@@ -3,9 +3,7 @@
  * GNU Lesser General Public License (GNU LGPL).
 
  * For details see: https://libreclinica.org/license
- * copyright (C) 2003 - 2011 Akaza Research
- * copyright (C) 2003 - 2019 OpenClinica
- * copyright (C) 2020 - 2024 LibreClinica
+ * LibreClinica, copyright (C) 2020
  */
 package org.akaza.openclinica.control.submit;
 
@@ -85,7 +83,16 @@ public class EnterDataForStudyEventServlet extends SecureController {
     // property; this
     // value will be saved as a request attribute
     public final static String HAS_END_DATE_NOTE = "hasEndDateNote";
-
+    // Status of the discrepancy note for attribute 'Location'
+    // the value will be saved as a request attribute
+    public final static String STATUS_DN_LOCATION ="statusDnLocation";
+    // Status of the discrepancy note for attribute 'Start Date'
+    // the value will be saved as a request attribute
+    public final static String STATUS_DN_START_DATE ="statusDnStartDate";
+    // Status of the discrepancy note for attribute 'End Date'
+    // the value will be saved as a request attribute
+    public final static String STATUS_DN_END_DATE ="statusDnEndDate";
+    
     private StudyEventBean getStudyEvent(int eventId) throws Exception {
         StudyEventDAO sedao = new StudyEventDAO(sm.getDataSource());
 
@@ -173,7 +180,7 @@ public class EnterDataForStudyEventServlet extends SecureController {
         }
 
         if (!allNotesforSubjectAndEvent.isEmpty()) {
-            setRequestAttributesForNotes(allNotesforSubjectAndEvent);
+            setRequestAttributesForNotes(allNotesforSubjectAndEvent, eventId);
         }
 
         // prepare to figure out what the display should look like
@@ -528,19 +535,23 @@ public class EnterDataForStudyEventServlet extends SecureController {
      *
      * @param discBeans
      *            A List of DiscrepancyNoteBeans.
+     * @param currentEventId 
+     *			 ID of current event to only display relevant notes           
      */
-    private void setRequestAttributesForNotes(List<DiscrepancyNoteBean> discBeans) {
+    private void setRequestAttributesForNotes(List<DiscrepancyNoteBean> discBeans, int currentEventId) {
         for (DiscrepancyNoteBean discrepancyNoteBean : discBeans) {
-            if ("location".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
-                request.setAttribute(HAS_LOCATION_NOTE, "yes");
-            } else if ("start_date".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
-                request.setAttribute(HAS_START_DATE_NOTE, "yes");
-
-            } else if ("end_date".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
-                request.setAttribute(HAS_END_DATE_NOTE, "yes");
-            }
-
+        	if(discrepancyNoteBean.getEntityId() == currentEventId) {
+        		if ("location".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
+        			request.setAttribute(STATUS_DN_LOCATION, discrepancyNoteBean.getResolutionStatusId());
+            		request.setAttribute(HAS_LOCATION_NOTE, "yes");
+        		} else if ("start_date".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
+        			request.setAttribute(STATUS_DN_START_DATE, discrepancyNoteBean.getResolutionStatusId());
+        			request.setAttribute(HAS_START_DATE_NOTE, "yes");
+        		} else if ("end_date".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
+        			request.setAttribute(STATUS_DN_END_DATE, discrepancyNoteBean.getResolutionStatusId());
+        			request.setAttribute(HAS_END_DATE_NOTE, "yes");
+        		}
+        	}	
         }
-
     }
 }
