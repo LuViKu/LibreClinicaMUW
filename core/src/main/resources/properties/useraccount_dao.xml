@@ -264,8 +264,14 @@
     </query>
     <query>
         <name>findAllByRole</name>
-        <sql>SELECT DISTINCT ON(uc.user_name) uc.* FROM study_user_role sur, user_account uc
-            WHERE sur.user_name=uc.user_name and (sur.role_name=? OR sur.role_name=?)
+        <sql>
+			SELECT DISTINCT ON (uc.user_name) uc.*
+			FROM study_user_role sur, user_account uc
+            WHERE
+				sur.user_name=uc.user_name AND
+				(sur.role_name=? OR sur.role_name=?) AND
+				uc.status_id=1
+			ORDER BY uc.user_name
         </sql>
     </query>
 </queries>
