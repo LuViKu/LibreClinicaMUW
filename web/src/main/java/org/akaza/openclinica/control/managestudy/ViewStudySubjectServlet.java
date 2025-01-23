@@ -80,20 +80,24 @@ public class ViewStudySubjectServlet extends SecureController {
 	private static final long serialVersionUID = 3682444868708787558L;
 	// The study subject has an existing discrepancy note related to their
     // unique identifier; this
-    // value will be saved as a request attribute
+    // value and status will be saved as a request attribute
     public final static String HAS_UNIQUE_ID_NOTE = "hasUniqueIDNote";
+    public final static String STATUS_DN_UNIQUE_ID ="statusDnUniquId";
     // The study subject has an existing discrepancy note related to their date
     // of birth; this
-    // value will be saved as a request attribute
+    // value and status will be saved as a request attribute
     public final static String HAS_DOB_NOTE = "hasDOBNote";
+    public final static String STATUS_DN_DOB = "statusDnDob";
     // The study subject has an existing discrepancy note related to their
     // Gender; this
-    // value will be saved as a request attribute
+    // value and status will be saved as a request attribute
     public final static String HAS_GENDER_NOTE = "hasGenderNote";
+    public final static String STATUS_DN_GENDER = "statusDnGender";
     // The study subject has an existing discrepancy note related to their
     // Enrollment Date; this
-    // value will be saved as a request attribute
+    // value and status will be saved as a request attribute
     public final static String HAS_ENROLLMENT_NOTE = "hasEnrollmentNote";
+    public final static String STATUS_DN_ENROLLMENT = "statusDnEnrollment";
     // request attribute for a discrepancy note
     public final static String UNIQUE_ID_NOTE = "uniqueIDNote";
     // request attribute for a discrepancy note
@@ -102,6 +106,7 @@ public class ViewStudySubjectServlet extends SecureController {
     public final static String GENDER_NOTE = "genderNote";
     // request attribute for a discrepancy note
     public final static String ENROLLMENT_NOTE = "enrollmentNote";
+        
 
     /**
      * Checks whether the user has the right permission to proceed function
@@ -691,15 +696,19 @@ public class ViewStudySubjectServlet extends SecureController {
             if ("unique_identifier".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
                 request.setAttribute(HAS_UNIQUE_ID_NOTE, "yes");
                 request.setAttribute(UNIQUE_ID_NOTE, discrepancyNoteBean);
+                request.setAttribute(STATUS_DN_UNIQUE_ID, discrepancyNoteBean.getResolutionStatusId());
             } else if ("date_of_birth".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
                 request.setAttribute(HAS_DOB_NOTE, "yes");
                 request.setAttribute(DOB_NOTE, discrepancyNoteBean);
+                request.setAttribute(STATUS_DN_DOB, discrepancyNoteBean.getResolutionStatusId());
             } else if ("enrollment_date".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
                 request.setAttribute(HAS_ENROLLMENT_NOTE, "yes");
                 request.setAttribute(ENROLLMENT_NOTE, discrepancyNoteBean);
+                request.setAttribute(STATUS_DN_ENROLLMENT, discrepancyNoteBean.getResolutionStatusId());
             } else if ("gender".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
                 request.setAttribute(HAS_GENDER_NOTE, "yes");
                 request.setAttribute(GENDER_NOTE, discrepancyNoteBean);
+                request.setAttribute(STATUS_DN_GENDER, discrepancyNoteBean.getResolutionStatusId());
             }
 
         }

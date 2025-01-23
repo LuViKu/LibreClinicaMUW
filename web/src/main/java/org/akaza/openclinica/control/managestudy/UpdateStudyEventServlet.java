@@ -92,6 +92,9 @@ public class UpdateStudyEventServlet extends SecureController {
     public final static String HAS_START_DATE_NOTE = "hasStartDateNote";
     public final static String HAS_END_DATE_NOTE = "hasEndDateNote";
 
+    public final static String STATUS_DN_LOCATION ="statusDnLocation";
+    public final static String STATUS_DN_START_DATE ="statusDnStartDate";
+    public final static String STATUS_DN_END_DATE ="statusDnEndDate";
 
     @Override
     public void mayProceed() throws InsufficientPermissionException {
@@ -111,7 +114,7 @@ public class UpdateStudyEventServlet extends SecureController {
         FormProcessor fp = new FormProcessor(request);
         int studyEventId = fp.getInt(EVENT_ID, true);
         int studySubjectId = fp.getInt(STUDY_SUBJECT_ID, true);
-
+        
         String module = fp.getString(MODULE);
         request.setAttribute(MODULE, module);
 
@@ -595,7 +598,7 @@ public class UpdateStudyEventServlet extends SecureController {
             }
 
             if (!allNotesforSubjectAndEvent.isEmpty()) {
-                setRequestAttributesForNotes(allNotesforSubjectAndEvent);
+                setRequestAttributesForNotes(allNotesforSubjectAndEvent, studyEventId);
             }
 
             HashMap<String, Object> presetValues = new HashMap<>();
@@ -783,17 +786,20 @@ public class UpdateStudyEventServlet extends SecureController {
             return "";
         }
     }
-    private void setRequestAttributesForNotes(List<DiscrepancyNoteBean> discBeans) {
+    private void setRequestAttributesForNotes(List<DiscrepancyNoteBean> discBeans, int currentEventId) {
         for (DiscrepancyNoteBean discrepancyNoteBean : discBeans) {
-            if ("location".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
-                request.setAttribute(HAS_LOCATION_NOTE, "yes");
-            } else if ("start_date".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
-                request.setAttribute(HAS_START_DATE_NOTE, "yes");
-
-            } else if ("end_date".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
-                request.setAttribute(HAS_END_DATE_NOTE, "yes");
-            }
-
+        	if(discrepancyNoteBean.getEntityId() == currentEventId) {
+        		if ("location".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
+        			request.setAttribute(STATUS_DN_LOCATION, discrepancyNoteBean.getResolutionStatusId());
+        			request.setAttribute(HAS_LOCATION_NOTE, "yes");
+        		} else if ("start_date".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
+        			request.setAttribute(STATUS_DN_START_DATE, discrepancyNoteBean.getResolutionStatusId());
+        			request.setAttribute(HAS_START_DATE_NOTE, "yes");
+        		} else if ("end_date".equalsIgnoreCase(discrepancyNoteBean.getColumn())) {
+        			request.setAttribute(STATUS_DN_END_DATE, discrepancyNoteBean.getResolutionStatusId());
+        			request.setAttribute(HAS_END_DATE_NOTE, "yes");
+        		}
+        	}	
         }
 
     }
