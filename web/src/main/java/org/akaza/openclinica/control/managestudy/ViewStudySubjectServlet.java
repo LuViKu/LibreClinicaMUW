@@ -106,7 +106,6 @@ public class ViewStudySubjectServlet extends SecureController {
     public final static String GENDER_NOTE = "genderNote";
     // request attribute for a discrepancy note
     public final static String ENROLLMENT_NOTE = "enrollmentNote";
-        
 
     /**
      * Checks whether the user has the right permission to proceed function

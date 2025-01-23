@@ -47,8 +47,7 @@ public class UpdateStudySubjectServlet extends SecureController {
 	 * 
 	 */
 	private static final long serialVersionUID = -8773308388221272583L;
-	
-	
+
 	/**
      * Checks whether the user has the right permission to proceed function
      */
