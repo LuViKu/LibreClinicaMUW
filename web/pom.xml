@@ -355,6 +355,9 @@
 						<!-- Needed by LibreClinica-web when docs module resources are used to pack the pdf manuals -->
 						<ignoredUnusedDeclaredDependency> org.libreclinica:LibreClinica-docs</ignoredUnusedDeclaredDependency>
 					</ignoredUnusedDeclaredDependencies>
+                    <ignoredUsedUndeclaredDependencies>
+                        <ignoredUsedUndeclaredDependency>javax.annotation:javax.annotation-api</ignoredUsedUndeclaredDependency>
+                    </ignoredUsedUndeclaredDependencies>
 		        </configuration>
 		      </plugin>
 			<plugin>
