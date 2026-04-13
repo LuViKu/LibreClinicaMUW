@@ -280,6 +280,9 @@
                         <!-- Needed by LibreClinica-web when HttpComponentsClientHttpRequestFactory is used-->
                         <ignoredUnusedDeclaredDependency>org.apache.httpcomponents:httpclient</ignoredUnusedDeclaredDependency>
                     </ignoredUnusedDeclaredDependencies>
+                    <ignoredUsedUndeclaredDependencies>
+                        <ignoredUsedUndeclaredDependency>jakarta.activation:jakarta.activation-api</ignoredUsedUndeclaredDependency>
+                    </ignoredUsedUndeclaredDependencies>
 				</configuration>
 			</plugin>
         </plugins>
