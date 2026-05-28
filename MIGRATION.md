@@ -89,6 +89,35 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
   | 20 | `StudyLockIT.lockedStudyRejectsWrites` | Set `Study.frozen_study=true`; assert that subsequent attempts to save `EventCRF` data throw the documented "study locked" exception |
 
   These will collectively be the institutional GCP regression suite. Open question: convert to `@RunWith(SpringJUnit4ClassRunner.class) + @Transactional` first (Phase B prep), or use the existing `HibernateOcDbTestCase` pattern for momentum?
+
+  **Progress so far (2026-05-28):** As a working exemplar of the integration-test pattern post Phase 0.3, [`ConfigurationDaoTest`](core/src/test/java/org/akaza/openclinica/dao/ConfigurationDaoTest.java) and its [DBUnit fixture](core/src/test/resources/org/akaza/openclinica/dao/testdata/ConfigurationDaoTest.xml) have been extended from 3 → 7 test methods (multi-row fixture, value round-trip, null-key handling, findAll containment, saveOrUpdate update-not-insert semantics). Total integration test count: 63 → 67, all green. The remaining 20 backlog tests above follow the same pattern.
+
+#### Integration-test authoring pattern (post Phase 0.3)
+
+Each new test class:
+1. **Extends `HibernateOcDbTestCase`** (in `core/src/test/java/org/akaza/openclinica/templates/`). The base class opens a per-test Spring transaction in `setUp()` and rolls it back in `tearDown()` — your test writes do not leak across tests.
+2. **Backed by a DBUnit XML fixture** at `core/src/test/resources/<package-as-path>/testdata/<TestClassName>.xml`. DBUnit performs `CLEAN_INSERT` against the named tables before the test runs (so the rows you declare are present + nothing else in those tables interferes). Use negative IDs (`-1`, `-2`, ...) to avoid colliding with Liquibase- or bootstrap-inserted rows.
+3. **Retrieves DAO beans from the Spring context**: `(MyDao) getContext().getBean("myDao")`. Wire identifier matches the bean `id` in `applicationContext-core-hibernate.xml`.
+4. **Asserts both the read path and the write path** in separate test methods (`testFindById`, `testFindByXxx`, `testSaveOrUpdate*`). Prefer container assertions (`assertTrue(allRows.contains(...))`) over size equality so the test doesn't break when Liquibase or bootstrap inserts additional rows.
+
+Verification recipe (per test class, before commit):
+
+```sh
+docker network create lc-test-net 2>/dev/null || true
+docker run -d --rm --name lc-test-pg --network lc-test-net \
+  -e POSTGRES_USER=clinica -e POSTGRES_PASSWORD=clinica \
+  -e POSTGRES_DB=openclinica-TEST \
+  postgres:14-alpine
+until docker exec lc-test-pg pg_isready -U clinica -d openclinica-TEST 2>/dev/null \
+    | grep -q "accepting connections"; do sleep 1; done
+
+docker run --rm --network lc-test-net \
+  -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
+  maven:3-eclipse-temurin-8 \
+  mvn -B -ntp -pl core -am -P integration-tests -Ddb.test=lc-test-pg clean test
+
+docker stop lc-test-pg && docker network rm lc-test-net
+```
 - [ ] **`RulesPostImportContainerServiceTest`** is the only "broken" test (test method commented out years ago). Either delete or restore — currently excluded so it doesn't error the build.
 
 #### Local-dev: running integration tests against a real Postgres

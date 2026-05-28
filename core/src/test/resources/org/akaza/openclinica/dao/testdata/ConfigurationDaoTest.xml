@@ -1,6 +1,14 @@
 <?xml version='1.0' encoding='UTF-8'?>
+<!--
+  DBUnit fixture for ConfigurationDaoTest. Three rows so findAll, lookup,
+  and update behaviour can all be exercised against the same dataset.
+  Negative IDs prevent collision with any rows Liquibase migrations or
+  app bootstrap might insert into 'configuration'.
+-->
 <dataset>
- 
- <configuration id="-1" key="test.test" value="TESTING" version="0"/> 
- 
+
+ <configuration id="-1" key="test.test"        value="TESTING"          version="0"/>
+ <configuration id="-2" key="muw.fixture.two"  value="second-value"     version="0"/>
+ <configuration id="-3" key="muw.fixture.long" value="long value with whitespace and punctuation: hello, world." version="0"/>
+
 </dataset>
