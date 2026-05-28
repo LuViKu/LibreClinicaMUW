@@ -188,6 +188,18 @@
 			<groupId>javax.persistence</groupId>
 			<artifactId>javax.persistence-api</artifactId>
 		</dependency>
+		<!--
+		    Phase B.3 PR 1/3 introduced OdmJaxbContext which imports
+		    javax.xml.bind.*. The transitive dep arrived from elsewhere
+		    on the classpath, but maven-dependency-plugin 3.8.1
+		    (analyze-only) flags the implicit-use as a build failure.
+		    Declared explicitly here; version pinned in the parent pom
+		    (pre-Phase-B JDK 11 JAXB fix).
+		-->
+		<dependency>
+			<groupId>javax.xml.bind</groupId>
+			<artifactId>jaxb-api</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>xml-apis</groupId>
 			<artifactId>xml-apis</artifactId>
