@@ -12,17 +12,11 @@ import static org.akaza.openclinica.odm.characterisation.GoldenAssertions.assert
 import static org.junit.Assert.assertNull;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.StringReader;
 import java.nio.charset.StandardCharsets;
 
 import org.akaza.openclinica.domain.rule.RulesPostImportContainer;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.xml.Unmarshaller;
-import org.exolab.castor.xml.XMLContext;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.junit.Test;
-import org.xml.sax.InputSource;
 
 /**
  * Phase B.0 characterisation for the rules-XML <em>unmarshaller</em> code
@@ -79,54 +73,33 @@ public class CastorRulesUnmarshallerCharacterisationTest {
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 + "<Rules xmlns=\"http://www.openclinica.org/ns/rules/v3.1\"/>\n";
 
-        RulesPostImportContainer parsed = unmarshalViaCastor(inputXml);
+        RulesPostImportContainer parsed = unmarshalViaJaxb(inputXml);
 
         assertUnmarshalled(parsed);
-        assertNull("Castor 1.4.1 leaves getRuleDefs() null after parsing an"
-                + " empty <Rules> envelope (pinned 2026-05-28); production"
-                + " null-checks before iterating. If JAXB returns an empty"
-                + " list here, that is a strict improvement and this assert"
-                + " should be updated to assertTrue(list.isEmpty()).",
+        // Phase B.3 PR 1/3: JAXB with @XmlAccessorType(NONE) + only a root
+        // annotation leaves the unbound collection fields null after parsing
+        // an empty document — same contract Castor 1.4.1 provided. Production
+        // callers (e.g. ImportRuleServlet) null-check before iterating.
+        // PR 2/3 may add @XmlElement on these collections; if it does, the
+        // post-parse state flips to empty-list and these asserts will be
+        // updated to assertTrue(list.isEmpty()) in that PR.
+        assertNull("Pinned 2026-05-28 (Castor) and re-pinned in B.3 PR 1/3 (JAXB):"
+                + " getRuleDefs() returns null after parsing an empty <Rules>"
+                + " envelope. PR 2/3 may flip this to empty-list.",
                 parsed.getRuleDefs());
-        assertNull("Castor 1.4.1 leaves getRuleSets() null after parsing an"
-                + " empty <Rules> envelope (pinned 2026-05-28); same note.",
+        assertNull("Same as above for getRuleSets().",
                 parsed.getRuleSets());
     }
 
     /**
-     * Production code path lifted from
-     * {@code ImportRuleServlet.loadCastor(File)}. The {@code FileReader} →
-     * {@code StringReader} substitution is the only adaptation.
+     * Production code path equivalent to {@code ImportRuleServlet.handleLoadCastor(File)}
+     * after Phase B.3 PR 1/3 swapped Castor → {@code javax.xml.bind} 2.3.x
+     * JAXB via {@link OdmJaxbContext}. The {@code File} → {@code ByteArrayInputStream}
+     * substitution is the only adaptation.
      */
-    private static RulesPostImportContainer unmarshalViaCastor(String inputXml) throws Exception {
-        byte[] mappingBytes = readClasspathResource("/properties/mapping.xml");
-        Mapping mapping = new Mapping();
-        mapping.loadMapping(new InputSource(new ByteArrayInputStream(mappingBytes)));
-
-        XMLContext xmlContext = new XMLContext();
-        xmlContext.addMapping(mapping);
-
-        Unmarshaller unmarshaller = xmlContext.createUnmarshaller();
-        unmarshaller.setWhitespacePreserve(false);
-        unmarshaller.setClass(RulesPostImportContainer.class);
-
-        StringReader reader = new StringReader(inputXml);
-        return (RulesPostImportContainer) unmarshaller.unmarshal(reader);
-    }
-
-    private static byte[] readClasspathResource(String path) throws Exception {
-        try (InputStream in = CastorRulesUnmarshallerCharacterisationTest.class
-                .getResourceAsStream(path)) {
-            if (in == null) {
-                throw new IllegalStateException("Castor mapping missing: " + path);
-            }
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) != -1) {
-                out.write(buf, 0, n);
-            }
-            return out.toByteArray();
-        }
+    private static RulesPostImportContainer unmarshalViaJaxb(String inputXml) {
+        OdmJaxbContext ctx = new OdmJaxbContext();
+        return ctx.unmarshalRulesImport(
+                new ByteArrayInputStream(inputXml.getBytes(StandardCharsets.UTF_8)));
     }
 }
