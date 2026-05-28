@@ -53,7 +53,7 @@
 		<db.test>localhost</db.test>
 		<jackson.version>2.13.5</jackson.version>
 		<saxon.version>8.7</saxon.version>
-		<hibernate.version>5.4.2.Final</hibernate.version>
+		<hibernate.version>5.6.15.Final</hibernate.version>
 		<castor.version>1.4.1</castor.version>
 		<logback.version>1.2.13</logback.version>
 		<slf4j.version>1.7.36</slf4j.version>
