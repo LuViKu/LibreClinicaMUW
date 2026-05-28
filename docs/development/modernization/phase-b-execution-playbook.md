@@ -19,6 +19,7 @@ Phase B does not start until *all* of the following are true. Skipping any of th
   - [ ] **DR-006** Castor replacement — Jakarta JAXB vs. Jackson XML (recommendation: JAXB; revisit during B.0 if characterisation tests show non-canonical Jackson output).
   - [ ] **DR-010** Java package rename `org.akaza.openclinica.*` → `at.ac.meduniwien.ophthalmology.*` (recommendation: yes, during Phase B — every file is being touched anyway).
 - [ ] Integration test backlog in [MIGRATION.md](../../../MIGRATION.md) — at least the first 5 critical-path tests (LoginFlowIT, StudyCrudIT, SubjectEnrolmentIT, StudyEventScheduleIT, AuditTrailIT) written + green. The post-Phase-0.3 test infrastructure proved we can write them; we need them as our regression net.
+- [ ] **Compose smoke test runs on every dep bump, not just on the integration profile.** Phase A.2's Quartz 2.2.3 → 2.3.2 + Spring Security 5.1 → 5.8 + project-version rename to `1.4.0rc1-muw` all passed the 67/67 integration suite but broke the compose smoke test (Dockerfile WAR-name glob, scheduler-XML `s[...]` placeholders against an incomplete `datainfo.properties`, and `jobStore.class` bypassing Spring's wiring — three stacked bugs; see commit `b75a2c287`). The integration tests do not load `applicationContext-core-scheduler.xml` and never will detect a runtime-only regression of that shape. Every Phase B sub-phase merge gate must therefore include the smoke test job — wording made explicit in the gate column of the sub-phase table below. *Sub-phase gates updated 2026-05-28.*
 - [ ] An institutional pre-Phase-B snapshot tag: `git tag -a pre-phase-b -m "..."` and pushed.
 - [ ] A dedicated Phase B integration branch: `feature/phase-b-jakarta-cliff` off `lc-develop`.
 
@@ -269,6 +270,7 @@ All of:
 | RB6 | `web/src/test/java` web-module tests (currently 2) break when servlets touch jakarta | Audit + fix during B.6 |
 | RB7 | Phase B drags 6+ months due to scope creep | Per-sub-phase merge gates; if a sub-phase is taking >2× estimate, escalate to a go/no-go review |
 | RB8 | Upstream ReliaTec lands an incompatible change that we cherry-pick | Eclipse Transformer on every cherry-pick post B.3; document each translation decision in `upstream-merges.md` (new file) |
+| RB9 | **Runtime-only regression that the integration test suite does not exercise** (e.g. Spring application-context wiring in XML files only loaded at app startup, like `applicationContext-core-scheduler.xml`) | Compose smoke test must be a hard merge gate on every Phase B sub-phase, not just the matrix Build job. Precedent: Phase A.2 shipped a Quartz config gap that passed 67/67 integration tests but broke `docker compose up` — see [commit `b75a2c287`](../../..). When adding a sub-phase, ensure its row in the sub-phase table names the smoke test in the gate column explicitly. |
 
 ---
 

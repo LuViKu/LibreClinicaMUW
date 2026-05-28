@@ -306,6 +306,8 @@ Hybrid SPA approach planned: React or Vue 3 for high-traffic clinician screens (
 
 **Feature-parity baseline:** [`docs/development/modernization/phase-e/`](docs/development/modernization/phase-e/) — live-walkthrough catalogue of every UI feature reachable today as Investigator, Monitor, and Data Manager, with screenshots and servlet-to-class cross-references. The SPA rewrite must preserve every feature listed there unless explicitly retired.
 
+**Known issues to investigate before / during Phase E:** [`docs/development/modernization/phase-e/known-issues.md`](docs/development/modernization/phase-e/known-issues.md) — runtime bugs in the existing UI that the modernization safety net has surfaced (e.g. `/pages/login/login` returning HTTP 500 as of 2026-05-28). Each entry must resolve to either a fix or an explicit "feature retired" decision before the SPA inherits the baseline.
+
 ---
 
 ## Cross-cutting workstreams
