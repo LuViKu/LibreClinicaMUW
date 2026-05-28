@@ -25,7 +25,12 @@
 		<!-- Default configuration activation -->
 		<config.id>default</config.id>
 
-		<skipTests>true</skipTests>
+		<!-- Phase 0 (2026-05-28): unit tests run by default. Integration tests
+		     that require a live PostgreSQL connection are excluded by surefire
+		     configuration below; they will be replaced with Testcontainers-based
+		     integration tests in a later Phase 0 iteration. Override with
+		     -DskipTests=true for fast local builds. -->
+		<skipTests>false</skipTests>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 
 		<!-- Project's source control URL -->
@@ -54,6 +59,34 @@
 		<slf4j.version>1.7.36</slf4j.version>
 	</properties>
 	<profiles>
+		<profile>
+			<!-- Enables Phase 0 integration tests (DAO + rule-service tests that
+			     extend HibernateOcDbTestCase / OcDbTestCase and require a live
+			     PostgreSQL on localhost:5432, database 'openclinica-TEST', user
+			     'clinica' / password 'clinica' per core/src/test/resources/datainfo.properties).
+			     Activate with: mvn verify -P integration-tests
+			     CI activates this profile in the integration-tests job which
+			     spins up a postgres:14-alpine service container.
+			     NOTE: this profile does NOT yet bootstrap the database schema;
+			     test schema setup via Liquibase is pending work for Phase 0.2. -->
+			<id>integration-tests</id>
+			<build>
+				<pluginManagement>
+					<plugins>
+						<plugin>
+							<groupId>org.apache.maven.plugins</groupId>
+							<artifactId>maven-surefire-plugin</artifactId>
+							<configuration>
+								<!-- combine.self="override" wipes the exclude list inherited
+								     from the parent surefire pluginManagement config so the
+								     DB-dependent tests actually run under this profile. -->
+								<excludes combine.self="override"/>
+							</configuration>
+						</plugin>
+					</plugins>
+				</pluginManagement>
+			</build>
+		</profile>
 		<profile>
 			<id>codeship</id>
 			<properties>
@@ -911,6 +944,21 @@
 					<version>2.10</version>
 					<configuration>
 						<skipTests>${skipTests}</skipTests>
+						<!-- Excluded from default `mvn test`:
+						       - DAO tests extending HibernateOcDbTestCase / OcDbTestCase: require
+						         a live PostgreSQL on localhost:5432; static initializer fails
+						         without a DB and triggers NoClassDefFoundError on the test class.
+						       - RulesPostImportContainerServiceTest: only test method is commented
+						         out; JUnit reports "No tests found in...". Broken-by-omission.
+						     These remain in src/test/java to preserve git history and will be
+						     re-enabled as Testcontainers-based integration tests in a later
+						     Phase 0 iteration. See MIGRATION.md § Phase 0. -->
+						<excludes>
+							<exclude>**/dao/**/*DaoTest.java</exclude>
+							<exclude>**/service/rule/RuleSetServiceTest.java</exclude>
+							<exclude>**/service/rule/expression/SampleTest.java</exclude>
+							<exclude>**/service/rule/RulesPostImportContainerServiceTest.java</exclude>
+						</excludes>
 					</configuration>
 				</plugin>
 				<plugin>

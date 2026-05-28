@@ -44,7 +44,20 @@ docker run --rm \
 
 `.m2-cache/` is git-ignored and persists Maven downloads (first build ~10 min, subsequent ~2 min).
 
-Run unit tests in CI / locally with `-DskipTests=false`. Default in `pom.xml` is still `skipTests=true` pending Phase 0 triage of the existing test suite (21 tests).
+Unit tests run by default (`mvn test`) — 33 pass across 8 pure-unit test classes in `core/` and `web/`. To skip: `mvn -DskipTests=true …` for fast iteration. Integration tests (11 DB-dependent test classes excluded from the default run) require a live PostgreSQL:
+
+```sh
+docker compose up -d db
+docker run --rm \
+  --network host \
+  -v "$(pwd)":/app \
+  -v "$(pwd)/.m2-cache":/root/.m2 \
+  -w /app \
+  maven:3-eclipse-temurin-8 \
+  mvn -B -ntp -P integration-tests test
+```
+
+Note: the integration tests currently fail because the test DB schema isn't bootstrapped — Phase 0.2 work pending (see [MIGRATION.md § Phase 0](MIGRATION.md)).
 
 ## CI
 
