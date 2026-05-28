@@ -131,13 +131,18 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
     }
 
     /**
-     * Item 7: pin the CURRENT (broken) behaviour — `study_subject` has no
-     * UNIQUE on `(study_id, label)`, so a second enrolment with the same
-     * label succeeds. When the Liquibase changeset adding the unique
-     * constraint lands, flip this to assert rejection + rename to
-     * {@code testDuplicateLabelRejected}.
+     * Item 7: re-enrolling a subject with the same {@code label} in the
+     * same study is rejected by the {@code uniq_study_subject_study_label}
+     * UNIQUE constraint added by Liquibase changeset
+     * {@code lc-muw-2026-05-28-study-subject-label-unique}.
+     *
+     * <p>The DAO swallows the constraint-violation SQLException via
+     * {@code signalFailure}; the returned bean's id stays 0. This test
+     * pins that observable contract — the production
+     * {@code ImportRuleServlet} / Add Subject UI flows check {@code id > 0}
+     * to decide success vs failure.
      */
-    public void testDuplicateLabelCurrentlyNotRejected() throws Exception {
+    public void testDuplicateLabelRejected() throws Exception {
         DataSource dataSource = (DataSource) getContext().getBean("dataSource");
         SequenceUtil.bumpAll(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
@@ -194,15 +199,13 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         dupEnrolment.setStatus(Status.AVAILABLE);
         dupEnrolment.setOwner(owner);
 
-        // Pin the CURRENT (broken) behaviour: the second create succeeds.
-        // When the unique-constraint fix lands, this assertion will fail
-        // and the test must be flipped + renamed.
+        // Post-fix behaviour: the second create is rejected by the
+        // UNIQUE constraint. The DAO swallows the SQLException; bean.id
+        // stays 0. Production callers check id != 0 to detect failure.
         StudySubjectBean attempted = studySubjectDao.create(dupEnrolment);
-        assertNotNull("status quo: the second create does NOT throw"
-                + " (Phase 0 finding — fix scheduled)", attempted);
-        assertTrue("status quo: the second create yields a positive PK"
-                + " — silently double-enrolling. Fix this and flip the"
-                + " assertion to assertTrue(rejected).",
-                attempted.getId() > 0);
+        assertEquals("duplicate (study_id, label) must be rejected — DAO"
+                + " returns bean with id=0 (failureDetails="
+                + studySubjectDao.getFailureDetails() + ")",
+                0, attempted.getId());
     }
 }
