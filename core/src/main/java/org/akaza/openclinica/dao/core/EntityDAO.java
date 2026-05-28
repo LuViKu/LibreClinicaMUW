@@ -460,7 +460,20 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
             logger.debug("Executing dynamic query, EntityDAO: {}", query);
         	return rowCount;
         } catch (SQLException sqle) {
-            signalFailure(sqle);
+            // Phase 0 IT-investigation gate (2026-05-28): when a chained
+            // multi-step DAO (e.g. StudyDAO.createStepOne/Two/Three/Four)
+            // hits a real SQLException on step N then step N+1 runs an
+            // UPDATE that touches 0 rows, the empty SQLException thrown at
+            // line 457 lands here and overwrites the real exception's
+            // captured details. Keep the first real exception under the
+            // test gate. Production behaviour is unchanged when
+            // -Doc.dao.preserveFirstSqlException is unset.
+            boolean preserveFirst = Boolean.getBoolean("oc.dao.preserveFirstSqlException")
+                    && this.failureDetails != null
+                    && this.failureDetails.getMessage() != null;
+            if (!preserveFirst) {
+                signalFailure(sqle);
+            }
             if (logger.isWarnEnabled()) {
                 logger.warn("Exception while executing statement, EntityDAO.executeUpdate: {}: {}", query, sqle.getMessage());
                 logger.error(sqle.getMessage(), sqle);
@@ -472,7 +485,7 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
             } else {
                 this.closeIfNecessary(connection, ps);
             }
-        }    	
+        }
     }
 
     /**
@@ -500,7 +513,17 @@ public abstract class EntityDAO<B> implements DAOInterface<B> {
             logger.debug("Executing query, EntityDAO: {}", query);
             this.latestPK = getCurrentPK(connection);
         } catch (SQLException sqle) {
-            signalFailure(sqle);
+            // Phase 0 IT-investigation gate (2026-05-28): the inner executeUpdate
+            // call has already done signalFailure(realSqle) with the actual
+            // postgres SQLException (FK violation, constraint message, …). The
+            // empty SQLException thrown above when rowCount != 1 would
+            // overwrite the captured details. Tests can set
+            // -Doc.dao.preserveFirstSqlException=true to keep the real
+            // exception readable via getFailureDetails(). Production
+            // behaviour is unchanged when the property is unset.
+            if (!Boolean.getBoolean("oc.dao.preserveFirstSqlException")) {
+                signalFailure(sqle);
+            }
             if (logger.isWarnEnabled()) {
                 logger.warn("Exception while executing statement, EntityDAO.execute: {}: {}", query, sqle.getMessage());
                 logger.error(sqle.getMessage(), sqle);

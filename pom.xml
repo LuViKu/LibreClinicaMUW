@@ -95,6 +95,13 @@
 									<include>**/Test*.java</include>
 									<include>**/*IT.java</include>
 								</includes>
+								<!-- Phase 0 IT-investigation gate (see EntityDAO):
+								     keep the real SQLException visible via
+								     getFailureDetails() instead of overwriting
+								     it with the downstream empty exception. -->
+								<systemPropertyVariables>
+									<oc.dao.preserveFirstSqlException>true</oc.dao.preserveFirstSqlException>
+								</systemPropertyVariables>
 							</configuration>
 						</plugin>
 					</plugins>
