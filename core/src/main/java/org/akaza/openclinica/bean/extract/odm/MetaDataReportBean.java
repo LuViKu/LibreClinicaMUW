@@ -9,9 +9,8 @@
  */
 package org.akaza.openclinica.bean.extract.odm;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.StringWriter;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -54,13 +53,7 @@ import org.akaza.openclinica.domain.rule.RulesPostImportContainer;
 import org.akaza.openclinica.exception.OpenClinicaSystemException;
 import org.akaza.openclinica.logic.odmExport.MetadataUnit;
 import org.apache.commons.lang.StringEscapeUtils;
-import org.castor.xml.XMLConfiguration;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.mapping.MappingException;
-import org.exolab.castor.xml.MarshalException;
-import org.exolab.castor.xml.Marshaller;
-import org.exolab.castor.xml.ValidationException;
-import org.exolab.castor.xml.XMLContext;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 
 /**
  * Create ODM XML Study Element for a study.
@@ -73,6 +66,7 @@ public class MetaDataReportBean extends OdmXmlReportBean {
     private OdmStudyBean odmstudy;
     private LinkedHashMap<String, OdmStudyBean> odmStudyMap;
     private CoreResources coreResources;
+    private OdmJaxbContext odmJaxbContext;
 
     public MetaDataReportBean(OdmStudyBean odmstudy) {
         super();
@@ -131,39 +125,41 @@ public class MetaDataReportBean extends OdmXmlReportBean {
         xml.append(nls);
     }
 
-	private String handleLoadCastor(RulesPostImportContainer rpic) {
+    /**
+     * Phase B.3 PR 3c: Castor → JAXB. The Castor marshalling chain (with
+     * mappingMarshallerMetadata.xml + XML-prolog strip) is replaced by
+     * {@link OdmJaxbContext#marshalRulesMetadata}, which emits the
+     * {@code <OpenClinicaRules:Rules xmlns:OpenClinicaRules="..."/>}
+     * wrapper as a fragment (no XML prolog) — same byte profile the
+     * old code post-processed to. Verified by
+     * {@code CastorRulesContainerCharacterisationTest}.
+     *
+     * <p>Legacy method name kept so call sites + stack traces stay
+     * grep-compatible; B.4 will rename alongside the Spring 5 → 6 sweep.
+     */
+    private String handleLoadCastor(RulesPostImportContainer rpic) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        getOdmJaxbContext().marshalRulesMetadata(rpic, out);
+        return new String(out.toByteArray(), StandardCharsets.UTF_8);
+    }
 
-        try {
-            // Create Mapping
-            Mapping mapping = new Mapping();
-            mapping.loadMapping(getCoreResources().getURL("mappingMarshallerMetadata.xml"));
-            // Create XMLContext
-            XMLContext xmlContext = new XMLContext();
-            xmlContext.setProperty(XMLConfiguration.NAMESPACES, "true");
-            xmlContext.addMapping(mapping);
-
-            StringWriter writer = new StringWriter();
-            Marshaller marshaller = xmlContext.createMarshaller();
-            // marshaller.setNamespaceMapping("castor", "http://castor.org/sample/mapping/");
-            marshaller.setWriter(writer);
-            marshaller.marshal(rpic);
-            String result = writer.toString();
-            String newResult = result.replace("<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "");
-            return newResult;
-
-        } catch (FileNotFoundException ex) {
-            throw new OpenClinicaSystemException(ex.getMessage(), ex.getCause());
-        } catch (IOException ex) {
-            throw new OpenClinicaSystemException(ex.getMessage(), ex.getCause());
-        } catch (MarshalException e) {
-            throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
-        } catch (ValidationException e) {
-            throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
-        } catch (MappingException e) {
-            throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
-        } catch (Exception e) {
-            throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
+    /**
+     * Returns the wired-in {@link OdmJaxbContext} if present, otherwise
+     * a freshly-created one. OdmJaxbContext is effectively stateless
+     * outside its internal JAXBContext cache, so a per-call instance
+     * is correctness-equivalent (only slightly less efficient on
+     * repeated calls — acceptable for the metadata-export path which is
+     * a manual/admin operation rather than hot path).
+     */
+    private OdmJaxbContext getOdmJaxbContext() {
+        if (this.odmJaxbContext == null) {
+            this.odmJaxbContext = new OdmJaxbContext();
         }
+        return this.odmJaxbContext;
+    }
+
+    public void setOdmJaxbContext(OdmJaxbContext odmJaxbContext) {
+        this.odmJaxbContext = odmJaxbContext;
     }
 
     public void addNodeRulesData(MetaDataVersionBean a) {
