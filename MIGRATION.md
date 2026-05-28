@@ -61,9 +61,34 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 - [x] **Flip `<skipTests>true</skipTests>` → `false`** in [pom.xml](pom.xml) (2026-05-28). DB-integration tests excluded via surefire `<excludes>`; unit tests run by default.
 - [x] **`integration-tests` Maven profile** (2026-05-28): `mvn verify -P integration-tests` overrides surefire excludes via `combine.self="override"` and runs the DB-dependent tests. Expects PostgreSQL with database `openclinica-TEST`, user `clinica`/password `clinica` (per [core/src/test/resources/datainfo.properties](core/src/test/resources/datainfo.properties)).
 - [x] **CI integration-tests job** (2026-05-28): GitHub Actions service container (`postgres:14-alpine`) runs alongside the Maven job. `continue-on-error: true` while Phase 0.2 schema-bootstrap work is pending — see below.
-- [ ] **Phase 0.2 — Bootstrap test DB schema** (next): the integration-tests job currently fails because the test database is empty. Apply Liquibase migrations (`core/src/main/resources/migration/master.xml`) against `openclinica-TEST` before tests run, then DBUnit fixtures will load successfully. Option A: invoke Liquibase Maven plugin in a `pre-integration-test` phase. Option B: bake the schema into a custom Postgres init-SQL script. Option C: spring-test boots Liquibase via the application context (should already happen — verify why it doesn't).
+- [x] **Phase 0.2 — Bootstrap test DB schema (2026-05-28):** Option C verified to work. The Spring test context loaded by `HibernateOcDbTestCase` already wires `SpringLiquibase` (in `applicationContext-core-db.xml`) and a `PropertyPlaceholderConfigurer` with the custom `s[...]` syntax (in `applicationContext-core-spring.xml`) that resolves `s[driver]`, `s[url]`, `s[username]`, `s[password]` from `classpath:datainfo.properties`. When run against a Postgres providing the right DB (`openclinica-TEST`, user `clinica`/password `clinica`), Liquibase applies all 145+ changesets and DAO beans are wired correctly. Fixed: `test.properties` and `datainfo.properties` referenced different DB names (`openclinica-TEST-3.12` vs `openclinica-TEST`) — DBUnit and Spring DAOs were targeting different databases. Aligned both to `openclinica-TEST`. **Result:** integration test suite went from 0 → 63 tests running (33 unit tests + 30 integration tests now reach their test methods). New layer of pre-existing breakage exposed — see Phase 0.3.
+- [ ] **Phase 0.3 — Fix Hibernate session-management defect in `HibernateOcDbTestCase`** (next): 26 of the 30 integration tests error with `org.hibernate.SessionException: Session/EntityManager is closed`. Root cause: the static initializer opens a `PROPAGATION_REQUIRED` transaction at class load via `transactionManager.getTransaction(new DefaultTransactionDefinition())`, then `tearDown()` calls `transactionManager.commit(transactionManager.getTransaction(new DefaultTransactionDefinition()))` — the second `getTransaction` returns a *participant* TransactionStatus (because the outer one is still active), so the commit only marks the participant complete, never actually committing the outer transaction. The Hibernate session is closed at unpredictable times. Fix options: (a) modernize to Spring's `@RunWith(SpringJUnit4ClassRunner.class) + @Transactional` test integration (cleanest, but touches all 11 test classes); (b) rewrite the base class to track the actual outer TransactionStatus and commit it in tearDown; (c) move to `AbstractTransactionalJUnit4SpringContextTests`. Defect dates back to OpenClinica's original 2013 modularization (commit `adba9a97d`), predating LibreClinica.
 - [ ] **Add critical-path integration tests** (~20 tests, target ~2 weeks): login, study CRUD, subject enroll, scheduled event, CRF submission (initial DE + double DE), discrepancy note, ODM export, audit log row written, SDV state transition. Use Spring Test + Testcontainers (PostgreSQL 14).
 - [ ] **`RulesPostImportContainerServiceTest`** is the only "broken" test (test method commented out years ago). Either delete or restore — currently excluded so it doesn't error the build.
+
+#### Local-dev: running integration tests against a real Postgres
+
+```sh
+# Start a dedicated Postgres for testing (NOT compose's db, which is for the app).
+docker network create lc-test-net 2>/dev/null || true
+docker run -d --rm --name lc-test-pg --network lc-test-net \
+  -e POSTGRES_USER=clinica -e POSTGRES_PASSWORD=clinica \
+  -e POSTGRES_DB=openclinica-TEST \
+  postgres:14-alpine
+# Wait for ready (~5s)
+docker exec lc-test-pg pg_isready -U clinica -d openclinica-TEST
+
+# Run integration tests in the same network, pointing at lc-test-pg.
+docker run --rm --network lc-test-net \
+  -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
+  maven:3-eclipse-temurin-8 \
+  mvn -B -ntp -pl core -am -P integration-tests -Ddb.test=lc-test-pg test
+
+# Cleanup
+docker stop lc-test-pg && docker network rm lc-test-net
+```
+
+Currently expect: 33 unit tests pass, ~26 DAO tests error with "Session/EntityManager is closed" (Phase 0.3). 1 test still fails as "No tests found" (`RulesPostImportContainerServiceTest`).
 - [ ] **Coverage tooling**: add JaCoCo report, surface coverage in CI summary. Target: track baseline, no enforcement yet.
 - [ ] **Secret scan**: add Trivy or GitHub native secret scan to CI.
 - [ ] **CodeQL**: enable GitHub Advanced Security CodeQL workflow for Java.

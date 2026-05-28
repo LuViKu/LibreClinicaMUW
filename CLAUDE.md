@@ -44,20 +44,26 @@ docker run --rm \
 
 `.m2-cache/` is git-ignored and persists Maven downloads (first build ~10 min, subsequent ~2 min).
 
-Unit tests run by default (`mvn test`) — 33 pass across 8 pure-unit test classes in `core/` and `web/`. To skip: `mvn -DskipTests=true …` for fast iteration. Integration tests (11 DB-dependent test classes excluded from the default run) require a live PostgreSQL:
+Unit tests run by default (`mvn test`) — 33 pass across 8 pure-unit test classes in `core/` and `web/`. To skip: `mvn -DskipTests=true …` for fast iteration.
+
+Integration tests (11 DB-dependent test classes excluded from the default run) need a dedicated PostgreSQL **separate from the compose `db` service** — the compose `db` is for the app (DB name `libreclinica`); tests want `openclinica-TEST`. Run them on an isolated network:
 
 ```sh
-docker compose up -d db
-docker run --rm \
-  --network host \
-  -v "$(pwd)":/app \
-  -v "$(pwd)/.m2-cache":/root/.m2 \
-  -w /app \
+docker network create lc-test-net 2>/dev/null || true
+docker run -d --rm --name lc-test-pg --network lc-test-net \
+  -e POSTGRES_USER=clinica -e POSTGRES_PASSWORD=clinica \
+  -e POSTGRES_DB=openclinica-TEST \
+  postgres:14-alpine
+
+docker run --rm --network lc-test-net \
+  -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
   maven:3-eclipse-temurin-8 \
-  mvn -B -ntp -P integration-tests test
+  mvn -B -ntp -pl core -am -P integration-tests -Ddb.test=lc-test-pg test
+
+docker stop lc-test-pg && docker network rm lc-test-net
 ```
 
-Note: the integration tests currently fail because the test DB schema isn't bootstrapped — Phase 0.2 work pending (see [MIGRATION.md § Phase 0](MIGRATION.md)).
+Schema bootstrap works via `SpringLiquibase` in `applicationContext-core-db.xml` (Phase 0.2, 2026-05-28). Expect: 33 unit tests pass; ~26 DAO tests error with "Session/EntityManager is closed" (pre-existing Hibernate session-management bug — Phase 0.3 work). See [MIGRATION.md § Phase 0](MIGRATION.md).
 
 ## CI
 
