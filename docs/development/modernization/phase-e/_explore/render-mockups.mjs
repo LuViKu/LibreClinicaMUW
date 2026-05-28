@@ -12,6 +12,7 @@ const OUT = path.resolve(__dirname, 'mockup-renders');
 
 const files = [
   'index.html',
+  // Round 1 - one critical workflow per role
   'investigator-subject-matrix.html',
   'investigator-add-subject.html',
   'investigator-crf-entry.html',
@@ -19,6 +20,12 @@ const files = [
   'monitor-crf-readonly.html',
   'dm-build-study.html',
   'dm-update-event-definition.html',
+  // Round 2 - cross-role essentials
+  'notes-discrepancies.html',
+  'view-events.html',
+  'view-subject.html',
+  'schedule-event.html',
+  'dm-manage-users.html',
 ];
 
 (async () => {

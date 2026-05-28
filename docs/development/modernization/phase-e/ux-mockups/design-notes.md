@@ -59,6 +59,8 @@ Tailwind default 4-pt scale. Cards `p-4`, dense table cells `px-3 py-2`, primary
 
 ## Screens included
 
+### Round 1 — one critical workflow per role
+
 | Role | Screen | File | Replaces legacy |
 |---|---|---|---|
 | All | Landing index | [index.html](index.html) | n/a |
@@ -69,6 +71,18 @@ Tailwind default 4-pt scale. Cards `p-4`, dense table cells `px-3 py-2`, primary
 | Monitor | Read-only CRF view | [monitor-crf-readonly.html](monitor-crf-readonly.html) | `/ViewSectionDataEntry` |
 | Data Manager | Build Study | [dm-build-study.html](dm-build-study.html) | `/pages/studymodule` |
 | Data Manager | Update Event Definition | [dm-update-event-definition.html](dm-update-event-definition.html) | `/UpdateEventDefinition?id=…` |
+
+### Round 2 — cross-role essentials
+
+| Role | Screen | File | Replaces legacy |
+|---|---|---|---|
+| Inv · Mon · DM | Notes & Discrepancies | [notes-discrepancies.html](notes-discrepancies.html) | `/ViewNotes?module=submit` |
+| Inv · Mon · DM | View Events | [view-events.html](view-events.html) | `/ViewStudyEvents` |
+| Investigator | View Subject (M-001) | [view-subject.html](view-subject.html) | `/ViewStudySubject?id=…` |
+| Investigator | Schedule Event | [schedule-event.html](schedule-event.html) | `/CreateNewStudyEvent` |
+| Data Manager | Manage Users | [dm-manage-users.html](dm-manage-users.html) | `/ListStudyUser` |
+
+The Notes & Discrepancies mockup shows the **Monitor** view, with an in-place role switcher chip in the top bar and a "What changes per role" expandable in the side panel — so the per-role power differences (Investigator can't Close; Monitor is the only role that can; DM has full visibility plus delete-cascades-close) are visible in one place rather than spread across three near-identical mockups.
 
 ## What's intentionally NOT in these mockups
 
