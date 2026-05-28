@@ -13,10 +13,13 @@ RUN \
     --mount=type=cache,target=/app/odm/target \
     --mount=type=cache,target=/app/web/target \
     --mount=type=cache,target=/app/ws/target \
-
     set -eux; \
     mvn package; \
-    mv web/target/LibreClinica-web.war /;
+    # Maven's default WAR name is ${artifactId}-${version}.war, so this is
+    # LibreClinica-web-1.4.0rc1-muw.war today and will keep changing as the
+    # project version moves. Glob it and rename to a stable name for the
+    # COPY --from=builder line below.
+    mv web/target/LibreClinica-web-*.war /LibreClinica-web.war;
 
 ############################################################
 FROM tomcat:9-jdk11
