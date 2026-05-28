@@ -210,6 +210,10 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 **Timeline:** 3–6 months
 **Risk:** high
 
+**Detailed execution plan:** see [docs/development/modernization/phase-b-execution-playbook.md](docs/development/modernization/phase-b-execution-playbook.md) for the pre-flight checklist, per-sub-phase ordering, per-step verification gates, Castor characterisation strategy, and per-sub-phase risk register.
+
+**Companion: per-dependency mapping:** [docs/development/modernization/phase-b-dependency-analysis.md](docs/development/modernization/phase-b-dependency-analysis.md).
+
 ### Sequencing
 
 1. **Java 21 baseline first.** Bump build + runtime to JDK 21. Fix warnings. Update Maven compiler plugin. Verify everything in Phase A still works on JDK 21. (1–2 weeks)
