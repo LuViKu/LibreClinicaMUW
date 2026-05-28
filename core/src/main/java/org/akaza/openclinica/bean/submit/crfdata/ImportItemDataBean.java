@@ -9,14 +9,23 @@
  */
 package org.akaza.openclinica.bean.submit.crfdata;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlAttribute;
+
 import org.akaza.openclinica.bean.odmbeans.AuditLogsBean;
 import org.akaza.openclinica.bean.odmbeans.DiscrepancyNotesBean;
 import org.akaza.openclinica.bean.odmbeans.ElementRefBean;
 
+@XmlAccessorType(XmlAccessType.NONE)
 public class ImportItemDataBean {
+    @XmlAttribute(name = "ItemOID")
     private String itemOID;
+    @XmlAttribute(name = "TransactionType")
     private String transactionType;
+    @XmlAttribute(name = "Value")
     private String value;
+    @XmlAttribute(name = "IsNull")
     private String isNull; // boolean, tbh?
     private ElementRefBean measurementUnitRef = new ElementRefBean();
     private String reasonForNull;
