@@ -13,7 +13,6 @@ on:
     # Daily 04:00 UTC - picks up newly-published CVEs against pinned deps.
     - cron: '0 4 * * *'
   workflow_dispatch:
-  workflow_dispatch:
 
 permissions:
   contents: read
