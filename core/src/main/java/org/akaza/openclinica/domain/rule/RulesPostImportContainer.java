@@ -18,6 +18,30 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlRootElement;
+import javax.xml.bind.annotation.XmlTransient;
+
+/**
+ * Top-level container for the rules-XML import/export path.
+ *
+ * <p>Phase B.3 PR 1/3 introduced the JAXB annotations on this class. Only
+ * the root-level wiring is annotated here; the rich binding of nested
+ * fields (RuleSets, RuleDefs, polymorphic actions) is added in PR 2/3,
+ * once the empty-container B.0 characterisation tests prove the
+ * scaffolding works. The {@code @XmlAccessorType(NONE)} setting means
+ * fields are opt-in — utility/state collections (validRuleDefs, etc.)
+ * are explicitly {@link XmlTransient} so they cannot leak into the XML.
+ *
+ * <p>Castor's {@code mapping.xml} previously specified {@code <map-to xml="RuleImport"/>}
+ * for the marshal direction; {@link XmlRootElement} preserves that root
+ * name. The unmarshal direction accepts arbitrary roots through
+ * {@link org.akaza.openclinica.service.xml.OdmJaxbContext#unmarshalRulesImport}
+ * (matching Castor's {@code setClass}-based unmarshal behaviour).
+ */
+@XmlRootElement(name = "RuleImport")
+@XmlAccessorType(XmlAccessType.NONE)
 public class RulesPostImportContainer {
 
     private ArrayList<RuleSetBean> ruleSets;

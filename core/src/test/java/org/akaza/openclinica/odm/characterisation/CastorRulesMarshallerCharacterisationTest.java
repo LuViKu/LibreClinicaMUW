@@ -10,18 +10,11 @@ package org.akaza.openclinica.odm.characterisation;
 
 import static org.akaza.openclinica.odm.characterisation.GoldenAssertions.assertXmlSimilarToGolden;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.StringWriter;
-import java.nio.charset.StandardCharsets;
 
 import org.akaza.openclinica.domain.rule.RulesPostImportContainer;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.xml.Marshaller;
-import org.exolab.castor.xml.XMLContext;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.junit.Test;
-import org.xml.sax.InputSource;
 
 /**
  * Phase B.0 characterisation for the rules-XML <em>marshaller</em> code path
@@ -44,7 +37,7 @@ public class CastorRulesMarshallerCharacterisationTest {
     public void emptyContainerMarshalsToRootElementOnly() throws Exception {
         RulesPostImportContainer empty = new RulesPostImportContainer();
 
-        byte[] xml = marshalViaCastor(empty);
+        byte[] xml = marshalViaJaxb(empty);
 
         assertXmlSimilarToGolden(xml,
                 CastorRulesMarshallerCharacterisationTest.class,
@@ -52,41 +45,15 @@ public class CastorRulesMarshallerCharacterisationTest {
     }
 
     /**
-     * Production code path lifted from
-     * {@code DownloadRuleSetXmlServlet.handleLoadCastor(FileWriter, RulesPostImportContainer)}.
-     * The {@code FileWriter} → {@code StringWriter} substitution is the only
-     * adaptation: the test does not care about the output destination, only
-     * the bytes Castor produces.
+     * Production code path equivalent to
+     * {@code DownloadRuleSetXmlServlet.handleLoadCastor(OutputStream, RulesPostImportContainer)}
+     * after Phase B.3 PR 1/3 swapped Castor → {@code javax.xml.bind} 2.3.x
+     * JAXB via {@link OdmJaxbContext}.
      */
-    private static byte[] marshalViaCastor(RulesPostImportContainer rpic) throws Exception {
-        byte[] mappingBytes = readClasspathResource(
-                "/properties/mappingMarshaller.xml");
-        Mapping mapping = new Mapping();
-        mapping.loadMapping(new InputSource(new ByteArrayInputStream(mappingBytes)));
-
-        XMLContext xmlContext = new XMLContext();
-        xmlContext.addMapping(mapping);
-
-        StringWriter writer = new StringWriter();
-        Marshaller marshaller = xmlContext.createMarshaller();
-        marshaller.setWriter(writer);
-        marshaller.marshal(rpic);
-        return writer.toString().getBytes(StandardCharsets.UTF_8);
-    }
-
-    private static byte[] readClasspathResource(String path) throws Exception {
-        try (InputStream in = CastorRulesMarshallerCharacterisationTest.class
-                .getResourceAsStream(path)) {
-            if (in == null) {
-                throw new IllegalStateException("Castor mapping missing: " + path);
-            }
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) != -1) {
-                out.write(buf, 0, n);
-            }
-            return out.toByteArray();
-        }
+    private static byte[] marshalViaJaxb(RulesPostImportContainer rpic) {
+        OdmJaxbContext ctx = new OdmJaxbContext();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ctx.marshalRulesExport(rpic, out);
+        return out.toByteArray();
     }
 }

@@ -32,6 +32,13 @@
         <!--  <property name="messageSource" ref="messageSource"/> -->
     </bean>
 
+    <!--
+        Phase B.3 (Castor → JAXB, DR-006): single Spring-managed JAXBContext
+        cache for the lifetime of the application context. Used by the rules
+        import/export servlets and (in subsequent B.3 PRs) the CDISC ODM,
+        OpenRosa, and XForm code paths.
+    -->
+    <bean id="odmJaxbContext" class="org.akaza.openclinica.service.xml.OdmJaxbContext"/>
 
     <bean id="dataInfoProperties" factory-bean="coreResources" factory-method="getDataInfo"/>
 

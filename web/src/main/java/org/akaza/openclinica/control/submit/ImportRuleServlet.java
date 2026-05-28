@@ -10,8 +10,8 @@
 package org.akaza.openclinica.control.submit;
 
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.MessageFormat;
@@ -28,15 +28,10 @@ import org.akaza.openclinica.domain.rule.RulesPostImportContainer;
 import org.akaza.openclinica.exception.OpenClinicaSystemException;
 import org.akaza.openclinica.i18n.core.LocaleResolver;
 import org.akaza.openclinica.service.rule.RulesPostImportContainerService;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.akaza.openclinica.view.Page;
 import org.akaza.openclinica.web.InsufficientPermissionException;
 import org.akaza.openclinica.web.SQLInitServlet;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.mapping.MappingException;
-import org.exolab.castor.xml.MarshalException;
-import org.exolab.castor.xml.Unmarshaller;
-import org.exolab.castor.xml.ValidationException;
-import org.exolab.castor.xml.XMLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -148,25 +143,18 @@ public class ImportRuleServlet extends SecureController {
         return theDir;
     }
 
+    /**
+     * Parse the uploaded rules XML into a {@link RulesPostImportContainer}.
+     *
+     * <p>Phase B.3 PR 1/3 (DR-006): swapped from Castor 1.4.1 to
+     * {@code javax.xml.bind} 2.3.x JAXB via {@link OdmJaxbContext}. The
+     * legacy method name {@code handleLoadCastor} is preserved deliberately
+     * so call sites and stack traces stay grep-compatible until B.3 PR 3/3
+     * does the final rename + Castor dep drop.
+     */
     private RulesPostImportContainer handleLoadCastor(File xmlFile) {
-
-        RulesPostImportContainer ruleImport = null;
-        try {
-            // create an XMLContext instance
-            XMLContext xmlContext = new XMLContext();
-            // create and set a Mapping instance
-            Mapping mapping = xmlContext.createMapping();
-            // mapping.loadMapping(SpringServletAccess.getPropertiesDir(context) + "mapping.xml");
-            mapping.loadMapping(getCoreResources().getURL("mapping.xml"));
-
-            xmlContext.addMapping(mapping);
-            // create a new Unmarshaller
-            Unmarshaller unmarshaller = xmlContext.createUnmarshaller();
-            unmarshaller.setWhitespacePreserve(false);
-            unmarshaller.setClass(RulesPostImportContainer.class);
-            // Create a Reader to the file to unmarshal from
-            FileReader reader = new FileReader(xmlFile);
-            ruleImport = (RulesPostImportContainer) unmarshaller.unmarshal(reader);
+        try (InputStream in = new FileInputStream(xmlFile)) {
+            RulesPostImportContainer ruleImport = getOdmJaxbContext().unmarshalRulesImport(in);
             ruleImport.initializeRuleDef();
             logRuleImport(ruleImport);
             return ruleImport;
@@ -174,13 +162,12 @@ public class ImportRuleServlet extends SecureController {
             throw new OpenClinicaSystemException(ex.getMessage(), ex.getCause());
         } catch (IOException ex) {
             throw new OpenClinicaSystemException(ex.getMessage(), ex.getCause());
-        } catch (MarshalException e) {
-            throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
-        } catch (ValidationException e) {
-            throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
-        } catch (MappingException e) {
-            throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
         }
+    }
+
+    private OdmJaxbContext getOdmJaxbContext() {
+        return (OdmJaxbContext) SpringServletAccess.getApplicationContext(context)
+                .getBean("odmJaxbContext");
     }
 
     private void logRuleImport(RulesPostImportContainer ruleImport) {

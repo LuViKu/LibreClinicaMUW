@@ -16,15 +16,10 @@ import org.akaza.openclinica.domain.rule.RuleSetRuleBean;
 import org.akaza.openclinica.domain.rule.RulesPostImportContainer;
 import org.akaza.openclinica.exception.OpenClinicaSystemException;
 import org.akaza.openclinica.service.rule.RuleSetServiceInterface;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.akaza.openclinica.view.Page;
 import org.akaza.openclinica.web.InsufficientPermissionException;
 import org.akaza.openclinica.web.SQLInitServlet;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.mapping.MappingException;
-import org.exolab.castor.xml.MarshalException;
-import org.exolab.castor.xml.Marshaller;
-import org.exolab.castor.xml.ValidationException;
-import org.exolab.castor.xml.XMLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -32,8 +27,9 @@ import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -63,34 +59,26 @@ public class DownloadRuleSetXmlServlet extends SecureController {
 
     }
 
-    private FileWriter handleLoadCastor(FileWriter writer, RulesPostImportContainer rpic) {
-
+    /**
+     * Serialise a {@link RulesPostImportContainer} to {@code out} as XML.
+     *
+     * <p>Phase B.3 PR 1/3 (DR-006): swapped from Castor 1.4.1 to
+     * {@code javax.xml.bind} 2.3.x JAXB via {@link OdmJaxbContext}. The
+     * legacy method name {@code handleLoadCastor} is preserved deliberately
+     * so call sites and stack traces stay grep-compatible until B.3 PR 3/3
+     * does the final rename + Castor dep drop.
+     */
+    private void handleLoadCastor(OutputStream out, RulesPostImportContainer rpic) {
         try {
-            // Create Mapping
-            Mapping mapping = new Mapping();
-            mapping.loadMapping(getCoreResources().getURL("mappingMarshaller.xml"));
-            // Create XMLContext
-            XMLContext xmlContext = new XMLContext();
-            xmlContext.addMapping(mapping);
-
-            Marshaller marshaller = xmlContext.createMarshaller();
-            marshaller.setWriter(writer);
-            marshaller.marshal(rpic);
-            return writer;
-
-        } catch (FileNotFoundException ex) {
-            throw new OpenClinicaSystemException(ex.getMessage(), ex.getCause());
-        } catch (IOException ex) {
-            throw new OpenClinicaSystemException(ex.getMessage(), ex.getCause());
-        } catch (MarshalException e) {
-            throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
-        } catch (ValidationException e) {
-            throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
-        } catch (MappingException e) {
-            throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
+            getOdmJaxbContext().marshalRulesExport(rpic, out);
         } catch (Exception e) {
             throw new OpenClinicaSystemException(e.getMessage(), e.getCause());
         }
+    }
+
+    private OdmJaxbContext getOdmJaxbContext() {
+        return (OdmJaxbContext) SpringServletAccess.getApplicationContext(context)
+                .getBean("odmJaxbContext");
     }
 
     private RulesPostImportContainer prepareRulesPostImportRuleSetRuleContainer(String ruleSetRuleIds) {
@@ -119,8 +107,9 @@ public class DownloadRuleSetXmlServlet extends SecureController {
         String dir = SQLInitServlet.getField("filePath") + "rules" + File.separator;
         Long time = System.currentTimeMillis();
         File f = new File(dir + "rules" + currentStudy.getOid() + "-" + time + ".xml");
-        FileWriter writer = new FileWriter(f);
-        handleLoadCastor(writer, prepareRulesPostImportRuleSetRuleContainer(ruleSetRuleIds));
+        try (OutputStream writer = new FileOutputStream(f)) {
+            handleLoadCastor(writer, prepareRulesPostImportRuleSetRuleContainer(ruleSetRuleIds));
+        }
 
         response.setHeader("Content-disposition", "attachment; filename=\"" + "rules" + currentStudy.getOid() + "-" + time + ".xml" + "\";");
         response.setContentType("text/xml");
