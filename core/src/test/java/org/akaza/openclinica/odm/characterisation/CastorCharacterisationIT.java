@@ -9,6 +9,7 @@
 package org.akaza.openclinica.odm.characterisation;
 
 import org.akaza.openclinica.templates.HibernateOcDbTestCase;
+import org.dbunit.operation.DatabaseOperation;
 
 /**
  * Base class for Phase B.0 Castor characterisation tests. Subclasses pin a
@@ -94,5 +95,42 @@ public abstract class CastorCharacterisationIT extends HibernateOcDbTestCase {
      */
     protected void assertUnmarshalled(Object unmarshalledRoot) {
         GoldenAssertions.assertUnmarshalled(unmarshalledRoot);
+    }
+
+    /**
+     * Override the DBUnit default {@link DatabaseOperation#CLEAN_INSERT} (which
+     * issues a {@code DELETE FROM <table>} for every table named in the dataset
+     * before inserting). The institutional Liquibase migrations seed several
+     * referential rows in {@code study}, {@code user_account}, {@code status},
+     * etc. that downstream tables have FKs to - a blanket DELETE on {@code study}
+     * trips {@code fk_study_reference_instrument} (or any of a dozen sibling
+     * FKs).
+     *
+     * <p>{@code INSERT} skips the wipe and adds only the fixture rows. Tests
+     * pick deliberately unused IDs (typically negative) to avoid colliding with
+     * the seed data, and the surrounding Spring transaction rolls back so the
+     * inserts do not leak.
+     */
+    @Override
+    protected DatabaseOperation getSetUpOperation() throws Exception {
+        return DatabaseOperation.INSERT;
+    }
+
+    /**
+     * Run a fixture-row {@code DELETE} as the DBUnit tearDown operation. The
+     * {@code INSERT} setup auto-commits via the
+     * {@link org.apache.commons.dbcp.BasicDataSource} connection (no Spring
+     * transaction wraps the DBUnit setUp call, so the inserts persist even
+     * when the surrounding Spring test transaction rolls back). Without a
+     * matching tearDown delete, the next run would trip on a unique-key
+     * violation on the fixture rows.
+     *
+     * <p>{@code DELETE} (vs. {@code DELETE_ALL}) only removes the rows named
+     * in the dataset, so institutional Liquibase seed rows in {@code study},
+     * {@code user_account}, etc. are left intact.
+     */
+    @Override
+    protected DatabaseOperation getTearDownOperation() throws Exception {
+        return DatabaseOperation.DELETE;
     }
 }
