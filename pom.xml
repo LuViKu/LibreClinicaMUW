@@ -83,6 +83,18 @@
 								     from the parent surefire pluginManagement config so the
 								     DB-dependent tests actually run under this profile. -->
 								<excludes combine.self="override"/>
+								<!-- Phase 0 backlog ITs follow the failsafe naming
+								     convention (*IT.java), which surefire's default
+								     includes do not pick up. Explicit include keeps
+								     them in the integration-tests profile alongside
+								     the legacy *Test.java suites. The default includes
+								     are repeated so the profile keeps them too. -->
+								<includes combine.self="override">
+									<include>**/*Test.java</include>
+									<include>**/*Tests.java</include>
+									<include>**/Test*.java</include>
+									<include>**/*IT.java</include>
+								</includes>
 							</configuration>
 						</plugin>
 					</plugins>
@@ -1011,6 +1023,12 @@
 							     it runs in the default suite and verifies the
 							     XMLUnit dependency is wired correctly. -->
 							<exclude>**/odm/characterisation/*IT.java</exclude>
+							<!-- Phase 0 integration-test backlog: critical-path
+							     ITs (LoginFlowIT, StudyCrudIT, …) live in the
+							     dedicated `it/` package, extend
+							     HibernateOcDbTestCase, and require a live
+							     Postgres. Run via the integration-tests profile. -->
+							<exclude>**/it/*IT.java</exclude>
 						</excludes>
 					</configuration>
 				</plugin>
