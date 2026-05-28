@@ -78,11 +78,18 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         // Boot-strap user_id=1 exists in every LibreClinica install.
         UserAccountBean owner = (UserAccountBean) userDao.findByPK(1);
         assertNotNull("Bootstrap user (id=1) must exist", owner);
+        assertTrue("CI debug: bootstrap owner.id must be > 0, was " + owner.getId(),
+                owner.getId() > 0);
+
+        // Unique-per-run identifiers — see testDuplicateLabelCurrentlyNotRejected
+        // for the rationale. Same pattern applied here for consistency.
+        String runTag = String.valueOf(System.currentTimeMillis());
+        String enrolmentLabel = "MUW-ENROL-001-" + runTag;
 
         // Parent study to enrol the subject into.
         StudyBean study = new StudyBean();
-        study.setName("MUW Subject Enrolment IT Study");
-        study.setIdentifier("MUW_SUBJ_ENROL_IT_STUDY");
+        study.setName("MUW Subject Enrolment IT Study " + runTag);
+        study.setIdentifier("MUW_SUBJ_ENROL_IT_STUDY_" + runTag);
         study.setStatus(Status.AVAILABLE);
         study.setOwnerId(owner.getId());
         study = studyDao.create(study);
@@ -90,7 +97,7 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
 
         // 1) Subject row.
         SubjectBean subject = new SubjectBean();
-        subject.setUniqueIdentifier("MUW-SUBJ-IT-001");
+        subject.setUniqueIdentifier("MUW-SUBJ-IT-001-" + runTag);
         subject.setStatus(Status.AVAILABLE);
         subject.setOwner(owner);
         subject = subjectDao.create(subject);
@@ -98,7 +105,7 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
 
         // 2) StudySubject row linking the subject to the study.
         StudySubjectBean enrolment = new StudySubjectBean();
-        enrolment.setLabel("MUW-ENROL-001");
+        enrolment.setLabel(enrolmentLabel);
         enrolment.setSubjectId(subject.getId());
         enrolment.setStudyId(study.getId());
         enrolment.setStatus(Status.AVAILABLE);
@@ -117,7 +124,7 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         assertEquals("FK study_id round-trips",
                 study.getId(), roundTripped.getStudyId());
         assertEquals("label round-trips",
-                "MUW-ENROL-001", roundTripped.getLabel());
+                enrolmentLabel, roundTripped.getLabel());
     }
 
     /**
@@ -154,42 +161,58 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         UserAccountDAO userDao = (UserAccountDAO) getContext().getBean("userAccountDao");
 
         UserAccountBean owner = (UserAccountBean) userDao.findByPK(1);
+        assertTrue("CI debug: bootstrap owner.id must be > 0, was " + owner.getId(),
+                owner.getId() > 0);
+
+        // Unique-per-run identifiers so cross-test pollution in a shared
+        // postgres (CI integration-tests profile) doesn't collide with
+        // identifiers from prior test classes/methods that REFRESH-inserted
+        // without cleanup. The previous "MUW_SUBJ_ENROL_IT_DUP" + fixed
+        // subject-uids caused silent FK / unique-constraint failures in
+        // CI but passed locally (fresh postgres per `-Dtest=` invocation).
+        String runTag = String.valueOf(System.currentTimeMillis());
 
         StudyBean study = new StudyBean();
-        study.setName("MUW Subject Enrolment IT Dup Study");
-        study.setIdentifier("MUW_SUBJ_ENROL_IT_DUP");
+        study.setName("MUW SubjEnrol IT Dup Study " + runTag);
+        study.setIdentifier("MUW_SUBJ_ENROL_IT_DUP_" + runTag);
         study.setStatus(Status.AVAILABLE);
         study.setOwnerId(owner.getId());
         study = studyDao.create(study);
+        assertTrue("CI debug: study.create() must yield positive PK, was "
+                + study.getId(), study.getId() > 0);
 
         SubjectBean subjectOne = new SubjectBean();
-        subjectOne.setUniqueIdentifier("MUW-SUBJ-IT-DUP-A");
+        subjectOne.setUniqueIdentifier("MUW-SUBJ-IT-DUP-A-" + runTag);
         subjectOne.setStatus(Status.AVAILABLE);
         subjectOne.setOwner(owner);
         subjectOne = subjectDao.create(subjectOne);
+        assertTrue("CI debug: subjectOne.create() must yield positive PK, was "
+                + subjectOne.getId(), subjectOne.getId() > 0);
 
         SubjectBean subjectTwo = new SubjectBean();
-        subjectTwo.setUniqueIdentifier("MUW-SUBJ-IT-DUP-B");
+        subjectTwo.setUniqueIdentifier("MUW-SUBJ-IT-DUP-B-" + runTag);
         subjectTwo.setStatus(Status.AVAILABLE);
         subjectTwo.setOwner(owner);
         subjectTwo = subjectDao.create(subjectTwo);
+        assertTrue("CI debug: subjectTwo.create() must yield positive PK, was "
+                + subjectTwo.getId(), subjectTwo.getId() > 0);
 
-        // First enrolment with label "MUW-DUP-001": succeeds.
+        // First enrolment with a unique-per-run label: succeeds.
         StudySubjectBean firstEnrolment = new StudySubjectBean();
-        firstEnrolment.setLabel("MUW-DUP-001");
+        firstEnrolment.setLabel("MUW-DUP-001-" + runTag);
         firstEnrolment.setSubjectId(subjectOne.getId());
         firstEnrolment.setStudyId(study.getId());
         firstEnrolment.setStatus(Status.AVAILABLE);
         firstEnrolment.setOwner(owner);
         firstEnrolment = studySubjectDao.create(firstEnrolment);
-        assertTrue("first enrolment must succeed",
+        assertTrue("first enrolment must succeed (got id=" + firstEnrolment.getId() + ")",
                 firstEnrolment.getId() > 0);
 
         // Second enrolment with the SAME label in the SAME study: must
         // be rejected. The DAO either throws or leaves id == 0; the
         // production code path treats either as "duplicate label".
         StudySubjectBean dupEnrolment = new StudySubjectBean();
-        dupEnrolment.setLabel("MUW-DUP-001");
+        dupEnrolment.setLabel("MUW-DUP-001-" + runTag); // same label as firstEnrolment
         dupEnrolment.setSubjectId(subjectTwo.getId());
         dupEnrolment.setStudyId(study.getId());
         dupEnrolment.setStatus(Status.AVAILABLE);
