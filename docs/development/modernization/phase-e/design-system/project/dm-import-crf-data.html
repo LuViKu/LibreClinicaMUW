@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>Import CRF Data · Step 3 · LCDemo · LibreClinica MUW</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="muw-tailwind-config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="muw-tokens.css" />
+  <style>
+    html, body { font-family: 'Inter', system-ui, sans-serif; }
+    body { font-feature-settings: "cv11", "ss01", "ss03"; }
+    .icon { width: 16px; height: 16px; stroke-width: 1.75; }
+    .icon-sm { width: 14px; height: 14px; stroke-width: 1.75; }
+    .icon-xs { width: 12px; height: 12px; stroke-width: 1.75; }
+    table.dense th, table.dense td { font-size: 12px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 text-sm">
+
+  <!-- Top bar -->
+  <header class="h-12 border-b border-slate-200 bg-white flex items-center px-4 sticky top-0 z-30">
+    <a href="index.html" class="flex items-center gap-2 mr-6 text-slate-900">
+      <svg class="w-7 h-7 text-muw-blue" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="14" stroke-width="1.4"/><path d="M12 8v16M20 8v16M8 12h16M8 20h16" stroke-width="1.75"/></svg>
+      <span class="muw-display font-semibold text-muw-blue tracking-tight whitespace-nowrap">LibreClinica<em class="not-italic font-medium text-muw-coral-700 text-[0.7em] uppercase tracking-[0.08em] ml-1.5 align-middle">MUW</em></span>
+    </a>
+    <nav class="flex items-center gap-1.5 text-xs text-slate-500">
+      <button class="hover:text-slate-900 font-medium text-slate-700">LCDemo</button>
+      <svg class="icon-sm text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg>
+      <a href="dm-build-study.html" class="hover:text-slate-900">Build Study</a>
+      <svg class="icon-sm text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-slate-900 font-medium">Import CRF Data</span>
+    </nav>
+    <div class="ml-auto flex items-center gap-2">
+      <button class="flex items-center gap-2 pl-2 pr-3 py-1 hover:bg-slate-100 rounded-md text-xs">
+        <span class="w-6 h-6 rounded-full bg-muw-coral-100 text-muw-coral-700 inline-flex items-center justify-center text-[10px] font-semibold">DM</span>
+        <span class="text-slate-700">dm_demo</span>
+        <span class="rounded-full bg-muw-coral-50 text-muw-coral-700 text-[10px] px-1.5 py-0.5 font-medium whitespace-nowrap">Data Manager</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-8 py-6">
+
+    <div class="mb-5">
+      <div class="text-xs text-slate-500 mb-1">LCDemo · bulk-load existing data</div>
+      <h1 class="text-xl font-semibold tracking-tight">Import CRF Data</h1>
+      <p class="text-xs text-slate-500 mt-1 max-w-3xl">
+        Bulk-load completed CRFs from CDISC ODM XML. Subject / event / CRF / item must already be defined
+        in the study. The import is staged — nothing is committed until you confirm at the final step.
+      </p>
+    </div>
+
+    <!-- Stepper -->
+    <ol class="flex items-center gap-3 mb-6 text-xs">
+      <li class="flex items-center gap-2 text-muw-teal-700 font-medium">
+        <span class="w-7 h-7 rounded-full bg-muw-teal-100 inline-flex items-center justify-center">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <span>Upload</span>
+      </li>
+      <span class="flex-1 h-px bg-emerald-300"></span>
+      <li class="flex items-center gap-2 text-muw-teal-700 font-medium">
+        <span class="w-7 h-7 rounded-full bg-muw-teal-100 inline-flex items-center justify-center">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+        </span>
+        <span>Map</span>
+      </li>
+      <span class="flex-1 h-px bg-blue-300"></span>
+      <li class="flex items-center gap-2 text-muw-blue-700 font-semibold">
+        <span class="w-7 h-7 rounded-full bg-muw-blue text-white inline-flex items-center justify-center">3</span>
+        <span>Preview &amp; resolve</span>
+      </li>
+      <span class="flex-1 h-px bg-slate-200"></span>
+      <li class="flex items-center gap-2 text-slate-500">
+        <span class="w-7 h-7 rounded-full border border-slate-300 bg-white inline-flex items-center justify-center text-slate-500 font-semibold">4</span>
+        <span>Commit</span>
+      </li>
+    </ol>
+
+    <!-- File context card -->
+    <div class="bg-white border border-slate-200 rounded-lg p-4 mb-4 flex items-center gap-4">
+      <span class="w-10 h-10 rounded-md bg-slate-100 inline-flex items-center justify-center shrink-0">
+        <svg class="icon text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </span>
+      <div class="flex-1">
+        <div class="font-medium text-slate-900">site-muenchen-aki.odm.xml</div>
+        <div class="text-xs text-slate-500">CDISC ODM 1.3 · 4.2 MB · uploaded 28-May 14:58 by dm_demo · 3 subjects, 8 events, 17 CRFs detected</div>
+      </div>
+      <button class="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700">Re-upload</button>
+    </div>
+
+    <!-- Validation summary -->
+    <section class="mb-4 grid grid-cols-5 gap-2">
+      <div class="rounded-lg border border-slate-200 p-3 bg-white">
+        <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Rows</div>
+        <div class="mt-1 text-xl font-semibold text-slate-900">412</div>
+        <div class="text-xs text-slate-500">across 17 CRFs</div>
+      </div>
+      <div class="rounded-lg border border-muw-teal-100 bg-muw-teal-50 p-3">
+        <div class="text-[10px] uppercase tracking-wider text-muw-teal-700 font-semibold flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-teal-500"></span>Ready to import
+        </div>
+        <div class="mt-1 text-xl font-semibold text-emerald-900">389</div>
+        <div class="text-xs text-muw-teal-700">new records, no conflicts</div>
+      </div>
+      <div class="rounded-lg border border-amber-200 bg-amber-50 p-3">
+        <div class="text-[10px] uppercase tracking-wider text-amber-700 font-semibold flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>Overwrites existing
+        </div>
+        <div class="mt-1 text-xl font-semibold text-amber-900">17</div>
+        <div class="text-xs text-amber-700">need explicit confirmation</div>
+      </div>
+      <div class="rounded-lg border border-rose-200 bg-rose-50 p-3">
+        <div class="text-[10px] uppercase tracking-wider text-rose-700 font-semibold flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span>Errors · will skip
+        </div>
+        <div class="mt-1 text-xl font-semibold text-rose-900">6</div>
+        <div class="text-xs text-rose-700">unmapped OID / bad value</div>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div class="text-[10px] uppercase tracking-wider text-slate-600 font-semibold flex items-center gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>Warnings
+        </div>
+        <div class="mt-1 text-xl font-semibold text-slate-900">23</div>
+        <div class="text-xs text-slate-500">soft validation, import OK</div>
+      </div>
+    </section>
+
+    <!-- Filter chips -->
+    <div class="flex items-center gap-2 mb-3 text-xs">
+      <div class="text-slate-500">Show:</div>
+      <button class="px-2.5 py-1 rounded-full border border-muw-blue-200 bg-muw-blue-50 text-blue-800 inline-flex items-center gap-1 font-medium">
+        All non-ready
+      </button>
+      <button class="px-2.5 py-1 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-700">Conflicts only</button>
+      <button class="px-2.5 py-1 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-700">Errors only</button>
+      <button class="px-2.5 py-1 rounded-full border border-slate-200 bg-white hover:bg-slate-50 text-slate-700">By subject</button>
+      <input type="text" placeholder="Find OID, subject, CRF…" class="ml-auto px-2.5 py-1 border border-slate-200 rounded-md text-xs w-64 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100 focus:outline-none" />
+    </div>
+
+    <!-- Table of staged rows -->
+    <div class="bg-white border border-slate-200 rounded-lg overflow-hidden mb-4">
+      <table class="dense w-full text-left">
+        <thead class="bg-slate-50 text-xs text-slate-600">
+          <tr class="border-b border-slate-200">
+            <th class="px-3 py-2 font-medium w-32">Status</th>
+            <th class="px-3 py-2 font-medium w-20">Subject</th>
+            <th class="px-3 py-2 font-medium w-28">Event</th>
+            <th class="px-3 py-2 font-medium w-32">CRF · item</th>
+            <th class="px-3 py-2 font-medium">Existing → incoming</th>
+            <th class="px-3 py-2 font-medium w-32">Action</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+
+          <tr class="hover:bg-slate-50 bg-amber-50/30">
+            <td class="px-3 py-2.5">
+              <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-800 px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Overwrite
+              </span>
+            </td>
+            <td class="px-3 py-2.5 font-medium">M-001</td>
+            <td class="px-3 py-2.5 text-slate-700">V2 Day 30</td>
+            <td class="px-3 py-2.5 font-mono text-xs text-slate-600">AE · ae_severity</td>
+            <td class="px-3 py-2.5">
+              <div class="flex items-center gap-2 text-xs">
+                <span class="font-mono px-1.5 py-0.5 rounded bg-rose-50 text-rose-900 border border-rose-200">Severe</span>
+                <svg class="icon-xs text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <span class="font-mono px-1.5 py-0.5 rounded bg-muw-teal-50 text-emerald-900 border border-muw-teal-100">Moderate</span>
+              </div>
+            </td>
+            <td class="px-3 py-2.5">
+              <select class="w-full px-2 py-1 border border-slate-300 rounded text-xs bg-white">
+                <option>Overwrite (with note)</option>
+                <option>Skip</option>
+              </select>
+            </td>
+          </tr>
+
+          <tr class="hover:bg-slate-50 bg-amber-50/30">
+            <td class="px-3 py-2.5">
+              <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-800 px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Overwrite
+              </span>
+            </td>
+            <td class="px-3 py-2.5 font-medium">M-002</td>
+            <td class="px-3 py-2.5 text-slate-700">V1 Inclusion</td>
+            <td class="px-3 py-2.5 font-mono text-xs text-slate-600">Vitals · weight_kg</td>
+            <td class="px-3 py-2.5">
+              <div class="flex items-center gap-2 text-xs">
+                <span class="font-mono px-1.5 py-0.5 rounded bg-rose-50 text-rose-900 border border-rose-200">68.0</span>
+                <svg class="icon-xs text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                <span class="font-mono px-1.5 py-0.5 rounded bg-muw-teal-50 text-emerald-900 border border-muw-teal-100">67.5</span>
+              </div>
+            </td>
+            <td class="px-3 py-2.5">
+              <select class="w-full px-2 py-1 border border-slate-300 rounded text-xs bg-white">
+                <option>Overwrite (with note)</option>
+                <option>Skip</option>
+              </select>
+            </td>
+          </tr>
+
+          <tr class="hover:bg-slate-50 bg-rose-50/30">
+            <td class="px-3 py-2.5">
+              <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Error
+              </span>
+            </td>
+            <td class="px-3 py-2.5 font-medium">M-003</td>
+            <td class="px-3 py-2.5 text-slate-700">V2 Day 30</td>
+            <td class="px-3 py-2.5 font-mono text-xs text-slate-600">AE · ae_severity</td>
+            <td class="px-3 py-2.5 text-xs text-rose-700">
+              <strong>Bad value</strong> "Mild but persistent" · expected one of 1, 2, 3, 4, 5
+            </td>
+            <td class="px-3 py-2.5">
+              <button class="text-xs text-muw-blue hover:underline">Open mapping</button>
+            </td>
+          </tr>
+
+          <tr class="hover:bg-slate-50 bg-rose-50/30">
+            <td class="px-3 py-2.5">
+              <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Error
+              </span>
+            </td>
+            <td class="px-3 py-2.5 font-medium">M-007</td>
+            <td class="px-3 py-2.5 text-slate-700">V1 Inclusion</td>
+            <td class="px-3 py-2.5 font-mono text-xs text-slate-600">Demographics · sex_at_birth</td>
+            <td class="px-3 py-2.5 text-xs text-rose-700">
+              <strong>Unknown item OID</strong> — no <span class="font-mono">sex_at_birth</span> in current Demographics v3.0
+            </td>
+            <td class="px-3 py-2.5">
+              <button class="text-xs text-muw-blue hover:underline">Open mapping</button>
+            </td>
+          </tr>
+
+          <tr class="hover:bg-slate-50 bg-rose-50/30">
+            <td class="px-3 py-2.5">
+              <span class="inline-flex items-center gap-1 rounded-full bg-rose-50 text-rose-700 px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                <span class="w-1.5 h-1.5 rounded-full bg-rose-500"></span> Error
+              </span>
+            </td>
+            <td class="px-3 py-2.5 font-medium">M-009</td>
+            <td class="px-3 py-2.5 text-slate-700">—</td>
+            <td class="px-3 py-2.5 text-slate-500 italic">subject record</td>
+            <td class="px-3 py-2.5 text-xs text-rose-700">
+              <strong>Subject not enrolled</strong> — M-009 does not exist; enrol first or remove from XML
+            </td>
+            <td class="px-3 py-2.5 text-slate-400 text-xs italic">Will skip</td>
+          </tr>
+
+          <tr class="hover:bg-slate-50 bg-slate-50/40">
+            <td class="px-3 py-2.5">
+              <span class="inline-flex items-center gap-1 rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-xs font-medium">
+                <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span> Warning
+              </span>
+            </td>
+            <td class="px-3 py-2.5 font-medium">M-001</td>
+            <td class="px-3 py-2.5 text-slate-700">V2 Day 30</td>
+            <td class="px-3 py-2.5 font-mono text-xs text-slate-600">Vitals · heart_rate</td>
+            <td class="px-3 py-2.5 text-xs text-slate-700">
+              Value <span class="font-mono">42</span> is below normal range (50–100). Will import as-is; rule will flag for SDV.
+            </td>
+            <td class="px-3 py-2.5 text-slate-400 text-xs italic">Auto-flag</td>
+          </tr>
+
+          <tr class="hover:bg-slate-50">
+            <td class="px-3 py-2.5">
+              <span class="inline-flex items-center gap-1 rounded-full bg-muw-teal-50 text-muw-teal-700 px-2 py-0.5 text-xs font-medium whitespace-nowrap">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+                Ready
+              </span>
+            </td>
+            <td class="px-3 py-2.5 font-medium">M-001</td>
+            <td class="px-3 py-2.5 text-slate-700">V1 Inclusion</td>
+            <td class="px-3 py-2.5 font-mono text-xs text-slate-600">Demographics · year_of_birth</td>
+            <td class="px-3 py-2.5 text-xs text-slate-700">
+              <span class="font-mono">1962</span> · new record
+            </td>
+            <td class="px-3 py-2.5 text-slate-400 text-xs italic">Insert</td>
+          </tr>
+
+        </tbody>
+      </table>
+      <div class="border-t border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500 flex items-center justify-between">
+        <span>Showing 7 of 46 non-ready rows</span>
+        <div class="flex items-center gap-1.5">
+          <label>Rows:</label>
+          <select class="border border-slate-200 rounded px-1.5 py-1 text-xs bg-white"><option>10</option><option>25</option><option>50</option></select>
+        </div>
+      </div>
+    </div>
+
+    <!-- Overwrite confirmation -->
+    <div class="bg-white border border-slate-200 rounded-lg p-4 mb-4">
+      <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-2">Audit log entry</h3>
+      <p class="text-xs text-slate-700 mb-2">
+        17 overwrites require a <em>Reason for Change</em> note. This note is recorded against every overwritten
+        item in the audit log.
+      </p>
+      <textarea rows="2" class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100 focus:outline-none" placeholder="e.g. Site München sent corrected ODM after on-site source-data reconciliation 26-May-2026."></textarea>
+    </div>
+
+    <!-- Action row -->
+    <div class="flex items-center justify-between bg-white border border-slate-200 rounded-lg px-4 py-3">
+      <a href="#" class="text-xs text-slate-500 hover:text-slate-700 inline-flex items-center gap-1">
+        <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="15 18 9 12 15 6"/></svg>
+        Back to Map step
+      </a>
+      <div class="flex items-center gap-2 text-xs">
+        <span class="text-slate-500">Will commit:</span>
+        <span class="font-medium text-muw-teal-700">389 new</span>
+        <span class="text-slate-300">·</span>
+        <span class="font-medium text-amber-700">17 overwrite</span>
+        <span class="text-slate-300">·</span>
+        <span class="text-slate-500">6 skip</span>
+        <button class="ml-3 px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium inline-flex items-center gap-1.5">
+          Continue to Commit
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+</body>
+</html>

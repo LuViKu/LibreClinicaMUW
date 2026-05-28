@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>Design System · LibreClinica MUW</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="muw-tailwind-config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="muw-tokens.css" />
+  <style>
+    .grid-cell { border: 1px dashed rgba(17,29,78,0.12); border-radius: 8px; }
+    .check::before {
+      content: ''; display: inline-block; width: 6px; height: 6px;
+      background: var(--muw-teal); border-radius: 999px; margin-right: 8px;
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body class="bg-white text-slate-900 text-sm">
+
+  <!-- Header -->
+  <header class="border-b border-slate-200 sticky top-0 z-30 bg-white/95 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+      <a href="index.html" class="muw-brand">
+        <svg class="muw-mark" viewBox="0 0 32 32" fill="none" stroke="currentColor"><circle cx="16" cy="16" r="14" stroke-width="1.4"/><path d="M12 8v16M20 8v16M8 12h16M8 20h16" stroke-width="1.75" stroke-linecap="round"/></svg>
+        <span class="muw-wordmark">LibreClinica <em>MUW</em></span>
+      </a>
+      <nav class="flex items-center gap-1 text-sm">
+        <a href="index.html" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-muw-blue hover:bg-muw-blue-50">Mockups</a>
+        <a href="design-system.html" class="px-3 py-1.5 rounded-md text-muw-blue bg-muw-blue-50 font-medium">Design system</a>
+        <a href="design-notes.md" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-muw-blue hover:bg-muw-blue-50">Notes</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="max-w-6xl mx-auto px-6 py-12">
+
+    <!-- Hero -->
+    <section class="mb-16 grid grid-cols-12 gap-8">
+      <div class="col-span-7">
+        <div class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muw-coral-700 whitespace-nowrap mb-4">
+          <span class="muw-rule"></span>
+          <span>v1 · cCRF Platform</span>
+        </div>
+        <h1 class="muw-display text-5xl font-medium text-muw-blue leading-tight mb-5">
+          Design system for clinical data&nbsp;capture.
+        </h1>
+        <p class="text-slate-600 text-base leading-relaxed max-w-xl">
+          A small, opinionated system for the LibreClinica MUW cCRF platform — built for the
+          Department of Ophthalmology and Optometry at the Medical University of Vienna.
+          Rooted in the MedUni Wien Corporate Design, sharpened for data-dense clinical workflows.
+        </p>
+        <div class="mt-7 flex items-center gap-3">
+          <a href="#colors" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-muw-blue text-white hover:bg-muw-blue-700 text-sm font-medium">
+            Browse tokens
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
+          <a href="index.html" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium">
+            See all 17 mockups
+          </a>
+        </div>
+      </div>
+
+      <!-- Hero swatch tile -->
+      <div class="col-span-5">
+        <div class="aspect-[4/3] rounded-2xl overflow-hidden bg-muw-blue relative shadow-muw-elev">
+          <svg class="absolute inset-0 w-full h-full text-white/[0.04]" viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice"><defs><pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse"><path d="M0 32V0h32" fill="none" stroke="currentColor" stroke-width="1"/></pattern></defs><rect width="400" height="300" fill="url(#grid)"/></svg>
+          <!-- Coral seal -->
+          <div class="absolute top-6 right-6 w-20 h-20 rounded-full bg-muw-coral/90 flex items-center justify-center">
+            <svg class="w-10 h-10 text-muw-blue" viewBox="0 0 32 32" fill="none" stroke="currentColor"><circle cx="16" cy="16" r="13" stroke-width="1.4"/><path d="M12 8v16M20 8v16M8 12h16M8 20h16" stroke-width="1.75" stroke-linecap="round"/></svg>
+          </div>
+          <div class="absolute bottom-6 left-6 right-6">
+            <div class="muw-display text-white text-2xl leading-tight mb-1">Dunkelblau<br/><span class="text-muw-coral">+&nbsp;Coral</span></div>
+            <div class="text-white/60 text-xs tracking-wide font-mono">#111d4e · #f0a794</div>
+          </div>
+          <!-- Bottom row of secondary swatches -->
+          <div class="absolute bottom-0 left-0 right-0 flex">
+            <div class="h-2 flex-1 bg-muw-sky"></div>
+            <div class="h-2 flex-1 bg-muw-teal"></div>
+            <div class="h-2 flex-1 bg-muw-coral"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Principles -->
+    <section class="mb-20 grid grid-cols-3 gap-5">
+      <div class="rounded-muw border border-slate-200 p-5">
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-muw-coral-700 mb-2">Principle 01</div>
+        <h3 class="font-semibold text-base text-muw-blue mb-1.5">Clinical, not corporate.</h3>
+        <p class="text-slate-600 leading-relaxed text-[13px]">Data density first. Status carries text AND colour. Every error explains itself. The chrome stays quiet so the data leads.</p>
+      </div>
+      <div class="rounded-muw border border-slate-200 p-5">
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-muw-coral-700 mb-2">Principle 02</div>
+        <h3 class="font-semibold text-base text-muw-blue mb-1.5">MUW where it matters.</h3>
+        <p class="text-slate-600 leading-relaxed text-[13px]">Dunkelblau anchors brand moments — wordmark, primary action, focus ring. Coral is the warm accent. Secondary colors map to roles.</p>
+      </div>
+      <div class="rounded-muw border border-slate-200 p-5">
+        <div class="text-xs font-medium uppercase tracking-[0.12em] text-muw-coral-700 mb-2">Principle 03</div>
+        <h3 class="font-semibold text-base text-muw-blue mb-1.5">Audited by default.</h3>
+        <p class="text-slate-600 leading-relaxed text-[13px]">Every regulated action shows what is recorded, by whom, when. Reversibility and consequences live in the affordance, not in the help docs.</p>
+      </div>
+    </section>
+
+    <!-- COLORS ============================================================== -->
+    <section id="colors" class="mb-20 scroll-mt-20">
+      <div class="flex items-end justify-between mb-8 pb-4 border-b border-slate-200">
+        <div>
+          <div class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muw-coral-700 whitespace-nowrap mb-2">
+            <span class="muw-rule"></span><span>Tokens · Colour</span>
+          </div>
+          <h2 class="muw-display text-3xl text-muw-blue">Farbwelt</h2>
+          <p class="text-slate-500 mt-1.5 text-sm">One primary, three secondary — the MUW palette with shade scales tuned for UI.</p>
+        </div>
+        <div class="text-xs text-slate-400 font-mono whitespace-nowrap">muw-tailwind-config.js</div>
+      </div>
+
+      <!-- Primary -->
+      <div class="mb-8">
+        <div class="flex items-baseline gap-3 mb-3">
+          <h3 class="text-sm font-semibold text-muw-blue">Primärfarbe · Dunkelblau</h3>
+          <span class="text-xs text-slate-500">brand, primary actions, links, body text emphasis</span>
+        </div>
+        <div class="grid grid-cols-11 gap-1.5">
+          <!-- 50 .. 950 -->
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24">
+            <div class="font-medium text-muw-blue-700">50</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue-50 border border-slate-200"></div><div class="font-mono text-[9px] text-slate-400 mt-1">#f3f4f9</div></div>
+          </div>
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24">
+            <div class="font-medium text-muw-blue-700">100</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue-100 border border-slate-200"></div><div class="font-mono text-[9px] text-slate-400 mt-1">#e3e6ef</div></div>
+          </div>
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24">
+            <div class="font-medium text-muw-blue-700">200</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue-200"></div><div class="font-mono text-[9px] text-slate-400 mt-1">#c6cce0</div></div>
+          </div>
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24">
+            <div class="font-medium text-muw-blue-700">300</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue-300"></div><div class="font-mono text-[9px] text-slate-400 mt-1">#9aa3c4</div></div>
+          </div>
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24">
+            <div class="font-medium text-muw-blue-700">400</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue-400"></div><div class="font-mono text-[9px] text-white/0">·</div></div>
+          </div>
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24">
+            <div class="font-medium text-muw-blue-700">500</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue-500"></div><div class="font-mono text-[9px] text-slate-400 mt-1">#384782</div></div>
+          </div>
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24">
+            <div class="font-medium text-muw-blue-700">600</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue-600"></div><div class="font-mono text-[9px] text-slate-400 mt-1">#243366</div></div>
+          </div>
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24">
+            <div class="font-medium text-muw-blue-700">700</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue-700"></div><div class="font-mono text-[9px] text-slate-400 mt-1">#1a2658</div></div>
+          </div>
+          <!-- 800 — brand default — highlighted -->
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24 ring-2 ring-muw-coral relative">
+            <div class="absolute -top-2 left-2 px-1.5 py-0.5 rounded bg-muw-coral text-[8.5px] uppercase tracking-wider font-semibold text-muw-blue">Brand</div>
+            <div class="font-medium text-muw-blue-700">800</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue"></div><div class="font-mono text-[9px] text-muw-blue mt-1">#111d4e</div></div>
+          </div>
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24">
+            <div class="font-medium text-muw-blue-700">900</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue-900"></div><div class="font-mono text-[9px] text-slate-400 mt-1">#0b1438</div></div>
+          </div>
+          <div class="grid-cell p-3 text-[10px] flex flex-col justify-between h-24">
+            <div class="font-medium text-muw-blue-700">950</div>
+            <div><div class="w-full h-6 rounded bg-muw-blue-950"></div><div class="font-mono text-[9px] text-slate-400 mt-1">#050817</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Secondary swatch rows -->
+      <div class="grid grid-cols-3 gap-5">
+        <!-- Hellblau -->
+        <div class="rounded-muw border border-slate-200 overflow-hidden">
+          <div class="h-24 bg-muw-sky flex items-end p-3 text-muw-blue">
+            <div>
+              <div class="muw-display text-lg font-medium">Hellblau</div>
+              <div class="font-mono text-[10px] opacity-75">#5fb4e5</div>
+            </div>
+          </div>
+          <div class="px-4 py-3 text-xs">
+            <div class="text-slate-500 leading-relaxed mb-3">Info state · scheduled events · Monitor role.</div>
+            <div class="flex gap-1">
+              <div class="flex-1 h-5 bg-muw-sky-50 rounded-l"></div>
+              <div class="flex-1 h-5 bg-muw-sky-100"></div>
+              <div class="flex-1 h-5 bg-muw-sky-300"></div>
+              <div class="flex-1 h-5 bg-muw-sky-500"></div>
+              <div class="flex-1 h-5 bg-muw-sky-700 rounded-r"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Grün -->
+        <div class="rounded-muw border border-slate-200 overflow-hidden">
+          <div class="h-24 bg-muw-teal flex items-end p-3 text-white">
+            <div>
+              <div class="muw-display text-lg font-medium">Grün</div>
+              <div class="font-mono text-[10px] opacity-80">#2f8e91</div>
+            </div>
+          </div>
+          <div class="px-4 py-3 text-xs">
+            <div class="text-slate-500 leading-relaxed mb-3">Success · complete · signed · Investigator role.</div>
+            <div class="flex gap-1">
+              <div class="flex-1 h-5 bg-muw-teal-50 rounded-l"></div>
+              <div class="flex-1 h-5 bg-muw-teal-100"></div>
+              <div class="flex-1 h-5 bg-muw-teal-300"></div>
+              <div class="flex-1 h-5 bg-muw-teal-500"></div>
+              <div class="flex-1 h-5 bg-muw-teal-700 rounded-r"></div>
+            </div>
+          </div>
+        </div>
+        <!-- Coral -->
+        <div class="rounded-muw border border-slate-200 overflow-hidden">
+          <div class="h-24 bg-muw-coral flex items-end p-3 text-muw-blue">
+            <div>
+              <div class="muw-display text-lg font-medium">Coral</div>
+              <div class="font-mono text-[10px] opacity-75">#f0a794</div>
+            </div>
+          </div>
+          <div class="px-4 py-3 text-xs">
+            <div class="text-slate-500 leading-relaxed mb-3">Warm accent · Data Manager role · 40 % as info-bg tint.</div>
+            <div class="flex gap-1">
+              <div class="flex-1 h-5 bg-muw-coral-50 rounded-l"></div>
+              <div class="flex-1 h-5 bg-muw-coral-100"></div>
+              <div class="flex-1 h-5 bg-muw-coral-300"></div>
+              <div class="flex-1 h-5 bg-muw-coral-500"></div>
+              <div class="flex-1 h-5 bg-muw-coral-700 rounded-r"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Semantic mapping -->
+      <div class="mt-8 rounded-muw border border-slate-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+          <h3 class="text-sm font-semibold text-muw-blue">Semantic mapping</h3>
+          <span class="text-[11px] text-slate-500">how the palette maps onto status, role and feedback</span>
+        </div>
+        <table class="w-full text-xs">
+          <thead class="text-slate-500 text-[11px] uppercase tracking-wider">
+            <tr class="border-b border-slate-100">
+              <th class="text-left px-4 py-2 font-medium">Use</th>
+              <th class="text-left px-4 py-2 font-medium">Token</th>
+              <th class="text-left px-4 py-2 font-medium">Hex</th>
+              <th class="text-left px-4 py-2 font-medium">Example</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr><td class="px-4 py-3 font-medium">Primary action · brand</td><td class="px-4 py-3 font-mono text-muw-blue">muw-blue</td><td class="px-4 py-3 font-mono text-slate-500">#111d4e</td><td class="px-4 py-3"><button class="px-3 py-1.5 rounded-md bg-muw-blue text-white text-xs font-medium">Save &amp; continue</button></td></tr>
+            <tr><td class="px-4 py-3 font-medium">Success · complete · signed</td><td class="px-4 py-3 font-mono text-muw-teal-700">muw-teal-{50,500,700}</td><td class="px-4 py-3 font-mono text-slate-500">#2f8e91</td><td class="px-4 py-3"><span class="pill bg-muw-teal-50 text-muw-teal-700"><span class="dot bg-muw-teal-500"></span>Complete</span></td></tr>
+            <tr><td class="px-4 py-3 font-medium">Info · scheduled · neutral note</td><td class="px-4 py-3 font-mono text-muw-sky-700">muw-sky-{50,500,700}</td><td class="px-4 py-3 font-mono text-slate-500">#5fb4e5</td><td class="px-4 py-3"><span class="pill bg-muw-sky-50 text-muw-sky-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Scheduled</span></td></tr>
+            <tr><td class="px-4 py-3 font-medium">Warning · in progress · pending</td><td class="px-4 py-3 font-mono text-amber-700">amber-{50,500,700}</td><td class="px-4 py-3 font-mono text-slate-500">#b45309</td><td class="px-4 py-3"><span class="pill bg-amber-50 text-amber-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>In progress</span></td></tr>
+            <tr><td class="px-4 py-3 font-medium">Danger · error · open query</td><td class="px-4 py-3 font-mono text-rose-700">rose-{50,500,700}</td><td class="px-4 py-3 font-mono text-slate-500">#b91c1c</td><td class="px-4 py-3"><span class="pill bg-rose-50 text-rose-700"><span class="dot bg-rose-500"></span>Open query</span></td></tr>
+            <tr><td class="px-4 py-3 font-medium">Role · Investigator</td><td class="px-4 py-3 font-mono text-muw-teal-700">muw-teal</td><td class="px-4 py-3 font-mono text-slate-500">#2f8e91</td><td class="px-4 py-3"><span class="pill bg-muw-teal-50 text-muw-teal-700"><span class="dot bg-muw-teal-500"></span>Investigator</span></td></tr>
+            <tr><td class="px-4 py-3 font-medium">Role · Monitor</td><td class="px-4 py-3 font-mono text-muw-sky-700">muw-sky</td><td class="px-4 py-3 font-mono text-slate-500">#5fb4e5</td><td class="px-4 py-3"><span class="pill bg-muw-sky-50 text-muw-sky-700"><span class="dot bg-muw-sky-500"></span>Monitor</span></td></tr>
+            <tr><td class="px-4 py-3 font-medium">Role · Data Manager</td><td class="px-4 py-3 font-mono text-muw-coral-700">muw-coral</td><td class="px-4 py-3 font-mono text-slate-500">#f0a794</td><td class="px-4 py-3"><span class="pill bg-muw-coral-50 text-muw-coral-700"><span class="dot bg-muw-coral-500"></span>Data Manager</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TYPOGRAPHY ========================================================== -->
+    <section id="type" class="mb-20 scroll-mt-20">
+      <div class="flex items-end justify-between mb-8 pb-4 border-b border-slate-200">
+        <div>
+          <div class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muw-coral-700 whitespace-nowrap mb-2">
+            <span class="muw-rule"></span><span>Tokens · Type</span>
+          </div>
+          <h2 class="muw-display text-3xl text-muw-blue">Typografie</h2>
+          <p class="text-slate-500 mt-1.5 text-sm">Two faces. Serif for moments of brand. Grotesk for everything else.</p>
+        </div>
+        <div class="text-xs text-slate-400">14&nbsp;px UI base · 13&nbsp;px table rows</div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-5 mb-10">
+        <!-- Display (Danton ≈ Newsreader) -->
+        <div class="rounded-muw border border-slate-200 p-6 relative overflow-hidden">
+          <div class="flex items-baseline justify-between mb-4">
+            <div>
+              <div class="text-[11px] text-muw-coral-700 font-medium uppercase tracking-[0.12em] whitespace-nowrap">Display · Serif</div>
+              <div class="font-semibold text-muw-blue mt-0.5">Newsreader</div>
+            </div>
+            <div class="text-[11px] text-slate-500 font-mono whitespace-nowrap">MUW Danton ≈</div>
+          </div>
+          <div class="muw-display text-5xl text-muw-blue leading-[1.05] mb-2">Aa&nbsp;Bb&nbsp;Cc</div>
+          <div class="muw-display text-base text-slate-600 mb-5">Modern antiqua · weights 400 / 500 / 600 / 700</div>
+
+          <div class="space-y-2 border-t border-slate-100 pt-4">
+            <div class="muw-display text-3xl text-muw-blue leading-tight">Sign Subject M-001</div>
+            <div class="muw-display text-2xl text-muw-blue leading-tight">Source Data Verification</div>
+            <div class="muw-display text-lg text-muw-blue">Per-site enrolment progress</div>
+          </div>
+
+          <div class="absolute bottom-3 right-3 text-[10px] text-slate-400 font-mono">.font-serif · .muw-display</div>
+        </div>
+
+        <!-- UI (Akkurat ≈ Inter) -->
+        <div class="rounded-muw border border-slate-200 p-6 relative overflow-hidden">
+          <div class="flex items-baseline justify-between mb-4">
+            <div>
+              <div class="text-[11px] text-muw-coral-700 font-medium uppercase tracking-[0.12em] whitespace-nowrap">UI · Grotesk</div>
+              <div class="font-semibold text-muw-blue mt-0.5">Inter</div>
+            </div>
+            <div class="text-[11px] text-slate-500 font-mono whitespace-nowrap">MUW Akkurat Pro ≈</div>
+          </div>
+          <div class="text-5xl font-semibold text-muw-blue leading-[1.05] tracking-tight mb-2">Aa&nbsp;Bb&nbsp;Cc</div>
+          <div class="text-base text-slate-600 mb-5">Clean grotesk · weights 400 / 500 / 600 / 700</div>
+
+          <div class="space-y-2 border-t border-slate-100 pt-4">
+            <div class="text-base text-slate-900 font-semibold">Mark CRF as complete</div>
+            <div class="text-sm text-slate-700">User entered 12 of 14 required items. Validation pending.</div>
+            <div class="text-xs text-slate-500">Last saved 12 min ago — auto-save every 60 s.</div>
+            <div class="text-[11px] text-slate-400 font-mono">M-001 · V1 Inclusion · ae_severity</div>
+          </div>
+
+          <div class="absolute bottom-3 right-3 text-[10px] text-slate-400 font-mono">.font-sans (default)</div>
+        </div>
+      </div>
+
+      <!-- Scale -->
+      <div class="rounded-muw border border-slate-200 overflow-hidden">
+        <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+          <h3 class="text-sm font-semibold text-muw-blue">Type scale</h3>
+          <span class="text-[11px] text-slate-500">when to reach for which size</span>
+        </div>
+        <table class="w-full text-xs">
+          <thead class="text-slate-500 text-[11px] uppercase tracking-wider">
+            <tr class="border-b border-slate-100">
+              <th class="text-left px-4 py-2 font-medium w-44">Token</th>
+              <th class="text-left px-4 py-2 font-medium w-24">Size</th>
+              <th class="text-left px-4 py-2 font-medium w-24">Weight</th>
+              <th class="text-left px-4 py-2 font-medium">Use · Sample</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+            <tr><td class="px-4 py-3 font-mono text-muw-coral-700">muw-display 5xl</td><td class="px-4 py-3 text-slate-500">48 / 53</td><td class="px-4 py-3 text-slate-500">500</td><td class="px-4 py-3"><span class="muw-display text-5xl font-medium text-muw-blue">Hero headline</span></td></tr>
+            <tr><td class="px-4 py-3 font-mono text-muw-coral-700">muw-display 3xl</td><td class="px-4 py-3 text-slate-500">30 / 36</td><td class="px-4 py-3 text-slate-500">500</td><td class="px-4 py-3"><span class="muw-display text-3xl text-muw-blue">Page title (h1)</span></td></tr>
+            <tr><td class="px-4 py-3 font-mono text-muw-coral-700">muw-display xl</td><td class="px-4 py-3 text-slate-500">20 / 28</td><td class="px-4 py-3 text-slate-500">500</td><td class="px-4 py-3"><span class="muw-display text-xl text-muw-blue">Sign Subject M-001</span></td></tr>
+            <tr><td class="px-4 py-3 font-mono text-slate-700">text-lg semibold</td><td class="px-4 py-3 text-slate-500">18 / 26</td><td class="px-4 py-3 text-slate-500">600</td><td class="px-4 py-3"><span class="text-lg font-semibold text-slate-900">Section heading</span></td></tr>
+            <tr><td class="px-4 py-3 font-mono text-slate-700">text-sm (base)</td><td class="px-4 py-3 text-slate-500">14 / 20</td><td class="px-4 py-3 text-slate-500">400 / 500</td><td class="px-4 py-3"><span class="text-sm text-slate-700">Default body and form labels. Use 500 for emphasis.</span></td></tr>
+            <tr><td class="px-4 py-3 font-mono text-slate-700">text-[13px]</td><td class="px-4 py-3 text-slate-500">13 / 18</td><td class="px-4 py-3 text-slate-500">400</td><td class="px-4 py-3"><span class="text-[13px] text-slate-700">Table rows · 36 px row height · clinical data density.</span></td></tr>
+            <tr><td class="px-4 py-3 font-mono text-slate-700">text-xs</td><td class="px-4 py-3 text-slate-500">12 / 16</td><td class="px-4 py-3 text-slate-500">400 / 500</td><td class="px-4 py-3"><span class="text-xs text-slate-500">Helper text · metadata · breadcrumb · pill labels (11 px also OK).</span></td></tr>
+            <tr><td class="px-4 py-3 font-mono text-slate-700">font-mono text-[11px]</td><td class="px-4 py-3 text-slate-500">11 / 16</td><td class="px-4 py-3 text-slate-500">400</td><td class="px-4 py-3"><span class="font-mono text-[11px] text-slate-500">OIDs, version strings, SQL-like keys — JetBrains Mono.</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- COMPONENTS ========================================================== -->
+    <section id="components" class="mb-20 scroll-mt-20">
+      <div class="flex items-end justify-between mb-8 pb-4 border-b border-slate-200">
+        <div>
+          <div class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muw-coral-700 whitespace-nowrap mb-2">
+            <span class="muw-rule"></span><span>Components</span>
+          </div>
+          <h2 class="muw-display text-3xl text-muw-blue">Komponenten</h2>
+          <p class="text-slate-500 mt-1.5 text-sm">Primitives used across all 17 mockups. Composition is the design system.</p>
+        </div>
+      </div>
+
+      <!-- Buttons -->
+      <div class="rounded-muw border border-slate-200 p-6 mb-5">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="text-sm font-semibold text-muw-blue">Buttons</h3>
+          <span class="text-[11px] text-slate-500">primary · secondary · ghost · danger · sizes</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <button class="px-4 py-2 rounded-md bg-muw-blue text-white hover:bg-muw-blue-700 text-sm font-medium inline-flex items-center gap-1.5">
+            Save &amp; continue
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+          <button class="px-4 py-2 rounded-md border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 text-sm font-medium">Save draft</button>
+          <button class="px-4 py-2 rounded-md text-muw-blue hover:bg-muw-blue-50 text-sm font-medium">Cancel</button>
+          <button class="px-4 py-2 rounded-md bg-muw-teal text-white hover:bg-muw-teal-700 text-sm font-medium inline-flex items-center gap-1.5">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+            Mark verified (SDV)
+          </button>
+          <button class="px-4 py-2 rounded-md border border-rose-200 bg-white text-rose-700 hover:bg-rose-50 text-sm font-medium">Discard changes</button>
+          <span class="text-slate-300">·</span>
+          <button class="px-3 py-1.5 rounded-md bg-muw-blue text-white text-xs font-medium">Sm</button>
+          <button class="px-5 py-2.5 rounded-md bg-muw-blue text-white text-base font-medium">Large CTA</button>
+          <span class="text-slate-300">·</span>
+          <button disabled class="px-4 py-2 rounded-md bg-muw-blue text-white text-sm font-medium opacity-40 cursor-not-allowed">Disabled</button>
+        </div>
+      </div>
+
+      <!-- Form inputs -->
+      <div class="rounded-muw border border-slate-200 p-6 mb-5">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="text-sm font-semibold text-muw-blue">Form fields</h3>
+          <span class="text-[11px] text-slate-500">text · select · radio group · validation states</span>
+        </div>
+        <div class="grid grid-cols-3 gap-5 max-w-4xl">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1 req">Study Subject ID</label>
+            <input type="text" placeholder="e.g. M-042" class="muw-focus w-full px-3 py-2 border border-slate-300 rounded-md focus:border-muw-blue text-sm" />
+            <p class="mt-1 text-[11px] text-slate-500">Cannot be edited after save.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1 req">Severity</label>
+            <select class="muw-focus w-full px-3 py-2 border border-slate-300 rounded-md bg-white text-sm">
+              <option>— select —</option><option>Mild</option><option>Moderate</option><option>Severe</option>
+            </select>
+            <p class="mt-1 text-[11px] text-slate-500">CTCAE v5.0 grading scale.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1 req">Date of enrolment</label>
+            <input type="text" value="28-May-2026" class="muw-focus w-full px-3 py-2 border border-slate-300 rounded-md text-sm" />
+            <p class="mt-1 text-[11px] text-slate-500">dd-MMM-yyyy</p>
+          </div>
+
+          <!-- Validation states -->
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Username</label>
+            <input type="text" value="dr.kraus" class="w-full px-3 py-2 border-2 border-muw-blue rounded-md text-sm shadow-[0_0_0_3px_rgba(17,29,78,0.12)]" />
+            <p class="mt-1 text-[11px] text-slate-500">Focused</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">Year of birth</label>
+            <input type="text" value="19a3" class="w-full px-3 py-2 border-2 border-rose-500 rounded-md text-sm bg-rose-50/40" />
+            <p class="mt-1 text-[11px] text-rose-700">Must be a 4-digit year.</p>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1">CRF version</label>
+            <input type="text" value="German V1.0" disabled class="w-full px-3 py-2 border border-slate-200 rounded-md text-sm bg-slate-50 text-slate-500" />
+            <p class="mt-1 text-[11px] text-slate-500">Locked · data exists</p>
+          </div>
+
+          <!-- Radio group -->
+          <div class="col-span-2">
+            <label class="block text-xs font-medium text-slate-700 mb-1.5 req">Gender</label>
+            <div class="grid grid-cols-3 gap-2">
+              <label class="flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-md text-sm cursor-pointer hover:border-muw-blue-300">
+                <input type="radio" name="g" class="accent-muw-blue" /> Female
+              </label>
+              <label class="flex items-center gap-2 px-3 py-2 border-2 border-muw-blue rounded-md text-sm cursor-pointer bg-muw-blue-50">
+                <input type="radio" name="g" class="accent-muw-blue" checked /> Male
+              </label>
+              <label class="flex items-center gap-2 px-3 py-2 border border-slate-300 rounded-md text-sm cursor-pointer hover:border-muw-blue-300">
+                <input type="radio" name="g" class="accent-muw-blue" /> Other
+              </label>
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1.5">Checkboxes</label>
+            <div class="space-y-1.5">
+              <label class="flex items-center gap-2 text-sm"><input type="checkbox" checked class="accent-muw-blue rounded" /> Required</label>
+              <label class="flex items-center gap-2 text-sm"><input type="checkbox" checked class="accent-muw-teal rounded" /> SDV target</label>
+              <label class="flex items-center gap-2 text-sm"><input type="checkbox" class="rounded" /> PHI sensitive</label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status pills + role chips -->
+      <div class="rounded-muw border border-slate-200 p-6 mb-5">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="text-sm font-semibold text-muw-blue">Status pills · Role chips</h3>
+          <span class="text-[11px] text-slate-500">icon + label · text alone never carries meaning</span>
+        </div>
+        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-medium mb-2">CRF · Event status</div>
+        <div class="flex flex-wrap gap-2 mb-5">
+          <span class="pill bg-slate-50 text-slate-500"><span class="dot bg-slate-300"></span>Not started</span>
+          <span class="pill bg-amber-50 text-amber-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>In progress</span>
+          <span class="pill bg-muw-sky-50 text-muw-sky-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Scheduled</span>
+          <span class="pill bg-muw-teal-50 text-muw-teal-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>Complete</span>
+          <span class="pill bg-muw-teal-50 text-muw-teal-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>Signed</span>
+          <span class="pill bg-muw-teal-50 text-muw-teal-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>Verified</span>
+          <span class="pill bg-rose-50 text-rose-700"><span class="dot bg-rose-500"></span>Query</span>
+          <span class="pill bg-slate-100 text-slate-600"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M5 5l14 14"/></svg>Skipped</span>
+          <span class="pill bg-slate-100 text-slate-600"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Locked</span>
+        </div>
+
+        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-medium mb-2">Role · Identity</div>
+        <div class="flex flex-wrap gap-2 mb-5">
+          <span class="pill bg-muw-teal-50 text-muw-teal-700"><span class="dot bg-muw-teal-500"></span>Investigator</span>
+          <span class="pill bg-muw-sky-50 text-muw-sky-700"><span class="dot bg-muw-sky-500"></span>Monitor</span>
+          <span class="pill bg-muw-coral-50 text-muw-coral-700"><span class="dot bg-muw-coral-500"></span>Data Manager</span>
+          <span class="pill bg-slate-100 text-slate-600"><span class="dot bg-slate-400"></span>System</span>
+        </div>
+
+        <div class="text-[11px] uppercase tracking-wider text-slate-400 font-medium mb-2">Discrepancy · Note state</div>
+        <div class="flex flex-wrap gap-2">
+          <span class="pill bg-rose-50 text-rose-700"><span class="dot bg-rose-500"></span>Query · New</span>
+          <span class="pill bg-amber-50 text-amber-700"><span class="dot bg-amber-500"></span>Query · Updated</span>
+          <span class="pill bg-muw-teal-50 text-muw-teal-700"><span class="dot bg-muw-teal-500"></span>Query · Resolution proposed</span>
+          <span class="pill bg-slate-100 text-slate-500"><span class="dot bg-slate-400"></span>Query · Closed</span>
+          <span class="pill bg-amber-50 text-amber-700"><span class="dot bg-amber-500"></span>Failed validation</span>
+          <span class="pill bg-slate-100 text-slate-500">Annotation</span>
+          <span class="pill bg-muw-coral-50 text-muw-coral-700"><span class="dot bg-muw-coral-500"></span>Reason for change</span>
+        </div>
+      </div>
+
+      <!-- Banners / callouts -->
+      <div class="rounded-muw border border-slate-200 p-6 mb-5">
+        <div class="flex items-center justify-between mb-5">
+          <h3 class="text-sm font-semibold text-muw-blue">Banners &amp; callouts</h3>
+          <span class="text-[11px] text-slate-500">info · success · warning · danger · attention</span>
+        </div>
+        <div class="space-y-3 max-w-3xl">
+          <div class="flex items-start gap-2.5 px-4 py-3 rounded-md bg-muw-sky-50 text-muw-sky-700 text-sm border border-muw-sky-100">
+            <svg class="icon mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="16" y2="12"/><line x1="12" x2="12.01" y1="8" y2="8"/></svg>
+            <div><strong class="font-semibold">Where this shows up:</strong> the SDV-requirement column you set above becomes the visible label on the Monitor SDV table.</div>
+          </div>
+          <div class="flex items-start gap-2.5 px-4 py-3 rounded-md bg-muw-teal-50 text-muw-teal-700 text-sm border border-muw-teal-100">
+            <svg class="icon mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+            <div><strong class="font-semibold">12 CRFs selected.</strong> All belong to verified source documents. Click <em>Mark verified (SDV)</em> to commit.</div>
+          </div>
+          <div class="flex items-start gap-2.5 px-4 py-3 rounded-md bg-amber-50 text-amber-800 text-sm border border-amber-100">
+            <svg class="icon mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>
+            <div><strong class="font-semibold">Backward-incompatible change:</strong> v2.0 used codes 1–4. Existing data for code 5 will need migration before publish.</div>
+          </div>
+          <div class="flex items-start gap-2.5 px-4 py-3 rounded-md bg-rose-50 text-rose-800 text-sm border border-rose-100">
+            <svg class="icon mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+            <div><strong class="font-semibold">Account locked</strong> after 3 failed attempts. Contact a study administrator to unlock.</div>
+          </div>
+          <!-- Coral 40 % info-heavy bg, lifted from MUW style guide for print -->
+          <div class="px-4 py-3 rounded-md text-muw-blue text-sm border border-muw-coral-100 flex items-start gap-2.5" style="background-color: var(--muw-coral-40-bg);">
+            <svg class="icon mt-0.5 shrink-0 text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <div><strong class="font-semibold">MUW print accent.</strong> The "coral 40 %" background, used by the MUW style guide for info-heavy pages, finds a home here as a high-attention attestation banner.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card + Table fragment -->
+      <div class="grid grid-cols-5 gap-5">
+        <!-- Subject card -->
+        <div class="col-span-2 rounded-muw border border-slate-200 p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-semibold text-muw-blue">Subject card</h3>
+            <span class="text-[11px] text-slate-500">summary primitive</span>
+          </div>
+          <div class="rounded-muw border border-slate-200 p-4">
+            <div class="flex items-start gap-3 mb-3">
+              <div class="w-10 h-10 rounded-full bg-muw-blue-50 text-muw-blue font-medium flex items-center justify-center text-sm">M-001</div>
+              <div class="flex-1">
+                <div class="text-[11px] uppercase tracking-wider text-slate-500">Study subject</div>
+                <div class="font-semibold text-muw-blue text-base">M-001</div>
+                <div class="text-[11px] text-slate-500">München · enrolled 06-Oct-2020</div>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-1.5 mb-4">
+              <span class="pill bg-amber-50 text-amber-700">Data entry in progress</span>
+              <span class="pill bg-rose-50 text-rose-700"><span class="dot bg-rose-500"></span>2 open queries</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-[12px] pt-3 border-t border-slate-100">
+              <div><div class="text-slate-500 text-[10px] uppercase tracking-wider">Sex</div><div class="font-medium">Female</div></div>
+              <div><div class="text-slate-500 text-[10px] uppercase tracking-wider">Group</div><div class="font-medium">Arm A</div></div>
+              <div><div class="text-slate-500 text-[10px] uppercase tracking-wider">Age at enrolment</div><div class="font-medium">54</div></div>
+              <div><div class="text-slate-500 text-[10px] uppercase tracking-wider">Site PI</div><div class="font-medium">Max v. Pettenkofer</div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dense table -->
+        <div class="col-span-3 rounded-muw border border-slate-200 overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-muw-blue">Dense table row</h3>
+            <span class="text-[11px] text-slate-500">36 px height · 13 px text · sticky head</span>
+          </div>
+          <table class="w-full text-[13px]">
+            <thead class="bg-slate-50 text-slate-500 text-[11px] uppercase tracking-wider sticky top-0">
+              <tr>
+                <th class="text-left px-3 py-2 font-medium">Subject</th>
+                <th class="text-left px-3 py-2 font-medium">Group</th>
+                <th class="text-left px-3 py-2 font-medium">V1 Inclusion</th>
+                <th class="text-left px-3 py-2 font-medium">V2 Follow-up</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr class="hover:bg-muw-blue-50/30"><td class="px-3 py-2 font-medium text-muw-blue">M-001</td><td class="px-3 py-2">Arm A</td><td class="px-3 py-2"><span class="pill bg-amber-50 text-amber-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>In progress</span></td><td class="px-3 py-2 text-slate-400">Not started</td></tr>
+              <tr class="hover:bg-muw-blue-50/30"><td class="px-3 py-2 font-medium text-muw-blue">M-002</td><td class="px-3 py-2">Arm A</td><td class="px-3 py-2"><span class="pill bg-muw-teal-50 text-muw-teal-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>Complete</span></td><td class="px-3 py-2"><span class="pill bg-amber-50 text-amber-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>In progress</span></td></tr>
+              <tr class="hover:bg-muw-blue-50/30"><td class="px-3 py-2 font-medium text-muw-blue">M-003</td><td class="px-3 py-2">Arm B</td><td class="px-3 py-2"><span class="pill bg-muw-teal-50 text-muw-teal-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>Signed</span></td><td class="px-3 py-2"><span class="pill bg-muw-teal-50 text-muw-teal-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>Signed</span></td></tr>
+              <tr class="hover:bg-muw-blue-50/30"><td class="px-3 py-2 font-medium text-muw-blue">M-004</td><td class="px-3 py-2">Arm B</td><td class="px-3 py-2"><span class="pill bg-muw-teal-50 text-muw-teal-700">Complete</span></td><td class="px-3 py-2"><span class="pill bg-rose-50 text-rose-700"><span class="dot bg-rose-500"></span>Query</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ICONOGRAPHY ========================================================= -->
+    <section id="icons" class="mb-20 scroll-mt-20">
+      <div class="flex items-end justify-between mb-8 pb-4 border-b border-slate-200">
+        <div>
+          <div class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muw-coral-700 whitespace-nowrap mb-2">
+            <span class="muw-rule"></span><span>Iconography</span>
+          </div>
+          <h2 class="muw-display text-3xl text-muw-blue">Symbole</h2>
+          <p class="text-slate-500 mt-1.5 text-sm">Lucide line icons · 16 / 20 / 24 px · stroke-width 1.75 · always paired with a label.</p>
+        </div>
+      </div>
+      <div class="rounded-muw border border-slate-200 p-6">
+        <div class="grid grid-cols-12 gap-3 text-[11px] text-center text-slate-600">
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Home</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>Matrix</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="8" r="4"/><path d="M3 21a9 9 0 0 1 18 0"/></svg>Subject</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Event</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 13h6M9 17h4"/></svg>CRF</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>Audit</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 11a3 3 0 1 1 6 0"/><circle cx="12" cy="12" r="10"/><path d="M12 17v.01"/></svg>Query</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>Verify</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>Lock</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>Edit</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>Export</div>
+          <div class="flex flex-col items-center gap-1.5"><svg class="icon-lg text-muw-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/></svg>Flag</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- USAGE ============================================================== -->
+    <section class="mb-12">
+      <div class="rounded-muw bg-muw-blue text-white p-8 grid grid-cols-12 gap-6 overflow-hidden relative">
+        <svg class="absolute -right-10 -top-10 w-72 h-72 text-white/[0.04]" viewBox="0 0 200 200" fill="currentColor"><circle cx="100" cy="100" r="95"/></svg>
+        <div class="col-span-8 relative">
+          <div class="text-[11px] uppercase tracking-[0.14em] text-muw-coral mb-2">For developers</div>
+          <h2 class="muw-display text-3xl font-medium mb-3">Use the system in any mockup.</h2>
+          <p class="text-white/70 text-sm leading-relaxed max-w-xl mb-5">Three lines in the head and the entire MUW palette + Newsreader / Inter pairing is available as Tailwind utility classes. No build step.</p>
+          <div class="rounded-md bg-muw-blue-950/50 border border-white/10 p-4 text-[11.5px] font-mono leading-relaxed text-white/80 overflow-x-auto">
+<span class="text-muw-coral">&lt;script</span> src=<span class="text-muw-sky">"https://cdn.tailwindcss.com"</span><span class="text-muw-coral">&gt;&lt;/script&gt;</span><br/>
+<span class="text-muw-coral">&lt;script</span> src=<span class="text-muw-sky">"muw-tailwind-config.js"</span><span class="text-muw-coral">&gt;&lt;/script&gt;</span><br/>
+<span class="text-muw-coral">&lt;link</span> rel=<span class="text-muw-sky">"stylesheet"</span> href=<span class="text-muw-sky">"muw-tokens.css"</span> <span class="text-muw-coral">/&gt;</span>
+          </div>
+        </div>
+        <div class="col-span-4 relative">
+          <div class="text-[11px] uppercase tracking-[0.14em] text-muw-coral mb-2">Then write</div>
+          <div class="space-y-2 text-[11.5px] font-mono text-white/80 leading-relaxed">
+            <div><span class="text-muw-coral">class=</span><span class="text-muw-sky">"bg-muw-blue"</span></div>
+            <div><span class="text-muw-coral">class=</span><span class="text-muw-sky">"text-muw-teal-700"</span></div>
+            <div><span class="text-muw-coral">class=</span><span class="text-muw-sky">"muw-display text-3xl"</span></div>
+            <div><span class="text-muw-coral">class=</span><span class="text-muw-sky">"rounded-muw shadow-muw-card"</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-200 pt-6 pb-12 text-[11px] text-slate-500 flex items-center justify-between">
+      <div>LibreClinica MUW design system v1 · <span class="text-slate-400">28 May 2026</span></div>
+      <div>Anchored in the MedUni Wien Corporate Design Styleguide (March 2022).</div>
+    </footer>
+
+  </div>
+</body>
+</html>

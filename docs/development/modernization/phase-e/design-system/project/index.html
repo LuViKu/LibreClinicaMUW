@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>LibreClinica MUW · Phase E UX mockups</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="muw-tailwind-config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600;6..72,700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="muw-tokens.css" />
+  <style>
+    .card { transition: border-color .15s ease, box-shadow .15s ease, transform .15s ease; }
+    .card:hover { border-color: var(--muw-blue-200); box-shadow: var(--muw-card, 0 1px 2px rgba(17,29,78,0.04), 0 8px 24px rgba(17,29,78,0.05)); transform: translateY(-1px); }
+    .role-dot { width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0; }
+  </style>
+</head>
+<body class="bg-white text-slate-900 text-sm">
+
+  <!-- Sticky brand header -->
+  <header class="border-b border-slate-200 sticky top-0 z-30 bg-white/95 backdrop-blur">
+    <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
+      <a href="index.html" class="flex items-center gap-2.5">
+        <svg class="w-7 h-7 text-muw-blue" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="16" cy="16" r="14" stroke-width="1.4"/><path d="M12 8v16M20 8v16M8 12h16M8 20h16" stroke-width="1.75"/></svg>
+        <span class="muw-display font-semibold text-muw-blue tracking-tight whitespace-nowrap">LibreClinica<em class="not-italic font-medium text-muw-coral-700 text-[0.7em] uppercase tracking-[0.08em] ml-1.5 align-middle">MUW</em></span>
+      </a>
+      <nav class="flex items-center gap-1 text-sm">
+        <a href="index.html" class="px-3 py-1.5 rounded-md text-muw-blue bg-muw-blue-50 font-medium">Mockups</a>
+        <a href="design-system.html" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-muw-blue hover:bg-muw-blue-50">Design system</a>
+        <a href="design-notes.md" class="px-3 py-1.5 rounded-md text-slate-600 hover:text-muw-blue hover:bg-muw-blue-50">Notes</a>
+      </nav>
+    </div>
+  </header>
+
+  <div class="max-w-6xl mx-auto px-6">
+
+    <!-- Hero -->
+    <section class="py-14 grid grid-cols-12 gap-8 border-b border-slate-200">
+      <div class="col-span-8">
+        <div class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muw-coral-700 mb-4 whitespace-nowrap">
+          <span class="muw-rule"></span>
+          <span>Phase E · UX exploration · v1</span>
+        </div>
+        <h1 class="muw-display text-5xl font-medium text-muw-blue leading-[1.05] mb-5">
+          Designing the next LibreClinica<br/>for the Department of Ophthalmology
+          <span class="text-muw-coral-700">&amp; Optometry</span>.
+        </h1>
+        <p class="text-slate-600 text-base leading-relaxed max-w-2xl">
+          Modern, clinical, data-dense — lineage drawn from REDCap, Castor EDC and Medidata Rave,
+          dressed in the Medical University of Vienna corporate design. Seventeen mockups, each
+          replacing a specific legacy JSP in the current LibreClinica build.
+        </p>
+        <div class="mt-7 flex items-center gap-3">
+          <a href="#mockups" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-muw-blue text-white hover:bg-muw-blue-700 text-sm font-medium">
+            Browse mockups
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
+          <a href="design-system.html" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md border border-slate-300 text-slate-700 hover:bg-slate-50 text-sm font-medium">
+            Design system
+          </a>
+          <a href="design-notes.md" class="text-sm text-slate-500 hover:text-muw-blue underline ml-2">design-notes.md</a>
+        </div>
+      </div>
+      <div class="col-span-4 flex items-end">
+        <!-- Mini fact card -->
+        <div class="rounded-muw border border-slate-200 p-5 w-full bg-muw-blue-50/40">
+          <div class="text-[11px] uppercase tracking-[0.14em] text-muw-coral-700 font-medium mb-3 whitespace-nowrap">Scope at a glance</div>
+          <dl class="space-y-2.5 text-[13px]">
+            <div class="flex items-baseline justify-between gap-3">
+              <dt class="text-slate-500">Mockups</dt>
+              <dd class="muw-display text-2xl text-muw-blue leading-none">17</dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-3 pt-2 border-t border-muw-blue-100">
+              <dt class="text-slate-500">Roles covered</dt>
+              <dd class="font-medium text-muw-blue">Inv · Mon · DM</dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-3 pt-2 border-t border-muw-blue-100">
+              <dt class="text-slate-500">Legacy JSPs replaced</dt>
+              <dd class="font-medium text-muw-blue">14</dd>
+            </div>
+            <div class="flex items-baseline justify-between gap-3 pt-2 border-t border-muw-blue-100">
+              <dt class="text-slate-500">Tailwind tokens</dt>
+              <dd class="font-medium text-muw-blue">MUW v1</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+    </section>
+
+    <!-- Role legend -->
+    <section class="py-10">
+      <div class="grid grid-cols-3 gap-5">
+        <div class="rounded-muw border border-slate-200 p-5 bg-white">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="role-dot bg-muw-teal-500"></span>
+            <span class="font-semibold text-muw-blue">Investigator</span>
+            <span class="text-[11px] text-slate-400 ml-auto font-mono">muw-teal</span>
+          </div>
+          <p class="text-slate-500 text-[13px] leading-relaxed">Physician / study assistant at a site. Adds subjects, schedules events, enters CRF data, handles discrepancies, signs subjects.</p>
+        </div>
+        <div class="rounded-muw border border-slate-200 p-5 bg-white">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="role-dot bg-muw-sky-500"></span>
+            <span class="font-semibold text-muw-blue">Monitor</span>
+            <span class="text-[11px] text-slate-400 ml-auto font-mono">muw-sky</span>
+          </div>
+          <p class="text-slate-500 text-[13px] leading-relaxed">Source Data Verification, query authority — the only role that can close discrepancies. Read-only access to data.</p>
+        </div>
+        <div class="rounded-muw border border-slate-200 p-5 bg-white">
+          <div class="flex items-center gap-2 mb-2">
+            <span class="role-dot bg-muw-coral-500"></span>
+            <span class="font-semibold text-muw-blue">Data Manager</span>
+            <span class="text-[11px] text-slate-400 ml-auto font-mono">muw-coral</span>
+          </div>
+          <p class="text-slate-500 text-[13px] leading-relaxed">Study setup: Build Study workflow, CRF design, event definitions, rules, sites, users. Broadest surface area.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Mockups grid =================================================== -->
+    <section id="mockups" class="pt-4 pb-12 scroll-mt-20">
+
+      <div class="flex items-end justify-between mb-6 pb-3 border-b border-slate-200">
+        <div>
+          <div class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muw-coral-700 mb-2 whitespace-nowrap">
+            <span class="muw-rule"></span><span>Round 1 · Critical workflows</span>
+          </div>
+          <h2 class="muw-display text-2xl text-muw-blue">One per role</h2>
+        </div>
+        <span class="text-xs text-slate-400">7 screens</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+
+        <a href="investigator-subject-matrix.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-teal-50 text-muw-teal-700 whitespace-nowrap"><span class="role-dot bg-muw-teal-500"></span>Investigator</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/ListStudySubjects</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Subject Matrix</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Site-scoped subject list with per-event status. Search, filter, schedule new event, sign subject.</div>
+        </a>
+
+        <a href="investigator-add-subject.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-teal-50 text-muw-teal-700 whitespace-nowrap"><span class="role-dot bg-muw-teal-500"></span>Investigator</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/AddNewSubject</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Add Subject</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Enrol a study subject. Three save modes: finish, add next, schedule first event.</div>
+        </a>
+
+        <a href="investigator-crf-entry.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-teal-50 text-muw-teal-700 whitespace-nowrap"><span class="role-dot bg-muw-teal-500"></span>Investigator</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/InitialDataEntry</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">CRF data entry</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Per-section CRF form with inline discrepancy threads, required-field markers, mark-complete.</div>
+        </a>
+
+        <a href="monitor-sdv.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-sky-50 text-muw-sky-700 whitespace-nowrap"><span class="role-dot bg-muw-sky-500"></span>Monitor</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/pages/viewAllSubjectSDVtmp</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">SDV table — View by Event &amp; CRF</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Completed CRFs across all subjects with SDV requirement, status, bulk-verify action.</div>
+        </a>
+
+        <a href="monitor-crf-readonly.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-sky-50 text-muw-sky-700 whitespace-nowrap"><span class="role-dot bg-muw-sky-500"></span>Monitor</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/ViewSectionDataEntry</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Read-only CRF view</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">The popup primitive opened from SDV. Item-level flags, side-panel discrepancy thread.</div>
+        </a>
+
+        <a href="dm-build-study.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-coral-50 text-muw-coral-700 whitespace-nowrap"><span class="role-dot bg-muw-coral-500"></span>Data Manager</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/pages/studymodule</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Build Study</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">The 7-task setup tracker — Create Study → CRF → Events → Groups → Rules → Sites → Users.</div>
+        </a>
+
+        <a href="dm-update-event-definition.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-coral-50 text-muw-coral-700 whitespace-nowrap"><span class="role-dot bg-muw-coral-500"></span>Data Manager</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/UpdateEventDefinition</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Update Event Definition</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Event metadata + per-CRF assignment with SDV requirement (the value Monitor sees).</div>
+        </a>
+
+      </div>
+
+      <!-- Round 2 -->
+      <div class="flex items-end justify-between mb-6 mt-12 pb-3 border-b border-slate-200">
+        <div>
+          <div class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muw-coral-700 mb-2 whitespace-nowrap">
+            <span class="muw-rule"></span><span>Round 2 · Cross-role essentials</span>
+          </div>
+          <h2 class="muw-display text-2xl text-muw-blue">Shared surfaces</h2>
+        </div>
+        <span class="text-xs text-slate-400">5 screens</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+
+        <a href="notes-discrepancies.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-1">
+              <span class="pill bg-muw-teal-50 text-muw-teal-700 !text-[10px] !px-1.5">Inv</span>
+              <span class="pill bg-muw-sky-50 text-muw-sky-700 !text-[10px] !px-1.5">Mon</span>
+              <span class="pill bg-muw-coral-50 text-muw-coral-700 !text-[10px] !px-1.5">DM</span>
+            </div>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/ViewNotes</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Notes &amp; Discrepancies</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">List + thread panel. Role-conditional powers: Investigator responds; Monitor creates &amp; closes; DM full visibility.</div>
+        </a>
+
+        <a href="view-events.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-1">
+              <span class="pill bg-muw-teal-50 text-muw-teal-700 !text-[10px] !px-1.5">Inv</span>
+              <span class="pill bg-muw-sky-50 text-muw-sky-700 !text-[10px] !px-1.5">Mon</span>
+              <span class="pill bg-muw-coral-50 text-muw-coral-700 !text-[10px] !px-1.5">DM</span>
+            </div>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/ViewStudyEvents</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">View Events</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Cross-subject event listing with filterable status, event-definition, dates.</div>
+        </a>
+
+        <a href="view-subject.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-teal-50 text-muw-teal-700 whitespace-nowrap"><span class="role-dot bg-muw-teal-500"></span>Investigator</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/ViewStudySubject</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">View Subject (M-001)</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Subject detail with events &amp; per-CRF status, sign button, Subject Casebook PDF.</div>
+        </a>
+
+        <a href="schedule-event.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-teal-50 text-muw-teal-700 whitespace-nowrap"><span class="role-dot bg-muw-teal-500"></span>Investigator</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/CreateNewStudyEvent</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Schedule Event</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Event definition selector, start / end dates, location, CRF list preview.</div>
+        </a>
+
+        <a href="dm-manage-users.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-coral-50 text-muw-coral-700 whitespace-nowrap"><span class="role-dot bg-muw-coral-500"></span>Data Manager</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/ListStudyUser</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Manage Users</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Per-user role + site + auth (2FA app / letter), pending invites, role permissions cheat sheet.</div>
+        </a>
+
+      </div>
+
+      <!-- Round 3 -->
+      <div class="flex items-end justify-between mb-6 mt-12 pb-3 border-b border-slate-200">
+        <div>
+          <div class="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.14em] text-muw-coral-700 mb-2 whitespace-nowrap">
+            <span class="muw-rule"></span><span>Round 3 · Sign-off, modal, audit, designer</span>
+          </div>
+          <h2 class="muw-display text-2xl text-muw-blue">High-stakes surfaces</h2>
+        </div>
+        <span class="text-xs text-slate-400">6 screens</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3">
+
+        <a href="investigator-sign-subject.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-teal-50 text-muw-teal-700 whitespace-nowrap"><span class="role-dot bg-muw-teal-500"></span>Investigator</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/SignStudySubject</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Sign Subject (M-001)</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Pre-flight checklist, casebook snapshot, e-signature attestation. Pattern: one-way regulatory action.</div>
+        </a>
+
+        <a href="monitor-add-query.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-sky-50 text-muw-sky-700 whitespace-nowrap"><span class="role-dot bg-muw-sky-500"></span>Monitor</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/CreateDiscrepancyNote</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Add Query modal</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Modal over dimmed CRF context. Segmented note-type, severity, assign, due date. Pattern: focused-action modal.</div>
+        </a>
+
+        <a href="study-audit-log.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-1">
+              <span class="pill bg-muw-teal-50 text-muw-teal-700 !text-[10px] !px-1.5">Inv</span>
+              <span class="pill bg-muw-sky-50 text-muw-sky-700 !text-[10px] !px-1.5">Mon</span>
+              <span class="pill bg-muw-coral-50 text-muw-coral-700 !text-[10px] !px-1.5">DM</span>
+            </div>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/ViewAuditLog</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Study Audit Log</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Timeline of every regulated event with before/after diff cards. Filters narrow, never hide.</div>
+        </a>
+
+        <a href="login.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-slate-100 text-slate-600 whitespace-nowrap"><span class="role-dot bg-slate-400"></span>No auth</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/pages/login/login</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Login + forced password change</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Centred card with MUW lockup, LDAP fallback. Right pane: first-login stepper (password, 2FA, terms).</div>
+        </a>
+
+        <a href="dm-create-crf.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-coral-50 text-muw-coral-700 whitespace-nowrap"><span class="role-dot bg-muw-coral-500"></span>Data Manager</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/CreateCRF · /EditCRF</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Create / Edit CRF</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Item-grid designer, section rail, response-type cells, repeating groups, response-set side panel, live Investigator preview.</div>
+        </a>
+
+        <a href="dm-import-crf-data.html" class="card group rounded-muw border border-slate-200 bg-white p-4 block">
+          <div class="flex items-center justify-between mb-2">
+            <span class="pill bg-muw-coral-50 text-muw-coral-700 whitespace-nowrap"><span class="role-dot bg-muw-coral-500"></span>Data Manager</span>
+            <span class="text-slate-400 text-[11px] font-mono whitespace-nowrap">/ImportCRFData</span>
+          </div>
+          <div class="font-semibold text-muw-blue group-hover:underline">Import CRF Data wizard</div>
+          <div class="text-slate-500 mt-1 text-[12.5px] leading-snug">Multi-step: Upload → Map → Preview &amp; resolve → Commit. Per-row before/after diff with action selector.</div>
+        </a>
+
+      </div>
+
+    </section>
+
+    <!-- Reminder banner -->
+    <section class="pb-12">
+      <div class="rounded-muw bg-muw-blue text-white p-6 grid grid-cols-12 gap-5 overflow-hidden relative">
+        <svg class="absolute -right-12 -bottom-12 w-56 h-56 text-white/[0.04]" viewBox="0 0 200 200" fill="currentColor"><circle cx="100" cy="100" r="95"/></svg>
+        <div class="col-span-8 relative">
+          <div class="text-[11px] uppercase tracking-[0.14em] text-muw-coral mb-2 whitespace-nowrap">Heads up</div>
+          <h3 class="muw-display text-xl font-medium mb-2">These are static sketches.</h3>
+          <p class="text-white/70 text-[13px] leading-relaxed max-w-2xl">
+            Filters, buttons and form fields look real but do nothing. Open
+            <a href="design-notes.md" class="underline hover:text-white">design-notes.md</a>
+            for the design tokens, the scope decisions, and what is explicitly NOT in the first
+            pass (empty / error / loading states, real interactivity, responsive breakpoints,
+            accessibility audit, i18n).
+          </p>
+        </div>
+        <div class="col-span-4 relative flex items-center justify-end">
+          <a href="design-system.html" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-white text-muw-blue hover:bg-muw-coral hover:text-muw-blue text-sm font-medium">
+            View design system
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-200 py-8 text-[11px] text-slate-500 flex items-center justify-between">
+      <div>LibreClinica MUW · Phase E UX exploration · v1 · 28 May 2026</div>
+      <div class="flex items-center gap-3">
+        <span>Anchored in MedUni Wien Corporate Design (March 2022)</span>
+      </div>
+    </footer>
+
+  </div>
+</body>
+</html>
