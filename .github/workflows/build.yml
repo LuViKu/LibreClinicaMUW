@@ -54,6 +54,33 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+      - name: Upload JaCoCo coverage reports
+        if: matrix.java == '11' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-jdk${{ matrix.java }}
+          path: |
+            **/target/site/jacoco/**
+            **/target/jacoco.exec
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Surface coverage summary in job log
+        if: matrix.java == '11' && always()
+        run: |
+          set +e
+          for csv in $(find . -path '*/target/site/jacoco/jacoco.csv' 2>/dev/null); do
+            module=$(echo "$csv" | awk -F'/' '{print $2}')
+            echo "::group::Coverage — ${module}"
+            # Skip header; sum INSTRUCTION_MISSED and INSTRUCTION_COVERED columns.
+            awk -F',' 'NR>1 { miss+=$4; cov+=$5 } END {
+              total=miss+cov;
+              if (total==0) { print "  (no instrumented instructions)" }
+              else printf "  Instruction coverage: %d / %d (%.1f%%)\n", cov, total, (cov*100.0/total)
+            }' "$csv"
+            echo "::endgroup::"
+          done
+
   integration-tests:
     # Runs the DB-dependent tests excluded from the default surefire run
     # (DAO + rule-service tests extending HibernateOcDbTestCase / OcDbTestCase).
@@ -101,6 +128,17 @@ jobs:
         with:
           name: surefire-reports-integration
           path: '**/target/surefire-reports/**'
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Upload JaCoCo coverage from integration tests
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-coverage-integration
+          path: |
+            **/target/site/jacoco/**
+            **/target/jacoco.exec
           retention-days: 14
           if-no-files-found: ignore
 

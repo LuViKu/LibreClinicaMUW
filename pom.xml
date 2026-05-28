@@ -941,9 +941,16 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-surefire-plugin</artifactId>
-					<version>2.10</version>
+					<!-- 2.10 (2011) → 2.22.2 (2018): the late-property syntax @{argLine}
+					     used to attach the JaCoCo agent was introduced in 2.17. Sticking
+					     to the 2.x line keeps JDK 8 compatibility and the existing
+					     JUnit 3/4 mixed test discovery semantics. -->
+					<version>2.22.2</version>
 					<configuration>
 						<skipTests>${skipTests}</skipTests>
+						<!-- @{argLine} is resolved late so the JaCoCo prepare-agent goal
+						     (bound to initialize) has already populated it. -->
+						<argLine>@{argLine}</argLine>
 						<!-- Excluded from default `mvn test`:
 						       - DAO tests extending HibernateOcDbTestCase / OcDbTestCase: require
 						         a live PostgreSQL on localhost:5432; static initializer fails
@@ -985,6 +992,54 @@
 					<version>2.8</version>
 					<configuration>
 						<addVersionToProjectName>true</addVersionToProjectName>
+					</configuration>
+				</plugin>
+				<!-- JaCoCo: line-coverage instrumentation + HTML/XML reports.
+				     prepare-agent populates the `argLine` Maven property (referenced
+				     by surefire `@{argLine}`); the `report` execution generates
+				     core/target/site/jacoco/ at the end of the `test` phase. No
+				     coverage threshold enforced yet (Phase 0 goal: track baseline). -->
+				<plugin>
+					<groupId>org.jacoco</groupId>
+					<artifactId>jacoco-maven-plugin</artifactId>
+					<version>0.8.12</version>
+					<executions>
+						<execution>
+							<id>jacoco-prepare-agent</id>
+							<goals>
+								<goal>prepare-agent</goal>
+							</goals>
+						</execution>
+						<execution>
+							<id>jacoco-report</id>
+							<phase>test</phase>
+							<goals>
+								<goal>report</goal>
+							</goals>
+						</execution>
+					</executions>
+				</plugin>
+				<!-- OWASP dependency-check: scans Maven dependencies against the NVD
+				     for known CVEs. Not bound to a build phase (slow first run +
+				     downloads CVE database). Invoke explicitly:
+				         mvn org.owasp:dependency-check-maven:check
+				     or via the .github/workflows/security.yml nightly job. Pinning
+				     to 9.x avoids the 10.x NVD-API-key hard requirement. -->
+				<plugin>
+					<groupId>org.owasp</groupId>
+					<artifactId>dependency-check-maven</artifactId>
+					<version>9.2.0</version>
+					<configuration>
+						<failBuildOnCVSS>8</failBuildOnCVSS>
+						<skipTestScope>true</skipTestScope>
+						<formats>
+							<format>HTML</format>
+							<format>SARIF</format>
+							<format>JSON</format>
+						</formats>
+						<suppressionFiles>
+							<suppressionFile>${project.basedir}/dependency-check-suppressions.xml</suppressionFile>
+						</suppressionFiles>
 					</configuration>
 				</plugin>
 				<plugin>
@@ -1134,6 +1189,16 @@
                </plugin>
 			</plugins>
 		</pluginManagement>
+
+		<!-- Plugins activated for every module (configuration inherited from
+		     pluginManagement above). JaCoCo runs on every test execution so
+		     every module produces a coverage report. -->
+		<plugins>
+			<plugin>
+				<groupId>org.jacoco</groupId>
+				<artifactId>jacoco-maven-plugin</artifactId>
+			</plugin>
+		</plugins>
 
 		<resources>
 			<resource>

@@ -63,7 +63,32 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 - [x] **CI integration-tests job** (2026-05-28): GitHub Actions service container (`postgres:14-alpine`) runs alongside the Maven job. `continue-on-error: true` while Phase 0.2 schema-bootstrap work is pending — see below.
 - [x] **Phase 0.2 — Bootstrap test DB schema (2026-05-28):** Option C verified to work. The Spring test context loaded by `HibernateOcDbTestCase` already wires `SpringLiquibase` (in `applicationContext-core-db.xml`) and a `PropertyPlaceholderConfigurer` with the custom `s[...]` syntax (in `applicationContext-core-spring.xml`) that resolves `s[driver]`, `s[url]`, `s[username]`, `s[password]` from `classpath:datainfo.properties`. When run against a Postgres providing the right DB (`openclinica-TEST`, user `clinica`/password `clinica`), Liquibase applies all 145+ changesets and DAO beans are wired correctly. Fixed: `test.properties` and `datainfo.properties` referenced different DB names (`openclinica-TEST-3.12` vs `openclinica-TEST`) — DBUnit and Spring DAOs were targeting different databases. Aligned both to `openclinica-TEST`. **Result:** integration test suite went from 0 → 63 tests running (33 unit tests + 30 integration tests now reach their test methods). New layer of pre-existing breakage exposed — see Phase 0.3.
 - [x] **Phase 0.3 — Hibernate session-management fix (2026-05-28):** Resolved via option (b) — minimal-diff rewrite of `HibernateOcDbTestCase` to manage transactions per-test. Static initializer no longer opens a transaction (it was opened-then-leaked); a `private TransactionStatus testTransactionStatus` field is opened in `setUp()` and rolled back (not committed) in `tearDown()`. Rollback (vs. commit) prevents test writes from accumulating across the suite. Also restored `RulesPostImportContainerServiceTest` with a `testPlaceholder()` stub + Javadoc explaining the long-commented-out historical method, so JUnit 3 no longer reports "No tests found". **Result: 63/63 integration tests pass on `mvn -P integration-tests test` against a clean Postgres** (was: 63 running, 1 failure + 26 errors). CI integration-tests job had `continue-on-error: true` removed — the job now enforces green.
-- [ ] **Add critical-path integration tests** (~20 tests, target ~2 weeks): login, study CRUD, subject enroll, scheduled event, CRF submission (initial DE + double DE), discrepancy note, ODM export, audit log row written, SDV state transition. Use Spring Test + Testcontainers (PostgreSQL 14).
+- [ ] **Add critical-path integration tests** (~20 tests, target ~2 weeks). Backlog with concrete test names and minimum assertions — each should extend `HibernateOcDbTestCase` (now fixed in Phase 0.3) or migrate to `@RunWith(SpringJUnit4ClassRunner.class)`:
+
+  | # | Class / method | Asserts |
+  |---|---|---|
+  | 1 | `LoginFlowIT.loginSuccessful` | `AuthenticationProvider.authenticate(...)` returns an `Authentication` with the expected `UserAccountBean` for valid credentials |
+  | 2 | `LoginFlowIT.loginFailedRecordsAuditEntry` | After 1 failed login, exactly one `audit_user_login` row exists with `loginStatus = FAILED_LOGIN` and the username |
+  | 3 | `LoginFlowIT.passwordEncoderRecognisesLegacyMd5` | A hash created by the legacy MD5 encoder still authenticates via `DelegatingPasswordEncoder` |
+  | 4 | `StudyCrudIT.createAndRetrieveStudy` | `StudyDAO.create(study)` returns a row with a positive PK; `findByPK(pk)` round-trips all required fields |
+  | 5 | `StudyCrudIT.parentChildStudy` | Saving a study with `parentStudyId` populated yields the right hierarchy via `findChildrenByParent` |
+  | 6 | `SubjectEnrolmentIT.enrolSubjectInStudy` | Creating a `Subject` + `StudySubject` produces matching rows linked by foreign key; `enrollment_date` defaults sensibly |
+  | 7 | `SubjectEnrolmentIT.duplicateLabelRejected` | Re-enrolling a subject with the same label in the same study throws the documented exception |
+  | 8 | `StudyEventScheduleIT.scheduleEvent` | `StudyEventDAO.create(event)` for an existing `StudyEventDefinition` produces a row in `study_event` with `status=SCHEDULED` |
+  | 9 | `StudyEventScheduleIT.eventStatusTransitions` | Drive an event through SCHEDULED → DATA_ENTRY_STARTED → COMPLETED → LOCKED → SIGNED; verify each transition is persisted |
+  | 10 | `CrfDataEntryIT.initialDataEntry` | Submit an `EventCRF` with `ItemData` rows; verify the EventCRF status becomes `INITIAL_DATA_ENTRY_COMPLETE` and each `ItemData.value` is persisted with the right encoding |
+  | 11 | `CrfDataEntryIT.doubleDataEntryComparison` | Round-trip two independent DDE submissions; verify divergence detection produces a `DiscrepancyNote` |
+  | 12 | `CrfDataEntryIT.fileItemUpload` | Submit an item with `ResponseType.FILE`; verify the file blob is written under `${filePath}` and `ItemData.value` holds the relative path |
+  | 13 | `DiscrepancyNoteIT.createAnnotation` | Create a `DiscrepancyNote` of type ANNOTATION attached to a specific `ItemData`; verify retrieval via `DnItemDataMap` |
+  | 14 | `DiscrepancyNoteIT.queryWorkflow` | Create a QUERY, transition it through NEW → OPEN → RESOLVED → CLOSED via the rule action; verify status persisted and audit row created |
+  | 15 | `SdvIT.sdvStatusToggle` | Mark an EventCRF as `sdvStatus = TRUE`; verify the change is persisted and the SDV filter query returns the row |
+  | 16 | `OdmExportIT.studyMetadataExport` | Call `ODMMetadataRestResource` for a known study; assert the produced ODM XML validates against the ODM 1.3 XSD shipped in `odm/` |
+  | 17 | `OdmImportIT.crfImportRoundTrip` | Import a CRF via `ImportCRFDataServlet`'s service layer; assert the resulting CRF + version + items match the input ODM document |
+  | 18 | `AuditTrailIT.mutationWritesAuditRow` | For each of `INSERT`, `UPDATE`, `DELETE` on `ItemData`, assert one `audit_log_event` row with `audit_table='item_data'`, correct `old_value`/`new_value`, and `reason_for_change` |
+  | 19 | `RandomizationRuleIT.ruleTriggersRandomize` | Configure a `RuleSet` with a `RandomizeAction`; submit data that satisfies the condition; assert the randomization result is persisted |
+  | 20 | `StudyLockIT.lockedStudyRejectsWrites` | Set `Study.frozen_study=true`; assert that subsequent attempts to save `EventCRF` data throw the documented "study locked" exception |
+
+  These will collectively be the institutional GCP regression suite. Open question: convert to `@RunWith(SpringJUnit4ClassRunner.class) + @Transactional` first (Phase B prep), or use the existing `HibernateOcDbTestCase` pattern for momentum?
 - [ ] **`RulesPostImportContainerServiceTest`** is the only "broken" test (test method commented out years ago). Either delete or restore — currently excluded so it doesn't error the build.
 
 #### Local-dev: running integration tests against a real Postgres
@@ -89,9 +114,11 @@ docker stop lc-test-pg && docker network rm lc-test-net
 ```
 
 Currently expect: 33 unit tests pass, ~26 DAO tests error with "Session/EntityManager is closed" (Phase 0.3). 1 test still fails as "No tests found" (`RulesPostImportContainerServiceTest`).
-- [ ] **Coverage tooling**: add JaCoCo report, surface coverage in CI summary. Target: track baseline, no enforcement yet.
-- [ ] **Secret scan**: add Trivy or GitHub native secret scan to CI.
-- [ ] **CodeQL**: enable GitHub Advanced Security CodeQL workflow for Java.
+- [x] **Coverage tooling (2026-05-28):** JaCoCo 0.8.12 plugin wired into the parent pom (`jacoco-maven-plugin`, `prepare-agent` + `report` executions), surefire bumped 2.10 → 2.22.2 for `@{argLine}` late-property support. Coverage artifact uploaded by `.github/workflows/build.yml` (both `build` and `integration-tests` jobs); per-module instruction-coverage summary surfaced in the job log. No enforcement yet.
+- [x] **OWASP dependency-check (2026-05-28):** `dependency-check-maven` 9.2.0 plugin in pluginManagement (`failBuildOnCVSS=8`, `skipTestScope=true`, HTML/SARIF/JSON output). Not bound to a build phase (first-run NVD download is slow); invoked nightly by `.github/workflows/security.yml` with an NVD database cache and optional `NVD_API_KEY` secret. SARIF results upload to the GitHub Security tab. Empty suppression file at [dependency-check-suppressions.xml](dependency-check-suppressions.xml).
+- [x] **Trivy filesystem scan (2026-05-28):** `.github/workflows/security.yml` runs `aquasecurity/trivy-action` on every push + PR + daily. CRITICAL/HIGH severity, ignore-unfixed, SARIF output to Security tab. `exit-code: 0` initially (report-only) — flip to `1` after Phase A.2 lands and the backlog has been triaged.
+- [x] **Gitleaks secret scan (2026-05-28):** `.github/workflows/security.yml` runs the Gitleaks GitHub Action on every push + PR. (GitHub native secret scanning is also enabled on the repo by default for free public repos and for orgs with Advanced Security; Gitleaks supplements that with custom-pattern coverage for the working tree.)
+- [x] **CodeQL (2026-05-28):** `.github/workflows/codeql.yml` runs the Java analyzer with `security-extended,security-and-quality` query packs on push/PR + weekly. Manual build (`mvn compile`) rather than CodeQL autobuild to match the actual project structure (legacy plugin chain breaks autobuild detection).
 
 **Phase exit criteria:** Green CI on `lc-develop`, all unit tests run by default, critical-path integration tests in place, smoke test reliably catches "the app doesn't start" regressions, Dependabot active.
 
