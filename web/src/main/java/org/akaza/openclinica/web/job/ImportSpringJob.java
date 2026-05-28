@@ -67,8 +67,7 @@ import org.akaza.openclinica.service.rule.RuleSetServiceInterface;
 import org.akaza.openclinica.web.SQLInitServlet;
 import org.akaza.openclinica.web.crfdata.ImportCRFDataService;
 import org.apache.commons.lang.StringUtils;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.xml.Unmarshaller;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.quartz.JobDataMap;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
@@ -115,6 +114,7 @@ public class ImportSpringJob extends QuartzJobBean {
 
     private DataSource dataSource;
     private OpenClinicaMailSender mailSender;
+    private OdmJaxbContext odmJaxbContext;
     private ImportCRFDataService dataService;
     private ItemDataDAO itemDataDao;// = new ItemDataDAO(sm.getDataSource());
     private EventCRFDAO eventCrfDao;// = new EventCRFDAO(sm.getDataSource());
@@ -155,6 +155,7 @@ public class ImportSpringJob extends QuartzJobBean {
             ApplicationContext appContext = (ApplicationContext) context.getScheduler().getContext().get("applicationContext");
             dataSource = (DataSource) appContext.getBean("dataSource");
             mailSender = (OpenClinicaMailSender) appContext.getBean("openClinicaMailSender");
+            odmJaxbContext = (OdmJaxbContext) appContext.getBean("odmJaxbContext");
             RuleSetServiceInterface ruleSetService = (RuleSetServiceInterface) appContext.getBean("ruleSetService");
 
             itemDataDao = new ItemDataDAO(dataSource);
@@ -308,17 +309,15 @@ public class ImportSpringJob extends QuartzJobBean {
             StudyBean studyBean, File destDirectory, TriggerBean triggerBean, RuleSetServiceInterface ruleSetService) throws Exception {
         StringBuffer msg = new StringBuffer();
         StringBuffer auditMsg = new StringBuffer();
-        Mapping myMap = new Mapping();
 
         String propertiesPath = CoreResources.PROPERTIES_DIR;
 
         new File(propertiesPath + File.separator + "ODM1-3-0.xsd");
         File xsdFile2 = new File(propertiesPath + File.separator + "ODM1-2-1.xsd");
-        // @pgawade 18-April-2011 Fix for issue 8394
-        String ODM_MAPPING_DIR_path = CoreResources.ODM_MAPPING_DIR;
-        myMap.loadMapping(ODM_MAPPING_DIR_path + File.separator + "cd_odm_mapping.xml");
 
-        Unmarshaller um1 = new Unmarshaller(myMap);
+        // Phase B.3 PR 3b: Castor → JAXB via the shared OdmJaxbContext bean
+        // (wired into the field in executeInternalInTransaction). Same
+        // bean-tree shape as before, verified by JaxbClinicalDataFullTreeCharacterisationTest.
         ODMContainer odmContainer = new ODMContainer();
         // BufferedWriter out = new BufferedWriter(new FileWriter(new
         // File("log.txt")));
@@ -356,7 +355,7 @@ public class ImportSpringJob extends QuartzJobBean {
             try {
 
                 // schemaValidator.validateAgainstSchema(f, xsdFile);
-                odmContainer = (ODMContainer) um1.unmarshal(new FileReader(f));
+                odmContainer = odmJaxbContext.unmarshalClinicalData(new FileInputStream(f));
 
                 logger.debug("Found crf data container for study oid: " + odmContainer.getCrfDataPostImportContainer().getStudyOID());
                 logger.debug("found length of subject list: " + odmContainer.getCrfDataPostImportContainer().getSubjectData().size());
@@ -366,7 +365,7 @@ public class ImportSpringJob extends QuartzJobBean {
                     schemaValidator.validateAgainstSchema(f, xsdFile2);
                     // for backwards compatibility, we also try to validate vs
                     // 1.2.1 ODM 06/2008
-                    odmContainer = (ODMContainer) um1.unmarshal(new FileReader(f));
+                    odmContainer = odmJaxbContext.unmarshalClinicalData(new FileInputStream(f));
                 } catch (Exception me2) {
                     // not sure if we want to report me2
 
