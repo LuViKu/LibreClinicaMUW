@@ -9,14 +9,28 @@
  */
 package org.akaza.openclinica.bean.submit.crfdata;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
 /**
  * ODM Container, the surrounding tag for Clinical Data together with meta data
- * 
+ *
  * @author thickerson, 04/2008
- * 
+ *
+ * <p>Phase B.3 PR 2/3: minimal JAXB annotations on the rooted element +
+ * the ClinicalData child. PR 3/3 will extend annotations across the full
+ * clinical-data subtree (SubjectData / StudyEventData / FormData / ItemGroupData
+ * / ItemData) needed for the production import path. For now only the
+ * empty-envelope + StudyOID-attribute round-trip is JAXB-bound; production
+ * callers (ImportCRFDataServlet et al.) stay on Castor until PR 3.
  */
+@XmlRootElement(name = "ODM", namespace = "http://www.cdisc.org/ns/odm/v1.3")
+@XmlAccessorType(XmlAccessType.NONE)
 public class ODMContainer {
 
+    @XmlElement(name = "ClinicalData", namespace = "http://www.cdisc.org/ns/odm/v1.3")
     private CRFDataPostImportContainer crfDataPostImportContainer;
     private String subjectUniqueIdentifier;
     private String studyUniqueIdentifier;
