@@ -90,7 +90,21 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 
   These will collectively be the institutional GCP regression suite. Open question: convert to `@RunWith(SpringJUnit4ClassRunner.class) + @Transactional` first (Phase B prep), or use the existing `HibernateOcDbTestCase` pattern for momentum?
 
-  **Progress so far (2026-05-28):** As a working exemplar of the integration-test pattern post Phase 0.3, [`ConfigurationDaoTest`](core/src/test/java/org/akaza/openclinica/dao/ConfigurationDaoTest.java) and its [DBUnit fixture](core/src/test/resources/org/akaza/openclinica/dao/testdata/ConfigurationDaoTest.xml) have been extended from 3 → 7 test methods (multi-row fixture, value round-trip, null-key handling, findAll containment, saveOrUpdate update-not-insert semantics). Total integration test count: 63 → 67, all green. The remaining 20 backlog tests above follow the same pattern.
+  **Progress (2026-05-28):**
+
+  - **Item 3 (`LoginFlowIT.passwordEncoderRecognisesLegacyMd5`)** ✅ — landed as a unit test, [`OpenClinicaPasswordEncoderTest`](core/src/test/java/org/akaza/openclinica/core/OpenClinicaPasswordEncoderTest.java). 4 test methods pin the SHA-1 round-trip, salted-encoding equivalence, MD5 fallback path (legacy users still authenticate), and wrong-password rejection. Phase B.4 gate.
+  - **Extended fixtures, not in the original 20 but pattern-proven and high-value Phase B.5 guards:**
+    - [`ConfigurationDaoTest`](core/src/test/java/org/akaza/openclinica/dao/ConfigurationDaoTest.java) 3 → 7 methods (multi-row fixture, value round-trip, null-key handling, findAll containment, saveOrUpdate update-not-insert).
+    - [`AuditUserLoginDaoTest`](core/src/test/java/org/akaza/openclinica/dao/AuditUserLoginDaoTest.java) 2 → 5 methods (multi-row fixture, findAll containment, two Hibernate-Criteria-based filter tests via `AuditUserLoginFilter` — directly pins the Phase B.5 Criteria API removal target).
+  - **Phase B.0 Castor characterisation framework scaffolded** ✅:
+    - [`CastorCharacterisationIT`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorCharacterisationIT.java) abstract base class with `assertXmlSimilarToGolden` / `assertXmlIdenticalToGolden` helpers + capture-on-first-run helper messages, golden directory at `core/src/test/resources/org/akaza/openclinica/odm/characterisation/golden/`.
+    - [`CastorCharacterisationFrameworkTest`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorCharacterisationFrameworkTest.java) framework smoke test (2/2 green) — verifies XMLUnit is wired and the "similar" comparison behaves correctly on attribute order + whitespace + value differences. Runs in the default `mvn test` profile.
+    - `org.xmlunit:xmlunit-core` 2.10 + `xmlunit-matchers` 2.10 added to dependencyManagement (test scope) per [DR-006](docs/development/modernization/decision-record.md#dr-006--castor-replacement-jakarta-jaxb).
+    - Subclasses of `CastorCharacterisationIT` are excluded from default surefire (need live Postgres); they run under `mvn -P integration-tests test`.
+
+  **Counts:** unit suite 33 → 39 (+4 password + 2 framework); integration suite 67 → 74 (+3 audit-user-login extensions; the +4 from ConfigurationDaoTest were counted in the earlier 63 → 67).
+
+  **What's NOT done (still in the 20-test backlog):** items 1–2, 4–20 inclusive. The Castor characterisation IT subclasses (one per ODM code path: `ODMMetadataRestResource`, `ImportCRFDataServlet`, `MetaDataCollector`, `AdminDataCollector`, rule XSLT) are scaffold-ready: pick a code path, subclass `CastorCharacterisationIT`, capture a golden on first run, commit. The [Phase B execution playbook §B.0](docs/development/modernization/phase-b-execution-playbook.md#b0--castor-characterisation-tests-pre-flight) lists the five canonical code paths.
 
 #### Integration-test authoring pattern (post Phase 0.3)
 

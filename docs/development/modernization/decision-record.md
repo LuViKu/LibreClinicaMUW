@@ -102,10 +102,88 @@ This document captures the strategic decisions that frame the modernization proj
 
 ---
 
+## DR-006 — Castor replacement: Jakarta JAXB
+
+**Date:** 2026-05-28
+**Status:** Accepted (pre-flight ratification for Phase B.3)
+**Companion analysis:** [docs/development/modernization/phase-b-dependency-analysis.md](phase-b-dependency-analysis.md) (Castor row); [docs/development/modernization/phase-b-execution-playbook.md § B.3](phase-b-execution-playbook.md)
+
+**Context.** Castor 1.4.1 (2014) has no Jakarta-namespace variant and must be removed before Phase B can complete. The CDISC ODM 1.3 import/export paths (`ImportCRFDataServlet`, `ODMMetadataRestResource`, `MetaDataCollector`, `AdminDataCollector`, plus rule-engine XSLT executions) all currently use Castor's mapping-driven marshaller/unmarshaller and `XmlSchemaValidationHelper`. Three replacement options were considered:
+
+| Option | Pros | Cons |
+|--------|------|------|
+| **Jakarta JAXB 4 (`jakarta.xml.bind` + `org.glassfish.jaxb:jaxb-runtime`)** | XSD-schema-validated; `xjc` already used in the `odm` module to generate JAXB classes from ODM 1.3 XSD; annotation-driven (no separate mapping file); the most canonical output for schema-defined XML; native to Jakarta EE 9+ | Steeper learning curve for ad-hoc XML; `XmlAdapter` needed for some date / decimal lexical preservation |
+| Jackson XML (`jackson-dataformat-xml`) | Familiar (Jackson is already in the dep tree for JSON); easier for one-off bean → XML | Produces non-canonical XML (attribute ordering, default-namespace handling differs from JAXB); harder to keep byte-equivalent against an XSD-validated baseline; would still need a schema-validation step for ODM |
+| EclipseLink MOXy | Drop-in JAXB implementation with extensions (oxm.xml mapping file, dynamic typing) | One more dependency to track; institutional team has no MOXy experience; benefits over plain JAXB are minor for our schema-locked use case |
+
+**Decision.** **Jakarta JAXB 4** for the Castor → modern XML binding swap.
+
+**Rationale.**
+1. The `odm/` module already contains JAXB-generated classes from the ODM 1.3 XSD — half the work is done.
+2. ODM 1.3 is schema-locked; canonical, schema-validated XML output is the requirement of every downstream consumer (regulators, biostatistics pipelines, partner sites). JAXB matches that contract; Jackson XML does not.
+3. Byte-equivalence against pre-Phase-B Castor output (the [B.0 characterisation tests](phase-b-execution-playbook.md#b0--castor-characterisation-tests-pre-flight) regime) is achievable with JAXB + targeted `XmlAdapter`s where lexical formats differ.
+4. Plain JAXB has the smallest dependency footprint (no MOXy install).
+
+**Consequences.**
+- Phase B.3 (Castor → JAXB swap) becomes the highest-risk sub-phase of Phase B per the playbook risk register (`RB1`). Must not start until B.0 characterisation tests are green on the current stack.
+- The `OdmJaxbContext` bean recommended in the playbook is the wiring landing — a single Spring-managed `JAXBContext` cached for the lifetime of the application context (instantiation is expensive).
+- `XmlSchemaValidationHelper` (Castor) → `jakarta.xml.validation.Validator` (one-line swap per call site).
+- A `dependency-check-suppressions.xml` entry may be needed for transitive `commons-beanutils` 1.x pulled by Castor; verify after removal.
+- Open follow-ups: lexical preservation of `dateTime` / `decimal` / `Boolean` values may need per-field `XmlAdapter`s. The B.0 characterisation suite is the harness for catching those.
+
+**Revisit triggers.**
+- If a B.0 characterisation test cannot be made byte-equivalent on JAXB output even with `XmlAdapter`s, this DR is amended in favour of Jackson XML or MOXy. The cost of that pivot is the work to date on JAXB context wiring (low — a few hours).
+- If the `odm/` module's existing JAXB-generated classes are discovered to be incomplete (we have not audited every ODM 1.3 element used at this scale), the gap is filled by re-running `xjc` against the upstream XSD before the swap. Not a DR amendment.
+
+---
+
+## DR-010 — Java package rename to MUW namespace, during Phase B.11
+
+**Date:** 2026-05-28
+**Status:** Accepted (pre-flight ratification for Phase B.11)
+**Companion analysis:** [docs/development/modernization/phase-b-execution-playbook.md § B.11](phase-b-execution-playbook.md)
+
+**Context.** The heritage Java packages are `org.akaza.openclinica.*` (legacy OpenClinica) and `org.libreclinica.*` (post-2019 LibreClinica additions). Three options were considered:
+
+1. **Rename now, during Phase 0/A** — minimal-effort while CI is light, but every Java file change cascades through cherry-picks from upstream ReliaTec, and every Phase B `javax → jakarta` Eclipse Transformer run also has to deal with the rename. Doubles the merge-conflict surface.
+2. **Rename during Phase B.11** — every file is being touched anyway for `javax → jakarta`; bundle the package rename into the same touch. Single review cycle. Single upstream-divergence event.
+3. **Defer indefinitely** — accept `org.akaza.openclinica.*` as a permanent institutional inheritance. Lowest immediate effort but ongoing identity confusion (institutional Maven `groupId` says `at.ac.meduniwien.ophthalmology.libreclinica` while Java packages say `org.akaza.openclinica`).
+
+**Decision.** **Rename during Phase B.11** to `at.ac.meduniwien.ophthalmology.libreclinica.*`.
+
+**Rationale.**
+1. Per [DR-003](#dr-003--hard-fork-from-upstream-reliateclibreclinica), we are committed to a hard fork. Heritage package names no longer serve a "stay close to upstream for easier merges" purpose post Phase B.
+2. Per [DR-005](#dr-005--muw-ophthalmology-branding-applied), institutional identity is a stated goal. Java packages that say `org.akaza.openclinica` undermine that goal in IDEs, in stack traces, in dependency-tree output, and in error messages copied into support tickets.
+3. The single-most-expensive event in renaming Java packages is updating every Spring XML `<bean class="...">`, every JSP `<jsp:useBean class="...">`, every DBUnit `getTestDataFilePath()` (encodes package as path), every `component-scan base-package`, and every `web.xml` listener / filter class reference. Phase B.11 is when every one of those files is already being touched for the Jakarta migration anyway — there is no cheaper time.
+4. The rename runs as an IntelliJ "structural search and replace" on the Phase B integration branch, immediately after the JSP taglib URI updates (B.7) land, and immediately before the reconciliation sweep (B.12). Branch name per playbook: `feature/phase-b-jakarta-cliff-package-rename` (off `feature/phase-b-jakarta-cliff`).
+
+**Mapping.**
+
+| Old prefix | New prefix | Notes |
+|------------|-----------|-------|
+| `org.akaza.openclinica.*` | `at.ac.meduniwien.ophthalmology.libreclinica.*` | Bulk |
+| `org.libreclinica.*` (LibreClinica community additions) | `at.ac.meduniwien.ophthalmology.libreclinica.*` | Merge into the same MUW namespace |
+| `org.akaza.openclinica.gwt.GwtMenu` | (removed per Phase D) | Do not rename; just delete during the GWT removal sub-phase |
+
+**Consequences.**
+- DBUnit `getTestDataFilePath()` in `HibernateOcDbTestCase` and `OcDbTestCase` derives the path from `getClass().getPackage().getName()`. After the rename, all `core/src/test/resources/org/akaza/openclinica/.../testdata/*.xml` files must move to `core/src/test/resources/at/ac/meduniwien/ophthalmology/libreclinica/.../testdata/*.xml`. Mechanical but voluminous.
+- Spring XML `<bean class="..">` references (~70 distinct classes referenced by Spring) need rewriting.
+- `web.xml` servlet classes (~295 entries) need rewriting.
+- JSP `<jsp:useBean class="...">` and `<jsp:scriptlet>` directives across 413 JSPs need rewriting. Eclipse Transformer alone cannot do this since it targets `javax → jakarta`, not package renames; pair with an IntelliJ structural-replace run on the same branch.
+- Liquibase changelog references: column-comment text strings that contain `org.akaza.openclinica` (e.g. in audit_log_event entries) are NOT rewritten — those are historical data, not class references.
+- Logback `<logger name="...">` declarations in `logback.xml` must be rewritten.
+- An entry in `upstream-merges.md` (the cherry-pick log per [DR-003](#dr-003--hard-fork-from-upstream-reliateclibreclinica)) documenting the rename event with the script used.
+
+**Revisit triggers.**
+- If during Phase B.11 the rename touches more than ~5000 files (Eclipse Transformer + structural-replace baseline), the cost-benefit shifts. Pause + reassess on a sub-phase go/no-go review.
+
+---
+
 ## Future decisions (open)
 
-- DR-006 — Castor replacement choice: Jakarta JAXB vs. Jackson XML (decide before Phase B)
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D)
 - DR-008 — UI framework for Phase E: React vs. Vue 3 vs. Svelte (decide before Phase E)
 - DR-009 — Spring Authorization Server adoption (replaces deprecated Spring Security OAuth2 — decide during Phase B)
-- DR-010 — Java package rename target: keep `org.akaza.openclinica` / `org.libreclinica` or migrate to `at.ac.meduniwien.ophthalmology.*` (decide before Phase B)
+- DR-011 — Database connection pool: HikariCP vs. DBCP2 (recommend HikariCP; decide during Phase C)
+- DR-012 — Date/time API: Joda-Time → `java.time` (recommend `java.time`; decide during Phase B)
+- DR-013 — L2 cache: EhCache 3 vs. Caffeine + JCache (recommend Caffeine + JCache for Spring Boot 3 default; decide during Phase B)

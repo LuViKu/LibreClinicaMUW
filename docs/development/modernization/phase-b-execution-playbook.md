@@ -15,10 +15,13 @@ Phase B does not start until *all* of the following are true. Skipping any of th
 
 - [ ] Phase 0 + A merged to `lc-develop` and pushed (CI green end-to-end).
 - [ ] **Castor characterisation tests** in place and passing on the current stack — see [§B.0 Castor characterisation](#b0--castor-characterisation-tests-pre-flight) below. **This is the non-negotiable gate.** Without byte-equivalent ODM XML capture, the Castor → JAXB replacement (B.3) cannot be reviewed.
-- [ ] Decision record entries closed:
-  - [ ] **DR-006** Castor replacement — Jakarta JAXB vs. Jackson XML (recommendation: JAXB; revisit during B.0 if characterisation tests show non-canonical Jackson output).
-  - [ ] **DR-010** Java package rename `org.akaza.openclinica.*` → `at.ac.meduniwien.ophthalmology.*` (recommendation: yes, during Phase B — every file is being touched anyway).
+- [x] Decision record entries closed (2026-05-28):
+  - [x] **[DR-006](decision-record.md#dr-006--castor-replacement-jakarta-jaxb)** — Castor replacement: **Jakarta JAXB 4**. Revisit only if a B.0 characterisation test cannot be made byte-equivalent on JAXB output even with `XmlAdapter`s.
+  - [x] **[DR-010](decision-record.md#dr-010--java-package-rename-to-muw-namespace-during-phase-b11)** — Java packages `org.akaza.openclinica.*` + `org.libreclinica.*` rename to `at.ac.meduniwien.ophthalmology.libreclinica.*` during sub-phase B.11.
 - [ ] Integration test backlog in [MIGRATION.md](../../../MIGRATION.md) — at least the first 5 critical-path tests (LoginFlowIT, StudyCrudIT, SubjectEnrolmentIT, StudyEventScheduleIT, AuditTrailIT) written + green. The post-Phase-0.3 test infrastructure proved we can write them; we need them as our regression net.
+  - [x] Item 3 (`LoginFlowIT.passwordEncoderRecognisesLegacyMd5`) landed 2026-05-28 as `OpenClinicaPasswordEncoderTest` (4 unit tests, Phase B.4 gate).
+  - [x] B.0 characterisation framework scaffolded 2026-05-28: `CastorCharacterisationIT` abstract base + `CastorCharacterisationFrameworkTest` smoke (2/2 green) + XMLUnit dependency + golden directory. Subclasses for each ODM code path are now mechanical, but still pending.
+  - [ ] Items 1, 2, 4, 5, 6–20 (StudyCrudIT, SubjectEnrolmentIT, StudyEventScheduleIT, AuditTrailIT, full CRF/discrepancy/SDV/ODM coverage). Each is ~1–2 days of focused work given multi-entity DBUnit fixtures.
 - [ ] **Compose smoke test runs on every dep bump, not just on the integration profile.** Phase A.2's Quartz 2.2.3 → 2.3.2 + Spring Security 5.1 → 5.8 + project-version rename to `1.4.0rc1-muw` all passed the 67/67 integration suite but broke the compose smoke test (Dockerfile WAR-name glob, scheduler-XML `s[...]` placeholders against an incomplete `datainfo.properties`, and `jobStore.class` bypassing Spring's wiring — three stacked bugs; see commit `b75a2c287`). The integration tests do not load `applicationContext-core-scheduler.xml` and never will detect a runtime-only regression of that shape. Every Phase B sub-phase merge gate must therefore include the smoke test job — wording made explicit in the gate column of the sub-phase table below. *Sub-phase gates updated 2026-05-28.*
 - [ ] An institutional pre-Phase-B snapshot tag: `git tag -a pre-phase-b -m "..."` and pushed.
 - [ ] A dedicated Phase B integration branch: `feature/phase-b-jakarta-cliff` off `lc-develop`.

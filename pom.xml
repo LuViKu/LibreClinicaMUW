@@ -686,6 +686,21 @@
 				<version>1.6.1</version>
 				<scope>test</scope>
 			</dependency>
+			<!-- XMLUnit 2.x: canonical XML comparison for Phase B.0 Castor
+			     characterisation tests. See DR-006 + phase-b-execution-playbook.md
+			     §B.0. 2.10.x is the final 2.x release line on JDK 8. -->
+			<dependency>
+				<groupId>org.xmlunit</groupId>
+				<artifactId>xmlunit-core</artifactId>
+				<version>2.10.0</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.xmlunit</groupId>
+				<artifactId>xmlunit-matchers</artifactId>
+				<version>2.10.0</version>
+				<scope>test</scope>
+			</dependency>
 			<dependency>
 				<groupId>org.jdom</groupId>
 				<artifactId>jdom</artifactId>
@@ -983,6 +998,13 @@
 							<exclude>**/service/rule/RuleSetServiceTest.java</exclude>
 							<exclude>**/service/rule/expression/SampleTest.java</exclude>
 							<exclude>**/service/rule/RulesPostImportContainerServiceTest.java</exclude>
+							<!-- Phase B.0 Castor characterisation tests extend
+							     HibernateOcDbTestCase: a live Postgres is required.
+							     The framework smoke test
+							     (CastorCharacterisationFrameworkTest) is exempt:
+							     it runs in the default suite and verifies the
+							     XMLUnit dependency is wired correctly. -->
+							<exclude>**/odm/characterisation/*IT.java</exclude>
 						</excludes>
 					</configuration>
 				</plugin>
