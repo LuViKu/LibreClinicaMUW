@@ -87,19 +87,29 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         UserAccountDAO userDao = (UserAccountDAO) getContext().getBean("userAccountDao");
 
         UserAccountBean owner = (UserAccountBean) userDao.findByPK(1);
+        assertTrue("CI debug: bootstrap owner.id must be > 0, was " + owner.getId(),
+                owner.getId() > 0);
+
+        // Unique-per-run identifiers so cross-test pollution in CI's
+        // shared postgres doesn't collide. Each create() now also asserts
+        // a positive PK so a silent FK / constraint failure surfaces at
+        // the exact step.
+        String runTag = String.valueOf(System.currentTimeMillis());
 
         // 1) Study.
         StudyBean study = new StudyBean();
-        study.setName("MUW StudyEvent IT Schedule");
-        study.setIdentifier("MUW_SE_IT_SCHEDULE");
+        study.setName("MUW StudyEvent IT Schedule " + runTag);
+        study.setIdentifier("MUW_SE_IT_SCHEDULE_" + runTag);
         study.setStatus(Status.AVAILABLE);
         study.setOwnerId(owner.getId());
         study = studyDao.create(study);
+        assertTrue("CI debug: study.create() must yield positive PK, was "
+                + study.getId(), study.getId() > 0);
 
         // 2) Study event definition (the "form" of the event — repeats once,
         // type "scheduled", category "Visit").
         StudyEventDefinitionBean sed = new StudyEventDefinitionBean();
-        sed.setName("MUW SE IT Visit 1");
+        sed.setName("MUW SE IT Visit 1 " + runTag);
         sed.setStudyId(study.getId());
         sed.setDescription("Round-trip schedule test");
         sed.setRepeating(false);
@@ -109,21 +119,27 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         sed.setOwnerId(owner.getId());
         sed.setOrdinal(1);
         sed = sedDao.create(sed);
+        assertTrue("CI debug: sed.create() must yield positive PK, was "
+                + sed.getId(), sed.getId() > 0);
 
         // 3) Subject + study_subject (an enrolled patient).
         SubjectBean subject = new SubjectBean();
-        subject.setUniqueIdentifier("MUW-SE-IT-001");
+        subject.setUniqueIdentifier("MUW-SE-IT-001-" + runTag);
         subject.setStatus(Status.AVAILABLE);
         subject.setOwner(owner);
         subject = subjectDao.create(subject);
+        assertTrue("CI debug: subject.create() must yield positive PK, was "
+                + subject.getId(), subject.getId() > 0);
 
         StudySubjectBean enrolment = new StudySubjectBean();
-        enrolment.setLabel("MUW-SE-IT-ENROL-001");
+        enrolment.setLabel("MUW-SE-IT-ENROL-001-" + runTag);
         enrolment.setSubjectId(subject.getId());
         enrolment.setStudyId(study.getId());
         enrolment.setStatus(Status.AVAILABLE);
         enrolment.setOwner(owner);
         enrolment = studySubjectDao.create(enrolment);
+        assertTrue("CI debug: enrolment.create() must yield positive PK, was "
+                + enrolment.getId(), enrolment.getId() > 0);
 
         // 4) Schedule the event.
         StudyEventBean event = new StudyEventBean();
@@ -140,7 +156,8 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         event.setDateStarted(new Date());
         event = eventDao.create(event);
 
-        assertTrue("study_event.create() must yield positive PK",
+        assertTrue("study_event.create() must yield positive PK (got id="
+                + event.getId() + ")",
                 event.getId() > 0);
         StudyEventBean roundTripped =
                 (StudyEventBean) eventDao.findByPK(event.getId());
@@ -173,16 +190,22 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         UserAccountDAO userDao = (UserAccountDAO) getContext().getBean("userAccountDao");
 
         UserAccountBean owner = (UserAccountBean) userDao.findByPK(1);
+        assertTrue("CI debug: bootstrap owner.id must be > 0, was " + owner.getId(),
+                owner.getId() > 0);
+
+        String runTag = String.valueOf(System.currentTimeMillis());
 
         StudyBean study = new StudyBean();
-        study.setName("MUW StudyEvent IT Transitions");
-        study.setIdentifier("MUW_SE_IT_TRANSITIONS");
+        study.setName("MUW StudyEvent IT Transitions " + runTag);
+        study.setIdentifier("MUW_SE_IT_TRANSITIONS_" + runTag);
         study.setStatus(Status.AVAILABLE);
         study.setOwnerId(owner.getId());
         study = studyDao.create(study);
+        assertTrue("CI debug: study.create() must yield positive PK, was "
+                + study.getId(), study.getId() > 0);
 
         StudyEventDefinitionBean sed = new StudyEventDefinitionBean();
-        sed.setName("MUW SE IT Visit 2");
+        sed.setName("MUW SE IT Visit 2 " + runTag);
         sed.setStudyId(study.getId());
         sed.setDescription("Transition test");
         sed.setRepeating(false);
@@ -192,20 +215,26 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         sed.setOwnerId(owner.getId());
         sed.setOrdinal(1);
         sed = sedDao.create(sed);
+        assertTrue("CI debug: sed.create() must yield positive PK, was "
+                + sed.getId(), sed.getId() > 0);
 
         SubjectBean subject = new SubjectBean();
-        subject.setUniqueIdentifier("MUW-SE-IT-002");
+        subject.setUniqueIdentifier("MUW-SE-IT-002-" + runTag);
         subject.setStatus(Status.AVAILABLE);
         subject.setOwner(owner);
         subject = subjectDao.create(subject);
+        assertTrue("CI debug: subject.create() must yield positive PK, was "
+                + subject.getId(), subject.getId() > 0);
 
         StudySubjectBean enrolment = new StudySubjectBean();
-        enrolment.setLabel("MUW-SE-IT-ENROL-002");
+        enrolment.setLabel("MUW-SE-IT-ENROL-002-" + runTag);
         enrolment.setSubjectId(subject.getId());
         enrolment.setStudyId(study.getId());
         enrolment.setStatus(Status.AVAILABLE);
         enrolment.setOwner(owner);
         enrolment = studySubjectDao.create(enrolment);
+        assertTrue("CI debug: enrolment.create() must yield positive PK, was "
+                + enrolment.getId(), enrolment.getId() > 0);
 
         StudyEventBean event = new StudyEventBean();
         event.setStudyEventDefinitionId(sed.getId());
