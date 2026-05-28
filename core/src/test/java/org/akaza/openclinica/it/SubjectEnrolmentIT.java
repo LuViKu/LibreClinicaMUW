@@ -77,14 +77,13 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
      * then enrols one subject into it, then asserts the two rows exist
      * and are linked.
      */
-    // Disabled in CI 2026-05-28 — passes locally on a fresh postgres
-    // but fails in CI's shared postgres at study_subject.create() returning
-    // id=0 (silent FK / unique-constraint violation). Unique-per-run
-    // identifiers didn't fix it. Root cause unidentified; needs deeper
-    // investigation with surefire stdout capture or a Postgres query log.
-    // See session-handover.md follow-ups. Re-enable by renaming to
-    // testEnrolSubjectInStudy.
-    public void disabled_testEnrolSubjectInStudy() throws Exception {
+    // Re-enabled 2026-05-28 (session 3) for diagnostic CI run — the
+    // openclinica-test.log artifact is now uploaded with surefire-reports,
+    // so the SQLException that the DAO swallowed should be visible after
+    // the CI run completes. Once the root cause is identified + fixed,
+    // re-disable testDuplicateLabelCurrentlyNotRejected if it still fails,
+    // and delete the testPlaceholder() stub.
+    public void testEnrolSubjectInStudy() throws Exception {
         DataSource dataSource = (DataSource) getContext().getBean("dataSource");
         StudyDAO studyDao = new StudyDAO(dataSource);
         SubjectDAO subjectDao = new SubjectDAO(dataSource);
