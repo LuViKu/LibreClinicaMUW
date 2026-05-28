@@ -1,4 +1,4 @@
-FROM docker.io/library/maven:3-eclipse-temurin-8 AS builder
+FROM docker.io/library/maven:3-eclipse-temurin-21 AS builder
 
 WORKDIR /app
 
@@ -49,7 +49,21 @@ RUN --mount=type=cache,target=/root/.m2 \
     mv web/target/LibreClinica-web-*.war /LibreClinica-web.war;
 
 ############################################################
-FROM tomcat:9-jdk11
+FROM tomcat:9-jdk21
+
+# Phase B.1 JDK 21 baseline: legacy Spring/Hibernate reflection needs java.base
+# opens, Castor 1.4.1's BaseXercesJDK5Serializer touches an internal JDK class
+# (com.sun.org.apache.xml.internal.serialize.XMLSerializer) that needs java.xml
+# exports, and Spring-LDAP's AbstractContextSource references com.sun.jndi.ldap.LdapCtxFactory
+# from java.naming. All three are stopgaps that go away when subsequent sub-phases
+# replace Castor (B.3, DR-006), Spring 5→6 (B.4) and Hibernate 5→6 (B.5).
+ENV CATALINA_OPTS="\
+    --add-opens=java.base/java.lang=ALL-UNNAMED \
+    --add-opens=java.base/java.lang.invoke=ALL-UNNAMED \
+    --add-opens=java.base/java.lang.reflect=ALL-UNNAMED \
+    --add-opens=java.base/java.util=ALL-UNNAMED \
+    --add-exports=java.xml/com.sun.org.apache.xml.internal.serialize=ALL-UNNAMED \
+    --add-exports=java.naming/com.sun.jndi.ldap=ALL-UNNAMED"
 
 LABEL org.opencontainers.image.title="LibreClinica MUW Ophthalmology"
 LABEL org.opencontainers.image.description="Electronic Data Capture for the Department of Ophthalmology and Optometry, Medical University of Vienna — institutional build of LibreClinica."
