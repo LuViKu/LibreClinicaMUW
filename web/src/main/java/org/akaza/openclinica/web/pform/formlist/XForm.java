@@ -11,16 +11,28 @@ package org.akaza.openclinica.web.pform.formlist;
 
 import java.security.NoSuchAlgorithmException;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+
 import org.akaza.openclinica.bean.admin.CRFBean;
 import org.akaza.openclinica.bean.submit.CRFVersionBean;
 
+@XmlAccessorType(XmlAccessType.NONE)
 public class XForm {
+    @XmlElement(name = "formID")
     private String formID = null;
+    @XmlElement(name = "name")
     private String name = null;
+    @XmlElement(name = "majorMinorVersion")
     private String majorMinorVersion = null;
+    @XmlElement(name = "version")
     private String version = null;
+    @XmlElement(name = "hash")
     private String hash = null;
+    @XmlElement(name = "downloadUrl")
     private String downloadURL = null;
+    @XmlElement(name = "manifestUrl")
     private String manifestURL = null;
 
     public XForm() {

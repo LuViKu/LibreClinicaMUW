@@ -1,7 +1,7 @@
 /*
  * LibreClinica is distributed under the
  * GNU Lesser General Public License (GNU LGPL).
-
+ *
  * For details see: https://libreclinica.org/license
  * copyright (C) 2003 - 2011 Akaza Research
  * copyright (C) 2003 - 2019 OpenClinica
@@ -9,8 +9,16 @@
  */
 package org.akaza.openclinica.domain.xform.dto;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlValue;
+
+@XmlAccessorType(XmlAccessType.NONE)
 public class Label {
+    @XmlAttribute(name = "ref")
     private String ref;
+    @XmlValue
     private String label;
 
     public String getRef() {

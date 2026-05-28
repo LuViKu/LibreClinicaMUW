@@ -101,6 +101,7 @@
     <bean id="xformParser" class="org.akaza.openclinica.domain.xform.XformParser">
         <property name="dataSource" ref="dataSource"></property>
         <property name="coreResources" ref="coreResources"/>
+        <property name="odmJaxbContext" ref="odmJaxbContext"/>
     </bean>
 
     <bean name="apiSecurityFilter" class="org.akaza.openclinica.web.filter.ApiSecurityFilter"/>

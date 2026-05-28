@@ -1,7 +1,7 @@
 /*
  * LibreClinica is distributed under the
  * GNU Lesser General Public License (GNU LGPL).
-
+ *
  * For details see: https://libreclinica.org/license
  * copyright (C) 2003 - 2011 Akaza Research
  * copyright (C) 2003 - 2019 OpenClinica
@@ -9,15 +9,29 @@
  */
 package org.akaza.openclinica.domain.xform.dto;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlAttribute;
+
+@XmlAccessorType(XmlAccessType.NONE)
 public class Bind {
+    @XmlAttribute(name = "nodeset")
     private String nodeSet;
+    @XmlAttribute(name = "type")
     private String type;
+    @XmlAttribute(name = "readonly")
     private String readOnly;
+    @XmlAttribute(name = "calculate")
     private String calculate;
+    @XmlAttribute(name = "constraint")
     private String constraint;
+    @XmlAttribute(name = "constraintMsg")
     private String constraintMsg;
+    @XmlAttribute(name = "required")
     private String required;
+    @XmlAttribute(name = "preload", namespace = "http://openrosa.org/javarosa")
     private String jrPreload;
+    @XmlAttribute(name = "relevant")
     private String relevant;
 
     public String getRelevant() {

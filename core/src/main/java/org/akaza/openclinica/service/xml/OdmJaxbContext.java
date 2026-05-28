@@ -8,8 +8,11 @@
  */
 package org.akaza.openclinica.service.xml;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.StringWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -23,6 +26,7 @@ import javax.xml.transform.stream.StreamSource;
 
 import org.akaza.openclinica.bean.submit.crfdata.ODMContainer;
 import org.akaza.openclinica.domain.rule.RulesPostImportContainer;
+import org.akaza.openclinica.domain.xform.dto.Html;
 
 /**
  * Single Spring-managed wiring point for the project's JAXB contexts.
@@ -157,6 +161,93 @@ public class OdmJaxbContext {
         } catch (JAXBException e) {
             throw new IllegalStateException(
                     "Failed to unmarshal ODMContainer (clinical data)", e);
+        }
+    }
+
+    /**
+     * Unmarshal an XForm document (the {@code xform_template.xml}-shaped XHTML
+     * + XForms tree) into the {@code core} {@link Html} DTO used by
+     * {@code XformParser}. Mirrors the Castor behaviour with
+     * {@code unmarshaller.setClass(Html.class)} +
+     * {@code setWhitespacePreserve(false)} — the root element name is taken
+     * from the {@code @XmlRootElement} on {@link Html}.
+     */
+    public Html unmarshalXform(String xml) {
+        try {
+            Unmarshaller unmarshaller = contextFor(Html.class).createUnmarshaller();
+            ByteArrayInputStream in = new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8));
+            return (Html) unmarshaller.unmarshal(new StreamSource(in));
+        } catch (JAXBException e) {
+            throw new IllegalStateException("Failed to unmarshal XForm Html", e);
+        }
+    }
+
+    /**
+     * Marshal an XForm {@link Html} DTO to a String. Output is a single-line
+     * (non-indented) XML fragment — no XML declaration prolog — so it can be
+     * sliced and reassembled by {@code OpenRosaXmlGenerator.buildForm} just
+     * like the Castor output.
+     */
+    public String marshalXform(Html html) {
+        try {
+            Marshaller marshaller = contextFor(Html.class).createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.FALSE);
+            marshaller.setProperty(Marshaller.JAXB_ENCODING, "UTF-8");
+            marshaller.setProperty(Marshaller.JAXB_FRAGMENT, Boolean.TRUE);
+            StringWriter writer = new StringWriter();
+            marshaller.marshal(html, writer);
+            return writer.toString();
+        } catch (JAXBException e) {
+            throw new IllegalStateException("Failed to marshal XForm Html", e);
+        }
+    }
+
+    /**
+     * Generic unmarshal helper for any {@code @XmlRootElement}-annotated
+     * type. Used by the OpenRosa-side bindings ({@code web/pform/dto/Html},
+     * etc.) where the bean lives outside {@code core}. The root element
+     * name is taken from the JAXB binding on the target class.
+     */
+    public <T> T unmarshalRoot(Class<T> rootClass, String xml) {
+        if (rootClass == null) {
+            throw new IllegalArgumentException("rootClass cannot be null");
+        }
+        try {
+            Unmarshaller unmarshaller = contextFor(rootClass).createUnmarshaller();
+            ByteArrayInputStream in = new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8));
+            return rootClass.cast(unmarshaller.unmarshal(new StreamSource(in)));
+        } catch (JAXBException e) {
+            throw new IllegalStateException("Failed to unmarshal " + rootClass.getName(), e);
+        }
+    }
+
+    /**
+     * Generic marshal-to-String helper for OpenRosa-side bindings ({@code
+     * XFormList}, {@code Manifest}, the {@code web/pform/dto/Html}). Lives in
+     * {@code core} so the JAXB context cache stays in one place, but the
+     * caller passes a {@code @XmlRootElement}-annotated bean of any type.
+     * Output is formatted, UTF-8, without the XML prolog so the byte stream
+     * is identical in shape to the Castor output the OpenRosa clients
+     * expect.
+     */
+    public String marshalToString(Object root) {
+        if (root == null) {
+            throw new IllegalArgumentException("root cannot be null");
+        }
+        try {
+            Marshaller marshaller = contextFor(root.getClass()).createMarshaller();
+            // Castor's XForm marshaller pinned indent=false; the OpenRosa
+            // formList/Manifest marshallers didn't set it. Keeping all three
+            // unformatted matches the XForm code path's expectation that
+            // {@code String.indexOf("<instance>")} returns a single token.
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.FALSE);
+            marshaller.setProperty(Marshaller.JAXB_ENCODING, "UTF-8");
+            marshaller.setProperty(Marshaller.JAXB_FRAGMENT, Boolean.TRUE);
+            StringWriter writer = new StringWriter();
+            marshaller.marshal(root, writer);
+            return writer.toString();
+        } catch (JAXBException e) {
+            throw new IllegalStateException("Failed to marshal " + root.getClass().getName(), e);
         }
     }
 }

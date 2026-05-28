@@ -1,7 +1,7 @@
 /*
  * LibreClinica is distributed under the
  * GNU Lesser General Public License (GNU LGPL).
-
+ *
  * For details see: https://libreclinica.org/license
  * copyright (C) 2003 - 2011 Akaza Research
  * copyright (C) 2003 - 2019 OpenClinica
@@ -11,9 +11,18 @@ package org.akaza.openclinica.domain.xform.dto;
 
 import java.util.List;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlElement;
+
+@XmlAccessorType(XmlAccessType.NONE)
 public class Body {
+    @XmlAttribute(name = "class")
     private String cssClass = null;
+    @XmlAttribute(name = "appearance")
     private String appearance = null;
+    @XmlElement(name = "group")
     private List<Group> group;
 
     public List<Group> getGroup() {

@@ -75,6 +75,7 @@ import org.akaza.openclinica.dao.service.StudyParameterValueDAO;
 import org.akaza.openclinica.dao.submit.CRFVersionDAO;
 import org.akaza.openclinica.domain.datamap.CrfVersionMedia;
 import org.akaza.openclinica.service.pmanage.ParticipantPortalRegistrar;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.akaza.openclinica.web.pform.formlist.XForm;
 import org.akaza.openclinica.web.pform.formlist.XFormList;
 import org.akaza.openclinica.web.pform.manifest.Manifest;
@@ -82,9 +83,6 @@ import org.akaza.openclinica.web.pform.manifest.MediaFile;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.exception.ExceptionUtils;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.xml.Marshaller;
-import org.exolab.castor.xml.XMLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -119,6 +117,7 @@ public class OpenRosaServices {
     private OpenRosaSubmissionController openRosaSubmissionController;
     private RuleActionPropertyDao ruleActionPropertyDao;
     private SCDItemMetadataDao scdItemMetadataDao;
+    private OdmJaxbContext odmJaxbContext;
     ParticipantPortalRegistrar participantPortalRegistrar;
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
     StudyDAO sdao;
@@ -208,16 +207,11 @@ public class OpenRosaServices {
                 }
             }
 
-            // Create the XML formList using a Castor mapping file.
-            XMLContext xmlContext = new XMLContext();
-            Mapping mapping = xmlContext.createMapping();
-            mapping.loadMapping(getCoreResources().getURL("openRosaFormListMapping.xml"));
-            xmlContext.addMapping(mapping);
-
-            Marshaller marshaller = xmlContext.createMarshaller();
-            StringWriter writer = new StringWriter();
-            marshaller.setWriter(writer);
-            marshaller.marshal(formList);
+            // Phase B.3 PR 3c-2: openRosaFormListMapping.xml → JAXB via the
+            // shared OdmJaxbContext bean. @XmlRootElement on XFormList +
+            // @XmlSchema namespace defaults on the package preserve the
+            // OpenRosa xforms-list XML shape that the Castor mapping produced.
+            String xml = getOdmJaxbContextOrDefault().marshalToString(formList);
 
             // Set response headers
             Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
@@ -228,7 +222,7 @@ public class OpenRosaServices {
             response.setHeader("Content-Type", "text/xml; charset=UTF-8");
             response.setHeader("Date", format.format(currentDate));
             response.setHeader("X-OpenRosa-Version", "1.0");
-            return writer.toString();
+            return xml;
         } catch (Exception e) {
             LOGGER.error(e.getMessage());
             LOGGER.error(ExceptionUtils.getStackTrace(e));
@@ -274,16 +268,9 @@ public class OpenRosaServices {
             }
         }
         try {
-            // Create the XML manifest using a Castor mapping file.
-            XMLContext xmlContext = new XMLContext();
-            Mapping mapping = xmlContext.createMapping();
-            mapping.loadMapping(getCoreResources().getURL("openRosaManifestMapping.xml"));
-            xmlContext.addMapping(mapping);
-
-            Marshaller marshaller = xmlContext.createMarshaller();
-            StringWriter writer = new StringWriter();
-            marshaller.setWriter(writer);
-            marshaller.marshal(manifest);
+            // Phase B.3 PR 3c-2: openRosaManifestMapping.xml → JAXB via the
+            // shared OdmJaxbContext bean.
+            String xml = getOdmJaxbContextOrDefault().marshalToString(manifest);
 
             // Set response headers
             Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("GMT"));
@@ -294,7 +281,7 @@ public class OpenRosaServices {
             response.setHeader("Content-Type", "text/xml; charset=UTF-8");
             response.setHeader("Date", format.format(currentDate));
             response.setHeader("X-OpenRosa-Version", "1.0");
-            return writer.toString();
+            return xml;
         } catch (Exception e) {
             LOGGER.error(e.getMessage());
             LOGGER.error(ExceptionUtils.getStackTrace(e));
@@ -336,7 +323,8 @@ public class OpenRosaServices {
                 xform = updateRepeatGroupsWithOrdinal(crfVersion.getXform());
             } else {
 
-                OpenRosaXmlGenerator generator = new OpenRosaXmlGenerator(coreResources, dataSource, ruleActionPropertyDao);
+                OpenRosaXmlGenerator generator = new OpenRosaXmlGenerator(coreResources, dataSource,
+                        ruleActionPropertyDao, getOdmJaxbContextOrDefault());
                 xform = generator.buildForm(formId);
             }
         } catch (Exception e) {
@@ -545,6 +533,21 @@ public class OpenRosaServices {
 
     public void setScdItemMetadataDao(SCDItemMetadataDao scdItemMetadataDao) {
         this.scdItemMetadataDao = scdItemMetadataDao;
+    }
+
+    public OdmJaxbContext getOdmJaxbContext() {
+        return odmJaxbContext;
+    }
+
+    public void setOdmJaxbContext(OdmJaxbContext odmJaxbContext) {
+        this.odmJaxbContext = odmJaxbContext;
+    }
+
+    private OdmJaxbContext getOdmJaxbContextOrDefault() {
+        if (this.odmJaxbContext == null) {
+            this.odmJaxbContext = new OdmJaxbContext();
+        }
+        return this.odmJaxbContext;
     }
 
     private StudyBean getStudy(String oid) {
