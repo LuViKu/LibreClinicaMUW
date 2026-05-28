@@ -1,0 +1,168 @@
+{
+  "url": "https://libreclinica.reliatec.de/lc-demo01/EnterDataForStudyEvent?eventId=1",
+  "title": "LibreClinica",
+  "h1": [
+    "Enter or Validate Data for CRFs in V1 Inclusion"
+  ],
+  "links": [
+    {
+      "text": "LCDemo",
+      "href": "ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "München",
+      "href": "ViewSite?id=4"
+    },
+    {
+      "text": "Change Study/Site",
+      "href": "ChangeStudy"
+    },
+    {
+      "text": "user_demo (Investigator) en",
+      "href": "UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "j_spring_security_logout"
+    },
+    {
+      "text": "Home",
+      "href": "MainMenu"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "ListStudySubjects"
+    },
+    {
+      "text": "Add Subject",
+      "href": "AddNewSubject"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "ViewNotes?module=submit"
+    },
+    {
+      "text": "Tasks",
+      "href": "#"
+    },
+    {
+      "text": "Support",
+      "href": "javascript:openDocWindow('https://www.libreclinica.org/support.html')"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "ListStudySubjects"
+    },
+    {
+      "text": "Add Subject",
+      "href": "AddNewSubject"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "ViewNotes?module=submit"
+    },
+    {
+      "text": "Schedule Event",
+      "href": "CreateNewStudyEvent"
+    },
+    {
+      "text": "View Events",
+      "href": "ViewStudyEvents"
+    },
+    {
+      "text": "Import Data",
+      "href": "ImportCRFData"
+    },
+    {
+      "text": "View Datasets",
+      "href": "ViewDatasets"
+    },
+    {
+      "text": "Create Dataset",
+      "href": "CreateDataset"
+    },
+    {
+      "text": "Update Profile",
+      "href": "UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "j_spring_security_logout"
+    },
+    {
+      "text": "München",
+      "href": "ViewSite?id=4"
+    },
+    {
+      "text": "data entry started",
+      "href": "EnterDataForStudyEvent?eventId=1"
+    },
+    {
+      "text": "Edit Study Event",
+      "href": "UpdateStudyEvent?event_id=1&ss_id=1"
+    },
+    {
+      "text": "LibreClinica Website",
+      "href": "https://www.libreclinica.org"
+    },
+    {
+      "text": "Documentation",
+      "href": "https://www.libreclinica.org/documentation"
+    },
+    {
+      "text": "Contact",
+      "href": "/lc-demo01/Contact"
+    },
+    {
+      "text": "Documents",
+      "href": "DocumentList"
+    },
+    {
+      "text": "software for clinical research",
+      "href": "http://www.libreclinica.org"
+    },
+    {
+      "text": "GNU Lesser General Public License",
+      "href": "http://www.gnu.org/licenses/lgpl-3.0.html"
+    }
+  ],
+  "forms": [
+    {
+      "action": "ListStudySubjects",
+      "method": "GET",
+      "n_inputs": 3,
+      "input_names": [
+        "findSubjects_f_studySubject.label",
+        "navBar"
+      ]
+    },
+    {
+      "action": "InitialDataEntry?action=ide_s&eventDefinitionCRFId=1&studyEventId=1&subjectId=1&eventCRFId=0&exitTo=EnterDataForStudyEvent?eventId=1",
+      "method": "POST",
+      "n_inputs": 1,
+      "input_names": [
+        "crfVersionId"
+      ]
+    },
+    {
+      "action": "ViewStudySubject",
+      "method": "POST",
+      "n_inputs": 3,
+      "input_names": [
+        "id",
+        "Submit",
+        "exit"
+      ]
+    }
+  ],
+  "buttons": [
+    "Go",
+    "View this Subject's Record",
+    "Exit"
+  ],
+  "tables": [],
+  "messages": [
+    "V1 Inclusion",
+    "cmed"
+  ]
+}

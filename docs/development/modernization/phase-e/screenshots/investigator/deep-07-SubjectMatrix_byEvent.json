@@ -1,0 +1,221 @@
+{
+  "url": "https://libreclinica.reliatec.de/lc-demo01/ListStudySubjects?event=2",
+  "title": "LibreClinica",
+  "h1": [
+    "Subject Matrix for München"
+  ],
+  "links": [
+    {
+      "text": "LCDemo",
+      "href": "ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "München",
+      "href": "ViewSite?id=4"
+    },
+    {
+      "text": "Change Study/Site",
+      "href": "ChangeStudy"
+    },
+    {
+      "text": "user_demo (Investigator) en",
+      "href": "UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "j_spring_security_logout"
+    },
+    {
+      "text": "Home",
+      "href": "MainMenu"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "ListStudySubjects"
+    },
+    {
+      "text": "Add Subject",
+      "href": "AddNewSubject"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "ViewNotes?module=submit"
+    },
+    {
+      "text": "Tasks",
+      "href": "#"
+    },
+    {
+      "text": "Support",
+      "href": "javascript:openDocWindow('https://www.libreclinica.org/support.html')"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "ListStudySubjects"
+    },
+    {
+      "text": "Add Subject",
+      "href": "AddNewSubject"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "ViewNotes?module=submit"
+    },
+    {
+      "text": "Schedule Event",
+      "href": "CreateNewStudyEvent"
+    },
+    {
+      "text": "View Events",
+      "href": "ViewStudyEvents"
+    },
+    {
+      "text": "Import Data",
+      "href": "ImportCRFData"
+    },
+    {
+      "text": "View Datasets",
+      "href": "ViewDatasets"
+    },
+    {
+      "text": "Create Dataset",
+      "href": "CreateDataset"
+    },
+    {
+      "text": "Update Profile",
+      "href": "UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "j_spring_security_logout"
+    },
+    {
+      "text": "LCDemo",
+      "href": "/lc-demo01/ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "München",
+      "href": "/lc-demo01/ViewStudy?id=4"
+    },
+    {
+      "text": "Show More",
+      "href": "javascript:hideCols('findSubjects',[1,2,3,4,5,6],true);"
+    },
+    {
+      "text": "Hide",
+      "href": "javascript:hideCols('findSubjects',[1,2,3,4,5,6],false);"
+    },
+    {
+      "text": "Add New Subject",
+      "href": "javascript:;"
+    },
+    {
+      "text": "Apply Filter",
+      "href": "javascript:onInvokeAction('findSubjects','filter')"
+    },
+    {
+      "text": "Clear Filter",
+      "href": "javascript:jQuery.jmesa.removeAllFiltersFromLimit('findSubjects');onInvokeAction('findSubjects','clear')"
+    },
+    {
+      "text": "X",
+      "href": "javascript:leftnavExpand('Menu_on_M-001_1_1'); javascript:leftnavExpand('Menu_off_M-001_1_1'); "
+    },
+    {
+      "text": "View/Enter Data",
+      "href": "EnterDataForStudyEvent?eventId=1"
+    },
+    {
+      "text": "X",
+      "href": "javascript:leftnavExpand('Menu_on_M-001_2_1'); javascript:leftnavExpand('Menu_off_M-001_2_1'); "
+    },
+    {
+      "text": "Schedule",
+      "href": "CreateNewStudyEvent?studySubjectId=1&studyEventDefinition=2"
+    },
+    {
+      "text": "X",
+      "href": "javascript:leftnavExpand('Menu_on_M-001_3_1'); javascript:leftnavExpand('Menu_off_M-001_3_1'); "
+    },
+    {
+      "text": "Schedule",
+      "href": "CreateNewStudyEvent?studySubjectId=1&studyEventDefinition=3"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"enrollmentDateField\", ifFormat : \"%d-%b-%Y\", button : \"enrollmentDateTrigger\", customPX: 300, customPY: 10 });",
+      "href": "#"
+    },
+    {
+      "text": "LibreClinica Website",
+      "href": "https://www.libreclinica.org"
+    },
+    {
+      "text": "Documentation",
+      "href": "https://www.libreclinica.org/documentation"
+    },
+    {
+      "text": "Contact",
+      "href": "/lc-demo01/Contact"
+    },
+    {
+      "text": "Documents",
+      "href": "DocumentList"
+    },
+    {
+      "text": "software for clinical research",
+      "href": "http://www.libreclinica.org"
+    },
+    {
+      "text": "GNU Lesser General Public License",
+      "href": "http://www.gnu.org/licenses/lgpl-3.0.html"
+    }
+  ],
+  "forms": [
+    {
+      "action": "ListStudySubjects",
+      "method": "GET",
+      "n_inputs": 3,
+      "input_names": [
+        "findSubjects_f_studySubject.label",
+        "navBar"
+      ]
+    },
+    {
+      "action": "/lc-demo01/ListStudySubjects",
+      "method": null,
+      "n_inputs": 4,
+      "input_names": [
+        "module",
+        "maxRows",
+        "showMoreLink"
+      ]
+    },
+    {
+      "action": "AddNewSubject",
+      "method": "post",
+      "n_inputs": 13,
+      "input_names": [
+        "subjectOverlay",
+        "submitted",
+        "addWithEvent",
+        "label",
+        "uniqueIdentifier",
+        "enrollmentDate",
+        "gender",
+        "yob",
+        "studyEventDefinition",
+        "startDate",
+        "location",
+        "addSubject",
+        "cancel"
+      ]
+    }
+  ],
+  "buttons": [
+    "Go",
+    "Add",
+    "Cancel"
+  ],
+  "tables": [],
+  "messages": []
+}

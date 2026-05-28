@@ -1,0 +1,176 @@
+{
+  "url": "https://libreclinica.reliatec.de/lc-demo01/pages/viewSubjectAggregate?studyId=3",
+  "title": "LibreClinica",
+  "h1": [
+    "Source Data Verification for LCDemo"
+  ],
+  "links": [
+    {
+      "text": "LCDemo",
+      "href": "/lc-demo01/ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "Change Study/Site",
+      "href": "/lc-demo01/ChangeStudy"
+    },
+    {
+      "text": "monitor_demo (Monitor) en_US",
+      "href": "/lc-demo01/UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "/lc-demo01/j_spring_security_logout"
+    },
+    {
+      "text": "Home",
+      "href": "/lc-demo01/MainMenu"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "/lc-demo01/ListStudySubjects"
+    },
+    {
+      "text": "SDV",
+      "href": "/lc-demo01/pages/viewAllSubjectSDVtmp?sdv_restore=true&studyId=3"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "/lc-demo01/ViewNotes?module=submit"
+    },
+    {
+      "text": "Tasks",
+      "href": "#"
+    },
+    {
+      "text": "Support",
+      "href": "javascript:openDocWindow('https://www.libreclinica.org/support.html')"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "/lc-demo01/ListStudySubjects"
+    },
+    {
+      "text": "View Events",
+      "href": "/lc-demo01/ViewStudyEvents"
+    },
+    {
+      "text": "Source Data Verification",
+      "href": "/lc-demo01/pages/viewAllSubjectSDVtmp?sdv_restore=true&studyId=3"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "/lc-demo01/ViewNotes?module=submit"
+    },
+    {
+      "text": "Study Audit Log",
+      "href": "/lc-demo01/StudyAuditLog"
+    },
+    {
+      "text": "View Datasets",
+      "href": "/lc-demo01/ViewDatasets"
+    },
+    {
+      "text": "Create Dataset",
+      "href": "/lc-demo01/CreateDataset"
+    },
+    {
+      "text": "Update Profile",
+      "href": "/lc-demo01/UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "/lc-demo01/j_spring_security_logout"
+    },
+    {
+      "text": "LCDemo",
+      "href": "/lc-demo01/ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "View By Event CRF",
+      "href": "viewAllSubjectSDVtmp?sdv_restore=true&studyId=3"
+    },
+    {
+      "text": "View By Study Subject ID",
+      "href": "viewSubjectAggregate?studyId=3"
+    },
+    {
+      "text": "Show More",
+      "href": "javascript:hideCols('s_sdv',[2,3,4],true);"
+    },
+    {
+      "text": "Hide",
+      "href": "javascript:hideCols('s_sdv',[2,3,4],false);"
+    },
+    {
+      "text": "All Shown,",
+      "href": "javascript:selectAllChecks(document.sdvForm,true)"
+    },
+    {
+      "text": "None",
+      "href": "javascript:selectAllChecks(document.sdvForm,false)"
+    },
+    {
+      "text": "Apply Filter",
+      "href": "javascript:onInvokeAction('s_sdv','filter')"
+    },
+    {
+      "text": "Clear Filter",
+      "href": "javascript:jQuery.jmesa.removeAllFiltersFromLimit('s_sdv');onInvokeAction('s_sdv','clear')"
+    },
+    {
+      "text": "LibreClinica Website",
+      "href": "https://www.libreclinica.org"
+    },
+    {
+      "text": "Documentation",
+      "href": "https://www.libreclinica.org/documentation"
+    },
+    {
+      "text": "Contact",
+      "href": "/lc-demo01/Contact"
+    },
+    {
+      "text": "Documents",
+      "href": "DocumentList"
+    },
+    {
+      "text": "software for clinical research",
+      "href": "http://www.libreclinica.org"
+    },
+    {
+      "text": "GNU Lesser General Public License",
+      "href": "http://www.gnu.org/licenses/lgpl-3.0.html"
+    }
+  ],
+  "forms": [
+    {
+      "action": "/lc-demo01/ListStudySubjects",
+      "method": "GET",
+      "n_inputs": 3,
+      "input_names": [
+        "findSubjects_f_studySubject.label",
+        "navBar"
+      ]
+    },
+    {
+      "action": "/lc-demo01/pages/viewSubjectAggregate",
+      "method": null,
+      "n_inputs": 7,
+      "input_names": [
+        "studyId",
+        "studySubjectId",
+        "theStudySubjectId",
+        "redirection",
+        "maxRows",
+        "showMoreLink",
+        "sdvAllFormSubmit"
+      ]
+    }
+  ],
+  "buttons": [
+    "Go",
+    "SDV All Checked"
+  ],
+  "tables": [],
+  "messages": []
+}

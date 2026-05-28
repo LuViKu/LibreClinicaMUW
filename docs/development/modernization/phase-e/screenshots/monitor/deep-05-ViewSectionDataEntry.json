@@ -1,0 +1,54 @@
+{
+  "url": "https://libreclinica.reliatec.de/lc-demo01/ViewSectionDataEntry?ecId=1",
+  "title": "LibreClinica View Data Entry",
+  "h1": [
+    "inclusion German V1.0",
+    "M-001"
+  ],
+  "links": [
+    {
+      "text": "CRF Header Info",
+      "href": "javascript:leftnavExpand('CRF_infobox_closed'); leftnavExpand('CRF_infobox_open');"
+    },
+    {
+      "text": "CRF Header Info",
+      "href": "javascript:leftnavExpand('CRF_infobox_closed'); leftnavExpand('CRF_infobox_open');"
+    },
+    {
+      "text": "excl (2/2)",
+      "href": "ViewSectionDataEntry?ecId=1&crfVersionId=1&sectionId=2&tabId=2&studySubjectId=1&eventDefinitionCRFId=0&exitTo="
+    },
+    {
+      "text": "EKG",
+      "href": "https://www.pschyrembel.de/ekg"
+    }
+  ],
+  "forms": [
+    {
+      "action": "ViewSectionDataEntry",
+      "method": "POST",
+      "n_inputs": 14,
+      "input_names": [
+        "action",
+        "ecId",
+        "sectionId",
+        "tab",
+        "studySubjectId",
+        "eventDefinitionCRFId",
+        "interviewer",
+        "interviewDate",
+        "exit",
+        "sectionSelect",
+        "input1",
+        "input2",
+        "input3",
+        "input4"
+      ]
+    }
+  ],
+  "buttons": [
+    "Exit"
+  ],
+  "tables": [],
+  "messages": []
+}

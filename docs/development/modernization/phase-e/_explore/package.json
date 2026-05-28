@@ -1,0 +1,27 @@
+{
+  "name": "libreclinicamuw",
+  "version": "1.0.0",
+  "description": "LibreClinica MUW Ophthalmology ==============================",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LuViKu/LibreClinicaMUW.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/LuViKu/LibreClinicaMUW/issues"
+  },
+  "homepage": "https://github.com/LuViKu/LibreClinicaMUW#readme",
+  "dependencies": {
+    "playwright": "^1.60.0"
+  }
+}

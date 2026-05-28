@@ -304,6 +304,8 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 
 Hybrid SPA approach planned: React or Vue 3 for high-traffic clinician screens (data entry, dashboards, subject/study lists, discrepancy review), JSP retained for admin/low-frequency screens.
 
+**Feature-parity baseline:** [`docs/development/modernization/phase-e/`](docs/development/modernization/phase-e/) — live-walkthrough catalogue of every UI feature reachable today as Investigator, Monitor, and Data Manager, with screenshots and servlet-to-class cross-references. The SPA rewrite must preserve every feature listed there unless explicitly retired.
+
 ---
 
 ## Cross-cutting workstreams

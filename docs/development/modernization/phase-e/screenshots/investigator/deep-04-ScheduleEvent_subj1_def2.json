@@ -1,0 +1,246 @@
+{
+  "url": "https://libreclinica.reliatec.de/lc-demo01/CreateNewStudyEvent?studySubjectId=1&studyEventDefinition=2",
+  "title": "LibreClinica",
+  "h1": [
+    "Schedule Study Event for M-001"
+  ],
+  "links": [
+    {
+      "text": "LCDemo",
+      "href": "ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "München",
+      "href": "ViewSite?id=4"
+    },
+    {
+      "text": "Change Study/Site",
+      "href": "ChangeStudy"
+    },
+    {
+      "text": "user_demo (Investigator) en",
+      "href": "UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "j_spring_security_logout"
+    },
+    {
+      "text": "Home",
+      "href": "MainMenu"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "ListStudySubjects"
+    },
+    {
+      "text": "Add Subject",
+      "href": "AddNewSubject"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "ViewNotes?module=submit"
+    },
+    {
+      "text": "Tasks",
+      "href": "#"
+    },
+    {
+      "text": "Support",
+      "href": "javascript:openDocWindow('https://www.libreclinica.org/support.html')"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "ListStudySubjects"
+    },
+    {
+      "text": "Add Subject",
+      "href": "AddNewSubject"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "ViewNotes?module=submit"
+    },
+    {
+      "text": "Schedule Event",
+      "href": "CreateNewStudyEvent"
+    },
+    {
+      "text": "View Events",
+      "href": "ViewStudyEvents"
+    },
+    {
+      "text": "Import Data",
+      "href": "ImportCRFData"
+    },
+    {
+      "text": "View Datasets",
+      "href": "ViewDatasets"
+    },
+    {
+      "text": "Create Dataset",
+      "href": "CreateDataset"
+    },
+    {
+      "text": "Update Profile",
+      "href": "UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "j_spring_security_logout"
+    },
+    {
+      "text": "LCDemo",
+      "href": "/lc-demo01/ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "München",
+      "href": "/lc-demo01/ViewStudy?id=4"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"startdateField\", ifFormat : \"%d-%b-%Y\", button : \"startdateTrigger\" });",
+      "href": "#"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"enddateField\", ifFormat : \"%d-%b-%Y\", button : \"enddateTrigger\" });",
+      "href": "#"
+    },
+    {
+      "text": "Schedule Another Event: (optional)",
+      "href": "javascript:leftnavExpand('schedule0');"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"startScheduled0dateField\", ifFormat : \"%d-%b-%Y\", button : \"startScheduled0dateTrigger\" });",
+      "href": "#"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"endScheduled0dateField\", ifFormat : \"%d-%b-%Y\", button : \"endScheduled0dateTrigger\" });",
+      "href": "#"
+    },
+    {
+      "text": "Schedule Another Event: (optional)",
+      "href": "javascript:leftnavExpand('schedule1');"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"startScheduled1dateField\", ifFormat : \"%d-%b-%Y\", button : \"startScheduled1dateTrigger\" });",
+      "href": "#"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"endScheduled1dateField\", ifFormat : \"%d-%b-%Y\", button : \"endScheduled1dateTrigger\" });",
+      "href": "#"
+    },
+    {
+      "text": "Schedule Another Event: (optional)",
+      "href": "javascript:leftnavExpand('schedule2');"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"startScheduled2dateField\", ifFormat : \"%d-%b-%Y\", button : \"startScheduled2dateTrigger\" });",
+      "href": "#"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"endScheduled2dateField\", ifFormat : \"%d-%b-%Y\", button : \"endScheduled2dateTrigger\" });",
+      "href": "#"
+    },
+    {
+      "text": "Schedule Another Event: (optional)",
+      "href": "javascript:leftnavExpand('schedule3');"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"startScheduled3dateField\", ifFormat : \"%d-%b-%Y\", button : \"startScheduled3dateTrigger\" });",
+      "href": "#"
+    },
+    {
+      "text": "Calendar.setup({inputField : \"endScheduled3dateField\", ifFormat : \"%d-%b-%Y\", button : \"endScheduled3dateTrigger\" });",
+      "href": "#"
+    },
+    {
+      "text": "LibreClinica Website",
+      "href": "https://www.libreclinica.org"
+    },
+    {
+      "text": "Documentation",
+      "href": "https://www.libreclinica.org/documentation"
+    },
+    {
+      "text": "Contact",
+      "href": "/lc-demo01/Contact"
+    },
+    {
+      "text": "Documents",
+      "href": "DocumentList"
+    },
+    {
+      "text": "software for clinical research",
+      "href": "http://www.libreclinica.org"
+    },
+    {
+      "text": "GNU Lesser General Public License",
+      "href": "http://www.gnu.org/licenses/lgpl-3.0.html"
+    }
+  ],
+  "forms": [
+    {
+      "action": "ListStudySubjects",
+      "method": "GET",
+      "n_inputs": 3,
+      "input_names": [
+        "findSubjects_f_studySubject.label",
+        "navBar"
+      ]
+    },
+    {
+      "action": "CreateNewStudyEvent",
+      "method": "post",
+      "n_inputs": 56,
+      "input_names": [
+        "submitted",
+        "studySubject",
+        "studySubjectLabel",
+        "requestStudySubject",
+        "studyEventDefinition",
+        "startDate",
+        "startHour",
+        "startMinute",
+        "startHalf",
+        "endDate",
+        "endHour",
+        "endMinute",
+        "endHalf",
+        "location",
+        "studyEventDefinitionScheduled0",
+        "location",
+        "startScheduled0Date",
+        "startScheduled0Hour",
+        "startScheduled0Minute",
+        "startScheduled0Half",
+        "endScheduled0Date",
+        "endScheduled0Hour",
+        "endScheduled0Minute",
+        "endScheduled0Half",
+        "studyEventDefinitionScheduled1",
+        "location",
+        "startScheduled1Date",
+        "startScheduled1Hour",
+        "startScheduled1Minute",
+        "startScheduled1Half",
+        "endScheduled1Date",
+        "endScheduled1Hour",
+        "endScheduled1Minute",
+        "endScheduled1Half",
+        "studyEventDefinitionScheduled2",
+        "location",
+        "startScheduled2Date",
+        "startScheduled2Hour",
+        "startScheduled2Minute",
+        "startScheduled2Half"
+      ]
+    }
+  ],
+  "buttons": [
+    "Go",
+    "Proceed to Enter Data",
+    "Cancel"
+  ],
+  "tables": [],
+  "messages": []
+}

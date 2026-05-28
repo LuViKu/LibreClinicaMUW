@@ -1,0 +1,159 @@
+{
+  "url": "https://libreclinica.reliatec.de/lc-demo01/ViewNotes?module=submit",
+  "title": "LibreClinica",
+  "h1": [
+    "Notes and Discrepancies"
+  ],
+  "links": [
+    {
+      "text": "LCDemo",
+      "href": "ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "Change Study/Site",
+      "href": "ChangeStudy"
+    },
+    {
+      "text": "monitor_demo (Monitor) en",
+      "href": "UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "j_spring_security_logout"
+    },
+    {
+      "text": "Home",
+      "href": "MainMenu"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "ListStudySubjects"
+    },
+    {
+      "text": "SDV",
+      "href": "pages/viewAllSubjectSDVtmp?sdv_restore=true&studyId=3"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "ViewNotes?module=submit"
+    },
+    {
+      "text": "Tasks",
+      "href": "#"
+    },
+    {
+      "text": "Support",
+      "href": "javascript:openDocWindow('https://www.libreclinica.org/support.html')"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "ListStudySubjects"
+    },
+    {
+      "text": "View Events",
+      "href": "ViewStudyEvents"
+    },
+    {
+      "text": "Source Data Verification",
+      "href": "pages/viewAllSubjectSDVtmp?sdv_restore=true&studyId=3"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "ViewNotes?module=submit"
+    },
+    {
+      "text": "Study Audit Log",
+      "href": "StudyAuditLog"
+    },
+    {
+      "text": "View Datasets",
+      "href": "ViewDatasets"
+    },
+    {
+      "text": "Create Dataset",
+      "href": "CreateDataset"
+    },
+    {
+      "text": "Update Profile",
+      "href": "UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "j_spring_security_logout"
+    },
+    {
+      "text": "LCDemo",
+      "href": "/lc-demo01/ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "Hide summary statistics",
+      "href": "javascript:void(0)"
+    },
+    {
+      "text": "Show More",
+      "href": "javascript:hideCols('listNotes',[4, 5, 9, 11, 14, 16, 17, 19],true);"
+    },
+    {
+      "text": "Hide",
+      "href": "javascript:hideCols('listNotes',[4, 5, 9, 11, 14, 16, 17, 19],false);"
+    },
+    {
+      "text": "Apply Filter",
+      "href": "javascript:onInvokeAction('listNotes','filter')"
+    },
+    {
+      "text": "Clear Filter",
+      "href": "javascript:jQuery.jmesa.removeAllFiltersFromLimit('listNotes');onInvokeAction('listNotes','clear')"
+    },
+    {
+      "text": "LibreClinica Website",
+      "href": "https://www.libreclinica.org"
+    },
+    {
+      "text": "Documentation",
+      "href": "https://www.libreclinica.org/documentation"
+    },
+    {
+      "text": "Contact",
+      "href": "/lc-demo01/Contact"
+    },
+    {
+      "text": "Documents",
+      "href": "DocumentList"
+    },
+    {
+      "text": "software for clinical research",
+      "href": "http://www.libreclinica.org"
+    },
+    {
+      "text": "GNU Lesser General Public License",
+      "href": "http://www.gnu.org/licenses/lgpl-3.0.html"
+    }
+  ],
+  "forms": [
+    {
+      "action": "ListStudySubjects",
+      "method": "GET",
+      "n_inputs": 3,
+      "input_names": [
+        "findSubjects_f_studySubject.label",
+        "navBar"
+      ]
+    },
+    {
+      "action": "/lc-demo01/ViewNotes",
+      "method": null,
+      "n_inputs": 3,
+      "input_names": [
+        "module",
+        "maxRows",
+        "showMoreLink"
+      ]
+    }
+  ],
+  "buttons": [
+    "Go"
+  ],
+  "tables": [],
+  "messages": []
+}

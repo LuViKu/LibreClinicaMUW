@@ -1,0 +1,854 @@
+{
+  "/AccessFile": {
+    "class": "org.akaza.openclinica.control.extract.AccessFileServlet",
+    "name": "AccessFileServlet"
+  },
+  "/AddCRFToDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.AddCRFToDefinitionServlet",
+    "name": "AddCRFToDefinitionServlet"
+  },
+  "/AddNewSubject": {
+    "class": "org.akaza.openclinica.control.submit.AddNewSubjectServlet",
+    "name": "AddNewSubjectServlet"
+  },
+  "/AdminSystem": {
+    "class": "org.akaza.openclinica.control.admin.AdminSystemServlet",
+    "name": "AdminSystemServlet"
+  },
+  "/AdministrativeEditing": {
+    "class": "org.akaza.openclinica.control.submit.AdministrativeEditingServlet",
+    "name": "AdministrativeEditingServlet"
+  },
+  "/ApplyFilter": {
+    "class": "org.akaza.openclinica.control.extract.ApplyFilterServlet",
+    "name": "ApplyFilterServlet"
+  },
+  "/AssignUserToStudy": {
+    "class": "org.akaza.openclinica.control.managestudy.AssignUserToStudyServlet",
+    "name": "AssignUserToStudyServlet"
+  },
+  "/AuditDatabase": {
+    "class": "org.akaza.openclinica.control.admin.AuditDatabaseServlet",
+    "name": "AuditDatabaseServlet"
+  },
+  "/AuditLogStudy": {
+    "class": "org.akaza.openclinica.control.admin.AuditLogStudyServlet",
+    "name": "AuditLogStudyServlet"
+  },
+  "/AuditLogUser": {
+    "class": "org.akaza.openclinica.control.admin.AuditLogUserServlet",
+    "name": "AuditLogUserServlet"
+  },
+  "/AuditUserActivity": {
+    "class": "org.akaza.openclinica.control.admin.AuditUserActivityServlet",
+    "name": "AuditUserActivityServlet"
+  },
+  "/BatchCRFMigration": {
+    "class": "org.akaza.openclinica.control.admin.BatchCRFMigrationServlet",
+    "name": "BatchCRFMigrationServlet"
+  },
+  "/ChangeDefinitionCRFOrdinal": {
+    "class": "org.akaza.openclinica.control.managestudy.ChangeDefinitionCRFOrdinalServlet",
+    "name": "ChangeDefinitionCRFOrdinalServlet"
+  },
+  "/ChangeDefinitionOrdinal": {
+    "class": "org.akaza.openclinica.control.managestudy.ChangeDefinitionOrdinalServlet",
+    "name": "ChangeDefinitionOrdinalServlet"
+  },
+  "/ChangeStudy": {
+    "class": "org.akaza.openclinica.control.login.ChangeStudyServlet",
+    "name": "ChangeStudyServlet"
+  },
+  "/CheckCRFLocked": {
+    "class": "org.akaza.openclinica.control.submit.CheckCRFLocked",
+    "name": "CheckCRFLocked"
+  },
+  "/ChooseDownloadFormat": {
+    "class": "org.akaza.openclinica.control.extract.ChooseDownloadFormat",
+    "name": "ChooseDownloadFormat"
+  },
+  "/ClinicalData/html/view/*": {
+    "class": "org.akaza.openclinica.control.urlRewrite.UrlRewriteServlet",
+    "name": "urlRewriterServlet"
+  },
+  "/Configure": {
+    "class": "org.akaza.openclinica.control.admin.ConfigureServlet",
+    "name": "ConfigureServlet"
+  },
+  "/ConfigurePasswordRequirements": {
+    "class": "org.akaza.openclinica.control.admin.ConfigurePasswordRequirementsServlet",
+    "name": "ConfigurePasswordRequirementsServlet"
+  },
+  "/Contact": {
+    "class": "org.akaza.openclinica.control.login.ContactServlet",
+    "name": "ContactServlet"
+  },
+  "/CreateCRF": {
+    "class": "org.akaza.openclinica.control.admin.CreateCRFServlet",
+    "name": "CreateCRFServlet"
+  },
+  "/CreateCRFVersion": {
+    "class": "org.akaza.openclinica.control.admin.CreateCRFVersionServlet",
+    "name": "CreateCRFVersionServlet"
+  },
+  "/CreateDataset": {
+    "class": "org.akaza.openclinica.control.extract.CreateDatasetServlet",
+    "name": "CreateDatasetServlet"
+  },
+  "/CreateDiscrepancyNote": {
+    "class": "org.akaza.openclinica.control.submit.CreateDiscrepancyNoteServlet",
+    "name": "CreateDiscrepancyNoteServlet"
+  },
+  "/CreateFiltersOne": {
+    "class": "org.akaza.openclinica.control.extract.CreateFiltersOneServlet",
+    "name": "CreateFiltersOneServlet"
+  },
+  "/CreateFiltersThree": {
+    "class": "org.akaza.openclinica.control.extract.CreateFiltersThreeServlet",
+    "name": "CreateFiltersThreeServlet"
+  },
+  "/CreateFiltersTwo": {
+    "class": "org.akaza.openclinica.control.extract.CreateFiltersTwoServlet",
+    "name": "CreateFiltersTwoServlet"
+  },
+  "/CreateJobExport": {
+    "class": "org.akaza.openclinica.control.admin.CreateJobExportServlet",
+    "name": "CreateJobExportServlet"
+  },
+  "/CreateJobImport": {
+    "class": "org.akaza.openclinica.control.admin.CreateJobImportServlet",
+    "name": "CreateJobImportServlet"
+  },
+  "/CreateNewStudyEvent": {
+    "class": "org.akaza.openclinica.control.submit.CreateNewStudyEventServlet",
+    "name": "CreateNewStudyEventServlet"
+  },
+  "/CreateOneDiscrepancyNote": {
+    "class": "org.akaza.openclinica.control.submit.CreateOneDiscrepancyNoteServlet",
+    "name": "CreateOneDiscrepancyNoteServlet"
+  },
+  "/CreateStudy": {
+    "class": "org.akaza.openclinica.control.managestudy.CreateStudyServlet",
+    "name": "CreateStudyServlet"
+  },
+  "/CreateSubStudy": {
+    "class": "org.akaza.openclinica.control.managestudy.CreateSubStudyServlet",
+    "name": "CreateSubStudyServlet"
+  },
+  "/CreateSubjectGroupClass": {
+    "class": "org.akaza.openclinica.control.managestudy.CreateSubjectGroupClassServlet",
+    "name": "CreateSubjectGroupClassServlet"
+  },
+  "/CreateUserAccount": {
+    "class": "org.akaza.openclinica.control.admin.CreateUserAccountServlet",
+    "name": "CreateUserAccountServlet"
+  },
+  "/CreateXformCRFVersion": {
+    "class": "org.akaza.openclinica.control.admin.CreateXformCRFVersionServlet",
+    "name": "CreateXformCRFVersionServlet"
+  },
+  "/DataEntry": {
+    "class": "org.akaza.openclinica.control.submit.DataEntryServlet",
+    "name": "DataEntryServlet"
+  },
+  "/DefineStudyEvent": {
+    "class": "org.akaza.openclinica.control.managestudy.DefineStudyEventServlet",
+    "name": "DefineStudyEventServlet"
+  },
+  "/DeleteCRFVersion": {
+    "class": "org.akaza.openclinica.control.admin.DeleteCRFVersionServlet",
+    "name": "DeleteCRFVersionServlet"
+  },
+  "/DeleteEventCRF": {
+    "class": "org.akaza.openclinica.control.admin.DeleteEventCRFServlet",
+    "name": "DeleteEventCRFServlet"
+  },
+  "/DeleteStudyEvent": {
+    "class": "org.akaza.openclinica.control.managestudy.DeleteStudyEventServlet",
+    "name": "DeleteStudyEventServlet"
+  },
+  "/DeleteStudyUserRole": {
+    "class": "org.akaza.openclinica.control.admin.DeleteStudyUserRoleServlet",
+    "name": "DeleteStudyUserRoleServlet"
+  },
+  "/DeleteUser": {
+    "class": "org.akaza.openclinica.control.admin.DeleteUserServlet",
+    "name": "DeleteUserServlet"
+  },
+  "/DiscrepancyNoteOutputServlet": {
+    "class": "org.akaza.openclinica.control.extract.DiscrepancyNoteOutputServlet",
+    "name": "DiscrepancyNoteOutputServlet"
+  },
+  "/DoubleDataEntry": {
+    "class": "org.akaza.openclinica.control.submit.DoubleDataEntryServlet",
+    "name": "DoubleDataEntryServlet"
+  },
+  "/DownloadAttachedFile": {
+    "class": "org.akaza.openclinica.control.submit.DownloadAttachedFileServlet",
+    "name": "DownloadAttachedFileServlet"
+  },
+  "/DownloadRuleSetXml": {
+    "class": "org.akaza.openclinica.control.submit.DownloadRuleSetXmlServlet",
+    "name": "DownloadRuleSetXmlServlet"
+  },
+  "/DownloadStudyMetadata": {
+    "class": "org.akaza.openclinica.control.admin.DownloadStudyMetadataServlet",
+    "name": "DownloadStudyMetadataServlet"
+  },
+  "/DownloadVersionSpreadSheet": {
+    "class": "org.akaza.openclinica.control.admin.DownloadVersionSpreadSheetServlet",
+    "name": "DownloadVersionSpreadSheetServlet"
+  },
+  "/EditDataset": {
+    "class": "org.akaza.openclinica.control.extract.EditDatasetServlet",
+    "name": "EditDatasetServlet"
+  },
+  "/EditFilter": {
+    "class": "org.akaza.openclinica.control.extract.EditFilterServlet",
+    "name": "EditFilterServlet"
+  },
+  "/EditSelected": {
+    "class": "org.akaza.openclinica.control.extract.EditSelectedServlet",
+    "name": "EditSelectedServlet"
+  },
+  "/EditStudyUserRole": {
+    "class": "org.akaza.openclinica.control.admin.EditStudyUserRoleServlet",
+    "name": "EditStudyUserRoleServlet"
+  },
+  "/EditUserAccount": {
+    "class": "org.akaza.openclinica.control.admin.EditUserAccountServlet",
+    "name": "EditUserAccountServlet"
+  },
+  "/EnterDataForStudyEvent": {
+    "class": "org.akaza.openclinica.control.submit.EnterDataForStudyEventServlet",
+    "name": "EnterDataForStudyEventServlet"
+  },
+  "/ExecuteCrossEditCheck": {
+    "class": "org.akaza.openclinica.control.rule.ExecuteCrossEditCheckServlet",
+    "name": "ExecuteCrossEditCheckServlet"
+  },
+  "/ExportDataset": {
+    "class": "org.akaza.openclinica.control.extract.ExportDatasetServlet",
+    "name": "ExportDatasetServlet"
+  },
+  "/ExportExcelStudySubjectAuditLog": {
+    "class": "org.akaza.openclinica.control.managestudy.ExportExcelStudySubjectAuditLogServlet",
+    "name": "ExportExcelStudySubjectAuditLogServlet"
+  },
+  "/ExtractDatasetsMain": {
+    "class": "org.akaza.openclinica.control.extract.ExtractDatasetsMainServlet",
+    "name": "ExtractDatasetsMainServlet"
+  },
+  "/FindStudyEvent": {
+    "class": "org.akaza.openclinica.control.submit.FindStudyEventServlet",
+    "name": "FindStudyEventServlet"
+  },
+  "/ImportCRFData": {
+    "class": "org.akaza.openclinica.control.submit.ImportCRFDataServlet",
+    "name": "ImportCRFDataServlet"
+  },
+  "/ImportRule": {
+    "class": "org.akaza.openclinica.control.submit.ImportRuleServlet",
+    "name": "ImportRuleServlet"
+  },
+  "/InitCreateCRFVersion": {
+    "class": "org.akaza.openclinica.control.admin.InitCreateCRFVersionServlet",
+    "name": "InitCreateCRFVersionServlet"
+  },
+  "/InitUpdateCRF": {
+    "class": "org.akaza.openclinica.control.admin.InitUpdateCRFServlet",
+    "name": "InitUpdateCRFServlet"
+  },
+  "/InitUpdateEventDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.InitUpdateEventDefinitionServlet",
+    "name": "InitUpdateEventDefinitionServlet"
+  },
+  "/InitUpdateStudy": {
+    "class": "org.akaza.openclinica.control.managestudy.InitUpdateStudyServlet",
+    "name": "InitUpdateStudyServlet"
+  },
+  "/InitUpdateSubStudy": {
+    "class": "org.akaza.openclinica.control.managestudy.InitUpdateSubStudyServlet",
+    "name": "InitUpdateSubStudyServlet"
+  },
+  "/InitialDataEntry": {
+    "class": "org.akaza.openclinica.control.submit.InitialDataEntryServlet",
+    "name": "InitialDataEntryServlet"
+  },
+  "/ListCRF": {
+    "class": "org.akaza.openclinica.control.admin.ListCRFServlet",
+    "name": "ListCRFServlet"
+  },
+  "/ListDiscNotesForCRFServlet": {
+    "class": "org.akaza.openclinica.control.managestudy.ListDiscNotesForCRFServlet",
+    "name": "ListDiscNotesForCRFServlet"
+  },
+  "/ListEventDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.ListEventDefinitionServlet",
+    "name": "ListEventDefinitionServlet"
+  },
+  "/ListEventsForSubject": {
+    "class": "org.akaza.openclinica.control.managestudy.ListEventsForSubjectServlet",
+    "name": "ListEventsForSubjectServlet"
+  },
+  "/ListEventsForSubjects": {
+    "class": "org.akaza.openclinica.control.managestudy.ListEventsForSubjectsServlet",
+    "name": "ListEventsForSubjectsServlet"
+  },
+  "/ListSite": {
+    "class": "org.akaza.openclinica.control.managestudy.ListSiteServlet",
+    "name": "ListSiteServlet"
+  },
+  "/ListStudy": {
+    "class": "org.akaza.openclinica.control.managestudy.ListStudyServlet",
+    "name": "ListStudyServlet"
+  },
+  "/ListStudySubject": {
+    "class": "org.akaza.openclinica.control.managestudy.ListStudySubjectsManageServlet",
+    "name": "ListStudySubjectsManageServlet"
+  },
+  "/ListStudySubjects": {
+    "class": "org.akaza.openclinica.control.submit.ListStudySubjectsServlet",
+    "name": "ListStudySubjectsServlet"
+  },
+  "/ListStudySubjectsSubmit": {
+    "class": "org.akaza.openclinica.control.submit.ListStudySubjectsSubmitServlet",
+    "name": "ListStudySubjectsSubmitServlet"
+  },
+  "/ListStudyUser": {
+    "class": "org.akaza.openclinica.control.managestudy.ListStudyUserServlet",
+    "name": "ListStudyUserServlet"
+  },
+  "/ListSubject": {
+    "class": "org.akaza.openclinica.control.admin.ListSubjectServlet",
+    "name": "ListSubjectServlet"
+  },
+  "/ListSubjectGroupClass": {
+    "class": "org.akaza.openclinica.control.managestudy.ListSubjectGroupClassServlet",
+    "name": "ListSubjectGroupClassServlet"
+  },
+  "/ListUserAccounts": {
+    "class": "org.akaza.openclinica.control.admin.ListUserAccountsServlet",
+    "name": "ListUserAccountsServlet"
+  },
+  "/LockCRFVersion": {
+    "class": "org.akaza.openclinica.control.managestudy.LockCRFVersionServlet",
+    "name": "LockCRFVersionServlet"
+  },
+  "/LockEventDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.LockEventDefinitionServlet",
+    "name": "LockEventDefinitionServlet"
+  },
+  "/Logout": {
+    "class": "org.akaza.openclinica.control.login.LogoutServlet",
+    "name": "LogoutServlet"
+  },
+  "/MainMenu": {
+    "class": "org.akaza.openclinica.control.MainMenuServlet",
+    "name": "MainMenuServlet"
+  },
+  "/ManageStudy": {
+    "class": "org.akaza.openclinica.control.managestudy.ManageStudyServlet",
+    "name": "ManageStudyServlet"
+  },
+  "/ManageStudy1": {
+    "class": "org.akaza.openclinica.control.managestudy.ManageStudyServlet",
+    "name": "ManageStudyServlet"
+  },
+  "/MarkEventCRFComplete": {
+    "class": "org.akaza.openclinica.control.submit.MarkEventCRFCompleteServlet",
+    "name": "MarkEventCRFCompleteServlet"
+  },
+  "/MatchPassword": {
+    "class": "org.akaza.openclinica.control.submit.MatchPasswordServlet",
+    "name": "MatchPasswordServlet"
+  },
+  "/ParticipantFormServlet": {
+    "class": "org.akaza.openclinica.control.submit.ParticipantFormServlet",
+    "name": "ParticipantFormServlet"
+  },
+  "/PauseJob": {
+    "class": "org.akaza.openclinica.control.admin.PauseJobServlet",
+    "name": "PauseJobServlet"
+  },
+  "/PrintAllEventCRF": {
+    "class": "org.akaza.openclinica.control.managestudy.PrintAllEventCRFServlet",
+    "name": "PrintAllEventCRFServlet"
+  },
+  "/PrintAllSiteEventCRF": {
+    "class": "org.akaza.openclinica.control.managestudy.PrintAllSiteEventCRFServlet",
+    "name": "PrintAllSiteEventCRFServlet"
+  },
+  "/PrintCRF": {
+    "class": "org.akaza.openclinica.control.managestudy.PrintCRFServlet",
+    "name": "PrintCRFServlet"
+  },
+  "/PrintCRFById": {
+    "class": "org.akaza.openclinica.control.managestudy.PrintCRFByIdServlet",
+    "name": "PrintCRFByIdServlet"
+  },
+  "/PrintCRFOld": {
+    "class": "org.akaza.openclinica.control.managestudy.PrintCRFServlet",
+    "name": "PrintCRFOldServlet"
+  },
+  "/PrintDataEntry": {
+    "class": "org.akaza.openclinica.control.managestudy.PrintDataEntryServlet",
+    "name": "PrintDataEntryServlet"
+  },
+  "/PrintEventCRF": {
+    "class": "org.akaza.openclinica.control.managestudy.PrintEventCRFServlet",
+    "name": "PrintEventCRFServlet"
+  },
+  "/PrintoutCertificate": {
+    "class": "org.akaza.openclinica.control.admin.PrintoutCertificateServlet",
+    "name": "PrintoutCertificateServlet"
+  },
+  "/ReassignStudySubject": {
+    "class": "org.akaza.openclinica.control.managestudy.ReassignStudySubjectServlet",
+    "name": "ReassignStudySubjectServlet"
+  },
+  "/RemoveCRF": {
+    "class": "org.akaza.openclinica.control.admin.RemoveCRFServlet",
+    "name": "RemoveCRFServlet"
+  },
+  "/RemoveCRFFromDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.RemoveCRFFromDefinitionServlet",
+    "name": "RemoveCRFFromDefinitionServlet"
+  },
+  "/RemoveCRFVersion": {
+    "class": "org.akaza.openclinica.control.admin.RemoveCRFVersionServlet",
+    "name": "RemoveCRFVersionServlet"
+  },
+  "/RemoveDataset": {
+    "class": "org.akaza.openclinica.control.extract.RemoveDatasetServlet",
+    "name": "RemoveDatasetServlet"
+  },
+  "/RemoveEventCRF": {
+    "class": "org.akaza.openclinica.control.managestudy.RemoveEventCRFServlet",
+    "name": "RemoveEventCRFServlet"
+  },
+  "/RemoveEventDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.RemoveEventDefinitionServlet",
+    "name": "RemoveEventDefinitionServlet"
+  },
+  "/RemoveFilter": {
+    "class": "org.akaza.openclinica.control.extract.RemoveFilterServlet",
+    "name": "RemoveFilterServlet"
+  },
+  "/RemoveRuleSet": {
+    "class": "org.akaza.openclinica.control.submit.RemoveRuleSetServlet",
+    "name": "RemoveRuleSetServlet"
+  },
+  "/RemoveSite": {
+    "class": "org.akaza.openclinica.control.managestudy.RemoveSiteServlet",
+    "name": "RemoveSiteServlet"
+  },
+  "/RemoveStudy": {
+    "class": "org.akaza.openclinica.control.admin.RemoveStudyServlet",
+    "name": "RemoveStudyServlet"
+  },
+  "/RemoveStudyEvent": {
+    "class": "org.akaza.openclinica.control.managestudy.RemoveStudyEventServlet",
+    "name": "RemoveStudyEventServlet"
+  },
+  "/RemoveStudySubject": {
+    "class": "org.akaza.openclinica.control.managestudy.RemoveStudySubjectServlet",
+    "name": "RemoveStudySubjectServlet"
+  },
+  "/RemoveStudyUserRole": {
+    "class": "org.akaza.openclinica.control.managestudy.RemoveStudyUserRoleServlet",
+    "name": "RemoveStudyUserRoleServlet"
+  },
+  "/RemoveSubject": {
+    "class": "org.akaza.openclinica.control.admin.RemoveSubjectServlet",
+    "name": "RemoveSubjectServlet"
+  },
+  "/RemoveSubjectGroupClass": {
+    "class": "org.akaza.openclinica.control.managestudy.RemoveSubjectGroupClassServlet",
+    "name": "RemoveSubjectGroupClassServlet"
+  },
+  "/RequestPassword": {
+    "class": "org.akaza.openclinica.control.login.RequestPasswordServlet",
+    "name": "RequestPasswordServlet"
+  },
+  "/RequestStudy": {
+    "class": "org.akaza.openclinica.control.login.RequestStudyServlet",
+    "name": "RequestStudyServlet"
+  },
+  "/ResetPassword": {
+    "class": "org.akaza.openclinica.control.login.ResetPasswordServlet",
+    "name": "ResetPasswordServlet"
+  },
+  "/ResolveDiscrepancy": {
+    "class": "org.akaza.openclinica.control.managestudy.ResolveDiscrepancyServlet",
+    "name": "ResolveDiscrepancyServlet"
+  },
+  "/RestoreCRF": {
+    "class": "org.akaza.openclinica.control.admin.RestoreCRFServlet",
+    "name": "RestoreCRFServlet"
+  },
+  "/RestoreCRFFromDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.RestoreCRFFromDefinitionServlet",
+    "name": "RestoreCRFFromDefinitionServlet"
+  },
+  "/RestoreCRFVersion": {
+    "class": "org.akaza.openclinica.control.admin.RestoreCRFVersionServlet",
+    "name": "RestoreCRFVersionServlet"
+  },
+  "/RestoreDataset": {
+    "class": "org.akaza.openclinica.control.extract.RestoreDatasetServlet",
+    "name": "RestoreDatasetServlet"
+  },
+  "/RestoreEventCRF": {
+    "class": "org.akaza.openclinica.control.managestudy.RestoreEventCRFServlet",
+    "name": "RestoreEventCRFServlet"
+  },
+  "/RestoreEventDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.RestoreEventDefinitionServlet",
+    "name": "RestoreEventDefinitionServlet"
+  },
+  "/RestoreRuleSet": {
+    "class": "org.akaza.openclinica.control.submit.RestoreRuleSetServlet",
+    "name": "RestoreRuleSetServlet"
+  },
+  "/RestoreSite": {
+    "class": "org.akaza.openclinica.control.managestudy.RestoreSiteServlet",
+    "name": "RestoreSiteServlet"
+  },
+  "/RestoreStudy": {
+    "class": "org.akaza.openclinica.control.admin.RestoreStudyServlet",
+    "name": "RestoreStudyServlet"
+  },
+  "/RestoreStudyEvent": {
+    "class": "org.akaza.openclinica.control.managestudy.RestoreStudyEventServlet",
+    "name": "RestoreStudyEventServlet"
+  },
+  "/RestoreStudySubject": {
+    "class": "org.akaza.openclinica.control.managestudy.RestoreStudySubjectServlet",
+    "name": "RestoreStudySubjectServlet"
+  },
+  "/RestoreStudyUserRole": {
+    "class": "org.akaza.openclinica.control.managestudy.RestoreStudyUserRoleServlet",
+    "name": "RestoreStudyUserRoleServlet"
+  },
+  "/RestoreSubject": {
+    "class": "org.akaza.openclinica.control.admin.RestoreSubjectServlet",
+    "name": "RestoreSubjectServlet"
+  },
+  "/RestoreSubjectGroupClass": {
+    "class": "org.akaza.openclinica.control.managestudy.RestoreSubjectGroupClassServlet",
+    "name": "RestoreSubjectGroupClassServlet"
+  },
+  "/RunRule": {
+    "class": "org.akaza.openclinica.control.submit.RunRuleServlet",
+    "name": "RunRuleServlet"
+  },
+  "/RunRuleSet": {
+    "class": "org.akaza.openclinica.control.submit.RunRuleSetServlet",
+    "name": "RunRuleSetServlet"
+  },
+  "/SectionPreview": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewSectionDataEntryPreview",
+    "name": "ViewSectionDataEntryPreview"
+  },
+  "/SelectItems": {
+    "class": "org.akaza.openclinica.control.extract.SelectItemsServlet",
+    "name": "SelectItemsServlet"
+  },
+  "/SendTestEmail": {
+    "class": "org.akaza.openclinica.control.admin.SendTestEmailServlet",
+    "name": "SendTestEmailServlet"
+  },
+  "/SetStudyUserRole": {
+    "class": "org.akaza.openclinica.control.managestudy.SetStudyUserRoleServlet",
+    "name": "SetStudyUserRoleServlet"
+  },
+  "/SetUserRole": {
+    "class": "org.akaza.openclinica.control.admin.SetUserRoleServlet",
+    "name": "SetUserRoleServlet"
+  },
+  "/ShowFile": {
+    "class": "org.akaza.openclinica.control.extract.ShowFileServlet",
+    "name": "ShowFileServlet"
+  },
+  "/SignStudySubject": {
+    "class": "org.akaza.openclinica.control.managestudy.SignStudySubjectServlet",
+    "name": "SignStudySubjectServlet"
+  },
+  "/StudyAuditLog": {
+    "class": "org.akaza.openclinica.control.managestudy.StudyAuditLogServlet",
+    "name": "StudyAuditLogServlet"
+  },
+  "/SubmitData": {
+    "class": "org.akaza.openclinica.control.submit.SubmitDataServlet",
+    "name": "SubmitDataServlet"
+  },
+  "/SystemStatus": {
+    "class": "org.akaza.openclinica.control.admin.SystemStatusServlet",
+    "name": "SystemStatusServlet"
+  },
+  "/TableOfContents": {
+    "class": "org.akaza.openclinica.control.submit.TableOfContentsServlet",
+    "name": "TableOfContentsServlet"
+  },
+  "/TechAdmin": {
+    "class": "org.akaza.openclinica.control.techadmin.TechAdminServlet",
+    "name": "TechAdminServlet"
+  },
+  "/TestRule": {
+    "class": "org.akaza.openclinica.control.submit.TestRuleServlet",
+    "name": "TestRuleServlet"
+  },
+  "/UnLockUser": {
+    "class": "org.akaza.openclinica.control.admin.UnLockUserServlet",
+    "name": "UnLockUserServlet"
+  },
+  "/UnlockCRFVersion": {
+    "class": "org.akaza.openclinica.control.managestudy.UnlockCRFVersionServlet",
+    "name": "UnlockCRFVersionServlet"
+  },
+  "/UnlockEventDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.UnlockEventDefinitionServlet",
+    "name": "UnlockEventDefinitionServlet"
+  },
+  "/UpdateCRF": {
+    "class": "org.akaza.openclinica.control.admin.UpdateCRFServlet",
+    "name": "UpdateCRFServlet"
+  },
+  "/UpdateEventDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.UpdateEventDefinitionServlet",
+    "name": "UpdateEventDefinitionServlet"
+  },
+  "/UpdateJobExport": {
+    "class": "org.akaza.openclinica.control.admin.UpdateJobExportServlet",
+    "name": "UpdateJobExportServlet"
+  },
+  "/UpdateJobImport": {
+    "class": "org.akaza.openclinica.control.admin.UpdateJobImportServlet",
+    "name": "UpdateJobImportServlet"
+  },
+  "/UpdateProfile": {
+    "class": "org.akaza.openclinica.control.login.UpdateProfileServlet",
+    "name": "UpdateProfileServlet"
+  },
+  "/UpdateRuleSetRule": {
+    "class": "org.akaza.openclinica.control.submit.UpdateRuleSetRuleServlet",
+    "name": "UpdateRuleSetRuleServlet"
+  },
+  "/UpdateStudy": {
+    "class": "org.akaza.openclinica.control.managestudy.UpdateStudyServlet",
+    "name": "UpdateStudyServlet"
+  },
+  "/UpdateStudyEvent": {
+    "class": "org.akaza.openclinica.control.managestudy.UpdateStudyEventServlet",
+    "name": "UpdateStudyEventServlet"
+  },
+  "/UpdateStudyNew": {
+    "class": "org.akaza.openclinica.control.managestudy.UpdateStudyServletNew",
+    "name": "UpdateStudyServletNew"
+  },
+  "/UpdateStudySubject": {
+    "class": "org.akaza.openclinica.control.managestudy.UpdateStudySubjectServlet",
+    "name": "UpdateStudySubjectServlet"
+  },
+  "/UpdateSubStudy": {
+    "class": "org.akaza.openclinica.control.managestudy.UpdateSubStudyServlet",
+    "name": "UpdateSubStudyServlet"
+  },
+  "/UpdateSubject": {
+    "class": "org.akaza.openclinica.control.admin.UpdateSubjectServlet",
+    "name": "UpdateSubjectServlet"
+  },
+  "/UpdateSubjectGroupClass": {
+    "class": "org.akaza.openclinica.control.managestudy.UpdateSubjectGroupClassServlet",
+    "name": "UpdateSubjectGroupClassServlet"
+  },
+  "/UploadFile": {
+    "class": "org.akaza.openclinica.control.submit.UploadFileServlet",
+    "name": "UploadFileServlet"
+  },
+  "/VerifyImportedCRFData": {
+    "class": "org.akaza.openclinica.control.submit.VerifyImportedCRFDataServlet",
+    "name": "VerifyImportedCRFDataServlet"
+  },
+  "/VerifyImportedRule": {
+    "class": "org.akaza.openclinica.control.submit.VerifyImportedRuleServlet",
+    "name": "VerifyImportedRuleServlet"
+  },
+  "/ViewAllJobs": {
+    "class": "org.akaza.openclinica.control.admin.ViewAllJobsServlet",
+    "name": "ViewAllJobsServlet"
+  },
+  "/ViewCRF": {
+    "class": "org.akaza.openclinica.control.admin.ViewCRFServlet",
+    "name": "ViewCRFServlet"
+  },
+  "/ViewCRFVersion": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewCRFVersionServlet",
+    "name": "ViewCRFVersionServlet"
+  },
+  "/ViewCRFVersionPreview": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewCRFVersionPreview",
+    "name": "ViewCRFVersionPreview"
+  },
+  "/ViewDatasets": {
+    "class": "org.akaza.openclinica.control.extract.ViewDatasetsServlet",
+    "name": "ViewDatasetsServlet"
+  },
+  "/ViewDiscrepancyNote": {
+    "class": "org.akaza.openclinica.control.submit.ViewDiscrepancyNoteServlet",
+    "name": "ViewDiscrepancyNoteServlet"
+  },
+  "/ViewEventCRF": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewEventCRFServlet",
+    "name": "ViewEventCRFServlet"
+  },
+  "/ViewEventCRFContent": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewEventCRFContentServlet",
+    "name": "ViewEventCRFContentServlet"
+  },
+  "/ViewEventDefinition": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewEventDefinitionServlet",
+    "name": "ViewEventDefinitionServlet"
+  },
+  "/ViewEventDefinitionReadOnly": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewEventDefinitionReadOnlyServlet",
+    "name": "ViewEventDefinitionReadOnlyServlet"
+  },
+  "/ViewImportJob": {
+    "class": "org.akaza.openclinica.control.admin.ViewImportJobServlet",
+    "name": "ViewImportJobServlet"
+  },
+  "/ViewItemAuditLog": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewItemAuditLogServlet",
+    "name": "ViewItemAuditLogServlet"
+  },
+  "/ViewItemDetail": {
+    "class": "org.akaza.openclinica.control.extract.ViewItemDetailServlet",
+    "name": "ViewItemDetailServlet"
+  },
+  "/ViewJob": {
+    "class": "org.akaza.openclinica.control.admin.ViewJobServlet",
+    "name": "ViewJobServlet"
+  },
+  "/ViewLogMessage": {
+    "class": "org.akaza.openclinica.control.admin.ViewLogMessageServlet",
+    "name": "ViewLogMessage"
+  },
+  "/ViewNote": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewNoteServlet",
+    "name": "ViewNoteServlet"
+  },
+  "/ViewNotes": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewNotesServlet",
+    "name": "ViewNotesServlet"
+  },
+  "/ViewRuleAssignment": {
+    "class": "org.akaza.openclinica.control.submit.ViewRuleAssignmentNewServlet",
+    "name": "ViewRuleAssignmentNewServlet"
+  },
+  "/ViewRuleAssignmentNew": {
+    "class": "org.akaza.openclinica.control.submit.ViewRuleAssignmentServlet",
+    "name": "ViewRuleAssignmentServlet"
+  },
+  "/ViewRuleSet": {
+    "class": "org.akaza.openclinica.control.submit.ViewRuleSetServlet",
+    "name": "ViewRuleSetServlet"
+  },
+  "/ViewRuleSetAudit": {
+    "class": "org.akaza.openclinica.control.submit.ViewRuleSetAuditServlet",
+    "name": "ViewRuleSetAuditServlet"
+  },
+  "/ViewScheduler": {
+    "class": "org.akaza.openclinica.control.techadmin.ViewSchedulerServlet",
+    "name": "ViewSchedulerServlet"
+  },
+  "/ViewSectionDataEntry": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewSectionDataEntryServlet",
+    "name": "ViewSectionDataEntryServlet"
+  },
+  "/ViewSectionDataEntryById": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewSectionDataEntryByIdServlet",
+    "name": "ViewSectionDataEntryByIdServlet"
+  },
+  "/ViewSectionDataEntryRESTUrlServlet": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewSectionDataEntryRESTUrlServlet",
+    "name": "ViewSectionDataEntryRESTUrlServlet"
+  },
+  "/ViewSelected": {
+    "class": "org.akaza.openclinica.control.extract.ViewSelectedServlet",
+    "name": "ViewSelectedServlet"
+  },
+  "/ViewSingleJob": {
+    "class": "org.akaza.openclinica.control.admin.ViewSingleJobServlet",
+    "name": "ViewSingleJobServlet"
+  },
+  "/ViewSite": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewSiteServlet",
+    "name": "ViewSiteServlet"
+  },
+  "/ViewStudy": {
+    "class": "org.akaza.openclinica.control.admin.ViewStudyServlet",
+    "name": "ViewStudyServlet"
+  },
+  "/ViewStudyEvents": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewStudyEventsServlet",
+    "name": "ViewStudyEventsServlet"
+  },
+  "/ViewStudySubject": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewStudySubjectServlet",
+    "name": "ViewStudySubjectServlet"
+  },
+  "/ViewStudySubjectAuditLog": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewStudySubjectAuditLogServlet",
+    "name": "ViewStudySubjectAuditLogServlet"
+  },
+  "/ViewStudyUser": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewStudyUserServlet",
+    "name": "ViewStudyUserServlet"
+  },
+  "/ViewSubject": {
+    "class": "org.akaza.openclinica.control.admin.ViewSubjectServlet",
+    "name": "ViewSubjectServlet"
+  },
+  "/ViewSubjectGroupClass": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewSubjectGroupClassServlet",
+    "name": "ViewSubjectGroupClassServlet"
+  },
+  "/ViewTableOfContent": {
+    "class": "org.akaza.openclinica.control.managestudy.ViewTableOfContentServlet",
+    "name": "ViewTableOfContentServlet"
+  },
+  "/ViewUserAccount": {
+    "class": "org.akaza.openclinica.control.admin.ViewUserAccountServlet",
+    "name": "ViewUserAccountServlet"
+  },
+  "/form": {
+    "class": "org.akaza.openclinica.view.form.FormServlet",
+    "name": "FormServlet"
+  },
+  "/oauth/*": {
+    "class": "org.springframework.web.servlet.DispatcherServlet",
+    "name": "pages"
+  },
+  "/openrosa/formXml": {
+    "class": "org.akaza.openclinica.web.openrosa.OpenRosaFormDownloadServlet",
+    "name": "OpenRosaFormDownloadServlet"
+  },
+  "/pages/*": {
+    "class": "org.springframework.web.servlet.DispatcherServlet",
+    "name": "pages"
+  },
+  "/rest/*": {
+    "class": "com.sun.jersey.spi.spring.container.servlet.SpringServlet",
+    "name": "OpenClinicaJersey"
+  },
+  "/rest2/*": {
+    "class": "com.sun.jersey.spi.spring.container.servlet.SpringServlet",
+    "name": "OpenClinicaJersey2"
+  },
+  "/ws/*": {
+    "class": "org.springframework.ws.transport.http.MessageDispatcherServlet",
+    "name": "ws"
+  }
+}

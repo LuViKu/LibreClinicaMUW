@@ -1,0 +1,196 @@
+{
+  "url": "https://libreclinica.reliatec.de/lc-demo01/UpdateStudy?studyId=3",
+  "title": "LibreClinica",
+  "h1": [
+    "Welcome to LCDemo"
+  ],
+  "links": [
+    {
+      "text": "LCDemo",
+      "href": "ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "Change Study/Site",
+      "href": "ChangeStudy"
+    },
+    {
+      "text": "dm_demo (Data Manager) en",
+      "href": "UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "j_spring_security_logout"
+    },
+    {
+      "text": "Home",
+      "href": "MainMenu"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "ListStudySubjects"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "ViewNotes?module=submit"
+    },
+    {
+      "text": "Study Audit Log",
+      "href": "StudyAuditLog"
+    },
+    {
+      "text": "Tasks",
+      "href": "#"
+    },
+    {
+      "text": "Support",
+      "href": "javascript:openDocWindow('https://www.libreclinica.org/support.html')"
+    },
+    {
+      "text": "Subject Matrix",
+      "href": "ListStudySubjects"
+    },
+    {
+      "text": "Add Subject",
+      "href": "AddNewSubject"
+    },
+    {
+      "text": "Notes & Discrepancies",
+      "href": "ViewNotes?module=submit"
+    },
+    {
+      "text": "Schedule Event",
+      "href": "CreateNewStudyEvent"
+    },
+    {
+      "text": "View Events",
+      "href": "ViewStudyEvents"
+    },
+    {
+      "text": "Import Data",
+      "href": "ImportCRFData"
+    },
+    {
+      "text": "Source Data Verification",
+      "href": "pages/viewAllSubjectSDVtmp?sdv_restore=true&studyId=3"
+    },
+    {
+      "text": "Study Audit Log",
+      "href": "StudyAuditLog"
+    },
+    {
+      "text": "Rules",
+      "href": "ViewRuleAssignment?read=true"
+    },
+    {
+      "text": "Groups",
+      "href": "ListSubjectGroupClass?read=true"
+    },
+    {
+      "text": "CRFs",
+      "href": "ListCRF?module=manage"
+    },
+    {
+      "text": "View Datasets",
+      "href": "ViewDatasets"
+    },
+    {
+      "text": "Create Dataset",
+      "href": "CreateDataset"
+    },
+    {
+      "text": "View Study",
+      "href": "ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "Build Study",
+      "href": "pages/studymodule"
+    },
+    {
+      "text": "Users",
+      "href": "ListStudyUser"
+    },
+    {
+      "text": "Update Profile",
+      "href": "UpdateProfile"
+    },
+    {
+      "text": "Log Out",
+      "href": "j_spring_security_logout"
+    },
+    {
+      "text": "LCDemo",
+      "href": "/lc-demo01/ViewStudy?id=3&viewFull=yes"
+    },
+    {
+      "text": "Notes & Discrepancies Assigned to Me: 0",
+      "href": "ViewNotes?module=submit&listNotes_f_discrepancyNoteBean.user=dm_demo"
+    },
+    {
+      "text": "LibreClinica Website",
+      "href": "https://www.libreclinica.org"
+    },
+    {
+      "text": "Documentation",
+      "href": "https://www.libreclinica.org/documentation"
+    },
+    {
+      "text": "Contact",
+      "href": "/lc-demo01/Contact"
+    },
+    {
+      "text": "Documents",
+      "href": "DocumentList"
+    },
+    {
+      "text": "software for clinical research",
+      "href": "http://www.libreclinica.org"
+    },
+    {
+      "text": "GNU Lesser General Public License",
+      "href": "http://www.gnu.org/licenses/lgpl-3.0.html"
+    }
+  ],
+  "forms": [
+    {
+      "action": "ListStudySubjects",
+      "method": "GET",
+      "n_inputs": 3,
+      "input_names": [
+        "findSubjects_f_studySubject.label",
+        "navBar"
+      ]
+    },
+    {
+      "action": "/lc-demo01/MainMenu",
+      "method": null,
+      "n_inputs": 0,
+      "input_names": []
+    },
+    {
+      "action": "/lc-demo01/MainMenu",
+      "method": null,
+      "n_inputs": 0,
+      "input_names": []
+    },
+    {
+      "action": "/lc-demo01/MainMenu",
+      "method": null,
+      "n_inputs": 0,
+      "input_names": []
+    },
+    {
+      "action": "/lc-demo01/MainMenu",
+      "method": null,
+      "n_inputs": 0,
+      "input_names": []
+    }
+  ],
+  "buttons": [
+    "Go",
+    "OK"
+  ],
+  "tables": [],
+  "messages": [
+    "You don't have correct permission in your current Study. Change your current Study or contact the administrator. You don't have correct permission in your current Study. Change your current Study or contact the administrator."
+  ]
+}
