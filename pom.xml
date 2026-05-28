@@ -39,16 +39,18 @@
 		<!-- Config file - required by liquibase plugin -->
 		<config.file>src/main/resources/datainfo.properties</config.file>
 
-		<!-- Library Versions -->
-		<!-- Phase A modernization (2026-05-28): see MIGRATION.md.
-		     Spring/Spring Security/Hibernate/Quartz bumps deferred until unit-test
-		     suite is enabled and verified. The following are the next planned
-		     targets within the Spring 5.x / javax.* line (Phase A):
-		         spring.version          -> 5.3.39
-		         (introduce) spring.security.version -> 5.8.16
-		         hibernate.version       -> 5.6.15.Final
-		         quartz                  -> 2.3.2 -->
-		<spring.version>5.1.4.RELEASE</spring.version>
+		<!-- Library versions. Phase A.2 (2026-05-28) brought Spring, Spring Security,
+		     Hibernate, and Quartz to their final 5.x / javax.* releases. The jump to
+		     Spring 6 / Spring Security 6 / Hibernate 6 / jakarta.* is Phase B. -->
+		<spring.version>5.3.39</spring.version>
+		<!-- Spring Security has its own release cadence; 5.8.x is the final 5.x
+		     line and the recommended bridge before Spring Security 6. Previously
+		     this version was hard-coded as ${spring.version} which silently
+		     coupled the two; it was correct in Spring 5.1 (both released 5.1.4
+		     together) but wrong once we needed 5.3 + 5.8. -->
+		<spring.security.version>5.8.16</spring.security.version>
+		<!-- Spring Web Services 1.5.6 (2008-era) is retained intentionally; the
+		     SOAP API is upstream-deprecated and replacement/removal is Phase B. -->
 		<spring.ws.version>1.5.6</spring.ws.version>
 		<db.test>localhost</db.test>
 		<jackson.version>2.13.5</jackson.version>
@@ -312,22 +314,22 @@
 			<dependency>
 				<groupId>org.springframework.security</groupId>
 				<artifactId>spring-security-ldap</artifactId>
-				<version>${spring.version}</version>
+				<version>${spring.security.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>org.springframework.security</groupId>
 				<artifactId>spring-security-taglibs</artifactId>
-				<version>${spring.version}</version>
+				<version>${spring.security.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>org.springframework.security</groupId>
 				<artifactId>spring-security-acl</artifactId>
-				<version>${spring.version}</version>
+				<version>${spring.security.version}</version>
 			</dependency>
 			<dependency>
 			    <groupId>org.springframework.security</groupId>
 			    <artifactId>spring-security-config</artifactId>
-			    <version>${spring.version}</version>
+			    <version>${spring.security.version}</version>
 			    <scope>runtime</scope>
 			</dependency>
 			<dependency>
@@ -350,7 +352,7 @@
 	       <dependency>
 	           <groupId>org.springframework.security</groupId>
 	           <artifactId>spring-security-web</artifactId>
-	           <version>${spring.version}</version>
+	           <version>${spring.security.version}</version>
 	       </dependency>
 			<dependency>
 				<groupId>org.springframework</groupId>
@@ -365,7 +367,7 @@
 			<dependency>
 				<groupId>org.springframework.security</groupId>
 				<artifactId>spring-security-core</artifactId>
-				<version>${spring.version}</version>
+				<version>${spring.security.version}</version>
 			</dependency>
 			<dependency>
 	    		<groupId>org.springframework</groupId>
