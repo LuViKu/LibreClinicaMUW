@@ -37,7 +37,7 @@ Run sub-phases in this order. Each lives on a child branch off `feature/phase-b-
 |---|-----------|--------------|-------------------------------|-------------|
 | B.0 | Castor characterisation tests | `castor-characterisation` | New tests pin every ODM import/export path to a byte-equivalent snapshot on the current stack | 2 weeks |
 | B.1 | JDK 21 baseline (still Spring 5.3) | `jdk21-baseline` | `mvn test` + integration tests + smoke green on JDK 21 | 1–2 weeks |
-| B.2 | Eclipse Transformer dry run | `eclipse-transformer-dry-run` | Throwaway branch; capture the diff size + list of unconvertible sites | 1 week |
+| B.2 | Eclipse Transformer dry run ✅ ([report](phase-b-eclipse-transformer-dry-run.md)) | `eclipse-transformer-dry-run` | Throwaway branch; capture the diff size + list of unconvertible sites | 1 week |
 | B.3 | Castor → JAXB | `castor-to-jaxb` | All B.0 characterisation tests pass byte-equivalent on JAXB output | 3–4 weeks |
 | B.4 | Spring 5 → 6 + Security 5 → 6 + WS 1.5.6 → 4.x (or remove) | `spring6` | Integration tests + smoke green on Spring 6.1 / Security 6.x | 2–3 weeks |
 | B.5 | Hibernate 5.6 → 6.4 (`jakarta.persistence`) | `hibernate6` | All DAO integration tests green; characterise HQL strictness regressions | 3–4 weeks |
