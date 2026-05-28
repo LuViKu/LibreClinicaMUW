@@ -1,13 +1,18 @@
 name: Security scan
 
+# Triggers tuned 2026-05-28 alongside the build.yml + codeql.yml
+# refactor (save Actions credits): one run per merge to lc-develop/
+# master, the daily NVD/CVE cron heartbeat, and manual dispatch. PR
+# runs disabled because the daily cron already catches newly-published
+# CVEs against pinned deps; the per-merge run catches dep-graph
+# changes.
 on:
   push:
-    branches: [lc-develop, master]
-  pull_request:
     branches: [lc-develop, master]
   schedule:
     # Daily 04:00 UTC - picks up newly-published CVEs against pinned deps.
     - cron: '0 4 * * *'
+  workflow_dispatch:
   workflow_dispatch:
 
 permissions:

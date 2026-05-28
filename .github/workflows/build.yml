@@ -1,10 +1,15 @@
 name: Build
 
+# Triggers tuned 2026-05-28 to save GitHub Actions credits: previously
+# fired on every push to feature/**/release/**/hotfix/** plus PRs plus
+# lc-develop/master post-merge, which during autonomous Phase B work
+# burned 3+ runs per PR. Now: one run per merge to lc-develop/master,
+# release/hotfix tip pushes (rare), and explicit manual dispatch.
+# If you want pre-merge validation on a feature branch, use
+# `gh workflow run build.yml --ref <branch>` or push to release/hotfix.
 on:
   push:
-    branches: [lc-develop, master, "feature/**", "release/**", "hotfix/**"]
-  pull_request:
-    branches: [lc-develop, master]
+    branches: [lc-develop, master, "release/**", "hotfix/**"]
   workflow_dispatch:
 
 concurrency:
