@@ -110,18 +110,51 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         study = studyDao.create(study);
         assertTrue("study.create() must yield positive PK", study.getId() > 0);
 
-        // 1) Subject row.
+        // 1) Subject row. CI debug: the DAO overwrites the real SQLException
+        // with an empty one downstream, so we issue a raw JDBC INSERT through
+        // the same DataSource to capture the actual error.
+        StringBuilder diag = new StringBuilder();
+        try (java.sql.Connection conn = dataSource.getConnection()) {
+            diag.append("autoCommit=").append(conn.getAutoCommit())
+                .append(" txIsolation=").append(conn.getTransactionIsolation())
+                .append("; ");
+            try (java.sql.Statement stmt = conn.createStatement();
+                 java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM subject")) {
+                rs.next();
+                diag.append("subjectCount=").append(rs.getInt(1)).append("; ");
+            }
+            // Raw INSERT mirroring SubjectDAO.create's column set (positional
+            // INSERT defined in properties/subject_dao.xml). Failing here
+            // gives us the actual postgres SQLState + message.
+            String sql = "INSERT INTO subject (status_id, date_of_birth, gender, "
+                    + "unique_identifier, dob_collected, date_created, owner_id) "
+                    + "VALUES (?, NULL, 'm', ?, false, NOW(), ?)";
+            try (java.sql.PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setInt(1, Status.AVAILABLE.getId());
+                ps.setString(2, "MUW-SUBJ-RAW-" + runTag);
+                ps.setInt(3, owner.getId());
+                int rows = ps.executeUpdate();
+                diag.append("rawInsert.rows=").append(rows).append("; ");
+            } catch (Exception e) {
+                diag.append("rawInsertException=").append(e.getClass().getSimpleName())
+                    .append("[").append(e.getMessage()).append("]");
+                if (e instanceof java.sql.SQLException) {
+                    diag.append(" sqlState=").append(((java.sql.SQLException) e).getSQLState());
+                }
+            }
+        } catch (Exception probeEx) {
+            diag.append("probeException=").append(probeEx.getClass().getSimpleName())
+                .append("[").append(probeEx.getMessage()).append("]");
+        }
+
         SubjectBean subject = new SubjectBean();
         subject.setUniqueIdentifier("MUW-SUBJ-IT-001-" + runTag);
         subject.setStatus(Status.AVAILABLE);
         subject.setOwner(owner);
         subject = subjectDao.create(subject);
-        // Surface the captured SQLException via getFailureDetails() so
-        // the surefire-reports output shows the actual DB error rather
-        // than just "id was 0". The DAO swallows SQLExceptions silently
-        // (signalFailure stores it without rethrowing).
         assertTrue("subject.create() must yield positive PK (id=" + subject.getId()
-                + "; failureDetails=" + subjectDao.getFailureDetails() + ")",
+                + "; failureDetails=" + subjectDao.getFailureDetails()
+                + "; rawInsertDiag={" + diag + "})",
                 subject.getId() > 0);
 
         // 2) StudySubject row linking the subject to the study.
