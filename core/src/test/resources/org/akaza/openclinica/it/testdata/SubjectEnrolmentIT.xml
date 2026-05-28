@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  DBUnit fixture for SubjectEnrolmentIT. Empty: the test builds Study +
+  Subject + StudySubject in-memory and persists via the production DAOs
+  so the full create cascade is exercised (per LoginFlowIT/StudyCrudIT
+  pattern). DBUnit operation is REFRESH so the empty fixture is a no-op.
+-->
+<dataset>
+</dataset>
