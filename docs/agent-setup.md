@@ -18,9 +18,11 @@ one worktree is invisible to the other.
 
 | Directory | Branch | Used by |
 |-----------|--------|---------|
-| `/Users/lukas/LibreClinicaMUW` | `lc-develop` | Coordinator / review / running CI locally. No agent should make commits here directly; treat it as a read-only-ish view that fast-forwards via PR merges. |
-| `/Users/lukas/LibreClinicaMUW-modernization` | `feature/phase-b-jakarta-cliff` (or whichever Phase B/C/D branch is active) | **modernization agent** |
-| `/Users/lukas/LibreClinicaMUW-phase-e` | `feature/muw-phase-e-ux-mockups` (or whichever Phase E branch is active) | **phase-e (UI) agent** |
+| `/Users/lukas/LibreClinicaMUW/main` | `lc-develop` | Coordinator / review / running CI locally. No agent should make commits here directly; treat it as a read-only-ish view that fast-forwards via PR merges. |
+| `/Users/lukas/LibreClinicaMUW/modernization` | `feature/phase-b-jakarta-cliff` (or whichever Phase B/C/D branch is active) | **modernization agent** |
+| `/Users/lukas/LibreClinicaMUW/phase-e` | `feature/muw-phase-e-ux-mockups` (or whichever Phase E branch is active) | **phase-e (UI) agent** |
+
+The parent `/Users/lukas/LibreClinicaMUW/` directory is not itself a git repo — it is a container that holds the three worktrees as sibling subdirectories. The `.code-workspace` file at its root opens all three in VS Code simultaneously.
 
 `git worktree list` always shows the current state.
 
@@ -32,20 +34,20 @@ cannot change it mid-session.
 
 ```sh
 # Modernization session
-cd /Users/lukas/LibreClinicaMUW-modernization
+cd /Users/lukas/LibreClinicaMUW/modernization
 claude
 
 # Phase E (UI) session
-cd /Users/lukas/LibreClinicaMUW-phase-e
+cd /Users/lukas/LibreClinicaMUW/phase-e
 claude
 ```
 
 A side-effect worth knowing: Claude Code's per-project memory and todo
-state are keyed to the working directory path, so each worktree gets its
-own memory bucket under
-`/Users/lukas/.claude/projects/-Users-lukas-LibreClinicaMUW-modernization/`
-and `…-LibreClinicaMUW-phase-e/`. That keeps each agent's context
-separate, which is what we want.
+state are keyed to the working directory path (slashes replaced with
+hyphens), so each worktree gets its own memory bucket under
+`/Users/lukas/.claude/projects/-Users-lukas-LibreClinicaMUW-main/`,
+`…-LibreClinicaMUW-modernization/`, and `…-LibreClinicaMUW-phase-e/`.
+That keeps each agent's context separate, which is what we want.
 
 ## Working-tree rules each agent follows
 
@@ -74,21 +76,21 @@ When Phase B.0 wraps and Phase B.1 starts (per [Phase B execution
 playbook](development/modernization/phase-b-execution-playbook.md)):
 
 ```sh
-cd /Users/lukas/LibreClinicaMUW-modernization
+cd /Users/lukas/LibreClinicaMUW/modernization
 git fetch origin
 git checkout -b feature/phase-b-jdk21-baseline origin/lc-develop
 # … do the work, push the branch, open PR, merge to lc-develop, repeat
 ```
 
-The modernization worktree stays in the *same* sibling directory —
-only its checked-out branch changes. Same Claude session resumes; same
-memory bucket; same todo list.
+The modernization worktree stays in the *same* `modernization/`
+subdirectory — only its checked-out branch changes. Same Claude session
+resumes; same memory bucket; same todo list.
 
 ## Cleaning up a worktree (when a phase finishes)
 
 ```sh
 # from any directory:
-git worktree remove /Users/lukas/LibreClinicaMUW-modernization
+git worktree remove /Users/lukas/LibreClinicaMUW/modernization
 ```
 
 `git worktree remove` refuses if the worktree has uncommitted changes
@@ -98,9 +100,9 @@ contain ungraded work). Push everything first, then remove.
 ## Why this is enough (and we don't need a lock file)
 
 Worktrees give us **filesystem-level isolation**. Two agents writing
-to two different sibling directories cannot, by construction, observe
-each other's in-progress edits. The "two agents on the same working
-tree" failure mode goes away entirely.
+to two different worktree subdirectories cannot, by construction,
+observe each other's in-progress edits. The "two agents on the same
+working tree" failure mode goes away entirely.
 
 The only remaining shared mutable state is `lc-develop` on the remote.
 That's handled by:
