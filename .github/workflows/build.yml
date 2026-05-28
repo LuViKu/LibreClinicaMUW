@@ -132,7 +132,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: surefire-reports-integration
-          path: '**/target/surefire-reports/**'
+          path: |
+            **/target/surefire-reports/**
+            **/target/openclinica-test.log
           retention-days: 14
           if-no-files-found: ignore
 

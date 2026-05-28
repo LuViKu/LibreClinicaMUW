@@ -23,28 +23,54 @@ import org.akaza.openclinica.templates.HibernateOcDbTestCase;
 import org.dbunit.operation.DatabaseOperation;
 
 /**
- * Phase 0 integration-test backlog (MIGRATION.md items 6 + 7):
- * institutional regression net for the subject-enrolment path.
+ * Phase 0 integration-test backlog (MIGRATION.md items 6 + 7) — DISABLED
+ * pending a deeper investigation of the CI-only failure.
  *
- * <p>Pins two contracts the production "Add Subject" flow relies on:
- * <ol>
- *   <li><strong>{@link SubjectDAO#create} + {@link StudySubjectDAO#create}
- *       produce linked rows.</strong> Creating a subject in a study is a
- *       two-row operation (one in {@code subject}, one in {@code study_subject}
- *       linking the subject to the study by FK). The Add Subject form
- *       drives exactly this sequence.</li>
- *   <li><strong>Re-enrolling a subject with the same label in the same
- *       study is rejected.</strong> The {@code study_subject} table has
- *       a unique constraint on {@code (study_id, label)}; a duplicate
- *       insert raises a DB constraint violation. The production code
- *       catches this and re-renders the Add Subject form with an error.</li>
- * </ol>
+ * <p><strong>Status 2026-05-28:</strong> these tests pass locally when
+ * each is run in isolation via {@code mvn -Dtest=SubjectEnrolmentIT}
+ * against a fresh {@code postgres:14-alpine}, but they fail (alongside
+ * StudyEventScheduleIT) in CI's integration-tests profile AND in any
+ * local run that exercises the full suite against one shared postgres.
  *
- * <p><strong>Phase B.5 gate:</strong> these DAOs are hand-rolled JDBC, so
- * Hibernate 6 doesn't affect them directly. But the unique-constraint
- * exception type that bubbles up from the JDBC driver may change shape
- * under Spring's DataAccessException translation in B.4 — pinned here so
- * a translation drift surfaces.
+ * <p>Symptom: {@link StudySubjectDAO#create} returns a bean with
+ * {@code id = 0}. The DAO silently swallows the underlying
+ * {@link java.sql.SQLException} (see {@code EntityDAO.executeUpdateWithPK}'s
+ * catch block + {@code signalFailure} that gets overwritten by a downstream
+ * empty exception). A diagnostic probe at the failure point shows
+ * {@code study_subject} empty, the {@code study_subject_study_subject_id_seq}
+ * unused (last_value=1, is_called=false), {@code audit_log_event} at 5
+ * rows / sequence at 5 / is_called=true — none of which explains the
+ * silent insert failure.
+ *
+ * <p>Root cause not yet identified. Things eliminated so far:
+ * <ul>
+ *   <li>Not a sequence-out-of-sync with fixture data (SequenceUtil bumps
+ *       all relevant sequences before the create; study_subject is empty
+ *       at the time of failure).</li>
+ *   <li>Not the bootstrap user_account row (LoginFlowIT proves
+ *       findByPK(1) works on this same postgres).</li>
+ *   <li>Not unique-OID collision (label-prefixes are distinct across
+ *       test methods, and {@code getValidOid} randomizes on collision).</li>
+ * </ul>
+ *
+ * <p>Candidate next steps (next session):
+ * <ul>
+ *   <li>Modify {@code EntityDAO} test-fork to NOT overwrite the
+ *       captured SQLException — get the real error message + SQLState.</li>
+ *   <li>Enable postgres {@code log_statement=all} in the CI service
+ *       container env to capture every SQL during the failing run.</li>
+ *   <li>Run each candidate IT in isolation in CI via
+ *       {@code mvn -Dtest=SubjectEnrolmentIT} to confirm/deny that
+ *       the issue is cross-test pollution (and not the IT itself).</li>
+ *   <li>Use {@code org.testcontainers.PostgreSQLContainer} per-IT-class
+ *       to give each IT a fresh DB — long-term fix.</li>
+ * </ul>
+ *
+ * <p>This file keeps the real test methods as {@code disabled_*}-prefixed
+ * so JUnit 3 skips them. {@link #testPlaceholder} keeps the class
+ * discoverable. {@link SequenceUtil#bumpAll} is preserved because it
+ * covers a legitimate issue (legacy DBUnit fixtures inserting rows with
+ * explicit PKs), even though that wasn't the proximate cause here.
  */
 public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
 
@@ -62,47 +88,26 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         return DatabaseOperation.NONE;
     }
 
-    /**
-     * Stub so JUnit 3 finds at least one test method when both real
-     * tests below are {@code disabled_}-prefixed. Delete once the
-     * disabled tests are re-enabled.
-     */
+    /** Stub — see class-level Javadoc for why the real tests are disabled. */
     public void testPlaceholder() {
-        assertTrue("placeholder — real tests are disabled pending CI fix", true);
+        assertTrue("placeholder — real tests disabled pending CI investigation", true);
     }
 
-    /**
-     * Item 6: round-trip a fresh Subject + StudySubject pair via the
-     * production DAO create paths. The test creates a parent study,
-     * then enrols one subject into it, then asserts the two rows exist
-     * and are linked.
-     */
-    // Disabled in CI 2026-05-28 — passes locally on a fresh postgres
-    // but fails in CI's shared postgres at study_subject.create() returning
-    // id=0 (silent FK / unique-constraint violation). Unique-per-run
-    // identifiers didn't fix it. Root cause unidentified; needs deeper
-    // investigation with surefire stdout capture or a Postgres query log.
-    // See session-handover.md follow-ups. Re-enable by renaming to
-    // testEnrolSubjectInStudy.
+    /** Disabled — see class-level Javadoc. Re-enable by renaming. */
     public void disabled_testEnrolSubjectInStudy() throws Exception {
         DataSource dataSource = (DataSource) getContext().getBean("dataSource");
+        SequenceUtil.bumpAll(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
         SubjectDAO subjectDao = new SubjectDAO(dataSource);
         StudySubjectDAO studySubjectDao = new StudySubjectDAO(dataSource);
         UserAccountDAO userDao = (UserAccountDAO) getContext().getBean("userAccountDao");
 
-        // Boot-strap user_id=1 exists in every LibreClinica install.
         UserAccountBean owner = (UserAccountBean) userDao.findByPK(1);
         assertNotNull("Bootstrap user (id=1) must exist", owner);
-        assertTrue("CI debug: bootstrap owner.id must be > 0, was " + owner.getId(),
-                owner.getId() > 0);
 
-        // Unique-per-run identifiers — see testDuplicateLabelCurrentlyNotRejected
-        // for the rationale. Same pattern applied here for consistency.
         String runTag = String.valueOf(System.currentTimeMillis());
         String enrolmentLabel = "MUW-ENROL-001-" + runTag;
 
-        // Parent study to enrol the subject into.
         StudyBean study = new StudyBean();
         study.setName("MUW Subject Enrolment IT Study " + runTag);
         study.setIdentifier("MUW_SUBJ_ENROL_IT_STUDY_" + runTag);
@@ -111,7 +116,6 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         study = studyDao.create(study);
         assertTrue("study.create() must yield positive PK", study.getId() > 0);
 
-        // 1) Subject row.
         SubjectBean subject = new SubjectBean();
         subject.setUniqueIdentifier("MUW-SUBJ-IT-001-" + runTag);
         subject.setStatus(Status.AVAILABLE);
@@ -119,7 +123,6 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         subject = subjectDao.create(subject);
         assertTrue("subject.create() must yield positive PK", subject.getId() > 0);
 
-        // 2) StudySubject row linking the subject to the study.
         StudySubjectBean enrolment = new StudySubjectBean();
         enrolment.setLabel(enrolmentLabel);
         enrolment.setSubjectId(subject.getId());
@@ -130,11 +133,9 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         assertTrue("study_subject.create() must yield positive PK",
                 enrolment.getId() > 0);
 
-        // Both rows persisted and linked.
         StudySubjectBean roundTripped =
                 (StudySubjectBean) studySubjectDao.findByPK(enrolment.getId());
-        assertNotNull("findByPK round-trips the enrolment row",
-                roundTripped);
+        assertNotNull("findByPK round-trips the enrolment row", roundTripped);
         assertEquals("FK subject_id round-trips",
                 subject.getId(), roundTripped.getSubjectId());
         assertEquals("FK study_id round-trips",
@@ -143,51 +144,17 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
                 enrolmentLabel, roundTripped.getLabel());
     }
 
-    /**
-     * Item 7: pin the CURRENT behaviour of duplicate-label enrolment.
-     *
-     * <p><strong>Phase 0 finding (2026-05-28):</strong> the production
-     * {@code study_subject} table has NO unique constraint on
-     * {@code (study_id, label)} and {@code StudySubjectDAO.create} does
-     * not defend against duplicates. The second create with the same
-     * label in the same study succeeds and yields a positive PK — a
-     * silent double-enrolment hazard the GCP regression suite should
-     * not have shipped with. Surfacing this here so the fix gets
-     * scheduled.
-     *
-     * <p>This test pins the (broken) status quo so a future fix that
-     * adds the unique constraint (and/or makes the DAO throw) breaks
-     * this test loudly. Recommended fix:
-     * <ul>
-     *   <li>Liquibase changeset adding {@code UNIQUE (study_id, label)}
-     *       on {@code study_subject} — institutional priority because
-     *       duplicate subject labels corrupt every cross-event report.</li>
-     *   <li>Or: a {@code findByLabel}-based pre-flight check in
-     *       {@code StudySubjectDAO.create} that raises a typed exception.</li>
-     * </ul>
-     *
-     * <p>When the fix lands, flip the assertion to "must reject" and
-     * rename to {@code testDuplicateLabelRejected}.
-     */
-    // Disabled in CI 2026-05-28 — same family of CI-only failures as
-    // disabled_testEnrolSubjectInStudy above. Re-enable by renaming.
+    /** Disabled — see class-level Javadoc. Re-enable by renaming. */
     public void disabled_testDuplicateLabelCurrentlyNotRejected() throws Exception {
         DataSource dataSource = (DataSource) getContext().getBean("dataSource");
+        SequenceUtil.bumpAll(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
         SubjectDAO subjectDao = new SubjectDAO(dataSource);
         StudySubjectDAO studySubjectDao = new StudySubjectDAO(dataSource);
         UserAccountDAO userDao = (UserAccountDAO) getContext().getBean("userAccountDao");
 
         UserAccountBean owner = (UserAccountBean) userDao.findByPK(1);
-        assertTrue("CI debug: bootstrap owner.id must be > 0, was " + owner.getId(),
-                owner.getId() > 0);
 
-        // Unique-per-run identifiers so cross-test pollution in a shared
-        // postgres (CI integration-tests profile) doesn't collide with
-        // identifiers from prior test classes/methods that REFRESH-inserted
-        // without cleanup. The previous "MUW_SUBJ_ENROL_IT_DUP" + fixed
-        // subject-uids caused silent FK / unique-constraint failures in
-        // CI but passed locally (fresh postgres per `-Dtest=` invocation).
         String runTag = String.valueOf(System.currentTimeMillis());
 
         StudyBean study = new StudyBean();
@@ -196,26 +163,24 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         study.setStatus(Status.AVAILABLE);
         study.setOwnerId(owner.getId());
         study = studyDao.create(study);
-        assertTrue("CI debug: study.create() must yield positive PK, was "
-                + study.getId(), study.getId() > 0);
+        assertTrue("study.create() must yield positive PK", study.getId() > 0);
 
         SubjectBean subjectOne = new SubjectBean();
         subjectOne.setUniqueIdentifier("MUW-SUBJ-IT-DUP-A-" + runTag);
         subjectOne.setStatus(Status.AVAILABLE);
         subjectOne.setOwner(owner);
         subjectOne = subjectDao.create(subjectOne);
-        assertTrue("CI debug: subjectOne.create() must yield positive PK, was "
-                + subjectOne.getId(), subjectOne.getId() > 0);
+        assertTrue("subjectOne.create() must yield positive PK",
+                subjectOne.getId() > 0);
 
         SubjectBean subjectTwo = new SubjectBean();
         subjectTwo.setUniqueIdentifier("MUW-SUBJ-IT-DUP-B-" + runTag);
         subjectTwo.setStatus(Status.AVAILABLE);
         subjectTwo.setOwner(owner);
         subjectTwo = subjectDao.create(subjectTwo);
-        assertTrue("CI debug: subjectTwo.create() must yield positive PK, was "
-                + subjectTwo.getId(), subjectTwo.getId() > 0);
+        assertTrue("subjectTwo.create() must yield positive PK",
+                subjectTwo.getId() > 0);
 
-        // First enrolment with a unique-per-run label: succeeds.
         StudySubjectBean firstEnrolment = new StudySubjectBean();
         firstEnrolment.setLabel("MUW-DUP-001-" + runTag);
         firstEnrolment.setSubjectId(subjectOne.getId());
@@ -223,22 +188,16 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         firstEnrolment.setStatus(Status.AVAILABLE);
         firstEnrolment.setOwner(owner);
         firstEnrolment = studySubjectDao.create(firstEnrolment);
-        assertTrue("first enrolment must succeed (got id=" + firstEnrolment.getId() + ")",
+        assertTrue("first enrolment must succeed",
                 firstEnrolment.getId() > 0);
 
-        // Second enrolment with the SAME label in the SAME study: must
-        // be rejected. The DAO either throws or leaves id == 0; the
-        // production code path treats either as "duplicate label".
         StudySubjectBean dupEnrolment = new StudySubjectBean();
-        dupEnrolment.setLabel("MUW-DUP-001-" + runTag); // same label as firstEnrolment
+        dupEnrolment.setLabel("MUW-DUP-001-" + runTag);
         dupEnrolment.setSubjectId(subjectTwo.getId());
         dupEnrolment.setStudyId(study.getId());
         dupEnrolment.setStatus(Status.AVAILABLE);
         dupEnrolment.setOwner(owner);
 
-        // Pin the CURRENT (broken) behaviour: the second create succeeds.
-        // When the unique-constraint fix lands, this assertion will fail
-        // and the test must be flipped to assertTrue(rejected) + renamed.
         StudySubjectBean attempted = studySubjectDao.create(dupEnrolment);
         assertNotNull("status quo: the second create does NOT throw"
                 + " (Phase 0 finding — fix scheduled)", attempted);
