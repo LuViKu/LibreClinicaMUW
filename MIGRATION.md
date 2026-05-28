@@ -96,11 +96,21 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
   - **Extended fixtures, not in the original 20 but pattern-proven and high-value Phase B.5 guards:**
     - [`ConfigurationDaoTest`](core/src/test/java/org/akaza/openclinica/dao/ConfigurationDaoTest.java) 3 → 7 methods (multi-row fixture, value round-trip, null-key handling, findAll containment, saveOrUpdate update-not-insert).
     - [`AuditUserLoginDaoTest`](core/src/test/java/org/akaza/openclinica/dao/AuditUserLoginDaoTest.java) 2 → 5 methods (multi-row fixture, findAll containment, two Hibernate-Criteria-based filter tests via `AuditUserLoginFilter` — directly pins the Phase B.5 Criteria API removal target).
-  - **Phase B.0 Castor characterisation framework scaffolded** ✅:
-    - [`CastorCharacterisationIT`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorCharacterisationIT.java) abstract base class with `assertXmlSimilarToGolden` / `assertXmlIdenticalToGolden` helpers + capture-on-first-run helper messages, golden directory at `core/src/test/resources/org/akaza/openclinica/odm/characterisation/golden/`.
-    - [`CastorCharacterisationFrameworkTest`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorCharacterisationFrameworkTest.java) framework smoke test (2/2 green) — verifies XMLUnit is wired and the "similar" comparison behaves correctly on attribute order + whitespace + value differences. Runs in the default `mvn test` profile.
-    - `org.xmlunit:xmlunit-core` 2.10 + `xmlunit-matchers` 2.10 added to dependencyManagement (test scope) per [DR-006](docs/development/modernization/decision-record.md#dr-006--castor-replacement-jakarta-jaxb).
-    - Subclasses of `CastorCharacterisationIT` are excluded from default surefire (need live Postgres); they run under `mvn -P integration-tests test`.
+  - **Phase B.0 Castor characterisation framework + 5 tests green** ✅ (on `feature/phase-b-jakarta-cliff`):
+    - [`GoldenAssertions`](core/src/test/java/org/akaza/openclinica/odm/characterisation/GoldenAssertions.java) static helper class with `assertXmlSimilarToGolden` / `assertXmlIdenticalToGolden` + capture-on-first-run helper messages. Golden directory at `core/src/test/resources/org/akaza/openclinica/odm/characterisation/golden/`.
+    - [`CastorCharacterisationIT`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorCharacterisationIT.java) abstract base class (extends `HibernateOcDbTestCase`) for DB-driven characterisation tests; delegates to `GoldenAssertions`.
+    - [`CastorCharacterisationFrameworkTest`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorCharacterisationFrameworkTest.java) framework smoke test (**2/2 green**) — verifies XMLUnit is wired correctly.
+    - **Concrete characterisation tests covering 4 of the 5 distinct Castor mapping files** (unit-test-level, no DB):
+      - [`CastorRulesContainerCharacterisationTest`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorRulesContainerCharacterisationTest.java) — `mappingMarshallerMetadata.xml` via `MetaDataReportBean.handleLoadCastor`. **1/1 green**, golden captured.
+      - [`CastorRulesMarshallerCharacterisationTest`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorRulesMarshallerCharacterisationTest.java) — `mappingMarshaller.xml` via `DownloadRuleSetXmlServlet.handleLoadCastor`. **1/1 green**, golden captured.
+      - [`CastorRulesUnmarshallerCharacterisationTest`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorRulesUnmarshallerCharacterisationTest.java) — `mapping.xml` via `ImportRuleServlet`. **1/1 green**, asserts the *current* Castor behaviour of leaving collection fields null after parsing an empty envelope (pinned 2026-05-28 so a Phase B.3 JAXB swap surfaces if it changes this).
+      - [`CastorClinicalDataUnmarshallerCharacterisationTest`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorClinicalDataUnmarshallerCharacterisationTest.java) — `cd_odm_mapping.xml` via `ImportCRFDataServlet`. **2/2 green**, pins ODM-envelope shape + StudyOID round-trip.
+    - `org.xmlunit:xmlunit-core` 2.10 + `xmlunit-matchers` 2.10 in dependencyManagement (test scope) per [DR-006](docs/development/modernization/decision-record.md#dr-006--castor-replacement-jakarta-jaxb). Direct deps in `core/pom.xml`.
+    - `**/odm/characterisation/*IT.java` excluded from default surefire (need live Postgres); they run under `mvn -P integration-tests test`.
+
+  **Still pending for Phase B.0 to exit** (the two DB-driven export paths — the framework supports them, they just need multi-entity DBUnit fixtures):
+  - `OdmMetadataExportCharacterisationIT` — `ODMMetadataRestResource` against a study fixture. Extends `CastorCharacterisationIT`. Needs Study + StudyEventDefinition + CRF + CRFVersion + ItemGroup + Item rows in a DBUnit fixture.
+  - `OdmClinicalDataExportCharacterisationIT` — `ODMClinicalDataController` against the same fixture plus EventCRF + ItemData rows.
 
   **Counts:** unit suite 33 → 39 (+4 password + 2 framework); integration suite 67 → 74 (+3 audit-user-login extensions; the +4 from ConfigurationDaoTest were counted in the earlier 63 → 67).
 
