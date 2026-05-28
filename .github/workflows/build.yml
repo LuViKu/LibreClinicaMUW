@@ -57,17 +57,13 @@ jobs:
   integration-tests:
     # Runs the DB-dependent tests excluded from the default surefire run
     # (DAO + rule-service tests extending HibernateOcDbTestCase / OcDbTestCase).
-    # These tests expect a PostgreSQL on localhost:5432, database 'openclinica-TEST',
-    # user 'clinica' / password 'clinica' per core/src/test/resources/datainfo.properties.
-    #
-    # Phase 0 follow-up: this job is allowed to fail (continue-on-error: true)
-    # until the test-DB schema bootstrap is in place (Liquibase migrations need
-    # to run against openclinica-TEST before DBUnit fixtures can be loaded).
-    # Tracking issue: Phase 0.2 in MIGRATION.md.
+    # The Spring test context bootstraps the schema via SpringLiquibase against
+    # database 'openclinica-TEST' on the postgres service container below
+    # (user 'clinica' / password 'clinica' per core/src/test/resources/datainfo.properties).
+    # Phase 0.2 + 0.3 (2026-05-28) wired this up end-to-end - see MIGRATION.md.
     name: Integration tests (Postgres ${{ matrix.postgres }})
     needs: build
     runs-on: ubuntu-latest
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:

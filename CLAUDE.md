@@ -63,7 +63,7 @@ docker run --rm --network lc-test-net \
 docker stop lc-test-pg && docker network rm lc-test-net
 ```
 
-Schema bootstrap works via `SpringLiquibase` in `applicationContext-core-db.xml` (Phase 0.2, 2026-05-28). Expect: 33 unit tests pass; ~26 DAO tests error with "Session/EntityManager is closed" (pre-existing Hibernate session-management bug — Phase 0.3 work). See [MIGRATION.md § Phase 0](MIGRATION.md).
+Schema bootstrap works via `SpringLiquibase` in `applicationContext-core-db.xml`. **Expected result: 63 tests pass, 0 errors, 0 failures, 0 skipped.** (Phase 0.2 + 0.3, 2026-05-28.) See [MIGRATION.md § Phase 0](MIGRATION.md).
 
 ## CI
 

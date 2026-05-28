@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.support.ClassPathXmlApplicationContext;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.DefaultTransactionDefinition;
 
 import java.util.Locale;
@@ -44,9 +45,25 @@ public abstract class HibernateOcDbTestCase extends DataSourceBasedDBTestCase {
     public  BasicDataSource ds ;
     
    protected static  PlatformTransactionManager transactionManager;
+
+   /**
+    * Per-test Spring transaction status, opened in {@link #setUp()} and rolled
+    * back in {@link #tearDown()}. The transaction binds a Hibernate session to
+    * the current thread for the duration of the test, so DAO calls that resolve
+    * {@code sessionFactory.getCurrentSession()} see a live session. Rolling back
+    * keeps tests from leaving residue in the DB across the suite.
+    *
+    * <p>Replaces a long-standing defect (OpenClinica 2013, commit {@code adba9a97d})
+    * where {@link #tearDown()} called {@code commit()} on a brand-new participant
+    * {@code TransactionStatus} rather than the one opened in the static initializer,
+    * leaving the outer transaction permanently uncommitted and the Hibernate session
+    * subject to silent closure mid-test.
+    */
+   private TransactionStatus testTransactionStatus;
+
    static
    {
-       
+
        loadProperties();
        dbName = properties.getProperty("dbName");
        dbUrl = properties.getProperty("url");
@@ -56,9 +73,7 @@ public abstract class HibernateOcDbTestCase extends DataSourceBasedDBTestCase {
        locale = properties.getProperty("locale");
        initializeLocale();
        initializeQueriesInXml();
-      
-    
-       
+
        context =
            new ClassPathXmlApplicationContext(
                    new String[] { "classpath*:applicationContext-core-s*.xml", "classpath*:org/akaza/openclinica/applicationContext-core-db.xml",
@@ -68,33 +83,26 @@ public abstract class HibernateOcDbTestCase extends DataSourceBasedDBTestCase {
                       " classpath*:org/akaza/openclinica/applicationContext-core-timer.xml",
                        "classpath*:org/akaza/openclinica/applicationContext-security.xml" });
      transactionManager = (PlatformTransactionManager) context.getBean("transactionManager");
-     transactionManager.getTransaction(new DefaultTransactionDefinition());
-       
+     // Per-test transactions are opened in setUp() and rolled back in tearDown();
+     // no class-level transaction is opened here.
 
    }
-  
+
 
     public HibernateOcDbTestCase() {
-   
-      
+
+
     }
 
     @Override
     protected void setUp() throws Exception {
-     
-    /*    loadProperties();
-        dbName = properties.getProperty("dbName");
-        dbUrl = properties.getProperty("url");
-        dbUserName = properties.getProperty("username");
-        dbPassword = properties.getProperty("password");
-        dbDriverClassName = properties.getProperty("driver");
-        locale = properties.getProperty("locale");
-        initializeLocale();
-        initializeQueriesInXml();*/
-       // setUpContext();
-        // TODO Auto-generated method stub
         super.setUp();
-        
+        // Open a transaction that lives for the duration of this single test method.
+        // HibernateTransactionManager binds the Hibernate session to the current
+        // thread so DAO beans wired with SessionFactory.getCurrentSession() can
+        // use it. The transaction is rolled back in tearDown() to prevent test
+        // residue from leaking into other tests.
+        testTransactionStatus = transactionManager.getTransaction(new DefaultTransactionDefinition());
     }
 
     @Override
@@ -183,19 +191,26 @@ public abstract class HibernateOcDbTestCase extends DataSourceBasedDBTestCase {
         return dbName;
     }
   @Override
-  public void tearDown(){
-    
+  public void tearDown() {
+      // Roll back the test transaction first. Rollback (not commit) keeps test
+      // writes from accumulating across the suite. This is the actual fix for the
+      // 2013-era defect that left the original outer transaction uncommitted and
+      // Hibernate sessions in an inconsistent state.
       try {
-      
-        transactionManager.commit( transactionManager.getTransaction(new DefaultTransactionDefinition()));
-        super.tearDown();
-      //  transactionManager = null;
-       if(ds!=null)
-        ds.getConnection().close();
-       // getDataSource().getConnection().close();
-    } catch (Exception e) {
-          logger.error("TransactionManager is not commiting and closing properly: ", e);
-    }
-
+          if (testTransactionStatus != null && !testTransactionStatus.isCompleted()) {
+              transactionManager.rollback(testTransactionStatus);
+          }
+      } catch (Exception e) {
+          logger.error("Failed to roll back test transaction: ", e);
+      } finally {
+          testTransactionStatus = null;
+      }
+      try {
+          super.tearDown();
+      } catch (Exception e) {
+          logger.error("DBUnit super.tearDown() failed: ", e);
+      }
+      // ds is the DBUnit datasource; super.tearDown() already closed its
+      // connection. Nothing to do here.
   }
 }
