@@ -11,7 +11,6 @@ package org.akaza.openclinica.control.submit;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.InputStreamReader;
 import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,8 +38,7 @@ import org.akaza.openclinica.view.Page;
 import org.akaza.openclinica.web.InsufficientPermissionException;
 import org.akaza.openclinica.web.SQLInitServlet;
 import org.akaza.openclinica.web.crfdata.ImportCRFDataService;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.xml.Unmarshaller;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 
 /**
  * Create a new CRF verison by uploading excel file. Makes use of several other classes to validate and provide accurate
@@ -152,16 +150,16 @@ public class ImportCRFDataServlet extends SecureController {
             // http://apache.org/xml/features/validation/schema-full-checking");
             // // above sets to validate against namespace
 
-            Mapping myMap = new Mapping();
-            // @pgawade 18-April-2011 Fix for issue 8394
-            String ODM_MAPPING_DIRPath = CoreResources.ODM_MAPPING_DIR;
-            myMap.loadMapping(ODM_MAPPING_DIRPath + File.separator + "cd_odm_mapping.xml");
+            // Phase B.3 PR 3b: Castor → JAXB. The cd_odm_mapping.xml +
+            // org.exolab.castor.xml.Unmarshaller chain is replaced by
+            // OdmJaxbContext.unmarshalClinicalData, which uses the
+            // javax.xml.bind annotations on the ODMContainer bean tree
+            // (added in PR 3a). Same bean-tree shape, verified by
+            // JaxbClinicalDataFullTreeCharacterisationTest matching the
+            // Castor twin.
+            OdmJaxbContext odmJaxbContext = (OdmJaxbContext) SpringServletAccess
+                    .getApplicationContext(context).getBean("odmJaxbContext");
 
-            Unmarshaller um1 = new Unmarshaller(myMap);
-            // um1.addNamespaceToPackageMapping("http://www.openclinica.org/ns/odm_ext_v130/v3.1", "OpenClinica");
-            // um1.addNamespaceToPackageMapping("http://www.cdisc.org/ns/odm/v1.3"
-            // ,
-            // "ODMContainer");
             boolean fail = false;
             ODMContainer odmContainer = new ODMContainer();
             session.removeAttribute("odmContainer");
@@ -169,8 +167,7 @@ public class ImportCRFDataServlet extends SecureController {
 
                 // schemaValidator.validateAgainstSchema(f, xsdFile);
                 // utf-8 compliance, tbh 06/2009
-                InputStreamReader isr = new InputStreamReader(new FileInputStream(f), "UTF-8");
-                odmContainer = (ODMContainer) um1.unmarshal(isr);
+                odmContainer = odmJaxbContext.unmarshalClinicalData(new FileInputStream(f));
 
                 logger.debug("Found crf data container for study oid: " + odmContainer.getCrfDataPostImportContainer().getStudyOID());
                 logger.debug("found length of subject list: " + odmContainer.getCrfDataPostImportContainer().getSubjectData().size());
@@ -214,8 +211,7 @@ public class ImportCRFDataServlet extends SecureController {
                     schemaValidator.validateAgainstSchema(f, xsdFile2);
                     // for backwards compatibility, we also try to validate vs
                     // 1.2.1 ODM 06/2008
-                    InputStreamReader isr = new InputStreamReader(new FileInputStream(f), "UTF-8");
-                    odmContainer = (ODMContainer) um1.unmarshal(isr);
+                    odmContainer = odmJaxbContext.unmarshalClinicalData(new FileInputStream(f));
                 } catch (Exception me2) {
                     // not sure if we want to report me2
                     MessageFormat mf = new MessageFormat("");

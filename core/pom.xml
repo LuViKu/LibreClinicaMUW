@@ -52,6 +52,18 @@
                 </exclusion>
             </exclusions>
 		</dependency>
+		<!--
+		    Explicit xalan:serializer pull. batik-bridge (transitive of fop:1.0)
+		    pulls xalan:xalan but not xalan:serializer; the CVE upgrade to
+		    xalan 2.7.3 finalised the JAR split, so tests that touch
+		    org.apache.xml.serializer.* (e.g. Castor's marshaller path) fail
+		    with NoClassDefFoundError without this pin. Version comes from
+		    parent dependencyManagement.
+		-->
+		<dependency>
+			<groupId>xalan</groupId>
+			<artifactId>serializer</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>commons-lang</groupId>
 			<artifactId>commons-lang</artifactId>

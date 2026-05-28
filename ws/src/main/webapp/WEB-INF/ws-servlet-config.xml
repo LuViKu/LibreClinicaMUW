@@ -158,6 +158,7 @@
         <constructor-arg ref="dataSource"/>
         <constructor-arg ref="messageSource"/>
         <constructor-arg ref="coreResources"/>
+        <constructor-arg ref="odmJaxbContext"/>
         <property name="ruleSetService" ref="ruleSetService"/>
         <property name="transactionTemplate" ref="sharedTransactionTemplate"/>
     </bean>

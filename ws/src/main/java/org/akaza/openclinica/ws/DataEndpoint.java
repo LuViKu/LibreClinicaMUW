@@ -45,8 +45,7 @@ import org.akaza.openclinica.web.crfdata.ImportCRFInfo;
 import org.akaza.openclinica.web.crfdata.ImportCRFInfoContainer;
 import org.akaza.openclinica.ws.bean.BaseStudyDefinitionBean;
 import org.akaza.openclinica.ws.validator.CRFDataImportValidator;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.xml.Unmarshaller;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.MessageSource;
@@ -76,6 +75,7 @@ public class DataEndpoint {
     private final DataSource dataSource;
     private final MessageSource messages;
     private final CoreResources coreResources;
+    private final OdmJaxbContext odmJaxbContext;
     private final Locale locale;
     private final DataImportService dataImportService = new DataImportService();
 
@@ -83,10 +83,12 @@ public class DataEndpoint {
 
     private TransactionTemplate transactionTemplate;
 
-    public DataEndpoint(DataSource dataSource, MessageSource messages, CoreResources coreResources) {
+    public DataEndpoint(DataSource dataSource, MessageSource messages, CoreResources coreResources,
+                        OdmJaxbContext odmJaxbContext) {
         this.dataSource = dataSource;
         this.messages = messages;
         this.coreResources = coreResources;
+        this.odmJaxbContext = odmJaxbContext;
         this.ruleSetService = getRuleSetService();
 
         this.locale = new Locale("en_US");
@@ -234,24 +236,15 @@ public class DataEndpoint {
         if (xml == null)
             throw new Exception(respage.getString("unreadable_file"));
 
-        Mapping myMap = new Mapping();
-
-        // InputStream xsdFile = coreResources.getInputStream("ODM1-3-0.xsd");//new File(propertiesPath + File.separator
-        // + "ODM1-3-0.xsd");
-        // InputStream xsdFile2 = coreResources.getInputStream("ODM1-2-1.xsd");//new File(propertiesPath +
-        // File.separator + "ODM1-2-1.xsd");
-        InputStream mapInputStream = coreResources.getInputStream("cd_odm_mapping.xml");
-
-        myMap.loadMapping(new InputSource(mapInputStream));
-        Unmarshaller um1 = new Unmarshaller(myMap);
+        // Phase B.3 PR 3b: Castor → JAXB via OdmJaxbContext (Spring-wired
+        // via constructor). Same bean-tree shape, verified by
+        // JaxbClinicalDataFullTreeCharacterisationTest.
         ODMContainer odmContainer = new ODMContainer();
 
         try {
             LOG.debug(xml);
-            // File xsdFileFinal = new File(xsdFile);
-            // schemaValidator.validateAgainstSchema(xml, xsdFile);
-            // removing schema validation since we are presented with the chicken v egg error problem
-            odmContainer = (ODMContainer) um1.unmarshal(new StringReader(xml));
+            odmContainer = odmJaxbContext.unmarshalClinicalData(
+                    new java.io.ByteArrayInputStream(xml.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
             LOG.debug("Found crf data container for study oid: " + odmContainer.getCrfDataPostImportContainer().getStudyOID());
             LOG.debug("found length of subject list: " + odmContainer.getCrfDataPostImportContainer().getSubjectData().size());
             return odmContainer;
