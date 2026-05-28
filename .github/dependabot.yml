@@ -1,0 +1,49 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    labels:
+      - dependencies
+      - maven
+    groups:
+      spring:
+        patterns:
+          - "org.springframework*"
+          - "org.springframework.security*"
+          - "org.springframework.ws*"
+      jackson:
+        patterns:
+          - "com.fasterxml.jackson*"
+      hibernate:
+        patterns:
+          - "org.hibernate*"
+      apache-commons:
+        patterns:
+          - "commons-*"
+          - "org.apache.commons*"
+      logback:
+        patterns:
+          - "ch.qos.logback*"
+          - "org.slf4j*"
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - github-actions
+
+  - package-ecosystem: docker
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+    labels:
+      - dependencies
+      - docker

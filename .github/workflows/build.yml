@@ -1,0 +1,86 @@
+name: Build
+
+on:
+  push:
+    branches: [lc-develop, master, "feature/**", "release/**", "hotfix/**"]
+  pull_request:
+    branches: [lc-develop, master]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Maven build & unit tests (JDK ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Build on the runtime JDK (11) and the build JDK (8) declared in the Dockerfile.
+        # When Phase B lands, this matrix moves to [17, 21] and the JDK 8 entry is removed.
+        java: ['8', '11']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven
+
+      - name: Maven package (with unit tests)
+        run: mvn -B -ntp -DskipTests=false package
+
+      - name: Upload WAR artifacts
+        if: matrix.java == '11' && success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libreclinica-wars
+          path: |
+            web/target/*.war
+            ws/target/*.war
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Upload Surefire reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-jdk${{ matrix.java }}
+          path: '**/target/surefire-reports/**'
+          retention-days: 14
+          if-no-files-found: ignore
+
+  smoke-test:
+    name: Compose smoke test
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compose up
+        run: docker compose up --build --detach
+
+      - name: Wait for application to be reachable
+        run: |
+          set -e
+          for i in $(seq 1 60); do
+            if curl --silent --fail --output /dev/null http://127.0.0.1:8080/LibreClinica/; then
+              echo "Application reachable after ${i}0s"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Application did not become reachable within 10 minutes"
+          docker compose logs --tail 200
+          exit 1
+
+      - name: Compose down
+        if: always()
+        run: docker compose down --volumes --remove-orphans
