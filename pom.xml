@@ -53,7 +53,7 @@
 		     SOAP API is upstream-deprecated and replacement/removal is Phase B. -->
 		<spring.ws.version>1.5.6</spring.ws.version>
 		<db.test>localhost</db.test>
-		<jackson.version>2.13.5</jackson.version>
+		<jackson.version>2.17.3</jackson.version>
 		<saxon.version>8.7</saxon.version>
 		<hibernate.version>5.6.15.Final</hibernate.version>
 		<castor.version>1.4.1</castor.version>
@@ -203,7 +203,7 @@
             <dependency>
                 <groupId>commons-fileupload</groupId>
                 <artifactId>commons-fileupload</artifactId>
-                <version>1.5</version>
+                <version>1.6.0</version>
             </dependency>
             <dependency>
                 <groupId>commons-io</groupId>
@@ -213,7 +213,7 @@
 			<dependency>
 				<groupId>commons-beanutils</groupId>
 				<artifactId>commons-beanutils</artifactId>
-				<version>1.9.4</version>
+				<version>1.11.0</version>
 			</dependency>
 			<dependency>
 				<groupId>commons-dbcp</groupId>
@@ -614,7 +614,7 @@
 			<dependency>
 				<groupId>org.postgresql</groupId>
 				<artifactId>postgresql</artifactId>
-				<version>42.7.4</version>
+				<version>42.7.5</version>
 				<scope>runtime</scope>
 			</dependency>
 			<!-- Oracle JDBC driver -->
@@ -793,6 +793,32 @@
 	        	<artifactId>oro</artifactId>
 	        	<version>2.0.8</version>
 	        </dependency>
+			<!-- CVE security overrides: force safe versions of transitive dependencies -->
+			<dependency>
+				<groupId>org.apache.santuario</groupId>
+				<artifactId>xmlsec</artifactId>
+				<version>2.1.7</version>
+			</dependency>
+			<dependency>
+				<groupId>xalan</groupId>
+				<artifactId>xalan</artifactId>
+				<version>2.7.2</version>
+			</dependency>
+			<dependency>
+				<groupId>xerces</groupId>
+				<artifactId>xercesImpl</artifactId>
+				<version>2.12.2</version>
+			</dependency>
+			<dependency>
+				<groupId>com.mchange</groupId>
+				<artifactId>c3p0</artifactId>
+				<version>0.12.0</version>
+			</dependency>
+			<dependency>
+				<groupId>org.yaml</groupId>
+				<artifactId>snakeyaml</artifactId>
+				<version>2.0</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
