@@ -158,17 +158,22 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
                 subject.getId() > 0);
 
         // 2) StudySubject row linking the subject to the study.
+        // Probe with the EXACT DAO INSERT (matches study_subject_dao.xml
+        // <name>create</name> SQL: label, subject_id, study_id, status_id,
+        // date_created, owner_id, enrollment_date, secondary_label, oc_oid).
         StringBuilder ssDiag = new StringBuilder();
         try (java.sql.Connection conn = dataSource.getConnection()) {
             ssDiag.append("autoCommit=").append(conn.getAutoCommit()).append("; ");
             try (java.sql.PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO study_subject (label, subject_id, study_id, "
-                  + "status_id, date_created, owner_id) VALUES (?, ?, ?, ?, NOW(), ?)")) {
+                    "INSERT INTO study_subject (label, subject_id, study_id, status_id,"
+                  + " date_created, owner_id, enrollment_date, secondary_label, oc_oid)"
+                  + " VALUES (?, ?, ?, ?, NOW(), ?, NULL, '', ?)")) {
                 ps.setString(1, "MUW-SS-RAW-" + runTag);
                 ps.setInt(2, subject.getId());
                 ps.setInt(3, study.getId());
                 ps.setInt(4, Status.AVAILABLE.getId());
                 ps.setInt(5, owner.getId());
+                ps.setString(6, "SS_MUWRAW_" + runTag);
                 int rows = ps.executeUpdate();
                 ssDiag.append("rawSSInsert.rows=").append(rows);
             } catch (Exception e) {
