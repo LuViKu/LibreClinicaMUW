@@ -203,6 +203,98 @@ This document captures the strategic decisions that frame the modernization proj
 
 ---
 
+## DR-014 — Shibboleth SSO integration (draft)
+
+**Date:** 2026-05-28
+**Status:** Draft — options laid out, no decision yet. Decide before Phase D Spring Security work begins.
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** [DR-001](#dr-001--adopt-libreclinica-as-muw-ophthalmology-ecrf), [DR-005](#dr-005--muw-ophthalmology-branding-applied), DR-009 (Spring Authorization Server — open), R3 in [MIGRATION.md § Risk register](../../../MIGRATION.md)
+
+**Context.** The Medical University of Vienna runs **Shibboleth** as the institutional SSO provider (IdP at `login.meduniwien.ac.at`). Confirmed by the user 2026-05-28. The current LibreClinica auth stack speaks only username/password (MD5-hashed legacy, with optional LDAP/AD bind for institutional users). The Phase D Spring Security 5 → 6 migration ([R3](../../../MIGRATION.md)) covers MD5 → bcrypt via `DelegatingPasswordEncoder`; it does **not** cover federated SSO. Without a Shibboleth path, MedUni Wien clinicians would have to maintain a local LibreClinica password separate from their institutional credential — clinically unacceptable.
+
+**Constraints feeding the decision:**
+
+1. **MedUni Wien standard** is Apache HTTPD + `mod_shib` in front of the application server, propagating identity via `REMOTE_USER` and SAML attributes as request headers. Institutional IT supports this pattern. Spring Security as in-app SAML SP is non-standard for MedUni Wien deployments.
+2. **Local accounts must survive.** Sponsor-side monitors, ReliaTec personnel, demo / break-glass accounts cannot use the institutional IdP. The existing user table + password column stays; auth UI accommodates both paths (mockup pattern landed in [phase-e login.html](../../../docs/development/modernization/phase-e/ux-mockups/login.html)).
+3. **GCP / 21 CFR Part 11 §11.50.** Electronic signatures must be uniquely identifying. SSO-authenticated sign-offs need a re-authentication step (Shibboleth `forceAuthn=true`) to count as a binding signature event; the legal/regulatory team needs to ratify this interpretation before the Sign Subject flow ships.
+4. **2FA is delegated to the IdP.** MedUni Wien's IdP enforces MFA; LibreClinica's existing "LETTER vs APPLICATION 2FA" feature becomes vestigial for SSO users (still applies for local accounts). UX simplification: 2FA enrolment screens disappear from the Data Manager → Manage Users surface for IdP-bound users.
+5. **Attribute mapping required.** `eduPersonPrincipalName` → LibreClinica username (or a federated-identity column); `mail` → email; department / role attributes → LibreClinica study-role grant. Just-in-time (JIT) provisioning vs. pre-provisioned-by-admin needs a choice.
+
+**Decision options.**
+
+### Option A — Apache `mod_shib` reverse proxy (MedUni Wien standard)
+
+Architecture: Apache HTTPD with `mod_shib` terminates SAML in front of Tomcat. Auth-required paths protected by `<Location>` directives; `mod_shib` populates `REMOTE_USER` and SAML attributes as HTTP request headers. Spring Security on the back-end consumes `REMOTE_USER` via a `RequestHeaderAuthenticationFilter` and treats the request as pre-authenticated.
+
+**Pros:**
+- Standard MedUni Wien pattern — institutional IT manages cert rotation, IdP metadata refresh, SP registration. Lower operational ceremony for our team.
+- Auth happens before any LibreClinica code runs — defense-in-depth.
+- Cert-rotation and IdP-metadata changes do not require an app redeploy.
+- Apache layer also serves TLS termination and static assets, which we want regardless.
+
+**Cons:**
+- Adds Apache as a mandatory deployment dependency. The current Docker Compose stack is just Tomcat. New `apache` service with `mod_shib`, `shibboleth-sp` configuration, and `shibboleth.xml`.
+- Header-based pre-auth is trust-on-network — Spring Security must trust the upstream Apache; if an attacker bypasses Apache and hits Tomcat directly, headers can be spoofed. Network controls (Tomcat binds to `127.0.0.1` only, or compose-internal network) are mandatory.
+- Local-account login also has to flow through Apache (or be exposed on a separate path), which complicates the URL scheme.
+
+**Effort:** Medium. Mostly ops/config work; minimal app-code changes (one new Spring Security filter + a `UserDetailsService` that maps `REMOTE_USER` to the LibreClinica user table).
+
+### Option B — In-app SAML Service Provider via Spring Security
+
+Architecture: `spring-security-saml2-service-provider` (Spring Security 5.7+) handles the SAML protocol directly inside the WAR. SP metadata generated and registered with the MedUni Wien IdP. Auth flow is `/saml2/authenticate/<registration>` → IdP redirect → `/login/saml2/sso/<registration>` → Spring Security session.
+
+**Pros:**
+- Single-process deployment — no Apache front-end required. Compose stack unchanged in principle.
+- Auth state stays inside the JVM; no header-spoofing trust boundary.
+- Standard Spring Security primitives — controllers, filter chains, expressions all work uniformly across local and SSO auth.
+
+**Cons:**
+- **Non-standard at MedUni Wien.** IT must register a non-`mod_shib` SP, which they may push back on.
+- App owns SAML cert rotation, IdP metadata refresh — every refresh is a deploy.
+- SAML implementation surface inside the WAR enlarges the attack surface vs. an Apache front-end where most attacks die at the proxy.
+- Spring Security 6 SAML support is good but moves faster than the Spring Security 6 release cadence — minor-version churn for SAML config is realistic during Phase D.
+
+**Effort:** Larger than Option A. More app-code, more security-test surface, more coordination with MedUni Wien IT for SP registration.
+
+### Option C — Apache OIDC bridge (`mod_auth_openidc`) with MedUni Wien as OIDC provider
+
+Architecture: Apache HTTPD with `mod_auth_openidc` instead of `mod_shib`. Requires MedUni Wien IT to expose an OIDC endpoint (likely a Shibboleth → OIDC adapter). Identity propagated via `REMOTE_USER` and OIDC claim headers.
+
+**Pros:**
+- OIDC is the modern federation protocol; future-proofs us if MedUni Wien transitions off Shibboleth.
+- Spring Security 6 has excellent native OIDC support (`spring-security-oauth2-client`) for the in-app variant.
+
+**Cons:**
+- **Requires institutional cooperation** that may not exist. MedUni Wien may not run an OIDC endpoint today.
+- If we end up with an in-app OIDC client (no Apache bridge), we re-inherit Option B's cons in the OIDC flavour.
+
+**Effort:** Depends entirely on MedUni Wien IT availability of OIDC. Worth a single conversation to confirm before discounting.
+
+### Tentative recommendation
+
+**Option A (Apache `mod_shib` reverse proxy)**, contingent on MedUni Wien IT confirming this is the supported pattern (high probability — it is the institutional standard). Rationale:
+
+1. Aligns with institutional IT's existing operational model — least friction.
+2. Auth boundary at the network edge is the safer default for a clinical-data system.
+3. App-code changes are minimal — fits Phase D's "Spring Security 5 → 6 + Boot 3" already-large scope.
+
+If institutional IT actively prefers an in-app SP, switch to Option B. Reopen the OIDC option (C) only if MedUni Wien IT confirms OIDC availability.
+
+**Open questions to resolve before this DR is accepted:**
+
+1. Does MedUni Wien IT support the `mod_shib` reverse-proxy pattern for institutional applications? (One conversation. Treat as P0 dependency.)
+2. Is `forceAuthn=true` re-authentication legally sufficient for 21 CFR Part 11 §11.50 e-signatures under the institutional validation plan? (Conversation with legal/regulatory.)
+3. JIT vs. pre-provisioned user accounts on first SSO login. (UX decision; admin-invite flow vs. attribute-driven role grant.)
+4. Federated-identity column on the user table: extend the existing `username` field, or add a separate `external_id` column? (Liquibase changeset under [`core/src/main/resources/migration/`](../../../core/src/main/resources/migration/) when this DR is accepted.)
+5. Does the existing `LdapAuthenticationProvider` configuration in `applicationContext-security.xml` stay, get removed, or get co-existing? Decide whether LDAP becomes redundant once SSO is live, or whether it remains as a third auth path alongside SSO + local.
+
+**Revisit triggers.**
+- MedUni Wien transitions off Shibboleth (unlikely near-term but possible — they may move to OIDC).
+- A future ReliaTec upstream introduces native SAML/SSO — re-evaluate divergence cost.
+- A regulatory inspector challenges the `forceAuthn=true`-as-e-signature interpretation.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D)
