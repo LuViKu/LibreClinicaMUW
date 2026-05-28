@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>LibreClinica MUW — Phase E UX mockups</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+    body { font-feature-settings: "cv11", "ss01", "ss03"; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 text-sm">
+  <div class="max-w-6xl mx-auto px-6 py-10">
+
+    <header class="mb-10">
+      <div class="flex items-center gap-3 text-slate-500 text-xs font-medium uppercase tracking-wider mb-3">
+        <span>Phase E · UX exploration</span>
+        <span class="text-slate-300">/</span>
+        <span>Static HTML + Tailwind</span>
+        <span class="text-slate-300">/</span>
+        <span>Not implementation-ready</span>
+      </div>
+      <h1 class="text-3xl font-semibold text-slate-900">LibreClinica MUW UX mockups</h1>
+      <p class="mt-3 text-slate-600 max-w-3xl leading-relaxed">
+        Sketches for the Phase E SPA, scoped to one critical workflow per role.
+        Modern clinical / data-dense lineage (REDCap, Castor EDC, Medidata Rave).
+        Each screen replaces a specific legacy JSP — file map and design tokens in
+        <a href="design-notes.md" class="text-blue-600 hover:text-blue-700 underline">design-notes.md</a>.
+      </p>
+    </header>
+
+    <div class="grid grid-cols-3 gap-3 mb-10 text-xs">
+      <div class="rounded-lg border border-slate-200 bg-white p-4">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+          <span class="font-medium text-slate-900">Investigator</span>
+        </div>
+        <p class="text-slate-500 leading-relaxed">Physician / study assistant at a site. Adds subjects, schedules events, enters CRF data, handles discrepancies, signs subjects.</p>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-white p-4">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="inline-block w-2 h-2 rounded-full bg-sky-500"></span>
+          <span class="font-medium text-slate-900">Monitor</span>
+        </div>
+        <p class="text-slate-500 leading-relaxed">Source Data Verification, query authority, the only role that can close discrepancies. Read-only access to data.</p>
+      </div>
+      <div class="rounded-lg border border-slate-200 bg-white p-4">
+        <div class="flex items-center gap-2 mb-1">
+          <span class="inline-block w-2 h-2 rounded-full bg-violet-500"></span>
+          <span class="font-medium text-slate-900">Data Manager</span>
+        </div>
+        <p class="text-slate-500 leading-relaxed">Study setup: Build Study workflow, CRF design, event definitions, rules, sites, users. Broadest surface area.</p>
+      </div>
+    </div>
+
+    <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Mockups</h2>
+    <div class="grid grid-cols-2 gap-3">
+
+      <!-- Investigator -->
+      <a href="investigator-subject-matrix.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Investigator
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/ListStudySubjects</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Subject Matrix</div>
+        <div class="text-slate-500 mt-1 text-xs">Site-scoped subject list with per-event status. Search, filter, schedule new event, sign subject.</div>
+      </a>
+
+      <a href="investigator-add-subject.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Investigator
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/AddNewSubject</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Add Subject</div>
+        <div class="text-slate-500 mt-1 text-xs">Enrol a study subject. Three save modes: finish, add next, assign event.</div>
+      </a>
+
+      <a href="investigator-crf-entry.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Investigator
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/InitialDataEntry</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">CRF data entry</div>
+        <div class="text-slate-500 mt-1 text-xs">Per-section CRF form with inline discrepancy threads, required-field markers, mark-complete.</div>
+      </a>
+
+      <!-- Monitor -->
+      <a href="monitor-sdv.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-sky-50 text-sky-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span>Monitor
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/pages/viewAllSubjectSDVtmp</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">SDV table — View By Event CRF</div>
+        <div class="text-slate-500 mt-1 text-xs">Completed CRFs across all subjects with SDV requirement, status, bulk-verify action.</div>
+      </a>
+
+      <a href="monitor-crf-readonly.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-sky-50 text-sky-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span>Monitor
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/ViewSectionDataEntry</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Read-only CRF view</div>
+        <div class="text-slate-500 mt-1 text-xs">The popup primitive opened from SDV. Item-level flags, side-panel discrepancy thread.</div>
+      </a>
+
+      <!-- Data Manager -->
+      <a href="dm-build-study.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-violet-50 text-violet-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>Data Manager
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/pages/studymodule</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Build Study</div>
+        <div class="text-slate-500 mt-1 text-xs">The 7-task setup tracker — Create Study → CRF → Events → Groups → Rules → Sites → Users.</div>
+      </a>
+
+      <a href="dm-update-event-definition.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-violet-50 text-violet-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>Data Manager
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/UpdateEventDefinition</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Update Event Definition</div>
+        <div class="text-slate-500 mt-1 text-xs">Event metadata + per-CRF assignment with SDV requirement (the value Monitor sees).</div>
+      </a>
+
+    </div>
+
+    <div class="mt-10 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 leading-relaxed">
+      <strong class="font-semibold">Reminder:</strong> these are static sketches.
+      Filters, buttons, and form fields look real but do nothing. Open
+      <a href="design-notes.md" class="underline">design-notes.md</a> for the
+      design tokens, the scope decisions, and what is explicitly NOT in the first
+      pass (empty states, error states, real interactivity, responsive
+      breakpoints, accessibility audit, i18n).
+    </div>
+
+  </div>
+</body>
+</html>
