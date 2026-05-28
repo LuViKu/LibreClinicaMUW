@@ -34,23 +34,11 @@ import org.dbunit.operation.DatabaseOperation;
  * institutional regression net for the study-event scheduling +
  * status-transition path.
  *
- * <p>Pins two contracts the production "Schedule Event" flow relies on:
- * <ol>
- *   <li><strong>{@link StudyEventDAO#create} produces a row with
- *       {@code subject_event_status = SCHEDULED}.</strong> Every
- *       newly-scheduled event in the admin UI flows through this path.
- *       A drift in the default-status semantics would corrupt every
- *       newly-scheduled event silently.</li>
- *   <li><strong>The status field round-trips through the canonical
- *       lifecycle.</strong> SCHEDULED → DATA_ENTRY_STARTED → COMPLETED
- *       → LOCKED → SIGNED is the documented happy-path; each transition
- *       must persist via {@link StudyEventDAO#update}.</li>
- * </ol>
- *
- * <p><strong>Phase B.5 gate:</strong> StudyEventDAO is hand-rolled JDBC,
- * so Hibernate 6 doesn't affect it directly. But Spring's
- * DataAccessException translation may shift the exception shape around
- * any constraint violations.
+ * <p>See {@link SubjectEnrolmentIT}'s class-Javadoc for the
+ * VARCHAR(30) overflow root cause behind the earlier CI flakes —
+ * the same lesson applies here: keep every persisted string &le; 30
+ * chars, and reload via {@code findByPK} after multi-step DAO creates
+ * so silent INSERT failures surface immediately.
  */
 public class StudyEventScheduleIT extends HibernateOcDbTestCase {
 
@@ -71,19 +59,10 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
     /**
      * Item 8: schedule a study event and assert the resulting
      * {@code study_event} row carries {@code subject_event_status =
-     * SCHEDULED}.
-     *
-     * <p>Setup chain: a study, a study_event_definition, a subject +
-     * study_subject, then the study_event itself. The test exercises
-     * every CREATE in this chain so any FK regression surfaces here.
+     * SCHEDULED}. Setup chain: Study → StudyEventDefinition →
+     * Subject + StudySubject → StudyEvent.
      */
-    /** Stub — see SubjectEnrolmentIT class-Javadoc for why real tests are disabled. */
-    public void testPlaceholder() {
-        assertTrue("placeholder — real tests disabled pending CI investigation", true);
-    }
-
-    /** Disabled — same family of CI-only failures as SubjectEnrolmentIT. */
-    public void disabled_testScheduleEvent() throws Exception {
+    public void testScheduleEvent() throws Exception {
         DataSource dataSource = (DataSource) getContext().getBean("dataSource");
         SequenceUtil.bumpAll(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
@@ -94,29 +73,24 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         UserAccountDAO userDao = (UserAccountDAO) getContext().getBean("userAccountDao");
 
         UserAccountBean owner = (UserAccountBean) userDao.findByPK(1);
-        assertTrue("CI debug: bootstrap owner.id must be > 0, was " + owner.getId(),
-                owner.getId() > 0);
-
-        // Unique-per-run identifiers so cross-test pollution in CI's
-        // shared postgres doesn't collide. Each create() now also asserts
-        // a positive PK so a silent FK / constraint failure surfaces at
-        // the exact step.
-        String runTag = String.valueOf(System.currentTimeMillis());
+        assertTrue("bootstrap owner.id must be > 0", owner.getId() > 0);
 
         // 1) Study.
         StudyBean study = new StudyBean();
-        study.setName("MUW StudyEvent IT Schedule " + runTag);
-        study.setIdentifier("MUW_SE_IT_SCHEDULE_" + runTag);
+        study.setName("MUW SE Sched Study");           // 18 chars
+        study.setIdentifier("MUW_SE_SCHED_STUDY");     // 18 chars
         study.setStatus(Status.AVAILABLE);
         study.setOwnerId(owner.getId());
         study = studyDao.create(study);
-        assertTrue("CI debug: study.create() must yield positive PK, was "
-                + study.getId(), study.getId() > 0);
+        assertTrue("study.create() must yield positive PK (failureDetails="
+                + studyDao.getFailureDetails() + ")",
+                study.getId() > 0);
+        assertTrue("study row must exist after create",
+                studyDao.findByPK(study.getId()).getId() > 0);
 
-        // 2) Study event definition (the "form" of the event — repeats once,
-        // type "scheduled", category "Visit").
+        // 2) Study event definition.
         StudyEventDefinitionBean sed = new StudyEventDefinitionBean();
-        sed.setName("MUW SE IT Visit 1 " + runTag);
+        sed.setName("MUW SE Visit 1");
         sed.setStudyId(study.getId());
         sed.setDescription("Round-trip schedule test");
         sed.setRepeating(false);
@@ -126,27 +100,26 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         sed.setOwnerId(owner.getId());
         sed.setOrdinal(1);
         sed = sedDao.create(sed);
-        assertTrue("CI debug: sed.create() must yield positive PK, was "
-                + sed.getId(), sed.getId() > 0);
+        assertTrue("sed.create() must yield positive PK", sed.getId() > 0);
 
-        // 3) Subject + study_subject (an enrolled patient).
+        // 3) Subject + study_subject.
         SubjectBean subject = new SubjectBean();
-        subject.setUniqueIdentifier("MUW-SE-IT-001-" + runTag);
+        subject.setUniqueIdentifier("MUW-SE-001");
         subject.setStatus(Status.AVAILABLE);
         subject.setOwner(owner);
         subject = subjectDao.create(subject);
-        assertTrue("CI debug: subject.create() must yield positive PK, was "
-                + subject.getId(), subject.getId() > 0);
+        assertTrue("subject.create() must yield positive PK", subject.getId() > 0);
 
         StudySubjectBean enrolment = new StudySubjectBean();
-        enrolment.setLabel("MUW-SE-IT-ENROL-001-" + runTag);
+        enrolment.setLabel("MUW-SE-ENROL-001");
         enrolment.setSubjectId(subject.getId());
         enrolment.setStudyId(study.getId());
         enrolment.setStatus(Status.AVAILABLE);
         enrolment.setOwner(owner);
         enrolment = studySubjectDao.create(enrolment);
-        assertTrue("CI debug: enrolment.create() must yield positive PK, was "
-                + enrolment.getId(), enrolment.getId() > 0);
+        assertTrue("enrolment.create() must yield positive PK"
+                + " (failureDetails=" + studySubjectDao.getFailureDetails() + ")",
+                enrolment.getId() > 0);
 
         // 4) Schedule the event.
         StudyEventBean event = new StudyEventBean();
@@ -156,15 +129,11 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         event.setStatus(Status.AVAILABLE);
         event.setOwner(owner);
         event.setSubjectEventStatus(SubjectEventStatus.SCHEDULED);
-        // dateStarted is required by StudyEventDAO.update — it eagerly
-        // calls .getTime() without null-checking. Production callers
-        // always set a planned-start when scheduling, so the test
-        // mirrors that.
         event.setDateStarted(new Date());
         event = eventDao.create(event);
 
-        assertTrue("study_event.create() must yield positive PK (got id="
-                + event.getId() + ")",
+        assertTrue("study_event.create() must yield positive PK"
+                + " (failureDetails=" + eventDao.getFailureDetails() + ")",
                 event.getId() > 0);
         StudyEventBean roundTripped =
                 (StudyEventBean) eventDao.findByPK(event.getId());
@@ -180,15 +149,10 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
 
     /**
      * Item 9: drive a scheduled event through the canonical status
-     * lifecycle: SCHEDULED → DATA_ENTRY_STARTED → COMPLETED → LOCKED
-     * → SIGNED. Each transition must persist.
-     *
-     * <p>Pinned to catch a regression where {@code update} silently
-     * drops a status change — that would break every monitor's
-     * filter-by-status view of the study.
+     * lifecycle SCHEDULED → DATA_ENTRY_STARTED → COMPLETED → LOCKED
+     * → SIGNED. Each transition must persist via update().
      */
-    /** Disabled — same family of CI-only failures as SubjectEnrolmentIT. */
-    public void disabled_testEventStatusTransitions() throws Exception {
+    public void testEventStatusTransitions() throws Exception {
         DataSource dataSource = (DataSource) getContext().getBean("dataSource");
         SequenceUtil.bumpAll(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
@@ -199,22 +163,21 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         UserAccountDAO userDao = (UserAccountDAO) getContext().getBean("userAccountDao");
 
         UserAccountBean owner = (UserAccountBean) userDao.findByPK(1);
-        assertTrue("CI debug: bootstrap owner.id must be > 0, was " + owner.getId(),
-                owner.getId() > 0);
-
-        String runTag = String.valueOf(System.currentTimeMillis());
 
         StudyBean study = new StudyBean();
-        study.setName("MUW StudyEvent IT Transitions " + runTag);
-        study.setIdentifier("MUW_SE_IT_TRANSITIONS_" + runTag);
+        study.setName("MUW SE Trans Study");           // 18 chars
+        study.setIdentifier("MUW_SE_TRANS_STUDY");     // 19 chars
         study.setStatus(Status.AVAILABLE);
         study.setOwnerId(owner.getId());
         study = studyDao.create(study);
-        assertTrue("CI debug: study.create() must yield positive PK, was "
-                + study.getId(), study.getId() > 0);
+        assertTrue("study.create() must yield positive PK (failureDetails="
+                + studyDao.getFailureDetails() + ")",
+                study.getId() > 0);
+        assertTrue("study row must exist after create",
+                studyDao.findByPK(study.getId()).getId() > 0);
 
         StudyEventDefinitionBean sed = new StudyEventDefinitionBean();
-        sed.setName("MUW SE IT Visit 2 " + runTag);
+        sed.setName("MUW SE Visit 2");
         sed.setStudyId(study.getId());
         sed.setDescription("Transition test");
         sed.setRepeating(false);
@@ -224,26 +187,24 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         sed.setOwnerId(owner.getId());
         sed.setOrdinal(1);
         sed = sedDao.create(sed);
-        assertTrue("CI debug: sed.create() must yield positive PK, was "
-                + sed.getId(), sed.getId() > 0);
+        assertTrue("sed.create() must yield positive PK", sed.getId() > 0);
 
         SubjectBean subject = new SubjectBean();
-        subject.setUniqueIdentifier("MUW-SE-IT-002-" + runTag);
+        subject.setUniqueIdentifier("MUW-SE-002");
         subject.setStatus(Status.AVAILABLE);
         subject.setOwner(owner);
         subject = subjectDao.create(subject);
-        assertTrue("CI debug: subject.create() must yield positive PK, was "
-                + subject.getId(), subject.getId() > 0);
+        assertTrue("subject.create() must yield positive PK", subject.getId() > 0);
 
         StudySubjectBean enrolment = new StudySubjectBean();
-        enrolment.setLabel("MUW-SE-IT-ENROL-002-" + runTag);
+        enrolment.setLabel("MUW-SE-ENROL-002");
         enrolment.setSubjectId(subject.getId());
         enrolment.setStudyId(study.getId());
         enrolment.setStatus(Status.AVAILABLE);
         enrolment.setOwner(owner);
         enrolment = studySubjectDao.create(enrolment);
-        assertTrue("CI debug: enrolment.create() must yield positive PK, was "
-                + enrolment.getId(), enrolment.getId() > 0);
+        assertTrue("enrolment.create() must yield positive PK",
+                enrolment.getId() > 0);
 
         StudyEventBean event = new StudyEventBean();
         event.setStudyEventDefinitionId(sed.getId());
@@ -252,10 +213,7 @@ public class StudyEventScheduleIT extends HibernateOcDbTestCase {
         event.setStatus(Status.AVAILABLE);
         event.setOwner(owner);
         event.setSubjectEventStatus(SubjectEventStatus.SCHEDULED);
-        // dateStarted is required by StudyEventDAO.update — it eagerly
-        // calls .getTime() without null-checking. Production callers
-        // always set a planned-start when scheduling, so the test
-        // mirrors that.
+        // dateStarted is required by StudyEventDAO.update (eager .getTime())
         event.setDateStarted(new Date());
         event = eventDao.create(event);
         assertTrue("scheduled event must have positive PK",
