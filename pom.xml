@@ -954,10 +954,10 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-compiler-plugin</artifactId>
-					<version>2.3.2</version>
+					<version>3.13.0</version>
 					<configuration>
-						<source>8</source>
-						<target>8</target>
+						<source>21</source>
+						<target>21</target>
 						<compilerArgument>-Xlint:all</compilerArgument>
 					</configuration>
 				</plugin>
@@ -982,8 +982,14 @@
 					<configuration>
 						<skipTests>${skipTests}</skipTests>
 						<!-- @{argLine} is resolved late so the JaCoCo prepare-agent goal
-						     (bound to initialize) has already populated it. -->
-						<argLine>@{argLine}</argLine>
+						     (bound to initialize) has already populated it.
+						     Phase B.1 JDK 21 baseline: legacy Mockito + Spring/Hibernate
+						     reflection needs java.base opens (InaccessibleObjectException
+						     on ClassLoader.defineClass), and Castor 1.4.1's BaseXercesJDK5Serializer
+						     touches an internal JDK class that needs java.xml exports. Both
+						     flags are stopgaps that go away when B.3 swaps Castor for Jakarta
+						     JAXB and Mockito is eventually bumped (see MIGRATION.md). -->
+						<argLine>@{argLine} --add-opens=java.base/java.lang=ALL-UNNAMED --add-opens=java.base/java.lang.invoke=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.util=ALL-UNNAMED --add-exports=java.xml/com.sun.org.apache.xml.internal.serialize=ALL-UNNAMED</argLine>
 						<!-- Excluded from default `mvn test`:
 						       - DAO tests extending HibernateOcDbTestCase / OcDbTestCase: require
 						         a live PostgreSQL on localhost:5432; static initializer fails
@@ -1171,7 +1177,9 @@
 				<plugin>
 			        <groupId>org.apache.maven.plugins</groupId>
 			        <artifactId>maven-dependency-plugin</artifactId>
-			        <version>3.1.2</version>
+			        <!-- 3.1.2 → 3.8.1: 3.1.2 bundles an ASM that can't read class file
+			             major version 65 (JDK 21). 3.8.1 ships ASM 9.7. Phase B.1 gate. -->
+			        <version>3.8.1</version>
 			        <executions>
 			        	<execution>
 			        		<id>analyze</id>

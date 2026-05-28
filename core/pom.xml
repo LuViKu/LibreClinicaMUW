@@ -306,6 +306,11 @@
 						<ignoredUnusedDeclaredDependency>org.apache.httpcomponents:httpclient</ignoredUnusedDeclaredDependency>
 						<!-- Needed by LOGBACK when conditional statements are used (e.g. in logback.xml) -->
 						<ignoredUnusedDeclaredDependency>org.codehaus.janino</ignoredUnusedDeclaredDependency>
+						<!-- log4jdbc4 is a runtime JDBC interceptor loaded via Class.forName by the
+						     log4jdbc driver wrapper configured in datainfo.properties; static analysis
+						     doesn't see the reference. dependency-plugin 3.1.2 → 3.8.1 (Phase B.1)
+						     made unused-declared-dep failures fatal by default. -->
+						<ignoredUnusedDeclaredDependency>log4jdbc:log4jdbc4</ignoredUnusedDeclaredDependency>
 					</ignoredUnusedDeclaredDependencies>
 				</configuration>
 			</plugin>
