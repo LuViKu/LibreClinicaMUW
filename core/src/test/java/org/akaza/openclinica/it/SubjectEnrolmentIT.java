@@ -116,7 +116,13 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         subject.setStatus(Status.AVAILABLE);
         subject.setOwner(owner);
         subject = subjectDao.create(subject);
-        assertTrue("subject.create() must yield positive PK", subject.getId() > 0);
+        // Surface the captured SQLException via getFailureDetails() so
+        // the surefire-reports output shows the actual DB error rather
+        // than just "id was 0". The DAO swallows SQLExceptions silently
+        // (signalFailure stores it without rethrowing).
+        assertTrue("subject.create() must yield positive PK (id=" + subject.getId()
+                + "; failureDetails=" + subjectDao.getFailureDetails() + ")",
+                subject.getId() > 0);
 
         // 2) StudySubject row linking the subject to the study.
         StudySubjectBean enrolment = new StudySubjectBean();
