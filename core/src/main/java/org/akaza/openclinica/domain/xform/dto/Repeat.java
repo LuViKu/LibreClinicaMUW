@@ -1,7 +1,7 @@
 /*
  * LibreClinica is distributed under the
  * GNU Lesser General Public License (GNU LGPL).
-
+ *
  * For details see: https://libreclinica.org/license
  * copyright (C) 2003 - 2011 Akaza Research
  * copyright (C) 2003 - 2019 OpenClinica
@@ -11,15 +11,34 @@ package org.akaza.openclinica.domain.xform.dto;
 
 import java.util.List;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlElements;
+
+@XmlAccessorType(XmlAccessType.NONE)
 public class Repeat {
 
+    @XmlAttribute(name = "nodeset")
     private String nodeset;
+    @XmlElements({
+            @XmlElement(name = "input",   type = Input.class),
+            @XmlElement(name = "select",  type = Select.class),
+            @XmlElement(name = "select1", type = Select1.class),
+            @XmlElement(name = "upload",  type = Upload.class)
+    })
     private List<UserControl> usercontrol;
+    @XmlElement(name = "label")
     private Label label;
     private String count;
+    @XmlAttribute(name = "count", namespace = "http://openrosa.org/javarosa")
     private String jrCount;
+    @XmlAttribute(name = "noAddRemove", namespace = "http://openrosa.org/javarosa")
     private String jrNoAddRemove;
+    @XmlAttribute(name = "appearance")
     private String appearance;
+    @XmlAttribute(name = "ref")
     private String ref;
 
     public Repeat() {

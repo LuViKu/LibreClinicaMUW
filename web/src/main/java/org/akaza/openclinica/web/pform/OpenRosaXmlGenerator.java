@@ -9,8 +9,6 @@
  */
 package org.akaza.openclinica.web.pform;
 
-import java.io.Reader;
-import java.io.StringReader;
 import java.io.StringWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,6 +43,7 @@ import org.akaza.openclinica.domain.rule.action.PropertyBean;
 import org.akaza.openclinica.domain.rule.action.RuleActionBean;
 import org.akaza.openclinica.domain.rule.expression.ExpressionBean;
 import org.akaza.openclinica.exception.OpenClinicaException;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.akaza.openclinica.web.pform.dto.Bind;
 import org.akaza.openclinica.web.pform.dto.Body;
 import org.akaza.openclinica.web.pform.dto.Group;
@@ -57,10 +56,6 @@ import org.akaza.openclinica.web.pform.widget.Widget;
 import org.akaza.openclinica.web.pform.widget.WidgetFactory;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.exception.ExceptionUtils;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.xml.Marshaller;
-import org.exolab.castor.xml.Unmarshaller;
-import org.exolab.castor.xml.XMLContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
@@ -72,7 +67,7 @@ import org.w3c.dom.Element;
  */
 public class OpenRosaXmlGenerator {
 
-    private XMLContext xmlContext = null;
+    private final OdmJaxbContext odmJaxbContext;
     private DataSource dataSource = null;
     protected final Logger log = LoggerFactory.getLogger(OpenRosaXmlGenerator.class);
     CoreResources coreResources;
@@ -84,21 +79,12 @@ public class OpenRosaXmlGenerator {
     private ItemFormMetadataDAO itemFormMetadataDAO;
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 
-    public OpenRosaXmlGenerator(CoreResources core, DataSource dataSource, RuleActionPropertyDao ruleActionPropertyDao) throws Exception {
+    public OpenRosaXmlGenerator(CoreResources core, DataSource dataSource, RuleActionPropertyDao ruleActionPropertyDao,
+            OdmJaxbContext odmJaxbContext) throws Exception {
         this.dataSource = dataSource;
         this.coreResources = core;
         this.ruleActionPropertyDao = ruleActionPropertyDao;
-
-        try {
-            xmlContext = new XMLContext();
-            Mapping mapping = xmlContext.createMapping();
-            mapping.loadMapping(core.getURL("openRosaXFormMapping.xml"));
-            xmlContext.addMapping(mapping);
-        } catch (Exception e) {
-            log.error(e.getMessage());
-            log.error(ExceptionUtils.getStackTrace(e));
-            throw new Exception(e);
-        }
+        this.odmJaxbContext = odmJaxbContext != null ? odmJaxbContext : new OdmJaxbContext();
     }
 
     /**
@@ -503,30 +489,11 @@ public class OpenRosaXmlGenerator {
     }
 
     private Html buildJavaXForm(String content) throws Exception {
-        // XML to Object
-        Reader reader = new StringReader(content);
-        Unmarshaller unmarshaller = xmlContext.createUnmarshaller();
-        unmarshaller.setClass(Html.class);
-        unmarshaller.setWhitespacePreserve(false);
-        Html html = (Html) unmarshaller.unmarshal(reader);
-        reader.close();
-        return html;
+        return odmJaxbContext.<Html>unmarshalRoot(Html.class, content);
     }
 
     private String buildStringXForm(Html html) throws Exception {
-        StringWriter writer = new StringWriter();
-
-        Marshaller marshaller = xmlContext.createMarshaller();
-        marshaller.setNamespaceMapping("h", "http://www.w3.org/1999/xhtml");
-        marshaller.setNamespaceMapping("jr", "http://openrosa.org/javarosa");
-        marshaller.setNamespaceMapping("xsd", "http://www.w3.org/2001/XMLSchema");
-        marshaller.setNamespaceMapping("ev", "http://www.w3.org/2001/xml-events");
-        marshaller.setNamespaceMapping("", "http://www.w3.org/2002/xforms");
-        marshaller.setProperty("org.exolab.castor.indent", "false");
-        marshaller.setWriter(writer);
-        marshaller.marshal(html);
-        String xform = writer.toString();
-        return xform;
+        return odmJaxbContext.marshalToString(html);
     }
 
     /**

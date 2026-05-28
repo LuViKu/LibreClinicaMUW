@@ -192,6 +192,7 @@
     <property name="coreResources" ref="coreResources"/>
     <property name="ruleActionPropertyDao" ref="ruleActionPropertyDao"/>
     <property name="openRosaSubmissionController" ref="openRosaSubmissionController" />
+    <property name="odmJaxbContext" ref="odmJaxbContext"/>
 </bean>
 
 <bean id="openRosaSubmissionController" class="org.akaza.openclinica.controller.openrosa.OpenRosaSubmissionController" autowire="byName">

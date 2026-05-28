@@ -9,76 +9,35 @@
  */
 package org.akaza.openclinica.domain.xform;
 
-import java.io.Reader;
-import java.io.StringReader;
-import java.io.StringWriter;
-
 import javax.sql.DataSource;
 
 import org.akaza.openclinica.dao.core.CoreResources;
 import org.akaza.openclinica.domain.xform.dto.Html;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.xml.Marshaller;
-import org.exolab.castor.xml.Unmarshaller;
-import org.exolab.castor.xml.XMLContext;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * XForm marshal / unmarshal helper. Phase B.3 PR 3c-2 migrated the XML
+ * binding from Castor (driven by {@code xformMapping.xml} +
+ * {@code openRosaXFormMapping.xml}) to {@code javax.xml.bind} 2.3.x JAXB
+ * via the shared {@link OdmJaxbContext}. The class is retained as a
+ * thin compatibility shim so the rest of the XForm pipeline
+ * ({@code FormBeanParser}, {@code WidgetFactory}, etc.) does not need to
+ * know about the JAXB context bean.
+ */
 public class XformParser {
-    private XMLContext xmlContext = null;
     private DataSource dataSource = null;
     protected final Logger log = LoggerFactory.getLogger(XformParser.class);
     private CoreResources coreResources;
+    private OdmJaxbContext odmJaxbContext;
 
-    /*
-     * public XformParser() throws Exception { try { xmlContext = new XMLContext(); Mapping mapping =
-     * xmlContext.createMapping(); mapping.loadMapping(coreResources.getURL("openRosaXFormMapping.xml"));
-     * xmlContext.addMapping(mapping); } catch (Exception e) { log.error(e.getMessage());
-     * log.error(ExceptionUtils.getStackTrace(e)); throw new Exception(e); } }
-     */
     public String marshall(Html html) throws Exception {
-        StringWriter writer = new StringWriter();
-
-        xmlContext = new XMLContext();
-        Mapping mapping = xmlContext.createMapping();
-        mapping.loadMapping(coreResources.getURL("openRosaXFormMapping.xml"));
-        xmlContext.addMapping(mapping);
-
-        Marshaller marshaller = xmlContext.createMarshaller();
-        marshaller.setNamespaceMapping("h", "http://www.w3.org/1999/xhtml");
-        marshaller.setNamespaceMapping("jr", "http://openrosa.org/javarosa");
-        marshaller.setNamespaceMapping("xsd", "http://www.w3.org/2001/XMLSchema");
-        marshaller.setNamespaceMapping("ev", "http://www.w3.org/2001/xml-events");
-        marshaller.setNamespaceMapping("", "http://www.w3.org/2002/xforms");
-        marshaller.setWriter(writer);
-        marshaller.marshal(html);
-        String xform = writer.toString();
-        return xform;
+        return getOdmJaxbContext().marshalXform(html);
     }
 
     public Html unMarshall(String xml) throws Exception {
-
-        xmlContext = new XMLContext();
-        Mapping mapping = xmlContext.createMapping();
-        mapping.loadMapping(coreResources.getURL("xformMapping.xml"));
-        xmlContext.addMapping(mapping);
-
-        // XML to Object
-        Reader reader = new StringReader(xml);
-        Unmarshaller unmarshaller = xmlContext.createUnmarshaller();
-        unmarshaller.setClass(Html.class);
-        unmarshaller.setWhitespacePreserve(false);
-        Html html = (Html) unmarshaller.unmarshal(reader);
-        reader.close();
-        return html;
-    }
-
-    public XMLContext getXmlContext() {
-        return xmlContext;
-    }
-
-    public void setXmlContext(XMLContext xmlContext) {
-        this.xmlContext = xmlContext;
+        return getOdmJaxbContext().unmarshalXform(xml);
     }
 
     public DataSource getDataSource() {
@@ -95,6 +54,17 @@ public class XformParser {
 
     public void setCoreResources(CoreResources coreResources) {
         this.coreResources = coreResources;
+    }
+
+    public OdmJaxbContext getOdmJaxbContext() {
+        if (this.odmJaxbContext == null) {
+            this.odmJaxbContext = new OdmJaxbContext();
+        }
+        return this.odmJaxbContext;
+    }
+
+    public void setOdmJaxbContext(OdmJaxbContext odmJaxbContext) {
+        this.odmJaxbContext = odmJaxbContext;
     }
 
 }

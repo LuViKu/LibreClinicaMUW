@@ -12,9 +12,17 @@ package org.akaza.openclinica.web.pform.formlist;
 import java.util.ArrayList;
 import java.util.List;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+@XmlRootElement(name = "xforms")
+@XmlAccessorType(XmlAccessType.NONE)
 public class XFormList {
+	@XmlElement(name = "xform")
 	private List<XForm> xforms = null;
-	
+
 	public XFormList()
 	{
 		xforms = new ArrayList<XForm>();
@@ -32,5 +40,5 @@ public class XFormList {
 	public void setXForms(List<XForm> xforms) {
 		this.xforms = xforms;
 	}
-	
+
 }

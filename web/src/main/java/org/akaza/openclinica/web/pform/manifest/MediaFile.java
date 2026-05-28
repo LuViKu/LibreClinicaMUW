@@ -9,9 +9,17 @@
  */
 package org.akaza.openclinica.web.pform.manifest;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+
+@XmlAccessorType(XmlAccessType.NONE)
 public class MediaFile {
+    @XmlElement(name = "filename")
     private String filename = null;
+    @XmlElement(name = "hash")
     private String hash = null;
+    @XmlElement(name = "downloadUrl")
     private String downloadUrl = null;
 
     public MediaFile() {

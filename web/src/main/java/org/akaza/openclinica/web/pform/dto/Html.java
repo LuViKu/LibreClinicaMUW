@@ -1,7 +1,7 @@
 /*
  * LibreClinica is distributed under the
  * GNU Lesser General Public License (GNU LGPL).
-
+ *
  * For details see: https://libreclinica.org/license
  * copyright (C) 2003 - 2011 Akaza Research
  * copyright (C) 2003 - 2019 OpenClinica
@@ -9,27 +9,36 @@
  */
 package org.akaza.openclinica.web.pform.dto;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
+
+@XmlRootElement(name = "html", namespace = "http://www.w3.org/1999/xhtml")
+@XmlAccessorType(XmlAccessType.NONE)
 public class Html {
-	private Head head;
-	private Body body;
-	
-	public Html() {}
-	
-	public Html(Html html) {
-		setHead(html.getHead());
-		setBody(html.getBody());
-	}
-	
-	public Head getHead() {
-		return head;
-	}	
-	public void setHead(Head head) {
-		this.head = head;
-	}	
-	public Body getBody() {
-		return body;
-	}	
-	public void setBody(Body body) {
-		this.body = body;
-	}
+    @XmlElement(name = "head", namespace = "http://www.w3.org/1999/xhtml")
+    private Head head;
+    @XmlElement(name = "body", namespace = "http://www.w3.org/1999/xhtml")
+    private Body body;
+
+    public Html() {}
+
+    public Html(Html html) {
+        setHead(html.getHead());
+        setBody(html.getBody());
+    }
+
+    public Head getHead() {
+        return head;
+    }
+    public void setHead(Head head) {
+        this.head = head;
+    }
+    public Body getBody() {
+        return body;
+    }
+    public void setBody(Body body) {
+        this.body = body;
+    }
 }
