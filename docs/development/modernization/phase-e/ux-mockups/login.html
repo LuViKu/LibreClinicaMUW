@@ -22,14 +22,14 @@
   <div class="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-900 flex items-center justify-between">
     <div class="flex items-center gap-2">
       <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
-      <span><strong>Mockup:</strong> two login states shown side-by-side. <em>Left:</em> normal sign-in. <em>Right:</em> first-login forced password change. In production only one would render at a time.</span>
+      <span><strong>Mockup:</strong> two states shown side-by-side. <em>Left:</em> sign-in landing (Shibboleth primary, local account fallback). <em>Right:</em> first-login profile completion after SSO bounce. In production only one would render at a time.</span>
     </div>
     <a href="index.html" class="text-amber-900 hover:underline">Back to mockup index &rsaquo;</a>
   </div>
 
   <div class="grid grid-cols-2 min-h-[calc(100vh-2.5rem)]">
 
-    <!-- Left: normal login -->
+    <!-- Left: sign-in landing (Shibboleth-primary) -->
     <section class="flex flex-col items-center justify-center px-6 py-12 bg-white border-r border-slate-200">
 
       <div class="w-full max-w-sm">
@@ -47,7 +47,29 @@
         </div>
 
         <h1 class="text-lg font-semibold tracking-tight mb-1">Sign in</h1>
-        <p class="text-xs text-slate-500 mb-5">Use your institutional credentials.</p>
+        <p class="text-xs text-slate-500 mb-5">Use your MedUni Wien institutional account.</p>
+
+        <!-- Primary: Shibboleth SSO -->
+        <a href="#" class="block w-full text-center px-4 py-3 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium">
+          <span class="inline-flex items-center justify-center gap-2.5">
+            <!-- Institutional shield icon -->
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            Continue with MedUni Wien
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </span>
+        </a>
+
+        <p class="mt-3 text-[11px] text-slate-500 leading-relaxed">
+          You'll be redirected to <span class="font-mono text-slate-700">login.meduniwien.ac.at</span> for
+          single sign-on. After authentication you'll return here automatically.
+          <strong>2FA, password resets and account lockout</strong> are handled by MedUni Wien IT.
+        </p>
+
+        <!-- Divider -->
+        <div class="relative my-7">
+          <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
+          <div class="relative flex justify-center"><span class="bg-white px-3 text-[11px] uppercase tracking-wider text-slate-400">or use a local account</span></div>
+        </div>
 
         <!-- Inline error (example) -->
         <div class="mb-3 rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-800 flex items-start gap-2">
@@ -55,42 +77,44 @@
           <span>Account locked after 3 failed attempts. Contact a study administrator to unlock.</span>
         </div>
 
-        <form class="space-y-4">
-          <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1 req">Username</label>
-            <input type="text" autofocus
-              class="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
-          </div>
+        <!-- Secondary: local-account form (collapsed-by-default in production) -->
+        <details open class="text-xs">
+          <summary class="cursor-pointer text-slate-600 hover:text-slate-900 mb-3 inline-flex items-center gap-1">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 12 15 18 9"/></svg>
+            Sign in with a local LibreClinica account
+          </summary>
 
-          <div>
-            <div class="flex items-baseline justify-between mb-1">
-              <label class="block text-xs font-medium text-slate-700 req">Password</label>
-              <a href="#" class="text-[11px] text-blue-600 hover:underline">Forgot password?</a>
+          <form class="space-y-3 mt-2">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1 req">Username</label>
+              <input type="text"
+                class="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
             </div>
-            <div class="relative">
-              <input type="password"
-                class="w-full px-3 py-2 pr-9 border border-slate-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
-              <button type="button" class="absolute right-2 top-1.5 p-1 hover:bg-slate-100 rounded text-slate-500" title="Show password">
-                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-              </button>
+
+            <div>
+              <div class="flex items-baseline justify-between mb-1">
+                <label class="block text-xs font-medium text-slate-700 req">Password</label>
+                <a href="#" class="text-[11px] text-blue-600 hover:underline">Forgot password?</a>
+              </div>
+              <div class="relative">
+                <input type="password"
+                  class="w-full px-3 py-2 pr-9 border border-slate-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+                <button type="button" class="absolute right-2 top-1.5 p-1 hover:bg-slate-100 rounded text-slate-500" title="Show password">
+                  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                </button>
+              </div>
             </div>
-          </div>
 
-          <button type="submit" class="w-full px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium inline-flex items-center justify-center gap-1.5">
-            Sign in
-            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-          </button>
+            <button type="submit" class="w-full px-4 py-2 text-sm border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 font-medium inline-flex items-center justify-center gap-1.5">
+              Sign in with local account
+            </button>
 
-          <div class="relative my-5">
-            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
-            <div class="relative flex justify-center"><span class="bg-white px-2 text-[11px] uppercase tracking-wider text-slate-400">or</span></div>
-          </div>
-
-          <button type="button" class="w-full px-4 py-2 text-sm border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 font-medium inline-flex items-center justify-center gap-2">
-            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg>
-            Continue with MUW LDAP
-          </button>
-        </form>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+              For external sponsor monitors, ReliaTec personnel, and break-glass demo accounts
+              that don't have a MedUni Wien identity. MedUni Wien staff should use SSO above.
+            </p>
+          </form>
+        </details>
 
         <!-- Footer chips -->
         <div class="mt-8 flex items-center justify-center gap-2 text-[11px] text-slate-400">
@@ -115,109 +139,122 @@
       </div>
     </section>
 
-    <!-- Right: forced password change (first login) -->
+    <!-- Right: first-login profile completion (after Shibboleth bounce) -->
     <section class="flex flex-col items-center justify-center px-6 py-12 bg-slate-50">
 
       <div class="w-full max-w-sm">
 
-        <!-- Stepper -->
+        <!-- Stepper: only two steps now (IdP owns password + 2FA) -->
         <ol class="flex items-center gap-2 text-[11px] mb-6">
           <li class="flex items-center gap-1.5 text-blue-700 font-medium">
             <span class="w-5 h-5 rounded-full bg-blue-600 text-white inline-flex items-center justify-center font-semibold">1</span>
-            Set password
+            Confirm profile
           </li>
           <span class="flex-1 h-px bg-slate-300"></span>
           <li class="flex items-center gap-1.5 text-slate-500">
             <span class="w-5 h-5 rounded-full border border-slate-300 bg-white inline-flex items-center justify-center text-slate-500 font-semibold">2</span>
-            Enrol 2FA
-          </li>
-          <span class="flex-1 h-px bg-slate-300"></span>
-          <li class="flex items-center gap-1.5 text-slate-500">
-            <span class="w-5 h-5 rounded-full border border-slate-300 bg-white inline-flex items-center justify-center text-slate-500 font-semibold">3</span>
             Accept terms
           </li>
         </ol>
 
-        <h1 class="text-lg font-semibold tracking-tight mb-1">Set a new password</h1>
+        <h1 class="text-lg font-semibold tracking-tight mb-1">Welcome, Dr. Müller</h1>
         <p class="text-xs text-slate-500 mb-5">
-          Signed in as <span class="font-mono text-slate-900">user_demo</span> ·
-          last reset by admin <span class="text-slate-700">25-May-2026</span>. Change required on first login.
+          Signed in via MedUni Wien SSO as
+          <span class="font-mono text-slate-900">m.mueller@meduniwien.ac.at</span>.
+          Please confirm a few details before your first session.
         </p>
 
         <form class="space-y-4">
-          <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1 req">Current (temporary) password</label>
-            <input type="password" value="LibreClinica" readonly
-              class="w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-100 text-slate-500" />
-          </div>
 
-          <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1 req">New password</label>
-            <input type="password" placeholder="At least 8 characters"
-              class="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
-
-            <!-- Strength meter -->
-            <div class="mt-2">
-              <div class="grid grid-cols-4 gap-1.5">
-                <div class="h-1 rounded bg-emerald-500"></div>
-                <div class="h-1 rounded bg-emerald-500"></div>
-                <div class="h-1 rounded bg-emerald-500"></div>
-                <div class="h-1 rounded bg-slate-200"></div>
-              </div>
-              <div class="mt-1 text-[11px] text-emerald-700 font-medium">Strong — good to go</div>
+          <!-- IdP attributes (read-only, sourced from Shibboleth) -->
+          <div class="rounded-md border border-slate-200 bg-white p-3 space-y-2.5">
+            <div class="flex items-center justify-between text-[10px] uppercase tracking-wider">
+              <span class="font-semibold text-slate-500">From MedUni Wien SSO</span>
+              <span class="text-slate-400 inline-flex items-center gap-1">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Read-only
+              </span>
             </div>
-
-            <ul class="mt-2 space-y-1 text-[11px]">
-              <li class="flex items-center gap-1.5 text-emerald-700">
-                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
-                ≥ 8 characters
-              </li>
-              <li class="flex items-center gap-1.5 text-emerald-700">
-                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
-                Includes a number and a symbol
-              </li>
-              <li class="flex items-center gap-1.5 text-emerald-700">
-                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
-                Mix of upper- and lowercase letters
-              </li>
-              <li class="flex items-center gap-1.5 text-slate-500">
-                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/></svg>
-                Not one of your last 5 passwords
-              </li>
-            </ul>
+            <dl class="text-xs space-y-1.5">
+              <div class="grid grid-cols-3 gap-2">
+                <dt class="text-slate-500">Name</dt>
+                <dd class="col-span-2 text-slate-900">Dr. Maria Müller</dd>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <dt class="text-slate-500">Email</dt>
+                <dd class="col-span-2 text-slate-900 font-mono text-[11px]">m.mueller@meduniwien.ac.at</dd>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <dt class="text-slate-500">eduPersonPN</dt>
+                <dd class="col-span-2 text-slate-700 font-mono text-[11px]">m.mueller@meduniwien.ac.at</dd>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <dt class="text-slate-500">Department</dt>
+                <dd class="col-span-2 text-slate-900">Ophthalmology and Optometry</dd>
+              </div>
+              <div class="grid grid-cols-3 gap-2">
+                <dt class="text-slate-500">Auth class</dt>
+                <dd class="col-span-2 text-slate-700">
+                  <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[11px] font-medium">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+                    MFA-verified
+                  </span>
+                </dd>
+              </div>
+            </dl>
+            <p class="text-[11px] text-slate-500 pt-1 border-t border-slate-100">
+              To change name, email or password, use the
+              <a href="#" class="text-blue-600 hover:underline">MedUni Wien account portal</a>.
+            </p>
           </div>
 
+          <!-- Local profile fields -->
           <div>
-            <label class="block text-xs font-medium text-slate-700 mb-1 req">Confirm new password</label>
-            <input type="password"
+            <label class="block text-xs font-medium text-slate-700 mb-1 req">Preferred display name</label>
+            <input type="text" value="Dr. M. Müller"
               class="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+            <p class="mt-1 text-[11px] text-slate-500">Shown in audit log, sign-off attestations and discrepancy threads.</p>
           </div>
 
-          <!-- Security question -->
-          <div class="rounded-md border border-slate-200 bg-white p-3 space-y-2">
-            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Account recovery</div>
+          <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="block text-xs text-slate-700 mb-1 req">Security question</label>
-              <select class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm bg-white">
-                <option>What was the name of your first pet?</option>
-                <option>In what city were you born?</option>
-                <option>Custom question…</option>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Locale</label>
+              <select class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white">
+                <option>Deutsch (Österreich)</option>
+                <option>English</option>
+                <option>Français</option>
               </select>
             </div>
             <div>
-              <label class="block text-xs text-slate-700 mb-1 req">Answer</label>
-              <input type="text"
-                class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+              <label class="block text-xs font-medium text-slate-700 mb-1">Time zone</label>
+              <select class="w-full px-3 py-2 border border-slate-300 rounded-md text-sm bg-white">
+                <option>Europe/Vienna (CEST)</option>
+                <option>UTC</option>
+              </select>
             </div>
           </div>
 
+          <!-- E-signature setup -->
+          <div class="rounded-md border border-slate-200 bg-white p-3 space-y-2">
+            <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500">E-signature</div>
+            <p class="text-[11px] text-slate-600 leading-relaxed">
+              Clinical sign-offs (Sign Subject, Sign Event) re-authenticate you through MedUni Wien
+              SSO with <span class="font-mono text-slate-900">forceAuthn=true</span> per
+              21 CFR Part 11 §11.50. No additional password is stored here.
+            </p>
+            <label class="flex items-start gap-2 text-xs text-slate-700">
+              <input type="checkbox" class="mt-0.5 rounded text-blue-600" checked />
+              <span>I understand that re-authenticating via MedUni Wien is the binding signature event for clinical attestations.</span>
+            </label>
+          </div>
+
           <button type="submit" class="w-full px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium inline-flex items-center justify-center gap-1.5">
-            Save and continue to 2FA enrolment
+            Confirm and continue to terms
             <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
           </button>
 
           <p class="text-[11px] text-slate-500 text-center">
-            You cannot return to the application until this step is complete.
+            You cannot return to the application until both steps are complete.
           </p>
         </form>
       </div>
