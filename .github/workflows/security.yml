@@ -26,7 +26,10 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.24.0
+        # 0.36.0 = latest as of 2026-04-22. Note the `v` prefix in the tag.
+        # The earlier value (0.24.0) did not exist as a tag; this caused the
+        # job to fail at the "Set up job" step with "Unable to resolve action".
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .

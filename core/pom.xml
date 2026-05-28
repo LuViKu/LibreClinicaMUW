@@ -25,6 +25,12 @@
 			<artifactId>spring-security-config</artifactId>
 		</dependency>
 		<dependency>
+			<!-- Direct use: OpenClinicaPasswordEncoder, SecurityManager
+			     (Hex, Utf8, PasswordEncoder). -->
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-crypto</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>org.springframework.security.oauth</groupId>
 			<artifactId>spring-security-oauth2</artifactId>
 		</dependency>
