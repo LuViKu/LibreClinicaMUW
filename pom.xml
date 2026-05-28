@@ -804,6 +804,20 @@
 				<artifactId>xalan</artifactId>
 				<version>2.7.3</version>
 			</dependency>
+			<!--
+			    xalan 2.7.x splits the formerly-monolithic xalan.jar into
+			    xalan:xalan + xalan:serializer. batik-bridge:1.7 only pulls
+			    xalan:xalan transitively; without an explicit serializer
+			    pin, callers that touch org.apache.xml.serializer.* (e.g.
+			    Castor's CastorRulesContainerCharacterisationTest) blow up
+			    with NoClassDefFoundError on SerializerTrace. Pinning here
+			    keeps both JARs at the same CVE-patched version.
+			-->
+			<dependency>
+				<groupId>xalan</groupId>
+				<artifactId>serializer</artifactId>
+				<version>2.7.3</version>
+			</dependency>
 			<dependency>
 				<groupId>com.mchange</groupId>
 				<artifactId>mchange-commons-java</artifactId>
