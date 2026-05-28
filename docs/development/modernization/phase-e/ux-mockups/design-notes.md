@@ -84,6 +84,26 @@ Tailwind default 4-pt scale. Cards `p-4`, dense table cells `px-3 py-2`, primary
 
 The Notes & Discrepancies mockup shows the **Monitor** view, with an in-place role switcher chip in the top bar and a "What changes per role" expandable in the side panel — so the per-role power differences (Investigator can't Close; Monitor is the only role that can; DM has full visibility plus delete-cascades-close) are visible in one place rather than spread across three near-identical mockups.
 
+### Round 3 — sign-off, modal pattern, audit log, login, CRF designer, import wizard
+
+| Role | Screen | File | Replaces legacy |
+|---|---|---|---|
+| Investigator | Sign Subject (M-001) | [investigator-sign-subject.html](investigator-sign-subject.html) | `/SignStudySubject?id=…` |
+| Monitor | Add Query modal | [monitor-add-query.html](monitor-add-query.html) | `/CreateDiscrepancyNote` (current JS popup) |
+| Inv · Mon · DM | Study Audit Log | [study-audit-log.html](study-audit-log.html) | `/ViewAuditLog` |
+| (no auth) | Login + forced password change | [login.html](login.html) | `/pages/login/login` (HTTP 500 in current build — see [known-issues.md](../known-issues.md)) |
+| Data Manager | Create / Edit CRF | [dm-create-crf.html](dm-create-crf.html) | `/CreateCRF` + `/EditCRF` (currently Excel upload only) |
+| Data Manager | Import CRF Data wizard | [dm-import-crf-data.html](dm-import-crf-data.html) | `/ImportCRFData` (multi-step) |
+
+**Patterns introduced in Round 3:**
+
+- **Confirmation-with-preflight** ([investigator-sign-subject.html](investigator-sign-subject.html)) — Pre-flight checklist (pass/warn/info rows) → casebook snapshot → e-signature attestation block → primary action. Use for any "this is a one-way regulatory action" screen (study lock, sign-off, archive).
+- **Modal over context** ([monitor-add-query.html](monitor-add-query.html)) — Underlying read-only CRF stays dimly visible (`bg-slate-900/40` scrim, `z-40`); modal panel sits centered at `pt-16`. Tight modal header (title + breadcrumb chips + close). Segmented note-type control instead of a dropdown. Audit-trail preview line in the footer left rail.
+- **Timeline vs table view** ([study-audit-log.html](study-audit-log.html)) — Activity stream with date markers and per-event-type icons (sign-off = emerald, reason-for-change = violet diff card, SDV = sky, admin = amber). Toggle to a flat table view for export workflows. The diff card (before/after side-by-side) is the reusable primitive for any "what changed" recap.
+- **Auth card + multi-step onboarding** ([login.html](login.html)) — Centred-card pattern, branded MUW lockup, inline error region, LDAP secondary action. Right pane shows the first-login forced-change variant: stepper (Password → 2FA → Terms), live password-strength meter, account-recovery sub-card. (Production: one pane renders at a time. Both shown here for review.)
+- **Item-grid designer with live preview** ([dm-create-crf.html](dm-create-crf.html)) — Left rail = sections; main = inline-editable item grid (drag-handle, OID + response-type cell editors, item-group separators for repeating vs non-repeating); right rail = response-set editor and per-item properties. Bottom of main shows a live Investigator-view preview that updates as you edit. Designed so DM never leaves the page to author an item.
+- **Wizard with stepper + preview-before-commit** ([dm-import-crf-data.html](dm-import-crf-data.html)) — Compact horizontal stepper (Upload → Map → **Preview & resolve** → Commit), validation summary cards (Ready / Overwrite / Error / Warning), filter chips, per-row diff cells with action selector, mandatory reason-for-change note before commit. Reusable for any "diff between staged and committed state" screen.
+
 ## What's intentionally NOT in these mockups
 
 To keep iteration cheap, these are out of scope for the first pass:

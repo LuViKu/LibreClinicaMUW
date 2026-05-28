@@ -26,6 +26,13 @@ const files = [
   'view-subject.html',
   'schedule-event.html',
   'dm-manage-users.html',
+  // Round 3 - sign-off, modal, audit, login, CRF designer, import wizard
+  'investigator-sign-subject.html',
+  'monitor-add-query.html',
+  'study-audit-log.html',
+  'login.html',
+  'dm-create-crf.html',
+  'dm-import-crf-data.html',
 ];
 
 (async () => {

@@ -206,6 +206,79 @@
 
     </div>
 
+    <h2 class="mt-10 text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">Round 3 · sign-off, modal, audit, login, CRF designer, import wizard</h2>
+    <div class="grid grid-cols-2 gap-3">
+
+      <a href="investigator-sign-subject.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Investigator
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/SignStudySubject</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Sign Subject (M-001)</div>
+        <div class="text-slate-500 mt-1 text-xs">Pre-flight checklist, casebook snapshot, e-signature attestation. Pattern: one-way regulatory action.</div>
+      </a>
+
+      <a href="monitor-add-query.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-sky-50 text-sky-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span>Monitor
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/CreateDiscrepancyNote</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Add Query modal</div>
+        <div class="text-slate-500 mt-1 text-xs">Modal over dimmed CRF context. Segmented note-type, severity, assign, due date. Pattern: focused-action modal.</div>
+      </a>
+
+      <a href="study-audit-log.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-1">
+            <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 px-1.5 py-0.5 text-[10px] font-medium">Inv</span>
+            <span class="inline-flex items-center gap-1 rounded-full bg-sky-50 text-sky-700 px-1.5 py-0.5 text-[10px] font-medium">Mon</span>
+            <span class="inline-flex items-center gap-1 rounded-full bg-violet-50 text-violet-700 px-1.5 py-0.5 text-[10px] font-medium">DM</span>
+          </div>
+          <span class="text-slate-400 text-xs font-mono">/ViewAuditLog</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Study Audit Log</div>
+        <div class="text-slate-500 mt-1 text-xs">Timeline of every regulated event with before/after diff cards. Filters narrow, never hide.</div>
+      </a>
+
+      <a href="login.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-50 text-slate-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-slate-400"></span>No auth
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/pages/login/login</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Login + forced password change</div>
+        <div class="text-slate-500 mt-1 text-xs">Centred card with MUW lockup, LDAP fallback. Right pane: first-login stepper (password, 2FA, terms).</div>
+      </a>
+
+      <a href="dm-create-crf.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-violet-50 text-violet-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>Data Manager
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/CreateCRF · /EditCRF</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Create / Edit CRF</div>
+        <div class="text-slate-500 mt-1 text-xs">Item-grid designer with section rail, response-type cell editors, repeating groups, response-set side panel, live Investigator preview.</div>
+      </a>
+
+      <a href="dm-import-crf-data.html" class="group rounded-lg border border-slate-200 bg-white p-4 hover:border-blue-300 hover:shadow-sm transition">
+        <div class="flex items-center justify-between mb-2">
+          <span class="inline-flex items-center gap-1.5 rounded-full bg-violet-50 text-violet-700 px-2 py-0.5 text-xs font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>Data Manager
+          </span>
+          <span class="text-slate-400 text-xs font-mono">/ImportCRFData</span>
+        </div>
+        <div class="font-medium text-slate-900 group-hover:text-blue-700">Import CRF Data wizard</div>
+        <div class="text-slate-500 mt-1 text-xs">Multi-step: Upload → Map → Preview &amp; resolve → Commit. Per-row before/after diff with action selector. Pattern: preview-before-commit wizard.</div>
+      </a>
+
+    </div>
+
     <div class="mt-10 rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 leading-relaxed">
       <strong class="font-semibold">Reminder:</strong> these are static sketches.
       Filters, buttons, and form fields look real but do nothing. Open
