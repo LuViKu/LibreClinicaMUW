@@ -133,7 +133,7 @@ Currently expect: 33 unit tests pass, ~26 DAO tests error with "Session/EntityMa
 Phase A is being executed in two sub-batches:
 
 - **Phase A.1 (done 2026-05-28):** low-risk CVE-closing bumps that don't change framework API surface — verified by `mvn compile`.
-- **Phase A.2 (pending):** higher-risk bumps (Spring framework, Spring Security, Hibernate, Quartz) that need the Phase 0 unit-test suite to be enabled and green before they can be safely verified.
+- **Phase A.2 (done 2026-05-28):** higher-risk bumps (Spring framework, Spring Security, Hibernate, Quartz, commons-*) verified end-to-end against `postgres:14-alpine` via the Phase 0 integration-tests profile — **63/63 tests pass on the new stack**.
 
 Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 
@@ -147,16 +147,17 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 | Apache Commons IO | 2.5 | **2.16.1** | A.1 | ✅ | CVE-2024-47554 |
 | Apache Commons Codec | 1.11 | **1.17.1** | A.1 | ✅ | |
 | PostgreSQL JDBC | 42.2.26 | **42.7.4** | A.1 | ✅ | |
-| Spring Framework | 5.1.4.RELEASE | **5.3.39** | A.2 | ⏳ | Final 5.x release; many CVE fixes |
-| Spring Security | 5.1.4.RELEASE | **5.8.16** | A.2 | ⏳ | Final 5.x line; CVE-2024-22243, CVE-2023-34035 |
+| Spring Framework | 5.1.4.RELEASE | **5.3.39** | A.2 | ✅ | Final 5.x release |
+| Spring Security | 5.1.4.RELEASE | **5.8.16** | A.2 | ✅ | Final 5.x; decoupled into separate `<spring.security.version>` property |
 | Spring WS | 1.5.6 | (audit — Spring WS 1.5 is from 2008; jump to 4.x during Phase B) | B | ⏳ | |
 | Spring OAuth2 | 2.3.5.RELEASE | (EOL since 2022; replace with Spring Authorization Server in Phase B/C) | B | ⏳ | |
-| Hibernate ORM | 5.4.2.Final | **5.6.15.Final** | A.2 | ⏳ | Many fixes; dialect updates for PG ≥ 14 |
-| Hibernate Validator | (audit) | **6.2.x** | A.2 | ⏳ | |
-| Apache Commons Lang | 2.3 | **commons-lang3 3.14** | A.2 / B | ⏳ | Package rename `org.apache.commons.lang` → `org.apache.commons.lang3` |
-| Apache Commons Collections | 3.2.1 | **3.2.2** *(or migrate to 4.4)* | A.2 | ⏳ | CVE-2015-7501 |
-| Apache Commons Validator | 1.3.1 | **1.9.0** | A.2 | ⏳ | |
-| Quartz | 2.2.3 | **2.3.2** | A.2 | ⏳ | Stay on 2.3 line in Phase A; jump to 2.5 in Phase D |
+| Hibernate ORM | 5.4.2.Final | **5.6.15.Final** | A.2 | ✅ | Verified end-to-end against live Postgres |
+| Hibernate Validator | (audit) | **6.2.x** | A.2 | ⏳ | Not currently a direct dep |
+| Apache Commons Lang | 2.3 | **2.6** (then `commons-lang3 3.14` in B) | A.2 / B | ✅ A.2 / ⏳ B | 2.6 is the final 2.x; 3.x is a package rename, Phase B |
+| Apache Commons Collections | 3.2.1 | **3.2.2** *(then migrate to 4.4 in Phase B)* | A.2 | ✅ A.2 / ⏳ B | CVE-2015-7501 closed; 4.x is a package rename |
+| Apache Commons Beanutils | 1.8.0 | **1.9.4** | A.2 | ✅ | |
+| Apache Commons Validator | 1.3.1 | **1.9.0** | A.2 | ✅ | |
+| Quartz | 2.2.3 | **2.3.2** | A.2 | ✅ | Jump to 2.5 deferred to Phase D (Jakarta-namespace) |
 | EhCache | 2.10.6 | (stay) | D | ⏳ | Phase D evaluates jump to Ehcache 3 / JCache |
 | JMesa | 2.4.2-oc | (stay — local fork) | E | ⏳ | Replace in Phase E |
 | Apache POI | 3.0.1 | (stay — defer to D for testing) | D | ⏳ | |
