@@ -158,6 +158,31 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
                 subject.getId() > 0);
 
         // 2) StudySubject row linking the subject to the study.
+        StringBuilder ssDiag = new StringBuilder();
+        try (java.sql.Connection conn = dataSource.getConnection()) {
+            ssDiag.append("autoCommit=").append(conn.getAutoCommit()).append("; ");
+            try (java.sql.PreparedStatement ps = conn.prepareStatement(
+                    "INSERT INTO study_subject (label, subject_id, study_id, "
+                  + "status_id, date_created, owner_id) VALUES (?, ?, ?, ?, NOW(), ?)")) {
+                ps.setString(1, "MUW-SS-RAW-" + runTag);
+                ps.setInt(2, subject.getId());
+                ps.setInt(3, study.getId());
+                ps.setInt(4, Status.AVAILABLE.getId());
+                ps.setInt(5, owner.getId());
+                int rows = ps.executeUpdate();
+                ssDiag.append("rawSSInsert.rows=").append(rows);
+            } catch (Exception e) {
+                ssDiag.append("rawSSInsertException=").append(e.getClass().getSimpleName())
+                    .append("[").append(e.getMessage()).append("]");
+                if (e instanceof java.sql.SQLException) {
+                    ssDiag.append(" sqlState=").append(((java.sql.SQLException) e).getSQLState());
+                }
+            }
+        } catch (Exception probeEx) {
+            ssDiag.append("ssProbeException=").append(probeEx.getClass().getSimpleName())
+                .append("[").append(probeEx.getMessage()).append("]");
+        }
+
         StudySubjectBean enrolment = new StudySubjectBean();
         enrolment.setLabel(enrolmentLabel);
         enrolment.setSubjectId(subject.getId());
@@ -165,7 +190,9 @@ public class SubjectEnrolmentIT extends HibernateOcDbTestCase {
         enrolment.setStatus(Status.AVAILABLE);
         enrolment.setOwner(owner);
         enrolment = studySubjectDao.create(enrolment);
-        assertTrue("study_subject.create() must yield positive PK",
+        assertTrue("study_subject.create() must yield positive PK (id="
+                + enrolment.getId() + "; failureDetails="
+                + studySubjectDao.getFailureDetails() + "; ssDiag={" + ssDiag + "})",
                 enrolment.getId() > 0);
 
         // Both rows persisted and linked.
