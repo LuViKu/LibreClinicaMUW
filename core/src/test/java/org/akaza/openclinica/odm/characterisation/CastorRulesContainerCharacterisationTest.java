@@ -10,19 +10,11 @@ package org.akaza.openclinica.odm.characterisation;
 
 import static org.akaza.openclinica.odm.characterisation.GoldenAssertions.assertXmlSimilarToGolden;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.StringWriter;
-import java.nio.charset.StandardCharsets;
 
 import org.akaza.openclinica.domain.rule.RulesPostImportContainer;
-import org.castor.xml.XMLConfiguration;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.xml.Marshaller;
-import org.exolab.castor.xml.XMLContext;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.junit.Test;
-import org.xml.sax.InputSource;
 
 /**
  * First Phase B.0 Castor characterisation test. Marshals a known
@@ -62,7 +54,7 @@ public class CastorRulesContainerCharacterisationTest {
     public void emptyContainerMarshalsToRootElementOnly() throws Exception {
         RulesPostImportContainer empty = new RulesPostImportContainer();
 
-        byte[] xml = marshalViaCastor(empty);
+        byte[] xml = marshalViaJaxb(empty);
 
         assertXmlSimilarToGolden(xml,
                 CastorRulesContainerCharacterisationTest.class,
@@ -70,55 +62,19 @@ public class CastorRulesContainerCharacterisationTest {
     }
 
     /**
-     * Production code path lifted verbatim from
-     * {@code MetaDataReportBean.handleLoadCastor(RulesPostImportContainer)}.
-     * The exception flow is collapsed into a single {@code throws Exception}
-     * because the test only cares about the marshal result, not which Castor
-     * exception type a regression might raise.
+     * Production code path equivalent to
+     * {@code MetaDataReportBean.handleLoadCastor(RulesPostImportContainer)}
+     * after Phase B.3 PR 2/3 swapped Castor → {@code javax.xml.bind} 2.3.x
+     * JAXB via {@link OdmJaxbContext#marshalRulesMetadata}. Output is wrapped
+     * in {@code <OpenClinicaRules:Rules ...>} (matching the
+     * mappingMarshallerMetadata.xml envelope) and emitted as a fragment
+     * (no XML prolog), so the rules block can be concatenated into the larger
+     * ODM metadata export.
      */
-    private static byte[] marshalViaCastor(RulesPostImportContainer rpic) throws Exception {
-        // Castor's Mapping.loadMapping is lazy on the SAX side - if the stream
-        // closes before marshalling starts, the marshal fails with "Stream
-        // closed". Read the mapping into a byte buffer upfront and hand
-        // Castor a fresh stream over the buffer.
-        byte[] mappingBytes = readClasspathResource(
-                "/properties/mappingMarshallerMetadata.xml");
-        Mapping mapping = new Mapping();
-        mapping.loadMapping(new InputSource(new ByteArrayInputStream(mappingBytes)));
-
-        XMLContext xmlContext = new XMLContext();
-        xmlContext.setProperty(XMLConfiguration.NAMESPACES, "true");
-        xmlContext.addMapping(mapping);
-
-        StringWriter writer = new StringWriter();
-        Marshaller marshaller = xmlContext.createMarshaller();
-        marshaller.setWriter(writer);
-        marshaller.marshal(rpic);
-
-        // Match the production code path: drop the XML prolog so consumers
-        // that concatenate the result into a larger document don't choke.
-        String result = writer.toString().replace(
-                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>", "");
-        return result.getBytes(StandardCharsets.UTF_8);
-    }
-
-    private static byte[] readClasspathResource(String path) throws Exception {
-        try (InputStream in = CastorRulesContainerCharacterisationTest.class
-                .getResourceAsStream(path)) {
-            if (in == null) {
-                throw new IllegalStateException(
-                        "Castor mapping missing: " + path + " not on the"
-                        + " classpath. If this file has been renamed or moved,"
-                        + " update the path here and document the move in the"
-                        + " Phase B.3 migration plan.");
-            }
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) != -1) {
-                out.write(buf, 0, n);
-            }
-            return out.toByteArray();
-        }
+    private static byte[] marshalViaJaxb(RulesPostImportContainer rpic) {
+        OdmJaxbContext ctx = new OdmJaxbContext();
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ctx.marshalRulesMetadata(rpic, out);
+        return out.toByteArray();
     }
 }

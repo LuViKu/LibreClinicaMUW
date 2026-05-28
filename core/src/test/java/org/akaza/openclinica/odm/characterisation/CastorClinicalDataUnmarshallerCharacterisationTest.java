@@ -13,16 +13,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.StringReader;
+import java.nio.charset.StandardCharsets;
 
 import org.akaza.openclinica.bean.submit.crfdata.CRFDataPostImportContainer;
 import org.akaza.openclinica.bean.submit.crfdata.ODMContainer;
-import org.exolab.castor.mapping.Mapping;
-import org.exolab.castor.xml.Unmarshaller;
+import org.akaza.openclinica.service.xml.OdmJaxbContext;
 import org.junit.Test;
-import org.xml.sax.InputSource;
 
 /**
  * Phase B.0 characterisation for the clinical-data ODM import path driven
@@ -69,7 +65,7 @@ public class CastorClinicalDataUnmarshallerCharacterisationTest {
                 + "  <ClinicalData StudyOID=\"S_MUW_TEST\"/>\n"
                 + "</ODM>\n";
 
-        ODMContainer parsed = unmarshalViaCastor(inputXml);
+        ODMContainer parsed = unmarshalViaJaxb(inputXml);
 
         assertUnmarshalled(parsed);
     }
@@ -89,46 +85,27 @@ public class CastorClinicalDataUnmarshallerCharacterisationTest {
                 + "  <ClinicalData StudyOID=\"OID.MUW.TEST.1\"/>\n"
                 + "</ODM>\n";
 
-        ODMContainer parsed = unmarshalViaCastor(inputXml);
+        ODMContainer parsed = unmarshalViaJaxb(inputXml);
         CRFDataPostImportContainer clinical = parsed.getCrfDataPostImportContainer();
 
         assertNotNull("ODMContainer.getCrfDataPostImportContainer() must be"
                 + " non-null after parsing a well-formed ClinicalData envelope",
                 clinical);
-        assertEquals("StudyOID round-trips through Castor unmarshal",
+        assertEquals("StudyOID round-trips through JAXB unmarshal",
                 "OID.MUW.TEST.1", clinical.getStudyOID());
     }
 
     /**
-     * Production code path lifted from
-     * {@code ImportCRFDataServlet.processCsvOrXml(...)}. The ODM_MAPPING_DIRPath
-     * resolution + FileReader substitution is the only adaptation.
+     * Production code path equivalent to {@code ImportCRFDataServlet.processCsvOrXml(...)}
+     * after Phase B.3 PR 2/3 swapped Castor → {@code javax.xml.bind} 2.3.x
+     * JAXB via {@link OdmJaxbContext}. The production servlet itself stays on
+     * Castor until PR 3/3 (which annotates the full SubjectData/StudyEventData/
+     * FormData/ItemGroupData/ItemData subtree); PR 2/3 only proves the
+     * envelope-level binding and the {@code StudyOID} attribute round-trip.
      */
-    private static ODMContainer unmarshalViaCastor(String inputXml) throws Exception {
-        byte[] mappingBytes = readClasspathResource("/properties/cd_odm_mapping.xml");
-        Mapping mapping = new Mapping();
-        mapping.loadMapping(new InputSource(new ByteArrayInputStream(mappingBytes)));
-
-        Unmarshaller um1 = new Unmarshaller(mapping);
-        ODMContainer odmContainer = new ODMContainer();
-        um1.setObject(odmContainer);
-        odmContainer = (ODMContainer) um1.unmarshal(new InputSource(new StringReader(inputXml)));
-        return odmContainer;
-    }
-
-    private static byte[] readClasspathResource(String path) throws Exception {
-        try (InputStream in = CastorClinicalDataUnmarshallerCharacterisationTest.class
-                .getResourceAsStream(path)) {
-            if (in == null) {
-                throw new IllegalStateException("Castor mapping missing: " + path);
-            }
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) != -1) {
-                out.write(buf, 0, n);
-            }
-            return out.toByteArray();
-        }
+    private static ODMContainer unmarshalViaJaxb(String inputXml) {
+        OdmJaxbContext ctx = new OdmJaxbContext();
+        return ctx.unmarshalClinicalData(
+                new ByteArrayInputStream(inputXml.getBytes(StandardCharsets.UTF_8)));
     }
 }

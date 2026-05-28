@@ -18,8 +18,10 @@ import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
 import javax.xml.bind.Unmarshaller;
+import javax.xml.namespace.QName;
 import javax.xml.transform.stream.StreamSource;
 
+import org.akaza.openclinica.bean.submit.crfdata.ODMContainer;
 import org.akaza.openclinica.domain.rule.RulesPostImportContainer;
 
 /**
@@ -98,6 +100,63 @@ public class OdmJaxbContext {
         } catch (JAXBException e) {
             throw new IllegalStateException(
                     "Failed to marshal RulesPostImportContainer", e);
+        }
+    }
+
+    /**
+     * Marshal a {@code RulesPostImportContainer} to XML on {@code out} wrapped
+     * in the OpenClinica-rules root element ({@code <OpenClinicaRules:Rules
+     * xmlns:OpenClinicaRules="http://www.openclinica.org/ns/rules/v3.1"/>}).
+     * Used by the ODM metadata export ({@code MetaDataReportBean}) where the
+     * rules block is embedded in a larger document, so the XML prolog is
+     * dropped to keep concatenation clean.
+     *
+     * <p>The same {@code RulesPostImportContainer} class also supports the
+     * {@code <RuleImport/>} root via {@link #marshalRulesExport}. JAXB allows
+     * one {@code @XmlRootElement} per class, so the alternate root is provided
+     * here through a {@link JAXBElement} wrapper with an explicit {@link QName}.
+     */
+    public void marshalRulesMetadata(RulesPostImportContainer rpic, OutputStream out) {
+        try {
+            Marshaller marshaller = contextFor(RulesPostImportContainer.class)
+                    .createMarshaller();
+            marshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+            marshaller.setProperty(Marshaller.JAXB_ENCODING, "UTF-8");
+            // FRAGMENT=true drops the <?xml prolog so the marshalled rules
+            // block can be concatenated into the larger ODM metadata export
+            // without an embedded prolog — same behaviour as
+            // MetaDataReportBean's post-Castor String.replace prolog strip.
+            marshaller.setProperty(Marshaller.JAXB_FRAGMENT, Boolean.TRUE);
+
+            QName rulesRoot = new QName(
+                    "http://www.openclinica.org/ns/rules/v3.1", "Rules", "OpenClinicaRules");
+            JAXBElement<RulesPostImportContainer> wrapped = new JAXBElement<>(
+                    rulesRoot, RulesPostImportContainer.class, rpic);
+            marshaller.marshal(wrapped, out);
+        } catch (JAXBException e) {
+            throw new IllegalStateException(
+                    "Failed to marshal RulesPostImportContainer (metadata variant)", e);
+        }
+    }
+
+    /**
+     * Unmarshal a CDISC ODM clinical-data XML stream into an
+     * {@link ODMContainer}. Mirrors the Castor unmarshal behaviour from
+     * {@code ImportCRFDataServlet.processCsvOrXml}: the root element name is
+     * taken from the binding ({@code @XmlRootElement(name="ODM", namespace=
+     * "http://www.cdisc.org/ns/odm/v1.3")}), and missing optional children
+     * (a {@code <ClinicalData>} without {@code <SubjectData>}, etc.) yield
+     * null fields on the parsed bean.
+     */
+    public ODMContainer unmarshalClinicalData(InputStream in) {
+        try {
+            Unmarshaller unmarshaller = contextFor(ODMContainer.class).createUnmarshaller();
+            JAXBElement<ODMContainer> element = unmarshaller.unmarshal(
+                    new StreamSource(in), ODMContainer.class);
+            return element.getValue();
+        } catch (JAXBException e) {
+            throw new IllegalStateException(
+                    "Failed to unmarshal ODMContainer (clinical data)", e);
         }
     }
 }
