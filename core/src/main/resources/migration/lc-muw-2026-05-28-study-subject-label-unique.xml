@@ -1,0 +1,35 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase 0 finding (2026-05-28): `study_subject` had no UNIQUE
+        constraint on (study_id, label) and `StudySubjectDAO.create`
+        did not defend against duplicates. Two enrolments with the same
+        subject label in the same study both succeeded, silently double-
+        enrolling. Cross-event reports then double-counted the subject.
+        Surfaced by `SubjectEnrolmentIT.testDuplicateLabelCurrentlyNotRejected`.
+
+        This changeset adds the missing UNIQUE constraint. When it runs:
+        - On clean DBs: the constraint is created cleanly.
+        - On DBs with existing duplicates (institutional concern): the
+          ALTER will fail. Per the Phase 0 backlog, the institutional team
+          will be advised to run `SELECT study_id, label, COUNT(*) FROM
+          study_subject GROUP BY 1,2 HAVING COUNT(*) > 1` and clean
+          duplicates before the next deploy. The data-quality cleanup is
+          out of scope for this commit.
+
+        After the constraint lands, flip
+        `SubjectEnrolmentIT.testDuplicateLabelCurrentlyNotRejected` to
+        assert rejection and rename to `testDuplicateLabelRejected`.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-05-28-study-subject-label-unique">
+        <addUniqueConstraint
+            constraintName="uniq_study_subject_study_label"
+            tableName="study_subject"
+            columnNames="study_id, label"/>
+    </changeSet>
+</databaseChangeLog>
