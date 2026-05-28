@@ -2,12 +2,39 @@ FROM docker.io/library/maven:3-eclipse-temurin-8 AS builder
 
 WORKDIR /app
 
+# ----- Dependency layer -----
+#
+# Copy every pom.xml first, in a separate COPY for each module. As long as
+# none of the poms change, Docker re-uses the next layer (which downloads all
+# Maven dependencies) from cache. The BuildKit cache mount on /root/.m2 also
+# preserves the downloaded jars across runs on the same builder, and the
+# GHA-backed buildx cache (see .github/workflows/build.yml) makes the same
+# /root/.m2 cache survive across GitHub-hosted runners.
+#
+# Result: a no-source-change CI run skips Maven dependency download entirely
+# (~30 seconds vs ~5 minutes from cold).
+COPY pom.xml ./
+COPY core/pom.xml core/
+COPY odm/pom.xml odm/
+COPY docs/pom.xml docs/
+COPY web/pom.xml web/
+COPY ws/pom.xml ws/
+
+RUN --mount=type=cache,target=/root/.m2 \
+    set -eux; \
+    # dependency:go-offline + de.qaware.maven:go-offline-maven-plugin would
+    # be the canonical "pre-fetch every dep" combo, but the plugin pulls
+    # extra setup. dependency:go-offline alone covers the bulk of artifacts
+    # for this multi-module build. The `|| true` tolerates the handful of
+    # plugins that report missing-artifact metadata even after a clean
+    # download (notably jaxb2 and jrebel) - the actual `mvn package` run
+    # below re-resolves them with a working cache.
+    mvn -B -ntp dependency:go-offline -DskipTests=true || true
+
+# ----- Build layer -----
 COPY . .
 
-RUN \
-    # cache downloaded dependencies
-    --mount=type=cache,target=/root/.m2 \
-    # build cache
+RUN --mount=type=cache,target=/root/.m2 \
     --mount=type=cache,target=/app/core/target \
     --mount=type=cache,target=/app/docs/target \
     --mount=type=cache,target=/app/odm/target \

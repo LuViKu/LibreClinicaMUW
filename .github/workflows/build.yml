@@ -152,8 +152,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Compose up
-        run: docker compose up --build --detach
+      # Build the libreclinica image via bake with GitHub Actions cache
+      # backend. mode=max also caches intermediate (non-final) layers,
+      # which is what makes the BuildKit `--mount=type=cache` directives
+      # in the Dockerfile actually survive across runs.
+      #
+      # First run on a fresh cache populates ~500 MB of Maven artifacts
+      # and is the same ~8 minutes as before. Subsequent runs whose poms
+      # have not changed reuse the dependency layer entirely and the
+      # smoke build drops to ~30-60 seconds.
+      - name: Build libreclinica image (cached)
+        uses: docker/bake-action@v5
+        with:
+          files: compose.yaml
+          targets: libreclinica
+          load: true
+          set: |
+            *.cache-from=type=gha,scope=smoke-${{ github.workflow }}
+            *.cache-to=type=gha,scope=smoke-${{ github.workflow }},mode=max
+
+      - name: Compose up (uses pre-built image)
+        run: docker compose up --detach --no-build
 
       - name: Wait for application to be reachable
         run: |
