@@ -11,14 +11,26 @@ package org.akaza.openclinica.bean.submit.crfdata;
 
 import java.util.ArrayList;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlElement;
+
 import org.akaza.openclinica.bean.odmbeans.AuditLogsBean;
 import org.akaza.openclinica.bean.odmbeans.DiscrepancyNotesBean;
 
+@XmlAccessorType(XmlAccessType.NONE)
 public class FormDataBean {
+    @XmlElement(name = "ItemGroupData", namespace = "http://www.cdisc.org/ns/odm/v1.3")
     private ArrayList<ImportItemGroupDataBean> itemGroupData;
     private AuditLogsBean auditLogs;
     private DiscrepancyNotesBean discrepancyNotes;
+    @XmlAttribute(name = "FormOID")
     private String formOID;
+    // OpenClinica:Status — the only field on this bean that lives in the
+    // openclinica extension namespace, not the cdisc default.
+    @XmlAttribute(name = "Status",
+            namespace = "http://www.openclinica.org/ns/odm_ext_v130/v3.1")
     private String EventCRFStatus;
 
     public FormDataBean() {

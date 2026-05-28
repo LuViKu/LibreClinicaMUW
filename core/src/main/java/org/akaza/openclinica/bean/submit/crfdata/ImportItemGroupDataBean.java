@@ -11,9 +11,18 @@ package org.akaza.openclinica.bean.submit.crfdata;
 
 import java.util.ArrayList;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlElement;
+
+@XmlAccessorType(XmlAccessType.NONE)
 public class ImportItemGroupDataBean {
+    @XmlElement(name = "ItemData", namespace = "http://www.cdisc.org/ns/odm/v1.3")
     private ArrayList<ImportItemDataBean> itemData;
+    @XmlAttribute(name = "ItemGroupOID")
     private String itemGroupOID;
+    @XmlAttribute(name = "ItemGroupRepeatKey")
     private String itemGroupRepeatKey;
     
     public ImportItemGroupDataBean() {

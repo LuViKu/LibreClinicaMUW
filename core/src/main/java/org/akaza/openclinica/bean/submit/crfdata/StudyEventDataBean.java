@@ -11,13 +11,22 @@ package org.akaza.openclinica.bean.submit.crfdata;
 
 import java.util.ArrayList;
 
+import javax.xml.bind.annotation.XmlAccessType;
+import javax.xml.bind.annotation.XmlAccessorType;
+import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlElement;
+
 import org.akaza.openclinica.bean.odmbeans.AuditLogsBean;
 import org.akaza.openclinica.bean.odmbeans.DiscrepancyNotesBean;
 import org.akaza.openclinica.domain.datamap.StudyEventDefinition;
 
+@XmlAccessorType(XmlAccessType.NONE)
 public class StudyEventDataBean {
+    @XmlElement(name = "FormData", namespace = "http://www.cdisc.org/ns/odm/v1.3")
     private ArrayList<FormDataBean> formData;
+    @XmlAttribute(name = "StudyEventOID")
     private String studyEventOID;
+    @XmlAttribute(name = "StudyEventRepeatKey")
     private String studyEventRepeatKey;
     private AuditLogsBean auditLogs;
     private DiscrepancyNotesBean discrepancyNotes;

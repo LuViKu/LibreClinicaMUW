@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlAttribute;
+import javax.xml.bind.annotation.XmlElement;
 
 /**
  * CRFDataPostImportContainer, meant to serve as the 'ClinicalData' tag in CRF Data Import. Will contain the following:
@@ -22,17 +23,19 @@ import javax.xml.bind.annotation.XmlAttribute;
  *
  * @author thickerson, 04/2008
  *
- * <p>Phase B.3 PR 2/3: only the StudyOID attribute is JAXB-bound here; the
- * subjectData + upsertOn child trees are added in PR 3/3 once the production
- * import path is migrated off Castor. JAXB leaves the unannotated fields
- * null after parsing — same contract Castor 1.4.1 provided for empty inputs.
+ * <p>Phase B.3 PR 3a: full JAXB bean-tree wiring complete. StudyOID
+ * attribute (PR 2) + SubjectData + UpsertOn children. Per DR-006
+ * amendment the namespace stays on cdisc/v1.3 (javax.xml.bind 2.3.x);
+ * jakarta migration happens in B.4.
  */
 @XmlAccessorType(XmlAccessType.NONE)
 public class CRFDataPostImportContainer {
 
+    @XmlElement(name = "SubjectData", namespace = "http://www.cdisc.org/ns/odm/v1.3")
     private ArrayList<SubjectDataBean> subjectData;
     @XmlAttribute(name = "StudyOID")
     private String studyOID;
+    @XmlElement(name = "UpsertOn", namespace = "http://www.cdisc.org/ns/odm/v1.3")
     private UpsertOnBean upsertOn;
 
     public String getStudyOID() {
