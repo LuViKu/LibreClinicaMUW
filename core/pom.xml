@@ -143,10 +143,6 @@
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>org.codehaus.castor</groupId>
-			<artifactId>castor-xml</artifactId>
-		</dependency>
 		<!-- @pgawade 16-NOV-2010 jmesa library for unit tests -->
 		<dependency>
 			<groupId>org.jmesa</groupId>

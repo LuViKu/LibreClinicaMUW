@@ -23,14 +23,11 @@ import org.xmlunit.diff.Diff;
 import org.xmlunit.diff.ElementSelectors;
 
 /**
- * Static helpers for golden-file XML comparison used by Castor characterisation
- * tests. Factored out of the original {@link CastorCharacterisationIT} base
- * class so that <em>unit</em> characterisation tests (those that drive Castor
- * directly with an in-memory bean, no DB required) can use the same comparison
- * logic without inheriting the DB lifecycle.
- *
- * <p>See {@link CastorCharacterisationIT} for the DB-driven base class and the
- * full doc on the characterisation pattern.
+ * Static helpers for golden-file XML comparison used by the surviving JAXB
+ * characterisation tests. The Castor characterisation suite was retired in
+ * Phase B.3 PR 3c-3 once the Castor → JAXB migration completed; the JAXB
+ * tests still use these helpers to compare against the goldens captured
+ * during B.0 from the original Castor output.
  *
  * <h2>Capturing a golden on first run</h2>
  *
