@@ -6,9 +6,9 @@
     <packaging>war</packaging>
     <name>LibreClinica Web Services</name>
     <parent>
-        <groupId>org.libreclinica</groupId>
+        <groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
         <artifactId>LibreClinica</artifactId>
-		<version>1.4.0rc1</version>
+		<version>1.4.0rc1-muw</version>
     </parent>
 
     <properties>

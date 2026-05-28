@@ -2,12 +2,16 @@
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
 	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
-	<groupId>org.libreclinica</groupId>
+	<groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
 	<artifactId>LibreClinica</artifactId>
 	<packaging>pom</packaging>
-	<version>1.4.0rc1</version>
-	<name>LibreClinica</name>
-	<description>LibreClinica</description>
+	<version>1.4.0rc1-muw</version>
+	<name>LibreClinica MUW Ophthalmology</name>
+	<description>Electronic Data Capture (EDC) for clinical trials — institutional build of LibreClinica for the Department of Ophthalmology and Optometry, Medical University of Vienna.</description>
+	<organization>
+		<name>Department of Ophthalmology and Optometry, Medical University of Vienna</name>
+		<url>https://www.meduniwien.ac.at/web/en/about-us/organisation/university-clinical-departments/clinical-department-of-ophthalmology-and-optometry/</url>
+	</organization>
 
 	<modules>
 		<module>core</module>
@@ -31,14 +35,23 @@
 		<config.file>src/main/resources/datainfo.properties</config.file>
 
 		<!-- Library Versions -->
+		<!-- Phase A modernization (2026-05-28): see MIGRATION.md.
+		     Spring/Spring Security/Hibernate/Quartz bumps deferred until unit-test
+		     suite is enabled and verified. The following are the next planned
+		     targets within the Spring 5.x / javax.* line (Phase A):
+		         spring.version          -> 5.3.39
+		         (introduce) spring.security.version -> 5.8.16
+		         hibernate.version       -> 5.6.15.Final
+		         quartz                  -> 2.3.2 -->
 		<spring.version>5.1.4.RELEASE</spring.version>
 		<spring.ws.version>1.5.6</spring.ws.version>
 		<db.test>localhost</db.test>
-		<jackson.version>2.9.8</jackson.version>
+		<jackson.version>2.13.5</jackson.version>
 		<saxon.version>8.7</saxon.version>
 		<hibernate.version>5.4.2.Final</hibernate.version>
 		<castor.version>1.4.1</castor.version>
-		<logback.version>1.1.3</logback.version>
+		<logback.version>1.2.13</logback.version>
+		<slf4j.version>1.7.36</slf4j.version>
 	</properties>
 	<profiles>
 		<profile>
@@ -99,7 +112,7 @@
 			<dependency>
 				<groupId>${project.groupId}.odm</groupId>
 				<artifactId>LibreClinica-odm</artifactId>
-				<version>2.2</version>
+				<version>2.2-muw</version>
 			</dependency>
 			<dependency>
 				<groupId>org.jmesa</groupId>
@@ -134,12 +147,12 @@
             <dependency>
                 <groupId>commons-fileupload</groupId>
                 <artifactId>commons-fileupload</artifactId>
-                <version>1.3.3</version>
+                <version>1.5</version>
             </dependency>
             <dependency>
                 <groupId>commons-io</groupId>
                 <artifactId>commons-io</artifactId>
-                <version>2.5</version>
+                <version>2.16.1</version>
             </dependency>
 			<dependency>
 				<groupId>commons-beanutils</groupId>
@@ -188,7 +201,7 @@
 			<dependency>
 				<groupId>commons-codec</groupId>
 				<artifactId>commons-codec</artifactId>
-				<version>1.11</version>
+				<version>1.17.1</version>
 			</dependency>
 			<dependency>
 				<groupId>commons-validator</groupId>
@@ -531,7 +544,7 @@
 			<dependency>
 				<groupId>org.postgresql</groupId>
 				<artifactId>postgresql</artifactId>
-				<version>42.2.26</version>
+				<version>42.7.4</version>
 				<scope>runtime</scope>
 			</dependency>
 			<!-- Oracle JDBC driver -->
@@ -733,14 +746,14 @@
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>slf4j-api</artifactId>
-			<version>1.7.6</version>
+			<version>${slf4j.version}</version>
 		</dependency>
 		<!--@pgawade 02-DEC-2010 Added jul-to-slf4j-1.5.6.jar to get liquibase
 			logs using SLF4JBridgeHandler -->
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>jul-to-slf4j</artifactId>
-			<version>1.7.6</version>
+			<version>${slf4j.version}</version>
 			<scope>runtime</scope>
 		</dependency>
 		<!-- potentially replaces jul-to-slf4j
@@ -753,7 +766,7 @@
 		<dependency>
 			<groupId>org.slf4j</groupId>
 			<artifactId>jcl-over-slf4j</artifactId>
-			<version>1.7.6</version>
+			<version>${slf4j.version}</version>
 			<scope>runtime</scope>
 		</dependency>
 		<!-- SPRING -->

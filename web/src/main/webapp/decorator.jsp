@@ -9,7 +9,7 @@
 <head>
     <meta http-equiv="content-type" content="text/html; charset=utf-8">
     <meta name="gwt:property" content="locale=${pageContext.request.locale}">
-    <title><decorator:title default="LibreClinica" /></title>
+    <title><decorator:title default="LibreClinica MUW Ophthalmology" /></title>
     <script type="text/javascript" language="javascript" src="../gwt/GwtMenu/org.akaza.openclinica.gwt.GwtMenu.nocache.js"></script>
     <script type="text/javascript" language="javascript" src="../includes/prototype.js"></script>
     <script type="text/javascript" language="javascript" src="../includes/global_functions_javascript.js"></script>
@@ -30,7 +30,12 @@
 <body>
 <div id="headerDiv">
     <fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-    <div id="logoDiv"><img src="../images/Logo.gif" alt="Akaza logo"/></div>
+    <div id="logoDiv">
+        <img src="../images/Logo.gif" alt="LibreClinica"/>
+        <span class="muw-strapline" style="margin-left:14px; font-size:13px; color:#444; vertical-align:middle;">
+            Department of Ophthalmology and Optometry &middot; Medical University of Vienna
+        </span>
+    </div>
     <!-- the sub-menu, or alternative menu, displays if JavaScript is disabled-->
     <div id="menuContainer">
         <noscript>

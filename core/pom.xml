@@ -6,9 +6,9 @@
     <packaging>jar</packaging>
     <name>LibreClinica Core</name>
     <parent>
-        <groupId>org.libreclinica</groupId>
+        <groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
         <artifactId>LibreClinica</artifactId>
-  		<version>1.4.0rc1</version>
+  		<version>1.4.0rc1-muw</version>
     </parent>
 
     <dependencies>
@@ -135,7 +135,7 @@
 			<artifactId>jmesa</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.libreclinica.odm</groupId>
+			<groupId>at.ac.meduniwien.ophthalmology.libreclinica.odm</groupId>
 			<artifactId>LibreClinica-odm</artifactId>
 		</dependency>
 		<dependency>
@@ -282,7 +282,7 @@
 				<configuration>
 					<ignoreNonCompile>true</ignoreNonCompile>
 					<usedDependencies>
-						<usedDependency>org.libreclinica.odm:LibreClinica-odm</usedDependency>
+						<usedDependency>at.ac.meduniwien.ophthalmology.libreclinica.odm:LibreClinica-odm</usedDependency>
 					</usedDependencies>
                		<ignoredUsedUndeclaredDependencies>
                   		<ignoredUsedUndeclaredDependency>org.apache.pdfbox:pdfbox</ignoredUsedUndeclaredDependency>

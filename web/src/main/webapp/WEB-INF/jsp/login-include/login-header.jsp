@@ -17,7 +17,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml">
 
 <head>
-	<title><fmt:message key="openclinica" bundle="${resword}"/></title>
+	<title>LibreClinica MUW Ophthalmology &middot; <fmt:message key="openclinica" bundle="${resword}"/></title>
 	
 	<c:set var="contextPath" value="${fn:replace(pageContext.request.requestURL, fn:substringAfter(pageContext.request.requestURL, pageContext.request.contextPath), '')}" />
 	<meta http-equiv="X-UA-Compatible" content="IE=8" />
@@ -60,7 +60,12 @@
                     <td class="header_td">
                         <div class="disabled_header"><img src="${pageContext.request.contextPath}/images/spacer.gif"/></div>
                         <!-- Logo -->
-                        <div class="logo"><img src="${pageContext.request.contextPath}/images/Logo.gif" /></div>
+                        <div class="logo">
+                            <img src="${pageContext.request.contextPath}/images/Logo.gif" alt="LibreClinica" />
+                            <div class="muw-strapline" style="font-size:13px; color:#444; padding-top:6px;">
+                                Department of Ophthalmology and Optometry &middot; Medical University of Vienna
+                            </div>
+                        </div>
                         <!-- Main Navigation -->
                         
 <!-- End Main Navigation -->

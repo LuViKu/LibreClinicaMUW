@@ -21,10 +21,28 @@ RUN \
 ############################################################
 FROM tomcat:9-jdk11
 
+LABEL org.opencontainers.image.title="LibreClinica MUW Ophthalmology"
+LABEL org.opencontainers.image.description="Electronic Data Capture for the Department of Ophthalmology and Optometry, Medical University of Vienna — institutional build of LibreClinica."
+LABEL org.opencontainers.image.vendor="Department of Ophthalmology and Optometry, Medical University of Vienna"
+LABEL org.opencontainers.image.licenses="LGPL-2.1-or-later"
+LABEL org.opencontainers.image.source="https://github.com/LuViKu/LibreClinicaMUW"
+
 RUN set -eux; \
     # set up redirection to application when accessing tomcat root
     mkdir /usr/local/tomcat/webapps/ROOT; \
-    echo '<html><head><meta http-equiv="refresh" content="0; URL=LibreClinica/" /></head></html>' \
+    printf '%s\n' \
+        '<!DOCTYPE html>' \
+        '<html lang="en">' \
+        '<head>' \
+        '  <meta charset="utf-8" />' \
+        '  <meta http-equiv="refresh" content="0; URL=LibreClinica/" />' \
+        '  <title>LibreClinica MUW Ophthalmology</title>' \
+        '</head>' \
+        '<body>' \
+        '  <p>Loading LibreClinica MUW Ophthalmology &mdash; Department of Ophthalmology and Optometry, Medical University of Vienna.</p>' \
+        '  <p>If you are not redirected automatically, <a href="LibreClinica/">click here</a>.</p>' \
+        '</body>' \
+        '</html>' \
         > /usr/local/tomcat/webapps/ROOT/index.html;
 
 # set up volumes for data and logs

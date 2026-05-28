@@ -1,6 +1,11 @@
+# LibreClinica MUW Ophthalmology — local development stack
+# Department of Ophthalmology and Optometry, Medical University of Vienna
+name: libreclinica-muw
+
 services:
   libreclinica:
     build: .
+    image: libreclinica-muw:dev
     ports:
       - "127.0.0.1:8080:8080"
     depends_on:

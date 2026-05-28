@@ -6,9 +6,9 @@
 	<packaging>war</packaging>
 	<name>LibreClinica Web Application</name>
 	<parent>
-		<groupId>org.libreclinica</groupId>
+		<groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
 		<artifactId>LibreClinica</artifactId>
-		<version>1.4.0rc1</version>
+		<version>1.4.0rc1-muw</version>
 	</parent>
 
 	<properties>
@@ -353,7 +353,7 @@
 						<!-- Needed by LibreClinica-web when HttpComponentsClientHttpRequestFactory is used-->
 						<ignoredUnusedDeclaredDependency>org.apache.httpcomponents:httpclient</ignoredUnusedDeclaredDependency>
 						<!-- Needed by LibreClinica-web when docs module resources are used to pack the pdf manuals -->
-						<ignoredUnusedDeclaredDependency> org.libreclinica:LibreClinica-docs</ignoredUnusedDeclaredDependency>
+						<ignoredUnusedDeclaredDependency> at.ac.meduniwien.ophthalmology.libreclinica:LibreClinica-docs</ignoredUnusedDeclaredDependency>
 					</ignoredUnusedDeclaredDependencies>
                     <ignoredUsedUndeclaredDependencies>
                         <ignoredUsedUndeclaredDependency>javax.annotation:javax.annotation-api</ignoredUsedUndeclaredDependency>
@@ -379,7 +379,7 @@
 				<configuration>
 					<overlays>
 						<overlay>
-							<groupId>org.libreclinica</groupId>
+							<groupId>at.ac.meduniwien.ophthalmology.libreclinica</groupId>
 							<artifactId>LibreClinica-docs</artifactId>
 							<includes>
 								<include>manuals/*.pdf</include>
