@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  DBUnit fixture for StudyCrudIT.
+
+  Intentionally empty: this test builds StudyBean instances in-memory
+  and persists them via the production StudyDAO.create() path, so the
+  full createStepOne → createStepFour cascade is exercised. No pre-
+  existing fixture rows are needed.
+
+  The Spring per-test transaction rolls back at tearDown, but StudyDAO
+  uses a JDBC DataSource directly — its inserts commit to the database
+  regardless. The DBUnit operation is REFRESH (not CLEAN_INSERT), so
+  even if rows were declared here they'd be merged not replaced.
+-->
+<dataset>
+</dataset>
