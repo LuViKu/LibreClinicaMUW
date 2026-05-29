@@ -124,26 +124,11 @@ public class ListStudySubjectsServlet extends SecureController {
     }
 
     private void createTable() {
+        // Phase B.4 jmesa PR 4c: the legacy
+        // ListStudySubjectTableFactory.createTable().render() blob is
+        // gone. The findSubjects.jsp shell now includes a vanilla-JS
+        // fragment that fetches /FindSubjectsData asynchronously.
 
-        ListStudySubjectTableFactory factory = new ListStudySubjectTableFactory(showMoreLink);
-        factory.setStudyEventDefinitionDao(getStudyEventDefinitionDao());
-        factory.setSubjectDAO(getSubjectDAO());
-        factory.setStudySubjectDAO(getStudySubjectDAO());
-        factory.setStudyEventDAO(getStudyEventDAO());
-        factory.setStudyBean(currentStudy);
-        factory.setStudyGroupClassDAO(getStudyGroupClassDAO());
-        factory.setSubjectGroupMapDAO(getSubjectGroupMapDAO());
-        factory.setStudyDAO(getStudyDAO());
-        factory.setCurrentRole(currentRole);
-        factory.setCurrentUser(ub);
-        factory.setEventCRFDAO(getEventCRFDAO());
-        factory.setEventDefintionCRFDAO(getEventDefinitionCRFDAO());
-        factory.setStudyGroupDAO(getStudyGroupDAO());
-        factory.setStudyParameterValueDAO(getStudyParameterValueDAO());
-        String findSubjectsHtml = factory.createTable(request, response).render();
-
-        request.setAttribute("findSubjectsHtml", findSubjectsHtml);
-        // A. Hamid.
         // For event definitions and group class list in the add subject popup
         request.setAttribute("allDefsArray", super.getEventDefinitionsByCurrentStudy());
         request.setAttribute("studyGroupClasses", super.getStudyGroupClassesByCurrentStudy());
@@ -151,7 +136,6 @@ public class ListStudySubjectsServlet extends SecureController {
         session.setAttribute(AddNewSubjectServlet.FORM_DISCREPANCY_NOTES_NAME, discNotes);
 
         forwardPage(Page.LIST_STUDY_SUBJECTS);
-
     }
 
     @Override

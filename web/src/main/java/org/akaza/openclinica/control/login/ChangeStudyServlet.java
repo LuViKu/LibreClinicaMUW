@@ -23,7 +23,6 @@ import org.akaza.openclinica.control.SpringServletAccess;
 import org.akaza.openclinica.control.core.SecureController;
 import org.akaza.openclinica.control.form.FormProcessor;
 import org.akaza.openclinica.control.form.Validator;
-import org.akaza.openclinica.control.submit.ListStudySubjectTableFactory;
 import org.akaza.openclinica.dao.login.UserAccountDAO;
 import org.akaza.openclinica.dao.managestudy.DiscrepancyNoteDAO;
 import org.akaza.openclinica.dao.managestudy.EventDefinitionCRFDAO;
@@ -283,9 +282,10 @@ public class ChangeStudyServlet extends SecureController {
                 + ub.getId() + " AND (dn.resolution_status_id=1 OR dn.resolution_status_id=2 OR dn.resolution_status_id=3)", currentStudy);
         request.setAttribute("assignedDiscrepancies", assignedDiscrepancies == null ? 0 : assignedDiscrepancies);
 
-        if (currentRole.isInvestigator() || currentRole.isResearchAssistant()|| currentRole.isResearchAssistant2()) {
-            setupListStudySubjectTable();
-        }
+        // Phase B.4 jmesa PR 4c: investigator / RA / RA2 study-subject
+        // matrix is now rendered client-side via
+        // managestudy/include/findSubjectsTable.jsp + /FindSubjectsData,
+        // so no server-side setup is needed.
         if (currentRole.isMonitor()) {
             setupSubjectSDVTable();
         } else if (currentRole.isCoordinator() || currentRole.isDirector()) {
@@ -397,28 +397,7 @@ public class ChangeStudyServlet extends SecureController {
         request.setAttribute("studyStatisticsRows", rows);
     }
 
-    private void setupListStudySubjectTable() {
-
-        ListStudySubjectTableFactory factory = new ListStudySubjectTableFactory(true);
-        factory.setStudyEventDefinitionDao(getStudyEventDefinitionDao());
-        factory.setSubjectDAO(getSubjectDAO());
-        factory.setStudySubjectDAO(getStudySubjectDAO());
-        factory.setStudyEventDAO(getStudyEventDAO());
-        factory.setStudyBean(currentStudy);
-        factory.setStudyGroupClassDAO(getStudyGroupClassDAO());
-        factory.setSubjectGroupMapDAO(getSubjectGroupMapDAO());
-        factory.setStudyDAO(getStudyDAO());
-        factory.setCurrentRole(currentRole);
-        factory.setCurrentUser(ub);
-        factory.setEventCRFDAO(getEventCRFDAO());
-        factory.setEventDefintionCRFDAO(getEventDefinitionCRFDAO());
-        factory.setStudyGroupDAO(getStudyGroupDAO());
-        factory.setStudyParameterValueDAO(getStudyParameterValueDAO());
-        String findSubjectsHtml = factory.createTable(request, response).render();
-        request.setAttribute("findSubjectsHtml", findSubjectsHtml);
-    }
-
-    public StudyEventDefinitionDAO getStudyEventDefinitionDao() {
+public StudyEventDefinitionDAO getStudyEventDefinitionDao() {
         studyEventDefinitionDAO = studyEventDefinitionDAO == null ? new StudyEventDefinitionDAO(sm.getDataSource()) : studyEventDefinitionDAO;
         return studyEventDefinitionDAO;
     }

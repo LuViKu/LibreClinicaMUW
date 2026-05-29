@@ -22,7 +22,6 @@ import org.akaza.openclinica.bean.managestudy.StudyBean;
 import org.akaza.openclinica.bean.service.StudyParameterValueBean;
 import org.akaza.openclinica.control.core.SecureController;
 import org.akaza.openclinica.control.form.FormProcessor;
-import org.akaza.openclinica.control.submit.ListStudySubjectTableFactory;
 import org.akaza.openclinica.dao.login.UserAccountDAO;
 import org.akaza.openclinica.dao.managestudy.DiscrepancyNoteDAO;
 import org.akaza.openclinica.dao.managestudy.EventDefinitionCRFDAO;
@@ -199,9 +198,10 @@ public class MainMenuServlet extends SecureController {
                 }
                 setPresetValues(fp.getPresetValues());
 
-                if (currentRole.isInvestigator() || currentRole.isResearchAssistant() || currentRole.isResearchAssistant2()) {
-                    setupListStudySubjectTable();
-                }
+                // Phase B.4 jmesa PR 4c: investigator / RA / RA2 see
+                // the study-subject matrix inline on MainMenu. The
+                // table is now rendered client-side from
+                // /FindSubjectsData, so no server-side setup is needed.
                 if (currentRole.isMonitor()) {
                     setupSubjectSDVTable();
                 } else if (currentRole.isCoordinator() || currentRole.isDirector()) {
@@ -338,28 +338,6 @@ public class MainMenuServlet extends SecureController {
         request.setAttribute("studyStatisticsRows", rows);
     }
 
-    private void setupListStudySubjectTable() {
-
-        ListStudySubjectTableFactory factory = new ListStudySubjectTableFactory(true);
-        factory.setStudyEventDefinitionDao(getStudyEventDefinitionDao());
-        factory.setSubjectDAO(getSubjectDAO());
-        factory.setStudySubjectDAO(getStudySubjectDAO());
-        factory.setStudyEventDAO(getStudyEventDAO());
-        factory.setStudyBean(currentStudy);
-        factory.setStudyGroupClassDAO(getStudyGroupClassDAO());
-        factory.setSubjectGroupMapDAO(getSubjectGroupMapDAO());
-        factory.setStudyDAO(getStudyDAO());
-        factory.setCurrentRole(currentRole);
-        factory.setCurrentUser(ub);
-        factory.setEventCRFDAO(getEventCRFDAO());
-        factory.setEventDefintionCRFDAO(getEventDefinitionCRFDAO());
-        factory.setStudyGroupDAO(getStudyGroupDAO());
-        factory.setStudyParameterValueDAO(getStudyParameterValueDAO());
-        String findSubjectsHtml = factory.createTable(request, response).render();
-        request.setAttribute("findSubjectsHtml", findSubjectsHtml);
-    }
-
-    
     public StudyParameterValueDAO getStudyParameterValueDAO() {
      studyParameterValueDAO = this.studyParameterValueDAO == null ? new StudyParameterValueDAO(sm.getDataSource()) : studyParameterValueDAO;
 		return studyParameterValueDAO;

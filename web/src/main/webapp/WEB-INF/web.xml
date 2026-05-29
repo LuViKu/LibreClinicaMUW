@@ -924,6 +924,11 @@
         <servlet-class>org.akaza.openclinica.control.admin.ListSubjectDataServlet</servlet-class>
     </servlet>
     <servlet>
+        <servlet-name>FindSubjectsDataServlet</servlet-name>
+        <description>JSON endpoint for the DataTables-backed study-subject matrix (Phase B.4 jmesa PR 4c).</description>
+        <servlet-class>org.akaza.openclinica.control.submit.FindSubjectsDataServlet</servlet-class>
+    </servlet>
+    <servlet>
         <servlet-name>UpdateSubjectServlet</servlet-name>
         <display-name>UpdateSubject</display-name>
         <servlet-class>org.akaza.openclinica.control.admin.UpdateSubjectServlet</servlet-class>
@@ -1964,6 +1969,10 @@
     <servlet-mapping>
         <servlet-name>ListSubjectDataServlet</servlet-name>
         <url-pattern>/ListSubjectData</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>FindSubjectsDataServlet</servlet-name>
+        <url-pattern>/FindSubjectsData</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
         <servlet-name>UpdateSubjectServlet</servlet-name>
