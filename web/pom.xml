@@ -362,6 +362,16 @@
 					</ignoredUnusedDeclaredDependencies>
                     <ignoredUsedUndeclaredDependencies>
                         <ignoredUsedUndeclaredDependency>javax.annotation:javax.annotation-api</ignoredUsedUndeclaredDependency>
+                        <!-- Phase B.4 smoke harness (PR #37 + #38): SmokeIT imports
+                             from selenium-api / -chrome-driver / -chromium-driver /
+                             -remote-driver / -support, all transitives of the
+                             umbrella selenium-java dep declared above. Listing
+                             each individually would be drift-prone. -->
+                        <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-api</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-chrome-driver</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-chromium-driver</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-remote-driver</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-support</ignoredUsedUndeclaredDependency>
                     </ignoredUsedUndeclaredDependencies>
 		        </configuration>
 		      </plugin>

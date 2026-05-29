@@ -18,7 +18,6 @@ COPY core/pom.xml core/
 COPY odm/pom.xml odm/
 COPY docs/pom.xml docs/
 COPY web/pom.xml web/
-COPY ws/pom.xml ws/
 
 RUN --mount=type=cache,target=/root/.m2 \
     set -eux; \
@@ -39,7 +38,6 @@ RUN --mount=type=cache,target=/root/.m2 \
     --mount=type=cache,target=/app/docs/target \
     --mount=type=cache,target=/app/odm/target \
     --mount=type=cache,target=/app/web/target \
-    --mount=type=cache,target=/app/ws/target \
     set -eux; \
     mvn package; \
     # Maven's default WAR name is ${artifactId}-${version}.war, so this is

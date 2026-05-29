@@ -52,18 +52,12 @@
                 </exclusion>
             </exclusions>
 		</dependency>
-		<!--
-		    Explicit xalan:serializer pull. batik-bridge (transitive of fop:1.0)
-		    pulls xalan:xalan but not xalan:serializer; the CVE upgrade to
-		    xalan 2.7.3 finalised the JAR split, so tests that touch
-		    org.apache.xml.serializer.* (e.g. Castor's marshaller path) fail
-		    with NoClassDefFoundError without this pin. Version comes from
-		    parent dependencyManagement.
-		-->
-		<dependency>
-			<groupId>xalan</groupId>
-			<artifactId>serializer</artifactId>
-		</dependency>
+		<!-- xalan:serializer pin removed 2026-05-29 (Phase B.4 smoke-bundle
+		     branch): Castor was deleted in PR #28 so the marshaller path
+		     that needed org.apache.xml.serializer.* no longer exists, and
+		     maven-dependency-plugin analyze-only now (correctly) flags
+		     the dep as unused. Original PR #25 context preserved in git
+		     log if a future xalan-using path comes back. -->
 		<dependency>
 			<groupId>commons-lang</groupId>
 			<artifactId>commons-lang</artifactId>
@@ -118,10 +112,11 @@
 			<groupId>commons-io</groupId>
 			<artifactId>commons-io</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>commons-validator</groupId>
-			<artifactId>commons-validator</artifactId>
-		</dependency>
+		<!-- commons-validator removed from core 2026-05-29: no org.apache
+		     .commons.validator imports under core/src. Still pulled in via
+		     web/pom.xml for web-side form validation; the analyze-only
+		     gate only checks per-module declared-vs-used. -->
+
 		<dependency>
 			<groupId>javax.servlet</groupId>
 			<artifactId>servlet-api</artifactId>
