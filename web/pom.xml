@@ -85,10 +85,9 @@
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-ldap</artifactId>
 		</dependency>
-        <dependency>
-            <groupId>org.jmesa</groupId>
-            <artifactId>jmesa</artifactId>
-        </dependency>
+        <!-- Phase B.4 jmesa PR 9 (cohort 7): jmesa dependency dropped.
+             All *TableFactory subclasses + SDVUtil rendering paths
+             migrated to vanilla-JS DataServlets across cohorts 1-7. -->
 		<dependency>
 			<groupId>commons-beanutils</groupId>
 			<artifactId>commons-beanutils</artifactId>

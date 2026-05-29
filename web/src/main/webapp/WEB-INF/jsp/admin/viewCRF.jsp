@@ -194,11 +194,37 @@
 <span class="title_Manage" style="font-weight: bold;"><fmt:message key="studies_using_crf" bundle="${resword}"/></span>
 
 <div id="studiesDiv">
-    <form  action="${pageContext.request.contextPath}/ViewCRF">
-        <input type="hidden" name="module" value="admin">
-        <input type="hidden" name="crfId" value="${crf.id}">
-        ${studiesTableHTML}
-    </form>
+    <%-- Phase B.4 jmesa PR 9 (cohort 7): jmesa renderStudiesTable
+         replaced by plain JSTL c:forEach. The studyBeans request
+         attribute carries StudyBean instances. --%>
+    <table id="studiesTable" class="aka_form" style="width:100%; border-collapse: collapse;">
+        <thead>
+            <tr class="aka_table_header_row">
+                <th class="aka_table_header">Study Name</th>
+                <th class="aka_table_header">Unique Protocol Id</th>
+                <th class="aka_table_header">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <c:choose>
+                <c:when test="${empty studyBeans}">
+                    <tr><td colspan="3" style="text-align:center; padding:8px;">
+                        <fmt:message key="no_data" bundle="${resword}"/>
+                    </td></tr>
+                </c:when>
+                <c:otherwise>
+                    <c:forEach var="s" items="${studyBeans}">
+                        <tr>
+                            <td><c:out value="${s.name}"/></td>
+                            <td><c:out value="${s.identifier}"/></td>
+                            <td><a href="${pageContext.request.contextPath}/ViewStudy?id=${s.id}&viewFull=yes">
+                                <img src="images/bt_View.gif" border="0" alt="View" hspace="4"/></a></td>
+                        </tr>
+                    </c:forEach>
+                </c:otherwise>
+            </c:choose>
+        </tbody>
+    </table>
 </div>
 
  <br/>

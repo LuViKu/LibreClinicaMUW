@@ -30,8 +30,10 @@ import javax.servlet.http.HttpSession;
 import javax.sql.DataSource;
 
 import org.akaza.openclinica.bean.admin.CRFBean;
+import org.akaza.openclinica.bean.core.DataEntryStage;
 import org.akaza.openclinica.bean.core.Role;
 import org.akaza.openclinica.bean.core.Status;
+import org.akaza.openclinica.bean.core.SubjectEventStatus;
 import org.akaza.openclinica.bean.login.StudyUserRoleBean;
 import org.akaza.openclinica.bean.login.UserAccountBean;
 import org.akaza.openclinica.bean.managestudy.EventDefinitionCRFBean;
@@ -40,7 +42,10 @@ import org.akaza.openclinica.bean.managestudy.StudyEventBean;
 import org.akaza.openclinica.bean.managestudy.StudyGroupBean;
 import org.akaza.openclinica.bean.managestudy.StudySubjectBean;
 import org.akaza.openclinica.bean.submit.EventCRFBean;
+import org.akaza.openclinica.bean.submit.SubjectBean;
 import org.akaza.openclinica.controller.helper.SdvFilterDataBean;
+import org.akaza.openclinica.dao.EventCRFSDVFilter;
+import org.akaza.openclinica.dao.EventCRFSDVSort;
 import org.akaza.openclinica.dao.StudySubjectSDVFilter;
 import org.akaza.openclinica.dao.StudySubjectSDVSort;
 import org.akaza.openclinica.dao.admin.CRFDAO;
@@ -50,8 +55,10 @@ import org.akaza.openclinica.dao.managestudy.StudyEventDAO;
 import org.akaza.openclinica.dao.managestudy.StudyGroupDAO;
 import org.akaza.openclinica.dao.managestudy.StudySubjectDAO;
 import org.akaza.openclinica.dao.submit.EventCRFDAO;
+import org.akaza.openclinica.dao.submit.SubjectDAO;
 import org.akaza.openclinica.domain.SourceDataVerification;
 import org.akaza.openclinica.i18n.core.LocaleResolver;
+import org.akaza.openclinica.i18n.util.I18nFormatUtil;
 import org.akaza.openclinica.i18n.util.ResourceBundleProvider;
 import org.akaza.openclinica.view.StudyInfoPanel;
 import org.akaza.openclinica.web.table.sdv.SDVUtil;
@@ -317,6 +324,168 @@ public class SDVController {
         try { return Integer.parseInt(s); } catch (NumberFormatException nfe) { return 0; }
     }
 
+    /**
+     * JSON endpoint backing the per-event-CRF SDV table rendered by
+     * {@code /pages/viewAllSubjectSDVtmp}, {@code /viewAllSubjectSDVform},
+     * and {@code /viewAllSubjectSDV} (per-subject variant). Phase B.4
+     * jmesa PR 9 (cohort 7) — replaces the
+     * {@code SDVUtil.renderEventCRFTableWithLimit} /
+     * {@code SDVUtil.renderSubjectsTableWithLimit} HTML blobs.
+     *
+     * <p>Optional {@code studySubjectId} query param restricts the
+     * result to one subject (per-subject variant); omit it for the
+     * full-study event-CRF table.
+     *
+     * <p>Each row carries semantic fields plus an {@code
+     * availableActions} array; the JS fragment renders the SDV
+     * checkbox / DoubleCheck icon / CRF-status icon / submit button
+     * based on those.
+     */
+    @RequestMapping("/viewAllSubjectSdvData")
+    @ResponseBody
+    public void viewEventCrfSdvData(HttpServletRequest request, HttpServletResponse response,
+                                    @RequestParam("studyId") int studyId)
+            throws IOException {
+        if (!mayProceed(request)) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return;
+        }
+        int studySubjectIdFilter = -1;
+        String ssidParam = request.getParameter("studySubjectId");
+        if (ssidParam != null && !ssidParam.isEmpty()) {
+            try { studySubjectIdFilter = Integer.parseInt(ssidParam); }
+            catch (NumberFormatException nfe) { studySubjectIdFilter = -1; }
+        }
+
+        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        SubjectDAO subjectDAO = new SubjectDAO(dataSource);
+        StudyDAO studyDAO = new StudyDAO(dataSource);
+        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
+        EventDefinitionCRFDAO eventDefinitionCRFDAO = new EventDefinitionCRFDAO(dataSource);
+
+        java.util.ResourceBundle resword = ResourceBundleProvider.getWordsBundle(
+                LocaleResolver.getLocale(request));
+        SimpleDateFormat dateFormat = I18nFormatUtil.getDateFormat(LocaleResolver.getLocale(request));
+
+        int rowStart = 0;
+        int rowEnd = 500;
+
+        // Materialise the row list. Per-subject variant uses the
+        // legacy by-subject DAO call; full-study uses the filter/sort
+        // overload from the (now-deleted) jmesa rendering path.
+        List<EventCRFBean> eventCRFBeans;
+        long totalRows;
+        if (studySubjectIdFilter > 0) {
+            eventCRFBeans = eventCRFDAO.getEventCRFsByStudySubjectLimit(
+                    studySubjectIdFilter, studyId, studyId, rowEnd - rowStart, rowStart);
+            totalRows = eventCRFBeans.size();
+        } else {
+            EventCRFSDVFilter filter = new EventCRFSDVFilter(studyId);
+            EventCRFSDVSort sort = new EventCRFSDVSort();
+            totalRows = eventCRFDAO.getCountWithFilter(studyId, studyId, filter);
+            eventCRFBeans = eventCRFDAO.getWithFilterAndSort(
+                    studyId, studyId, filter, sort, rowStart, rowEnd);
+        }
+
+        List<Map<String, Object>> rows = new ArrayList<>(eventCRFBeans.size());
+        // Resolve event names + display values per row (lifted from
+        // the deleted SDVUtil.getSubjectRows).
+        for (EventCRFBean crfBean : eventCRFBeans) {
+            StudySubjectBean ss = (StudySubjectBean) studySubjectDAO.findByPK(crfBean.getStudySubjectId());
+            StudyEventBean studyEvent = (StudyEventBean) studyEventDAO.findByPK(crfBean.getStudyEventId());
+            SubjectBean subject = (SubjectBean) subjectDAO.findByPK(ss.getSubjectId());
+            StudyBean parentStudy = (StudyBean) studyDAO.findByPK(ss.getStudyId());
+            EventDefinitionCRFBean edc = eventDefinitionCRFDAO
+                    .findByStudyEventIdAndCRFVersionId(parentStudy, studyEvent.getId(), crfBean.getCRFVersionId());
+
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", crfBean.getId());
+            row.put("studySubjectId", ss.getLabel());
+            row.put("studySubjectInternalId", ss.getId());
+            row.put("studyIdentifier", parentStudy == null ? "" : parentStudy.getIdentifier());
+            row.put("personId", subject == null ? "" : subject.getUniqueIdentifier());
+            row.put("secondaryId", ss.getSecondaryLabel());
+            row.put("eventName", studyEvent.getName());
+            row.put("eventDate", studyEvent.getDateStarted() == null
+                    ? "" : dateFormat.format(studyEvent.getDateStarted()));
+            row.put("enrollmentDate", ss.getEnrollmentDate() == null
+                    ? "" : dateFormat.format(ss.getEnrollmentDate()));
+            row.put("studySubjectStatus",
+                    ss.getStatus() == null ? "" : ss.getStatus().getName());
+
+            row.put("crfNameVersion", sdvUtil.getCRFName(crfBean.getCRFVersionId())
+                    + "/ " + sdvUtil.getCRFVersionName(crfBean.getCRFVersionId()));
+
+            SourceDataVerification sourceData =
+                    edc == null ? null : edc.getSourceDataVerification();
+            row.put("sdvRequirementDefinition",
+                    sourceData == null ? "" : sourceData.toString());
+
+            int crfStageId = crfBean.getStage() == null
+                    ? DataEntryStage.UNCOMPLETED.getId() : crfBean.getStage().getId();
+            if (studyEvent.getSubjectEventStatus() == SubjectEventStatus.LOCKED
+                    || studyEvent.getSubjectEventStatus() == SubjectEventStatus.STOPPED
+                    || studyEvent.getSubjectEventStatus() == SubjectEventStatus.SKIPPED) {
+                crfStageId = DataEntryStage.LOCKED.getId();
+            }
+            row.put("crfStageId", crfStageId);
+            row.put("eventDefinitionCRFId", edc == null ? 0 : edc.getId());
+            row.put("crfVersionId", crfBean.getCRFVersionId());
+
+            row.put("lastUpdatedDate", crfBean.getUpdatedDate() == null
+                    ? "" : dateFormat.format(crfBean.getUpdatedDate()));
+            row.put("lastUpdatedBy", crfBean.getUpdater() == null ? ""
+                    : crfBean.getUpdater().getFirstName() + " " + crfBean.getUpdater().getLastName());
+            row.put("studyEventStatus", studyEvent.getStatus() == null
+                    ? "" : studyEvent.getStatus().getName());
+
+            boolean sdvVerified = crfBean.isSdvStatus();
+            boolean studyLocked = parentStudy != null && parentStudy.getStatus() != null
+                    && parentStudy.getStatus().isLocked();
+            row.put("sdvVerified", sdvVerified);
+            row.put("studyLocked", studyLocked);
+
+            List<String> actions = new ArrayList<>();
+            if (!sdvVerified && !studyLocked) {
+                actions.add("sdv");
+            }
+            row.put("availableActions", actions);
+
+            rows.add(row);
+        }
+
+        List<Map<String, Object>> columns = new ArrayList<>();
+        columns.add(column("sdvStatus",                resword.getString("SDV_status")));
+        columns.add(column("studySubjectId",           resword.getString("study_subject_ID")));
+        columns.add(column("studyIdentifier",          resword.getString("site_id")));
+        columns.add(column("personId",                 resword.getString("person_ID")));
+        columns.add(column("secondaryId",              resword.getString("secondary_ID")));
+        columns.add(column("eventName",                resword.getString("event_name")));
+        columns.add(column("eventDate",                resword.getString("event_date")));
+        columns.add(column("enrollmentDate",           resword.getString("enrollment_date")));
+        columns.add(column("studySubjectStatus",       resword.getString("subject_status")));
+        columns.add(column("crfNameVersion",           resword.getString("CRF_name") + " / " + resword.getString("version")));
+        columns.add(column("sdvRequirementDefinition", resword.getString("SDV_requirement")));
+        columns.add(column("crfStatus",                resword.getString("CRF_status")));
+        columns.add(column("lastUpdatedDate",          resword.getString("last_updated_date")));
+        columns.add(column("lastUpdatedBy",            resword.getString("last_updated_by")));
+        columns.add(column("studyEventStatus",         resword.getString("study_event_status")));
+        columns.add(column("sdvStatusActions",         resword.getString("actions")));
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("draw", parseDraw(request));
+        payload.put("recordsTotal", totalRows);
+        payload.put("recordsFiltered", totalRows);
+        payload.put("data", rows);
+        payload.put("columns", columns);
+
+        response.setContentType("application/json;charset=UTF-8");
+        try (OutputStream out = response.getOutputStream()) {
+            new ObjectMapper().writeValue(out, payload);
+        }
+    }
+
     @RequestMapping("/viewAllSubjectSDV")
     public ModelMap viewSubjectHandler(HttpServletRequest request, @RequestParam("studySubjectId") int studySubjectId, @RequestParam("studyId") int studyId) {
 
@@ -335,9 +504,9 @@ public class SDVController {
         }
 
         request.setAttribute("pageMessages", pageMessages);
-
-        String sdvMatrix = sdvUtil.renderSubjectsTableWithLimit(request, studyId, studySubjectId);
-        gridMap.addAttribute(SUBJECT_SDV_TABLE_ATTRIBUTE, sdvMatrix);
+        // Phase B.4 jmesa PR 9 (cohort 7): sdvUtil.renderSubjectsTableWithLimit
+        // is gone. JSP shell now includes a vanilla-JS fragment that fetches
+        // /pages/viewAllSubjectSdvData asynchronously.
         return gridMap;
     }
 
@@ -397,10 +566,8 @@ public class SDVController {
         }
 
         request.setAttribute("pageMessages", pageMessages);
-
-        String sdvMatrix = sdvUtil.renderEventCRFTableWithLimit(request, studyId, "../");
-
-        gridMap.addAttribute(SUBJECT_SDV_TABLE_ATTRIBUTE, sdvMatrix);
+        // Phase B.4 jmesa PR 9 (cohort 7): sdvUtil.renderEventCRFTableWithLimit
+        // is gone — replaced by /pages/viewAllSubjectSdvData + JSP fragment.
         return gridMap;
     }
 
@@ -430,8 +597,8 @@ public class SDVController {
         }
 
         request.setAttribute("pageMessages", pageMessages);
-        String sdvMatrix = sdvUtil.renderEventCRFTableWithLimit(request, studyId, "");
-        gridMap.addAttribute(SUBJECT_SDV_TABLE_ATTRIBUTE, sdvMatrix);
+        // Phase B.4 jmesa PR 9 (cohort 7): sdvUtil.renderEventCRFTableWithLimit
+        // is gone — replaced by /pages/viewAllSubjectSdvData + JSP fragment.
         return gridMap;
     }
 

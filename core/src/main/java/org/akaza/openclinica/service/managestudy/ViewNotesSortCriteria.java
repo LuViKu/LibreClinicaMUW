@@ -14,8 +14,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.akaza.openclinica.core.util.Pair;
-import org.jmesa.limit.Sort;
-import org.jmesa.limit.SortSet;
 
 /**
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
@@ -47,14 +45,8 @@ public class ViewNotesSortCriteria {
         return criteria;
     }
     
-    public static ViewNotesSortCriteria buildFilterCriteria(SortSet sortSet) {
-        ViewNotesSortCriteria criteria = new ViewNotesSortCriteria();
-        for (Sort sort : sortSet.getSorts()) {
-            String sortField = SORT_BY_TABLE_COLUMN.get(sort.getProperty());
-            criteria.getSorters().put(sortField, sort.getOrder().name());
-        }
-        return criteria;
-    }
+    // Phase B.4 jmesa PR 9 (cohort 7): SortSet-based buildFilterCriteria
+    // overload removed — no jmesa-driven caller remains.
 
     public Map<String, String> getSorters() {
         return sorters;

@@ -214,11 +214,9 @@
 				<artifactId>LibreClinica-odm</artifactId>
 				<version>2.2-muw</version>
 			</dependency>
-			<dependency>
-				<groupId>org.jmesa</groupId>
-				<artifactId>jmesa</artifactId>
-				<version>2.4.2-oc</version>
-			</dependency>
+			<!-- Phase B.4 jmesa PR 9 (cohort 7): jmesa dependencyManagement
+			     entry dropped. The 2.4.2-oc local-OpenClinica fork is no
+			     longer needed by any module. -->
 			<dependency>
 				<!-- 2.2.3 -> 2.3.2: final 2.3.x release, API-compatible.
 				     Jump to 2.5.x deferred to Phase D (Jakarta-compatible namespace). -->

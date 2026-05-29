@@ -40,22 +40,8 @@
     </td>
 </tr>
 <jsp:include page="include/sideInfo.jsp"/>
-<link rel="stylesheet" href="../includes/jmesa/jmesa.css" type="text/css">
-<script type="text/JavaScript" language="JavaScript" src="../includes/jmesa/jquery.min.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="../includes/jmesa/jmesa.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="../includes/jmesa/jquery.jmesa.js"></script>
-  <script type="text/javascript" language="JavaScript" src="../includes/jmesa/jquery-migrate-1.1.1.js"></script>
-<%-- view all subjects starts here --%>
-<script type="text/javascript">
-    function onInvokeAction(id,action) {
-        setExportToLimit(id, '');
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        //location.href = '${pageContext.request.contextPath}/ViewCRF?module=manage&crfId=' + '${crf.id}&' + parameterString;
-    }
-</script>
+<%-- Phase B.4 jmesa PR 9 (cohort 7): jmesa scripts removed — table
+     rendered client-side by include/viewAllSubjectSdvTable.jsp. --%>
 
 <div id="searchFilterSDV">
     <table border="0" cellpadding="0" cellspacing="0">
@@ -233,13 +219,11 @@
         <input type="hidden" name="crfId" value="0">
         <%-- the destination JSP page after removal or adding SDV for an eventCRF --%>
         <input type="hidden" name="redirection" value="viewAllSubjectSDVform">
-        <%--<input type="hidden" name="decorator" value="mydecorator">--%>
-        ${sdvTableAttribute}
+        <jsp:include page="include/viewAllSubjectSdvTable.jsp"/>
         <br />
         <input type="submit" name="sdvAllFormSubmit" class="button_medium" value="<fmt:message key="submit" bundle="${resword}"/>" onclick="this.form.method='POST';this.form.action='${pageContext.request.contextPath}/pages/handleSDVPost';this.form.submit();"/>
         <input type="submit" name="sdvAllFormCancel" class="button_medium" value="<fmt:message key="cancel" bundle="${resword}"/>" onclick="this.form.action='${pageContext.request.contextPath}/pages/viewAllSubjectSDVtmp';this.form.submit();"/>
     </form>
-    <script type="text/javascript">hideCols('sdv',[1,2,5,6,9,10])</script>
 
 </div>
 <br />

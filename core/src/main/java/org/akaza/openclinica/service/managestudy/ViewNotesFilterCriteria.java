@@ -20,10 +20,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.lang.StringUtils;
-import org.jmesa.limit.Filter;
-import org.jmesa.limit.FilterSet;
-import org.jmesa.limit.Limit;
-import org.jmesa.limit.RowSelect;
 
 /**
  * @author Doug Rodrigues (douglas.rodrigues@openclinica.com)
@@ -111,37 +107,9 @@ public class ViewNotesFilterCriteria {
         return criteria;
     }
 
-    public static ViewNotesFilterCriteria buildFilterCriteria(Limit limit, String datePattern,
-            Map<String, String> discrepancyNoteTypeDecoder, Map<String, String> resolutionTypeDecoder) {
-        ViewNotesFilterCriteria criteria = new ViewNotesFilterCriteria();
-
-        FilterSet filterSet = limit.getFilterSet();
-        if (filterSet != null) {
-            DateFormat df = new SimpleDateFormat(datePattern);
-            for (Filter filter : filterSet.getFilters()) {
-                String columnName = filter.getProperty();
-                String filterName = FILTER_BY_TABLE_COLUMN.get(columnName);
-                if (filterName == null) {
-                    throw new IllegalArgumentException("No query fragment available for column '" + columnName + "'");
-                }
-                String value = filter.getValue();
-                if (filterName.equals("discrepancy_note_type_id")) {
-                    value = discrepancyNoteTypeDecoder.get(value);
-                } else if (filterName.equals("resolution_status_id")) {
-                    value = resolutionTypeDecoder.get(value);
-                }
-                criteria.getFilters().put(filterName, processValue(filterName, value, df));
-            }
-        }
-
-        RowSelect rowSelect = limit.getRowSelect();
-        if (rowSelect != null) {
-            criteria.pageNumber = rowSelect.getPage();
-            criteria.pageSize = rowSelect.getMaxRows();
-        }
-
-        return criteria;
-    }
+    // Phase B.4 jmesa PR 9 (cohort 7): Limit-based buildFilterCriteria
+    // overload removed — the Map-based variant above replaces it now
+    // that no jmesa-driven caller remains.
 
     public Map<String, Object> getFilters() {
         return filters;
