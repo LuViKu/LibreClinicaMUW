@@ -410,8 +410,12 @@
 						<ignoredUnusedDeclaredDependency>org.apache.httpcomponents:httpclient</ignoredUnusedDeclaredDependency>
 						<!-- Needed by LibreClinica-web when docs module resources are used to pack the pdf manuals -->
 						<ignoredUnusedDeclaredDependency> at.ac.meduniwien.ophthalmology.libreclinica:LibreClinica-docs</ignoredUnusedDeclaredDependency>
-						<!-- Phase C.1: Spring Boot web starter on classpath ahead of C.2's
-						     @SpringBootApplication. No direct compile-time references yet. -->
+						<!-- Phase C.1: Spring Boot web starter — brings the embedded
+						     servlet container's transitive graph, Boot's MVC autoconfig,
+						     etc. Direct refs in LibreClinicaApplication are on
+						     spring-boot + spring-boot-autoconfigure jars (under the
+						     starter umbrella). Analyze-only doesn't credit the starter
+						     for those transitives. -->
 						<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-web</ignoredUnusedDeclaredDependency>
 						<!-- Phase C.1: Boot's BOM upgrades jakarta.mail-api to a version
 						     where the impl ships in org.eclipse.angus:jakarta.mail.
@@ -433,6 +437,12 @@
                         <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-chromium-driver</ignoredUsedUndeclaredDependency>
                         <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-remote-driver</ignoredUsedUndeclaredDependency>
                         <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-support</ignoredUsedUndeclaredDependency>
+                        <!-- Phase C.2: LibreClinicaApplication imports
+                             SpringApplication + @SpringBootApplication +
+                             autoconfig exclusion classes; all come via the
+                             starter-web transitive graph. -->
+                        <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot-autoconfigure</ignoredUsedUndeclaredDependency>
                     </ignoredUsedUndeclaredDependencies>
 		        </configuration>
 		      </plugin>

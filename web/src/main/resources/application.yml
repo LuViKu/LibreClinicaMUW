@@ -1,0 +1,56 @@
+# Phase C.2 — Spring Boot application configuration.
+#
+# Dormant during WAR deployment (the legacy XML configs imported via
+# @ImportResource on LibreClinicaApplication continue to be authoritative).
+# Activated for the future `java -jar` execution path that C.14 flips on
+# when packaging changes from WAR to JAR.
+#
+# Per Phase C playbook §C.2.
+
+spring:
+  application:
+    name: libreclinica
+
+  # Phase C.3 will replace the XML-declared dataSource with Spring Boot's
+  # auto-configured pool. Until then this block is read but the actual
+  # DataSource bean comes from applicationContext-core-db.xml (which has
+  # its own legacy `s[propertyName]` placeholder resolution against
+  # datainfo.properties — C.8 retires that).
+  datasource:
+    url: ${LIBRECLINICA_DB_URL:jdbc:postgresql://db:5432/libreclinica?sslMode=verify-full&scramMaxIterations=10000}
+    username: ${LIBRECLINICA_DB_USER:clinica}
+    password: ${LIBRECLINICA_DB_PASSWORD:clinica}
+
+  # Phase C.4 will translate the XML JpaProperties into this block.
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Phase C.7 — mail config. Default targets the compose-local mailcrab
+  # SMTP container; override via env vars in real deployments.
+  mail:
+    host: ${LIBRECLINICA_SMTP_HOST:smtp}
+    port: ${LIBRECLINICA_SMTP_PORT:1025}
+
+  # Phase C.13 will replace the SpringLiquibase XML bean with this block.
+  liquibase:
+    change-log: classpath:migration/db.changelog-master.xml
+
+  # Phase C.2: don't try to bind the legacy custom `s[propertyName]`
+  # placeholder syntax through Spring Boot's standard resolver. C.8
+  # converts those sites to `${propertyName}`.
+  config:
+    import: optional:classpath:datainfo.properties
+
+logging:
+  # Preserve the existing logback.xml (mounted from docker/config/ at
+  # runtime; explicit reference keeps Spring Boot's default
+  # auto-configuration out of the way).
+  config: classpath:logback.xml
+
+server:
+  servlet:
+    context-path: /LibreClinica
+  port: 8080
