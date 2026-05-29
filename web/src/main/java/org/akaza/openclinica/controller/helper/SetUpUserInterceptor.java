@@ -15,7 +15,7 @@ import org.akaza.openclinica.i18n.core.LocaleResolver;
 import org.akaza.openclinica.i18n.util.ResourceBundleProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.web.servlet.handler.HandlerInterceptorAdapter;
+import org.springframework.web.servlet.HandlerInterceptor;
 
 import java.util.Locale;
 
@@ -28,7 +28,11 @@ import javax.sql.DataSource;
  * An "interceptor" class that sets up a UserAccount and stores it in the Session, before
  * another class is initialized and potentially uses that UserAccount.
  */
-public class SetUpUserInterceptor extends HandlerInterceptorAdapter {
+// Phase B.4 cliff: HandlerInterceptorAdapter was removed in Spring 6 (the
+// HandlerInterceptor interface gained default methods in Spring 5.3, so the
+// adapter became obsolete). Implementing the interface directly is the
+// drop-in replacement — preHandle's signature is unchanged.
+public class SetUpUserInterceptor implements HandlerInterceptor {
 
     public static final String USER_BEAN_NAME = "userBean";
 

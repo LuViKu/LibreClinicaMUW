@@ -36,7 +36,6 @@ import jakarta.mail.internet.MimeMessage;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletOutputStream;
-import jakarta.servlet.SingleThreadModel;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -147,7 +146,11 @@ import org.springframework.security.core.userdetails.UserDetails;
  *
  * @author ssachs
  */
-public abstract class SecureController extends HttpServlet implements SingleThreadModel {
+// Phase B.4 cliff: SingleThreadModel removed in Servlet 5 (jakarta.servlet 6).
+// The interface was a long-deprecated no-op marker — request-scoped state must
+// be addressed at the field level (each SecureController subclass owns its own
+// HttpSession-scoped or request-scoped fields). No behavior change.
+public abstract class SecureController extends HttpServlet {
     /**
 	 * 
 	 */

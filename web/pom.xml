@@ -167,6 +167,27 @@
 		<dependency>
 			<groupId>org.glassfish.web</groupId>
 			<artifactId>jakarta.servlet.jsp.jstl</artifactId>
+			<!-- JSTL impl: pulled in for JSP runtime; no compile-time references in
+			     web/src — declared as runtime to satisfy analyze-only. -->
+			<scope>runtime</scope>
+		</dependency>
+		<!-- Phase B.4 cliff: explicit decls satisfying analyze-only.
+		     jakarta.annotation-api is used directly by Spring 6 @PostConstruct usage;
+		     commons-fileupload2-core supplies DiskFileItem(Factory);
+		     jsr311-api still required by transitive Jersey 1.x (will be dropped
+		     when Jersey 3 lands in a later cliff). -->
+		<dependency>
+			<groupId>jakarta.annotation</groupId>
+			<artifactId>jakarta.annotation-api</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-fileupload2-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>javax.ws.rs</groupId>
+			<artifactId>jsr311-api</artifactId>
+			<version>1.1.1</version>
 		</dependency>
         <dependency>
             <groupId>jakarta.servlet</groupId>

@@ -41,9 +41,13 @@ import org.akaza.openclinica.i18n.util.ResourceBundleProvider;
 import org.akaza.openclinica.service.crfdata.XformMetaDataService;
 import org.akaza.openclinica.view.Page;
 import org.akaza.openclinica.web.InsufficientPermissionException;
-import org.apache.commons.fileupload.FileItem;
-import org.apache.commons.fileupload.disk.DiskFileItemFactory;
-import org.apache.commons.fileupload.servlet.ServletFileUpload;
+// Phase B.4 cliff: commons-fileupload 1.x → commons-fileupload2-jakarta-servlet6.
+// Disk-backed variants in fileupload2.core; the jakarta.servlet 6 entry point
+// lives under fileupload2.jakarta.servlet6.
+import java.nio.charset.StandardCharsets;
+import org.apache.commons.fileupload2.core.DiskFileItem;
+import org.apache.commons.fileupload2.core.DiskFileItemFactory;
+import org.apache.commons.fileupload2.jakarta.servlet6.JakartaServletDiskFileUpload;
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.springframework.validation.DataBinder;
 import org.springframework.validation.Errors;
@@ -71,9 +75,9 @@ public class CreateXformCRFVersionServlet extends SecureController {
 
         
         // Retrieve submission data from multipart request
-        DiskFileItemFactory factory = new DiskFileItemFactory();
-        ServletFileUpload upload = new ServletFileUpload(factory);
-        List<FileItem> items = upload.parseRequest(request);
+        DiskFileItemFactory factory = DiskFileItemFactory.builder().get();
+        JakartaServletDiskFileUpload upload = new JakartaServletDiskFileUpload(factory);
+        List<DiskFileItem> items = upload.parseRequest(request);
         String submittedCrfName = retrieveFormFieldValue(items, "crfName");
         String submittedCrfVersionName = retrieveFormFieldValue(items, "versionName");
         String submittedCrfVersionDescription = retrieveFormFieldValue(items, "versionDescription");
@@ -237,18 +241,18 @@ public class CreateXformCRFVersionServlet extends SecureController {
         }
     }
 
-    private String retrieveFormFieldValue(List<FileItem> items, String fieldName) throws Exception {
-        for (FileItem item : items) {
+    private String retrieveFormFieldValue(List<DiskFileItem> items, String fieldName) throws Exception {
+        for (DiskFileItem item : items) {
             if (fieldName.equals(item.getFieldName()))
-                return item.getString("UTF-8");
+                return item.getString(StandardCharsets.UTF_8);
         }
         logger.warn("Form field '" + fieldName + "' missing from xform submission.");
         return "";
     }
 
-    private void saveAttachedMedia(List<FileItem> items, CrfBean crf, CrfVersion version) {
+    private void saveAttachedMedia(List<DiskFileItem> items, CrfBean crf, CrfVersion version) {
         boolean hasFiles = false;
-        for (FileItem item : items) {
+        for (DiskFileItem item : items) {
             if (!item.isFormField() && item.getName() != null && !item.getName().isEmpty())
                 hasFiles = true;
         }
@@ -261,7 +265,7 @@ public class CreateXformCRFVersionServlet extends SecureController {
                 logger.debug("Made the directory " + dir);
             }
             // Save any media files
-            for (FileItem item : items) {
+            for (DiskFileItem item : items) {
                 if (!item.isFormField()) {
 
                     String fileName = item.getName();
@@ -273,7 +277,8 @@ public class CreateXformCRFVersionServlet extends SecureController {
 
                     File uploadedFile = new File(dir + File.separator + fileName);
                     try {
-                        item.write(uploadedFile);
+                        // fileupload2: FileItem.write takes a Path, not a File.
+                        item.write(uploadedFile.toPath());
                     } catch (Exception e) {
                         throw new OpenClinicaSystemException(e.getMessage());
                     }

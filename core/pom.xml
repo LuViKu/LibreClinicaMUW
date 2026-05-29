@@ -104,6 +104,15 @@
 			<version>0.12</version>
 		</dependency>
       -->
+		<!-- fileupload2 core types (DiskFileItem, DiskFileItemFactory) are used
+		     directly under web/ and core/ — declare the core artifact alongside
+		     the jakarta.servlet6 entry-point artifact, since maven-dependency
+		     -plugin analyze-only requires every directly-used artifact to be
+		     explicit. -->
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-fileupload2-core</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-fileupload2-jakarta-servlet6</artifactId>
@@ -128,6 +137,9 @@
         <dependency>
         	<groupId>jakarta.activation</groupId>
 			<artifactId>jakarta.activation-api</artifactId>
+			<!-- Runtime-only: pulled in by jakarta.mail (mail engine
+			     activates DataHandler on send) but no compile-time references. -->
+			<scope>runtime</scope>
         </dependency>
         <dependency>
         	<groupId>jakarta.annotation</groupId>
@@ -271,11 +283,8 @@
 			<artifactId>liquibase-core</artifactId>
 			<scope>runtime</scope>
 		</dependency>
-        <dependency>
-            <groupId>javax.annotation</groupId>
-            <artifactId>javax.annotation-api</artifactId>
-            <version>1.3.2</version>
-        </dependency>
+        <!-- Phase B.4 cliff: javax.annotation-api 1.3.2 dropped — replaced
+             by jakarta.annotation-api declared above. -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>

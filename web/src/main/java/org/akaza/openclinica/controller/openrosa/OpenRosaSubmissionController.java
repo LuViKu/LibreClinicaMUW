@@ -34,9 +34,11 @@ import org.akaza.openclinica.exception.OpenClinicaSystemException;
 import org.akaza.openclinica.i18n.core.LocaleResolver;
 import org.akaza.openclinica.service.pmanage.ParticipantPortalRegistrar;
 import org.akaza.openclinica.web.pform.PFormCache;
-import org.apache.commons.fileupload.FileItem;
-import org.apache.commons.fileupload.disk.DiskFileItemFactory;
-import org.apache.commons.fileupload.servlet.ServletFileUpload;
+// Phase B.4 cliff: commons-fileupload 1.x → commons-fileupload2-jakarta-servlet6.
+import java.nio.charset.StandardCharsets;
+import org.apache.commons.fileupload2.core.DiskFileItem;
+import org.apache.commons.fileupload2.core.DiskFileItemFactory;
+import org.apache.commons.fileupload2.jakarta.servlet6.JakartaServletDiskFileUpload;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.slf4j.Logger;
@@ -106,20 +108,20 @@ public class OpenRosaSubmissionController {
                 logger.info("Submissions to the study not allowed.  Aborting submission.");
                 return new ResponseEntity<String>(org.springframework.http.HttpStatus.NOT_ACCEPTABLE);
             }
-            if (ServletFileUpload.isMultipartContent(request)) {
+            if (JakartaServletDiskFileUpload.isMultipartContent(request)) {
                 FileProperties fileProperties= new FileProperties();
-                DiskFileItemFactory factory = new DiskFileItemFactory();
-                ServletFileUpload upload = new ServletFileUpload(factory);
+                DiskFileItemFactory factory = DiskFileItemFactory.builder().get();
+                JakartaServletDiskFileUpload upload = new JakartaServletDiskFileUpload(factory);
                 upload.setFileSizeMax(fileProperties.getFileSizeMax());
-                List<FileItem> items = upload.parseRequest(request);              
-                for (FileItem item : items) {
+                List<DiskFileItem> items = upload.parseRequest(request);
+                for (DiskFileItem item : items) {
                     if (item.getContentType() != null && !item.getFieldName().equals("xml_submission_file") ) {
                         File file = processUploadedFile(item, study.getOc_oid());
                         if (file != null) {
                             map.put(item.getFieldName(), file.getPath());
                         }
                     } else if (item.getFieldName().equals("xml_submission_file")) {
-                        requestBody = item.getString("UTF-8");
+                        requestBody = item.getString(StandardCharsets.UTF_8);
                     }
                 }
                 listOfUploadFilePaths.add(map);
@@ -209,7 +211,7 @@ public class OpenRosaSubmissionController {
         return basePath;
     }
 
-    private File processUploadedFile(FileItem item, String studyOid) {
+    private File processUploadedFile(DiskFileItem item, String studyOid) {
 
         String basePath = getAttachedFilePath();
 
@@ -256,7 +258,8 @@ public class OpenRosaSubmissionController {
 
         try {
             if (uploadedFile != null) {
-                item.write(uploadedFile);
+                // fileupload2: FileItem.write takes a Path.
+                item.write(uploadedFile.toPath());
             }
         } catch (Exception e) {
             throw new OpenClinicaSystemException(e.getMessage());
