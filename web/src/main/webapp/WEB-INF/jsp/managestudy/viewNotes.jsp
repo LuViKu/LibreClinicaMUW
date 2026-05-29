@@ -14,22 +14,12 @@
     </c:otherwise>
 </c:choose>
 
-<link rel="stylesheet" href="includes/jmesa/jmesa.css" type="text/css">
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.min.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jmesa.js"></script>
-<script type="text/javascript" language="JavaScript" src="includes/jmesa/jquery-migrate-1.1.1.js"></script>
+<%-- Phase B.4 jmesa PR 5a (cohort 3a): jmesa scripts no longer needed
+     here — the table is rendered client-side via the
+     include/viewNotesTable.jsp fragment. The print link below still
+     reuses openDocWindow from the host scripts already loaded by the
+     header. --%>
 <script type="text/javascript">
-    function onInvokeAction(id,action) {
-        if(id.indexOf('listNotes') == -1)  {
-        setExportToLimit(id, '');
-        }
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        location.href = '${pageContext.request.contextPath}/ViewNotes?'+ parameterString;
-    }
     function openPopup() {
         openDocWindow(window.location.href +'&print=yes')
     }
@@ -160,10 +150,9 @@
     <!-- End Of New Summary -->
 </div>
 
-<form  action="${pageContext.request.contextPath}/ViewNotes" style="clear:left; float:left;">
-        <input type="hidden" name="module" value="submit">
-        ${viewNotesHtml}
-    </form>
+<div style="clear:left; float:left; width:100%;">
+    <jsp:include page="include/viewNotesTable.jsp"/>
+</div>
 <!-- EXPANDING WORKFLOW BOX -->
 
 <div style="clear:left">

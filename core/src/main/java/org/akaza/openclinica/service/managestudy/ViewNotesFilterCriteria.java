@@ -91,6 +91,26 @@ public class ViewNotesFilterCriteria {
         return criteria;
     }
 
+    /**
+     * Same as {@link #buildFilterCriteria(Map, String, Map, Map)} but
+     * also applies paging. Phase B.4 jmesa PR 5a: lets a non-jmesa
+     * caller (e.g. a DataTables-protocol servlet) request a specific
+     * page of results without instantiating a jmesa Limit.
+     */
+    public static ViewNotesFilterCriteria buildFilterCriteria(
+            Map<String, String> filters,
+            String datePattern,
+            Map<String, String> discrepancyNoteTypeDecoder,
+            Map<String, String> resolutionTypeDecoder,
+            Integer pageNumber,
+            Integer pageSize) {
+        ViewNotesFilterCriteria criteria = buildFilterCriteria(
+                filters, datePattern, discrepancyNoteTypeDecoder, resolutionTypeDecoder);
+        criteria.pageNumber = pageNumber;
+        criteria.pageSize = pageSize;
+        return criteria;
+    }
+
     public static ViewNotesFilterCriteria buildFilterCriteria(Limit limit, String datePattern,
             Map<String, String> discrepancyNoteTypeDecoder, Map<String, String> resolutionTypeDecoder) {
         ViewNotesFilterCriteria criteria = new ViewNotesFilterCriteria();
