@@ -252,6 +252,12 @@
     </servlet>
 
     <servlet>
+        <servlet-name>AuditUserActivityDataServlet</servlet-name>
+        <description>JSON endpoint for the DataTables-backed audit-user-activity table (Phase B.4 jmesa PR 4a).</description>
+        <servlet-class>org.akaza.openclinica.control.admin.AuditUserActivityDataServlet</servlet-class>
+    </servlet>
+
+    <servlet>
         <servlet-name>SystemStatusServlet</servlet-name>
         <description>SystemStatusServlet</description>
         <servlet-class>org.akaza.openclinica.control.admin.SystemStatusServlet</servlet-class>
@@ -2163,6 +2169,10 @@
     <servlet-mapping>
         <servlet-name>AuditUserActivityServlet</servlet-name>
         <url-pattern>/AuditUserActivity</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>AuditUserActivityDataServlet</servlet-name>
+        <url-pattern>/AuditUserActivityData</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
         <servlet-name>SystemStatusServlet</servlet-name>
