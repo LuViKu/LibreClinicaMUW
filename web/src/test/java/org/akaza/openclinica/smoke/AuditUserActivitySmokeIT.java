@@ -52,51 +52,27 @@ public class AuditUserActivitySmokeIT extends SmokeIT {
 
         goTo("AuditUserActivity");
 
-        // DataTables initialisation runs on DOMContentLoaded and fires
-        // a JSON request to /AuditUserActivityData. Wait until the
-        // table has thead + at least one <tr> in the body (DataTables
-        // renders an empty-state row even on zero data, so a row count
-        // ≥ 1 is the right floor).
+        // The JSP renders a 5-column thead skeleton (always present)
+        // and an initial "Loading..." row in tbody. Vanilla JS fetches
+        // /AuditUserActivityData and replaces tbody content with the
+        // actual rows. Wait for the loading-state row to be replaced
+        // with the actual data rows.
         wait.until(ExpectedConditions.visibilityOfElementLocated(By.cssSelector("#auditUserLogin thead tr")));
-        wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector("#auditUserLogin tbody tr")));
+        // First user-data row carries an <a> in the actions column
+        // (every audit row produced by the endpoint has a userAccountId).
+        wait.until(ExpectedConditions.presenceOfElementLocated(
+                By.cssSelector("#auditUserLogin tbody tr td a")));
 
         List<WebElement> headerCells = driver.findElements(
                 By.cssSelector("#auditUserLogin thead tr th"));
-        assertEquals("Header column count must match the DataTables init in auditUserActivity.jsp",
+        assertEquals("Header column count must match auditUserActivity.jsp's <thead>",
                 EXPECTED_HEADERS.size(), headerCells.size());
 
         List<WebElement> bodyRows = driver.findElements(
                 By.cssSelector("#auditUserLogin tbody tr"));
-        assertTrue("DataTables must render at least one body row "
-                        + "(even an empty-state row); none means the AJAX call to "
-                        + "/AuditUserActivityData did not deliver JSON.",
+        assertTrue("At least one body row must be rendered after the AJAX fetch "
+                        + "(the test runs as a logged-in sysadmin, so the audit_user_login "
+                        + "table is guaranteed non-empty).",
                 bodyRows.size() >= 1);
-    }
-
-    @Test
-    public void datatableSearchInputAppearsAndAccepts() {
-        loginAs(
-                System.getProperty("smoke.username", DEFAULT_USERNAME),
-                System.getProperty("smoke.password", DEFAULT_PASSWORD));
-
-        goTo("AuditUserActivity");
-
-        // DataTables injects its own global search <input> next to the
-        // table. Locator is brittle to DataTables version changes —
-        // currently 2.x uses an input with type=search inside the
-        // _filter wrapper. Adjust when DataTables JS major-bumps.
-        WebElement search = wait.until(ExpectedConditions.elementToBeClickable(
-                By.cssSelector("div.dt-search input[type='search'], div.dataTables_filter input[type='search']")));
-        search.sendKeys("zzz-no-match-expected");
-
-        // After a column-search keystroke, DataTables re-issues the
-        // AJAX call. We can't reliably assert on filtered row counts
-        // without test fixtures, but we can assert the field accepts
-        // input and the table is still visible (no JS exception
-        // crashed the page).
-        assertTrue("Search input must accept typing",
-                "zzz-no-match-expected".equals(search.getAttribute("value")));
-        assertTrue("Table must remain visible after typing in the search box",
-                driver.findElement(By.id("auditUserLogin")).isDisplayed());
     }
 }

@@ -1,33 +1,37 @@
-# DataTables.net 2.x vendor bundle
+# Vendor slot for a future client-side table library
 
-> Phase B.4 — jmesa replacement (jmesa PR 2 introduces the slot, jmesa PR 3 fills it).
+> Phase B.4 jmesa replacement — historical artifact, currently unused.
 
-This directory hosts the DataTables.net 2.x distribution. The JSP
-partial at [`WEB-INF/jsp/include/datatable.jsp`](../../../WEB-INF/jsp/include/datatable.jsp)
-references the following files via `${pageContext.request.contextPath}/includes/js/datatables/`:
+The original PR #37 / #38 plan dropped a DataTables.net 2.x bundle
+here and built a JSP partial (`WEB-INF/jsp/include/datatable.jsp`) to
+init it. **It did not work** in practice — DataTables 2.x crashes
+during init with `Cannot read properties of undefined (reading
+'ariaTitle')` on every page that also loads LibreClinica's
+`includes/prototype.js`. Prototype.js monkey-patches
+`Element.prototype` in ways DataTables 2.x's column-metadata walk
+doesn't tolerate. The bundle was removed; cohort 2a
+(`AuditUserActivity`) ships with a vanilla-JS `fetch` + DOM render
+pattern instead (see `WEB-INF/jsp/admin/auditUserActivity.jsp` for the
+reference).
 
-- `datatables.min.css`
-- `datatables.min.js`
+The Java side of the original plan stays:
+[`DataTableRequest`](../../../core/src/main/java/org/akaza/openclinica/web/datatable/DataTableRequest.java)
+parses the standard DataTables AJAX-protocol query params, and
+[`DataTableResponse`](../../../core/src/main/java/org/akaza/openclinica/web/datatable/DataTableResponse.java)
+emits the standard `{draw, recordsTotal, recordsFiltered, data}`
+shape. Future cohorts can keep using those even if the client side
+isn't DataTables.
 
-## How to drop in the bundle
+## If a future cohort needs DataTables.net (or similar)
 
-1. Open <https://datatables.net/download/>
-2. Select: DataTables 2.x, plus the styling framework that matches the
-   rest of the LibreClinica admin UI (use the **Default** styling pack
-   unless the cohort PR cover sheet says otherwise).
-3. Generate a single concatenated file pair (`datatables.min.css` +
-   `datatables.min.js`); place both here.
-4. Commit them — they are tracked in git like any other vendor asset
-   (see the existing `includes/js/jquery/` precedent).
+Likely options that won't conflict with Prototype.js:
 
-## Why not load from CDN
+- DataTables in an iframe (isolates the global pollution; ugly).
+- Drop Prototype.js from the affected pages (large blast radius —
+  many JSPs depend on its `$()` and `Form.serialize`).
+- Use a different client lib that doesn't use jQuery (Tabulator,
+  AG Grid, native `<table>` + a small render function — which is
+  what cohort 2a does).
 
-Clinical-data deployments at MedUni Wien run behind a firewall that
-blocks egress to public CDNs. The bundle must be served from the same
-host as the app.
-
-## Cohort 1 (admin statistics) usage
-
-The four small admin-stats tables that ship in jmesa PR 3 will use
-client-side mode — DataTables loads the full row set on first render.
-No AJAX endpoint required.
+Whichever path, drop the chosen JS+CSS bundle here and update the
+`<script>`/`<link>` references in the cohort JSP.

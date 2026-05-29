@@ -15,7 +15,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TestWatcher;
@@ -130,22 +129,26 @@ public abstract class SmokeIT {
         wait = new WebDriverWait(driver, WAIT);
     }
 
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.quit();
-        }
-    }
-
     /**
-     * On test failure, dump a screenshot + the current page source under
-     * {@code target/smoke-failures/<testClassName>.<testMethod>/}. Makes
-     * the difference between "timeout — no idea why" and "timeout — we
-     * were stuck on the login error page because the seed credentials
-     * are wrong". Files survive surefire teardown.
+     * Driver lifecycle + on-failure artifact capture in one rule.
+     *
+     * <p>JUnit 4 fires {@code @After} before {@code TestWatcher.failed()},
+     * so a naïve {@code driver.quit()} in {@code @After} would tear the
+     * session down before the watcher could call {@code getPageSource()}
+     * / {@code getScreenshotAs()}. Moving the quit into the watcher's
+     * {@code finished()} (which runs <em>after</em> {@code failed()})
+     * keeps the driver alive long enough to capture artifacts.
+     *
+     * <p>On failure, writes under
+     * {@code target/smoke-failures/<className>.<methodName>/}:
+     * <ul>
+     *   <li>{@code screenshot.png} — what the browser actually rendered</li>
+     *   <li>{@code page.html} — full DOM at failure</li>
+     *   <li>{@code current-url.txt} — driver.getCurrentUrl()</li>
+     * </ul>
      */
     @Rule
-    public TestWatcher failureArtifacts = new TestWatcher() {
+    public TestWatcher driverLifecycle = new TestWatcher() {
         @Override
         protected void failed(Throwable e, Description description) {
             if (driver == null) {
@@ -155,26 +158,37 @@ public abstract class SmokeIT {
                     description.getClassName() + "." + description.getMethodName());
             try {
                 Files.createDirectories(dir);
-                try {
-                    String pageSource = driver.getPageSource();
-                    if (pageSource != null) {
-                        Files.write(dir.resolve("page.html"),
-                                pageSource.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                    }
-                } catch (Exception inner) {
-                    // best-effort; don't mask the real failure
-                }
-                if (driver instanceof TakesScreenshot) {
-                    byte[] png = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
-                    Files.write(dir.resolve("screenshot.png"), png);
-                }
+            } catch (IOException ioe) {
+                return;
+            }
+            try {
                 String url = driver.getCurrentUrl();
                 if (url != null) {
                     Files.write(dir.resolve("current-url.txt"),
                             url.getBytes(java.nio.charset.StandardCharsets.UTF_8));
                 }
-            } catch (IOException ioe) {
-                // best-effort; the real failure is what surefire reports
+            } catch (Exception ignored) { /* best-effort */ }
+            try {
+                String pageSource = driver.getPageSource();
+                if (pageSource != null) {
+                    Files.write(dir.resolve("page.html"),
+                            pageSource.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            } catch (Exception ignored) { /* best-effort */ }
+            try {
+                if (driver instanceof TakesScreenshot) {
+                    byte[] png = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
+                    Files.write(dir.resolve("screenshot.png"), png);
+                }
+            } catch (Exception ignored) { /* best-effort */ }
+        }
+
+        @Override
+        protected void finished(Description description) {
+            if (driver != null) {
+                try {
+                    driver.quit();
+                } catch (Exception ignored) { /* best-effort */ }
             }
         }
     };
