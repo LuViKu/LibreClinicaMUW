@@ -81,8 +81,15 @@
 							<configuration>
 								<!-- combine.self="override" wipes the exclude list inherited
 								     from the parent surefire pluginManagement config so the
-								     DB-dependent tests actually run under this profile. -->
-								<excludes combine.self="override"/>
+								     DB-dependent tests actually run under this profile.
+								     **/*SmokeIT.java is re-excluded explicitly because the
+								     **/*IT.java include below otherwise scoops up our
+								     Selenium browser-smokes — those need a running stack
+								     + WebDriver hub which CI doesn't provide. They live
+								     in the smoke-tests profile (see below). -->
+								<excludes combine.self="override">
+									<exclude>**/*SmokeIT.java</exclude>
+								</excludes>
 								<!-- Phase 0 backlog ITs follow the failsafe naming
 								     convention (*IT.java), which surefire's default
 								     includes do not pick up. Explicit include keeps
