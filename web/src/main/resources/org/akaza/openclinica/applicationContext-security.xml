@@ -18,8 +18,17 @@
        user-defined `authenticationManager` alias and loops on itself
        (BeanCurrentlyInCreationException). The alias is registered in
        applicationContext-core-security.xml. -->
+  <!-- Phase B.4 cliff: explicit security-context-repository-ref points BOTH
+       the SecurityContextHolderFilter (managed by <security:http>) AND
+       the custom FORM_LOGIN_FILTER below at the SAME HttpSessionSecurityContextRepository.
+       In SS 6 the <security:http> default repository switched to
+       DelegatingSecurityContextRepository(RequestAttribute*, HttpSession*),
+       and a custom-filter at FORM_LOGIN_FILTER position keeps its own
+       default (plain HttpSession*) — the mismatch meant the SecurityContext
+       saved during login wasn't read back on the next request. -->
   <security:http entry-point-ref="authenticationProcessingFilterEntryPoint"
                  authentication-manager-ref="authenticationManager"
+                 security-context-repository-ref="securityContextRepository"
                  request-matcher="ant"
                  use-expressions="true">
     
@@ -65,14 +74,20 @@
         <property name="forceHttps" value="false"/>
     </bean>
     
+    <!-- Phase B.4 cliff: shared SecurityContextRepository — see <security:http>
+         above for rationale. -->
+    <bean id="securityContextRepository"
+          class="org.springframework.security.web.context.HttpSessionSecurityContextRepository"/>
+
     <bean id="myFilter" class="org.akaza.openclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter">
         <property name="authenticationManager" ref="authenticationManager"/>
         <property name="authenticationFailureHandler" ref="failureHandler" />
         <property name="authenticationSuccessHandler" ref="successHandler" />
-        <!-- 
-        <property name="authenticationFailureUrl" value="/pages/login/login?action=errorLogin"/>
-        <property name="defaultTargetUrl" value="/MainMenu"/>
-         -->
+        <!-- Phase B.4 cliff: explicit securityContextRepository so the custom
+             filter saves the SecurityContext into HTTP session under the
+             SAME repository the SecurityContextHolderFilter reads from on
+             subsequent requests. -->
+        <property name="securityContextRepository" ref="securityContextRepository"/>
         <property name="auditUserLoginDao" ref="auditUserLoginDao"/>
         <property name="configurationDao" ref="configurationDao"/>
         <property name="dataSource" ref="dataSource"/>

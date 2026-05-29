@@ -1255,6 +1255,12 @@
 						<ignoredUnusedDeclaredDependencies>
 							<!-- Needed by commons-validator -->
 							<ignoredUnusedDeclaredDependency>oro:oro</ignoredUnusedDeclaredDependency>
+							<!-- Phase B.4 cliff: Castor was retired in B.3 — the path that
+							     used xalan.serializer is gone; the dep is still pulled in
+							     transitively by fop / batik. commons-validator is web-only
+							     but appears in core's transitive classpath. -->
+							<ignoredUnusedDeclaredDependency>commons-validator:commons-validator</ignoredUnusedDeclaredDependency>
+							<ignoredUnusedDeclaredDependency>xalan:serializer</ignoredUnusedDeclaredDependency>
 						</ignoredUnusedDeclaredDependencies>
 			        </configuration>
 			      </plugin>
