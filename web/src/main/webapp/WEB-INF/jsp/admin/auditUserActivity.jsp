@@ -14,14 +14,11 @@
 
 
 <%-- Phase B.4 jmesa PR 4a: jmesa-rendered HTML blob replaced with
-     a DataTables.net 2.x server-side-processing init. The rows are
-     fetched via AJAX from /AuditUserActivityData (see
-     AuditUserActivityDataServlet). Operator drops the DataTables JS+CSS
-     bundle at /includes/js/datatables/ — see the README in that dir. --%>
-<link rel="stylesheet" type="text/css"
-      href="${pageContext.request.contextPath}/includes/js/datatables/datatables.min.css"/>
-<script type="text/javascript"
-        src="${pageContext.request.contextPath}/includes/js/datatables/datatables.min.js"></script>
+     vanilla-JS fetch + DOM render. The Audit User Activity table is
+     admin-only, small (typically < 100 rows), and has no
+     sort / filter / paginate needs that justify DataTables.net.
+     Rows arrive as JSON from /AuditUserActivityData (the
+     AuditUserActivityDataServlet endpoint preserved from PR #36). --%>
 
 
 <!-- then instructions-->
@@ -59,38 +56,80 @@
 <P><I><fmt:message key="server_time_info" bundle="${resword}"/> <fmt:formatDate value="${now}" pattern="yyyy-MM-dd hh:mm"/>.</I></P>
 
 <div id="auditUserLoginDiv">
-    <table id="auditUserLogin" class="datatable display" style="width:100%"></table>
+    <table id="auditUserLogin" class="aka_form" style="width:100%; border-collapse: collapse;">
+        <thead>
+            <tr class="aka_table_header_row">
+                <th class="aka_table_header"><fmt:message key="user_name" bundle="${resword}"/></th>
+                <th class="aka_table_header"><fmt:message key="attempt_date" bundle="${resword}"/></th>
+                <th class="aka_table_header"><fmt:message key="status" bundle="${resword}"/></th>
+                <th class="aka_table_header"><fmt:message key="details" bundle="${resword}"/></th>
+                <th class="aka_table_header"><fmt:message key="actions" bundle="${resword}"/></th>
+            </tr>
+        </thead>
+        <tbody id="auditUserLoginBody">
+            <tr><td colspan="5" style="text-align:center; padding:8px;">Loading&hellip;</td></tr>
+        </tbody>
+    </table>
 </div>
 
 <script type="text/javascript">
-  document.addEventListener('DOMContentLoaded', function() {
-    new DataTable('#auditUserLogin', {
-      serverSide: true,
-      processing: true,
-      ajax: '${pageContext.request.contextPath}/AuditUserActivityData',
-      pageLength: 25,
-      lengthMenu: [10, 25, 50, 100],
-      stateSave: true,
-      order: [[1, 'desc']],
-      columns: [
-        { data: 'userName',         title: '<fmt:message key="user_name" bundle="${resword}"/>' },
-        { data: 'loginAttemptDate', title: '<fmt:message key="attempt_date" bundle="${resword}"/>' },
-        { data: 'loginStatus',      title: '<fmt:message key="status" bundle="${resword}"/>' },
-        { data: 'details',          title: '<fmt:message key="details" bundle="${resword}"/>' },
-        {
-          data: 'userAccountId',
-          title: '<fmt:message key="actions" bundle="${resword}"/>',
-          orderable: false,
-          searchable: false,
-          render: function(userAccountId) {
-            if (userAccountId == null) { return ''; }
-            var url = '${pageContext.request.contextPath}/ViewUserAccount?userId=' + encodeURIComponent(userAccountId) + '&viewFull=yes';
-            return '<a href="' + url + '" title="View"><img hspace="6" border="0" align="left" alt="View" src="images/bt_View.gif"/></a>';
-          }
+  (function () {
+    var ctx = '${pageContext.request.contextPath}';
+    function esc(s) {
+      if (s == null) return '';
+      return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function load() {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', ctx + '/AuditUserActivityData?draw=1&start=0&length=500', true);
+      xhr.setRequestHeader('Accept', 'application/json');
+      xhr.onload = function () {
+        var tbody = document.getElementById('auditUserLoginBody');
+        if (xhr.status !== 200) {
+          tbody.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center; padding:8px;">Error loading audit log: HTTP ' + xhr.status + '</td></tr>';
+          return;
         }
-      ]
-    });
-  });
+        var payload;
+        try { payload = JSON.parse(xhr.responseText); }
+        catch (e) {
+          tbody.innerHTML = '<tr><td colspan="5" style="color:red; text-align:center; padding:8px;">Error parsing audit log JSON</td></tr>';
+          return;
+        }
+        var rows = (payload && payload.data) || [];
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:8px;"><fmt:message key="no_data" bundle="${resword}"/></td></tr>';
+          return;
+        }
+        var html = '';
+        for (var i = 0; i < rows.length; i++) {
+          var r = rows[i];
+          var actionHtml = '';
+          if (r.userAccountId != null) {
+            var url = ctx + '/ViewUserAccount?userId=' + encodeURIComponent(r.userAccountId) + '&viewFull=yes';
+            actionHtml = '<a href="' + url + '" title="View"><img src="images/bt_View.gif" border="0" alt="View" hspace="6"/></a>';
+          }
+          html += '<tr>'
+                + '<td>' + esc(r.userName) + '</td>'
+                + '<td>' + esc(r.loginAttemptDate) + '</td>'
+                + '<td>' + esc(r.loginStatus) + '</td>'
+                + '<td>' + esc(r.details) + '</td>'
+                + '<td>' + actionHtml + '</td>'
+                + '</tr>';
+        }
+        tbody.innerHTML = html;
+      };
+      xhr.onerror = function () {
+        document.getElementById('auditUserLoginBody').innerHTML =
+            '<tr><td colspan="5" style="color:red; text-align:center; padding:8px;">Network error loading audit log</td></tr>';
+      };
+      xhr.send();
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', load);
+    } else {
+      load();
+    }
+  })();
 </script>
 
 

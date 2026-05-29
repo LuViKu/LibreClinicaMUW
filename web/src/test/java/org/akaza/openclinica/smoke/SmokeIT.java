@@ -8,15 +8,25 @@
  */
 package org.akaza.openclinica.smoke;
 
+import java.io.IOException;
+import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 
-import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
 import org.openqa.selenium.By;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.remote.RemoteWebDriver;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 /**
@@ -69,6 +79,16 @@ public abstract class SmokeIT {
     /** System property: run headless. Default true; set to false locally to watch the browser. */
     private static final String PROP_HEADLESS = "smoke.headless";
 
+    /**
+     * System property: optional URL of a Selenium WebDriver hub
+     * (e.g. {@code http://localhost:4444/wd/hub} when running
+     * {@code selenium/standalone-chrome} in Docker). When set, the
+     * test connects via {@link RemoteWebDriver} instead of launching
+     * a local Chrome. Useful when the test JVM has no browser binary
+     * (CI containers, agent build environments).
+     */
+    private static final String PROP_REMOTE_URL = "webdriver.remote.url";
+
     /** Default credentials for the smoke sysadmin account — overridden by the install's first-run user. */
     protected static final String DEFAULT_USERNAME = "root";
     protected static final String DEFAULT_PASSWORD = "password";
@@ -81,13 +101,18 @@ public abstract class SmokeIT {
     protected String baseUrl;
 
     @Before
-    public void startBrowser() {
+    public void startBrowser() throws Exception {
         baseUrl = System.getProperty(PROP_BASE_URL, DEFAULT_BASE_URL);
         if (!baseUrl.endsWith("/")) {
             baseUrl = baseUrl + "/";
         }
 
         ChromeOptions options = new ChromeOptions();
+        // selenium/standalone-chrome runs headless by default; --headless
+        // is harmless when set on remote too. Default "true" means
+        // headless. Set -Dsmoke.headless=false locally to watch the
+        // browser visually (only meaningful when launching a local
+        // ChromeDriver, not when going through the remote hub).
         if (!"false".equalsIgnoreCase(System.getProperty(PROP_HEADLESS, "true"))) {
             options.addArguments("--headless=new");
         }
@@ -95,16 +120,78 @@ public abstract class SmokeIT {
         options.addArguments("--disable-dev-shm-usage");
         options.addArguments("--window-size=1280,1024");
 
-        driver = new ChromeDriver(options);
+        String remoteUrl = System.getProperty(PROP_REMOTE_URL);
+        if (remoteUrl != null && !remoteUrl.isEmpty()) {
+            driver = new RemoteWebDriver(URI.create(remoteUrl).toURL(), options);
+        } else {
+            driver = new ChromeDriver(options);
+        }
         wait = new WebDriverWait(driver, WAIT);
     }
 
-    @After
-    public void tearDown() {
-        if (driver != null) {
-            driver.quit();
+    /**
+     * Driver lifecycle + on-failure artifact capture in one rule.
+     *
+     * <p>JUnit 4 fires {@code @After} before {@code TestWatcher.failed()},
+     * so a naïve {@code driver.quit()} in {@code @After} would tear the
+     * session down before the watcher could call {@code getPageSource()}
+     * / {@code getScreenshotAs()}. Moving the quit into the watcher's
+     * {@code finished()} (which runs <em>after</em> {@code failed()})
+     * keeps the driver alive long enough to capture artifacts.
+     *
+     * <p>On failure, writes under
+     * {@code target/smoke-failures/<className>.<methodName>/}:
+     * <ul>
+     *   <li>{@code screenshot.png} — what the browser actually rendered</li>
+     *   <li>{@code page.html} — full DOM at failure</li>
+     *   <li>{@code current-url.txt} — driver.getCurrentUrl()</li>
+     * </ul>
+     */
+    @Rule
+    public TestWatcher driverLifecycle = new TestWatcher() {
+        @Override
+        protected void failed(Throwable e, Description description) {
+            if (driver == null) {
+                return;
+            }
+            Path dir = Paths.get("target", "smoke-failures",
+                    description.getClassName() + "." + description.getMethodName());
+            try {
+                Files.createDirectories(dir);
+            } catch (IOException ioe) {
+                return;
+            }
+            try {
+                String url = driver.getCurrentUrl();
+                if (url != null) {
+                    Files.write(dir.resolve("current-url.txt"),
+                            url.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            } catch (Exception ignored) { /* best-effort */ }
+            try {
+                String pageSource = driver.getPageSource();
+                if (pageSource != null) {
+                    Files.write(dir.resolve("page.html"),
+                            pageSource.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            } catch (Exception ignored) { /* best-effort */ }
+            try {
+                if (driver instanceof TakesScreenshot) {
+                    byte[] png = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
+                    Files.write(dir.resolve("screenshot.png"), png);
+                }
+            } catch (Exception ignored) { /* best-effort */ }
         }
-    }
+
+        @Override
+        protected void finished(Description description) {
+            if (driver != null) {
+                try {
+                    driver.quit();
+                } catch (Exception ignored) { /* best-effort */ }
+            }
+        }
+    };
 
     /**
      * Performs the standard form-based login. The login page lives at
