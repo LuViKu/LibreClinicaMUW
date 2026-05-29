@@ -11,10 +11,11 @@ package org.akaza.openclinica.dao.submit;
 
 import org.akaza.openclinica.dao.managestudy.CriteriaCommand;
 import org.apache.commons.lang.StringEscapeUtils;
-import org.joda.time.DateTime;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
@@ -91,9 +92,9 @@ public class ListSubjectFilter implements CriteriaCommand {
         try {
             DateFormat format = new SimpleDateFormat("yyyy");
             Date startDate = format.parse(value);
-            DateTime dt = new DateTime(startDate.getTime());
+            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
             dt = dt.plusYears(1);
-            Date endDate = dt.toDate();
+            Date endDate = Date.from(dt.toInstant());
             if (format.format(startDate).equals(value)) {
                 criteria = " AND ( " + column + " between '" + theDefaultFormat.format(startDate) + "' and '" + theDefaultFormat.format(endDate) + "')";
             }
@@ -109,9 +110,9 @@ public class ListSubjectFilter implements CriteriaCommand {
         try {
             DateFormat format = new SimpleDateFormat(i18Format);
             Date startDate = format.parse(value);
-            DateTime dt = new DateTime(startDate.getTime());
+            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
             dt = dt.plusDays(1);
-            Date endDate = dt.toDate();
+            Date endDate = Date.from(dt.toInstant());
             if (format.format(startDate).equals(value)) {
                 criteria = " AND (  " + column + " between '" + theDefaultFormat.format(startDate) + "' and '" + theDefaultFormat.format(endDate) + "')";
             }
