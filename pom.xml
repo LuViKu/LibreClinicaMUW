@@ -41,9 +41,14 @@
 		<!-- Library versions. Phase B.4 (2026-05-29) crossed the jakarta cliff:
 		     Spring 5.3 → 6.1, Spring Security 5.8 → 6.3, javax.* → jakarta.*,
 		     hibernate-core swapped to the hibernate-core-jakarta artifact (still
-		     5.6.15 — Hibernate 6.4 ships in B.5). -->
-		<spring.version>6.1.18</spring.version>
-		<spring.security.version>6.3.6</spring.security.version>
+		     5.6.15 — Hibernate 6.4 in B.5). Phase C.1 (2026-05-29) imports
+		     spring-boot-dependencies 3.5 BOM and aligns Spring 6.1 → 6.2,
+		     Spring Security 6.3 → 6.4 to match Boot's managed transitives —
+		     mixing 6.1 + 6.2 jars caused CGLIB ClassLoaderAwareGeneratorStrategy
+		     signature mismatches at runtime. -->
+		<spring-boot.version>3.5.0</spring-boot.version>
+		<spring.version>6.2.6</spring.version>
+		<spring.security.version>6.4.4</spring.security.version>
 		<db.test>localhost</db.test>
 		<jackson.version>2.17.3</jackson.version>
 		<saxon.version>8.7</saxon.version>
@@ -221,6 +226,19 @@
 
 	<dependencyManagement>
 		<dependencies>
+			<!-- Phase C.1: Spring Boot BOM. Imported FIRST so explicit
+			     dependency entries below override Boot's defaults where
+			     the legacy version pin diverges from Boot's recommendation.
+			     Per-dep overrides (Spring 6.1.18, Security 6.3.6, Hibernate
+			     6.4.10, Jackson 2.17.3, …) stay in place until each sub-phase
+			     verifies the bumped version. -->
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-dependencies</artifactId>
+				<version>${spring-boot.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
 			<dependency>
 				<groupId>${project.groupId}.odm</groupId>
 				<artifactId>LibreClinica-odm</artifactId>
@@ -592,11 +610,18 @@
 				<artifactId>logback-classic</artifactId>
 				<version>${logback.version}</version>
 			</dependency>
-			<!-- LOGBACK needs Janino when conditional statements are used (e.g. in logback.xml) -->
+			<!-- LOGBACK needs Janino when conditional statements are used (e.g. in logback.xml).
+			     Phase C.1: bump 2.7.5 → 3.1.12 so janino's Location matches
+			     commons-compiler 3.x that Boot 3.5's logback transitive pulls in. -->
 			<dependency>
 				<groupId>org.codehaus.janino</groupId>
 				<artifactId>janino</artifactId>
-				<version>2.7.5</version>
+				<version>3.1.12</version>
+			</dependency>
+			<dependency>
+				<groupId>org.codehaus.janino</groupId>
+				<artifactId>commons-compiler</artifactId>
+				<version>3.1.12</version>
 			</dependency>
 			<dependency>
 				<groupId>jakarta.xml.bind</groupId>
@@ -1256,6 +1281,11 @@
 							<ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-chromium-driver</ignoredUsedUndeclaredDependency>
 							<ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-remote-driver</ignoredUsedUndeclaredDependency>
 							<ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-support</ignoredUsedUndeclaredDependency>
+							<!-- Phase C.1: Boot's BOM ships angus-mail as the jakarta.mail
+							     impl. Existing email code references jakarta.mail types via
+							     jakarta.mail-api; analyze-only sees the impl on classpath
+							     and flags it as used-undeclared. -->
+							<ignoredUsedUndeclaredDependency>org.eclipse.angus:jakarta.mail</ignoredUsedUndeclaredDependency>
 						</ignoredUsedUndeclaredDependencies>
 						<ignoredUnusedDeclaredDependencies>
 							<!-- Needed by commons-validator -->
@@ -1266,6 +1296,21 @@
 							     but appears in core's transitive classpath. -->
 							<ignoredUnusedDeclaredDependency>commons-validator:commons-validator</ignoredUnusedDeclaredDependency>
 							<ignoredUnusedDeclaredDependency>xalan:serializer</ignoredUnusedDeclaredDependency>
+							<!-- Phase C.1: Spring Boot starters added for the C.2-C.16
+							     sub-phases. No direct compile-time references yet (no
+							     @SpringBootApplication until C.2); the C-phase
+							     conversions will start using them. -->
+							<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter</ignoredUnusedDeclaredDependency>
+							<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-web</ignoredUnusedDeclaredDependency>
+							<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-data-jpa</ignoredUnusedDeclaredDependency>
+							<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-mail</ignoredUnusedDeclaredDependency>
+							<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-quartz</ignoredUnusedDeclaredDependency>
+							<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-validation</ignoredUnusedDeclaredDependency>
+							<!-- Boot BOM upgrades jakarta.mail-api to a version where the
+							     impl ships in org.eclipse.angus:jakarta.mail. The legacy
+							     api-only dep is still declared explicitly; the angus impl
+							     comes via the Boot BOM transitively. -->
+							<ignoredUnusedDeclaredDependency>jakarta.mail:jakarta.mail-api</ignoredUnusedDeclaredDependency>
 						</ignoredUnusedDeclaredDependencies>
 			        </configuration>
 			      </plugin>

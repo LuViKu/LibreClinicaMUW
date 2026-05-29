@@ -12,6 +12,32 @@
     </parent>
 
     <dependencies>
+		<!-- Phase C.1: Spring Boot starters. The starters are on the
+		     classpath but no @SpringBootApplication / @EnableAutoConfiguration
+		     runs yet (C.2 will bootstrap that). Adding them here gives the
+		     subsequent sub-phases a path to drop the explicit Spring deps
+		     they currently shadow (spring-orm, spring-context-support, etc.)
+		     and pick up Boot-managed transitive versions. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-jpa</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-quartz</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-validation</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework</groupId>
 			<artifactId>spring-webmvc</artifactId>
