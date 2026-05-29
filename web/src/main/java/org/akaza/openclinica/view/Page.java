@@ -627,10 +627,12 @@ public enum Page {
     INITIAL_DATA_ENTRY_NW ("/WEB-INF/jsp/submit/initialDataEntryNw.jsp", "Data Entry"),
     VIEW_SECTION_DATA_ENTRY_PRINT_GROUPS ("/WEB-INF/jsp/managestudy/viewGroupSectionsPrint.jsp",
             "Print View for Group Tables"),
-    LIST_SUBJECT_DISC_NOTE ("/WEB-INF/jsp/managestudy/listSubjectDiscNote.jsp", "List Disc Notes By Subject"),
+    // Phase B.4 jmesa PR 5b cleanup: LIST_SUBJECT_DISC_NOTE and
+    // LIST_SUBJECT_DISC_NOTE_SERVLET removed — the corresponding JSP +
+    // servlet were dead code (web.xml mapping commented out since 2014).
+    // LIST_DNOTES_FOR_CRF is still live (ListDiscNotesForCRFServlet).
     LIST_DNOTES_FOR_CRF ("/WEB-INF/jsp/submit/listDNotesForCRF.jsp", "List Disc Notes By Subject and CRF"),
     CHOOSE_DOWNLOAD_FORMAT ("/WEB-INF/jsp/submit/chooseDownloadFormat.jsp", "Choose download format"),
-    LIST_SUBJECT_DISC_NOTE_SERVLET ("/ListDiscNotesSubjectServlet", "List Disc Notes Servlet"),
 
     FILE_UPLOAD ("/WEB-INF/jsp/submit/uploadFile.jsp", "Form For File Uploading"),
     //UPLOAD_FILE_SERVLET ("/UploadFile", "Upload File"),
