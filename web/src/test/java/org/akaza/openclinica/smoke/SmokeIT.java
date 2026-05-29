@@ -1,0 +1,134 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+ *
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2026 Department of Ophthalmology and Optometry,
+ *                     Medical University of Vienna
+ */
+package org.akaza.openclinica.smoke;
+
+import java.time.Duration;
+
+import org.junit.After;
+import org.junit.Before;
+import org.openqa.selenium.By;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
+import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.support.ui.WebDriverWait;
+
+/**
+ * Base class for Phase B.4 jmesa-replacement smoke tests. Spins up a
+ * Selenium ChromeDriver against a manually-started LibreClinica
+ * instance and exposes a login helper. Subclasses navigate to a
+ * specific page and assert visual behaviour.
+ *
+ * <h2>Operator usage</h2>
+ *
+ * Smoke tests live in the {@code smoke-tests} Maven profile (not in
+ * the default unit or integration profiles). They run only when
+ * explicitly activated and require:
+ *
+ * <ol>
+ *   <li>A locally-running LibreClinica stack (e.g.
+ *       {@code docker compose up} from the repo root).</li>
+ *   <li>A reachable Chrome binary on the host. Selenium 4 manages the
+ *       chromedriver download automatically.</li>
+ *   <li>Override the target URL via {@code -Dsmoke.base.url=...} if
+ *       the stack runs elsewhere. The default is the compose stack's
+ *       {@code http://localhost:8080/LibreClinica/}.</li>
+ * </ol>
+ *
+ * <pre>{@code
+ * docker compose up -d
+ * mvn -pl web -P smoke-tests test
+ * }</pre>
+ *
+ * <h2>Why a separate profile (not integration-tests)</h2>
+ *
+ * The {@code integration-tests} profile runs against a postgres
+ * service container in CI and exercises DAO + service paths headlessly.
+ * Smoke tests require an actual app server + browser, which is not
+ * currently wired into CI. Keeping the two profiles separate prevents
+ * one CI red from blocking the other.
+ *
+ * <h2>Lifecycle</h2>
+ *
+ * One WebDriver per test method (cheap on a hot Chrome). Quit
+ * unconditionally in {@link #tearDown} so a failing assertion doesn't
+ * leak browser processes.
+ */
+public abstract class SmokeIT {
+
+    /** System property: target base URL. Default points at the compose stack. */
+    private static final String PROP_BASE_URL = "smoke.base.url";
+    private static final String DEFAULT_BASE_URL = "http://localhost:8080/LibreClinica/";
+
+    /** System property: run headless. Default true; set to false locally to watch the browser. */
+    private static final String PROP_HEADLESS = "smoke.headless";
+
+    /** Default credentials for the smoke sysadmin account — overridden by the install's first-run user. */
+    protected static final String DEFAULT_USERNAME = "root";
+    protected static final String DEFAULT_PASSWORD = "password";
+
+    /** Reasonable global wait for page transitions and DataTables initialisation. */
+    protected static final Duration WAIT = Duration.ofSeconds(15);
+
+    protected WebDriver driver;
+    protected WebDriverWait wait;
+    protected String baseUrl;
+
+    @Before
+    public void startBrowser() {
+        baseUrl = System.getProperty(PROP_BASE_URL, DEFAULT_BASE_URL);
+        if (!baseUrl.endsWith("/")) {
+            baseUrl = baseUrl + "/";
+        }
+
+        ChromeOptions options = new ChromeOptions();
+        if (!"false".equalsIgnoreCase(System.getProperty(PROP_HEADLESS, "true"))) {
+            options.addArguments("--headless=new");
+        }
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--window-size=1280,1024");
+
+        driver = new ChromeDriver(options);
+        wait = new WebDriverWait(driver, WAIT);
+    }
+
+    @After
+    public void tearDown() {
+        if (driver != null) {
+            driver.quit();
+        }
+    }
+
+    /**
+     * Performs the standard form-based login. The login page lives at
+     * {@code /MainMenu} on a fresh session; LibreClinica redirects there
+     * on hitting any protected URL.
+     */
+    protected void loginAs(String username, String password) {
+        driver.get(baseUrl + "MainMenu");
+        // Login form fields are named j_username / j_password (Spring
+        // Security 5 form-login default). Find by name to survive
+        // visual restyling.
+        WebElement user = driver.findElement(By.name("j_username"));
+        WebElement pass = driver.findElement(By.name("j_password"));
+        user.sendKeys(username);
+        pass.sendKeys(password);
+        pass.submit();
+    }
+
+    /**
+     * Navigates to {@code path} relative to the base URL. {@code path}
+     * may be a bare servlet name like {@code "AuditUserActivity"} or
+     * include query parameters.
+     */
+    protected void goTo(String path) {
+        driver.get(baseUrl + path);
+    }
+}
