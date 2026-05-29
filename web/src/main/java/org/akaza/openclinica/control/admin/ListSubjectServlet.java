@@ -10,10 +10,6 @@
 package org.akaza.openclinica.control.admin;
 
 import org.akaza.openclinica.control.core.SecureController;
-import org.akaza.openclinica.dao.login.UserAccountDAO;
-import org.akaza.openclinica.dao.managestudy.StudyDAO;
-import org.akaza.openclinica.dao.managestudy.StudySubjectDAO;
-import org.akaza.openclinica.dao.submit.SubjectDAO;
 import org.akaza.openclinica.i18n.core.LocaleResolver;
 import org.akaza.openclinica.view.Page;
 import org.akaza.openclinica.web.InsufficientPermissionException;
@@ -21,20 +17,19 @@ import org.akaza.openclinica.web.InsufficientPermissionException;
 import java.util.Locale;
 
 /**
- * Processes user request and generate subject list
+ * Renders the admin "List Subjects" page shell. Phase B.4 jmesa PR 4b:
+ * the deleted {@code ListSubjectTableFactory} used to build the full
+ * table HTML here; the JSP now ships an empty {@code <table>} skeleton
+ * and rows arrive via {@link ListSubjectDataServlet} at
+ * {@code /ListSubjectData}.
  *
  * @author jxu
  */
 public class ListSubjectServlet extends SecureController {
-    /**
-	 * 
-	 */
-	private static final long serialVersionUID = 1884177064586726489L;
-	Locale locale;
 
-    /**
-     *
-     */
+    private static final long serialVersionUID = 1884177064586726489L;
+    Locale locale;
+
     @Override
     public void mayProceed() throws InsufficientPermissionException {
 
@@ -51,23 +46,6 @@ public class ListSubjectServlet extends SecureController {
 
     @Override
     public void processRequest() throws Exception {
-        SubjectDAO sdao = new SubjectDAO(sm.getDataSource());
-
-        StudySubjectDAO subdao = new StudySubjectDAO(sm.getDataSource());
-        StudyDAO studyDao = new StudyDAO(sm.getDataSource());
-        UserAccountDAO uadao = new UserAccountDAO(sm.getDataSource());
-
-        ListSubjectTableFactory factory = new ListSubjectTableFactory();
-        factory.setSubjectDao(sdao);
-        factory.setStudySubjectDao(subdao);
-        factory.setUserAccountDao(uadao);
-        factory.setStudyDao(studyDao);
-        factory.setCurrentStudy(currentStudy);
-
-
-        String auditLogsHtml = factory.createTable(request, response).render();
-        request.setAttribute("listSubjectsHtml", auditLogsHtml);
-
         forwardPage(Page.SUBJECT_LIST);
     }
 

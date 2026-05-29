@@ -26,9 +26,7 @@ services:
 
         - action: rebuild
           path: ./web
-
-        - action: rebuild
-          path: ./ws
+        # ws/ module removed in PR #31; nothing to watch there any more.
 
   db:
     image: docker.io/library/postgres:14-alpine
@@ -36,8 +34,18 @@ services:
       POSTGRES_PASSWORD: clinica
       POSTGRES_USER: clinica
       POSTGRES_DB: libreclinica
+    # Named volume so the in-browser install (first-run wizard,
+    # sysadmin account, sample study) survives `docker compose down`.
+    # Without it, every smoke run starts on an empty user_account
+    # table and login lands on /pages/login/login. Wipe via:
+    #   docker compose down -v
+    volumes:
+      - libreclinica-db-data:/var/lib/postgresql/data
 
   smtp:
     image: docker.io/marlonb/mailcrab:v1.1.0
     ports:
       - "127.0.0.1:1080:1080"
+
+volumes:
+  libreclinica-db-data:
