@@ -8,12 +8,21 @@
  */
 package org.akaza.openclinica.smoke;
 
+import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Rule;
+import org.junit.rules.TestWatcher;
+import org.junit.runner.Description;
 import org.openqa.selenium.By;
+import org.openqa.selenium.OutputType;
+import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -127,6 +136,48 @@ public abstract class SmokeIT {
             driver.quit();
         }
     }
+
+    /**
+     * On test failure, dump a screenshot + the current page source under
+     * {@code target/smoke-failures/<testClassName>.<testMethod>/}. Makes
+     * the difference between "timeout — no idea why" and "timeout — we
+     * were stuck on the login error page because the seed credentials
+     * are wrong". Files survive surefire teardown.
+     */
+    @Rule
+    public TestWatcher failureArtifacts = new TestWatcher() {
+        @Override
+        protected void failed(Throwable e, Description description) {
+            if (driver == null) {
+                return;
+            }
+            Path dir = Paths.get("target", "smoke-failures",
+                    description.getClassName() + "." + description.getMethodName());
+            try {
+                Files.createDirectories(dir);
+                try {
+                    String pageSource = driver.getPageSource();
+                    if (pageSource != null) {
+                        Files.write(dir.resolve("page.html"),
+                                pageSource.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                } catch (Exception inner) {
+                    // best-effort; don't mask the real failure
+                }
+                if (driver instanceof TakesScreenshot) {
+                    byte[] png = ((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES);
+                    Files.write(dir.resolve("screenshot.png"), png);
+                }
+                String url = driver.getCurrentUrl();
+                if (url != null) {
+                    Files.write(dir.resolve("current-url.txt"),
+                            url.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+            } catch (IOException ioe) {
+                // best-effort; the real failure is what surefire reports
+            }
+        }
+    };
 
     /**
      * Performs the standard form-based login. The login page lives at
