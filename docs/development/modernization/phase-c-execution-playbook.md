@@ -60,6 +60,61 @@ Run sub-phases in this order. Each lives on a child branch off `feature/phase-c-
 
 Total: ~6 weeks FTE-equivalent. C.3 through C.10 can run in parallel after C.2 lands.
 
+### Observed C.8 interlock (added 2026-05-29 after the autonomous C.0–C.3 pass)
+
+**C.3 through C.10 are NOT cleanly independent of C.8.** The custom
+`PropertyPlaceholderConfigurer` (in `applicationContext-core-spring.xml`)
+uses the `s[propertyName]` placeholder syntax, sourced from
+`coreResources.getDataInfo()` — a `java.util.Properties` produced by
+`CoreResources` from `datainfo.properties` plus derived values
+(`driver` / `url` from `dbType` + `dbHost` + `dbPort` + `db`,
+`hibernate.dialect`, Quartz job-store properties, etc.). Every XML bean
+that consumes a placeholder (the `dataSource`, the Hibernate session
+factory's `hibernate.dialect`, the mail sender's host/port, the
+scheduler properties) is implicitly bound to this configurer.
+
+A Java `@Configuration` class can't `@Value("s[propertyName]")` —
+Spring's `Environment` resolves only `${...}` placeholders. So a
+proper conversion of any of these bean groups (C.3 dataSource,
+C.4 EMF, C.5 scheduler, C.7 mailSender) needs the placeholder retire
+first, OR needs to inline the derived value at the call site.
+
+**Practical execution order** (a refinement of the playbook table):
+
+1. C.0 — contract tests (done; landed 3136593e6)
+2. C.1 — Spring Boot BOM + starters (done; landed 717ca3df9)
+3. C.2 — `LibreClinicaApplication` dormant (done; landed 413c05d71)
+4. C.3 partial — optional JDBC URL hardening (done; landed a7bc9d3ec). Full
+   DataSource conversion to Java config deferred — bundled with C.8.
+5. **C.8 + C.3-completion + C.4 + C.5 + C.7 bundled** — single push that:
+   * retires the `s[...]` custom placeholder configurer in favour of
+     Spring's standard `${...}` resolution against
+     `Environment` (Spring Boot reads `datainfo.properties` via
+     `spring.config.import` in `application.yml`),
+   * lifts `CoreResources.setDatabaseProperties()` derived keys into
+     a `@ConfigurationProperties` class (or keeps the derivation but
+     publishes them as standard environment keys),
+   * lands `DataSourceConfig`, `JpaConfig`, `QuartzConfig`,
+     `MailConfig` as Java `@Configuration` classes with `@Bean`
+     methods, removing the corresponding XML files,
+   * drops the autoconfig exclusions in `LibreClinicaApplication`
+     for each migrated slice.
+   This is ~2-3 days of focused work but each XML can't cleanly
+   leave the build alone.
+6. C.6 — services + component-scan. Can move ahead of C.8 if the
+   target classes don't consume placeholders.
+7. C.9 — timer XML. Tiny; rolls in with the C.5 Quartz work.
+8. C.10 — `SecurityFilterChain`. Independent of C.8 (the security XMLs
+   don't use `s[...]` placeholders) — can land any time after C.6.
+9. C.11 — `pages-servlet.xml` → `WebMvcConfigurer`.
+10. C.12 — `web.xml` filter registrations → `FilterRegistrationBean`.
+11. C.13 — Liquibase via `spring-boot-starter-liquibase`. Tiny;
+    can land any time after C.8.
+12. C.14 — WAR → JAR + embedded Tomcat. Gate: C.10 + C.12 must be
+    done so the `@SpringBootApplication` boot path is complete.
+13. C.15 — Actuator.
+14. C.16 — Reconciliation sweep + manual GCP smoke.
+
 ---
 
 ## C.0 — Boot/startup contract characterisation tests (pre-flight)
