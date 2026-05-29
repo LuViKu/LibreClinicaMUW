@@ -919,6 +919,11 @@
         <servlet-class>org.akaza.openclinica.control.admin.ListSubjectServlet</servlet-class>
     </servlet>
     <servlet>
+        <servlet-name>ListSubjectDataServlet</servlet-name>
+        <description>JSON endpoint for the DataTables-backed admin ListSubject table (Phase B.4 jmesa PR 4b).</description>
+        <servlet-class>org.akaza.openclinica.control.admin.ListSubjectDataServlet</servlet-class>
+    </servlet>
+    <servlet>
         <servlet-name>UpdateSubjectServlet</servlet-name>
         <display-name>UpdateSubject</display-name>
         <servlet-class>org.akaza.openclinica.control.admin.UpdateSubjectServlet</servlet-class>
@@ -1955,6 +1960,10 @@
     <servlet-mapping>
         <servlet-name>ListSubjectServlet</servlet-name>
         <url-pattern>/ListSubject</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>ListSubjectDataServlet</servlet-name>
+        <url-pattern>/ListSubjectData</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
         <servlet-name>UpdateSubjectServlet</servlet-name>
