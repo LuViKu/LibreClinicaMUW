@@ -24,7 +24,7 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 | Spring Framework | 5.1.4 | **6.1+** | B |
 | Spring Boot | n/a | **3.x** | C |
 | Spring Security | 5.1.4 | **6.x** | B |
-| Spring WS | 3.0.10 | **4.x** | B (or removed) |
+| ~~Spring WS~~ | ~~3.0.10~~ | **removed** | B (#31, 2026-05-29) |
 | Servlet API | `javax.servlet` 3.1 | **`jakarta.servlet` 6.0** | B |
 | JPA | `javax.persistence` | **`jakarta.persistence`** | B |
 | Hibernate ORM | 5.4.2 | **6.4+** | B |
@@ -202,7 +202,7 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 | PostgreSQL JDBC | 42.2.26 | **42.7.4** | A.1 | ✅ | |
 | Spring Framework | 5.1.4.RELEASE | **5.3.39** | A.2 | ✅ | Final 5.x release |
 | Spring Security | 5.1.4.RELEASE | **5.8.16** | A.2 | ✅ | Final 5.x; decoupled into separate `<spring.security.version>` property |
-| Spring WS | 1.5.6 | (audit — Spring WS 1.5 is from 2008; jump to 4.x during Phase B) | B | ⏳ | |
+| ~~Spring WS~~ | ~~1.5.6~~ | **removed** | B | ✅ | PR #31 (2026-05-29) — `ws/` module deleted, 3 spring-ws-* depMgmt entries dropped. README + decision: no active SOAP consumer at MUW Ophthalmology. |
 | Spring OAuth2 | 2.3.5.RELEASE | (EOL since 2022; replace with Spring Authorization Server in Phase B/C) | B | ⏳ | |
 | Hibernate ORM | 5.4.2.Final | **5.6.15.Final** | A.2 | ✅ | Verified end-to-end against live Postgres |
 | Hibernate Validator | (audit) | **6.2.x** | A.2 | ⏳ | Not currently a direct dep |
@@ -243,7 +243,7 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 1. **Java 21 baseline first.** Bump build + runtime to JDK 21. Fix warnings. Update Maven compiler plugin. Verify everything in Phase A still works on JDK 21. (1–2 weeks)
 2. **Eclipse Transformer dry run.** Run Eclipse Transformer (or IntelliJ's javax→jakarta refactor) against a throwaway branch to discover the scope of mechanical changes vs. manual reconciliation work. Capture the diff size and any unconvertible sites. (1 week)
 3. **Replace Castor 1.4.1 → JAXB (or Jackson XML).** Castor has no Jakarta variant. This is a *forced* replacement and touches every CDISC ODM code path. Treated as a sub-phase. (3–4 weeks)
-4. **Spring 5 → 6, Security 5 → 6, WS 3 → 4** in lockstep. (2–3 weeks)
+4. **Spring 5 → 6, Security 5 → 6** in lockstep. ~~Spring WS 3 → 4~~ N/A — `ws/` module removed in PR #31 (2026-05-29). (2–3 weeks)
 5. **Hibernate 5.6 → 6.4** with `jakarta.persistence`. Highest-risk single library — HQL strictness changes, sequence generator behavior, removal of `Criteria` API. (3–4 weeks)
 6. **Tomcat 9 → 10/11**. Servlet 5+ / `jakarta.servlet`. (1–2 weeks)
 7. **JSTL 1.1 → 3.0** + 413 JSPs updated to new taglib URIs. Mechanical but voluminous. Eclipse Transformer handles most. (1–2 weeks)

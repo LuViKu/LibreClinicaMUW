@@ -123,7 +123,7 @@ Bump build + runtime to JDK 21 without changing anything else. Surfaces every JD
 
 ### Steps
 
-1. Inventory every Castor usage: `grep -rn 'org.codehaus.castor\|castor\.\(xml\|core\)' core/ web/ ws/ odm/`.
+1. ~~Inventory every Castor usage: `grep -rn 'org.codehaus.castor\|castor\.\(xml\|core\)' core/ web/ ws/ odm/`.~~ Castor was entirely removed in PR #28 (2026-05-29) — DR-006 closed.
 2. Replace dependency declarations:
    - Remove `org.codehaus.castor:castor` and `org.codehaus.castor:castor-xml` from `pom.xml`.
    - Add `jakarta.xml.bind:jakarta.xml.bind-api:4.0.x` and `org.glassfish.jaxb:jaxb-runtime:4.0.x`.
@@ -161,7 +161,7 @@ Castor → JAXB is the largest blast-radius change in Phase B. Branch must merge
    - `WebSecurityConfigurerAdapter` removed → migrate to `SecurityFilterChain` bean (lambda-style DSL).
    - Password encoder default: provide a `DelegatingPasswordEncoder` that recognises legacy MD5 hashes and upgrades on next login. The existing `UserAccountBean.password` field stores MD5; do not invalidate sessions.
    - CSRF default is now ON for all stateful POSTs; some legacy form submissions may need either a CSRF token added or explicit `.csrf().disable()` on read-only paths (audit carefully — clinical-data POSTs should NOT disable CSRF).
-5. **Spring WS 1.5.6** → either bump to 4.0.x or remove. Recommendation: **remove the `ws` module** entirely if no active SOAP consumer (verify with stakeholders). The README already calls it "legacy, not tested, not actively developed."
+5. ~~**Spring WS 1.5.6** → either bump to 4.0.x or remove.~~ ✅ **Done in PR #31 (2026-05-29)** — `ws/` module deleted entirely; no active SOAP consumer confirmed at MUW Ophthalmology.
 6. Run full integration test suite.
 7. Smoke test, focusing on the login path (DelegatingPasswordEncoder + CSRF).
 
@@ -249,7 +249,7 @@ All of:
 - [ ] All Spring dependencies on 6.x / Security 6.x line
 - [ ] Hibernate on 6.x with `jakarta.persistence`
 - [ ] Tomcat 10/11; Servlet 6.0 / JSP 3.1 / JSTL 3.0
-- [ ] **Zero `javax.*` imports in `src/main/java/`** (verifiable: `! grep -rln 'import javax\.' core/src/main/java web/src/main/java ws/src/main/java`)
+- [ ] **Zero migrating `javax.*` imports in `src/main/java/`** (verifiable: `! grep -rln 'import javax\.\(servlet\|persistence\|xml\.bind\|ws\.rs\|mail\|annotation\.PostConstruct\)' core/src/main/java web/src/main/java`). JDK-shipped `javax.sql`, `javax.naming`, `javax.xml.{parsers,transform,xpath,datatype,namespace,validation}` stay. (`ws/` module removed in PR #31.)
 - [ ] All 413 JSPs updated to Jakarta taglib URIs
 - [ ] Java packages renamed to `at.ac.meduniwien.ophthalmology.libreclinica.*` (if DR-010 ratified)
 - [ ] Castor entirely removed (`! grep -rln 'org.codehaus.castor' .`)
