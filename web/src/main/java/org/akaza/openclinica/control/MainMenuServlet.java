@@ -12,15 +12,14 @@ package org.akaza.openclinica.control;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 
+import org.akaza.openclinica.bean.core.Status;
+import org.akaza.openclinica.bean.core.SubjectEventStatus;
 import org.akaza.openclinica.bean.login.UserAccountBean;
 import org.akaza.openclinica.bean.managestudy.StudyBean;
 import org.akaza.openclinica.bean.service.StudyParameterValueBean;
-import org.akaza.openclinica.control.admin.EventStatusStatisticsTableFactory;
-import org.akaza.openclinica.control.admin.SiteStatisticsTableFactory;
-import org.akaza.openclinica.control.admin.StudyStatisticsTableFactory;
-import org.akaza.openclinica.control.admin.StudySubjectStatusStatisticsTableFactory;
 import org.akaza.openclinica.control.core.SecureController;
 import org.akaza.openclinica.control.form.FormProcessor;
 import org.akaza.openclinica.control.submit.ListStudySubjectTableFactory;
@@ -245,47 +244,98 @@ public class MainMenuServlet extends SecureController {
         request.setAttribute("sdvMatrix", sdvMatrix);
     }
 
-    private void setupStudySubjectStatusStatisticsTable() {
+    /*
+     * Phase B.4 jmesa PR 3: the four MainMenu stats tables (study /
+     * site / subject-status / event-status) were rendered through
+     * jmesa TableFactory + custom AbstractHtmlView subclasses, each
+     * producing an HTML <table> blob stuffed into a request attribute
+     * and dumped into menu.jsp as ${...}. The tables have 1–10 rows
+     * and no sorting / filtering / pagination — DataTables would be
+     * overkill. Replaced with plain List<Map<String,Object>> request
+     * attributes that menu.jsp now iterates via c:forEach. The four
+     * TableFactory classes + the StudyStatisticsView /
+     * StudySubjectStatusView / EventStatusView / StatisticsView
+     * helpers are deleted in the same PR.
+     */
 
-        StudySubjectStatusStatisticsTableFactory factory = new StudySubjectStatusStatisticsTableFactory();
-        factory.setStudySubjectDao(getStudySubjectDAO());
-        factory.setCurrentStudy(currentStudy);
-        factory.setStudyDao(getStudyDAO());
-        String studySubjectStatusStatistics = factory.createTable(request, response).render();
-        request.setAttribute("studySubjectStatusStatistics", studySubjectStatusStatistics);
+    private void setupStudySubjectStatusStatisticsTable() {
+        StudySubjectDAO dao = getStudySubjectDAO();
+        Integer totalStudySubjects = dao.getCountofStudySubjects(currentStudy);
+        Status[] statuses = { Status.AVAILABLE, Status.SIGNED, Status.DELETED };
+        List<java.util.Map<String, Object>> rows = new ArrayList<java.util.Map<String, Object>>();
+        for (Status status : statuses) {
+            Integer count = dao.getCountofStudySubjectsBasedOnStatus(currentStudy, status);
+            long pct = totalStudySubjects == 0 ? 0L
+                    : Math.round((count.doubleValue() / totalStudySubjects.doubleValue()) * 100);
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<String, Object>();
+            row.put("status", status.getName());
+            row.put("studySubjects", count);
+            row.put("percentage", pct);
+            rows.add(row);
+        }
+        request.setAttribute("studySubjectStatusStatisticsRows", rows);
     }
 
     private void setupSubjectEventStatusStatisticsTable() {
-
-        EventStatusStatisticsTableFactory factory = new EventStatusStatisticsTableFactory();
-        factory.setStudySubjectDao(getStudySubjectDAO());
-        factory.setCurrentStudy(currentStudy);
-        factory.setStudyEventDao(getStudyEventDAO());
-        factory.setStudyDao(getStudyDAO());
-        String subjectEventStatusStatistics = factory.createTable(request, response).render();
-        request.setAttribute("subjectEventStatusStatistics", subjectEventStatusStatistics);
+        StudyEventDAO eventDao = getStudyEventDAO();
+        SubjectEventStatus[] subjectEventStatuses = {
+                SubjectEventStatus.SCHEDULED,
+                SubjectEventStatus.DATA_ENTRY_STARTED,
+                SubjectEventStatus.COMPLETED,
+                SubjectEventStatus.SIGNED,
+                SubjectEventStatus.LOCKED,
+                SubjectEventStatus.SKIPPED,
+                SubjectEventStatus.STOPPED };
+        List<java.util.Map<String, Object>> rows = new ArrayList<java.util.Map<String, Object>>();
+        Integer totalEvents = eventDao.getCountofEvents(currentStudy);
+        for (SubjectEventStatus subjectEventStatus : subjectEventStatuses) {
+            Integer count = eventDao.getCountofEventsBasedOnEventStatus(currentStudy, subjectEventStatus);
+            long pct = totalEvents == 0 ? 0L
+                    : Math.round((count.doubleValue() / totalEvents.doubleValue()) * 100);
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<String, Object>();
+            row.put("status", subjectEventStatus.getName());
+            row.put("studySubjects", count);
+            row.put("percentage", pct);
+            rows.add(row);
+        }
+        request.setAttribute("subjectEventStatusStatisticsRows", rows);
     }
 
+    @SuppressWarnings("unchecked")
     private void setupStudySiteStatisticsTable() {
-
-        SiteStatisticsTableFactory factory = new SiteStatisticsTableFactory();
-        factory.setStudySubjectDao(getStudySubjectDAO());
-        factory.setCurrentStudy(currentStudy);
-        factory.setStudyDao(getStudyDAO());
-        String studySiteStatistics = factory.createTable(request, response).render();
-        request.setAttribute("studySiteStatistics", studySiteStatistics);
-
+        StudyDAO studyDao = getStudyDAO();
+        StudySubjectDAO subjectDao = getStudySubjectDAO();
+        java.util.List<StudyBean> studies = (java.util.List<StudyBean>) studyDao.findAll(currentStudy.getId());
+        List<java.util.Map<String, Object>> rows = new ArrayList<java.util.Map<String, Object>>();
+        for (StudyBean studyBean : studies) {
+            Integer count = subjectDao.getCountofStudySubjectsAtStudyOrSite(studyBean);
+            Integer expected = studyBean.getExpectedTotalEnrollment();
+            long pct = expected == null || expected == 0 ? 0L
+                    : Math.round((count.doubleValue() / expected.doubleValue()) * 100);
+            java.util.Map<String, Object> row = new java.util.LinkedHashMap<String, Object>();
+            row.put("name", studyBean.getName());
+            row.put("enrolled", count);
+            row.put("expectedTotalEnrollment", expected);
+            row.put("percentage", pct);
+            rows.add(row);
+        }
+        request.setAttribute("studySiteStatisticsRows", rows);
     }
 
     private void setupStudyStatisticsTable() {
-
-        StudyStatisticsTableFactory factory = new StudyStatisticsTableFactory();
-        factory.setStudySubjectDao(getStudySubjectDAO());
-        factory.setCurrentStudy(currentStudy);
-        factory.setStudyDao(getStudyDAO());
-        String studyStatistics = factory.createTable(request, response).render();
-        request.setAttribute("studyStatistics", studyStatistics);
-
+        StudySubjectDAO subjectDao = getStudySubjectDAO();
+        Integer count = subjectDao.getCountofStudySubjectsAtStudy(currentStudy);
+        Integer expected = currentStudy.getExpectedTotalEnrollment();
+        long pct = expected == null || expected == 0 ? 0L
+                : Math.round((count.doubleValue() / expected.doubleValue()) * 100);
+        java.util.Map<String, Object> row = new java.util.LinkedHashMap<String, Object>();
+        row.put("name", currentStudy.getName());
+        row.put("enrolled", count);
+        row.put("expectedTotalEnrollment", expected);
+        row.put("percentage", pct);
+        java.util.List<java.util.Map<String, Object>> rows = new java.util.ArrayList<java.util.Map<String, Object>>();
+        rows.add(row);
+        request.setAttribute("studyStatisticsRows", rows);
     }
 
     private void setupListStudySubjectTable() {
