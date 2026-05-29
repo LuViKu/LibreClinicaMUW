@@ -288,6 +288,14 @@
 			<groupId>org.mockito</groupId>
 			<artifactId>mockito-core</artifactId>
 		</dependency>
+		<!-- Selenium 4.x for the smoke-tests profile (browser-driven
+		     verification of jmesa cohort migrations). Only fetched +
+		     used when the profile is active; production WAR is not
+		     affected. -->
+		<dependency>
+			<groupId>org.seleniumhq.selenium</groupId>
+			<artifactId>selenium-java</artifactId>
+		</dependency>
       <!--
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
