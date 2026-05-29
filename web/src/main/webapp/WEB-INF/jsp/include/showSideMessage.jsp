@@ -3,7 +3,7 @@
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.page_messages" var="resmessages"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.page_messages" var="resmessages"/>
 
 <jsp:useBean scope='request' id='pageMessages' class='java.util.ArrayList'/>
 <%--<jsp:useBean scope='request' id='message' class='java.lang.String'/>--%>

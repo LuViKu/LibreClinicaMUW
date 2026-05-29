@@ -3,8 +3,8 @@
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
 <script type="text/javascript" src="includes/wz_tooltip/wz_tooltip.js"></script>
 
 <!-- move the alert message to the sidebar-->
@@ -35,7 +35,7 @@
   </tr>
 
 <jsp:useBean scope="request" id="section" class=
-  "org.akaza.openclinica.bean.submit.DisplaySectionBean" />
+  "at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplaySectionBean" />
 
 <%-- set button text depending on whether or not the user is confirming values --%>
 <c:choose>

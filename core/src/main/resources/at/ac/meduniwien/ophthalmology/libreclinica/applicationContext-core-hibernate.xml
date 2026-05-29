@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:tx="http://www.springframework.org/schema/tx"
+        xmlns:aop="http://www.springframework.org/schema/aop"
+	    xsi:schemaLocation="http://www.springframework.org/schema/beans
+                            http://www.springframework.org/schema/beans/spring-beans.xsd
+                            http://www.springframework.org/schema/tx
+                            http://www.springframework.org/schema/tx/spring-tx.xsd
+                            http://www.springframework.org/schema/aop
+                            http://www.springframework.org/schema/aop/spring-aop.xsd"
+                            >
+
+
+
+    <!-- A Hibernate SessionFactory for mapping Domain Objects from object to relation tables -->
+    <bean id="sessionFactory" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
+        <property name="dataSource" ref="dataSource"/>
+        <property name="mappingLocations">
+            <list>
+                <value>classpath:at/ac/meduniwien/ophthalmology/libreclinica/typedefs.hbm.xml</value>
+            </list>
+        </property>
+        <property name="annotatedClasses">
+            <list>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetAuditBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.ExpressionBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetRuleBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetRuleAuditBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionRunBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionRunLogBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.EmailActionBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.NotificationActionBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.DiscrepancyNoteActionBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.ShowActionBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.HideActionBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.InsertActionBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.EventActionBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RandomizeActionBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.PropertyBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.StratificationFactorBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.user.AuthoritiesBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.managestudy.StudyModuleStatus</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.AuditUserLoginBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.DatabaseChangeLogBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.ConfigurationBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.admin.MeasurementUnit</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemGroupMetadataBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemFormMetadataBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.SCDItemMetadataBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.usageStats.LogUsageStatsBean</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.OpenClinicaVersionBean</value>
+ 
+                <!-- The following beans are coded for data maping, currently they are partially working, to resume the work uncomment it -->
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Study</value> 
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserAccount</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserType</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfBean              </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CompletionStatus</value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfVersion</value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfVersionMedia</value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DiscrepancyNote      </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DiscrepancyNoteType  </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnEventCrfMap   </value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnEventCrfMapId </value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnItemDataMap</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnItemDataMapId </value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnStudyEventMap      </value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnStudySubjectMap                 </value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnSubjectMap                 </value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnStudyEventMapId    </value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.VersioningMap    </value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.VersioningMapId    </value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrf             </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventDefinitionCrf   </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Item                 </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemData             </value>  
+ 
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventDefinitionCrfItemTag </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventDefinitionCrfTag</value>  
+
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataFlag </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrfFlag   </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataFlagWorkflow </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrfFlagWorkflow   </value>  
+
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.IdtView   </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Tag   </value>  
+
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataType         </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemFormMetadata      </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemGroup             </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemGroupMetadata     </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemReferenceType     </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResolutionStatus      </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResponseSet           </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResponseType          </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Section               </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEvent            </value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEventDefinition</value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudySubject</value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Subject</value>  
+        
+                <!-- the following were not tested, to be remain commented as of now -->         
+                <!--         <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditEvent    </value>       -->
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditLogEvent     </value>   
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditLogEventType    </value>  
+                <!-- to be remain commented for now -->
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.GroupClassTypes      </value>  
+                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.MeasurementUnit       </value>   -->
+                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.NullValueType         </value>   -->
+                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.OpenclinicaVersion    </value>   -->
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyGroup</value>  
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyGroupClass</value>  
+                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyModuleStatus</value>   -->
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyParameter</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyParameterValue</value>
+                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyParameterValueId</value>   -->
+                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyType</value>   -->
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyUserRole</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyUserRoleId</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.SubjectGroupMap</value>
+
+       
+                
+            </list>
+        </property>
+        <property name="hibernateProperties">
+            <props>
+                <prop key="hibernate.show_sql">false</prop>
+                <prop key="hibernate.format_sql">true</prop>
+                <prop key="hibernate.dialect">s[hibernate.dialect]</prop>
+                <prop key="hibernate.generate_statistics">true</prop>
+                <!-- Phase B.4 cliff: 2L cache temporarily disabled.
+                     hibernate-ehcache 5.x is javax-only with no jakarta-namespaced
+                     sibling at 5.6.x; the WIP commit dropped the dependency from
+                     core/pom.xml in preparation for B.5 (Hibernate 6.4 + jcache +
+                     ehcache 3). Re-enable in B.5 with:
+                       org.hibernate.cache.jcache.JCacheRegionFactory
+                       + ehcache 3.x JSR-107 provider. -->
+                <prop key="hibernate.cache.use_query_cache">false</prop>
+                <prop key="hibernate.cache.use_second_level_cache">false</prop>
+                <prop key="hibernate.allow_update_outside_transaction">true</prop>
+                <!-- Uncommenting the following line allows better logging of Hibernate errors for debugging purposes. Must be commented out for production use. -->
+                <!-- prop key="hibernate.jdbc.batch_size">0</prop -->
+            </props>
+        </property>
+        <property name="implicitNamingStrategy">
+            <!-- <bean class="org.hibernate.cfg.ImprovedNamingStrategy"/> -->
+            <bean class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.cfg.LegacyImprovedImplicitNamingStrategy"/>
+        </property>
+    </bean>
+
+  <!-- A transaction manager for working with Hibernate SessionFactories -->
+  <bean id="transactionManager" class="org.springframework.orm.hibernate5.HibernateTransactionManager">
+    <property name="sessionFactory" ref="sessionFactory"/>
+  </bean>
+  
+  <bean id="sharedTransactionTemplate" class="org.springframework.transaction.support.TransactionTemplate">
+    <property name="transactionManager" ref="transactionManager"/>
+  </bean>
+  
+
+  <bean id="hibernateTemplate" class="org.springframework.orm.hibernate5.HibernateTemplate">
+    <property name="sessionFactory" ref="sessionFactory"/>
+  </bean>
+
+  <!-- Instructs the container to look for beans with @Transactional and decorate them -->
+  <tx:annotation-driven transaction-manager="transactionManager" proxy-target-class="true"/>
+
+  <bean id="abstractDomainDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AbstractDomainDao" abstract="true"/>
+
+  <bean id="ruleActionRunLogDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleActionRunLogDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="dynamicsItemFormMetadataDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.DynamicsItemFormMetadataDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="dynamicsItemGroupMetadataDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.DynamicsItemGroupMetadataDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="ruleSetDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="ruleSetAuditDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetAuditDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="ruleDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="ruleActionPropertyDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleActionPropertyDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="ruleSetRuleDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="ruleSetRuleAuditDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleAuditDao" parent="abstractDomainDao" autowire="byName" />
+
+  <bean id="authoritiesDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuthoritiesDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="studyModuleStatusDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.StudyModuleStatusDao" parent="abstractDomainDao" autowire="byName"/>
+
+  <bean id="auditUserLoginDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="databaseChangeLogDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.DatabaseChangeLogDao" autowire="byName" />
+  <bean id="configurationDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ConfigurationDao" parent="abstractDomainDao" autowire="byName" />
+
+  <bean id="measurementUnitDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.MeasurementUnitDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="scdItemMetadataDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.SCDItemMetadataDao" parent="abstractDomainDao" autowire="byName" />
+  
+  <bean id="usageStatsServiceDAO" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.UsageStatsServiceDAO" parent="abstractDomainDao" autowire="byName" />
+  <bean id="openClinicaVersionDAO" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.OpenClinicaVersionDAO" parent="abstractDomainDao" autowire="byName" />
+  <bean id="crfVersionDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.CrfVersionDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="eventCrfDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.EventCrfDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="eventDefinitionCrfDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.EventDefinitionCrfDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="crfVersionMediaDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.CrfVersionMediaDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="crfDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.CrfDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="sectionDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.SectionDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="itemGroupDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemGroupDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="itemDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDao" parent="abstractDomainDao" autowire="byName" />
+
+
+  <bean id="eventDefinitionCrfItemTagDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.EventDefinitionCrfItemTagDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="eventDefinitionCrfTagDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.EventDefinitionCrfTagDao" parent="abstractDomainDao" autowire="byName" />
+ 
+  <bean id="eventCrfFlagDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.EventCrfFlagDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="itemDataFlagDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDataFlagDao" parent="abstractDomainDao" autowire="byName" />
+ 
+  <bean id="eventCrfFlagWorkflowDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.EventCrfFlagWorkflowDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="itemDataFlagWorkflowDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDataFlagWorkflowDao" parent="abstractDomainDao" autowire="byName" />
+
+  <bean id="idtViewDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.IdtViewDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="tagDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.TagDao" parent="abstractDomainDao" autowire="byName" />
+
+
+  <bean id="itemDataDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDataDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="itemReferenceTypeDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemReferenceTypeDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="itemDataTypeDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDataTypeDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="responseSetDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ResponseSetDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="responseTypeDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ResponseTypeDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="itemFormMetadataDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemFormMetadataDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="versioningMapDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.VersioningMapDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="itemGroupMetadataDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemGroupMetadataDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="studyParameterValueDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.StudyParameterValueDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="dnItemDataMapDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.DnItemDataMapDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="completionStatusDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.CompletionStatusDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="discrepancyNoteDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.DiscrepancyNoteDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="discrepancyNoteTypeDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.DiscrepancyNoteTypeDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="resolutionStatusDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ResolutionStatusDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="studyUserRoleDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.StudyUserRoleDao" parent="abstractDomainDao" autowire="byName" />
+  <bean id="subjectDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.SubjectDao" parent="abstractDomainDao" autowire="byName" />
+  
+  <bean id="viewNotesDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.ViewNotesDaoImpl">
+    <property name="dataSource" ref="dataSource"/>
+    <property name="queryStore" ref="queryStore"/>
+  </bean>
+  
+  <bean id="studyDaoDomain" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.StudyDao" parent="abstractDomainDao" autowire="byName">
+  
+  </bean>
+    
+  <bean id="studySubjectDaoDomain" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.StudySubjectDao" parent="abstractDomainDao" autowire="byName">
+  </bean>
+   <bean id="studyEventDefDaoDomain" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.StudyEventDefinitionDao" parent="abstractDomainDao" autowire="byName">
+  </bean>
+   <bean id="auditLogEventDaoDomain" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditLogEventDao" parent="abstractDomainDao" autowire="byName">
+  </bean>
+  <bean id="userDaoDomain" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.UserAccountDao" parent="abstractDomainDao" autowire="byName"/>
+  <bean id="userTypeDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.UserTypeDao" parent="abstractDomainDao" autowire="byName"/>
+  <bean id="studyEventDaoDomain" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.StudyEventDao" parent="abstractDomainDao" autowire="byName"></bean> 
+</beans>

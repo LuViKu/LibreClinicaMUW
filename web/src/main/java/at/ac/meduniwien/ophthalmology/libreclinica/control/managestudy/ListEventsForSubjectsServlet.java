@@ -1,0 +1,181 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormDiscrepancyNotes;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.AddNewSubjectServlet;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.SubmitDataServlet;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectGroupMapDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
+import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+
+import java.util.Locale;
+
+/**
+ * @author Krikor Krumlian
+ */
+public class ListEventsForSubjectsServlet extends SecureController {
+
+    // Shaoyu Su
+    private static final long serialVersionUID = 1L;
+    private StudyEventDefinitionDAO studyEventDefinitionDAO;
+    private SubjectDAO subjectDAO;
+    private StudySubjectDAO studySubjectDAO;
+    private StudyEventDAO studyEventDAO;
+    private StudyGroupClassDAO studyGroupClassDAO;
+    private SubjectGroupMapDAO subjectGroupMapDAO;
+    private StudyDAO studyDAO;
+    private StudyGroupDAO studyGroupDAO;
+    private EventCRFDAO eventCRFDAO;
+    private EventDefinitionCRFDAO eventDefintionCRFDAO;
+    private CRFDAO crfDAO;
+    Locale locale;
+    private boolean showMoreLink;
+    /*
+     * (non-Javadoc)
+     *
+     * @see at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController#mayProceed()
+     */
+    @Override
+    protected void mayProceed() throws InsufficientPermissionException {
+
+        locale = LocaleResolver.getLocale(request);
+
+        if (ub.isSysAdmin()) {
+            return;
+        }
+
+        if (SubmitDataServlet.mayViewData(ub, currentRole)) {
+            return;
+        }
+
+        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("may_not_submit_data"), "1");
+    }
+
+    @Override
+    public void processRequest() throws Exception {
+
+        FormProcessor fp = new FormProcessor(request);
+        if(fp.getString("showMoreLink").equals("")){
+            showMoreLink = true;
+        }else {
+            showMoreLink = Boolean.parseBoolean(fp.getString("showMoreLink"));
+        }
+        String idSetting = currentStudy.getStudyParameterConfig().getSubjectIdGeneration();
+        // set up auto study subject id
+        if (idSetting.equals("auto editable") || idSetting.equals("auto non-editable")) {
+            //Shaoyu Su
+            //int nextLabel = getStudySubjectDAO().findTheGreatestLabel() + 1;
+            //request.setAttribute("label", new Integer(nextLabel).toString());
+            request.setAttribute("label", resword.getString("id_generated_Save_Add"));
+        }
+
+        // checks which module the requests are from
+        String module = fp.getString(MODULE);
+        request.setAttribute(MODULE, module);
+
+        int definitionId = fp.getInt("defId");
+        if (definitionId <= 0) {
+            addPageMessage(respage.getString("please_choose_an_ED_ta_to_vies_details"));
+            forwardPage(Page.LIST_STUDY_SUBJECTS);
+            return;
+        }
+
+        // Phase B.4 jmesa PR 6b (cohort 4b): the factory.createTable().render()
+        // blob is gone. The JSP shell now includes a vanilla-JS fragment that
+        // fetches /ListEventsForSubjectsData asynchronously, forwarding the
+        // defId query-string param so the dynamic CRF columns line up.
+        request.setAttribute("defId", definitionId);
+        // A. Hamid.
+        // For event definitions and group class list in the add subject popup
+        request.setAttribute("allDefsArray", super.getEventDefinitionsByCurrentStudy());
+        request.setAttribute("studyGroupClasses", super.getStudyGroupClassesByCurrentStudy());
+        FormDiscrepancyNotes discNotes = new FormDiscrepancyNotes();
+        session.setAttribute(AddNewSubjectServlet.FORM_DISCREPANCY_NOTES_NAME, discNotes);
+        //
+        forwardPage(Page.LIST_EVENTS_FOR_SUBJECTS);
+
+    }
+
+    public StudyEventDefinitionDAO getStudyEventDefinitionDao() {
+        studyEventDefinitionDAO = studyEventDefinitionDAO == null ? new StudyEventDefinitionDAO(sm.getDataSource()) : studyEventDefinitionDAO;
+        return studyEventDefinitionDAO;
+    }
+
+    public SubjectDAO getSubjectDAO() {
+        subjectDAO = this.subjectDAO == null ? new SubjectDAO(sm.getDataSource()) : subjectDAO;
+        return subjectDAO;
+    }
+
+    public StudySubjectDAO getStudySubjectDAO() {
+        studySubjectDAO = this.studySubjectDAO == null ? new StudySubjectDAO(sm.getDataSource()) : studySubjectDAO;
+        return studySubjectDAO;
+    }
+
+    public StudyGroupClassDAO getStudyGroupClassDAO() {
+        studyGroupClassDAO = this.studyGroupClassDAO == null ? new StudyGroupClassDAO(sm.getDataSource()) : studyGroupClassDAO;
+        return studyGroupClassDAO;
+    }
+
+    public SubjectGroupMapDAO getSubjectGroupMapDAO() {
+        subjectGroupMapDAO = this.subjectGroupMapDAO == null ? new SubjectGroupMapDAO(sm.getDataSource()) : subjectGroupMapDAO;
+        return subjectGroupMapDAO;
+    }
+
+    public StudyEventDAO getStudyEventDAO() {
+        studyEventDAO = this.studyEventDAO == null ? new StudyEventDAO(sm.getDataSource()) : studyEventDAO;
+        return studyEventDAO;
+    }
+
+    public StudyDAO getStudyDAO() {
+        studyDAO = this.studyDAO == null ? new StudyDAO(sm.getDataSource()) : studyDAO;
+        return studyDAO;
+    }
+
+    public EventCRFDAO getEventCRFDAO() {
+        eventCRFDAO = this.eventCRFDAO == null ? new EventCRFDAO(sm.getDataSource()) : eventCRFDAO;
+        return eventCRFDAO;
+    }
+
+    public EventDefinitionCRFDAO getEventDefinitionCRFDAO() {
+        eventDefintionCRFDAO = this.eventDefintionCRFDAO == null ? new EventDefinitionCRFDAO(sm.getDataSource()) : eventDefintionCRFDAO;
+        return eventDefintionCRFDAO;
+    }
+
+    public CRFDAO getCrfDAO() {
+        crfDAO = this.crfDAO == null ? new CRFDAO(sm.getDataSource()) : crfDAO;
+        return crfDAO;
+    }
+
+    public CRFVersionDAO getCRFVersionDAO(){
+    	CRFVersionDAO	crfVersionDAO =new CRFVersionDAO(sm.getDataSource());
+    	return crfVersionDAO;
+    	}
+    public StudyGroupDAO getStudyGroupDAO() {
+        studyGroupDAO = this.studyGroupDAO == null ? new StudyGroupDAO(sm.getDataSource()) : studyGroupDAO;
+        return studyGroupDAO;
+    }
+
+}

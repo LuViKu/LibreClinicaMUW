@@ -5,7 +5,7 @@
 
 
 <link rel="stylesheet" href="includes/jmesa/jmesa.css" type="text/css">
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
 
 <c:choose>
 <c:when test="${userBean.sysAdmin && module=='admin'}">
@@ -50,8 +50,8 @@
 
 </script>
 
-<jsp:useBean scope='session' id='userBean' class='org.akaza.openclinica.bean.login.UserAccountBean'/>
-<jsp:useBean scope='request' id='ruleSet' class='org.akaza.openclinica.domain.rule.RuleSetBean'/>
+<jsp:useBean scope='session' id='userBean' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean'/>
+<jsp:useBean scope='request' id='ruleSet' class='at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean'/>
 <jsp:useBean scope='request' id='result' class='java.util.HashMap'/>
 
 <h1><c:choose>

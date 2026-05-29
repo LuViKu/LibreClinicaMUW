@@ -11,7 +11,7 @@ eternal="false"
 timeToLiveSeconds="240"
 overflowToDisk="false" diskPersistent="false" memoryStoreEvictionPolicy="LFU"  />
  <cache
-    name="org.akaza.openclinica.domain.datamap.StudySubject"
+    name="at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudySubject"
     maxElementsInMemory="10000"
     eternal="false"
     timeToIdleSeconds="300"
@@ -21,7 +21,7 @@ overflowToDisk="false" diskPersistent="false" memoryStoreEvictionPolicy="LFU"  /
     </cache>
 
   <cache
-name="org.akaza.openclinica.domain.datamap.StudySubject.studyEvents"
+name="at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudySubject.studyEvents"
     maxElementsInMemory="450"
     eternal="false"
     timeToLiveSeconds="600" statistics="true"

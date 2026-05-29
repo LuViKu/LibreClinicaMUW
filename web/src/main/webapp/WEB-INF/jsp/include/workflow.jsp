@@ -2,8 +2,8 @@
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
  
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>  
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/> 
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>  
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/> 
 
  <c:set var="imagePathPrefix" value="${imagePathPrefix}" />
  <c:set var="module" value="${param.module}"/>

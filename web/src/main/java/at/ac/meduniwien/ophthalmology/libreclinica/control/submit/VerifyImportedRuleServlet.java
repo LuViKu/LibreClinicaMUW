@@ -1,0 +1,105 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
+
+import java.text.MessageFormat;
+import java.util.Locale;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RulesPostImportContainer;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetServiceInterface;
+import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+
+/**
+ * View the uploaded data and verify what is going to be saved into the system
+ * and what is not.
+ *
+ * @author Krikor Krumlian
+ */
+@SuppressWarnings("serial")
+public class VerifyImportedRuleServlet extends SecureController {
+
+    Locale locale;
+    RuleSetServiceInterface ruleSetService;
+
+    @Override
+    public void processRequest() throws Exception {
+
+        String action = request.getParameter("action");
+
+        // checks which module the requests are from
+        /*
+        String module = fp.getString(MODULE);
+        request.setAttribute(MODULE, module);
+
+        resetPanel();
+        panel.setStudyInfoShown(false);
+        panel.setOrderedData(true);
+
+        setToPanel(resword.getString("create_CRF"), respage.getString("br_create_new_CRF_entering"));
+        setToPanel(resword.getString("create_CRF_version"), respage.getString("br_create_new_CRF_uploading"));
+        setToPanel(resword.getString("revise_CRF_version"), respage.getString("br_if_you_owner_CRF_version"));
+        setToPanel(resword.getString("CRF_spreadsheet_template"), respage.getString("br_download_blank_CRF_spreadsheet_from"));
+        setToPanel(resword.getString("example_CRF_br_spreadsheets"), respage.getString("br_download_example_CRF_instructions_from"));
+        */
+
+        if ("confirm".equalsIgnoreCase(action)) {
+            // session.setAttribute("crf", new CRFBean());
+            RulesPostImportContainer rulesContainer = (RulesPostImportContainer) session.getAttribute("importedData");
+            logger.info("Size of ruleDefs : " + rulesContainer.getRuleDefs().size());
+            logger.info("Size of ruleSets : " + rulesContainer.getRuleSets().size());
+            forwardPage(Page.VERIFY_RULES_IMPORT);
+        }
+
+        if ("save".equalsIgnoreCase(action)) {
+            RulesPostImportContainer rulesContainer = (RulesPostImportContainer) session.getAttribute("importedData");
+            getRuleSetService().saveImport(rulesContainer);
+            MessageFormat mf = new MessageFormat("");
+            mf.applyPattern(resword.getString("successful_rule_upload"));
+
+            Object[] arguments =
+                { rulesContainer.getValidRuleDefs().size() + rulesContainer.getDuplicateRuleDefs().size(),
+                    rulesContainer.getValidRuleSetDefs().size() + rulesContainer.getDuplicateRuleSetDefs().size() };
+            addPageMessage(mf.format(arguments));
+            Object pageMessages = request.getAttribute(PAGE_MESSAGE);
+            session.setAttribute("pageMessages", pageMessages);
+            response.sendRedirect(request.getContextPath() + Page.MANAGE_STUDY_MODULE.getFileName());
+        }
+    }
+
+    private RuleSetServiceInterface getRuleSetService() {
+        ruleSetService =
+            this.ruleSetService != null ? ruleSetService : (RuleSetServiceInterface) SpringServletAccess.getApplicationContext(context).getBean(
+                    "ruleSetService");
+        // TODO: Add getRequestURLMinusServletPath(),getContextPath()
+        return ruleSetService;
+    }
+
+    @Override
+    public void mayProceed() throws InsufficientPermissionException {
+
+        locale = LocaleResolver.getLocale(request);
+        if (ub.isSysAdmin()) {
+            return;
+        }
+
+        Role r = currentRole.getRole();
+        if (r.equals(Role.STUDYDIRECTOR) || r.equals(Role.COORDINATOR) || r.equals(Role.INVESTIGATOR) || r.equals(Role.RESEARCHASSISTANT)|| r.equals(Role.RESEARCHASSISTANT2)) {
+            return;
+        }
+
+        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("may_not_submit_data"), "1");
+    }
+}

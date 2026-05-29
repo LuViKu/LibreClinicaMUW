@@ -1,0 +1,133 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy;
+
+import org.apache.commons.lang.StringEscapeUtils;
+
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+
+public class StudyAuditLogFilter implements CriteriaCommand {
+
+    List<Filter> filters = new ArrayList<>();
+    HashMap<String, String> columnMapping = new HashMap<>();
+    Integer studyEventDefinitionId;
+    String defaultFormat = "yyyy-MM-dd";
+    DateFormat theDefaultFormat;
+    String i18Format;
+
+    public StudyAuditLogFilter(String dateFormat) {
+
+        theDefaultFormat = new SimpleDateFormat(defaultFormat);
+        
+        i18Format = dateFormat;
+
+        columnMapping.put("studySubject.label", "ss.label");
+        columnMapping.put("studySubject.status", "ss.status_id");
+        columnMapping.put("studySubject.oid", "ss.oc_oid");
+        columnMapping.put("studySubject.secondaryLabel", "ss.secondary_label");
+        columnMapping.put("subject.dateOfBirth", "s.date_of_birth");
+        columnMapping.put("subject.uniqueIdentifier", "s.unique_identifier");
+        columnMapping.put("studySubject.owner", "ua.user_name");
+        columnMapping.put("studySubject.status", "ss.status_id");
+    }
+
+    public void addFilter(String property, Object value) {
+        filters.add(new Filter(property, value));
+    }
+
+    public String execute(String criteria) {
+        String theCriteria = "";
+        for (Filter filter : filters) {
+            theCriteria += buildCriteria(criteria, filter.getProperty(), filter.getValue());
+        }
+
+        return theCriteria;
+    }
+
+    private String buildCriteria(String criteria, String property, Object value) {
+        value = StringEscapeUtils.escapeSql(value.toString());
+        if (value != null) {
+            if (property.equals("studySubject.status")) {
+                criteria = criteria + " and ";
+                criteria = criteria + " " + columnMapping.get(property) + " = " + value.toString() + " ";
+            } else if (property.equals("subject.dateOfBirth")) {
+                criteria += onlyYearAndMonthAndDay(String.valueOf(value));
+                criteria += onlyYear(String.valueOf(value));
+            }
+
+            else {
+                criteria = criteria + " and ";
+                criteria = criteria + " UPPER(" + columnMapping.get(property) + ") like UPPER('%" + value.toString() + "%')" + " ";
+            }
+        }
+        return criteria;
+    }
+
+    private String onlyYear(String value) {
+        String criteria = "";
+        try {
+            DateFormat format = new SimpleDateFormat("yyyy");
+            Date startDate = format.parse(value);
+            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
+            dt = dt.plusYears(1);
+            Date endDate = Date.from(dt.toInstant());
+            if (format.format(startDate).equals(value)) {
+                criteria = "AND ( s.date_of_birth between '" + theDefaultFormat.format(startDate) + "' and '" + theDefaultFormat.format(endDate) + "')";
+            }
+
+        } catch (Exception e) {
+            // Do nothing
+        }
+        return criteria;
+    }
+
+    private String onlyYearAndMonthAndDay(String value) {
+        String criteria = "";
+        try {
+            DateFormat format = new SimpleDateFormat(i18Format);
+            Date startDate = format.parse(value);
+            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
+            dt = dt.plusDays(1);
+            Date endDate = Date.from(dt.toInstant());
+            if (format.format(startDate).equals(value)) {
+                criteria = "AND ( s.date_of_birth between '" + theDefaultFormat.format(startDate) + "' and '" + theDefaultFormat.format(endDate) + "')";
+            }
+        } catch (Exception e) {
+            // Do nothing
+        }
+        return criteria;
+    }
+
+    private static class Filter {
+        private final String property;
+        private final Object value;
+
+        public Filter(String property, Object value) {
+            this.property = property;
+            this.value = value;
+        }
+
+        public String getProperty() {
+            return property;
+        }
+
+        public Object getValue() {
+            return value;
+        }
+    }
+
+}

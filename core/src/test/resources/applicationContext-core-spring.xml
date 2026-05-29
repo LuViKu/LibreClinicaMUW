@@ -12,7 +12,7 @@
     
      <util:properties id="testInfo" location="classpath:test.properties"/>
      
-      <bean id="coreResources" class="org.akaza.openclinica.dao.core.CoreResources">
+      <bean id="coreResources" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources">
            
         <property name="dataInfo" ref="testInfo"/>
   			

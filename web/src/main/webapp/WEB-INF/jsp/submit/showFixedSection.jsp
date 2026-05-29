@@ -3,8 +3,8 @@
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 <%@ taglib uri="com.akazaresearch.tags" prefix="aka_frm" %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/> 
-<jsp:useBean scope="request" id="section" class="org.akaza.openclinica.bean.submit.DisplaySectionBean" />
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/> 
+<jsp:useBean scope="request" id="section" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplaySectionBean" />
 <jsp:useBean scope="request" id="annotations" class="java.lang.String" />
 
 <c:set var="currPage" value="" />

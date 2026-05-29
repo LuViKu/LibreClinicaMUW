@@ -1,0 +1,326 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
+
+import static at.ac.meduniwien.ophthalmology.libreclinica.core.util.ClassCastHelper.asHashSet;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.SubmitDataServlet;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.DiscrepancyNoteUtil;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.DiscrepancyNotesSummary;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.ViewNotesService;
+import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import org.springframework.web.context.support.WebApplicationContextUtils;
+/**
+ * View a list of all discrepancy notes in current study
+ *
+ * @author ssachs
+ * @author jxu
+ * Created on Sep 23, 2005
+ */
+public class ViewNotesServlet extends SecureController {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 6196337101804576598L;
+	public static final String PRINT = "print";
+    public static final String RESOLUTION_STATUS = "resolutionStatus";
+    public static final String TYPE = "discNoteType";
+    public static final String WIN_LOCATION = "window_location";
+    public static final String NOTES_TABLE = "notesTable";
+    public static final String DISCREPANCY_NOTE_TYPE = "discrepancyNoteType";
+    private boolean showMoreLink;
+    private ViewNotesService viewNotesService;
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController#processRequest()
+     */
+    @Override
+    protected void processRequest() throws Exception {
+        String module = request.getParameter("module");
+        String moduleStr = "manage";
+        if (module != null && module.trim().length() > 0) {
+            if ("submit".equals(module)) {
+                request.setAttribute("module", "submit");
+                moduleStr = "submit";
+            } else if ("admin".equals(module)) {
+                request.setAttribute("module", "admin");
+                moduleStr = "admin";
+            } else {
+                request.setAttribute("module", "manage");
+            }
+        }
+
+        FormProcessor fp = new FormProcessor(request);
+        if(fp.getString("showMoreLink").equals("")){
+            showMoreLink = true;
+        }else {
+            showMoreLink = Boolean.parseBoolean(fp.getString("showMoreLink"));
+        }
+
+        int oneSubjectId = fp.getInt("id");
+        // BWP 11/03/2008 3029: This session attribute in removed in
+        // ResolveDiscrepancyServlet.mayProceed() >>
+        session.setAttribute("subjectId", oneSubjectId);
+        // >>
+
+        int discNoteType = 0;
+        try {
+            discNoteType = Integer.parseInt(request.getParameter("type"));
+        } catch (NumberFormatException nfe) {
+            // Show all DN's
+            discNoteType = -1;
+        }
+        request.setAttribute(DISCREPANCY_NOTE_TYPE, discNoteType);
+
+        boolean removeSession = fp.getBoolean("removeSession");
+
+        // BWP 11/03/2008 3029: This session attribute in removed in
+        // ResolveDiscrepancyServlet.mayProceed() >>
+        session.setAttribute("module", module);
+        // >>
+
+        // Do we only want to view the notes for 1 subject?
+        String viewForOne = fp.getString("viewForOne");
+
+        DiscrepancyNoteDAO dndao = new DiscrepancyNoteDAO(sm.getDataSource());
+        dndao.setFetchMapping(true);
+
+        int resolutionStatus = 0;
+        try {
+            resolutionStatus = Integer.parseInt(request.getParameter("resolutionStatus"));
+        } catch (NumberFormatException nfe) {
+            // Show all DN's
+            resolutionStatus = -1;
+        }
+
+        if (removeSession) {
+            session.removeAttribute(WIN_LOCATION);
+            session.removeAttribute(NOTES_TABLE);
+        }
+
+        // after resolving a note, user wants to go back to view notes page, we
+        // save the current URL
+        // so we can go back later
+        session.setAttribute(WIN_LOCATION, "ViewNotes?viewForOne=" + viewForOne + "&id=" + oneSubjectId + "&module=" + module + " &removeSession=1");
+
+        boolean hasAResolutionStatus = resolutionStatus >= 1 && resolutionStatus <= 5;
+        HashSet<Integer> resolutionStatusIds = asHashSet(session.getAttribute(RESOLUTION_STATUS), Integer.class);
+        // remove the session if there is no resolution status
+        if (!hasAResolutionStatus && resolutionStatusIds != null) {
+            session.removeAttribute(RESOLUTION_STATUS);
+            resolutionStatusIds = null;
+        }
+        if (hasAResolutionStatus) {
+            if (resolutionStatusIds == null) {
+                resolutionStatusIds = new HashSet<Integer>();
+            }
+            resolutionStatusIds.add(resolutionStatus);
+            session.setAttribute(RESOLUTION_STATUS, resolutionStatusIds);
+        }
+
+        // Phase B.4 jmesa PR 5a (cohort 3a): the ListNotesTableFactory
+        // HTML blob is gone. The JSP shell now includes a vanilla-JS
+        // fragment that fetches /ViewNotesData asynchronously. The
+        // summary-statistics block above the table is still
+        // server-rendered (small, static layout — no win from
+        // moving it client-side).
+        at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.ViewNotesFilterCriteria summaryFilter =
+                at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.ViewNotesFilterCriteria.buildFilterCriteria(
+                        new HashMap<String, String>(),
+                        getDataFormat(),
+                        buildTypeDecoder(),
+                        buildResolutionDecoder());
+        DiscrepancyNotesSummary summary = resolveViewNotesService()
+                .calculateNotesSummary(currentStudy, summaryFilter);
+
+        Map<String, Map<String, String>> stats = generateDiscrepancyNotesSummary(summary);
+        Map<String,String> totalMap = generateDiscrepancyNotesTotal(stats);
+
+        int grandTotal = 0;
+        for (String typeName: totalMap.keySet()) {
+            String total = totalMap.get(typeName);
+            grandTotal = total.equals("--") ? grandTotal + 0 : grandTotal + Integer.parseInt(total);
+        }
+        request.setAttribute("summaryMap", stats);
+
+        String viewNotesURL = this.getPageURL();
+        session.setAttribute("viewNotesURL", viewNotesURL);
+        String viewNotesPageFileName = this.getPageServletFileName();
+        session.setAttribute("viewNotesPageFileName", viewNotesPageFileName);
+
+        request.setAttribute("mapKeys", ResolutionStatus.getMembers());
+        request.setAttribute("typeNames", DiscrepancyNoteUtil.getTypeNames());
+        request.setAttribute("typeKeys", totalMap);
+        request.setAttribute("grandTotal", grandTotal);
+
+        if ("yes".equalsIgnoreCase(fp.getString(PRINT))) {
+            at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.ViewNotesFilterCriteria printFilter =
+                    at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.ViewNotesFilterCriteria.buildFilterCriteria(
+                            new HashMap<String, String>(),
+                            getDataFormat(),
+                            buildTypeDecoder(),
+                            buildResolutionDecoder());
+            List<at.ac.meduniwien.ophthalmology.libreclinica.core.util.Pair<String,String>> sortPairs =
+                    new ArrayList<at.ac.meduniwien.ophthalmology.libreclinica.core.util.Pair<String,String>>();
+            sortPairs.add(new at.ac.meduniwien.ophthalmology.libreclinica.core.util.Pair<String,String>(
+                    "discrepancyNoteBean.createdDate", "desc"));
+            List<DiscrepancyNoteBean> allNotes = resolveViewNotesService().listNotes(
+                    currentStudy, printFilter,
+                    at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.ViewNotesSortCriteria
+                            .buildFilterCriteria(sortPairs));
+            request.setAttribute("allNotes", allNotes);
+            forwardPage(Page.VIEW_DISCREPANCY_NOTES_IN_STUDY_PRINT);
+        } else {
+            forwardPage(Page.VIEW_DISCREPANCY_NOTES_IN_STUDY);
+        }
+    }
+
+    private String getDataFormat() {
+        java.util.ResourceBundle resformat =
+                at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider.getFormatBundle(
+                        at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver.getLocale(request));
+        return resformat.getString("date_format_string");
+    }
+
+    private Map<String, String> buildTypeDecoder() {
+        Map<String, String> decoder = new HashMap<String, String>();
+        for (DiscrepancyNoteType t : DiscrepancyNoteType.list) {
+            decoder.put(t.getName(), Integer.toString(t.getId()));
+        }
+        decoder.put("Query and Failed Validation Check", "1,3");
+        return decoder;
+    }
+
+    private Map<String, String> buildResolutionDecoder() {
+        Map<String, String> decoder = new HashMap<String, String>();
+        for (ResolutionStatus s : ResolutionStatus.list) {
+            decoder.put(s.getName(), Integer.toString(s.getId()));
+        }
+        decoder.put("New and Updated", "1,2");
+        return decoder;
+    }
+
+    /**
+     * @param stats
+     * @return
+     */
+    private Map<String, String> generateDiscrepancyNotesTotal(Map<String, Map<String, String>> stats) {
+        Map<String, String> result = new HashMap<String, String>(stats.size());
+
+        int totals[] = new int[DiscrepancyNoteType.list.size() + 1]; // The "invalid" type is not part of this list
+
+        for (String resStatus : stats.keySet()) {
+            Map<String, String> dnTypeMap = stats.get(resStatus);
+            for (String dnType: dnTypeMap.keySet()) {
+                String stringVal = dnTypeMap.get(dnType);
+                int val = (stringVal.equals("--") ? 0 : Integer.parseInt(stringVal));
+                totals[DiscrepancyNoteType.getByName(dnType).getId()] += val;
+            }
+        }
+
+        for (int i = 1; i < totals.length; i++) { // Discarding i = 0 ("Invalid" DiscrepancyNoteType)
+            String dnType = DiscrepancyNoteType.get(i).getName();
+            result.put(dnType, (totals[i] == 0 ? "--" : Integer.toString(totals[i])));
+        }
+
+        return result;
+    }
+
+    /**
+     * @param resolveViewNotesService
+     * @return
+     */
+    private Map<String, Map<String, String>> generateDiscrepancyNotesSummary(DiscrepancyNotesSummary summary) {
+        Map<String, Map<String, String>> result = new HashMap<String, Map<String, String>>();
+        for (ResolutionStatus resStatus : ResolutionStatus.list) {
+            Map<String, String> resStatusMap = new HashMap<String, String>(DiscrepancyNoteType.list.size());
+            for (DiscrepancyNoteType dnType : DiscrepancyNoteType.list) {
+                int val = summary.getSum(resStatus, dnType);
+                resStatusMap.put(dnType.getName(), (val == 0 ? "--" : Integer.toString(val)));
+            }
+            int acc = summary.getSum(resStatus);
+            resStatusMap.put("Total", (acc == 0 ? "--" : Integer.toString(acc)));
+            result.put(resStatus.getName(), resStatusMap);
+        }
+        return result;
+    }
+
+    public ArrayList<DiscrepancyNoteBean> filterForOneSubject(ArrayList<DiscrepancyNoteBean> allNotes, int subjectId, int resolutionStatus) {
+
+        if (allNotes == null || allNotes.isEmpty() || subjectId == 0)
+            return allNotes;
+        // Are the D Notes filtered by resolution?
+        boolean filterByRes = resolutionStatus >= 1 && resolutionStatus <= 5;
+
+        ArrayList<DiscrepancyNoteBean> filteredNotes = new ArrayList<DiscrepancyNoteBean>();
+        StudySubjectDAO subjectDao = new StudySubjectDAO(sm.getDataSource());
+        StudySubjectBean studySubjBean = (StudySubjectBean) subjectDao.findByPK(subjectId);
+
+        for (DiscrepancyNoteBean discBean : allNotes) {
+            if (discBean.getSubjectName().equalsIgnoreCase(studySubjBean.getLabel())) {
+                if (!filterByRes) {
+                    filteredNotes.add(discBean);
+                } else {
+                    if (discBean.getResolutionStatusId() == resolutionStatus) {
+                        filteredNotes.add(discBean);
+                    }
+                }
+            }
+        }
+
+        return filteredNotes;
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController#mayProceed()
+     */
+    @Override
+    protected void mayProceed() throws InsufficientPermissionException {
+        /*
+         * if (currentRole.getRole().equals(Role.STUDYDIRECTOR) ||
+         * currentRole.getRole().equals(Role.COORDINATOR)) { return; }
+         */
+        if (SubmitDataServlet.mayViewData(ub, currentRole)) {
+            return;
+        }
+
+        addPageMessage(respage.getString("no_permission_to_view_discrepancies") + respage.getString("change_study_contact_sysadmin"));
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_study_director_or_study_cordinator"), "1");
+    }
+
+    protected ViewNotesService resolveViewNotesService() {
+        if (viewNotesService == null) {
+            viewNotesService = (ViewNotesService) WebApplicationContextUtils.getWebApplicationContext(
+                    getServletContext()).getBean("viewNotesService");
+        }
+        return viewNotesService;
+
+    }
+
+}

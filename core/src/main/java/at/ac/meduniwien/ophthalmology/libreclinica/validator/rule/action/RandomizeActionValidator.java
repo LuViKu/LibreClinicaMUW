@@ -1,0 +1,162 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.validator.rule.action;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.PropertyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RandomizeActionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.ExpressionService;
+import org.apache.commons.collections.CollectionUtils;
+import org.springframework.validation.Errors;
+import org.springframework.validation.ValidationUtils;
+import org.springframework.validation.Validator;
+
+import java.util.Collection;
+import java.util.List;
+import java.util.ResourceBundle;
+
+import javax.sql.DataSource;
+
+public class RandomizeActionValidator implements Validator {
+
+    ItemDAO itemDAO;
+    ItemFormMetadataDAO itemFormMetadataDAO;
+    EventDefinitionCRFDAO eventDefinitionCRFDAO;
+    StudyEventDefinitionDAO studyEventDefinitionDAO;
+    CRFDAO crfDAO;
+    DataSource dataSource;
+    EventDefinitionCRFBean eventDefinitionCRFBean;
+    ExpressionService expressionService;
+    RuleSetBean ruleSetBean;
+    ResourceBundle respage;
+
+
+    public RandomizeActionValidator(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    /**
+     * This Validator validates just Person instances
+     */
+    public boolean supports(Class<?> clazz) {
+        return RandomizeActionBean.class.equals(clazz);
+    }
+
+    public void validateOidInPropertyBean(PropertyBean propertyBean, Errors e, String p) {
+        if (getExpressionService().isExpressionPartial(getRuleSetBean().getTarget().getValue())) {
+            if (getExpressionService().getExpressionSize(propertyBean.getOid()).intValue() > 3) {
+                e.rejectValue(p + "oid", "oid.invalid", "OID: " + propertyBean.getOid() + " is Invalid.");
+            }
+            try {
+                getExpressionService().isExpressionValid(propertyBean.getOid());
+            } catch (OpenClinicaSystemException ose) {
+                e.rejectValue(p + "oid", "oid.invalid", "OID: " + propertyBean.getOid() + " is Invalid.");
+            }
+            // Use OID in destinationProperty to get CRF
+            CRFBean destinationPropertyOidCrf = getExpressionService().getCRFFromExpression(propertyBean.getOid());
+            if (destinationPropertyOidCrf == null) {
+                ItemBean item = getExpressionService().getItemBeanFromExpression(propertyBean.getOid());
+                destinationPropertyOidCrf = getCrfDAO().findByItemOid(item.getOid());
+            }
+            // Use Target get CRF
+            CRFBean targetCrf = getExpressionService().getCRFFromExpression(getRuleSetBean().getTarget().getValue());
+            if (targetCrf == null) {
+                ItemBean item = getExpressionService().getItemBeanFromExpression(getRuleSetBean().getTarget().getValue());
+                targetCrf = getCrfDAO().findByItemOid(item.getOid());
+
+            }
+            // TODO let the database calculate the 'intersection' this will be much faster and will consume less resources
+            // Get All event definitions the selected CRF belongs to
+            List<StudyEventDefinitionBean> destinationPropertyStudyEventDefinitions = getStudyEventDefinitionDAO().findAllByCrf(destinationPropertyOidCrf);
+            List<StudyEventDefinitionBean> targetStudyEventDefinitions = getStudyEventDefinitionDAO().findAllByCrf(targetCrf);
+            @SuppressWarnings("rawtypes")
+			Collection intersection = CollectionUtils.intersection(destinationPropertyStudyEventDefinitions, targetStudyEventDefinitions);
+            if (intersection.size() == 0) {
+                e.rejectValue(p + "oid", "oid.invalid", "OID: " + propertyBean.getOid() + " is Invalid.");
+            }
+        } else {
+            String expression = getExpressionService().constructFullExpressionIfPartialProvided(propertyBean.getOid(), getRuleSetBean().getTarget().getValue());
+            ItemBean item = getExpressionService().getItemBeanFromExpression(expression);
+
+            if (!getExpressionService().isRandomizeActionExpressionValid(propertyBean.getOid(), getRuleSetBean(), 3) || item == null) {
+                e.rejectValue(p + "oid", "oid.invalid", "OID: " + propertyBean.getOid() + " is Invalid.");
+            }
+        }
+    }
+
+    
+    public void validate(Object obj, Errors e) {
+        RandomizeActionBean randomizeActionBean = (RandomizeActionBean) obj;
+        String p="";
+        for (int i = 0; i < randomizeActionBean.getProperties().size(); i++) {
+             p = "properties[" + i + "].";
+            PropertyBean propertyBean = randomizeActionBean.getProperties().get(i);
+            ValidationUtils.rejectIfEmpty(e, p + "oid", "oid.empty");
+            validateOidInPropertyBean(propertyBean, e, p);
+        }
+
+    }
+
+
+
+    public ItemDAO getItemDAO() {
+        return this.itemDAO != null ? itemDAO : new ItemDAO(dataSource);
+    }
+
+    public StudyEventDefinitionDAO getStudyEventDefinitionDAO() {
+        return this.studyEventDefinitionDAO != null ? studyEventDefinitionDAO : new StudyEventDefinitionDAO(dataSource);
+    }
+
+    public CRFDAO getCrfDAO() {
+        return this.crfDAO != null ? crfDAO : new CRFDAO(dataSource);
+    }
+
+    public EventDefinitionCRFDAO getEventDefinitionCRFDAO() {
+        return this.eventDefinitionCRFDAO != null ? eventDefinitionCRFDAO : new EventDefinitionCRFDAO(dataSource);
+    }
+
+    public ItemFormMetadataDAO getItemFormMetadataDAO() {
+        return this.itemFormMetadataDAO != null ? itemFormMetadataDAO : new ItemFormMetadataDAO(dataSource);
+    }
+
+    public EventDefinitionCRFBean getEventDefinitionCRFBean() {
+        return eventDefinitionCRFBean;
+    }
+
+    public void setEventDefinitionCRFBean(EventDefinitionCRFBean eventDefinitionCRFBean) {
+        this.eventDefinitionCRFBean = eventDefinitionCRFBean;
+    }
+
+    public ExpressionService getExpressionService() {
+        return expressionService;
+    }
+
+    public void setExpressionService(ExpressionService expressionService) {
+        this.expressionService = expressionService;
+    }
+
+    public RuleSetBean getRuleSetBean() {
+        return ruleSetBean;
+    }
+
+    public void setRuleSetBean(RuleSetBean ruleSetBean) {
+        this.ruleSetBean = ruleSetBean;
+    }
+}

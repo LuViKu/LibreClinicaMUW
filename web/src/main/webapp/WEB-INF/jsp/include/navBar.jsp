@@ -1,9 +1,9 @@
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
-<%@ page import="org.akaza.openclinica.i18n.util.ResourceBundleProvider" %>
+<%@ page import="at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider" %>
 <%@ page import="org.springframework.web.servlet.support.RequestContextUtils" %>
 <%@ page import="org.springframework.context.ApplicationContext" %>
-<%@ page import="org.akaza.openclinica.dao.core.CoreResources" %>
+<%@ page import="at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources" %>
 
 
 <%
@@ -14,9 +14,9 @@ request.setAttribute("coreResources", coreResources);
 session.setAttribute("coreResources", coreResources);
 %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.workflow" var="resworkflow"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow" var="resworkflow"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/>
 
 <script language="JavaScript">
         function confirmCancel(pageName){

@@ -7,7 +7,7 @@
  * copyright (C) 2003 - 2019 OpenClinica
  * copyright (C) 2020 - 2024 LibreClinica
  */
-package org.akaza.openclinica.gwt.client;
+package at.ac.meduniwien.ophthalmology.libreclinica.gwt.client;
 
 import com.google.gwt.i18n.client.Constants;
 

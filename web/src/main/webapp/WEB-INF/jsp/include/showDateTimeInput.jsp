@@ -1,20 +1,20 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
 
-<%@ page import="org.akaza.openclinica.i18n.util.*" %>
+<%@ page import="at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.*" %>
 <%@ page import="java.util.ResourceBundle" %>
 
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/> 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/> 
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/> 
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/> 
 
 
 <jsp:useBean scope="request" id="presetValues" class="java.util.HashMap" />
 
 <%
     //ResourceBundleProvider rbProvider = new ResourceBundleProvider();
-    ResourceBundle resformat = ResourceBundle.getBundle("org.akaza.openclinica.i18n.format", ResourceBundleProvider.getLocale());
+    ResourceBundle resformat = ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.format", ResourceBundleProvider.getLocale());
 %>
 <c:set var="prefix" value="${param.prefix}" />
 <c:set var="count" value="${param.count}" />

@@ -1,4 +1,4 @@
-<%@page import="org.akaza.openclinica.service.user.LdapUserService"%>
+<%@page import="at.ac.meduniwien.ophthalmology.libreclinica.service.user.LdapUserService"%>
 <%@page import="org.springframework.context.ApplicationContext"%>
 <%@page import="org.springframework.web.context.support.WebApplicationContextUtils"%>
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
@@ -9,8 +9,8 @@ ApplicationContext ctx = WebApplicationContextUtils.getRequiredWebApplicationCon
 LdapUserService ldapUserService = (LdapUserService) ctx.getBean(LdapUserService.class);
 %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
 
 <!-- start of login/requestPasswordPopup.jsp -->
 

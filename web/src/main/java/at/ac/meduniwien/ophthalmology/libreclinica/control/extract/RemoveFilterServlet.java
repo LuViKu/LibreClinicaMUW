@@ -1,0 +1,132 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.control.extract;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.FilterBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.FilterDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
+import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.FilterRow;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Locale;
+
+/**
+ * <P>
+ * The goal here is to provide a small servlet which will change a status from
+ * 'available' to 'unavailable' so that it cannot be accessed.
+ *
+ * <P>
+ * TODO define who can or can't remove a filter; creator only? anyone in the
+ * project?
+ *
+ * @author thickerson
+ *
+ */
+public class RemoveFilterServlet extends SecureController {
+
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = -2186500665426195476L;
+
+	Locale locale;
+    // < ResourceBundleresmessage,restext,resword,resexception;
+
+    public static final String PATH = "RemoveFilter";
+    public static final String ARG_FILTER_ID = "filterId";
+
+    public static String getLink(int filterId) {
+        return PATH + '?' + ARG_FILTER_ID + '=' + filterId;
+    }
+
+    @Override
+    public void processRequest() throws Exception {
+        FormProcessor fp = new FormProcessor(request);
+        int filterId = fp.getInt("filterId");
+        FilterDAO fDAO = new FilterDAO(sm.getDataSource());
+        FilterBean filter = (FilterBean) fDAO.findByPK(filterId);
+
+        String action = request.getParameter("action");
+        if (resword.getString("remove_this_filter").equalsIgnoreCase(action)) {
+            filter.setStatus(Status.DELETED);
+            fDAO.update(filter);
+            addPageMessage(respage.getString("filter_removed_admin_can_access_and_reverse"));
+            EntityBeanTable table = getFilterTable();
+            request.setAttribute("table", table);
+
+            forwardPage(Page.CREATE_FILTER_SCREEN_1);
+        } else if (resword.getString("cancel").equalsIgnoreCase(action)) {
+            EntityBeanTable table = getFilterTable();
+            request.setAttribute("table", table);
+
+            forwardPage(Page.CREATE_FILTER_SCREEN_1);
+        } else {
+            request.setAttribute("filter", filter);
+            forwardPage(Page.REMOVE_FILTER);
+        }
+    }
+
+    @Override
+    public void mayProceed() throws InsufficientPermissionException {
+
+        locale = LocaleResolver.getLocale(request);
+        // < resmessage =
+        // ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.page_messages",locale);
+        // < restext =
+        // ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes",locale);
+        // < resword =
+        // ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.words",locale);
+        // <
+        // resexception=ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.exceptions",locale);
+
+        if (ub.isSysAdmin()) {
+            return;
+        }
+        if (currentRole.getRole().equals(Role.STUDYDIRECTOR) || currentRole.getRole().equals(Role.COORDINATOR)
+            || currentRole.getRole().equals(Role.INVESTIGATOR)) {
+            return;
+        }
+
+        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+        throw new InsufficientPermissionException(Page.MENU, resexception.getString("not_allowed_access_extract_data_servlet"), "1");
+
+    }
+
+    private EntityBeanTable getFilterTable() {
+        FormProcessor fp = new FormProcessor(request);
+        FilterDAO fdao = new FilterDAO(sm.getDataSource());
+        EntityBeanTable table = fp.getEntityBeanTable();
+
+        ArrayList<FilterBean> filters = fdao.findAll();
+        // TODO make findAllByProject
+        ArrayList<FilterRow> filterRows = FilterRow.generateRowsFromBeans(filters);
+
+        String[] columns =
+            { resword.getString("filter_name"), resword.getString("description"), resword.getString("created_by"), resword.getString("created_date"),
+                resword.getString("status"), resword.getString("actions") };
+
+        table.setColumns(new ArrayList<String>(Arrays.asList(columns)));
+        table.hideColumnLink(5);
+        table.setQuery("CreateFiltersOne", new HashMap<>());
+        table.setRows(filterRows);
+        table.computeDisplay();
+        return table;
+    }
+
+}

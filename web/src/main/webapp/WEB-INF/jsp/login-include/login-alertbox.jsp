@@ -3,7 +3,7 @@
 
 <!-- start of login/login-alertbox.jsp, which is used when you enter a wrong account and/or pass word-->
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/> 
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/> 
 
 <% 
     String action = request.getParameter("action");

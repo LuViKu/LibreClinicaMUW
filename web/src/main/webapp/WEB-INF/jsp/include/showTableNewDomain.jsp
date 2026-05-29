@@ -6,10 +6,10 @@
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/> 
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/> 
 
-<jsp:useBean scope="request" id="table" class="org.akaza.openclinica.web.domain.EntityBeanTable" />
+<jsp:useBean scope="request" id="table" class="at.ac.meduniwien.ophthalmology.libreclinica.web.domain.EntityBeanTable" />
 <c:set var="rowURL" value="${param.rowURL}" />
 <c:set var="outerFormName" value="${param.outerFormName}" />
 <c:set var="searchFormOnClickJS" value="${param.searchFormOnClickJS}" />

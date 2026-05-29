@@ -3,11 +3,11 @@
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
  
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>  
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>  
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
 
 <jsp:useBean scope="request" id="section" class=
-  "org.akaza.openclinica.bean.submit.DisplaySectionBean" />
+  "at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplaySectionBean" />
 <jsp:useBean scope="request" id="annotations" class="java.lang.String" />
 
 <script type="text/javascript" language="JavaScript">

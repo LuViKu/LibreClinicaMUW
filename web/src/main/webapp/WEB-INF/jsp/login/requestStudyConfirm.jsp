@@ -2,7 +2,7 @@
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
 
 
 <jsp:include page="../include/home-header.jsp"/>
@@ -35,7 +35,7 @@
 		</td>
   </tr>
 <jsp:include page="../include/sideInfo.jsp"/>
-<jsp:useBean scope="session" id="newRole" class="org.akaza.openclinica.bean.login.StudyUserRoleBean"/>
+<jsp:useBean scope="session" id="newRole" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean"/>
 <h1><span class="title_manage"><fmt:message key="confirm_your_study_acces_request" bundle="${resword}"/></span></h1>
 
 <form action="RequestStudy?action=submit" method="post">

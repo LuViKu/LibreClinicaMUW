@@ -1,0 +1,143 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
+
+import java.util.ArrayList;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.NewCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+
+/**
+ * @author jxu
+ *
+ * TODO To change the template for this generated type comment go to Window -
+ * Preferences - Java - Code Style - Code Templates
+ */
+public class DeleteCRFVersionServlet extends SecureController {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = -8472820655058098368L;
+
+	public static final String VERSION_ID = "verId";
+
+    public static final String VERSION_TO_DELETE = "version";
+
+    /**
+     *
+     */
+    @Override
+    public void mayProceed() throws InsufficientPermissionException {
+        if (ub.isSysAdmin()) {
+            return;
+        }
+
+        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+        throw new InsufficientPermissionException(Page.CRF_LIST_SERVLET, "not admin", "1");
+    }
+
+    @Override
+    public void processRequest() throws Exception {
+        FormProcessor fp = new FormProcessor(request);
+        int versionId = fp.getInt(VERSION_ID, true);
+        String action = request.getParameter("action");
+        if (versionId == 0) {
+            addPageMessage(respage.getString("please_choose_a_CRF_version_to_delete"));
+            forwardPage(Page.CRF_LIST_SERVLET);
+        } else {
+            CRFVersionDAO cvdao = new CRFVersionDAO(sm.getDataSource());
+            EventDefinitionCRFDAO edcdao = new EventDefinitionCRFDAO(sm.getDataSource());
+            StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(sm.getDataSource());
+            StudyEventDAO seDao = new StudyEventDAO(sm.getDataSource());
+            ItemDataDAO iddao = new ItemDataDAO(sm.getDataSource());
+            EventCRFDAO ecdao = new EventCRFDAO(sm.getDataSource());
+            StudySubjectDAO ssdao = new StudySubjectDAO(sm.getDataSource());
+            CRFVersionBean version = (CRFVersionBean) cvdao.findByPK(versionId);
+
+            // find definitions using this version
+            ArrayList<EventDefinitionCRFBean> definitions = edcdao.findByDefaultVersion(version.getId());
+            for (Object edcBean: definitions) {
+                StudyEventDefinitionBean sedBean = (StudyEventDefinitionBean)sedDao.findByPK(((EventDefinitionCRFBean)edcBean).getStudyEventDefinitionId());
+                ((EventDefinitionCRFBean)edcBean).setEventName(sedBean.getName());
+            }
+
+            // find event crfs using this version
+            		
+            ArrayList<ItemDataBean> idBeans = iddao.findByCRFVersion(version);
+            ArrayList <EventCRFBean> eCRFs = ecdao.findAllByCRF(version.getCrfId());
+               for(EventCRFBean eCRF : eCRFs){
+            	   
+            	   StudySubjectBean ssBean = (StudySubjectBean) ssdao.findByPK(eCRF.getStudySubjectId());
+            	   eCRF.setStudySubject(ssBean);
+                   StudyEventBean seBean = (StudyEventBean) seDao.findByPK(eCRF.getStudyEventId());
+                   StudyEventDefinitionBean sedBean = (StudyEventDefinitionBean) sedDao.findByPK(seBean.getStudyEventDefinitionId());
+                   seBean.setStudyEventDefinition(sedBean);
+                   eCRF.setStudyEvent(seBean);
+               }
+            
+            ArrayList<EventCRFBean> eventCRFs = ecdao.findAllByCRFVersion(versionId);
+            boolean canDelete = true;
+            if (!definitions.isEmpty()) {// used in definition
+                canDelete = false;
+                request.setAttribute("definitions", definitions);
+                addPageMessage(respage.getString("this_CRF_version") + " "+ version.getName()
+                    + respage.getString("has_associated_study_events_definitions_cannot_delete"));
+
+            } else if (!idBeans.isEmpty()) {
+                canDelete = false;
+                request.setAttribute("eventCRFs", eCRFs);
+                request.setAttribute("itemDataForVersion", idBeans);
+                addPageMessage(respage.getString("this_CRF_version") +" "+ version.getName() + respage.getString("has_associated_item_data_cannot_delete"));
+            
+            } else if (!eventCRFs.isEmpty()) {
+                canDelete = false;
+                request.setAttribute("eventsForVersion", eventCRFs);
+                addPageMessage(respage.getString("this_CRF_version") + " "+ version.getName() + respage.getString("has_associated_study_events_cannot_delete"));
+            }
+            if ("confirm".equalsIgnoreCase(action)) {
+                request.setAttribute(VERSION_TO_DELETE, version);
+                forwardPage(Page.DELETE_CRF_VERSION);
+            } else {
+                // submit
+                if (canDelete) {
+                    ArrayList<ItemBean> items = cvdao.findNotSharedItemsByVersion(versionId);
+                    NewCRFBean nib = new NewCRFBean(sm.getDataSource(), version.getCrfId());
+                    nib.setDeleteQueries(cvdao.generateDeleteQueries(versionId, items));
+                    nib.deleteFromDB();
+                    addPageMessage(respage.getString("the_CRF_version_has_been_deleted_succesfully"));
+                } else {
+                    addPageMessage(respage.getString("the_CRF_version_cannot_be_deleted"));
+                }
+                forwardPage(Page.CRF_LIST_SERVLET);
+            }
+
+        }
+
+    }
+
+}

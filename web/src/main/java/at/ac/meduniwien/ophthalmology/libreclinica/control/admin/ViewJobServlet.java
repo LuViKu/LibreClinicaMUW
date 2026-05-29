@@ -1,0 +1,159 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Set;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.TriggerBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.DatasetBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.XsltTriggerService;
+import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.bean.TriggerRow;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.job.ExampleSpringJob;
+import org.quartz.JobDataMap;
+import org.quartz.Trigger;
+import org.quartz.Trigger.TriggerState;
+import org.quartz.TriggerKey;
+import org.quartz.impl.StdScheduler;
+import org.quartz.impl.matchers.GroupMatcher;
+
+/**
+ * 
+ * @author thickerson purpose: to generate the list of jobs and allow us to view them
+ */
+public class ViewJobServlet extends SecureController {
+
+   
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = -1226529718566575419L;
+	private static String SCHEDULER = "schedulerFactoryBean";
+
+    private StdScheduler scheduler;
+
+    @Override
+    protected void mayProceed() throws InsufficientPermissionException {
+        // TODO copied from CreateJobExport - DRY? tbh
+        if (ub.isSysAdmin() || ub.isTechAdmin()) {
+            return;
+        }
+//        if (currentRole.getRole().equals(Role.STUDYDIRECTOR) || currentRole.getRole().equals(Role.COORDINATOR)) {// ?
+//            // ?
+//            return;
+//        }
+
+        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_allowed_access_extract_data_servlet"), "1");// TODO
+        // above copied from create dataset servlet, needs to be changed to
+        // allow only admin-level users
+
+    }
+
+    private StdScheduler getScheduler() {
+        scheduler = this.scheduler != null ? scheduler : (StdScheduler) SpringServletAccess.getApplicationContext(context).getBean(SCHEDULER);
+        return scheduler;
+    }
+
+    @Override
+    protected void processRequest() throws Exception {
+        // TODO single stage servlet where we get the list of jobs
+        // and push them out to the JSP page
+        // related classes will be required to generate the table rows
+        // and eventually links to view and edit the jobs as well
+        FormProcessor fp = new FormProcessor(request);
+        // First we must get a reference to a scheduler
+        scheduler = getScheduler();
+        XsltTriggerService xsltTriggerSrvc = new XsltTriggerService();
+        
+        Set<TriggerKey> triggerKeySet = scheduler.getTriggerKeys(GroupMatcher.triggerGroupEquals(xsltTriggerSrvc.getTriggerGroupNameForExportJobs()));
+        TriggerKey[] triggerKeys = triggerKeySet.stream().toArray(TriggerKey[]::new);
+
+        ArrayList<TriggerBean> triggerBeans = new ArrayList<>();
+        for (TriggerKey triggerKey : triggerKeys) {
+            Trigger trigger = scheduler.getTrigger(triggerKey);
+            try {
+                logger.debug("prev fire time " + trigger.getPreviousFireTime().toString());
+                logger.debug("next fire time " + trigger.getNextFireTime().toString());
+                logger.debug("final fire time: " + trigger.getFinalFireTime().toString());
+            } catch (NullPointerException npe) {
+                // could be nulls in the dates, etc
+            }
+
+            // logger.info(trigger.getDescription());
+            // logger.info("");//getJobDataMap()
+            TriggerBean triggerBean = new TriggerBean();
+            triggerBean.setFullName(triggerKey.getName());
+            triggerBean.setPreviousDate(trigger.getPreviousFireTime());
+            triggerBean.setNextDate(trigger.getNextFireTime());
+            if (trigger.getDescription() != null) {
+                triggerBean.setDescription(trigger.getDescription());
+            }
+            // setting: frequency, dataset name
+            JobDataMap dataMap = new JobDataMap();
+            DatasetDAO datasetDAO = new DatasetDAO(sm.getDataSource());
+            StudyDAO studyDao = new StudyDAO(sm.getDataSource());
+            if (trigger.getJobDataMap().size() > 0) {
+                dataMap = trigger.getJobDataMap();
+                int dsId = dataMap.getInt(ExampleSpringJob.DATASET_ID);
+                String periodToRun = dataMap.getString(ExampleSpringJob.PERIOD);
+                triggerBean.setPeriodToRun(periodToRun);
+                DatasetBean dataset = (DatasetBean) datasetDAO.findByPK(dsId);
+                triggerBean.setDataset(dataset);
+                triggerBean.setDatasetName(dataset.getName());
+                StudyBean study = (StudyBean) studyDao.findByPK(dataset.getStudyId());
+                triggerBean.setStudyName(study.getName());
+                // triggerBean.setStudyName(dataMap.getString(ExampleSpringJob.STUDY_NAME));
+            }
+            logger.debug("Trigger Priority: " + triggerKey.getName() + " " + trigger.getPriority());
+            if (scheduler.getTriggerState(triggerKey) == TriggerState.PAUSED) {
+                triggerBean.setActive(false);
+                logger.debug("setting active to false for trigger: " + triggerKey.getName());
+            } else {
+                triggerBean.setActive(true);
+                logger.debug("setting active to TRUE for trigger: " + triggerKey.getName());
+            }
+            triggerBeans.add(triggerBean);
+            // our wrapper to show triggers
+        }
+
+        ArrayList<TriggerRow> allRows = TriggerRow.generateRowsFromBeans(triggerBeans);
+
+        EntityBeanTable table = fp.getEntityBeanTable();
+        String[] columns =
+            { resword.getString("name"), resword.getString("previous_fire_time"), resword.getString("next_fire_time"), resword.getString("description"),
+                resword.getString("period_to_run"), resword.getString("dataset"), resword.getString("study"), resword.getString("actions") };
+        table.setColumns(new ArrayList<String>(Arrays.asList(columns)));
+        table.hideColumnLink(3);
+        table.hideColumnLink(7);
+        table.setQuery("ViewJob", new HashMap<>());
+        // table.addLink("", "CreateUserAccount");
+        table.setSortingColumnInd(0);
+        table.setRows(allRows);
+        table.computeDisplay();
+
+        request.setAttribute("table", table);
+        // throw new NullPointerException("faking an error here");
+        forwardPage(Page.VIEW_JOB);
+
+    }
+
+}

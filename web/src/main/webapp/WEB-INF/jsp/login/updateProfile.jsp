@@ -3,9 +3,9 @@
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/>
-<%@ page import="org.akaza.openclinica.i18n.util.ResourceBundleProvider" %>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/>
+<%@ page import="at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider" %>
 <c:import url="../include/home-header.jsp">
     <c:param name="profilePage" value="yes"/>
 </c:import>
@@ -34,8 +34,8 @@
 
 <jsp:useBean scope="request" id="studies" class="java.util.ArrayList"/>
 <jsp:useBean scope="request" id="mustChangePass" class="java.lang.String"/>
-<jsp:useBean scope="session" id="study" class="org.akaza.openclinica.bean.managestudy.StudyBean"/>
-<jsp:useBean scope="session" id="userBean1" class="org.akaza.openclinica.bean.login.UserAccountBean"/>
+<jsp:useBean scope="session" id="study" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean"/>
+<jsp:useBean scope="session" id="userBean1" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean"/>
 
 <div class="textbox_center">
 <h1><span class="title_manage"><fmt:message key="change_user_profile" bundle="${resword}"/></span></h1>

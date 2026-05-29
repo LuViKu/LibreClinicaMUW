@@ -1,0 +1,68 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.dao.cache;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import net.sf.ehcache.CacheManager;
+import net.sf.ehcache.Ehcache;
+import net.sf.ehcache.Element;
+
+public class EhCacheWrapper<K, V> implements CacheWrapper<K, V> 
+{
+    private final String cacheName;
+    private final CacheManager cacheManager;
+    protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
+    
+    public EhCacheWrapper(final String cacheName, final CacheManager cacheManager)
+    {
+    this.cacheName = cacheName;
+    this.cacheManager = cacheManager;
+    }
+    
+    public void put(final K key, final V value)
+    {
+    	getCache().put(new Element(key, value));
+    }
+    
+    @SuppressWarnings("unchecked")
+	public V get(final K key) 
+    {
+    	String db_type = CoreResources.getField("dbType");
+    	if ( db_type.equalsIgnoreCase("postgres")){
+	    	Element element =null;
+		        Ehcache ehCache = getCache();
+		        if(ehCache!=null)          
+		        {
+		            element = getCache().get(key);
+		            logMe("element  null"+element);
+		        }
+		    if (element != null) {
+		        logMe("element not null"+element);
+		        return (V) element.getObjectValue();
+		    }
+    	}
+    	return null;
+    }
+    public Ehcache getCache() 
+    {
+    	return cacheManager.getEhcache(cacheName);
+    }
+
+    
+    private void logMe(String message){
+        
+        logger.debug(message);
+       
+    }
+}
+

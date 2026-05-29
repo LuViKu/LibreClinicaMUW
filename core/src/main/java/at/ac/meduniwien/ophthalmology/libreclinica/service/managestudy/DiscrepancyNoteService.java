@@ -1,0 +1,64 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import javax.sql.DataSource;
+
+public class DiscrepancyNoteService {
+
+    protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
+    DataSource ds;
+    private DiscrepancyNoteDAO discrepancyNoteDao;
+
+    public DiscrepancyNoteService(DataSource ds) {
+        this.ds = ds;
+    }
+
+    public void saveFieldNotes(String description, int entityId, String entityType, StudyBean sb, UserAccountBean ub) {
+
+        // Create a new thread each time
+        DiscrepancyNoteBean parent = createDiscrepancyNoteBean(description, entityId, entityType, sb, ub, null);
+        createDiscrepancyNoteBean(description, entityId, entityType, sb, ub, parent.getId());
+
+    }
+
+    private DiscrepancyNoteBean createDiscrepancyNoteBean(String description, int entityId, String entityType, StudyBean sb, UserAccountBean ub,
+            Integer parentId) {
+        DiscrepancyNoteBean dnb = new DiscrepancyNoteBean();
+        dnb.setEntityId(entityId);
+        dnb.setStudyId(sb.getId());
+        dnb.setEntityType(entityType);
+        dnb.setDescription(description);
+        dnb.setDiscrepancyNoteTypeId(1);
+        dnb.setResolutionStatusId(1);
+        dnb.setColumn("value");
+        dnb.setOwner(ub);
+        if (parentId != null) {
+            dnb.setParentDnId(parentId);
+        }
+        dnb = (DiscrepancyNoteBean) getDiscrepancyNoteDao().create(dnb);
+        getDiscrepancyNoteDao().createMapping(dnb);
+        return dnb;
+
+    }
+
+    private DiscrepancyNoteDAO getDiscrepancyNoteDao() {
+        discrepancyNoteDao = this.discrepancyNoteDao != null ? discrepancyNoteDao : new DiscrepancyNoteDAO(ds);
+        return discrepancyNoteDao;
+    }
+
+}

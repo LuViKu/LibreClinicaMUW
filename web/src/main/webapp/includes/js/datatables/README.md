@@ -15,9 +15,9 @@ pattern instead (see `WEB-INF/jsp/admin/auditUserActivity.jsp` for the
 reference).
 
 The Java side of the original plan stays:
-[`DataTableRequest`](../../../core/src/main/java/org/akaza/openclinica/web/datatable/DataTableRequest.java)
+[`DataTableRequest`](../../../core/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/web/datatable/DataTableRequest.java)
 parses the standard DataTables AJAX-protocol query params, and
-[`DataTableResponse`](../../../core/src/main/java/org/akaza/openclinica/web/datatable/DataTableResponse.java)
+[`DataTableResponse`](../../../core/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/web/datatable/DataTableResponse.java)
 emits the standard `{draw, recordsTotal, recordsFiltered, data}`
 shape. Future cohorts can keep using those even if the client side
 isn't DataTables.

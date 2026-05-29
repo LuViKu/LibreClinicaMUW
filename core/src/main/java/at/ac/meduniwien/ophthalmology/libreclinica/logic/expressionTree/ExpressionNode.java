@@ -1,0 +1,63 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.logic.expressionTree;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+
+/**
+ * @author Krikor Krumlian
+ * 
+ */
+public abstract class ExpressionNode {
+
+    protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
+    private OpenClinicaExpressionParser expressionParser;
+
+    Object value() throws OpenClinicaSystemException {
+        return calculate();
+    }
+
+    /*
+     * Use this method to test the expression mainly Data types plugging test
+     * data wherever necessary. This will not only validate the syntax but also
+     * test the validity of the expression itself.
+     * 
+     */
+    String testValue() throws OpenClinicaSystemException {
+        return testCalculate();
+    }
+
+    abstract Object calculate() throws OpenClinicaSystemException;
+
+    abstract String testCalculate() throws OpenClinicaSystemException;
+
+    abstract void printStackCommands();
+
+    String getNumber() {
+        return null;
+    }
+
+    public void setExpressionParser(OpenClinicaExpressionParser expressionParser) {
+        this.expressionParser = expressionParser;
+    }
+
+    public HashMap<String, String> getTestValues() {
+        return expressionParser.getTestValues();
+    }
+
+    public HashMap<String, String> getResponseTestValues() {
+        return expressionParser.getResponseTestValues();
+    }
+
+}

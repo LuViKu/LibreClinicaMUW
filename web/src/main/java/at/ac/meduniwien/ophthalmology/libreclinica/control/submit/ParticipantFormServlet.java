@@ -1,0 +1,82 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
+
+import java.util.HashMap;
+import java.util.Map;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.EnketoAPI;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.pform.EnketoCredentials;
+
+public class ParticipantFormServlet extends SecureController {
+
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1870794659352123090L;
+	public static final String CRF_ID = "crfOID";
+    public static final String FORM_URL = "formURL";
+
+    @Override
+    protected void processRequest() throws Exception {
+        String crf_oid = request.getParameter(CRF_ID);
+        String formURL = null;
+
+        // Build Enketo URL for CRF version.
+        if (currentStudy.getStudyParameterConfig().getParticipantPortal().equals("enabled")) {
+            EnketoCredentials credentials = getCredentials();
+            EnketoAPI enketo = new EnketoAPI(credentials);
+            formURL = enketo.getFormPreviewURL(crf_oid);
+            if (!formURL.equals("")){
+                response.sendRedirect(formURL);
+            } else {
+                if (credentials.getServerUrl() == null) {
+                    addPageMessage(respage.getString("pform_preview_missing_url"));    
+                } else {
+                    if ((credentials.getApiKey() != null) && (credentials.getOcInstanceUrl() != null)) {
+                        addPageMessage(respage.getString("pform_preview_forbidden"));        
+                    } else {
+                        addPageMessage(respage.getString("participate_not_available"));
+                    }
+                }
+                forwardPage(Page.MENU_SERVLET);
+            }
+        }
+    }
+
+    @Override
+    protected void mayProceed() throws InsufficientPermissionException {
+        // Can validate user has proper permissions to access this page.
+        // Throw InsufficientPermissionException if they don't.
+        // For now we allow everyone access to this page.
+        return;
+    }
+
+    private EnketoCredentials getCredentials() throws Exception {
+        EnketoCredentials credentials = null;
+        @SuppressWarnings("unchecked")
+		Map<String, EnketoCredentials> credentialsMap = (Map<String, EnketoCredentials>) session.getAttribute("EnketoCredentialsMap");
+        if (credentialsMap == null) {
+            credentialsMap = new HashMap<String, EnketoCredentials>();
+            credentials = EnketoCredentials.getInstance(currentStudy.getOid());
+            credentialsMap.put(currentStudy.getOid(), credentials);
+            session.setAttribute("EnketoCredentialsMap", credentialsMap);
+        } else if (credentialsMap.get(currentStudy.getOid()) == null) {
+            credentials = EnketoCredentials.getInstance(currentStudy.getOid());
+            credentialsMap.put(currentStudy.getOid(), credentials);
+        } else
+            credentials = credentialsMap.get(currentStudy.getOid());
+
+        return credentials;
+    }
+}

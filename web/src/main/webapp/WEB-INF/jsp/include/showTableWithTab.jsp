@@ -1,14 +1,14 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.workflow" var="resworkflow"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow" var="resworkflow"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
 
 <c:set var="suppressAddSubject"  value="${param.suppressAddSubject}"/>
 <c:set var="discNoteType"  value="${param.discNoteType}"/>
 
-<jsp:useBean scope="request" id="table" class="org.akaza.openclinica.web.bean.EntityBeanTable" />
+<jsp:useBean scope="request" id="table" class="at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable" />
 <c:set var="rowURL" value="${param.rowURL}" />
 <c:set var="groupCount" value="${param.groupNum}" />
 

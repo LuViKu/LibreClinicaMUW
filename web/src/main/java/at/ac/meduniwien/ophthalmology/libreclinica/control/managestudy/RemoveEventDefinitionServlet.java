@@ -1,0 +1,210 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.control.managestudy;
+
+import java.util.ArrayList;
+import java.util.Date;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.service.StudyParameterValueDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.EventDefinitionCrfTagService;
+import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+
+/**
+ * @author jxu
+ *
+ * TODO To change the template for this generated type comment go to Window -
+ * Preferences - Java - Code Style - Code Templates
+ */
+public class RemoveEventDefinitionServlet extends SecureController {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = -1239348170889370031L;
+	EventDefinitionCrfTagService eventDefinitionCrfTagService = null;
+
+    /**
+     *
+     */
+    @Override
+    public void mayProceed() throws InsufficientPermissionException {
+        checkStudyLocked(Page.LIST_DEFINITION_SERVLET, respage.getString("current_study_locked"));
+        if (ub.isSysAdmin()) {
+            return;
+        }
+
+        if (currentRole.getRole().equals(Role.STUDYDIRECTOR) || currentRole.getRole().equals(Role.COORDINATOR)) {
+            return;
+        }
+
+        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+        throw new InsufficientPermissionException(Page.LIST_DEFINITION_SERVLET, resexception.getString("not_study_director"), "1");
+
+    }
+
+    @Override
+    public void processRequest() throws Exception {
+        String idString = request.getParameter("id");
+
+        int defId = Integer.valueOf(idString.trim()).intValue();
+        StudyEventDefinitionDAO sdao = new StudyEventDefinitionDAO(sm.getDataSource());
+        StudyEventDefinitionBean sed = (StudyEventDefinitionBean) sdao.findByPK(defId);
+
+//        checkRoleByUserAndStudy(ub.getName(), sed.getStudyId(), 0);
+        if (currentStudy.getId() != sed.getStudyId()) {
+            addPageMessage(respage.getString("no_have_correct_privilege_current_study")
+                    + " " + respage.getString("change_active_study_or_contact"));
+            forwardPage(Page.MENU_SERVLET);
+            return;
+        }
+        
+        
+        // find all CRFs
+        EventDefinitionCRFDAO edao = new EventDefinitionCRFDAO(sm.getDataSource());
+        ArrayList<EventDefinitionCRFBean> eventDefinitionCRFs = edao.findAllByDefinition(defId);
+
+        CRFVersionDAO cvdao = new CRFVersionDAO(sm.getDataSource());
+        CRFDAO cdao = new CRFDAO(sm.getDataSource());
+        for (int i = 0; i < eventDefinitionCRFs.size(); i++) {
+            EventDefinitionCRFBean edc = (EventDefinitionCRFBean) eventDefinitionCRFs.get(i);
+            ArrayList<CRFVersionBean> versions = cvdao.findAllByCRF(edc.getCrfId());
+            edc.setVersions(versions);
+            CRFBean crf = (CRFBean) cdao.findByPK(edc.getCrfId());
+            edc.setCrfName(crf.getName());
+            CRFVersionBean defaultVersion = (CRFVersionBean) cvdao.findByPK(edc.getDefaultVersionId());
+            edc.setDefaultVersionName(defaultVersion.getName());
+
+            CRFBean cBean = (CRFBean) cdao.findByPK(edc.getCrfId());                
+            String crfPath=sed.getOid()+"."+cBean.getOid();
+            edc.setOffline(getEventDefinitionCrfTagService().getEventDefnCrfOfflineStatus(2,crfPath,true));
+
+        }
+
+        // finds all events
+        StudyEventDAO sedao = new StudyEventDAO(sm.getDataSource());
+        ArrayList<StudyEventBean> events = sedao.findAllByDefinition(sed.getId());
+
+        String action = request.getParameter("action");
+        if (idString == null || idString.trim().isEmpty()) {
+            addPageMessage(respage.getString("please_choose_a_SED_to_remove"));
+            forwardPage(Page.LIST_DEFINITION_SERVLET);
+        } else {
+            if ("confirm".equalsIgnoreCase(action)) {
+                if (!sed.getStatus().equals(Status.AVAILABLE)) {
+                    addPageMessage(respage.getString("this_SED_is_not_available_for_this_study")
+                        + respage.getString("please_contact_sysadmin_for_more_information"));
+                    forwardPage(Page.LIST_DEFINITION_SERVLET);
+                    return;
+                }
+                StudyParameterValueDAO spvdao = new StudyParameterValueDAO(sm.getDataSource());    
+                String participateFormStatus = spvdao.findByHandleAndStudy(sed.getStudyId(), "participantPortal").getValue();
+                if (participateFormStatus.equals("enabled")) baseUrl();
+            
+                request.setAttribute("participateFormStatus",participateFormStatus );
+
+                
+                
+                request.setAttribute("definitionToRemove", sed);
+                request.setAttribute("eventDefinitionCRFs", eventDefinitionCRFs);
+                request.setAttribute("events", events);
+                forwardPage(Page.REMOVE_DEFINITION);
+            } else {
+                logger.info("submit to remove the definition");
+                // remove definition
+                sed.setStatus(Status.DELETED);
+                sed.setUpdater(ub);
+                sed.setUpdatedDate(new Date());
+                sdao.update(sed);
+
+                // remove all crfs
+                for (int j = 0; j < eventDefinitionCRFs.size(); j++) {
+                    EventDefinitionCRFBean edc = (EventDefinitionCRFBean) eventDefinitionCRFs.get(j);
+                    if (!edc.getStatus().equals(Status.DELETED)) {
+                        edc.setStatus(Status.AUTO_DELETED);
+                        edc.setUpdater(ub);
+                        edc.setUpdatedDate(new Date());
+                        edao.update(edc);
+                    }
+                }
+                // remove all events
+
+                EventCRFDAO ecdao = new EventCRFDAO(sm.getDataSource());
+
+                for (int j = 0; j < events.size(); j++) {
+                    StudyEventBean event = (StudyEventBean) events.get(j);
+                    if (!event.getStatus().equals(Status.DELETED)) {
+                        event.setStatus(Status.AUTO_DELETED);
+                        event.setUpdater(ub);
+                        event.setUpdatedDate(new Date());
+                        sedao.update(event);
+
+                        ArrayList<EventCRFBean> eventCRFs = ecdao.findAllByStudyEvent(event);
+                        // remove all the item data
+                        ItemDataDAO iddao = new ItemDataDAO(sm.getDataSource());
+                        for (int k = 0; k < eventCRFs.size(); k++) {
+                            EventCRFBean eventCRF = (EventCRFBean) eventCRFs.get(k);
+                            if (!eventCRF.getStatus().equals(Status.DELETED)) {
+                                eventCRF.setStatus(Status.AUTO_DELETED);
+                                eventCRF.setUpdater(ub);
+                                eventCRF.setUpdatedDate(new Date());
+                                ecdao.update(eventCRF);
+
+                                ArrayList<ItemDataBean> itemDatas = iddao.findAllByEventCRFId(eventCRF.getId());
+                                for (int a = 0; a < itemDatas.size(); a++) {
+                                    ItemDataBean item = (ItemDataBean) itemDatas.get(a);
+                                    if (!item.getStatus().equals(Status.DELETED)) {
+                                        item.setStatus(Status.AUTO_DELETED);
+                                        item.setUpdater(ub);
+                                        item.setUpdatedDate(new Date());
+                                        iddao.update(item);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                String emailBody =
+                    respage.getString("the_SED") + sed.getName() + " " + respage.getString("has_been_removed_from_the_study") + currentStudy.getName() + ".";
+
+                addPageMessage(emailBody);
+//                sendEmail(emailBody);
+                forwardPage(Page.LIST_DEFINITION_SERVLET);
+            }
+
+        }
+
+    }
+    
+    public EventDefinitionCrfTagService getEventDefinitionCrfTagService() {
+        eventDefinitionCrfTagService=
+         this.eventDefinitionCrfTagService != null ? eventDefinitionCrfTagService : (EventDefinitionCrfTagService) SpringServletAccess.getApplicationContext(context).getBean("eventDefinitionCrfTagService");
+
+         return eventDefinitionCrfTagService;
+     }
+
+}

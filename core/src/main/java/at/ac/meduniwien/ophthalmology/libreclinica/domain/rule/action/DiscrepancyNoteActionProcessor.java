@@ -1,0 +1,72 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleActionRunLogDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetRuleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.ExecutionMode;
+import at.ac.meduniwien.ophthalmology.libreclinica.logic.rulerunner.RuleRunner.RuleRunnerMode;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.managestudy.DiscrepancyNoteService;
+
+import javax.sql.DataSource;
+
+public class DiscrepancyNoteActionProcessor implements ActionProcessor {
+
+    DataSource ds;
+    DiscrepancyNoteService discrepancyNoteService;
+    RuleActionRunLogDao ruleActionRunLogDao;
+    RuleSetRuleBean ruleSetRule;
+
+    public DiscrepancyNoteActionProcessor(DataSource ds, RuleActionRunLogDao ruleActionRunLogDao, RuleSetRuleBean ruleSetRule) {
+        this.ds = ds;
+        this.ruleActionRunLogDao = ruleActionRunLogDao;
+        this.ruleSetRule = ruleSetRule;
+    }
+
+    public RuleActionBean execute(RuleRunnerMode ruleRunnerMode, ExecutionMode executionMode, RuleActionBean ruleAction, ItemDataBean itemDataBean,
+            String itemData, StudyBean currentStudy, UserAccountBean ub, Object... arguments) {
+        switch (executionMode) {
+        case DRY_RUN: {
+            return dryRun(ruleAction, itemDataBean, itemData, currentStudy, ub);
+        }
+
+        case SAVE: {
+            return save(ruleAction, itemDataBean, itemData, currentStudy, ub);
+        }
+        default:
+            return null;
+        }
+    }
+
+    private RuleActionBean save(RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy, UserAccountBean ub) {
+        getDiscrepancyNoteService().saveFieldNotes(ruleAction.getCuratedMessage(), itemDataBean.getId(), itemData, currentStudy, ub);
+        RuleActionRunLogBean ruleActionRunLog =
+            new RuleActionRunLogBean(ruleAction.getActionType(), itemDataBean, itemDataBean.getValue(), ruleSetRule.getRuleBean().getOid());
+        ruleActionRunLogDao.saveOrUpdate(ruleActionRunLog);
+        return null;
+    }
+
+    private RuleActionBean dryRun(RuleActionBean ruleAction, ItemDataBean itemDataBean, String itemData, StudyBean currentStudy, UserAccountBean ub) {
+        return ruleAction;
+    }
+
+    public void execute(String message, int itemDataBeanId, String itemData, StudyBean currentStudy, UserAccountBean ub, Object... arguments) {
+        getDiscrepancyNoteService().saveFieldNotes(message, itemDataBeanId, itemData, currentStudy, ub);
+    }
+
+    private DiscrepancyNoteService getDiscrepancyNoteService() {
+        discrepancyNoteService = this.discrepancyNoteService != null ? discrepancyNoteService : new DiscrepancyNoteService(ds);
+        return discrepancyNoteService;
+    }
+
+}

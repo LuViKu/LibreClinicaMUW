@@ -1,7 +1,7 @@
 <%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
-<%@ page import="org.akaza.openclinica.logic.score.*, java.util.HashMap, java.util.ArrayList, org.akaza.openclinica.bean.submit.ResponseOptionBean, org.akaza.openclinica.bean.submit.ItemBean" %>
+<%@ page import="at.ac.meduniwien.ophthalmology.libreclinica.logic.score.*, java.util.HashMap, java.util.ArrayList, at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseOptionBean, at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean" %>
 
 <c:set var="inputType" value="${param.inputType}" />
 <c:set var="itemId" value="${param.itemId}" />
