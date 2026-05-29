@@ -24,7 +24,7 @@ jobs:
       fail-fast: false
       matrix:
         # Phase B.1: single JDK 21 entry matching the Dockerfile builder + runtime
-        # (maven:3-eclipse-temurin-21 + tomcat:9-jdk21).
+        # (maven:3-eclipse-temurin-21 + tomcat:10-jdk21 since Phase B.6).
         java: ['21']
     steps:
       - uses: actions/checkout@v4

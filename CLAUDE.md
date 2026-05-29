@@ -12,12 +12,13 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 
 | Layer | Now | Target (post-modernization) |
 |-------|-----|----|
-| Java | 11 (runtime) / 8 (build, per Dockerfile) | 21 (LTS) |
-| Framework | Spring 5.1.4 + XML config | Spring Boot 3.x + Java config |
-| Web | JSP + SiteMesh + Spring MVC + 295 legacy servlets | unchanged this phase; SPA in Phase E (deferred) |
-| Persistence | Hibernate 5.4.2 + Liquibase 3.6.3 + PostgreSQL 13/14 | Hibernate 6.4 + Liquibase 4 + PostgreSQL 14+ |
-| Packaging | WAR in Tomcat 9 | executable JAR with embedded Tomcat |
-| Namespace | `javax.*` | `jakarta.*` |
+| Java | 21 (build + runtime, per Dockerfile) | (achieved) |
+| Framework | Spring 6.1.18 + Spring Security 6.3.6 + XML config | Spring Boot 3.x + Java config |
+| Web | JSP + SiteMesh + Spring MVC + ~295 legacy servlets; jmesa fully evicted | unchanged this phase; SPA in Phase E (deferred) |
+| Persistence | Hibernate 5.6.15 (jakarta-namespaced artifact) + Liquibase 3.6.3 + PostgreSQL 13/14 | Hibernate 6.4 (Phase B.5, deferred) + Liquibase 4 + PostgreSQL 14+ |
+| Packaging | WAR in Tomcat 10 (jakarta servlet 6) | executable JAR with embedded Tomcat |
+| Namespace | `jakarta.*` | (achieved) |
+| Java packages | `at.ac.meduniwien.ophthalmology.libreclinica.*` | (achieved — DR-010) |
 | Build group | `at.ac.meduniwien.ophthalmology.libreclinica` | (unchanged) |
 | Version | `1.4.0rc1-muw` | continues with `-muw` suffix |
 
@@ -38,7 +39,7 @@ docker run --rm \
   -v "$(pwd)":/app \
   -v "$(pwd)/.m2-cache":/root/.m2 \
   -w /app \
-  maven:3-eclipse-temurin-8 \
+  maven:3-eclipse-temurin-21 \
   mvn -B -DskipTests=true -ntp clean compile
 ```
 
@@ -57,7 +58,7 @@ docker run -d --rm --name lc-test-pg --network lc-test-net \
 
 docker run --rm --network lc-test-net \
   -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
-  maven:3-eclipse-temurin-8 \
+  maven:3-eclipse-temurin-21 \
   mvn -B -ntp -pl core -am -P integration-tests -Ddb.test=lc-test-pg test
 
 docker stop lc-test-pg && docker network rm lc-test-net
@@ -82,7 +83,7 @@ Dependabot updates weekly (`.github/dependabot.yml`), grouped by ecosystem (Spri
 | [`docs/development/modernization/`](docs/development/modernization/) | Decision records, modernization-specific docs |
 | [`docker/`](docker/) | Runtime config (`datainfo.properties`, logback.xml) |
 
-Java packages still use heritage `org.akaza.openclinica` and `org.libreclinica` namespaces — these are scheduled to be renamed to `at.ac.meduniwien.ophthalmology.*` during Phase B when every file is being touched for `javax→jakarta` migration anyway.
+Java packages live under `at.ac.meduniwien.ophthalmology.libreclinica.*` since Phase B.11 (2026-05-29). The heritage `org.akaza.openclinica.*` namespace was renamed in commit `4f531f9f7` per DR-010. Liquibase changelogs under `core/src/main/resources/migration/` keep historical `org.akaza.openclinica` references in column-comment strings — those are historical data, not class refs, and changing them would break checksum validation.
 
 ## Branching
 
