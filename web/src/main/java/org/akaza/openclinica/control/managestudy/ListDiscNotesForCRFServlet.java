@@ -21,10 +21,8 @@ import java.util.Locale;
 import org.akaza.openclinica.bean.core.Role;
 import org.akaza.openclinica.bean.login.StudyUserRoleBean;
 import org.akaza.openclinica.bean.login.UserAccountBean;
-import org.akaza.openclinica.bean.managestudy.StudyEventDefinitionBean;
 import org.akaza.openclinica.control.core.SecureController;
 import org.akaza.openclinica.control.form.FormProcessor;
-import org.akaza.openclinica.control.submit.ListDiscNotesForCRFTableFactory;
 import org.akaza.openclinica.dao.admin.CRFDAO;
 import org.akaza.openclinica.dao.managestudy.DiscrepancyNoteDAO;
 import org.akaza.openclinica.dao.managestudy.EventDefinitionCRFDAO;
@@ -172,33 +170,12 @@ public class ListDiscNotesForCRFServlet extends SecureController {
             return;
         }
 
+        // Phase B.4 jmesa PR 5c (cohort 3c): factory.createTable().render()
+        // is gone. The JSP shell now includes a vanilla-JS fragment that
+        // fetches /ListDiscNotesForCRFData asynchronously, forwarding the
+        // same defId / module / type / resolutionStatus query-string
+        // params so server-side filtering keeps working.
         request.setAttribute("eventDefinitionId", definitionId);
-
-        ListDiscNotesForCRFTableFactory factory = new ListDiscNotesForCRFTableFactory();
-        factory.setStudyEventDefinitionDao(getStudyEventDefinitionDao());
-        factory.setSubjectDAO(getSubjectDAO());
-        factory.setStudySubjectDAO(getStudySubjectDAO());
-        factory.setStudyEventDAO(getStudyEventDAO());
-        factory.setStudyBean(currentStudy);
-        factory.setStudyGroupClassDAO(getStudyGroupClassDAO());
-        factory.setSubjectGroupMapDAO(getSubjectGroupMapDAO());
-        factory.setStudyDAO(getStudyDAO());
-        factory.setStudyGroupDAO(getStudyGroupDAO());
-        factory.setCurrentRole(currentRole);
-        factory.setCurrentUser(ub);
-        factory.setEventCRFDAO(getEventCRFDAO());
-        factory.setEventDefintionCRFDAO(getEventDefinitionCRFDAO());
-        factory.setCrfDAO(getCrfDAO());
-        factory.setDiscrepancyNoteDAO(getDiscrepancyNoteDAO());
-        // factory.setStudyHasDiscNotes(allThreadedDiscNotes != null &&
-        // !allThreadedDiscNotes.isEmpty());
-        factory.setDiscNoteType(discNoteType);
-        factory.setModule(module);
-        factory.setResolutionStatus(resolutionStatus);
-        factory.setResolutionStatusIds(resolutionStatusIds);
-        factory.setSelectedStudyEventDefinition((StudyEventDefinitionBean) getStudyEventDefinitionDao().findByPK(definitionId));
-        String listDiscNotesForCRFHtml = factory.createTable(request, response).render();
-        request.setAttribute("listDiscNotesForCRFHtml", listDiscNotesForCRFHtml);
         request.setAttribute("defId", definitionId);
 
         forwardPage(Page.LIST_DNOTES_FOR_CRF);
