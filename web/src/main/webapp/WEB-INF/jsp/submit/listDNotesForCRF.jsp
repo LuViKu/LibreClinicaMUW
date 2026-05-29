@@ -20,25 +20,9 @@
    </c:otherwise>
   </c:choose>
 
-<link rel="stylesheet" href="includes/jmesa/jmesa.css" type="text/css">
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.min.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jmesa.js"></script>
-<script type="text/javascript" language="JavaScript" src="includes/jmesa/jquery-migrate-1.1.1.js"></script>
-
-<script type="text/javascript">
-    function onInvokeAction(id,action) {
-        if(id.indexOf('listDiscNotesForCRF') == -1)  {
-        setExportToLimit(id, '');
-        }
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        location.href = '${pageContext.request.contextPath}/ListDiscNotesForCRFServlet? + module=manage&defId=' + '${defId}&' + parameterString;
-    }
-
-</script>
+<%-- Phase B.4 jmesa PR 5c (cohort 3c): jmesa scripts removed — the
+     table is rendered client-side by the include/listDNotesForCRFTable.jsp
+     fragment. --%>
 
 
 <!-- move the alert message to the sidebar-->
@@ -290,11 +274,7 @@ function DisplaySectionTabs()
 <br><br>
 
 <div id="listDiscNotesDiv">
-    <form  action="${pageContext.request.contextPath}/ListDiscNotesForCRFServlet">
-        <input type="hidden" name="module" value="submit">
-        <input type="hidden" name="defId" value="${defId}">
-        ${listDiscNotesForCRFHtml}
-    </form>
+    <jsp:include page="include/listDNotesForCRFTable.jsp"/>
 </div>
 
 <!-- EXPANDING WORKFLOW BOX -->

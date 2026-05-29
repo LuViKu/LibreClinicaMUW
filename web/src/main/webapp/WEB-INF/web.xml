@@ -1152,6 +1152,11 @@
         <servlet-class>org.akaza.openclinica.control.managestudy.ViewNotesDataServlet</servlet-class>
     </servlet>
     <servlet>
+        <servlet-name>ListDiscNotesForCRFDataServlet</servlet-name>
+        <description>JSON endpoint for the DataTables-backed per-event-CRF discrepancy-note matrix (Phase B.4 jmesa PR 5c).</description>
+        <servlet-class>org.akaza.openclinica.control.managestudy.ListDiscNotesForCRFDataServlet</servlet-class>
+    </servlet>
+    <servlet>
         <servlet-name>ViewNoteServlet</servlet-name>
         <display-name>ViewNote</display-name>
         <servlet-class>org.akaza.openclinica.control.managestudy.ViewNoteServlet</servlet-class>
@@ -2164,6 +2169,10 @@
     <servlet-mapping>
         <servlet-name>ViewNotesDataServlet</servlet-name>
         <url-pattern>/ViewNotesData</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>ListDiscNotesForCRFDataServlet</servlet-name>
+        <url-pattern>/ListDiscNotesForCRFData</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
         <servlet-name>ViewNoteServlet</servlet-name>
