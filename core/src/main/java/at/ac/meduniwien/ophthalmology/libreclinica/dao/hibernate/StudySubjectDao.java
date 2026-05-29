@@ -32,7 +32,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
     public List<StudySubject> findAllByStudy(Integer studyId) {
         String query = "from " + getDomainClassName() + " do where do.study.studyId = :studyid";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
-        q.setInteger("studyid", studyId);
+        q.setParameter("studyid", studyId);
         return q.list();
       
     }
@@ -43,7 +43,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
-        q.setString("OCOID", OCOID);
+        q.setParameter("OCOID", OCOID);
         return q.uniqueResult();
     }
 
@@ -53,8 +53,8 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.study.studyId = :studyid and do.label = :label";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
-        q.setInteger("studyid", study.getStudyId());
-        q.setString("label", embeddedStudySubjectId);
+        q.setParameter("studyid", study.getStudyId());
+        q.setParameter("label", embeddedStudySubjectId);
         return q.uniqueResult();
     }
 
@@ -64,8 +64,8 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where (do.study.studyId = :studyid or do.study.study.studyId = :studyid) and do.label = :label";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
-        q.setInteger("studyid", study.getStudyId());
-        q.setString("label", embeddedStudySubjectId);
+        q.setParameter("studyid", study.getStudyId());
+        q.setParameter("label", embeddedStudySubjectId);
         return q.uniqueResult();
     }
 
@@ -75,8 +75,8 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.study.study.studyId = :studyid and do.label = :label";
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
-        q.setInteger("studyid", parentStudy.getStudyId());
-        q.setString("label", embeddedStudySubjectId);
+        q.setParameter("studyid", parentStudy.getStudyId());
+        q.setParameter("label", embeddedStudySubjectId);
         return new ArrayList<>(q.list());
     }
 
@@ -85,7 +85,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
     public ArrayList<StudyEvent> fetchListSEs(String id) {
         String query = " from StudyEvent se where se.studySubject.ocOid = :id order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
         Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
-        q.setString("id", id.toString());
+        q.setParameter("id", id.toString());
 
         return new ArrayList<>(q.list());
 
@@ -118,7 +118,7 @@ public class StudySubjectDao extends AbstractDomainDao<StudySubject> {
         String query = "from " + getDomainClassName() + " do  where (do.study.studyId = :studyid or do.study.study.studyId = :studyid)";
 
         Query<StudySubject> q = getCurrentSession().createQuery(query, StudySubject.class);
-        q.setInteger("studyid", studyId);
+        q.setParameter("studyid", studyId);
         List<StudySubject> allStudySubjects = q.list();
         
         int greatestLabel = 0;

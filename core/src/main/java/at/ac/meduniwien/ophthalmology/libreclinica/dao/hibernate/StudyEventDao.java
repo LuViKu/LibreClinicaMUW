@@ -34,8 +34,8 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 	public StudyEvent fetchByStudyEventDefOID(String oid,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
 		 Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
-         q.setInteger("studySubjectId", studySubjectId);
-         q.setString("oid", oid);
+         q.setParameter("studySubjectId", studySubjectId);
+         q.setParameter("oid", oid);
 
          return q.uniqueResult();
 	}
@@ -46,9 +46,9 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 	public StudyEvent fetchByStudyEventDefOIDAndOrdinal(String oid,Integer ordinal,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid and se.sampleOrdinal = :ordinal order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
 		 Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
-         q.setInteger("studySubjectId", studySubjectId);
-         q.setString("oid", oid);
-         q.setInteger("ordinal", ordinal);
+         q.setParameter("studySubjectId", studySubjectId);
+         q.setParameter("oid", oid);
+         q.setParameter("ordinal", ordinal);
          return q.uniqueResult();
 	}
 
@@ -58,9 +58,9 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
     public StudyEvent fetchByStudyEventDefOIDAndOrdinalTransactional(String oid,Integer ordinal,Integer studySubjectId){
         String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid and se.sampleOrdinal = :ordinal order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
         Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
-        q.setInteger("studySubjectId", studySubjectId);
-        q.setString("oid", oid);
-        q.setInteger("ordinal", ordinal);
+        q.setParameter("studySubjectId", studySubjectId);
+        q.setParameter("oid", oid);
+        q.setParameter("ordinal", ordinal);
         return q.uniqueResult();
     }
 
@@ -68,7 +68,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
     @SuppressWarnings("rawtypes")
 	public Integer findMaxOrdinalByStudySubjectStudyEventDefinition(int studySubjectId, int studyEventDefinitionId) {
         String query = "select max(sample_ordinal) from study_event where study_subject_id = " + studySubjectId + " and study_event_definition_id = " + studyEventDefinitionId;
-        NativeQuery q = getCurrentSession().createSQLQuery(query);
+        NativeQuery q = getCurrentSession().createNativeQuery(query);
         Number result = (Number) q.uniqueResult();
         if (result == null) return 0;
         else return result.intValue();
@@ -80,8 +80,8 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
 	public List<StudyEvent> fetchListByStudyEventDefOID(String oid,Integer studySubjectId){
 		String query = " from StudyEvent se where se.studySubject.studySubjectId = :studySubjectId and se.studyEventDefinition.oc_oid = :oid order by se.studyEventDefinition.ordinal,se.sampleOrdinal";
 		Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
-        q.setInteger("studySubjectId", studySubjectId);
-        q.setString("oid", oid);
+        q.setParameter("studySubjectId", studySubjectId);
+        q.setParameter("oid", oid);
 
         return q.list();
 	}
@@ -111,7 +111,7 @@ public class StudyEventDao extends AbstractDomainDao<StudyEvent> implements Appl
     public StudyEvent findByStudyEventId(int studyEventId) {
         String query = "from " + getDomainClassName() + " study_event  where study_event.studyEventId = :studyeventid ";
         Query<StudyEvent> q = getCurrentSession().createQuery(query, StudyEvent.class);
-        q.setInteger("studyeventid", studyEventId);
+        q.setParameter("studyeventid", studyEventId);
         return q.uniqueResult();
     }
 }

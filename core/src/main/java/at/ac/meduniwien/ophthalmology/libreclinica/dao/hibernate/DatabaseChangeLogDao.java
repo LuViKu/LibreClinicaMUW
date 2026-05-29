@@ -39,9 +39,9 @@ public class DatabaseChangeLogDao {
     public DatabaseChangeLogBean findById(String id, String author, String fileName) {
         String query = "from " + getDomainClassName() + " do  where do.id = :id and do.author = :author and do.fileName = :fileName ";
         Query<DatabaseChangeLogBean> q = getCurrentSession().createQuery(query, DatabaseChangeLogBean.class);
-        q.setString("id", id);
-        q.setString("author", author);
-        q.setString("fileName", fileName);
+        q.setParameter("id", id);
+        q.setParameter("author", author);
+        q.setParameter("fileName", fileName);
         return q.uniqueResult();
     }
 

@@ -134,7 +134,7 @@ public class Item  extends DataMapDomainObject{
 		this.itemReferenceType = itemReferenceType;
 	}
 
-	@Type(type = "status")
+	@Type(at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.StatusType.class)
     @Column(name = "status_id")
     public Status getStatus() {
         if (status != null) {

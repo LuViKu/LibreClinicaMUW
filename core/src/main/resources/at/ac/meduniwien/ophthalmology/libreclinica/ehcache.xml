@@ -1,77 +1,35 @@
-<ehcache xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../properties/ehcache.xsd">
-<defaultCache 
-	maxElementsInMemory="500000" 
-	eternal="false" 
-	overflowToDisk="false" 
-	timeToIdleSeconds="10" 
-	timeToLiveSeconds="20" 
-	diskPersistent="false" />
-<cache name="com.akaza.openclinica.dao.core.DAOCache" eternal="false"
-    maxElementsInMemory="10000" 
-    overflowToDisk="false" 
-    diskPersistent="false"
-    timeToIdleSeconds="0" 
-    timeToLiveSeconds="90"
-    memoryStoreEvictionPolicy="LFU" />
-<cache
-	name="org.hibernate.cache.StandardQueryCache"
-	maxElementsInMemory="500000"
-	eternal="false"
-	timeToLiveSeconds="240"
-	overflowToDisk="false" diskPersistent="false" memoryStoreEvictionPolicy="LFU"  />
-<cache
-    name="at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudySubject"
-    maxElementsInMemory="10000"
-    eternal="false"
-    timeToIdleSeconds="300"
-    timeToLiveSeconds="600" statistics="true"
-    overflowToDisk="false" diskPersistent="false" memoryStoreEvictionPolicy="LFU">
-</cache>
+<config
+    xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
+    xmlns='http://www.ehcache.org/v3'
+    xmlns:jsr107='http://www.ehcache.org/v3/jsr107'>
 
-<cache
-	name="at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudySubject.studyEvents"
-    maxElementsInMemory="450"
-    eternal="false"
-    timeToLiveSeconds="600" statistics="true"
-    overflowToDisk="false" diskPersistent="false" memoryStoreEvictionPolicy="LFU">
-</cache>
-    
- <!-- Page and Page Fragment Caches -->
-<cache name="CachePage1CachingFilter"
-  maxElementsInMemory="10"
-  eternal="false"
-  timeToIdleSeconds="10000"
-  timeToLiveSeconds="10000"
-  overflowToDisk="false">
-</cache>
-<cache name="CachedPage2Cache"
-  maxElementsInMemory="10"
-  eternal="false"
-  timeToLiveSeconds="3600"
-  overflowToDisk="false">
-</cache>
-<cache name="SimplePageFragmentCachingFilter"
-  maxElementsInMemory="10"
-  eternal="false"
-  timeToIdleSeconds="10000"
-  timeToLiveSeconds="10000"
-  overflowToDisk="false">
-</cache>
-<cache name="SimpleCachingHeadersTimeoutPageCachingFilter"
-  maxElementsInMemory="10"
-  eternal="false"
-  timeToIdleSeconds="10000"
-  timeToLiveSeconds="10000"
-  overflowToDisk="false">
-</cache>
+    <!--
+      Phase B.5: rewritten for ehcache 3 (JSR-107 / JCache).
+      Replaces the old ehcache 2.x <ehcache> root element + per-cache
+      <cache> blocks with the ehcache 3 schema.
 
-<cache name="randomizeObject"
-  maxElementsInMemory="200"
-  eternal="false"
-  timeToIdleSeconds="10000"
-  timeToLiveSeconds="10000"
-  overflowToDisk="false">
-</cache>
+      Two roles served:
+        - The legacy DAO query cache, name="com.akaza.openclinica.dao.core.DAOCache",
+          consumed via at...libreclinica.dao.cache.EhCacheWrapper (a thin JSR-107
+          adapter). Behaviour preserved: short TTL, in-memory only, LFU eviction
+          on overflow.
+        - Hibernate 2L cache regions are auto-created at runtime
+          (hibernate.javax.cache.missing_cache_strategy=create in
+          applicationContext-core-hibernate.xml). No need to pre-declare each
+          region as the 2.x XML used to.
 
-</ehcache>
+      The historic "CachePage1CachingFilter" page-cache entries served the
+      ehcache-web GzipFilter, which was removed during the B.4 cliff
+      (web.xml). Not re-declared here.
+    -->
 
+    <cache alias="com.akaza.openclinica.dao.core.DAOCache">
+        <key-type>java.lang.String</key-type>
+        <value-type>java.util.ArrayList</value-type>
+        <expiry>
+            <ttl unit="seconds">90</ttl>
+        </expiry>
+        <heap unit="entries">10000</heap>
+    </cache>
+
+</config>

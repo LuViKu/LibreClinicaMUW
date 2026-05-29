@@ -29,9 +29,9 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
                 + getDomainClassName()
                 + " event_crf where event_crf.crfVersion.crfVersionId = :crfversionid and event_crf.studyEvent.studyEventId = :studyeventid and event_crf.studySubject.studySubjectId= :studysubjectid";
         Query<EventCrf> q = getCurrentSession().createQuery(query, EventCrf.class);
-        q.setInteger("studyeventid", study_event_id);
-        q.setInteger("studysubjectid", study_subject_id);
-        q.setInteger("crfversionid", crf_version_id);
+        q.setParameter("studyeventid", study_event_id);
+        q.setParameter("studysubjectid", study_subject_id);
+        q.setParameter("crfversionid", crf_version_id);
         return (EventCrf) q.uniqueResult();
     }
 
@@ -42,9 +42,9 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
                 + getDomainClassName()
                 + " event_crf where event_crf.crfVersion.crf.crfId = :crfid and event_crf.studyEvent.studyEventId = :studyeventid and event_crf.studySubject.studySubjectId= :studysubjectid";
         Query<EventCrf> q = getCurrentSession().createQuery(query, EventCrf.class);
-        q.setInteger("studyeventid", study_event_id);
-        q.setInteger("studysubjectid", study_subject_id);
-        q.setInteger("crfid", crf_id);
+        q.setParameter("studyeventid", study_event_id);
+        q.setParameter("studysubjectid", study_subject_id);
+        q.setParameter("crfid", crf_id);
         return (EventCrf) q.uniqueResult();
     }
 
@@ -55,8 +55,8 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
                 + getDomainClassName()
                 + " event_crf where event_crf.studyEvent.studyEventId = :studyeventid and event_crf.studySubject.ocOid= :studysubjectoid";
         Query<EventCrf> q = getCurrentSession().createQuery(query, EventCrf.class);
-        q.setInteger("studyeventid", studyEventId);
-        q.setString("studysubjectoid", studySubjectOid);
+        q.setParameter("studyeventid", studyEventId);
+        q.setParameter("studysubjectoid", studySubjectOid);
         return q.list();
 	}
 
@@ -67,8 +67,8 @@ public class EventCrfDao extends AbstractDomainDao<EventCrf> {
                 + getDomainClassName()
                 + " event_crf where event_crf.studyEvent.studyEventId = :studyeventid and event_crf.statusId = :statusid";
         Query<EventCrf> q = getCurrentSession().createQuery(query, EventCrf.class);
-        q.setInteger("studyeventid", studyEventId);
-        q.setInteger("statusid", statusCode);
+        q.setParameter("studyeventid", studyEventId);
+        q.setParameter("statusid", statusCode);
         return q.list();
     }
     

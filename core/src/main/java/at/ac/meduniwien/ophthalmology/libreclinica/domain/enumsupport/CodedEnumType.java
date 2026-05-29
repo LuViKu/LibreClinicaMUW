@@ -1,11 +1,13 @@
 /*
  * LibreClinica is distributed under the
  * GNU Lesser General Public License (GNU LGPL).
-
+ *
  * For details see: https://libreclinica.org/license
  * copyright (C) 2003 - 2011 Akaza Research
  * copyright (C) 2003 - 2019 OpenClinica
  * copyright (C) 2020 - 2024 LibreClinica
+ * copyright (C) 2026 Department of Ophthalmology and Optometry,
+ *                     Medical University of Vienna
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport;
 
@@ -15,183 +17,171 @@ import java.lang.reflect.Method;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.util.Properties;
 
 import org.hibernate.HibernateException;
 import org.hibernate.engine.spi.SharedSessionContractImplementor;
-import org.hibernate.internal.util.ReflectHelper;
-import org.hibernate.type.IntegerType;
-import org.hibernate.usertype.EnhancedUserType;
 import org.hibernate.usertype.ParameterizedType;
+import org.hibernate.usertype.UserType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * 
- * A UserType to handle Coded Enumerations. Any Enum that is added to the
- * application and needs to be persisted using this method needs to do the 
- * following 
- * 
- * 1. Implement CodedEnum Interface
- * 2. A static method needs to be added "public static EnumType getByCode(Integer code) {}"
- * 3. Add the definition to typedefs.xml
- * 
- * @author Krikor Krumlian
+ * UserType to handle Coded Enumerations. Any enum that wants to persist via
+ * this mechanism implements {@link CodedEnum} and exposes a static
+ * {@code getByCode(Integer)} factory method; on the column side it's stored
+ * as an {@link Types#INTEGER INTEGER}.
+ *
+ * <p>Phase B.5 (2026-05-29): rewritten for Hibernate 6's generic
+ * {@code UserType<T>} contract. Notable changes from the Hibernate 5 form:
+ * <ul>
+ *   <li>{@code sqlTypes()} (an {@code int[]}) is gone — replaced by
+ *       {@code getSqlType()} returning a single JDBC {@link Types} code.</li>
+ *   <li>{@code nullSafeGet} / {@code nullSafeSet} take a single column
+ *       {@code position} (was a string-array of column names).</li>
+ *   <li>{@code EnhancedUserType}'s {@code objectToSQLString} /
+ *       {@code toXMLString} / {@code fromXMLString} (string-form
+ *       serialisation) no longer exists; the new interface uses
+ *       {@code toString} / {@code fromStringValue} via the base
+ *       {@link UserType} contract for cache disassemble — which here just
+ *       reuses the enum value verbatim since enums are immutable.</li>
+ *   <li>{@code ReflectHelper} (an internal API in Hibernate 5) is replaced
+ *       with plain {@link Class#forName(String)}.</li>
+ * </ul>
+ *
+ * <p>The string-based {@code @Type(type = "status")} annotation form is also
+ * gone in Hibernate 6 — see the {@code StatusType} / {@code RuleContextType}
+ * / {@code ActionTypeType} / {@code LoginStatusType} concrete subclasses
+ * that pre-configure the enum class and let domain entities use
+ * {@code @Type(StatusType.class)} directly.
+ *
+ * @author Krikor Krumlian (original)
  */
-public class CodedEnumType implements EnhancedUserType, ParameterizedType {
+public class CodedEnumType implements UserType<CodedEnum>, ParameterizedType {
 
-    private Class<CodedEnum> enumClass;
+    private Class<? extends CodedEnum> enumClass;
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
 
-    @SuppressWarnings({ "unchecked", "deprecation" })
+    /**
+     * Subclass hook: a concrete type can hard-bind the enum class without
+     * going through Hibernate's {@code @Parameter} machinery.
+     */
+    protected void setEnumClass(Class<? extends CodedEnum> enumClass) {
+        this.enumClass = enumClass;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
     public void setParameterValues(Properties parameters) {
         String enumClassName = parameters.getProperty("enumClassname");
+        if (enumClassName == null) {
+            // Concrete subclass has already wired the enum class via setEnumClass().
+            return;
+        }
         try {
-        	// TODO replace deprecated class/method
-            enumClass = ReflectHelper.classForName(enumClassName);
+            enumClass = (Class<? extends CodedEnum>) Class.forName(enumClassName);
         } catch (ClassNotFoundException cnfe) {
-            throw new HibernateException("Enum class not found", cnfe);
+            throw new HibernateException("Enum class not found: " + enumClassName, cnfe);
         }
     }
 
-    /* 
-     * Tells Hibernate what Java value type class is mapped by this userType
-     * @see org.hibernate.usertype.UserType#returnedClass()
-     */
+    @Override
+    public int getSqlType() {
+        return Types.INTEGER;
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
     public Class<CodedEnum> returnedClass() {
-        return enumClass;
+        return (Class<CodedEnum>) enumClass;
     }
 
-    /* 
-     * Tells Hibernate what SQL column types to use for DDL schema generation.
-     * @see org.hibernate.usertype.UserType#sqlTypes()
-     * 
-     */
-    public int[] sqlTypes() {
-        return new int[] { IntegerType.INSTANCE.sqlType() };
-    }
-
-    /* 
-     * Hibernate can make some minor performance optimizations for immutable types. This method 
-     * tells Hibernate that this type is immutable.
-     * @see org.hibernate.usertype.UserType#isMutable()
-     * 
-     */
+    @Override
     public boolean isMutable() {
         return false;
     }
 
-    public Object deepCopy(Object value) {
+    @Override
+    public CodedEnum deepCopy(CodedEnum value) {
         return value;
     }
 
-    /* 
-     * This method is called when Hibernate puts the object into a second-level cache.
-     * @see org.hibernate.usertype.UserType#disassemble(java.lang.Object)
-     */
-    public Serializable disassemble(Object value) {
-        return (Serializable) value;
+    @Override
+    public Serializable disassemble(CodedEnum value) {
+        // CodedEnum is an interface (not Serializable by declaration), even
+        // though concrete implementations are enums (always Serializable).
+        // Disassemble to the integer code, which is naturally Serializable.
+        return value == null ? null : value.getCode();
     }
 
-    /* This method does the opposite of what disassemble does. It can transform cached data into
-     * an instance. 
-     * @see org.hibernate.usertype.UserType#assemble(java.io.Serializable, java.lang.Object)
-     */
-    public Object assemble(Serializable cached, Object owner) {
-        return cached;
+    @Override
+    public CodedEnum assemble(Serializable cached, Object owner) {
+        if (cached == null) {
+            return null;
+        }
+        return getByCode(cached.toString());
     }
 
-    /* 
-     * Handles merging of detached object state.
-     * @see org.hibernate.usertype.UserType#replace(java.lang.Object, java.lang.Object, java.lang.Object)
-     */
-    public Object replace(Object original, Object target, Object owner) {
-        return original;
+    @Override
+    public CodedEnum replace(CodedEnum detached, CodedEnum managed, Object owner) {
+        return detached;
     }
 
-    /* 
-     * This method compares the current property value to a previous snapshot and determines
-     * whether the property is dirty and must be saved to the database.
-     * @see org.hibernate.usertype.UserType#equals(java.lang.Object, java.lang.Object)
-     */
-    public boolean equals(Object x, Object y) {
+    @Override
+    public boolean equals(CodedEnum x, CodedEnum y) {
         return x == y;
     }
 
-    public int hashCode(Object x) {
-        return x.hashCode();
+    @Override
+    public int hashCode(CodedEnum x) {
+        return x == null ? 0 : x.hashCode();
     }
 
-    /*
-        * Retrieves the property value from the JDBC Result-Set. You can also access the owner of the component
-        * if you need it for the conversion.
-        * @see org.hibernate.usertype.UserType#nullSafeGet(java.sql.ResultSet, java.lang.String[], java.lang.Object)
-        */
     @Override
-    public Object nullSafeGet(ResultSet rs, String[] strings, SharedSessionContractImplementor sharedSessionContractImplementor, Object o) throws HibernateException, SQLException {
-        String key = rs.getString(strings[0]);
-        return rs.wasNull() ? null : getByCode(key);
+    public CodedEnum nullSafeGet(ResultSet rs, int position, SharedSessionContractImplementor session, Object owner)
+            throws SQLException {
+        int code = rs.getInt(position);
+        return rs.wasNull() ? null : getByCode(Integer.toString(code));
     }
 
-    /*
-    * This method writes the property value to the JDBC Prepared-Statement.
-    * @see org.hibernate.usertype.UserType#nullSafeSet(java.sql.PreparedStatement, java.lang.Object, int)
-    */
     @Override
-    public void nullSafeSet(PreparedStatement st, Object value, int index, SharedSessionContractImplementor sharedSessionContractImplementor) throws HibernateException, SQLException {
+    public void nullSafeSet(PreparedStatement st, CodedEnum value, int index, SharedSessionContractImplementor session)
+            throws SQLException {
         if (value == null) {
-            st.setNull(index, IntegerType.INSTANCE.sqlType());
+            st.setNull(index, Types.INTEGER);
         } else {
-            Integer code = getCode(value);
+            Integer code = value.getCode();
             logger.debug("Binding '{}' to parameter: {}", code, index);
             st.setInt(index, code);
         }
     }
 
-    public Object fromXMLString(String xmlValue) {
-        return getByCode(xmlValue);
-    }
-
-    public String objectToSQLString(Object value) {
-        return '\'' + getCodeAsString(value) + '\'';
-    }
-
-    public String toXMLString(Object value) {
-        return getCodeAsString(value);
-    }
-
-
-    private Integer getCode(Object value) {
-        return ((CodedEnum) value).getCode();
-    }
-
-    private String getCodeAsString(Object value) {
-        return getCode(value).toString();
-    }
-
-    private Object getByCode(String key) {
-        Object value = null;
+    private CodedEnum getByCode(String key) {
         Method method = null;
         Integer theKey = null;
         try {
             theKey = Integer.valueOf(key);
             method = enumClass.getMethod("getByCode", Integer.class);
-            value = method.invoke(null, theKey);
+            return (CodedEnum) method.invoke(null, theKey);
         } catch (NumberFormatException e) {
-            throw new CodedEnumPersistenceException("Value passed in to this Method has wrong type " + method + " being passed " + theKey + " on value "
-                + value, e);
+            throw new CodedEnumPersistenceException(
+                    "Value passed in has wrong type; method=" + method + " key=" + theKey, e);
         } catch (SecurityException e) {
-            throw new CodedEnumPersistenceException("SecurityException on Method " + method + " being passed " + theKey + " on value " + value, e);
+            throw new CodedEnumPersistenceException(
+                    "SecurityException on method=" + method + " key=" + theKey, e);
         } catch (NoSuchMethodException e) {
-            throw new CodedEnumPersistenceException("Method not found " + method + " being passed " + theKey + " on value " + value, e);
+            throw new CodedEnumPersistenceException(
+                    "Method getByCode(Integer) not found on " + enumClass + "; key=" + theKey, e);
         } catch (IllegalArgumentException e) {
-            throw new CodedEnumPersistenceException("Could not call Method " + method + " being passed " + theKey + " on value " + value, e);
+            throw new CodedEnumPersistenceException(
+                    "Could not call method=" + method + " key=" + theKey, e);
         } catch (IllegalAccessException e) {
-            throw new CodedEnumPersistenceException("Don't have access to Method " + method + " being passed " + theKey + " on value " + value, e);
+            throw new CodedEnumPersistenceException(
+                    "No access to method=" + method + " key=" + theKey, e);
         } catch (InvocationTargetException e) {
-            throw new CodedEnumPersistenceException("InvocationTargetException on Method " + method + " being passed " + theKey + " on value " + value, e);
+            throw new CodedEnumPersistenceException(
+                    "InvocationTargetException on method=" + method + " key=" + theKey, e);
         }
-        return value;
     }
-
 }

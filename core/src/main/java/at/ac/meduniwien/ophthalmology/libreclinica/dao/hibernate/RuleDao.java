@@ -24,8 +24,8 @@ public class RuleDao extends AbstractDomainDao<RuleBean> {
     public RuleBean findByOid(RuleBean ruleBean) {
         String query = "from " + getDomainClassName() + " rule  where rule.oid = :oid and  rule.studyId = :studyId ";
         Query<RuleBean> q = getCurrentSession().createQuery(query, RuleBean.class);
-        q.setString("oid", ruleBean.getOid());
-        q.setInteger("studyId", ruleBean.getStudyId());
+        q.setParameter("oid", ruleBean.getOid());
+        q.setParameter("studyId", ruleBean.getStudyId());
         return q.uniqueResult();
     }
 
@@ -34,8 +34,8 @@ public class RuleDao extends AbstractDomainDao<RuleBean> {
     public RuleBean findByOid(String oid, Integer studyId) {
         String query = "from " + getDomainClassName() + " rule  where rule.oid = :oid and  rule.studyId = :studyId ";
         Query<RuleBean> q = getCurrentSession().createQuery(query, RuleBean.class);
-        q.setString("oid", oid);
-        q.setInteger("studyId", studyId);
+        q.setParameter("oid", oid);
+        q.setParameter("studyId", studyId);
         return q.uniqueResult();
     }
 

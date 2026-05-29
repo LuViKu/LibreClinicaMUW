@@ -1,17 +1,22 @@
 /*
  * LibreClinica is distributed under the
  * GNU Lesser General Public License (GNU LGPL).
-
+ *
  * For details see: https://libreclinica.org/license
  * copyright (C) 2003 - 2011 Akaza Research
  * copyright (C) 2003 - 2019 OpenClinica
  * copyright (C) 2020 - 2024 LibreClinica
+ * copyright (C) 2026 Department of Ophthalmology and Optometry,
+ *                     Medical University of Vienna
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.AuditUserLoginBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.LoginStatus;
-import org.hibernate.Criteria;
-import org.hibernate.criterion.Restrictions;
+import jakarta.persistence.criteria.CriteriaBuilder;
+import jakarta.persistence.criteria.CriteriaQuery;
+import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
@@ -21,101 +26,92 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-public class AuditUserLoginFilter implements CriteriaCommand {
+/**
+ * Builds WHERE-clause predicates for the audit-user-login table.
+ *
+ * <p>Phase B.5: migrated from Hibernate 5's
+ * {@code org.hibernate.criterion.Restrictions} to {@code jakarta.persistence.criteria}.
+ * The {@code loginAttemptDate} filter does prefix-on-yyyy[-MM[-dd[ HH[:mm]]]]
+ * matching by parsing each partial date format and adding a {@code between}
+ * over the implied [startDate, startDate+granularity) window — the original
+ * Hibernate 5 form did the same, just expressed via {@code Restrictions.between}.
+ */
+public class AuditUserLoginFilter implements CriteriaCommand<AuditUserLoginBean> {
 
-    List<Filter> filters = new ArrayList<Filter>();
+    private final List<Filter> filters = new ArrayList<>();
 
     public void addFilter(String property, Object value) {
         filters.add(new Filter(property, value));
     }
 
-    public Criteria execute(Criteria criteria) {
+    @Override
+    public void apply(CriteriaBuilder cb, CriteriaQuery<?> query, Root<AuditUserLoginBean> root) {
+        List<Predicate> predicates = new ArrayList<>();
         for (Filter filter : filters) {
-            buildCriteria(criteria, filter.getProperty(), filter.getValue());
+            collect(cb, root, filter.getProperty(), filter.getValue(), predicates);
         }
-
-        return criteria;
-    }
-
-    private void buildCriteria(Criteria criteria, String property, Object value) {
-        if (value != null) {
-            if (property.equals("loginStatus")) {
-                criteria.add(Restrictions.eq(property, LoginStatus.getByName((String) value)));
-            } else if (property.equals("loginAttemptDate")) {
-                onlyYearAndMonthAndDayAndHourAndMinute(String.valueOf(value), criteria);
-                onlyYearAndMonthAndDayAndHour(String.valueOf(value), criteria);
-                onlyYearAndMonthAndDay(String.valueOf(value), criteria);
-                onlyYearAndMonth(String.valueOf(value), criteria);
-                onlyYear(String.valueOf(value), criteria);
-            } else
-                criteria.add(Restrictions.like(property, "%" + value + "%").ignoreCase());
+        if (!predicates.isEmpty()) {
+            query.where(cb.and(predicates.toArray(new Predicate[0])));
         }
     }
 
-    private void onlyYear(String value, Criteria criteria) {
+    private void collect(CriteriaBuilder cb, Root<AuditUserLoginBean> root,
+                         String property, Object value, List<Predicate> predicates) {
+        if (value == null) {
+            return;
+        }
+        if ("loginStatus".equals(property)) {
+            predicates.add(cb.equal(root.get(property), LoginStatus.getByName((String) value)));
+        } else if ("loginAttemptDate".equals(property)) {
+            // Try every supported granularity in turn; the original code added
+            // ALL of them and let Hibernate 5 sort it out. JPA Criteria requires
+            // explicit choice, so add ALL predicates here too (they OR-out:
+            // only one will match a given row).
+            Predicate dateGroup = orDate(cb, root, String.valueOf(value));
+            if (dateGroup != null) {
+                predicates.add(dateGroup);
+            }
+        } else {
+            predicates.add(cb.like(cb.lower(root.get(property).as(String.class)),
+                    "%" + String.valueOf(value).toLowerCase() + "%"));
+        }
+    }
+
+    private Predicate orDate(CriteriaBuilder cb, Root<AuditUserLoginBean> root, String value) {
+        List<Predicate> dateRanges = new ArrayList<>();
+        addRangeIfMatch(cb, root, "yyyy-MM-dd HH:mm", value, ChronoStep.MINUTE, dateRanges);
+        addRangeIfMatch(cb, root, "yyyy-MM-dd HH",    value, ChronoStep.HOUR,   dateRanges);
+        addRangeIfMatch(cb, root, "yyyy-MM-dd",       value, ChronoStep.DAY,    dateRanges);
+        addRangeIfMatch(cb, root, "yyyy-MM",          value, ChronoStep.MONTH,  dateRanges);
+        addRangeIfMatch(cb, root, "yyyy",             value, ChronoStep.YEAR,   dateRanges);
+        if (dateRanges.isEmpty()) {
+            return null;
+        }
+        return cb.or(dateRanges.toArray(new Predicate[0]));
+    }
+
+    private void addRangeIfMatch(CriteriaBuilder cb, Root<AuditUserLoginBean> root,
+                                 String pattern, String value, ChronoStep step,
+                                 List<Predicate> out) {
         try {
-            DateFormat format = new SimpleDateFormat("yyyy");
+            DateFormat format = new SimpleDateFormat(pattern);
             Date startDate = format.parse(value);
             ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
-            dt = dt.plusYears(1);
+            switch (step) {
+                case MINUTE: dt = dt.plusMinutes(1); break;
+                case HOUR:   dt = dt.plusHours(1);   break;
+                case DAY:    dt = dt.plusDays(1);    break;
+                case MONTH:  dt = dt.plusMonths(1);  break;
+                case YEAR:   dt = dt.plusYears(1);   break;
+            }
             Date endDate = Date.from(dt.toInstant());
-            criteria.add(Restrictions.between("loginAttemptDate", startDate, endDate));
+            out.add(cb.between(root.<Date>get("loginAttemptDate"), startDate, endDate));
         } catch (Exception e) {
-            // Do nothing
+            // Pattern doesn't match — try the next narrower form.
         }
     }
 
-    private void onlyYearAndMonth(String value, Criteria criteria) {
-        try {
-            DateFormat format = new SimpleDateFormat("yyyy-MM");
-            Date startDate = format.parse(value);
-            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
-            dt = dt.plusMonths(1);
-            Date endDate = Date.from(dt.toInstant());
-            criteria.add(Restrictions.between("loginAttemptDate", startDate, endDate));
-        } catch (Exception e) {
-            // Do nothing
-        }
-    }
-
-    private void onlyYearAndMonthAndDay(String value, Criteria criteria) {
-        try {
-            DateFormat format = new SimpleDateFormat("yyyy-MM-dd");
-            Date startDate = format.parse(value);
-            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
-            dt = dt.plusDays(1);
-            Date endDate = Date.from(dt.toInstant());
-            criteria.add(Restrictions.between("loginAttemptDate", startDate, endDate));
-        } catch (Exception e) {
-            // Do nothing
-        }
-    }
-
-    private void onlyYearAndMonthAndDayAndHour(String value, Criteria criteria) {
-        try {
-            DateFormat format = new SimpleDateFormat("yyyy-MM-dd HH");
-            Date startDate = format.parse(value);
-            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
-            dt = dt.plusHours(1);
-            Date endDate = Date.from(dt.toInstant());
-            criteria.add(Restrictions.between("loginAttemptDate", startDate, endDate));
-        } catch (Exception e) {
-            // Do nothing
-        }
-    }
-
-    private void onlyYearAndMonthAndDayAndHourAndMinute(String value, Criteria criteria) {
-        try {
-            DateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm");
-            Date startDate = format.parse(value);
-            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
-            dt = dt.plusMinutes(1);
-            Date endDate = Date.from(dt.toInstant());
-            criteria.add(Restrictions.between("loginAttemptDate", startDate, endDate));
-        } catch (Exception e) {
-            // Do nothing
-        }
-    }
+    private enum ChronoStep { MINUTE, HOUR, DAY, MONTH, YEAR }
 
     private static class Filter {
         private final String property;
@@ -126,13 +122,7 @@ public class AuditUserLoginFilter implements CriteriaCommand {
             this.value = value;
         }
 
-        public String getProperty() {
-            return property;
-        }
-
-        public Object getValue() {
-            return value;
-        }
+        public String getProperty() { return property; }
+        public Object getValue()    { return value;    }
     }
-
 }

@@ -112,7 +112,7 @@ public class StudyGroupClass  extends DataMapDomainObject {
 	}
 
 
-	/* @Type(type = "status")
+	/* @Type(at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.StatusType.class)
 	@JoinColumn(name = "status_id")
 	public Status getStatus() {
 		return this.status;

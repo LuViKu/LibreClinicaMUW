@@ -90,7 +90,7 @@ public class AuditUserLoginBean extends AbstractMutableDomainObject {
         this.details = details;
     }
 
-    @Type(type = "loginStatus")
+    @Type(at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.LoginStatusType.class)
     @Column(name = "login_status_code")
     public LoginStatus getLoginStatus() {
         return loginStatus;

@@ -27,9 +27,9 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
         String query = "from " + getDomainClassName()
                 + " item_data where item_data.item.itemId = :itemid and item_data.eventCrf.eventCrfId = :eventcrfid and item_data.ordinal = :ordinal";
         Query<ItemData> q = getCurrentSession().createQuery(query, ItemData.class);
-        q.setInteger("itemid", itemId);
-        q.setInteger("eventcrfid", eventCrfId);
-        q.setInteger("ordinal", ordinal);
+        q.setParameter("itemid", itemId);
+        q.setParameter("eventcrfid", eventCrfId);
+        q.setParameter("ordinal", ordinal);
         return q.uniqueResult();
     }
 
@@ -37,7 +37,7 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
     @SuppressWarnings({ "rawtypes", "unchecked" })
 	public List<ItemData> findAllByEventCrf(Integer eventCrfId) {
         String query = "select * from item_data where event_crf_id = " + eventCrfId;
-        NativeQuery q = getCurrentSession().createSQLQuery(query).addEntity(ItemData.class);
+        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ItemData.class);
         
         return (List<ItemData>) q.list();
       
@@ -53,7 +53,7 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
             "join item_group_metadata igm on i.item_id=igm.item_id and igm.crf_version_id = ec.crf_version_id " + 
             "where id.event_crf_id = " + eventCrfId + " and igm.item_group_id = " + itemGroupId + " " + 
             "order by id.ordinal, igm.ordinal";
-        NativeQuery q = getCurrentSession().createSQLQuery(query).addEntity(ItemData.class);
+        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(ItemData.class);
         
         return (List<ItemData>) q.list();
       
@@ -64,7 +64,7 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
     public List<ItemData> findByEventCrfId(Integer eventCrfId) {
         String query = "from " + getDomainClassName() + " item_data where item_data.eventCrf.eventCrfId = :eventcrfid";
         Query<ItemData> q = getCurrentSession().createQuery(query, ItemData.class);
-        q.setInteger("eventcrfid", eventCrfId);
+        q.setParameter("eventcrfid", eventCrfId);
         return q.list();
       
     }
@@ -74,7 +74,7 @@ public class ItemDataDao extends AbstractDomainDao<ItemData> {
     public int getMaxGroupRepeat(Integer eventCrfId, Integer itemId) {
         getCurrentSession().flush();
         String query = "select max(ordinal) from item_data where event_crf_id = " + eventCrfId + " and item_id = " + itemId;
-        Query q = getCurrentSession().createSQLQuery(query);
+        Query q = getCurrentSession().createNativeQuery(query);
         Number result = (Number) q.uniqueResult();
         if (result == null) return 0;
         else return result.intValue();

@@ -29,9 +29,9 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
             "from " + getDomainClassName()
                 + " metadata where metadata.itemGroupMetadataId = :id and metadata.itemGroupId = :item_group_id and metadata.eventCrfId = :event_crf_id ";
         Query<DynamicsItemGroupMetadataBean> q = getCurrentSession().createQuery(query, DynamicsItemGroupMetadataBean.class);
-        q.setInteger("id", metadataBean.getId());
-        q.setInteger("item_group_id", metadataBean.getItemGroupId());
-        q.setInteger("event_crf_id", eventCrfBean.getId());
+        q.setParameter("id", metadataBean.getId());
+        q.setParameter("item_group_id", metadataBean.getItemGroupId());
+        q.setParameter("event_crf_id", eventCrfBean.getId());
         return q.uniqueResult();
     }
 
@@ -42,9 +42,9 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
             "from " + getDomainClassName()
                 + " metadata where metadata.itemGroupMetadataId = :id and metadata.itemGroupId = :item_group_id and metadata.eventCrfId = :event_crf_id ";
         Query<DynamicsItemGroupMetadataBean> q = getCurrentSession().createQuery(query, DynamicsItemGroupMetadataBean.class);
-        q.setInteger("id", metadataBean.getId());
-        q.setInteger("item_group_id", metadataBean.getItemGroupId());
-        q.setInteger("event_crf_id", eventCrfBeanId);
+        q.setParameter("id", metadataBean.getId());
+        q.setParameter("item_group_id", metadataBean.getItemGroupId());
+        q.setParameter("event_crf_id", eventCrfBeanId);
         return q.uniqueResult();
     }
 
@@ -57,11 +57,11 @@ public class DynamicsItemGroupMetadataDao extends AbstractDomainDao<DynamicsItem
                 + " and igm.item_id in (select im.item_id from item_form_metadata im where im.section_id = :sectionId and im.crf_version_id = :crfVersionId))"
                 + " and dg.show_group = 'true' limit 1";
         
-        org.hibernate.query.Query q = this.getCurrentSession().createSQLQuery(query);
-        q.setInteger("eventCrfId", eventCrfId);
-        q.setInteger("crfVersionId", crfVersionId);
-        q.setInteger("sectionId", sectionId);
-        q.setInteger("crfVersionId", crfVersionId);
+        org.hibernate.query.Query q = this.getCurrentSession().createNativeQuery(query);
+        q.setParameter("eventCrfId", eventCrfId);
+        q.setParameter("crfVersionId", crfVersionId);
+        q.setParameter("sectionId", sectionId);
+        q.setParameter("crfVersionId", crfVersionId);
         /* TODO use uniqueResult (or something similar), if the
          * query returns multiple (equivalent results) use distinct also
          */

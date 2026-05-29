@@ -26,7 +26,7 @@ public class CrfVersionMediaDao extends AbstractDomainDao<CrfVersionMedia> {
     public ArrayList<CrfVersionMedia> findByCrfVersionId(int crf_version_id) {
         String query = "from " + getDomainClassName() + " crf_version_media  where crf_version_media.crfVersion.crfVersionId = :crfversionid ";
         Query<CrfVersionMedia> q = getCurrentSession().createQuery(query, CrfVersionMedia.class);
-        q.setInteger("crfversionid", crf_version_id);
+        q.setParameter("crfversionid", crf_version_id);
         return new ArrayList<>(q.list());
     }
 }

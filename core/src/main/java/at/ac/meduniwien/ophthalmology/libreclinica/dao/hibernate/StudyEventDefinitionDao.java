@@ -25,7 +25,7 @@ public class StudyEventDefinitionDao extends AbstractDomainDao<StudyEventDefinit
     public StudyEventDefinition findByStudyEventDefinitionId(int studyEventDefinitionId) {
         String query = "from " + getDomainClassName() + " study_event_definition  where study_event_definition.studyEventDefinitionId = :studyeventdefinitionid ";
         Query<StudyEventDefinition> q = getCurrentSession().createQuery(query, StudyEventDefinition.class);
-        q.setInteger("studyeventdefinitionid", studyEventDefinitionId);
+        q.setParameter("studyeventdefinitionid", studyEventDefinitionId);
         return q.uniqueResult();
     }
 }

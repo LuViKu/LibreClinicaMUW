@@ -63,7 +63,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
         String query = "from " + getDomainClassName() + " ruleSetRule  where ruleSetRule.ruleSetBean.studyId = :studyId and status = :status ";
         Query<RuleSetRuleBean> q = getCurrentSession().createQuery(query, RuleSetRuleBean.class);
         
-        q.setInteger("studyId", studyId);
+        q.setParameter("studyId", studyId);
         q.setParameter("status", at.ac.meduniwien.ophthalmology.libreclinica.domain.Status.AVAILABLE);
         
         q.setCacheable(true);
@@ -117,7 +117,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
                 + " join rule_expression rer on r.rule_expression_id = rer.id " + " join rule_action ra on ra.rule_set_rule_id = rsr.id " + " where ";
 
         query += filter.execute("");
-        NativeQuery q = getCurrentSession().createSQLQuery(query);
+        NativeQuery q = getCurrentSession().createNativeQuery(query);
 
         return ((Number) q.uniqueResult()).intValue();
     }
@@ -140,7 +140,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
 
         query += filter.execute("");
         query += sort.execute("");
-        NativeQuery q = getCurrentSession().createSQLQuery(query).addEntity(domainClass());
+        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(domainClass());
         q.setFirstResult(rowStart);
         q.setMaxResults(rowEnd - rowStart);
         return new ArrayList<RuleSetRuleBean>(q.list());
@@ -157,7 +157,7 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
                 + " join rule_expression re on rs.rule_expression_id = re.id " + " join rule r on r.id = rsr.rule_id "
                 + " join rule_expression rer on r.rule_expression_id = rer.id " + " join rule_action ra on ra.rule_set_rule_id = rsr.id " + " where rs.study_id = " + study.getId() + "  AND  rsr.status_id = 1";
 
-        NativeQuery<BigInteger> q = getCurrentSession().createSQLQuery(query);
+        NativeQuery<BigInteger> q = getCurrentSession().createNativeQuery(query);
         return q.uniqueResult().intValue();
     }
 

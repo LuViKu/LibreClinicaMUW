@@ -16,13 +16,15 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.CompositeIdDomainObjec
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.query.Query;
-import org.springframework.orm.hibernate5.HibernateTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
 
+/**
+ * Phase B.5: HibernateTemplate retired — see {@link AbstractDomainDao}.
+ */
 public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainObject> {
 
-    private HibernateTemplate hibernateTemplate;
+    private SessionFactory sessionFactory;
 
     abstract Class<T> domainClass();
 
@@ -49,9 +51,10 @@ public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainOb
     @Transactional
     public Serializable save(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
-        Serializable id = getCurrentSession().save(domainObject);
-        return id;
-    }    
+        // Hibernate 6: Session.save returns Object (deprecated in favour of
+        // persist()); the actual id is always Serializable.
+        return (Serializable) getCurrentSession().save(domainObject);
+    }
 
     @SuppressWarnings("unchecked")
     @Transactional
@@ -67,24 +70,14 @@ public abstract class CompositeIdAbstractDomainDao<T extends CompositeIdDomainOb
     }
 
     public SessionFactory getSessionFactory() {
-        return hibernateTemplate.getSessionFactory();
+        return sessionFactory;
     }
 
-    /**
-     * @return Session Object
-     */
+    public void setSessionFactory(SessionFactory sessionFactory) {
+        this.sessionFactory = sessionFactory;
+    }
+
     public Session getCurrentSession() {
         return getSessionFactory().getCurrentSession();
     }
-
-    public HibernateTemplate getHibernateTemplate() {
-        return hibernateTemplate;
-    }
-
-    public void setHibernateTemplate(HibernateTemplate hibernateTemplate) {
-        this.hibernateTemplate = hibernateTemplate;
-    }
-
-
-
 }

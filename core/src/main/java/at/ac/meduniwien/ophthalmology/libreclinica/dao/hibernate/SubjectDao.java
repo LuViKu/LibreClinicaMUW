@@ -25,7 +25,7 @@ public class SubjectDao extends AbstractDomainDao<Subject> {
     public Subject findBySubjectId(Integer subjectId) {
         String query = "from " + getDomainClassName() + " do  where do.subjectId = :subject_id ";
         Query<Subject> q = getCurrentSession().createQuery(query, Subject.class);
-        q.setInteger("subject_id", subjectId);
+        q.setParameter("subject_id", subjectId);
         return q.uniqueResult();
     }
 
@@ -34,7 +34,7 @@ public class SubjectDao extends AbstractDomainDao<Subject> {
     public Subject findByUniqueIdentifier(String uniqueIdentifier) {
         String query = "from " + getDomainClassName() + " do  where do.uniqueIdentifier = :unique_identifier ";
         Query<Subject> q = getCurrentSession().createQuery(query, Subject.class);
-        q.setString("unique_identifier", uniqueIdentifier);
+        q.setParameter("unique_identifier", uniqueIdentifier);
         return q.uniqueResult();
     }
 }

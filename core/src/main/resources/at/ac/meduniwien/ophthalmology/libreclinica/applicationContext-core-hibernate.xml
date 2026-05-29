@@ -14,14 +14,15 @@
 
 
 
-    <!-- A Hibernate SessionFactory for mapping Domain Objects from object to relation tables -->
+    <!-- A Hibernate SessionFactory for mapping Domain Objects from object to relation tables.
+         Phase B.5: typedefs.hbm.xml was retired — Hibernate 6 removed the
+         <typedef> element. The four enum UserTypes (status / ruleContext /
+         actionType / loginStatus) now live as concrete CodedEnumType subclasses
+         under domain.enumsupport.{StatusType, RuleContextType, ActionTypeType,
+         LoginStatusType} and are referenced from @Type(SubclassName.class)
+         annotations on domain entities. -->
     <bean id="sessionFactory" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
         <property name="dataSource" ref="dataSource"/>
-        <property name="mappingLocations">
-            <list>
-                <value>classpath:at/ac/meduniwien/ophthalmology/libreclinica/typedefs.hbm.xml</value>
-            </list>
-        </property>
         <property name="annotatedClasses">
             <list>
                 <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean</value>
@@ -145,13 +146,28 @@
                 <prop key="hibernate.cache.use_query_cache">false</prop>
                 <prop key="hibernate.cache.use_second_level_cache">false</prop>
                 <prop key="hibernate.allow_update_outside_transaction">true</prop>
+                <!-- Phase B.5: switched from <property name="implicitNamingStrategy">
+                     to the property-based form. Spring 6's hibernate5
+                     LocalSessionFactoryBuilder.setImplicitNamingStrategy was
+                     compiled against Hibernate 5's void-returning method;
+                     Hibernate 6 changed it to a builder-style return type and
+                     triggers a NoSuchMethodError. The
+                     hibernate.implicit_naming_strategy hibernate-property
+                     path is stable across both versions and accepts the
+                     fully-qualified class name. -->
+                <prop key="hibernate.implicit_naming_strategy">at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.cfg.LegacyImprovedImplicitNamingStrategy</prop>
+                <!-- Phase B.5: Hibernate 6 enforces that @SequenceGenerator's
+                     allocationSize matches the DB sequence's actual INCREMENT BY.
+                     The LibreClinica schema uses INCREMENT BY 1 sequences but
+                     the entities default to allocationSize=50. Switch the
+                     strategy from the default EXCEPTION to LOG so Hibernate
+                     warns rather than refusing to start. (FIX would rewrite
+                     the entity mapping at runtime to match the DB; not what
+                     we want.) -->
+                <prop key="hibernate.id.sequence.increment_size_mismatch_strategy">LOG</prop>
                 <!-- Uncommenting the following line allows better logging of Hibernate errors for debugging purposes. Must be commented out for production use. -->
                 <!-- prop key="hibernate.jdbc.batch_size">0</prop -->
             </props>
-        </property>
-        <property name="implicitNamingStrategy">
-            <!-- <bean class="org.hibernate.cfg.ImprovedNamingStrategy"/> -->
-            <bean class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.cfg.LegacyImprovedImplicitNamingStrategy"/>
         </property>
     </bean>
 
@@ -165,9 +181,13 @@
   </bean>
   
 
-  <bean id="hibernateTemplate" class="org.springframework.orm.hibernate5.HibernateTemplate">
-    <property name="sessionFactory" ref="sessionFactory"/>
-  </bean>
+  <!-- Phase B.5: HibernateTemplate bean retired. Spring 6's
+       org.springframework.orm.hibernate5.HibernateTemplate references
+       org.hibernate.criterion.Criterion which was deleted in Hibernate 6,
+       so the class can't load. AbstractDomainDao + CompositeIdAbstractDomainDao
+       now hold a SessionFactory reference directly; autowire="byName" on the
+       abstractDomainDao parent below resolves the setter via the
+       sessionFactory bean declared at the top of this file. -->
 
   <!-- Instructs the container to look for beans with @Transactional and decorate them -->
   <tx:annotation-driven transaction-manager="transactionManager" proxy-target-class="true"/>

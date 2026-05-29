@@ -10,7 +10,6 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
 import java.io.Serializable;
-import java.sql.SQLException;
 import java.util.ArrayList;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
@@ -18,17 +17,24 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.DomainObject;
 import org.apache.commons.lang.StringUtils;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
-import org.hibernate.internal.SessionImpl;
 import org.hibernate.query.Query;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.orm.hibernate5.HibernateTemplate;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Phase B.5: Spring's {@code HibernateTemplate} (org.springframework.orm.hibernate5)
+ * was retired here. Even though Spring 6 keeps the package, it directly
+ * references {@code org.hibernate.criterion.*} which Hibernate 6 deleted —
+ * so the class can't load with Hibernate 6 on classpath. The SessionFactory
+ * is injected directly instead; the {@code getSessionFactory()} /
+ * {@code getCurrentSession()} surface this DAO base offered to subclasses is
+ * unchanged.
+ */
 public abstract class AbstractDomainDao<T extends DomainObject> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
-    private HibernateTemplate hibernateTemplate;
+    private SessionFactory sessionFactory;
 
     abstract Class<T> domainClass();
 
@@ -74,7 +80,10 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
     @Transactional
     public Serializable save(T domainObject) {
         getSessionFactory().getStatistics().logSummary();
-        return getCurrentSession().save(domainObject);
+        // Hibernate 6: Session.save(Object) returns Object (deprecated; persist()
+        // is the JPA-style replacement but returns void). Callers cast to
+        // Integer; the underlying ID is always Serializable.
+        return (Serializable) getCurrentSession().save(domainObject);
     }
 
     @SuppressWarnings("unchecked")
@@ -91,7 +100,11 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
     }
 
     public SessionFactory getSessionFactory() {
-        return hibernateTemplate.getSessionFactory();
+        return sessionFactory;
+    }
+
+    public void setSessionFactory(SessionFactory sessionFactory) {
+        this.sessionFactory = sessionFactory;
     }
 
     /**
@@ -105,27 +118,19 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         Session session = getSessionFactory().getCurrentSession();
 
         if (StringUtils.isNotEmpty(schema)) {
-            SessionImpl sessionImpl = (SessionImpl) session;
-            try {
-                String currentSchema = sessionImpl.connection().getSchema();
+            // Phase B.5: Hibernate 6 removed Session.connection() (and the
+            // SessionImpl.connection() override). The portable replacement is
+            // Session.doWork(Work) which exposes the underlying JDBC Connection
+            // for the duration of the callback.
+            session.doWork(connection -> {
+                String currentSchema = connection.getSchema();
                 if (!schema.equals(currentSchema)) {
-                    sessionImpl.connection().setSchema(schema);
+                    connection.setSchema(schema);
                     CoreResources.tenantSchema.set(schema);
-                    //CoreResources.setSchema(sessionImpl.connection());
                 }
-            } catch (SQLException e) {
-                logger.error(e.getMessage(), e);
-            }
+            });
         }
         return session;
-    }
-
-    public HibernateTemplate getHibernateTemplate() {
-        return hibernateTemplate;
-    }
-
-    public void setHibernateTemplate(HibernateTemplate hibernateTemplate) {
-        this.hibernateTemplate = hibernateTemplate;
     }
 
 }

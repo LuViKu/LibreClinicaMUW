@@ -44,9 +44,9 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
                 "metadata.itemDataId = :item_data_id order by metadata.id desc ";
 
         Query<DynamicsItemFormMetadataBean> q = getCurrentSession().createQuery(query, DynamicsItemFormMetadataBean.class);
-        q.setInteger("item_id", metadataBean.getItemId());
-        q.setInteger("event_crf_id", eventCrfBean.getId());
-        q.setInteger("item_data_id", itemDataBean.getId());
+        q.setParameter("item_id", metadataBean.getItemId());
+        q.setParameter("event_crf_id", eventCrfBean.getId());
+        q.setParameter("item_data_id", itemDataBean.getId());
         List<DynamicsItemFormMetadataBean> list = q.list();
         /* TODO use uniqueResult (or something similar), if the
          * query returns multiple (equivalent results) use distinct also
@@ -65,8 +65,8 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
                 "metadata.showItem = true order by metadata.id desc ";
 
         Query<DynamicsItemFormMetadataBean> q = getCurrentSession().createQuery(query, DynamicsItemFormMetadataBean.class);
-        q.setInteger("item_id", itemId);
-        q.setInteger("event_crf_id", eventCrfBean.getId());
+        q.setParameter("item_id", itemId);
+        q.setParameter("event_crf_id", eventCrfBean.getId());
 
         return new ArrayList<>(q.list());
     }
@@ -78,7 +78,7 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
         String query = "from " + getDomainClassName() + " metadata where metadata.itemDataId = :item_data_id ";
         Query<DynamicsItemFormMetadataBean> q = getCurrentSession().createQuery(query, DynamicsItemFormMetadataBean.class);
 
-        q.setInteger("item_data_id", itemDataBean.getId());
+        q.setParameter("item_data_id", itemDataBean.getId());
         return q.uniqueResult();
     }
 
@@ -177,18 +177,18 @@ public class DynamicsItemFormMetadataDao extends AbstractDomainDao<DynamicsItemF
     protected List<Integer> queryForIDs(String postgresQuery, Integer groupId, Integer sectionId,
             Integer eventCrfId, Integer crfVersionId) {
 
-        Query q = getCurrentSession().createSQLQuery(postgresQuery);
+        Query q = getCurrentSession().createNativeQuery(postgresQuery);
         if (groupId != null) {
-            q.setInteger("groupId", groupId);
+            q.setParameter("groupId", groupId);
         }
         if (sectionId != null) {
-            q.setInteger("sectionId", sectionId);
+            q.setParameter("sectionId", sectionId);
         }
         if (eventCrfId != null) {
-            q.setInteger("eventCrfId", eventCrfId);
+            q.setParameter("eventCrfId", eventCrfId);
         }
         if (crfVersionId != null) {
-            q.setInteger("crfVersionId", crfVersionId);
+            q.setParameter("crfVersionId", crfVersionId);
         }
         return HibernateUtil.queryIDsList(q);
     }

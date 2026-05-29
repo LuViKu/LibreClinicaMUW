@@ -34,7 +34,7 @@ public class ConfigurationDao extends AbstractDomainDao<ConfigurationBean> {
     public ConfigurationBean findByKey(String key) {
         String query = "from " + getDomainClassName() + " do where do.key = :key  ";
         Query<ConfigurationBean> q = getCurrentSession().createQuery(query, ConfigurationBean.class);
-        q.setString("key", key);
+        q.setParameter("key", key);
         return q.uniqueResult();
     }
 

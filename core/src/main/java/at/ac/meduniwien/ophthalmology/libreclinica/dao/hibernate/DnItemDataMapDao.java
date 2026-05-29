@@ -26,7 +26,7 @@ public class DnItemDataMapDao extends AbstractDomainDao<DnItemDataMap> {
     public List<DnItemDataMap> findByItemData(Integer itemDataId) {
         String query = "from " + getDomainClassName() + " do where do.itemData.itemDataId = :itemdataid ";
         Query<DnItemDataMap> q = getCurrentSession().createQuery(query, DnItemDataMap.class);
-        q.setInteger("itemdataid", itemDataId);
+        q.setParameter("itemdataid", itemDataId);
         return q.list();
     }
 }

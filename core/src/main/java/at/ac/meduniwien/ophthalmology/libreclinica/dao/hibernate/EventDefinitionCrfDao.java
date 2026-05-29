@@ -29,7 +29,7 @@ public class EventDefinitionCrfDao extends AbstractDomainDao<EventDefinitionCrf>
                 + getDomainClassName()
                 + " event_definition_crf where event_definition_crf.studyEventDefinition.studyEventDefinitionId = :studyeventdefinitionid";
         Query<EventDefinitionCrf> q = getCurrentSession().createQuery(query, EventDefinitionCrf.class);
-        q.setInteger("studyeventdefinitionid", studyEventDefinitionId);
+        q.setParameter("studyeventdefinitionid", studyEventDefinitionId);
         return q.list();
     }
 
@@ -39,8 +39,8 @@ public class EventDefinitionCrfDao extends AbstractDomainDao<EventDefinitionCrf>
         String query = "from " + getDomainClassName() + " do where do.studyEventDefinition.studyEventDefinitionId = :studyeventdefid " + 
                 " and do.study.studyId = :studyid and do.statusId = 1";
         Query<EventDefinitionCrf> q = getCurrentSession().createQuery(query, EventDefinitionCrf.class);
-        q.setInteger("studyeventdefid", studyEventDefinitionId);
-        q.setInteger("studyid", studyId);
+        q.setParameter("studyeventdefid", studyEventDefinitionId);
+        q.setParameter("studyid", studyId);
         return q.list();
         
     }
@@ -51,8 +51,8 @@ public class EventDefinitionCrfDao extends AbstractDomainDao<EventDefinitionCrf>
         String query = "from " + getDomainClassName() + " do where do.studyEventDefinition.studyEventDefinitionId = :studyeventdefid " + 
                 " and do.study.studyId = :studyid and do.statusId = 1 and do.hideCrf = true";
         Query<EventDefinitionCrf> q = getCurrentSession().createQuery(query, EventDefinitionCrf.class);
-        q.setInteger("studyeventdefid", studyEventDefinitionId);
-        q.setInteger("studyid", studyId);
+        q.setParameter("studyeventdefid", studyEventDefinitionId);
+        q.setParameter("studyid", studyId);
         return q.list();
         
     }

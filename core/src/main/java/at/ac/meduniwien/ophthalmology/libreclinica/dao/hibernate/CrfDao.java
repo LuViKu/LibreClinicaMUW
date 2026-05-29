@@ -27,7 +27,7 @@ public class CrfDao extends AbstractDomainDao<CrfBean> {
     public CrfBean findByName(String crfName) {
         String query = "from " + getDomainClassName() + " crf  where crf.name = :crfName ";
         Query<CrfBean> q = getCurrentSession().createQuery(query, CrfBean.class);
-        q.setString("crfName", crfName);
+        q.setParameter("crfName", crfName);
         return q.uniqueResult();
     }
 
@@ -37,7 +37,7 @@ public class CrfDao extends AbstractDomainDao<CrfBean> {
         getSessionFactory().getStatistics().logSummary();
         String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
         Query<CrfBean> q = getCurrentSession().createQuery(query, CrfBean.class);
-        q.setString("OCOID", OCOID);
+        q.setParameter("OCOID", OCOID);
         return q.uniqueResult();
     }
 
@@ -46,7 +46,7 @@ public class CrfDao extends AbstractDomainDao<CrfBean> {
     public CrfBean findByCrfId(Integer crfId) {
         String query = "from " + getDomainClassName() + " crf  where crf.crfId = :crfId ";
         Query<CrfBean> q = getCurrentSession().createQuery(query, CrfBean.class);
-        q.setInteger("crfId", crfId);
+        q.setParameter("crfId", crfId);
         return q.uniqueResult();
     }
     

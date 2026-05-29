@@ -188,9 +188,14 @@
 			<groupId>org.springframework.ldap</groupId>
 			<artifactId>spring-ldap-core</artifactId>
 		</dependency>
+		<!-- Phase B.5: ehcache 2.x → ehcache 3 (JSR-107 jakarta classifier).
+		     hibernate-jcache declared above brings the JCacheRegionFactory
+		     bridge; this dep is the actual JSR-107 provider. -->
 		<dependency>
-			<groupId>net.sf.ehcache</groupId>
+			<groupId>org.ehcache</groupId>
 			<artifactId>ehcache</artifactId>
+			<classifier>jakarta</classifier>
+			<scope>runtime</scope>
 		</dependency>
 		<dependency>
 			<groupId>commons-codec</groupId>
@@ -221,8 +226,12 @@
 			<artifactId>xml-apis</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>org.hibernate</groupId>
-			<artifactId>hibernate-core-jakarta</artifactId>
+			<groupId>org.hibernate.orm</groupId>
+			<artifactId>hibernate-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.hibernate.orm</groupId>
+			<artifactId>hibernate-jcache</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>ch.qos.logback</groupId>
@@ -241,10 +250,8 @@
 			<groupId>antlr</groupId>
 			<artifactId>antlr</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>net.sf.ehcache</groupId>
-			<artifactId>ehcache-web</artifactId>
-		</dependency>
+		<!-- Phase B.5: net.sf.ehcache:ehcache-web (GzipFilter) was removed in
+		     the B.4 cliff. -->
 		<dependency>
 			<groupId>com.sun.jersey.contribs</groupId>
 			<artifactId>jersey-spring</artifactId>

@@ -26,8 +26,8 @@ public class RuleActionPropertyDao extends AbstractDomainDao<PropertyBean> {
     public ArrayList <PropertyBean> findByOid(String itemOid , String groupOid) {
         String query = "from " + getDomainClassName() +  "  where oc_oid = :itemOid OR oc_oid=:groupOid ";
         Query<PropertyBean> q = getCurrentSession().createQuery(query, PropertyBean.class);
-        q.setString("itemOid", itemOid);
-        q.setString("groupOid", groupOid);
+        q.setParameter("itemOid", itemOid);
+        q.setParameter("groupOid", groupOid);
         return new ArrayList<>(q.list());
     }
 
@@ -36,7 +36,7 @@ public class RuleActionPropertyDao extends AbstractDomainDao<PropertyBean> {
     public ArrayList <PropertyBean> findByOid(String Oid) {
         String query = "from " + getDomainClassName() +  "  where oc_oid=:Oid ";
         Query<PropertyBean> q = getCurrentSession().createQuery(query, PropertyBean.class);
-        q.setString("Oid", Oid);
+        q.setParameter("Oid", Oid);
         return new ArrayList<>(q.list());
     }
 

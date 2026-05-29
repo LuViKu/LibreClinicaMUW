@@ -20,8 +20,14 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.cache.EhCacheWrapper;
 import org.springframework.core.io.ResourceLoader;
 import org.xml.sax.SAXException;
 
-import net.sf.ehcache.CacheException;
-import net.sf.ehcache.CacheManager;
+// Phase B.5: net.sf.ehcache 2.x → JSR-107 (JCache, javax.cache.*). The
+// CacheManager is obtained from the JCache CachingProvider (ehcache 3
+// provider on classpath), configured via ehcache.xml.
+import javax.cache.CacheManager;
+import javax.cache.Caching;
+import javax.cache.spi.CachingProvider;
+import java.net.URI;
+import java.net.URISyntaxException;
 
 /**
  * Provides a singleton SQLFactory instance
@@ -138,15 +144,28 @@ public class SQLFactory {
         // filename
         HashMap<String, String> fileList = new HashMap<>();
         CacheManager cacheManager = null;
-      
+
         try {
-            if (resourceLoader!=null) {
-                cacheManager = new CacheManager(resourceLoader.getResource("classpath:at/ac/meduniwien/ophthalmology/libreclinica/ehcache.xml").getInputStream());
+            if (resourceLoader != null) {
+                // Phase B.5: ehcache 2.x's `new CacheManager(InputStream)`
+                // is gone. JSR-107 / JCache asks the CachingProvider to load
+                // a config URI; ehcache 3's provider auto-resolves the
+                // classpath:at/.../ehcache.xml.
+                CachingProvider provider = Caching.getCachingProvider();
+                URI configUri;
+                try {
+                    configUri = resourceLoader
+                            .getResource("classpath:at/ac/meduniwien/ophthalmology/libreclinica/ehcache.xml")
+                            .getURL().toURI();
+                } catch (URISyntaxException e) {
+                    throw new IOException("ehcache.xml URL not URI-clean", e);
+                }
+                cacheManager = provider.getCacheManager(configUri, getClass().getClassLoader());
             }
-        } catch (CacheException | IOException e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
-        EhCacheWrapper<String, ArrayList<HashMap<String, Object>>> ehCache = new EhCacheWrapper<>("com.akaza.openclinica.dao.core.DAOCache",cacheManager);
+        EhCacheWrapper<String, ArrayList<HashMap<String, Object>>> ehCache = new EhCacheWrapper<>("com.akaza.openclinica.dao.core.DAOCache", cacheManager);
         
         setEhCacheWrapper(ehCache);
 

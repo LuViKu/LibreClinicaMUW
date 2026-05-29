@@ -47,7 +47,16 @@
 		<db.test>localhost</db.test>
 		<jackson.version>2.17.3</jackson.version>
 		<saxon.version>8.7</saxon.version>
-		<hibernate.version>5.6.15.Final</hibernate.version>
+		<!-- Phase B.5 (2026-05-29): Hibernate 5.6.15 → 6.4.10. groupId moves
+		     to org.hibernate.orm; the -jakarta artifact-id suffix goes away
+		     (6.x is jakarta-native). L2 cache via hibernate-jcache + ehcache 3
+		     (JSR-107). Spring 6's org.springframework.orm.hibernate5 package is
+		     retained on classpath and used for LocalSessionFactoryBean +
+		     HibernateTransactionManager + HibernateTemplate — Hibernate 6
+		     preserves the Configuration / Session / SessionFactory API surface
+		     these depend on. -->
+		<hibernate.version>6.4.10.Final</hibernate.version>
+		<ehcache.version>3.10.8</ehcache.version>
 		<jakarta.xml.bind.version>4.0.2</jakarta.xml.bind.version>
 		<jaxb.runtime.version>4.0.5</jaxb.runtime.version>
 		<jakarta.servlet.version>6.0.0</jakarta.servlet.version>
@@ -470,25 +479,16 @@
 				<!-- make sure the version matches the one used by org.springframework.security:spring-security-ldap -->
 				<version>2.3.2.RELEASE</version>
 			</dependency>
+			<!-- Phase B.5: net.sf.ehcache (2.x, javax-only) replaced by
+			     org.ehcache:ehcache 3 + hibernate-jcache below.
+			     net.sf.ehcache:ehcache-web (GzipFilter) was already removed
+			     during the B.4 cliff. -->
 			<dependency>
-    			<groupId>net.sf.ehcache</groupId>
+				<groupId>org.ehcache</groupId>
 				<artifactId>ehcache</artifactId>
-    			<!--  make sure the version matches the one used by org.hibernate:hibernate-ehcache -->
-    			<version>2.10.6</version>
+				<version>${ehcache.version}</version>
+				<classifier>jakarta</classifier>
 			</dependency>
-	        <dependency>
-	        	<!--  ehcache-web is used for the compress filter defined in web.xml -->
-	            <groupId>net.sf.ehcache</groupId>
-	            <artifactId>ehcache-web</artifactId>
-	            <version>2.0.4</version>
-	            <scope>runtime</scope>
-	            <exclusions>
-	            	<exclusion>
-	            		<groupId>net.sf.ehcache</groupId>
-	            		<artifactId>ehcache-core</artifactId>
-	            	</exclusion>
-	            </exclusions>
-	        </dependency>
 	        <dependency>
 	        	<groupId>jakarta.activation</groupId>
 				<artifactId>jakarta.activation-api</artifactId>
@@ -560,8 +560,13 @@
 			     5.6.x; re-wire via hibernate-jcache + ehcache 3 in B.5
 			     once on Hibernate 6.4. -->
 			<dependency>
-				<groupId>org.hibernate</groupId>
-				<artifactId>hibernate-core-jakarta</artifactId>
+				<groupId>org.hibernate.orm</groupId>
+				<artifactId>hibernate-core</artifactId>
+				<version>${hibernate.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.hibernate.orm</groupId>
+				<artifactId>hibernate-jcache</artifactId>
 				<version>${hibernate.version}</version>
 			</dependency>
 			<dependency>

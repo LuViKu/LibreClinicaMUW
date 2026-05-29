@@ -50,7 +50,7 @@ public class ExpressionBean extends AbstractAuditableMutableDomainObject impleme
         this.value = value;
     }
 
-    @Type(type = "ruleContext")
+    @Type(at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.RuleContextType.class)
     @Column(name = "context")
     public Context getContext() {
         return context;

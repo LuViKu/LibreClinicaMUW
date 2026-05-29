@@ -27,7 +27,7 @@ public class DiscrepancyNoteDao extends AbstractDomainDao<DiscrepancyNote> {
     public List<DiscrepancyNote> findParentNotesByItemData(Integer itemDataId) {
         String query = "select dn.* from discrepancy_note dn, dn_item_data_map didm where didm.item_data_id=" + itemDataId + " AND dn.parent_dn_id isnull " + 
             "AND dn.discrepancy_note_id=didm.discrepancy_note_id";
-        NativeQuery q = getCurrentSession().createSQLQuery(query).addEntity(DiscrepancyNote.class);
+        NativeQuery q = getCurrentSession().createNativeQuery(query).addEntity(DiscrepancyNote.class);
         return (List<DiscrepancyNote>) q.list();
     }
 
@@ -36,7 +36,7 @@ public class DiscrepancyNoteDao extends AbstractDomainDao<DiscrepancyNote> {
     public DiscrepancyNote findByDiscrepancyNoteId(int discrepancyNoteId) {
         String query = "from " + getDomainClassName() + " do where do.discrepancyNoteId = :discrepancynoteid ";
         Query<DiscrepancyNote> q = getCurrentSession().createQuery(query, DiscrepancyNote.class);
-        q.setInteger("discrepancynoteid", discrepancyNoteId);
+        q.setParameter("discrepancynoteid", discrepancyNoteId);
         return q.uniqueResult();
     }
 

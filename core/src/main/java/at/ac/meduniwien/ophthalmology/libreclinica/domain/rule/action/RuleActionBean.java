@@ -82,7 +82,7 @@ public class RuleActionBean extends AbstractAuditableMutableDomainObject impleme
         return p;
     }
 
-    @Type(type = "actionType")
+    @Type(at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.ActionTypeType.class)
     @Column(name = "action_type", updatable = false, insertable = false)
     public ActionType getActionType() {
         return actionType;
