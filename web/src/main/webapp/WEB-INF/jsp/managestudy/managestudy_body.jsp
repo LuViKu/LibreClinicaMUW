@@ -47,7 +47,10 @@
         <li><a href="ListStudySubjects">Subjects</a></li>
         <li><a href="ListSubjectGroupClass">Groups</a></li>
         <li><a href="ViewStudyEvents?module=manage">Events</a></li>
-        <li><a href="ListDiscNotesSubjectServlet?module=manage">Notes & Discrepancies</a></li>
+        <%-- Phase B.4 jmesa PR 5b cleanup: was
+             "ListDiscNotesSubjectServlet?module=manage" — dead URL since
+             2014. Re-pointed at the live ViewNotes page (cohort 3a target). --%>
+        <li><a href="ViewNotes?module=manage">Notes & Discrepancies</a></li>
         <li><a href="ViewRuleAssignment">Rules</a></li>
         <li><a href="ListStudyUser">Users</a></li>
         <li><a href="ListSite">Sites</a></li>

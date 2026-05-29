@@ -466,34 +466,11 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         return getCountByQuery(query, variables);
     }
 
-    public Integer getCountWithFilter(ListDiscNotesSubjectFilter filter, StudyBean currentStudy) {
-        HashMap<Integer, Object> variables = variables(currentStudy.getId(), currentStudy.getId());
-        String query = digester.getQuery("getCountWithFilterListDiscNotes");
-        query += filter.execute("");
-        return getCountByQuery(query, variables);
-    }
-
-    public ArrayList<StudySubjectBean> getWithFilterAndSort(StudyBean currentStudy, ListDiscNotesSubjectFilter filter, ListDiscNotesSubjectSort sort,
-            int rowStart, int rowEnd) {
-        setTypesExpected();
-
-        HashMap<Integer, Object> variables = variables(currentStudy.getId(), currentStudy.getId());
-        String sql = digester.getQuery("getWithFilterAndSortListDiscNotes");
-        sql = sql + filter.execute("");
-        
-        sql = sql + sort.execute("");
-        sql = sql + " LIMIT " + (rowEnd - rowStart) + " OFFSET " + rowStart;
-
-        ArrayList<HashMap<String, Object>> rows = this.select(sql, variables);
-        ArrayList<StudySubjectBean> studySubjects = new ArrayList<>();
-        for (HashMap<String, Object> hm : rows) {
-            StudySubjectBean studySubjectBean = this.getEntityFromHashMap(hm);
-            studySubjects.add(studySubjectBean);
-        }
-        
-        return studySubjects;
-    }
-
+    // Phase B.4 jmesa PR 5b cleanup: dropped the ListDiscNotesSubjectFilter
+    // overloads — only caller was the dead ListDiscNotesSubjectServlet (web.xml
+    // mapping commented out since 2014). The shared SQL queries
+    // getCountWithFilterListDiscNotes / getWithFilterAndSortListDiscNotes are
+    // still used by the ListDiscNotesForCRF overloads below.
     public Integer getCountWithFilter(ListDiscNotesForCRFFilter filter, StudyBean currentStudy) {
         HashMap<Integer, Object> variables = variables(currentStudy.getId(), currentStudy.getId());
         String query = digester.getQuery("getCountWithFilterListDiscNotes");

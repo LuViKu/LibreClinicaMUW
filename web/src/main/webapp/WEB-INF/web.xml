@@ -308,12 +308,10 @@
         <servlet-class>org.akaza.openclinica.control.managestudy.ListDiscNotesForCRFServlet</servlet-class>
     </servlet>
 
-    <!--    <servlet>
-            <servlet-name>ListDiscNotesSubjectServlet</servlet-name>
-            <display-name>ListDiscNotesSubjectServlet</display-name>
-            <description>ListDiscNotesSubjectServlet</description>
-            <servlet-class>org.akaza.openclinica.control.managestudy.ListDiscNotesSubjectServlet</servlet-class>
-        </servlet>-->
+    <!-- Phase B.4 jmesa PR 5b cleanup: removed commented-out
+         ListDiscNotesSubjectServlet stanza — the class and its JSP have
+         been deleted along with the rest of the dead subject-disc-notes
+         path. The ListDiscNotesForCRFServlet entry above remains active. -->
     <servlet>
         <servlet-name>ViewJobServlet</servlet-name>
         <display-name>ViewJobServlet</display-name>
@@ -1396,11 +1394,9 @@
         <url-pattern>/ListDiscNotesForCRFServlet</url-pattern>
     </servlet-mapping>
 
-    <!--    <servlet-mapping>
-            <servlet-name>ListDiscNotesSubjectServlet</servlet-name>
-            <url-pattern>/ListDiscNotesSubjectServlet</url-pattern>
-        </servlet-mapping>
-    -->
+    <!-- Phase B.4 jmesa PR 5b cleanup: removed commented-out
+         /ListDiscNotesSubjectServlet mapping — see notes near the
+         servlet definition above. -->
     <servlet-mapping>
         <servlet-name>ViewJobServlet</servlet-name>
         <url-pattern>/ViewJob</url-pattern>

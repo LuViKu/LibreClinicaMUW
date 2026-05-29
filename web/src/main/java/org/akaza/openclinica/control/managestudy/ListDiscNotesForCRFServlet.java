@@ -164,7 +164,11 @@ public class ListDiscNotesForCRFServlet extends SecureController {
         int definitionId = fp.getInt("defId");
         if (definitionId <= 0) {
             addPageMessage(respage.getString("please_choose_an_ED_ta_to_vies_details"));
-            forwardPage(Page.LIST_SUBJECT_DISC_NOTE_SERVLET);
+            // Phase B.4 jmesa PR 5b cleanup: previously forwarded to the
+            // dead LIST_SUBJECT_DISC_NOTE_SERVLET. Re-pointed at the live
+            // ViewNotes page (cohort 3a target) so the operator lands on a
+            // working notes view instead of a 404.
+            forwardPage(Page.VIEW_DISCREPANCY_NOTES_IN_STUDY);
             return;
         }
 
