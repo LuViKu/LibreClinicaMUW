@@ -77,7 +77,6 @@ Dependabot updates weekly (`.github/dependabot.yml`), grouped by ecosystem (Spri
 |------|----------|
 | [`core/`](core/) | Domain entities, services, DAOs, Hibernate mappings, Liquibase migrations (`core/src/main/resources/migration/`) |
 | [`web/`](web/) | Spring MVC controllers, 295 legacy servlets, 413 JSPs, static assets — produces `LibreClinica-web.war` |
-| [`ws/`](ws/) | SOAP web services — **deprecated upstream**, slated for removal/replacement |
 | [`odm/`](odm/) | CDISC ODM 1.3 JAXB bindings |
 | [`docs/`](docs/) | Jekyll-style static documentation |
 | [`docs/development/modernization/`](docs/development/modernization/) | Decision records, modernization-specific docs |

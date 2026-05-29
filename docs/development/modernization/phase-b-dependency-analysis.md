@@ -20,7 +20,7 @@ This is a static snapshot — verify current versions via Maven Central before c
 | `org.springframework:spring-* 5.1.4` (post-A: 5.3.39) | `6.1.x` | ✅ ⚠️ | Spring 6 requires Java 17+, jakarta.* namespace, Servlet 5+. Pure mechanical via Eclipse Transformer where deprecated APIs aren't removed; manual reconciliation for removed APIs (`Jdbc4SqlXmlHandler`, `WebApplicationObjectSupport.getMessageSourceAccessor`, etc.). |
 | `org.springframework.security:spring-security-* 5.1.4` (post-A: 5.8.16) | `6.3.x` | ✅ ⚠️ | Filter chain DSL changed (`SecurityFilterChain` bean required). `PasswordEncoder` defaults flipped — provide `DelegatingPasswordEncoder` to keep legacy MD5 hashes working until users re-login. |
 | `org.springframework.security.oauth:spring-security-oauth2 2.3.5.RELEASE` | — (remove) | 🛠️ | EOL since 2022. Replace with **Spring Authorization Server** (separate project) if OAuth2 is still needed. Check actual usage: very limited in this codebase. |
-| `org.springframework.ws:spring-ws-* 1.5.6` | `4.0.x` (or remove) | ⚠️ 🛠️ | Spring WS 1.5.6 is from 2008. SOAP API is upstream-deprecated. Recommend **removal** unless an active SOAP consumer exists. If retained: jump straight to 4.x. |
+| ~~`org.springframework.ws:spring-ws-* 1.5.6`~~ | **removed (PR #31, 2026-05-29)** | ✅ | Entire `ws/` SOAP module deleted along with the 3 `spring-ws-*` depMgmt entries. No active SOAP consumer at MUW Ophthalmology. |
 | `org.springframework.ldap:spring-ldap-core 2.3.2.RELEASE` | `3.2.x` | ✅ | Jakarta variant in 3.x. |
 | `org.springframework:spring-oxm` (uses Castor) | replace | 🔴 | Spring OXM is still present in Spring 6, but the Castor backend isn't. See "ODM / XML" below. |
 
@@ -53,8 +53,8 @@ This is a static snapshot — verify current versions via Maven Central before c
 | `org.codehaus.castor:castor 1.4.1` | **Jakarta JAXB** (`jakarta.xml.bind` 4.0 + Glassfish/EclipseLink MOXy) **or** Jackson XML (`jackson-dataformat-xml`) | 🛠️ 🔴 | **Castor is abandoned since 2014, no Jakarta variant.** Touches every CDISC ODM code path (`ImportCRFDataServlet`, `ODMMetadataRestResource`, `MetaDataCollector`, `AdminDataCollector`). Must produce byte-equivalent ODM XML — write characterization tests first. **This is the single highest-risk change in the modernization.** Recommend Jakarta JAXB to keep schema-validated XSD generation flow. |
 | `javax.xml.bind:jaxb-api 2.2.12` | `jakarta.xml.bind:jakarta.xml.bind-api 4.0.x` + `org.glassfish.jaxb:jaxb-runtime 4.0.x` | ✅ ⚠️ | Already a JAXB dep (alongside Castor!). Namespace swap. |
 | `net.sf.saxon:saxon 8.7` | `net.sf.saxon:Saxon-HE 12.x` | ⚠️ | Saxon 8.7 is from 2007; large API change to 9+/10+/11+/12+. XSLT scripts may need touch-ups. Audit rule-engine XSLT executions. |
-| `com.sun.xml.wss:xws-security 3.0` | — (remove with Spring WS) | 🛠️ | Only used by Spring WS security. Remove if SOAP API removed. |
-| `org.springframework.ws:spring-ws-core-tiger 1.5.6` | — (remove with Spring WS) | 🛠️ | "Tiger" variant is from Spring WS 1.x; subsumed in 2.x+. Remove. |
+| ~~`com.sun.xml.wss:xws-security 3.0`~~ | **removed (PR #31, 2026-05-29)** | ✅ | Dropped with the `ws/` module. |
+| ~~`org.springframework.ws:spring-ws-core-tiger 1.5.6`~~ | **removed (PR #31, 2026-05-29)** | ✅ | Dropped with the `ws/` module. |
 
 ## Logging
 
