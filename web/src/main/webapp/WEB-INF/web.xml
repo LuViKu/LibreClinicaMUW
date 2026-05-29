@@ -133,7 +133,15 @@
     </filter-mapping>
     <filter>
         <filter-name>hibernateFilter</filter-name>
-        <filter-class>org.springframework.orm.hibernate5.support.OpenSessionInViewFilter</filter-class>
+        <!--
+          Phase B.5 (Hibernate 6.4): replaced OpenSessionInViewFilter with
+          the JPA-style OpenEntityManagerInViewFilter. Spring 6's
+          org.springframework.orm.hibernate5 support package was compiled
+          against Hibernate 5 signatures and can't link against Hibernate 6.
+          The JPA filter targets the entityManagerFactory bean wired in
+          applicationContext-core-hibernate.xml.
+        -->
+        <filter-class>org.springframework.orm.jpa.support.OpenEntityManagerInViewFilter</filter-class>
     </filter>
     <filter-mapping>
         <filter-name>hibernateFilter</filter-name>

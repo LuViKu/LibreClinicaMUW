@@ -14,147 +14,52 @@
 
 
 
-    <!-- A Hibernate SessionFactory for mapping Domain Objects from object to relation tables.
-         Phase B.5: typedefs.hbm.xml was retired — Hibernate 6 removed the
+    <!-- JPA EntityManagerFactory + Hibernate JPA provider.
+         Phase B.5 (Hibernate 6.4): switched from Spring's hibernate5
+         LocalSessionFactoryBean (which can't link against Hibernate 6 —
+         org.springframework.orm.hibernate5 was compiled against Hibernate 5
+         method signatures) to the JPA-style LocalContainerEntityManagerFactoryBean
+         with HibernateJpaVendorAdapter. DAOs that need a Hibernate Session
+         unwrap it from the injected EntityManager.
+
+         typedefs.hbm.xml was retired here — Hibernate 6 removed the
          <typedef> element. The four enum UserTypes (status / ruleContext /
          actionType / loginStatus) now live as concrete CodedEnumType subclasses
          under domain.enumsupport.{StatusType, RuleContextType, ActionTypeType,
          LoginStatusType} and are referenced from @Type(SubclassName.class)
          annotations on domain entities. -->
-    <bean id="sessionFactory" class="org.springframework.orm.hibernate5.LocalSessionFactoryBean">
+    <bean id="entityManagerFactory" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">
         <property name="dataSource" ref="dataSource"/>
-        <property name="annotatedClasses">
+        <property name="persistenceUnitName" value="libreclinica"/>
+        <property name="jpaVendorAdapter">
+            <bean class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter"/>
+        </property>
+        <!-- Phase B.5: replaced the previous LocalSessionFactoryBean's explicit
+             annotatedClasses list (~150 entries) with packagesToScan. Spring's
+             JPA persistence-unit scanner walks the domain package tree and
+             registers every @Entity / @MappedSuperclass it finds — works on
+             Hibernate 6 without per-class enumeration. -->
+        <property name="packagesToScan">
             <list>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetAuditBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.ExpressionBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetRuleBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetRuleAuditBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionRunBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionRunLogBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.EmailActionBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.NotificationActionBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.DiscrepancyNoteActionBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.ShowActionBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.HideActionBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.InsertActionBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.EventActionBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RandomizeActionBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.PropertyBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.StratificationFactorBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.user.AuthoritiesBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.managestudy.StudyModuleStatus</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.AuditUserLoginBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.DatabaseChangeLogBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.ConfigurationBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.admin.MeasurementUnit</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemGroupMetadataBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.DynamicsItemFormMetadataBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.crfdata.SCDItemMetadataBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.usageStats.LogUsageStatsBean</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.OpenClinicaVersionBean</value>
- 
-                <!-- The following beans are coded for data maping, currently they are partially working, to resume the work uncomment it -->
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Study</value> 
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserAccount</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.user.UserType</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfBean              </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CompletionStatus</value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfVersion</value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfVersionMedia</value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DiscrepancyNote      </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DiscrepancyNoteType  </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnEventCrfMap   </value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnEventCrfMapId </value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnItemDataMap</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnItemDataMapId </value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnStudyEventMap      </value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnStudySubjectMap                 </value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnSubjectMap                 </value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.DnStudyEventMapId    </value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.VersioningMap    </value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.VersioningMapId    </value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrf             </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventDefinitionCrf   </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Item                 </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemData             </value>  
- 
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventDefinitionCrfItemTag </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventDefinitionCrfTag</value>  
-
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataFlag </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrfFlag   </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataFlagWorkflow </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.EventCrfFlagWorkflow   </value>  
-
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.IdtView   </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Tag   </value>  
-
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataType         </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemFormMetadata      </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemGroup             </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemGroupMetadata     </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemReferenceType     </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResolutionStatus      </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResponseSet           </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResponseType          </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Section               </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEvent            </value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEventDefinition</value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudySubject</value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Subject</value>  
-        
-                <!-- the following were not tested, to be remain commented as of now -->         
-                <!--         <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditEvent    </value>       -->
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditLogEvent     </value>   
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.AuditLogEventType    </value>  
-                <!-- to be remain commented for now -->
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.GroupClassTypes      </value>  
-                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.MeasurementUnit       </value>   -->
-                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.NullValueType         </value>   -->
-                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.OpenclinicaVersion    </value>   -->
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyGroup</value>  
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyGroupClass</value>  
-                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyModuleStatus</value>   -->
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyParameter</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyParameterValue</value>
-                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyParameterValueId</value>   -->
-                <!-- <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyType</value>   -->
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyUserRole</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyUserRoleId</value>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.SubjectGroupMap</value>
-
-       
-                
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain</value>
             </list>
         </property>
-        <property name="hibernateProperties">
+        <property name="jpaProperties">
             <props>
                 <prop key="hibernate.show_sql">false</prop>
                 <prop key="hibernate.format_sql">true</prop>
                 <prop key="hibernate.dialect">s[hibernate.dialect]</prop>
                 <prop key="hibernate.generate_statistics">true</prop>
-                <!-- Phase B.4 cliff: 2L cache temporarily disabled.
-                     hibernate-ehcache 5.x is javax-only with no jakarta-namespaced
-                     sibling at 5.6.x; the WIP commit dropped the dependency from
-                     core/pom.xml in preparation for B.5 (Hibernate 6.4 + jcache +
-                     ehcache 3). Re-enable in B.5 with:
-                       org.hibernate.cache.jcache.JCacheRegionFactory
-                       + ehcache 3.x JSR-107 provider. -->
-                <prop key="hibernate.cache.use_query_cache">false</prop>
-                <prop key="hibernate.cache.use_second_level_cache">false</prop>
+                <!-- Phase B.5: 2L cache re-enabled via JCache (JSR-107) +
+                     ehcache 3 (jakarta classifier). Hibernate 6's
+                     hibernate-jcache module bridges to whichever JSR-107
+                     provider is on the classpath. -->
+                <prop key="hibernate.cache.use_query_cache">true</prop>
+                <prop key="hibernate.cache.use_second_level_cache">true</prop>
+                <prop key="hibernate.cache.region.factory_class">jcache</prop>
+                <prop key="hibernate.javax.cache.provider">org.ehcache.jsr107.EhcacheCachingProvider</prop>
+                <prop key="hibernate.javax.cache.missing_cache_strategy">create</prop>
                 <prop key="hibernate.allow_update_outside_transaction">true</prop>
-                <!-- Phase B.5: switched from <property name="implicitNamingStrategy">
-                     to the property-based form. Spring 6's hibernate5
-                     LocalSessionFactoryBuilder.setImplicitNamingStrategy was
-                     compiled against Hibernate 5's void-returning method;
-                     Hibernate 6 changed it to a builder-style return type and
-                     triggers a NoSuchMethodError. The
-                     hibernate.implicit_naming_strategy hibernate-property
-                     path is stable across both versions and accepts the
-                     fully-qualified class name. -->
                 <prop key="hibernate.implicit_naming_strategy">at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.cfg.LegacyImprovedImplicitNamingStrategy</prop>
                 <!-- Phase B.5: Hibernate 6 enforces that @SequenceGenerator's
                      allocationSize matches the DB sequence's actual INCREMENT BY.
@@ -165,29 +70,38 @@
                      the entity mapping at runtime to match the DB; not what
                      we want.) -->
                 <prop key="hibernate.id.sequence.increment_size_mismatch_strategy">LOG</prop>
+                <!-- Phase B.5: disable Hibernate 6's pooled-optimizer for
+                     sequence id generators. The optimizer assumes the DB
+                     sequence increments by N (allocationSize) and reserves N
+                     values locally; the LibreClinica schema has INCREMENT BY 1
+                     sequences, so without this disable Hibernate hands out
+                     duplicate IDs and we hit "duplicate key value violates
+                     unique constraint" on the first auto-generated insert.
+                     "none" forces a database round-trip per id allocation,
+                     matching the Hibernate 5 default behaviour. -->
+                <prop key="hibernate.id.optimizer.pooled.preferred">none</prop>
                 <!-- Uncommenting the following line allows better logging of Hibernate errors for debugging purposes. Must be commented out for production use. -->
                 <!-- prop key="hibernate.jdbc.batch_size">0</prop -->
             </props>
         </property>
     </bean>
 
-  <!-- A transaction manager for working with Hibernate SessionFactories -->
-  <bean id="transactionManager" class="org.springframework.orm.hibernate5.HibernateTransactionManager">
-    <property name="sessionFactory" ref="sessionFactory"/>
+  <!-- Phase B.5: JpaTransactionManager replaces HibernateTransactionManager.
+       Wraps the EntityManagerFactory declared above; AbstractDomainDao now
+       uses @PersistenceContext to get the EntityManager and unwraps to
+       Hibernate Session where Session-specific APIs are still in use. -->
+  <bean id="transactionManager" class="org.springframework.orm.jpa.JpaTransactionManager">
+    <property name="entityManagerFactory" ref="entityManagerFactory"/>
   </bean>
-  
+
   <bean id="sharedTransactionTemplate" class="org.springframework.transaction.support.TransactionTemplate">
     <property name="transactionManager" ref="transactionManager"/>
   </bean>
-  
 
-  <!-- Phase B.5: HibernateTemplate bean retired. Spring 6's
-       org.springframework.orm.hibernate5.HibernateTemplate references
-       org.hibernate.criterion.Criterion which was deleted in Hibernate 6,
-       so the class can't load. AbstractDomainDao + CompositeIdAbstractDomainDao
-       now hold a SessionFactory reference directly; autowire="byName" on the
-       abstractDomainDao parent below resolves the setter via the
-       sessionFactory bean declared at the top of this file. -->
+  <!-- Phase B.5: @PersistenceUnit/@PersistenceContext annotation processing
+       (no longer auto-registered by <context:annotation-config> in Spring 6
+       outside JPA-aware contexts). -->
+  <bean class="org.springframework.orm.jpa.support.PersistenceAnnotationBeanPostProcessor"/>
 
   <!-- Instructs the container to look for beans with @Transactional and decorate them -->
   <tx:annotation-driven transaction-manager="transactionManager" proxy-target-class="true"/>

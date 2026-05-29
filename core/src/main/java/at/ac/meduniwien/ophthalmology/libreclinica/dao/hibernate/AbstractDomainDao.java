@@ -1,11 +1,13 @@
 /*
  * LibreClinica is distributed under the
  * GNU Lesser General Public License (GNU LGPL).
-
+ *
  * For details see: https://libreclinica.org/license
  * copyright (C) 2003 - 2011 Akaza Research
  * copyright (C) 2003 - 2019 OpenClinica
  * copyright (C) 2020 - 2024 LibreClinica
+ * copyright (C) 2026 Department of Ophthalmology and Optometry,
+ *                     Medical University of Vienna
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
@@ -14,6 +16,8 @@ import java.util.ArrayList;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.DomainObject;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.apache.commons.lang.StringUtils;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
@@ -23,18 +27,25 @@ import org.slf4j.LoggerFactory;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Phase B.5: Spring's {@code HibernateTemplate} (org.springframework.orm.hibernate5)
- * was retired here. Even though Spring 6 keeps the package, it directly
- * references {@code org.hibernate.criterion.*} which Hibernate 6 deleted —
- * so the class can't load with Hibernate 6 on classpath. The SessionFactory
- * is injected directly instead; the {@code getSessionFactory()} /
- * {@code getCurrentSession()} surface this DAO base offered to subclasses is
- * unchanged.
+ * Phase B.5 (2026-05-29): Hibernate 5 → 6 migration. Spring 6's
+ * {@code org.springframework.orm.hibernate5} package was bytecode-compiled
+ * against Hibernate 5 method signatures (e.g. {@code HibernateTemplate}
+ * directly references {@code org.hibernate.criterion.Criterion} which
+ * Hibernate 6 deleted; {@code LocalSessionFactoryBean} can't link against
+ * Hibernate 6's builder-returning Configuration setters either). The fix
+ * is to wire the DAO layer through the JPA {@link EntityManager} contract,
+ * which Hibernate 6 implements natively, and unwrap to {@link Session}
+ * only where the existing query code uses Hibernate-specific APIs.
+ *
+ * <p>The {@code getCurrentSession()} / {@code getSessionFactory()} accessor
+ * surface is preserved so subclasses keep working without per-DAO edits.
  */
 public abstract class AbstractDomainDao<T extends DomainObject> {
 
     protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
-    private SessionFactory sessionFactory;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     abstract Class<T> domainClass();
 
@@ -60,10 +71,10 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         Query<T> q = getCurrentSession().createQuery(query);
         return new ArrayList<T>(q.list());
     }
-    
+
     @SuppressWarnings("unchecked")
-	public T findByOcOID(String OCOID){
-    	 getSessionFactory().getStatistics().logSummary();
+    public T findByOcOID(String OCOID){
+         getSessionFactory().getStatistics().logSummary();
          String query = "from " + getDomainClassName() + " do  where do.oc_oid = :oc_oid";
          Query<T> q = getCurrentSession().createQuery(query);
          q.setParameter("oc_oid", OCOID);
@@ -93,35 +104,31 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         Query<T> q = getCurrentSession().createQuery(query);
         q.setParameter("key_value", id);
         return q.uniqueResult();
-    }    
-    
+    }
+
     public Long count() {
         return (Long) getCurrentSession().createQuery("select count(*) from " + domainClass().getName()).uniqueResult();
     }
 
+    /**
+     * Hibernate {@link SessionFactory} unwrapped from the injected JPA
+     * EntityManager (Hibernate 6's {@code Session} extends
+     * {@link jakarta.persistence.EntityManager}, so unwrap is free).
+     */
     public SessionFactory getSessionFactory() {
-        return sessionFactory;
-    }
-
-    public void setSessionFactory(SessionFactory sessionFactory) {
-        this.sessionFactory = sessionFactory;
+        return getCurrentSession().getSessionFactory();
     }
 
     /**
-     * @return Session Object
+     * Hibernate {@link Session} corresponding to the current JPA transaction.
      */
     public Session getCurrentSession() {
-        return getSessionFactory().getCurrentSession();
+        return entityManager.unwrap(Session.class);
     }
 
     public Session getCurrentSession(String schema) {
-        Session session = getSessionFactory().getCurrentSession();
-
+        Session session = getCurrentSession();
         if (StringUtils.isNotEmpty(schema)) {
-            // Phase B.5: Hibernate 6 removed Session.connection() (and the
-            // SessionImpl.connection() override). The portable replacement is
-            // Session.doWork(Work) which exposes the underlying JDBC Connection
-            // for the duration of the callback.
             session.doWork(connection -> {
                 String currentSchema = connection.getSchema();
                 if (!schema.equals(currentSchema)) {
@@ -132,5 +139,4 @@ public abstract class AbstractDomainDao<T extends DomainObject> {
         }
         return session;
     }
-
 }
