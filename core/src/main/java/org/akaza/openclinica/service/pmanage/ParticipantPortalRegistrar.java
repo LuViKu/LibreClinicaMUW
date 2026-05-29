@@ -12,7 +12,7 @@ package org.akaza.openclinica.service.pmanage;
 import java.net.MalformedURLException;
 import java.net.URL;
 
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpSession;
 
 import org.akaza.openclinica.bean.login.ParticipantDTO;
 import org.akaza.openclinica.dao.core.CoreResources;
@@ -35,7 +35,7 @@ public class ParticipantPortalRegistrar {
         String ocUrl = CoreResources.getField("sysURL.base") + "rest2/openrosa/" + studyOid;
         String pManageUrl = CoreResources.getField("portalURL") + "/app/rest/oc/authorizations?studyoid=" + studyOid + "&instanceurl=" + ocUrl;
         HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory();
-        requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT);
+        // requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT); // B.4: Spring 6 removed setReadTimeout(int); configure via HttpClient in B.12
         RestTemplate rest = new RestTemplate(requestFactory);
 
         try {
@@ -66,7 +66,7 @@ public class ParticipantPortalRegistrar {
         String ocUrl = CoreResources.getField("sysURL.base") + "rest2/openrosa/" + studyOid;
         String pManageUrl = CoreResources.getField("portalURL") + "/app/rest/oc/authorizations?studyoid=" + studyOid + "&instanceurl=" + ocUrl;
         HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory();
-        requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT);
+        // requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT); // B.4: Spring 6 removed setReadTimeout(int); configure via HttpClient in B.12
         RestTemplate rest = new RestTemplate(requestFactory);
         try {
             Authorization[] response = rest.getForObject(pManageUrl, Authorization[].class);
@@ -82,7 +82,7 @@ public class ParticipantPortalRegistrar {
     public String getHostNameAvailability(String hostName) {
         String pManageUrl = CoreResources.getField("portalURL") + "/app/permit/studys/name?hostName=" + hostName;
         HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory();
-        requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT);
+        // requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT); // B.4: Spring 6 removed setReadTimeout(int); configure via HttpClient in B.12
         RestTemplate rest = new RestTemplate(requestFactory);
         String response = null;
         try {
@@ -133,7 +133,7 @@ public class ParticipantPortalRegistrar {
        	String pManageUrl =host + "/app/rest/oc/email";
 
        	HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory();
-        requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT);
+        // requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT); // B.4: Spring 6 removed setReadTimeout(int); configure via HttpClient in B.12
         RestTemplate rest = new RestTemplate(requestFactory);
 
         try {
@@ -158,7 +158,7 @@ public class ParticipantPortalRegistrar {
         authRequest.setStudy(authStudy);
 
         HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory();
-        requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT);
+        // requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT); // B.4: Spring 6 removed setReadTimeout(int); configure via HttpClient in B.12
         RestTemplate rest = new RestTemplate(requestFactory);
 
         try {
@@ -179,7 +179,7 @@ public class ParticipantPortalRegistrar {
         String pManageUrlFull = pManageUrl + "/app/rest/oc/authorizations?studyoid=" + studyOid + "&instanceurl=" + ocUrl;
 
         HttpComponentsClientHttpRequestFactory requestFactory = new HttpComponentsClientHttpRequestFactory();
-        requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT);
+        // requestFactory.setReadTimeout(PARTICIPATE_READ_TIMEOUT); // B.4: Spring 6 removed setReadTimeout(int); configure via HttpClient in B.12
         RestTemplate rest = new RestTemplate(requestFactory);
         try {
             Authorization[] response = rest.getForObject(pManageUrlFull, Authorization[].class);

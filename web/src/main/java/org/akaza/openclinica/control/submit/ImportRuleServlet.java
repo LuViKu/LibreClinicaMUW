@@ -147,7 +147,7 @@ public class ImportRuleServlet extends SecureController {
      * Parse the uploaded rules XML into a {@link RulesPostImportContainer}.
      *
      * <p>Phase B.3 PR 1/3 (DR-006): swapped from Castor 1.4.1 to
-     * {@code javax.xml.bind} 2.3.x JAXB via {@link OdmJaxbContext}. The
+     * {@code jakarta.xml.bind} 2.3.x JAXB via {@link OdmJaxbContext}. The
      * legacy method name {@code handleLoadCastor} is preserved deliberately
      * so call sites and stack traces stay grep-compatible until B.3 PR 3/3
      * does the final rename + Castor dep drop.

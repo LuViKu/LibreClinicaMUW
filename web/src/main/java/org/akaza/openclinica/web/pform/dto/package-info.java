@@ -11,18 +11,18 @@
  * {@code core/.../domain/xform/dto/} used by {@link
  * org.akaza.openclinica.web.pform.OpenRosaXmlGenerator}. Phase B.3 PR
  * 3c-2 migrated the Castor mapping (driven by
- * {@code properties/openRosaXFormMapping.xml}) to {@code javax.xml.bind}
+ * {@code properties/openRosaXFormMapping.xml}) to {@code jakarta.xml.bind}
  * 2.3.x JAXB annotations on the DTOs themselves.
  */
-@javax.xml.bind.annotation.XmlSchema(
+@jakarta.xml.bind.annotation.XmlSchema(
         namespace = "http://www.w3.org/2002/xforms",
-        elementFormDefault = javax.xml.bind.annotation.XmlNsForm.QUALIFIED,
+        elementFormDefault = jakarta.xml.bind.annotation.XmlNsForm.QUALIFIED,
         xmlns = {
-                @javax.xml.bind.annotation.XmlNs(prefix = "",
+                @jakarta.xml.bind.annotation.XmlNs(prefix = "",
                         namespaceURI = "http://www.w3.org/2002/xforms"),
-                @javax.xml.bind.annotation.XmlNs(prefix = "h",
+                @jakarta.xml.bind.annotation.XmlNs(prefix = "h",
                         namespaceURI = "http://www.w3.org/1999/xhtml"),
-                @javax.xml.bind.annotation.XmlNs(prefix = "jr",
+                @jakarta.xml.bind.annotation.XmlNs(prefix = "jr",
                         namespaceURI = "http://openrosa.org/javarosa")
         })
 package org.akaza.openclinica.web.pform.dto;

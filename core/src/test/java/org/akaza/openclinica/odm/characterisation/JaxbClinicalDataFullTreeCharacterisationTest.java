@@ -31,7 +31,7 @@ import org.junit.Test;
  *
  * <p>Same input ODM 1.3 document, same assertions, but the unmarshal
  * goes through {@link OdmJaxbContext#unmarshalClinicalData} (Jakarta-
- * style JAXB on the existing odm/-module javax.xml.bind v2.3
+ * style JAXB on the existing odm/-module jakarta.xml.bind v2.3
  * annotations added in this commit). If both Castor and JAXB produce
  * the same bean-tree shape from the same input, the production
  * migration of {@code ImportCRFDataServlet} from Castor to JAXB

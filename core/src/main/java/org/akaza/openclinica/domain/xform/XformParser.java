@@ -20,7 +20,7 @@ import org.slf4j.LoggerFactory;
 /**
  * XForm marshal / unmarshal helper. Phase B.3 PR 3c-2 migrated the XML
  * binding from Castor (driven by {@code xformMapping.xml} +
- * {@code openRosaXFormMapping.xml}) to {@code javax.xml.bind} 2.3.x JAXB
+ * {@code openRosaXFormMapping.xml}) to {@code jakarta.xml.bind} 2.3.x JAXB
  * via the shared {@link OdmJaxbContext}. The class is retained as a
  * thin compatibility shim so the rest of the XForm pipeline
  * ({@code FormBeanParser}, {@code WidgetFactory}, etc.) does not need to

@@ -53,7 +53,7 @@ import org.akaza.openclinica.domain.xform.dto.Group;
 import org.akaza.openclinica.domain.xform.dto.Html;
 import org.akaza.openclinica.domain.xform.dto.UserControl;
 import org.akaza.openclinica.validator.xform.ItemValidator;
-import org.apache.commons.fileupload.FileItem;
+import org.apache.commons.fileupload2.core.DiskFileItem;
 import org.apache.commons.lang.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,7 +115,7 @@ public class XformMetaDataService {
 
     public Errors runService(CRFVersionBean version, XformContainer container, StudyBean currentStudy, UserAccountBean ub, Html html, String submittedCrfName,
             String submittedCrfVersionName, String submittedCrfVersionDescription, String submittedRevisionNotes, String submittedXformText,
-            List<FileItem> formItems) {
+            List<DiskFileItem> formItems) {
 
         // Create container for holding validation errors
         DataBinder dataBinder = new DataBinder(new CrfVersion());
@@ -136,7 +136,7 @@ public class XformMetaDataService {
     @Transactional
     public CrfVersion createCRFMetaData(CRFVersionBean version, XformContainer container, StudyBean currentStudy, UserAccountBean ub, Html html,
             String submittedCrfName, String submittedCrfVersionName, String submittedCrfVersionDescription, String submittedRevisionNotes,
-            String submittedXformText, List<FileItem> formItems, Errors errors) throws Exception {
+            String submittedXformText, List<DiskFileItem> formItems, Errors errors) throws Exception {
 
         // Retrieve CrfBean. Create one if it doesn't exist yet.
         CrfBean crf = null;
@@ -198,9 +198,9 @@ public class XformMetaDataService {
         return crfVersion;
     }
 
-    private void saveMedia(List<FileItem> items, CrfBean crf, CrfVersion version) {
+    private void saveMedia(List<DiskFileItem> items, CrfBean crf, CrfVersion version) {
         boolean hasFiles = false;
-        for (FileItem item : items) {
+        for (DiskFileItem item : items) {
             if (!item.isFormField() && item.getName() != null && !item.getName().isEmpty())
                 hasFiles = true;
         }
@@ -208,7 +208,7 @@ public class XformMetaDataService {
         if (hasFiles) {
             String dir = Utils.getCrfMediaFilePath(crf, version);
             // Save any media files
-            for (FileItem item : items) {
+            for (DiskFileItem item : items) {
                 if (!item.isFormField()) {
 
                     String fileName = item.getName();

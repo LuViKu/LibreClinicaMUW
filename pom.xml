@@ -38,24 +38,27 @@
 		<!-- Config file - required by liquibase plugin -->
 		<config.file>src/main/resources/datainfo.properties</config.file>
 
-		<!-- Library versions. Phase A.2 (2026-05-28) brought Spring, Spring Security,
-		     Hibernate, and Quartz to their final 5.x / javax.* releases. The jump to
-		     Spring 6 / Spring Security 6 / Hibernate 6 / jakarta.* is Phase B. -->
-		<spring.version>5.3.39</spring.version>
-		<!-- Spring Security has its own release cadence; 5.8.x is the final 5.x
-		     line and the recommended bridge before Spring Security 6. Previously
-		     this version was hard-coded as ${spring.version} which silently
-		     coupled the two; it was correct in Spring 5.1 (both released 5.1.4
-		     together) but wrong once we needed 5.3 + 5.8. -->
-		<spring.security.version>5.8.16</spring.security.version>
-		<!-- Spring Web Services 1.5.6 (2008-era) is retained intentionally; the
-		     SOAP API is upstream-deprecated and replacement/removal is Phase B. -->
+		<!-- Library versions. Phase B.4 (2026-05-29) crossed the jakarta cliff:
+		     Spring 5.3 → 6.1, Spring Security 5.8 → 6.3, javax.* → jakarta.*,
+		     hibernate-core swapped to the hibernate-core-jakarta artifact (still
+		     5.6.15 — Hibernate 6.4 ships in B.5). -->
+		<spring.version>6.1.18</spring.version>
+		<spring.security.version>6.3.6</spring.security.version>
 		<db.test>localhost</db.test>
 		<jackson.version>2.17.3</jackson.version>
 		<saxon.version>8.7</saxon.version>
 		<hibernate.version>5.6.15.Final</hibernate.version>
-		<logback.version>1.2.13</logback.version>
-		<slf4j.version>1.7.36</slf4j.version>
+		<jakarta.xml.bind.version>4.0.2</jakarta.xml.bind.version>
+		<jaxb.runtime.version>4.0.5</jaxb.runtime.version>
+		<jakarta.servlet.version>6.0.0</jakarta.servlet.version>
+		<jakarta.servlet.jsp.version>3.1.1</jakarta.servlet.jsp.version>
+		<jakarta.jstl.version>3.0.0</jakarta.jstl.version>
+		<jakarta.ws.rs.version>3.1.0</jakarta.ws.rs.version>
+		<jakarta.mail.version>2.1.3</jakarta.mail.version>
+		<jakarta.activation.version>2.1.3</jakarta.activation.version>
+		<jakarta.annotation.version>2.1.1</jakarta.annotation.version>
+		<logback.version>1.4.14</logback.version>
+		<slf4j.version>2.0.16</slf4j.version>
 		<!-- Selenium 4.x (test scope) drives the smoke-tests profile.
 		     4.20+ supports Java 21 + the Selenium-managed driver download. -->
 		<selenium.version>4.25.0</selenium.version>
@@ -252,10 +255,14 @@
                 <artifactId>jackson-annotations</artifactId>
                 <version>${jackson.version}</version>
             </dependency>
+            <!-- Phase B.4: commons-fileupload 1.x targets javax.servlet.
+                 commons-fileupload2-jakarta-servlet6 is the jakarta-namespaced
+                 successor. API surface differs (org.apache.commons.fileupload2.*);
+                 callers are updated in the same PR. -->
             <dependency>
-                <groupId>commons-fileupload</groupId>
-                <artifactId>commons-fileupload</artifactId>
-                <version>1.6.0</version>
+                <groupId>org.apache.commons</groupId>
+                <artifactId>commons-fileupload2-jakarta-servlet6</artifactId>
+                <version>2.0.0-M2</version>
             </dependency>
             <dependency>
                 <groupId>commons-io</groupId>
@@ -481,56 +488,57 @@
 	            </exclusions>
 	        </dependency>
 	        <dependency>
-	        	<groupId>javax.activation</groupId>
-				<artifactId>activation</artifactId>
-				<version>1.1.1</version>
-				<scope>runtime</scope>
+	        	<groupId>jakarta.activation</groupId>
+				<artifactId>jakarta.activation-api</artifactId>
+				<version>${jakarta.activation.version}</version>
 	        </dependency>
 	        <dependency>
-	        	<groupId>javax.activation</groupId>
-				<artifactId>javax.activation-api</artifactId>
-				<version>1.2.0</version>
-				<scope>runtime</scope>
+	        	<groupId>jakarta.annotation</groupId>
+				<artifactId>jakarta.annotation-api</artifactId>
+				<version>${jakarta.annotation.version}</version>
 	        </dependency>
 			<dependency>
-			   <groupId>javax.persistence</groupId>
-			   <artifactId>javax.persistence-api</artifactId>
-			   <!-- make sure the version matches the one used by org.hibernate:hibernate-core -->
-			   <version>2.2</version>
+			   <groupId>jakarta.persistence</groupId>
+			   <artifactId>jakarta.persistence-api</artifactId>
+			   <version>3.1.0</version>
 			</dependency>
 			<dependency>
-				<groupId>javax.ws.rs</groupId>
-				<artifactId>jsr311-api</artifactId>
-				<!-- make sure the version matches the one used by com.sun.jersey:jersey-server -->
-				<version>1.1.1</version>
+				<groupId>jakarta.ws.rs</groupId>
+				<artifactId>jakarta.ws.rs-api</artifactId>
+				<version>${jakarta.ws.rs.version}</version>
 			</dependency>
 			<dependency>
-				<groupId>javax.servlet.jsp</groupId>
-				<artifactId>jsp-api</artifactId>
-				<version>2.0</version>
+				<groupId>jakarta.servlet.jsp</groupId>
+				<artifactId>jakarta.servlet.jsp-api</artifactId>
+				<version>${jakarta.servlet.jsp.version}</version>
 				<scope>provided</scope>
 			</dependency>
 			<dependency>
-				<groupId>javax.servlet</groupId>
-				<artifactId>jstl</artifactId>
-				<version>1.1.2</version>
+				<groupId>jakarta.servlet.jsp.jstl</groupId>
+				<artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
+				<version>${jakarta.jstl.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.glassfish.web</groupId>
+				<artifactId>jakarta.servlet.jsp.jstl</artifactId>
+				<version>3.0.1</version>
 			</dependency>
 	        <dependency>
-	            <groupId>javax.servlet</groupId>
-	            <artifactId>javax.servlet-api</artifactId>
-	            <version>3.1.0</version>
+	            <groupId>jakarta.servlet</groupId>
+	            <artifactId>jakarta.servlet-api</artifactId>
+	            <version>${jakarta.servlet.version}</version>
 	            <scope>provided</scope>
 	        </dependency>
 			<dependency>
-				<groupId>com.sun.mail</groupId>
-				<artifactId>javax.mail</artifactId>
-				<version>1.6.2</version>
-				<exclusions>
-					<exclusion>
-						<groupId>javax.activation</groupId>
-						<artifactId>activation</artifactId>
-					</exclusion>
-				</exclusions>
+				<groupId>jakarta.mail</groupId>
+				<artifactId>jakarta.mail-api</artifactId>
+				<version>${jakarta.mail.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.eclipse.angus</groupId>
+				<artifactId>angus-mail</artifactId>
+				<version>2.0.3</version>
+				<scope>runtime</scope>
 			</dependency>
 			<dependency>
 				<groupId>org.apache.xmlgraphics</groupId>
@@ -543,24 +551,16 @@
 				<!-- make sure the version matches the one used by the batik libs (e.g. org.apache.xmlgraphics:batik-dom) -->
 				<version>1.3.04</version>
 			</dependency>
-			<!-- HIBERNATE -->
+			<!-- HIBERNATE — jakarta-namespaced artifact at 5.6.x.
+			     B.5 bumps to Hibernate 6.4.x (jakarta-native; no separate
+			     artifact suffix needed). Hibernate L2 cache (formerly
+			     hibernate-ehcache) does not ship a -jakarta sibling at
+			     5.6.x; re-wire via hibernate-jcache + ehcache 3 in B.5
+			     once on Hibernate 6.4. -->
 			<dependency>
 				<groupId>org.hibernate</groupId>
-				<artifactId>hibernate-core</artifactId>
+				<artifactId>hibernate-core-jakarta</artifactId>
 				<version>${hibernate.version}</version>
-			</dependency>
-         <!--
-			<dependency>
-				<groupId>org.hibernate</groupId>
-				<artifactId>hibernate-validator</artifactId>
-				<version>${hibernate.version}</version>
-			</dependency>
-         -->
-			<dependency>
-				<groupId>org.hibernate</groupId>
-				<artifactId>hibernate-ehcache</artifactId>
-				<version>${hibernate.version}</version>
-				<scope>runtime</scope>
 			</dependency>
 			<dependency>
 	    		<groupId>com.mattbertolini</groupId>
@@ -592,20 +592,16 @@
 				<version>2.7.5</version>
 			</dependency>
 			<dependency>
-				<groupId>javax.xml.bind</groupId>
-				<artifactId>jaxb-api</artifactId>
+				<groupId>jakarta.xml.bind</groupId>
+				<artifactId>jakarta.xml.bind-api</artifactId>
 				<scope>compile</scope>
-				<version>2.2.12</version>
-				<exclusions>
-					<exclusion>
-						<groupId>javax.xml.stream</groupId>
-						<artifactId>stax-api</artifactId>
-					</exclusion>
-					<exclusion>
-						<groupId>javax.activation</groupId>
-						<artifactId>activation</artifactId>
-					</exclusion>
-				</exclusions>
+				<version>${jakarta.xml.bind.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.glassfish.jaxb</groupId>
+				<artifactId>jaxb-runtime</artifactId>
+				<scope>runtime</scope>
+				<version>${jaxb.runtime.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>xerces</groupId>
@@ -956,11 +952,6 @@
 			<version>5.4.2.Final</version>
 		</dependency>
       -->
-		<dependency>
-			<groupId>org.hibernate</groupId>
-			<artifactId>hibernate-ehcache</artifactId>
-			<version>5.4.2.Final</version>
-		</dependency>
 		<!-- LIQUIBASE -->
       <!--
 		<dependency>
@@ -1368,9 +1359,19 @@
 
 	<repositories>
 		<repository>
+			<!-- Phase B.4: openclinica jfrog now returns 401 for unknown
+			     artifacts (jakarta.* deps weren't there in the javax era).
+			     updatePolicy=never lets Maven keep using the cached jars
+			     (jmesa-2.4.2-oc, log4jdbc4-1.2) without re-checking the
+			     401-walled repo on every build. -->
 			<snapshots>
 				<enabled>false</enabled>
 			</snapshots>
+			<releases>
+				<enabled>true</enabled>
+				<updatePolicy>never</updatePolicy>
+				<checksumPolicy>warn</checksumPolicy>
+			</releases>
 			<id>openclinica.jfrog.io-libs-release</id>
 			<name>openclinica.jfrog.io-libs-release</name>
 			<url>https://openclinica.jfrog.io/openclinica/libs-release</url>

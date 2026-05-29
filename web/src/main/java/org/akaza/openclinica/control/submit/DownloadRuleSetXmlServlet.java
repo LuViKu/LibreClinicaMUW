@@ -33,7 +33,7 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.servlet.ServletOutputStream;
+import jakarta.servlet.ServletOutputStream;
 
 public class DownloadRuleSetXmlServlet extends SecureController {
 
@@ -63,7 +63,7 @@ public class DownloadRuleSetXmlServlet extends SecureController {
      * Serialise a {@link RulesPostImportContainer} to {@code out} as XML.
      *
      * <p>Phase B.3 PR 1/3 (DR-006): swapped from Castor 1.4.1 to
-     * {@code javax.xml.bind} 2.3.x JAXB via {@link OdmJaxbContext}. The
+     * {@code jakarta.xml.bind} 2.3.x JAXB via {@link OdmJaxbContext}. The
      * legacy method name {@code handleLoadCastor} is preserved deliberately
      * so call sites and stack traces stay grep-compatible until B.3 PR 3/3
      * does the final rename + Castor dep drop.

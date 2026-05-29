@@ -28,7 +28,7 @@ import java.text.MessageFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
-import javax.xml.bind.DatatypeConverter;
+import jakarta.xml.bind.DatatypeConverter;
 import static org.akaza.openclinica.core.util.ClassCastHelper.*;
 public class UploadFileServlet extends SecureController {
     /**

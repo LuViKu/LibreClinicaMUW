@@ -8,7 +8,7 @@
  */
 /**
  * XForm DTO package. Phase B.3 PR 3c-2 migrated the Castor XML binding
- * (driven by {@code properties/xformMapping.xml}) to {@code javax.xml.bind}
+ * (driven by {@code properties/xformMapping.xml}) to {@code jakarta.xml.bind}
  * 2.3.x JAXB annotations on the DTOs themselves. The XForm spec mixes
  * three namespaces:
  *
@@ -24,18 +24,18 @@
  *       ({@code jr:count}, {@code jr:noAddRemove}). Override per-attribute.</li>
  * </ul>
  *
- * <p>Per DR-006 amendment, B.3 stays on {@code javax.xml.bind} 2.3.x;
+ * <p>Per DR-006 amendment, B.3 stays on {@code jakarta.xml.bind} 2.3.x;
  * jakarta moves to B.4 alongside Spring 5 → 6.
  */
-@javax.xml.bind.annotation.XmlSchema(
+@jakarta.xml.bind.annotation.XmlSchema(
         namespace = "http://www.w3.org/2002/xforms",
-        elementFormDefault = javax.xml.bind.annotation.XmlNsForm.QUALIFIED,
+        elementFormDefault = jakarta.xml.bind.annotation.XmlNsForm.QUALIFIED,
         xmlns = {
-                @javax.xml.bind.annotation.XmlNs(prefix = "",
+                @jakarta.xml.bind.annotation.XmlNs(prefix = "",
                         namespaceURI = "http://www.w3.org/2002/xforms"),
-                @javax.xml.bind.annotation.XmlNs(prefix = "h",
+                @jakarta.xml.bind.annotation.XmlNs(prefix = "h",
                         namespaceURI = "http://www.w3.org/1999/xhtml"),
-                @javax.xml.bind.annotation.XmlNs(prefix = "jr",
+                @jakarta.xml.bind.annotation.XmlNs(prefix = "jr",
                         namespaceURI = "http://openrosa.org/javarosa")
         })
 package org.akaza.openclinica.domain.xform.dto;

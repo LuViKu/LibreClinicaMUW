@@ -16,11 +16,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.JAXBElement;
-import javax.xml.bind.JAXBException;
-import javax.xml.bind.Marshaller;
-import javax.xml.bind.Unmarshaller;
+import jakarta.xml.bind.JAXBContext;
+import jakarta.xml.bind.JAXBElement;
+import jakarta.xml.bind.JAXBException;
+import jakarta.xml.bind.Marshaller;
+import jakarta.xml.bind.Unmarshaller;
 import javax.xml.namespace.QName;
 import javax.xml.transform.stream.StreamSource;
 
@@ -32,7 +32,7 @@ import org.akaza.openclinica.domain.xform.dto.Html;
  * Single Spring-managed wiring point for the project's JAXB contexts.
  *
  * <p>Phase B.3 ([DR-006] Castor → Jakarta JAXB) introduced this class.
- * Per [DR-006 amendment 2026-05-28], the API stays on {@code javax.xml.bind}
+ * Per [DR-006 amendment 2026-05-28], the API stays on {@code jakarta.xml.bind}
  * 2.3.x for B.3; B.4 migrates the whole codebase (including this class)
  * to {@code jakarta.xml.bind} 4.0.x alongside Spring 5→6 and the rest of
  * the namespace cliff.

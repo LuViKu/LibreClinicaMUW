@@ -153,7 +153,7 @@ public class ImportCRFDataServlet extends SecureController {
             // Phase B.3 PR 3b: Castor → JAXB. The cd_odm_mapping.xml +
             // org.exolab.castor.xml.Unmarshaller chain is replaced by
             // OdmJaxbContext.unmarshalClinicalData, which uses the
-            // javax.xml.bind annotations on the ODMContainer bean tree
+            // jakarta.xml.bind annotations on the ODMContainer bean tree
             // (added in PR 3a). Same bean-tree shape, verified by
             // JaxbClinicalDataFullTreeCharacterisationTest matching the
             // Castor twin.

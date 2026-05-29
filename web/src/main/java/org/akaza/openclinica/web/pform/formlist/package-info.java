@@ -9,9 +9,9 @@
 /**
  * OpenRosa {@code formList} DTOs. Phase B.3 PR 3c-2 migrated the
  * Castor mapping ({@code properties/openRosaFormListMapping.xml}) to
- * {@code javax.xml.bind} 2.3.x JAXB annotations.
+ * {@code jakarta.xml.bind} 2.3.x JAXB annotations.
  */
-@javax.xml.bind.annotation.XmlSchema(
+@jakarta.xml.bind.annotation.XmlSchema(
         namespace = "http://openrosa.org/xforms/xformsList",
-        elementFormDefault = javax.xml.bind.annotation.XmlNsForm.QUALIFIED)
+        elementFormDefault = jakarta.xml.bind.annotation.XmlNsForm.QUALIFIED)
 package org.akaza.openclinica.web.pform.formlist;

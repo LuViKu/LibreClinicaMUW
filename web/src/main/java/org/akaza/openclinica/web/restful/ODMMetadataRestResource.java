@@ -9,14 +9,14 @@
  */
 package org.akaza.openclinica.web.restful;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import javax.ws.rs.GET;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.ws.rs.GET;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.MediaType;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -194,7 +194,7 @@ public void setMetadataCollectorResource(
 //  @GET
  // @Path("/pdf/print/{studyOID}/{eventOID}/{formVersionOID}")
   //JN: Commenting out this part of pdf generation written by Nick as the approach might be different. Look for these files in mercurial repo for history.
- /*	public javax.ws.rs.core.Response getPdf(@PathParam("studyOID") String studyOID,@PathParam("formVersionOID") String formVersionOID,
+ /*	public jakarta.ws.rs.core.Response getPdf(@PathParam("studyOID") String studyOID,@PathParam("formVersionOID") String formVersionOID,
  	    @PathParam("eventOID") String eventOID, @Context HttpServletRequest request, @Context HttpServletResponse response ) {
       JSON json = metadataCollectorResource.collectODMMetadataJson(studyOID,formVersionOID);
       try {
@@ -203,13 +203,13 @@ public void setMetadataCollectorResource(
 		// TODO Auto-generated catch block
 		e.printStackTrace();
 	}
-    return javax.ws.rs.core.Response.ok().type("application/pdf").build();
+    return jakarta.ws.rs.core.Response.ok().type("application/pdf").build();
  }*/
 
  /*
    @GET
   @Path("/pdf/print/{studyOID}/{eventOID}/{formVersionOID}")
- 	public javax.ws.rs.core.Response getPdf2(@PathParam("studyOID") String studyOID,@PathParam("formVersionOID") String formVersionOID,
+ 	public jakarta.ws.rs.core.Response getPdf2(@PathParam("studyOID") String studyOID,@PathParam("formVersionOID") String formVersionOID,
  	    @Context HttpServletRequest request, @Context HttpServletResponse response ) {
       JSON json = metadataCollectorResource.collectODMMetadataJson(studyOID,formVersionOID);
       try {
@@ -219,7 +219,7 @@ public void setMetadataCollectorResource(
 		e.printStackTrace();
 	}
       File file = new File("...");
-      return javax.ws.rs.core.Response.ok(file, MediaType.APPLICATION_OCTET_STREAM)
+      return jakarta.ws.rs.core.Response.ok(file, MediaType.APPLICATION_OCTET_STREAM)
             .header("content-disposition", "attachment; filename =" + file.getName())
             .build();
  	}

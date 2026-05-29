@@ -11,10 +11,10 @@ package org.akaza.openclinica.bean.submit.crfdata;
 
 import java.util.ArrayList;
 
-import javax.xml.bind.annotation.XmlAccessType;
-import javax.xml.bind.annotation.XmlAccessorType;
-import javax.xml.bind.annotation.XmlAttribute;
-import javax.xml.bind.annotation.XmlElement;
+import jakarta.xml.bind.annotation.XmlAccessType;
+import jakarta.xml.bind.annotation.XmlAccessorType;
+import jakarta.xml.bind.annotation.XmlAttribute;
+import jakarta.xml.bind.annotation.XmlElement;
 
 /**
  * CRFDataPostImportContainer, meant to serve as the 'ClinicalData' tag in CRF Data Import. Will contain the following:
@@ -25,7 +25,7 @@ import javax.xml.bind.annotation.XmlElement;
  *
  * <p>Phase B.3 PR 3a: full JAXB bean-tree wiring complete. StudyOID
  * attribute (PR 2) + SubjectData + UpsertOn children. Per DR-006
- * amendment the namespace stays on cdisc/v1.3 (javax.xml.bind 2.3.x);
+ * amendment the namespace stays on cdisc/v1.3 (jakarta.xml.bind 2.3.x);
  * jakarta migration happens in B.4.
  */
 @XmlAccessorType(XmlAccessType.NONE)
