@@ -113,7 +113,9 @@ public class ViewRuleAssignmentTableToolbar extends DefaultToolbar {
         /**
          * @return Dynamically generate the indexes of studyGroupClasses. It starts from 4 because there are 4 columns before
          *         study group columns that will require to be hidden.
-         * @see ListStudySubjectTableFactory#configureColumns(org.jmesa.facade.TableFacade, java.util.Locale)
+         * (Historical note: this mirrored the column order in the deleted
+         * ListStudySubjectTableFactory; kept unchanged for the jmesa toolbar
+         * this class still serves.)
          */
         String getIndexes() {
             String result = "0,1,2,3,5,6,10,11,13,15";

@@ -17,11 +17,10 @@
 
 <jsp:include page="include/sideAlert.jsp"/>
 
-<script type="text/JavaScript" src="includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/JavaScript" src="includes/jmesa/jmesa.js"></script>
+<%-- Phase B.4 jmesa PR 4c: jmesa jQuery + CSS scripts no longer
+     needed for the subject matrix. The add-new-subject overlay still
+     needs jquery.blockUI, so load just that. --%>
 <script type="text/javascript" src="includes/jmesa/jquery.blockUI.js"></script>
-
-<link rel="stylesheet" href="includes/jmesa/jmesa.css" type="text/css">
 
 <!-- warning is study is frozen or locked -->
 <div id="box" class="dialog">
@@ -79,34 +78,20 @@
 </span>
 
 <c:if test="${userRole.investigator || userRole.researchAssistant || userRole.researchAssistant2}"> <!-- if investigator, research assistant or ra2 -->
-	<div id="findSubjectsDiv">
-    <script type="text/javascript">
-    function onInvokeAction(id,action) {
-        if(id.indexOf('findSubjects') == -1)  {
-        setExportToLimit(id, '');
-        }
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        location.href = '${pageContext.request.contextPath}/MainMenu?'+ parameterString;
-    }
-    jQuery(document).ready(function() {
-        jQuery('#addSubject').click(function() {
-            jQuery.blockUI({ message: jQuery('#addSubjectForm'), css:{left: "300px", top:"10px" } });
+    <div id="findSubjectsDiv">
+        <script type="text/javascript">
+        jQuery(document).ready(function() {
+            jQuery('#addSubject').click(function() {
+                jQuery.blockUI({ message: jQuery('#addSubjectForm'), css:{left: "300px", top:"10px" } });
+            });
+            jQuery('#cancel').click(function() {
+                jQuery.unblockUI();
+                return false;
+            });
         });
-
-        jQuery('#cancel').click(function() {
-            jQuery.unblockUI();
-            return false;
-        });
-    });
-    </script>
-    <form  action="${pageContext.request.contextPath}/ListStudySubjects">
-        <input type="hidden" name="module" value="admin">
-        ${findSubjectsHtml}
-    </form>
-</div>
+        </script>
+        <jsp:include page="managestudy/include/findSubjectsTable.jsp"/>
+    </div>
     <div id="addSubjectForm" style="display:none;">
          <c:import url="addSubjectMonitor.jsp"/>
     </div>
