@@ -12,12 +12,15 @@ package org.akaza.openclinica.controller;
 import static org.akaza.openclinica.core.util.ClassCastHelper.asArrayList;
 import static org.akaza.openclinica.core.util.ClassCastHelper.asEnumeration;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,16 +29,32 @@ import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import javax.sql.DataSource;
 
+import org.akaza.openclinica.bean.admin.CRFBean;
 import org.akaza.openclinica.bean.core.Role;
+import org.akaza.openclinica.bean.core.Status;
 import org.akaza.openclinica.bean.login.StudyUserRoleBean;
 import org.akaza.openclinica.bean.login.UserAccountBean;
+import org.akaza.openclinica.bean.managestudy.EventDefinitionCRFBean;
+import org.akaza.openclinica.bean.managestudy.StudyBean;
+import org.akaza.openclinica.bean.managestudy.StudyEventBean;
+import org.akaza.openclinica.bean.managestudy.StudyGroupBean;
+import org.akaza.openclinica.bean.managestudy.StudySubjectBean;
+import org.akaza.openclinica.bean.submit.EventCRFBean;
 import org.akaza.openclinica.controller.helper.SdvFilterDataBean;
+import org.akaza.openclinica.dao.StudySubjectSDVFilter;
+import org.akaza.openclinica.dao.StudySubjectSDVSort;
+import org.akaza.openclinica.dao.admin.CRFDAO;
+import org.akaza.openclinica.dao.managestudy.EventDefinitionCRFDAO;
+import org.akaza.openclinica.dao.managestudy.StudyDAO;
+import org.akaza.openclinica.dao.managestudy.StudyEventDAO;
+import org.akaza.openclinica.dao.managestudy.StudyGroupDAO;
+import org.akaza.openclinica.dao.managestudy.StudySubjectDAO;
+import org.akaza.openclinica.dao.submit.EventCRFDAO;
+import org.akaza.openclinica.domain.SourceDataVerification;
 import org.akaza.openclinica.i18n.core.LocaleResolver;
 import org.akaza.openclinica.i18n.util.ResourceBundleProvider;
 import org.akaza.openclinica.view.StudyInfoPanel;
 import org.akaza.openclinica.web.table.sdv.SDVUtil;
-import org.akaza.openclinica.web.table.sdv.SubjectIdSDVFactory;
-import org.jmesa.facade.TableFacade;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -46,6 +65,9 @@ import org.springframework.ui.ModelMap;
 import org.springframework.web.bind.ServletRequestDataBinder;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Implement the functionality for displaying a table of Event CRFs for Source Data
@@ -64,9 +86,9 @@ public class SDVController {
     @Qualifier("sdvUtil")
     private SDVUtil sdvUtil;
 
-    @Autowired
-    @Qualifier("sdvFactory")
-    private SubjectIdSDVFactory sdvFactory;
+    // Phase B.4 jmesa PR 7b (cohort 5b): sdvFactory removed. The
+    // per-subject SDV matrix is now rendered client-side via
+    // /viewSubjectAggregateData (vanilla-JS fetch + DOM build).
 
     //Autowire the class that handles the sidebar structure with a configured
     //bean named "sidebarInit"
@@ -79,7 +101,7 @@ public class SDVController {
 
     @RequestMapping("/viewSubjectAggregate")
     public ModelMap viewSubjectAggregateHandler(HttpServletRequest request, HttpServletResponse response, @RequestParam("studyId") int studyId) {
-		if (!mayProceed(request)) {
+        if (!mayProceed(request)) {
             try {
                 response.sendRedirect(request.getContextPath() + "/MainMenu?message=authentication_failed");
             } catch (Exception e) {
@@ -87,42 +109,212 @@ public class SDVController {
             }
             return null;
         }
+        // Phase B.4 jmesa PR 7b (cohort 5b): sdvFactory.createTable().render()
+        // is gone. JSP shell includes a vanilla-JS fragment that fetches
+        // /viewSubjectAggregateData asynchronously.
         ModelMap gridMap = new ModelMap();
-        HttpSession session = request.getSession();
-        boolean showMoreLink = false;
-        if(session.getAttribute("sSdvRestore") != null && session.getAttribute("sSdvRestore") == "false") {
-            session.setAttribute("sSdvRestore", "true");
-            showMoreLink = true;
-        }else if(request.getParameter("showMoreLink")!=null){
-            showMoreLink = Boolean.parseBoolean(request.getParameter("showMoreLink").toString());
-        }else if(session.getAttribute("s_sdv_showMoreLink")!=null) {
-            showMoreLink = Boolean.parseBoolean(session.getAttribute("s_sdv_showMoreLink")+"");
-        }else {
-            showMoreLink = true;
-        }
-        request.setAttribute("showMoreLink", showMoreLink+"");
-        session.setAttribute("s_sdv_showMoreLink", showMoreLink+"");
-
         request.setAttribute("studyId", studyId);
-        String restore = (String)request.getAttribute("s_sdv_restore");
-        restore = restore != null && restore.length()>0 ? restore : "false";
-        request.setAttribute("s_sdv_restore", restore);
-        // request.setAttribute("studySubjectId",studySubjectId);
-        /*SubjectIdSDVFactory tableFactory = new SubjectIdSDVFactory();
-        * @RequestParam("studySubjectId") int studySubjectId,*/
         request.setAttribute("imagePathPrefix", "../");
 
         ArrayList<String> pageMessages = asArrayList(request.getAttribute("pageMessages"), String.class);
         if (pageMessages == null) {
             pageMessages = new ArrayList<String>();
         }
-
         request.setAttribute("pageMessages", pageMessages);
-        sdvFactory.showMoreLink = showMoreLink;
-        TableFacade facade = sdvFactory.createTable(request, response);
-        String sdvMatrix = facade.render();
-        gridMap.addAttribute(SUBJECT_SDV_TABLE_ATTRIBUTE, sdvMatrix);
         return gridMap;
+    }
+
+    /**
+     * JSON endpoint backing the per-subject SDV table.
+     * Phase B.4 jmesa PR 7b (cohort 5b) — replaces the
+     * {@code SubjectIdSDVFactory.createTable().render()} blob the
+     * {@code /viewSubjectAggregate} mapping used to emit.
+     *
+     * <p>Each row carries pre-computed display fields (label / siteId /
+     * personId / status / group / counts) plus a semantic {@code
+     * sdvState} ("complete" | "needsSdv" | "notApplicable") and an
+     * {@code availableActions} array. The JSP fragment renders icons
+     * and per-row Submit buttons from those — no HTML built
+     * server-side.
+     */
+    @RequestMapping("/viewSubjectAggregateData")
+    @ResponseBody
+    public void viewSubjectAggregateData(HttpServletRequest request, HttpServletResponse response,
+                                         @RequestParam("studyId") int studyId)
+            throws IOException {
+        if (!mayProceed(request)) {
+            response.sendError(HttpServletResponse.SC_FORBIDDEN);
+            return;
+        }
+
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        StudyDAO studyDAO = new StudyDAO(dataSource);
+        StudyGroupDAO studyGroupDAO = new StudyGroupDAO(dataSource);
+        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
+        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
+        EventDefinitionCRFDAO eventDefinitionCrfDAO = new EventDefinitionCRFDAO(dataSource);
+        CRFDAO crfDAO = new CRFDAO(dataSource);
+
+        java.util.ResourceBundle resword = ResourceBundleProvider.getWordsBundle(
+                LocaleResolver.getLocale(request));
+
+        StudyBean studyBean = (StudyBean) studyDAO.findByPK(studyId);
+        boolean studyLocked = studyBean != null && studyBean.getStatus() != null
+                && studyBean.getStatus().isLocked();
+
+        StudySubjectSDVFilter filter = new StudySubjectSDVFilter();
+        StudySubjectSDVSort sort = new StudySubjectSDVSort();
+        sort.addSort("studySubjectId", "asc");
+
+        // Cap to MAX_PAGE_LENGTH; this is a non-paginated single fetch.
+        int rowStart = 0;
+        int rowEnd = 500;
+        int totalRows = studySubjectDAO.countAllByStudySDV(studyId, studyId, filter);
+        List<StudySubjectBean> studySubjects = studySubjectDAO.findAllByStudySDV(
+                studyId, studyId, filter, sort, rowStart, rowEnd);
+
+        List<Map<String, Object>> rows = new ArrayList<>(studySubjects.size());
+        for (StudySubjectBean ss : studySubjects) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("id", ss.getId());
+            row.put("studySubjectId", ss.getLabel());
+            row.put("personId", ss.getUniqueIdentifier());
+            row.put("studySubjectStatus", ss.getStatus() == null ? "" : ss.getStatus().getName());
+
+            int total = eventCRFDAO.countEventCRFsByStudySubject(ss.getId(), ss.getStudyId(), ss.getStudyId());
+            row.put("totalEventCRF", total);
+
+            StudyBean parentStudy = (StudyBean) studyDAO.findByPK(ss.getStudyId());
+            row.put("siteId", parentStudy == null ? "" : parentStudy.getIdentifier());
+
+            List<EventCRFBean> ecbs = eventCRFDAO.getEventCRFsByStudySubject(
+                    ss.getId(), ss.getStudyId(), ss.getStudyId());
+            Map<String, Integer> stats = computeEventCRFStats(
+                    ecbs, ss, studyEventDAO, eventDefinitionCrfDAO, crfDAO);
+
+            row.put("numberCRFComplete", stats.get("numberOfCompletedEventCRFs"));
+            row.put("numberOfCRFsSDV", stats.get("numberOfSDVdEventCRFs"));
+
+            boolean studySubjectSDVd = stats.get("areEventCRFsSDVd") == -1
+                    || stats.get("areEventCRFsSDVd") == 1 ? false : true;
+
+            String sdvState;
+            if (stats.get("shouldDisplaySDVButton") == 0) {
+                sdvState = "notApplicable";
+            } else if (studySubjectSDVd) {
+                sdvState = "complete";
+            } else {
+                sdvState = "needsSdv";
+            }
+            row.put("sdvState", sdvState);
+
+            List<StudyGroupBean> groups = studyGroupDAO.getGroupByStudySubject(
+                    ss.getId(), ss.getStudyId(), ss.getStudyId());
+            row.put("group", (groups == null || groups.isEmpty()) ? "" : groups.get(0).getName());
+
+            // availableActions: 'view' always; 'sdv' if needs-SDV +
+            // study not locked. Mirrors the legacy ActionsCellEditor.
+            List<String> actions = new ArrayList<>();
+            actions.add("view");
+            if ("needsSdv".equals(sdvState) && !studyLocked) {
+                actions.add("sdv");
+            }
+            row.put("availableActions", actions);
+
+            rows.add(row);
+        }
+
+        List<Map<String, Object>> columns = new ArrayList<>();
+        columns.add(column("sdvStatus",          resword.getString("SDV_status")));
+        columns.add(column("studySubjectId",     resword.getString("study_subject_ID")));
+        columns.add(column("siteId",             resword.getString("site_id")));
+        columns.add(column("personId",           resword.getString("person_ID")));
+        columns.add(column("studySubjectStatus", resword.getString("study_subject_status")));
+        columns.add(column("group",              resword.getString("group")));
+        columns.add(column("numberCRFComplete",  resword.getString("num_CRFs_completed")));
+        columns.add(column("numberOfCRFsSDV",    resword.getString("num_CRFs_SDV")));
+        columns.add(column("totalEventCRF",      resword.getString("total_events_CRF")));
+        columns.add(column("actions",            resword.getString("rule_actions")));
+
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("draw", parseDraw(request));
+        payload.put("recordsTotal", totalRows);
+        payload.put("recordsFiltered", totalRows);
+        payload.put("data", rows);
+        payload.put("columns", columns);
+        payload.put("studyLocked", studyLocked);
+
+        response.setContentType("application/json;charset=UTF-8");
+        try (OutputStream out = response.getOutputStream()) {
+            new ObjectMapper().writeValue(out, payload);
+        }
+    }
+
+    /**
+     * Subject-level EventCRF aggregation. Lifted verbatim from the
+     * deleted {@code SubjectIdSDVFactory.getEventCRFStats} so the
+     * client sees the same counts.
+     */
+    private Map<String, Integer> computeEventCRFStats(
+            List<EventCRFBean> eventCRFBeans,
+            StudySubjectBean studySubject,
+            StudyEventDAO studyEventDAO,
+            EventDefinitionCRFDAO eventDefinitionCrfDAO,
+            CRFDAO crfDAO) {
+        int numberOfCompletedEventCRFs = 0;
+        int numberOfSDVdEventCRFs = 0;
+        int areEventCRFsSDVd = eventCRFBeans.size() > 0 ? 0 : -1;
+        boolean partialOrHundred = false;
+
+        for (EventCRFBean ecb : eventCRFBeans) {
+            StudyEventBean studyEventBean = (StudyEventBean) studyEventDAO.findByPK(ecb.getStudyEventId());
+            CRFBean crfBean = crfDAO.findByVersionId(ecb.getCRFVersionId());
+
+            if (ecb.getStatus() == Status.UNAVAILABLE || ecb.getStatus() == Status.LOCKED) {
+                numberOfCompletedEventCRFs++;
+            }
+            if (ecb.isSdvStatus()) {
+                numberOfSDVdEventCRFs++;
+            }
+            EventDefinitionCRFBean edc = eventDefinitionCrfDAO
+                    .findByStudyEventDefinitionIdAndCRFIdAndStudyId(
+                            studyEventBean.getStudyEventDefinitionId(),
+                            crfBean.getId(), studySubject.getStudyId());
+            if (edc.getId() == 0) {
+                edc = eventDefinitionCrfDAO.findForStudyByStudyEventDefinitionIdAndCRFId(
+                        studyEventBean.getStudyEventDefinitionId(), crfBean.getId());
+            }
+            boolean requiresSdv = edc.getSourceDataVerification() == SourceDataVerification.AllREQUIRED
+                    || edc.getSourceDataVerification() == SourceDataVerification.PARTIALREQUIRED;
+            boolean ecbLocked = ecb.getStatus() == Status.UNAVAILABLE || ecb.getStatus() == Status.LOCKED;
+            if (requiresSdv && ecbLocked) {
+                partialOrHundred = true;
+            }
+            if (requiresSdv && !ecb.isSdvStatus() && ecbLocked) {
+                areEventCRFsSDVd = 1;
+            }
+        }
+
+        Map<String, Integer> stats = new HashMap<>();
+        stats.put("numberOfCompletedEventCRFs", numberOfCompletedEventCRFs);
+        stats.put("numberOfSDVdEventCRFs", numberOfSDVdEventCRFs);
+        stats.put("areEventCRFsSDVd", partialOrHundred ? areEventCRFsSDVd : 1);
+        stats.put("shouldDisplaySDVButton",
+                numberOfCompletedEventCRFs > 0 && partialOrHundred ? 1 : 0);
+        return stats;
+    }
+
+    private static Map<String, Object> column(String key, String title) {
+        Map<String, Object> c = new HashMap<>();
+        c.put("key", key);
+        c.put("title", title);
+        return c;
+    }
+
+    private static int parseDraw(HttpServletRequest request) {
+        String s = request.getParameter("draw");
+        if (s == null || s.isEmpty()) return 0;
+        try { return Integer.parseInt(s); } catch (NumberFormatException nfe) { return 0; }
     }
 
     @RequestMapping("/viewAllSubjectSDV")

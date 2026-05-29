@@ -18,7 +18,6 @@ import javax.servlet.http.HttpServletRequest;
 
 import org.akaza.openclinica.bean.admin.CRFBean;
 import org.akaza.openclinica.bean.core.Role;
-import org.akaza.openclinica.bean.login.UserAccountBean;
 import org.akaza.openclinica.bean.managestudy.StudyBean;
 import org.akaza.openclinica.bean.managestudy.StudyEventDefinitionBean;
 import org.akaza.openclinica.bean.rule.XmlSchemaValidationHelper;
@@ -111,27 +110,21 @@ public class ViewRuleAssignmentNewServlet extends SecureController {
     }
 
     private void createTable() {
-
+        // Phase B.4 jmesa PR 7a (cohort 5a): factory.createTable().render()
+        // is gone. The JSP shell now includes a vanilla-JS fragment that
+        // fetches /ViewRuleAssignmentData asynchronously.
         getCoreResources();
-		getCoreResources();
-		ViewRuleAssignmentTableFactory factory = new ViewRuleAssignmentTableFactory(showMoreLink, CoreResources.getField("designer.url")+"access?host="+getHostPathFromSysUrl(CoreResources.getField("sysURL.base"),request.getContextPath())+"&app="+getContextPath(request), isDesigner);
-        factory.setRuleSetService(getRuleSetService());
-        factory.setItemFormMetadataDAO(getItemFormMetadataDAO());
-        factory.setCurrentStudy(currentStudy);
-        factory.setCurrentUser((UserAccountBean)request.getSession().getAttribute(USER_BEAN_NAME));
-        String ruleAssignmentsHtml = factory.createTable(request, response).render();
-        request.getSession().setAttribute("ruleDesignerUrl",factory.getDesingerLink());
-        request.setAttribute("ruleAssignmentsHtml", ruleAssignmentsHtml);
+        String designerLink = CoreResources.getField("designer.url")
+                + "access?host=" + getHostPathFromSysUrl(
+                        CoreResources.getField("sysURL.base"), request.getContextPath())
+                + "&app=" + getContextPath(request);
+        request.getSession().setAttribute("ruleDesignerUrl", designerLink);
         createStudyEventForInfoPanel();
-        if (ruleAssignmentsHtml != null) {
-            if (isDesigner) {
-                forwardPage(Page.VIEW_RULE_SETS_DESIGNER);
-            } else {
-                forwardPage(Page.VIEW_RULE_SETS2);
-            }
-
+        if (isDesigner) {
+            forwardPage(Page.VIEW_RULE_SETS_DESIGNER);
+        } else {
+            forwardPage(Page.VIEW_RULE_SETS2);
         }
-
     }
     private String getHostPathFromSysUrl(String sysURL,String contextPath) {
         return sysURL.replaceAll(contextPath+"/", "");

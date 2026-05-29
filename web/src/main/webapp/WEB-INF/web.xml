@@ -1243,6 +1243,12 @@
     </servlet>
 
     <servlet>
+        <servlet-name>ViewRuleAssignmentDataServlet</servlet-name>
+        <description>JSON endpoint for the DataTables-backed rule-assignment table (Phase B.4 jmesa PR 7a).</description>
+        <servlet-class>org.akaza.openclinica.control.submit.ViewRuleAssignmentDataServlet</servlet-class>
+    </servlet>
+
+    <servlet>
         <servlet-name>RunRuleServlet</servlet-name>
         <display-name>RunRule</display-name>
         <servlet-class>org.akaza.openclinica.control.submit.RunRuleServlet</servlet-class>
@@ -1501,6 +1507,11 @@
     <servlet-mapping>
         <servlet-name>ViewRuleAssignmentNewServlet</servlet-name>
         <url-pattern>/ViewRuleAssignment</url-pattern>
+    </servlet-mapping>
+
+    <servlet-mapping>
+        <servlet-name>ViewRuleAssignmentDataServlet</servlet-name>
+        <url-pattern>/ViewRuleAssignmentData</url-pattern>
     </servlet-mapping>
 
     <servlet-mapping>

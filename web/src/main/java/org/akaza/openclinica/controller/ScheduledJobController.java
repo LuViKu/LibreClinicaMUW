@@ -29,10 +29,7 @@ import org.akaza.openclinica.bean.extract.ExtractPropertyBean;
 import org.akaza.openclinica.i18n.core.LocaleResolver;
 import org.akaza.openclinica.i18n.util.ResourceBundleProvider;
 import org.akaza.openclinica.service.extract.XsltTriggerService;
-import org.akaza.openclinica.web.table.scheduledjobs.ScheduledJobTableFactory;
-import org.akaza.openclinica.web.table.scheduledjobs.ScheduledJobs;
 import org.akaza.openclinica.web.table.sdv.SDVUtil;
-import org.jmesa.facade.TableFacade;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
@@ -50,6 +47,15 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.ModelMap;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.IOException;
+import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
 /**
  *
  * @author jnyayapathi
@@ -61,9 +67,6 @@ public class ScheduledJobController {
 
     public final static String SCHEDULED_TABLE_ATTRIBUTE = "scheduledTableAttribute";
 
-    @Autowired
-    @Qualifier("scheduledJobTableFactory")
-    private  ScheduledJobTableFactory  scheduledJobTableFactory;
     public static final String EP_BEAN = "epBean";
 
     @Autowired
@@ -75,112 +78,118 @@ public class ScheduledJobController {
 
     @RequestMapping("/listCurrentScheduledJobs")
     public ModelMap listScheduledJobs(HttpServletRequest request, HttpServletResponse response) throws SchedulerException{
+        // Phase B.4 jmesa PR 7c (cohort 5c): the factory.createTable().render()
+        // call is gone. The JSP shell now includes a vanilla-JS fragment that
+        // fetches /pages/listCurrentScheduledJobsData asynchronously.
         Locale locale = LocaleResolver.getLocale(request);
         ResourceBundleProvider.updateLocale(locale);
         ModelMap gridMap = new ModelMap();
 
-        boolean showMoreLink = false;
-        if(request.getParameter("showMoreLink")!=null){
-            showMoreLink = Boolean.parseBoolean(request.getParameter("showMoreLink").toString());
-        }else{
-            showMoreLink = true;
-        }
-        request.setAttribute("showMoreLink", showMoreLink+"");
-
-
-        // request.setAttribute("studySubjectId",studySubjectId);
-        /*SubjectIdSDVFactory tableFactory = new SubjectIdSDVFactory();
-        * @RequestParam("studySubjectId") int studySubjectId,*/
         request.setAttribute("imagePathPrefix", "../");
 
         ArrayList<String> pageMessages = asArrayList(request.getAttribute("pageMessages"), String.class);
         if (pageMessages == null) {
             pageMessages = new ArrayList<String>();
         }
-
         request.setAttribute("pageMessages", pageMessages);
+        return gridMap;
+    }
 
-        List<JobExecutionContext> listCurrentJobs = new ArrayList<JobExecutionContext>();
-        listCurrentJobs = scheduler.getCurrentlyExecutingJobs();
-        List<JobKey> currentJobList = listCurrentJobs.stream().map(job -> job.getTrigger().getJobKey()).collect(Collectors.toList());
-        
-        List<String> triggerGroups =  scheduler.getTriggerGroupNames();
-        List<SimpleTrigger> simpleTriggers = new ArrayList<SimpleTrigger>();
+    /**
+     * DataTables-protocol JSON endpoint backing the Quartz-jobs table.
+     * Phase B.4 jmesa PR 7c (cohort 5c) — replaces the
+     * {@code ScheduledJobTableFactory.createTable().render()} blob the
+     * {@code /listCurrentScheduledJobs} mapping used to emit.
+     *
+     * <p>Each row is a snapshot of the current scheduler state. The
+     * client polls this endpoint via the vanilla-JS fragment in
+     * {@code listCurrentScheduledJobs.jsp}, so "Currently Executing"
+     * vs "Scheduled" transitions become visible on the next page load.
+     */
+    @RequestMapping("/listCurrentScheduledJobsData")
+    @ResponseBody
+    public void listScheduledJobsData(HttpServletRequest request, HttpServletResponse response)
+            throws SchedulerException, IOException {
+        Locale locale = LocaleResolver.getLocale(request);
+        ResourceBundleProvider.updateLocale(locale);
+
+        List<JobExecutionContext> listCurrentJobs = scheduler.getCurrentlyExecutingJobs();
+        List<JobKey> currentJobList = listCurrentJobs.stream()
+                .map(job -> job.getTrigger().getJobKey())
+                .collect(Collectors.toList());
+
+        List<String> triggerGroups = scheduler.getTriggerGroupNames();
+        List<SimpleTrigger> simpleTriggers = new ArrayList<>();
         for (String triggerGroup : triggerGroups) {
-            logger.debug("Group: " + triggerGroup + " contains the following triggers");
-            Set<TriggerKey> triggerKeys = scheduler.getTriggerKeys(GroupMatcher.triggerGroupEquals(triggerGroup));
-
+            Set<TriggerKey> triggerKeys = scheduler.getTriggerKeys(
+                    GroupMatcher.triggerGroupEquals(triggerGroup));
             for (TriggerKey triggerKey : triggerKeys) {
-             TriggerState state = scheduler.getTriggerState(triggerKey);
-               logger.debug("- " + triggerKey.getName());
-               if (state != TriggerState.PAUSED) {
-               simpleTriggers.add((SimpleTrigger) scheduler.getTrigger(triggerKey));
-               }
+                TriggerState state = scheduler.getTriggerState(triggerKey);
+                if (state != TriggerState.PAUSED) {
+                    simpleTriggers.add((SimpleTrigger) scheduler.getTrigger(triggerKey));
+                }
             }
-         }
+        }
 
-       List <ScheduledJobs>jobsScheduled = new ArrayList<ScheduledJobs>();
-
+        List<Map<String, Object>> rows = new ArrayList<>();
         for (SimpleTrigger st : simpleTriggers) {
-        	JobKey jobKey = st.getJobKey();
+            JobKey jobKey = st.getJobKey();
             boolean isExecuting = currentJobList.contains(jobKey);
-
-            ScheduledJobs jobs = new ScheduledJobs();
 
             ExtractPropertyBean epBean = null;
             if (st.getJobDataMap() != null) {
                 epBean = (ExtractPropertyBean) st.getJobDataMap().get(EP_BEAN);
             }
+            if (epBean == null) continue;
 
-
-            if (epBean != null) {
-                StringBuilder checkbox = new StringBuilder();
-                checkbox.append("<input style='margin-right: 5px' type='checkbox'/>");
-
-                StringBuilder actions = new StringBuilder("<table><tr><td>");
-                if (isExecuting) {
-                    actions.append("&nbsp;");
-                } else {
-                    String contextPath = request.getContextPath();
-                    StringBuilder jsCodeString = new StringBuilder("this.form.method='GET'; this.form.action='").
-                            append(contextPath).append("/pages/cancelScheduledJob").append("';").
-                            append("this.form.theJobName.value='").append(jobKey.getName()).append("';").
-                            append("this.form.theJobGroupName.value='").append(jobKey.getGroup()).append("';").
-                            append("this.form.theTriggerName.value='").append(jobKey.getName()).append("';").
-                            append("this.form.theTriggerGroupName.value='").append(jobKey.getGroup()).append("';").
-                            append("this.form.submit();");
-
-                    actions.append("<td><input type=\"submit\" class=\"button\" value=\"Cancel Job\" ").
-                            append("name=\"cancelJob\" onclick=\"").append(jsCodeString.toString()).append("\" />");
-
-                }
-
-                actions.append("</td></tr></table>");
-
-                jobs.setCheckbox(checkbox.toString());
-                jobs.setDatasetId(epBean.getDatasetName());
-                String fireTime = st.getStartTime() != null ? longFormat(locale).format(st.getStartTime()) : "";
-                jobs.setFireTime(fireTime);
-                if(st.getNextFireTime() != null) {
-                    jobs.setScheduledFireTime(longFormat(locale).format(st.getNextFireTime()));
-                }
-                jobs.setExportFileName(epBean.getExportFileName()[0]);
-                jobs.setAction(actions.toString());
-                jobs.setJobStatus(isExecuting ? "Currently Executing" : "Scheduled");
-                jobsScheduled.add(jobs);
-            }
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("datasetId", epBean.getDatasetName());
+            row.put("fireTime", st.getStartTime() != null ? longFormat(locale).format(st.getStartTime()) : "");
+            row.put("exportFileName",
+                    epBean.getExportFileName() != null && epBean.getExportFileName().length > 0
+                            ? epBean.getExportFileName()[0] : "");
+            row.put("jobStatus", isExecuting ? "Currently Executing" : "Scheduled");
+            row.put("isExecuting", isExecuting);
+            // jobKey + triggerKey carried through so the cancel-job
+            // form on the client side can post them back unchanged.
+            row.put("jobName", jobKey.getName());
+            row.put("jobGroup", jobKey.getGroup());
+            row.put("triggerName", st.getKey().getName());
+            row.put("triggerGroup", st.getKey().getGroup());
+            rows.add(row);
         }
-        logger.debug("totalRows " + jobsScheduled.size());
 
-        request.setAttribute("totalJobs", jobsScheduled.size());
+        List<Map<String, Object>> columns = new ArrayList<>();
+        columns.add(column("datasetId",      "Dataset"));
+        columns.add(column("fireTime",       "Fire Time"));
+        columns.add(column("exportFileName", "Export File Name"));
+        columns.add(column("jobStatus",      "Job Status"));
+        columns.add(column("action",         "Action"));
 
-        request.setAttribute("jobs", jobsScheduled);
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("draw", parseDraw(request));
+        payload.put("recordsTotal", rows.size());
+        payload.put("recordsFiltered", rows.size());
+        payload.put("data", rows);
+        payload.put("columns", columns);
 
-        TableFacade facade = scheduledJobTableFactory.createTable(request, response);
-        String sdvMatrix = facade.render();
-        gridMap.addAttribute(SCHEDULED_TABLE_ATTRIBUTE, sdvMatrix);
-        return gridMap;
+        response.setContentType("application/json;charset=UTF-8");
+        try (OutputStream out = response.getOutputStream()) {
+            new ObjectMapper().writeValue(out, payload);
+        }
+    }
 
+    private static Map<String, Object> column(String key, String title) {
+        Map<String, Object> c = new HashMap<>();
+        c.put("key", key);
+        c.put("title", title);
+        return c;
+    }
+
+    private static int parseDraw(HttpServletRequest request) {
+        String s = request.getParameter("draw");
+        if (s == null || s.isEmpty()) return 0;
+        try { return Integer.parseInt(s); } catch (NumberFormatException nfe) { return 0; }
     }
 
     @RequestMapping("/cancelScheduledJob")
