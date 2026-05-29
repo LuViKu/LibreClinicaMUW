@@ -1157,6 +1157,16 @@
         <servlet-class>org.akaza.openclinica.control.managestudy.ListDiscNotesForCRFDataServlet</servlet-class>
     </servlet>
     <servlet>
+        <servlet-name>StudyAuditLogDataServlet</servlet-name>
+        <description>JSON endpoint for the DataTables-backed study audit-log subject table (Phase B.4 jmesa PR 6a).</description>
+        <servlet-class>org.akaza.openclinica.control.managestudy.StudyAuditLogDataServlet</servlet-class>
+    </servlet>
+    <servlet>
+        <servlet-name>ListEventsForSubjectsDataServlet</servlet-name>
+        <description>JSON endpoint for the DataTables-backed events-for-subjects matrix (Phase B.4 jmesa PR 6b).</description>
+        <servlet-class>org.akaza.openclinica.control.managestudy.ListEventsForSubjectsDataServlet</servlet-class>
+    </servlet>
+    <servlet>
         <servlet-name>ViewNoteServlet</servlet-name>
         <display-name>ViewNote</display-name>
         <servlet-class>org.akaza.openclinica.control.managestudy.ViewNoteServlet</servlet-class>
@@ -2173,6 +2183,14 @@
     <servlet-mapping>
         <servlet-name>ListDiscNotesForCRFDataServlet</servlet-name>
         <url-pattern>/ListDiscNotesForCRFData</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>StudyAuditLogDataServlet</servlet-name>
+        <url-pattern>/StudyAuditLogData</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>ListEventsForSubjectsDataServlet</servlet-name>
+        <url-pattern>/ListEventsForSubjectsData</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
         <servlet-name>ViewNoteServlet</servlet-name>

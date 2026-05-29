@@ -13,9 +13,6 @@ import java.util.Locale;
 
 import org.akaza.openclinica.bean.core.Role;
 import org.akaza.openclinica.control.core.SecureController;
-import org.akaza.openclinica.dao.login.UserAccountDAO;
-import org.akaza.openclinica.dao.managestudy.StudySubjectDAO;
-import org.akaza.openclinica.dao.submit.SubjectDAO;
 import org.akaza.openclinica.view.Page;
 import org.akaza.openclinica.web.InsufficientPermissionException;
 
@@ -53,21 +50,10 @@ public class StudyAuditLogServlet extends SecureController {
      */
     @Override
     protected void processRequest() throws Exception {
-        StudySubjectDAO subdao = new StudySubjectDAO(sm.getDataSource());
-        SubjectDAO sdao = new SubjectDAO(sm.getDataSource());
-        UserAccountDAO uadao = new UserAccountDAO(sm.getDataSource());
-
-        StudyAuditLogTableFactory factory = new StudyAuditLogTableFactory();
-        factory.setSubjectDao(sdao);
-        factory.setStudySubjectDao(subdao);
-        factory.setUserAccountDao(uadao);
-        factory.setCurrentStudy(currentStudy);
-
-        String auditLogsHtml = factory.createTable(request, response).render();
-        request.setAttribute("auditLogsHtml", auditLogsHtml);
-
+        // Phase B.4 jmesa PR 6a (cohort 4a): factory.createTable().render()
+        // is gone. The JSP shell now includes a vanilla-JS fragment that
+        // fetches /StudyAuditLogData asynchronously.
         forwardPage(Page.AUDIT_LOGS_STUDY);
-
     }
 
     /*

@@ -9,7 +9,6 @@
  */
 package org.akaza.openclinica.control.managestudy;
 
-import org.akaza.openclinica.bean.managestudy.StudyEventDefinitionBean;
 import org.akaza.openclinica.control.core.SecureController;
 import org.akaza.openclinica.control.form.FormDiscrepancyNotes;
 import org.akaza.openclinica.control.form.FormProcessor;
@@ -104,25 +103,10 @@ public class ListEventsForSubjectsServlet extends SecureController {
             return;
         }
 
-        ListEventsForSubjectTableFactory factory = new ListEventsForSubjectTableFactory(showMoreLink);
-        factory.setStudyEventDefinitionDao(getStudyEventDefinitionDao());
-        factory.setSubjectDAO(getSubjectDAO());
-        factory.setStudySubjectDAO(getStudySubjectDAO());
-        factory.setStudyEventDAO(getStudyEventDAO());
-        factory.setStudyBean(currentStudy);
-        factory.setStudyGroupClassDAO(getStudyGroupClassDAO());
-        factory.setSubjectGroupMapDAO(getSubjectGroupMapDAO());
-        factory.setStudyDAO(getStudyDAO());
-        factory.setStudyGroupDAO(getStudyGroupDAO());
-        factory.setCurrentRole(currentRole);
-        factory.setCurrentUser(ub);
-        factory.setEventCRFDAO(getEventCRFDAO());
-        factory.setEventDefintionCRFDAO(getEventDefinitionCRFDAO());
-        factory.setCrfDAO(getCrfDAO());
-        factory.setCrfVersionDAO(getCRFVersionDAO());
-        factory.setSelectedStudyEventDefinition((StudyEventDefinitionBean) getStudyEventDefinitionDao().findByPK(definitionId));
-        String listEventsForSubjectsHtml = factory.createTable(request, response).render();
-        request.setAttribute("listEventsForSubjectsHtml", listEventsForSubjectsHtml);
+        // Phase B.4 jmesa PR 6b (cohort 4b): the factory.createTable().render()
+        // blob is gone. The JSP shell now includes a vanilla-JS fragment that
+        // fetches /ListEventsForSubjectsData asynchronously, forwarding the
+        // defId query-string param so the dynamic CRF columns line up.
         request.setAttribute("defId", definitionId);
         // A. Hamid.
         // For event definitions and group class list in the add subject popup
