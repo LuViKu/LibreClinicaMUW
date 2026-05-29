@@ -113,44 +113,110 @@
 </c:if>
 
 <c:if test="${userRole.coordinator || userRole.director}">										<!-- datamanager / study director -->
-    <script type="text/javascript">
-	    function onInvokeAction(id,action) {
-	        if(id.indexOf('studySiteStatistics') == -1)  {
-	            setExportToLimit(id, '');
-	        }
-	        if(id.indexOf('subjectEventStatusStatistics') == -1)  {
-	            setExportToLimit(id, '');
-	        }
-	        if(id.indexOf('studySubjectStatusStatistics') == -1)  {
-	            setExportToLimit(id, '');
-	        }
-	        createHiddenInputFieldsForLimitAndSubmit(id);
-	    }
-    </script>
+    <%-- Phase B.4 jmesa PR 3: four stats tables rendered as plain HTML
+         (1-10 rows each, no sort/filter/paginate needed). The percentage
+         column carries a simple bar graph div for visual continuity with
+         the prior jmesa-rendered version. --%>
 
 	<table>
 		<tr>
 		    <td class="statistics_td">
-		    <form  action="${pageContext.request.contextPath}/MainMenu">
-		        ${studySiteStatistics}
-		    </form>
+		        <table class="stats-table">
+		            <thead>
+		                <tr><td colspan="4" class="stats-title"><fmt:message key="subject_enrollment_for_site" bundle="${resword}"/></td></tr>
+		                <tr>
+		                    <th><fmt:message key="site" bundle="${resword}"/></th>
+		                    <th><fmt:message key="enrolled" bundle="${resword}"/></th>
+		                    <th><fmt:message key="expected_enrollment" bundle="${resword}"/></th>
+		                    <th><fmt:message key="percentage" bundle="${resword}"/></th>
+		                </tr>
+		            </thead>
+		            <tbody>
+		                <c:forEach var="row" items="${studySiteStatisticsRows}">
+		                    <tr>
+		                        <td><c:out value="${row.name}"/></td>
+		                        <td><c:out value="${row.enrolled}"/></td>
+		                        <td><c:out value="${row.expectedTotalEnrollment}"/></td>
+		                        <td>
+		                            <div class="graph"><div class="bar" style="width: ${row.percentage}%">${row.percentage}%</div></div>
+		                        </td>
+		                    </tr>
+		                </c:forEach>
+		            </tbody>
+		        </table>
 		    </td>
 		    <td class="statistics_td">
-		    <form  action="${pageContext.request.contextPath}/MainMenu">
-		        ${studyStatistics}
-		    </form>
+		        <table class="stats-table">
+		            <thead>
+		                <tr><td colspan="4" class="stats-title"><fmt:message key="subject_enrollment_for_study" bundle="${resword}"/></td></tr>
+		                <tr>
+		                    <th><fmt:message key="study" bundle="${resword}"/></th>
+		                    <th><fmt:message key="enrolled" bundle="${resword}"/></th>
+		                    <th><fmt:message key="expected_enrollment" bundle="${resword}"/></th>
+		                    <th><fmt:message key="percentage" bundle="${resword}"/></th>
+		                </tr>
+		            </thead>
+		            <tbody>
+		                <c:forEach var="row" items="${studyStatisticsRows}">
+		                    <tr>
+		                        <td><c:out value="${row.name}"/></td>
+		                        <td><c:out value="${row.enrolled}"/></td>
+		                        <td><c:out value="${row.expectedTotalEnrollment}"/></td>
+		                        <td>
+		                            <div class="graph"><div class="bar" style="width: ${row.percentage}%">${row.percentage}%</div></div>
+		                        </td>
+		                    </tr>
+		                </c:forEach>
+		            </tbody>
+		        </table>
 		    </td>
 		</tr>
 		<tr>
     		<td class="statistics_td">
-    			<form  action="${pageContext.request.contextPath}/MainMenu">
-        			${subjectEventStatusStatistics}
-    			</form>
+    		    <table class="stats-table">
+    		        <thead>
+    		            <tr><td colspan="3" class="stats-title"><fmt:message key="event_status_statistics" bundle="${resword}"/></td></tr>
+    		            <tr>
+    		                <th><fmt:message key="event_status" bundle="${resword}"/></th>
+    		                <th><fmt:message key="n_events" bundle="${resword}"/></th>
+    		                <th><fmt:message key="percentage" bundle="${resword}"/></th>
+    		            </tr>
+    		        </thead>
+    		        <tbody>
+    		            <c:forEach var="row" items="${subjectEventStatusStatisticsRows}">
+    		                <tr>
+    		                    <td><c:out value="${row.status}"/></td>
+    		                    <td><c:out value="${row.studySubjects}"/></td>
+    		                    <td>
+    		                        <div class="graph"><div class="bar" style="width: ${row.percentage}%">${row.percentage}%</div></div>
+    		                    </td>
+    		                </tr>
+    		            </c:forEach>
+    		        </tbody>
+    		    </table>
     		</td>
 			<td class="statistics_td">
-				<form  action="${pageContext.request.contextPath}/MainMenu">
-					${studySubjectStatusStatistics}
-				</form>
+			    <table class="stats-table">
+			        <thead>
+			            <tr><td colspan="3" class="stats-title"><fmt:message key="study_subject_status_statistics" bundle="${resword}"/></td></tr>
+			            <tr>
+			                <th><fmt:message key="study_subject_status" bundle="${resword}"/></th>
+			                <th><fmt:message key="n_study_subjects" bundle="${resword}"/></th>
+			                <th><fmt:message key="percentage" bundle="${resword}"/></th>
+			            </tr>
+			        </thead>
+			        <tbody>
+			            <c:forEach var="row" items="${studySubjectStatusStatisticsRows}">
+			                <tr>
+			                    <td><c:out value="${row.status}"/></td>
+			                    <td><c:out value="${row.studySubjects}"/></td>
+			                    <td>
+			                        <div class="graph"><div class="bar" style="width: ${row.percentage}%">${row.percentage}%</div></div>
+			                    </td>
+			                </tr>
+			            </c:forEach>
+			        </tbody>
+			    </table>
 			</td>
 		</tr>
 	</table>
