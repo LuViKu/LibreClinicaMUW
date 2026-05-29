@@ -16,7 +16,6 @@ import java.util.Date;
 
 import org.akaza.openclinica.bean.core.NumericComparisonOperator;
 import org.akaza.openclinica.bean.submit.SubjectBean;
-import org.akaza.openclinica.control.AbstractTableFactory;
 import org.akaza.openclinica.control.core.SecureController;
 import org.akaza.openclinica.control.form.DiscrepancyValidator;
 import org.akaza.openclinica.control.form.FormDiscrepancyNotes;
@@ -353,11 +352,11 @@ public class UpdateSubjectServlet extends SecureController {
         
     	int flagRStatusId = dndao.getResolutionStatusIdForSubjectDNFlag(subjectId, "gender");
         if(flagRStatusId > 0) {
-        	request.setAttribute("genderDNFlag",AbstractTableFactory.getDNFlagIconName(flagRStatusId));
+        	request.setAttribute("genderDNFlag",getDNFlagIconName(flagRStatusId));
         }
         flagRStatusId = dndao.getResolutionStatusIdForSubjectDNFlag(subjectId, "date_of_birth");
         if(flagRStatusId > 0) {
-        	request.setAttribute("birthDNFlag",AbstractTableFactory.getDNFlagIconName(flagRStatusId));
+        	request.setAttribute("birthDNFlag",getDNFlagIconName(flagRStatusId));
         }
     }
     
@@ -397,6 +396,22 @@ public class UpdateSubjectServlet extends SecureController {
             return SecureController.ADMIN_SERVLET_CODE;
         } else {
             return "";
+        }
+    }
+
+    /**
+     * Phase B.4 jmesa PR 8 (cohort 6): inlined here from the deleted
+     * AbstractTableFactory. UpdateSubjectServlet was the only caller.
+     */
+    private static String getDNFlagIconName(int dnResolutionStatusId) {
+        switch (dnResolutionStatusId) {
+            case 1:  return "icon_Note";
+            case 2:  return "icon_flagYellow";
+            case 3:  return "icon_flagGreen";
+            case 4:  return "icon_flagBlack";
+            case 5:  return "icon_flagWhite";
+            case 0:
+            default: return "icon_noNote";
         }
     }
 
