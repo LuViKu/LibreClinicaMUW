@@ -23,27 +23,14 @@ import org.akaza.openclinica.bean.managestudy.DiscrepancyNoteBean;
 import org.akaza.openclinica.bean.managestudy.StudySubjectBean;
 import org.akaza.openclinica.control.core.SecureController;
 import org.akaza.openclinica.control.form.FormProcessor;
-import org.akaza.openclinica.control.submit.ListNotesTableFactory;
 import org.akaza.openclinica.control.submit.SubmitDataServlet;
-import org.akaza.openclinica.dao.admin.CRFDAO;
-import org.akaza.openclinica.dao.login.UserAccountDAO;
 import org.akaza.openclinica.dao.managestudy.DiscrepancyNoteDAO;
-import org.akaza.openclinica.dao.managestudy.EventDefinitionCRFDAO;
-import org.akaza.openclinica.dao.managestudy.StudyDAO;
-import org.akaza.openclinica.dao.managestudy.StudyEventDAO;
-import org.akaza.openclinica.dao.managestudy.StudyEventDefinitionDAO;
 import org.akaza.openclinica.dao.managestudy.StudySubjectDAO;
-import org.akaza.openclinica.dao.submit.CRFVersionDAO;
-import org.akaza.openclinica.dao.submit.EventCRFDAO;
-import org.akaza.openclinica.dao.submit.ItemDAO;
-import org.akaza.openclinica.dao.submit.ItemDataDAO;
-import org.akaza.openclinica.dao.submit.SubjectDAO;
 import org.akaza.openclinica.service.DiscrepancyNoteUtil;
 import org.akaza.openclinica.service.DiscrepancyNotesSummary;
 import org.akaza.openclinica.service.managestudy.ViewNotesService;
 import org.akaza.openclinica.view.Page;
 import org.akaza.openclinica.web.InsufficientPermissionException;
-import org.jmesa.facade.TableFacade;
 import org.springframework.web.context.support.WebApplicationContextUtils;
 /**
  * View a list of all discrepancy notes in current study
@@ -155,46 +142,22 @@ public class ViewNotesServlet extends SecureController {
             session.setAttribute(RESOLUTION_STATUS, resolutionStatusIds);
         }
 
-        StudySubjectDAO subdao = new StudySubjectDAO(sm.getDataSource());
-        StudyDAO studyDao = new StudyDAO(sm.getDataSource());
+        // Phase B.4 jmesa PR 5a (cohort 3a): the ListNotesTableFactory
+        // HTML blob is gone. The JSP shell now includes a vanilla-JS
+        // fragment that fetches /ViewNotesData asynchronously. The
+        // summary-statistics block above the table is still
+        // server-rendered (small, static layout — no win from
+        // moving it client-side).
+        org.akaza.openclinica.service.managestudy.ViewNotesFilterCriteria summaryFilter =
+                org.akaza.openclinica.service.managestudy.ViewNotesFilterCriteria.buildFilterCriteria(
+                        new HashMap<String, String>(),
+                        getDataFormat(),
+                        buildTypeDecoder(),
+                        buildResolutionDecoder());
+        DiscrepancyNotesSummary summary = resolveViewNotesService()
+                .calculateNotesSummary(currentStudy, summaryFilter);
 
-        SubjectDAO sdao = new SubjectDAO(sm.getDataSource());
-
-        UserAccountDAO uadao = new UserAccountDAO(sm.getDataSource());
-        CRFVersionDAO crfVersionDao = new CRFVersionDAO(sm.getDataSource());
-        CRFDAO crfDao = new CRFDAO(sm.getDataSource());
-        StudyEventDAO studyEventDao = new StudyEventDAO(sm.getDataSource());
-        StudyEventDefinitionDAO studyEventDefinitionDao = new StudyEventDefinitionDAO(sm.getDataSource());
-        EventDefinitionCRFDAO eventDefinitionCRFDao = new EventDefinitionCRFDAO(sm.getDataSource());
-        ItemDataDAO itemDataDao = new ItemDataDAO(sm.getDataSource());
-        ItemDAO itemDao = new ItemDAO(sm.getDataSource());
-        EventCRFDAO eventCRFDao = new EventCRFDAO(sm.getDataSource());
-
-
-
-        ListNotesTableFactory factory = new ListNotesTableFactory(showMoreLink);
-        factory.setSubjectDao(sdao);
-        factory.setStudySubjectDao(subdao);
-        factory.setUserAccountDao(uadao);
-        factory.setStudyDao(studyDao);
-        factory.setCurrentStudy(currentStudy);
-        factory.setDiscrepancyNoteDao(dndao);
-        factory.setCrfDao(crfDao);
-        factory.setCrfVersionDao(crfVersionDao);
-        factory.setStudyEventDao(studyEventDao);
-        factory.setStudyEventDefinitionDao(studyEventDefinitionDao);
-        factory.setEventDefinitionCRFDao(eventDefinitionCRFDao);
-        factory.setItemDao(itemDao);
-        factory.setItemDataDao(itemDataDao);
-        factory.setEventCRFDao(eventCRFDao);
-        factory.setModule(moduleStr);
-        factory.setDiscNoteType(discNoteType);
-        factory.setResolutionStatus(resolutionStatus);
-        factory.setViewNotesService(resolveViewNotesService());
-        //factory.setResolutionStatusIds(resolutionStatusIds);
-        TableFacade tf = factory.createTable(request, response);
-
-        Map<String, Map<String, String>> stats = generateDiscrepancyNotesSummary(factory.getNotesSummary());
+        Map<String, Map<String, String>> stats = generateDiscrepancyNotesSummary(summary);
         Map<String,String> totalMap = generateDiscrepancyNotesTotal(stats);
 
         int grandTotal = 0;
@@ -204,10 +167,6 @@ public class ViewNotesServlet extends SecureController {
         }
         request.setAttribute("summaryMap", stats);
 
-        tf.setTotalRows(grandTotal);
-        String viewNotesHtml = tf.render();
-
-        request.setAttribute("viewNotesHtml", viewNotesHtml);
         String viewNotesURL = this.getPageURL();
         session.setAttribute("viewNotesURL", viewNotesURL);
         String viewNotesPageFileName = this.getPageServletFileName();
@@ -219,12 +178,50 @@ public class ViewNotesServlet extends SecureController {
         request.setAttribute("grandTotal", grandTotal);
 
         if ("yes".equalsIgnoreCase(fp.getString(PRINT))) {
-        	List<DiscrepancyNoteBean> allNotes = factory.findAllNotes(tf);
+            org.akaza.openclinica.service.managestudy.ViewNotesFilterCriteria printFilter =
+                    org.akaza.openclinica.service.managestudy.ViewNotesFilterCriteria.buildFilterCriteria(
+                            new HashMap<String, String>(),
+                            getDataFormat(),
+                            buildTypeDecoder(),
+                            buildResolutionDecoder());
+            List<org.akaza.openclinica.core.util.Pair<String,String>> sortPairs =
+                    new ArrayList<org.akaza.openclinica.core.util.Pair<String,String>>();
+            sortPairs.add(new org.akaza.openclinica.core.util.Pair<String,String>(
+                    "discrepancyNoteBean.createdDate", "desc"));
+            List<DiscrepancyNoteBean> allNotes = resolveViewNotesService().listNotes(
+                    currentStudy, printFilter,
+                    org.akaza.openclinica.service.managestudy.ViewNotesSortCriteria
+                            .buildFilterCriteria(sortPairs));
             request.setAttribute("allNotes", allNotes);
             forwardPage(Page.VIEW_DISCREPANCY_NOTES_IN_STUDY_PRINT);
         } else {
             forwardPage(Page.VIEW_DISCREPANCY_NOTES_IN_STUDY);
         }
+    }
+
+    private String getDataFormat() {
+        java.util.ResourceBundle resformat =
+                org.akaza.openclinica.i18n.util.ResourceBundleProvider.getFormatBundle(
+                        org.akaza.openclinica.i18n.core.LocaleResolver.getLocale(request));
+        return resformat.getString("date_format_string");
+    }
+
+    private Map<String, String> buildTypeDecoder() {
+        Map<String, String> decoder = new HashMap<String, String>();
+        for (DiscrepancyNoteType t : DiscrepancyNoteType.list) {
+            decoder.put(t.getName(), Integer.toString(t.getId()));
+        }
+        decoder.put("Query and Failed Validation Check", "1,3");
+        return decoder;
+    }
+
+    private Map<String, String> buildResolutionDecoder() {
+        Map<String, String> decoder = new HashMap<String, String>();
+        for (ResolutionStatus s : ResolutionStatus.list) {
+            decoder.put(s.getName(), Integer.toString(s.getId()));
+        }
+        decoder.put("New and Updated", "1,2");
+        return decoder;
     }
 
     /**

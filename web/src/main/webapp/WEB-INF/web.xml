@@ -1149,6 +1149,11 @@
         <servlet-class>org.akaza.openclinica.control.managestudy.ViewNotesServlet</servlet-class>
     </servlet>
     <servlet>
+        <servlet-name>ViewNotesDataServlet</servlet-name>
+        <description>JSON endpoint for the DataTables-backed Notes &amp; Discrepancies table (Phase B.4 jmesa PR 5a).</description>
+        <servlet-class>org.akaza.openclinica.control.managestudy.ViewNotesDataServlet</servlet-class>
+    </servlet>
+    <servlet>
         <servlet-name>ViewNoteServlet</servlet-name>
         <display-name>ViewNote</display-name>
         <servlet-class>org.akaza.openclinica.control.managestudy.ViewNoteServlet</servlet-class>
@@ -2159,6 +2164,10 @@
     <servlet-mapping>
         <servlet-name>ViewNotesServlet</servlet-name>
         <url-pattern>/ViewNotes</url-pattern>
+    </servlet-mapping>
+    <servlet-mapping>
+        <servlet-name>ViewNotesDataServlet</servlet-name>
+        <url-pattern>/ViewNotesData</url-pattern>
     </servlet-mapping>
     <servlet-mapping>
         <servlet-name>ViewNoteServlet</servlet-name>
