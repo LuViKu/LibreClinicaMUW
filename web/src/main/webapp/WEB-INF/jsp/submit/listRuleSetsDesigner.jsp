@@ -24,27 +24,8 @@
 <script type="text/javascript" src="includes/new_cal/lang/<fmt:message key="jscalendar_language_file" bundle="${resformat}"/>"></script>
 <script type="text/javascript" src="includes/new_cal/calendar-setup.js"></script>
 
-<script type="text/javascript" language="JavaScript" src="includes/jmesa/jquery.min.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jmesa.js"></script>
-<%-- <script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jmesa-original.js"></script> --%>
-<script type="text/javascript" language="JavaScript" src="includes/jmesa/jquery.blockUI.js"></script>
-<script type="text/javascript" language="JavaScript" src="includes/jmesa/jquery-ui-1.8.2.custom.min.js"></script>
-
-<script type="text/javascript" language="JavaScript" src="includes/jmesa/jquery-migrate-1.1.1.js"></script>
-
-<script type="text/javascript">
-    function onInvokeAction(id,action) {
-        if(id.indexOf('ruleAssignments') == -1)  {
-        setExportToLimit(id, '');
-        }
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        location.href = '${pageContext.request.contextPath}/ViewRuleAssignment?'+ parameterString;
-    }
-</script>
+<%-- Phase B.4 jmesa PR 7a (cohort 5a): jmesa scripts removed —
+     table rendered client-side by ../include/viewRuleAssignmentTable.jsp. --%>
 
 <jsp:useBean scope='session' id='userBean' class='org.akaza.openclinica.bean.login.UserAccountBean'/>
 <jsp:useBean scope='session' id='userRole' class='org.akaza.openclinica.bean.login.StudyUserRoleBean' />
@@ -56,10 +37,5 @@
 
 
 <div id="ruleAssignmentsDiv">
-    <form  action="${pageContext.request.contextPath}/ViewRuleAssignment">
-        <input type="hidden" name="module" value="admin">
-        ${ruleAssignmentsHtml}
-    </form>
+    <jsp:include page="../include/viewRuleAssignmentTable.jsp"/>
 </div>
-
-<script>$j("img[title*='PDF']").attr('title', '<fmt:message key="view_rules_download_xml" bundle="${resword}"/>' );</script>

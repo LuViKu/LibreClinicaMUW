@@ -34,15 +34,15 @@
     	<property name="dataSource" ref="dataSource"/>
     </bean>
 
-    <bean name="sdvFactory" class="org.akaza.openclinica.web.table.sdv.SubjectIdSDVFactory">
-    	<property name="dataSource" ref="dataSource"/>
-    </bean>
+    <!-- Phase B.4 jmesa PR 7b (cohort 5b): sdvFactory bean deleted along
+         with the SubjectIdSDVFactory class. SDVController now exposes
+         /viewSubjectAggregateData as a JSON endpoint. -->
    
    
-       <bean name="scheduledJobTableFactory" class="org.akaza.openclinica.web.table.scheduledjobs.ScheduledJobTableFactory">
-    </bean>
-                 
-	
+    <!-- Phase B.4 jmesa PR 7c (cohort 5c): scheduledJobTableFactory bean
+         deleted along with the class. ScheduledJobController now
+         emits JSON at /pages/listCurrentScheduledJobsData. -->
+
     <oxm:jaxb2-marshaller id="jaxbMarshaller" context-path="org.cdisc.ns.odm.v130:org.cdisc.ns.odm.v130_api:org.openclinica.ns.odm_ext_v130.v31_api:org.openclinica.ns.odm_ext_v130.v31:org.openclinica.ns.rules.v31:org.openclinica.ns.response.v31:org.openclinica.ns.rules_test.v31"/>
     
     <bean id="marshallingHttpMessageConverter"  class="org.springframework.http.converter.xml.MarshallingHttpMessageConverter">

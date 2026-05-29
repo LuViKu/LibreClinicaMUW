@@ -32,22 +32,8 @@
 
 <jsp:include page="include/sideInfo.jsp"/>
 
-<link rel="stylesheet" href="../includes/jmesa/jmesa.css" type="text/css">
-<script type="text/JavaScript" src="../includes/jmesa/jquery.min.js"></script>
-<script type="text/JavaScript" src="../includes/jmesa/jmesa.js"></script>
-<script type="text/JavaScript" src="../includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/javascript" src="../includes/jmesa/jquery-migrate-1.1.1.js"></script>
-
-<script type="text/javascript">
-    function onInvokeAction(id,action) {
-        setExportToLimit(id, '');
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        //location.href = '${pageContext.request.contextPath}/ViewCRF?module=manage&crfId=' + '${crf.id}&' + parameterString;
-    }
-</script>
+<%-- Phase B.4 jmesa PR 7b (cohort 5b): jmesa scripts removed — table
+     rendered client-side by include/viewSubjectAggregateTable.jsp. --%>
 
 <h1><span class="title_manage"><fmt:message key="sdv_sdv_for" bundle="${resword}"/> <c:out value="${study.name}"/></span></h1>
 
@@ -91,15 +77,12 @@
         <%-- the destination JSP page after removal or adding SDV for an eventCRF --%>
         <input type="hidden" name="redirection" value="viewSubjectAggregate">
 
-        ${sdvTableAttribute}
+        <jsp:include page="include/viewSubjectAggregateTable.jsp"/>
         <br />
-            <c:if test="${!(study.status.locked)}">
-              <input type="submit" name="sdvAllFormSubmit" class="button_medium" value="<fmt:message key="sdv_all_checked" bundle="${resword}"/>" onclick="this.form.method='POST';this.form.action='${pageContext.request.contextPath}/pages/sdvStudySubjects';this.form.submit();"/>
-           </c:if>
-        <%--<input type="submit" name="sdvAllFormCancel" class="button_medium" value="Cancel" onclick="this.form.action='${pageContext.request.contextPath}/pages/viewSubjectAggregate';this.form.submit();"/> --%>
+        <c:if test="${!(study.status.locked)}">
+            <input type="submit" name="sdvAllFormSubmit" class="button_medium" value="<fmt:message key="sdv_all_checked" bundle="${resword}"/>" onclick="this.form.method='POST';this.form.action='${pageContext.request.contextPath}/pages/sdvStudySubjects';this.form.submit();"/>
+        </c:if>
     </form>
-    <script type="text/javascript">hideCols('s_sdv',[2,3,4])</script>
-
 </div>
 <!-- end of viewSubjectAggregate.jsp -->
 <jsp:include page="include/footer.jsp"/>
