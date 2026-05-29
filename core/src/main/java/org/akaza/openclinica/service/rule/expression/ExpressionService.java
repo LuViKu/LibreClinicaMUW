@@ -54,10 +54,9 @@ import org.akaza.openclinica.domain.rule.expression.ExpressionObjectWrapper;
 import org.akaza.openclinica.exception.OpenClinicaSystemException;
 import org.akaza.openclinica.i18n.util.ResourceBundleProvider;
 import org.akaza.openclinica.logic.expressionTree.ExpressionTreeHelper;
-import org.joda.time.DateMidnight;
-import org.joda.time.DateTimeZone;
-import org.joda.time.format.DateTimeFormatter;
-import org.joda.time.format.ISODateTimeFormat;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -216,15 +215,15 @@ public class ExpressionService {
             ssZoneId = TimeZone.getDefault().getID();
         }
 
-        DateTimeZone ssZone = DateTimeZone.forID(ssZoneId);
-        DateMidnight dm = new DateMidnight(ssZone);
-        DateTimeFormatter fmt = ISODateTimeFormat.date();
-        map.put("ssDate", fmt.print(dm));
+        ZoneId ssZone = ZoneId.of(ssZoneId);
+        LocalDate dm = LocalDate.now(ssZone);
+        DateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE;
+        map.put("ssDate", fmt.format(dm));
 
         map.put("serverZoneId", serverZoneId);
-        DateTimeZone serverZone = DateTimeZone.forID(serverZoneId);
-        DateMidnight serverDate = new DateMidnight(serverZone);
-        map.put("serverDate", fmt.print(serverDate));
+        ZoneId serverZone = ZoneId.of(serverZoneId);
+        LocalDate serverDate = LocalDate.now(serverZone);
+        map.put("serverDate", fmt.format(serverDate));
         return map;
     }
 

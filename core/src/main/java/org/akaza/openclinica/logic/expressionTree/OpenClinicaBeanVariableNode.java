@@ -9,16 +9,15 @@
  */
 package org.akaza.openclinica.logic.expressionTree;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.TimeZone;
 
 import org.akaza.openclinica.bean.core.SubjectEventStatus;
 import org.akaza.openclinica.domain.rule.expression.ExpressionBeanObjectWrapper;
 import org.akaza.openclinica.exception.OpenClinicaSystemException;
 import org.akaza.openclinica.service.rule.expression.ExpressionBeanService;
-import org.joda.time.DateMidnight;
-import org.joda.time.DateTimeZone;
-import org.joda.time.format.DateTimeFormatter;
-import org.joda.time.format.ISODateTimeFormat;
 
 /**
  * @author Krikor Krumlian
@@ -101,10 +100,10 @@ public class OpenClinicaBeanVariableNode extends ExpressionNode {
         if (ssTimeZone.equals("") || ssTimeZone == null) 	
         	ssTimeZone = TimeZone.getDefault().getID();
       
-            DateTimeZone ssZone = DateTimeZone.forID(ssTimeZone);
-            DateMidnight dm = new DateMidnight(ssZone);
-            DateTimeFormatter fmt = ISODateTimeFormat.date();
-            return fmt.print(dm);
+            ZoneId ssZone = ZoneId.of(ssTimeZone);
+            LocalDate dm = LocalDate.now(ssZone);
+            DateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE;
+            return fmt.format(dm);
         }
         return null;
     }

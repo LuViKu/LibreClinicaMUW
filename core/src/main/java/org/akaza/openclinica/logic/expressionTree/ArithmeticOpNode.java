@@ -9,11 +9,13 @@
  */
 package org.akaza.openclinica.logic.expressionTree;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+
 import org.akaza.openclinica.exception.OpenClinicaSystemException;
-import org.joda.time.DateMidnight;
-import org.joda.time.Days;
-import org.joda.time.format.DateTimeFormatter;
-import org.joda.time.format.ISODateTimeFormat;
 
 /**
  * @author Krikor Krumlian
@@ -83,12 +85,15 @@ public class ArithmeticOpNode extends ExpressionNode {
     }
 
     private String calculateDaysBetween(String value1, String value2) {
-        DateMidnight dm1 = new DateMidnight(ExpressionTreeHelper.getDate(value1).getTime());
-        DateMidnight dm2 = new DateMidnight(ExpressionTreeHelper.getDate(value2).getTime());
+        LocalDate dm1 = LocalDate.ofInstant(
+                Instant.ofEpochMilli(ExpressionTreeHelper.getDate(value1).getTime()),
+                ZoneId.systemDefault());
+        LocalDate dm2 = LocalDate.ofInstant(
+                Instant.ofEpochMilli(ExpressionTreeHelper.getDate(value2).getTime()),
+                ZoneId.systemDefault());
         switch (op) {
         case MINUS: {
-            Days d = Days.daysBetween(dm1, dm2);
-            int days = d.getDays();
+            long days = ChronoUnit.DAYS.between(dm1, dm2);
             return String.valueOf(Math.abs(days));
         }
         default:
@@ -97,16 +102,18 @@ public class ArithmeticOpNode extends ExpressionNode {
     }
 
     private String calculateGenericDate(String value1, String value2) {
-        DateMidnight dm = new DateMidnight(ExpressionTreeHelper.getDate(value1).getTime());
-        DateTimeFormatter fmt = ISODateTimeFormat.date();
+        LocalDate dm = LocalDate.ofInstant(
+                Instant.ofEpochMilli(ExpressionTreeHelper.getDate(value1).getTime()),
+                ZoneId.systemDefault());
+        DateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE;
         switch (op) {
         case PLUS: {
             dm = dm.plusDays(Double.valueOf(value2).intValue());
-            return fmt.print(dm);
+            return fmt.format(dm);
         }
         case MINUS: {
             dm = dm.minusDays(Double.valueOf(value2).intValue());
-            return fmt.print(dm);
+            return fmt.format(dm);
         }
         default:
             return null; // Bad operator!

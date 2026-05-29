@@ -48,8 +48,8 @@ import org.akaza.openclinica.service.rule.expression.ExpressionService;
 import org.akaza.openclinica.validator.rule.action.EventActionValidator;
 import org.akaza.openclinica.validator.rule.action.InsertActionValidator;
 import org.akaza.openclinica.validator.rule.action.RandomizeActionValidator;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.validation.DataBinder;
@@ -786,9 +786,9 @@ public class RulesPostImportContainerService {
     private boolean isRunTimeValid(AuditableBeanWrapper<RuleSetBean> ruleSetBeanWrapper , String runTime) {
         boolean isValid = true;
 
-        DateTimeFormatter formatter = DateTimeFormat.forPattern("HH:mm");
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("HH:mm");
         try {
-            formatter.parseDateTime(runTime);
+            LocalTime.parse(runTime, formatter);
              if(!runTime.matches("\\d{2}:\\d{2}")){
                  ruleSetBeanWrapper.error(createError("OCRERR_0047"));
                  isValid = false;

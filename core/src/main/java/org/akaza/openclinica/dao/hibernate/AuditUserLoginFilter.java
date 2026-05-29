@@ -12,10 +12,11 @@ package org.akaza.openclinica.dao.hibernate;
 import org.akaza.openclinica.domain.technicaladmin.LoginStatus;
 import org.hibernate.Criteria;
 import org.hibernate.criterion.Restrictions;
-import org.joda.time.DateTime;
 
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -55,9 +56,9 @@ public class AuditUserLoginFilter implements CriteriaCommand {
         try {
             DateFormat format = new SimpleDateFormat("yyyy");
             Date startDate = format.parse(value);
-            DateTime dt = new DateTime(startDate.getTime());
+            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
             dt = dt.plusYears(1);
-            Date endDate = dt.toDate();
+            Date endDate = Date.from(dt.toInstant());
             criteria.add(Restrictions.between("loginAttemptDate", startDate, endDate));
         } catch (Exception e) {
             // Do nothing
@@ -68,9 +69,9 @@ public class AuditUserLoginFilter implements CriteriaCommand {
         try {
             DateFormat format = new SimpleDateFormat("yyyy-MM");
             Date startDate = format.parse(value);
-            DateTime dt = new DateTime(startDate.getTime());
+            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
             dt = dt.plusMonths(1);
-            Date endDate = dt.toDate();
+            Date endDate = Date.from(dt.toInstant());
             criteria.add(Restrictions.between("loginAttemptDate", startDate, endDate));
         } catch (Exception e) {
             // Do nothing
@@ -81,9 +82,9 @@ public class AuditUserLoginFilter implements CriteriaCommand {
         try {
             DateFormat format = new SimpleDateFormat("yyyy-MM-dd");
             Date startDate = format.parse(value);
-            DateTime dt = new DateTime(startDate.getTime());
+            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
             dt = dt.plusDays(1);
-            Date endDate = dt.toDate();
+            Date endDate = Date.from(dt.toInstant());
             criteria.add(Restrictions.between("loginAttemptDate", startDate, endDate));
         } catch (Exception e) {
             // Do nothing
@@ -94,9 +95,9 @@ public class AuditUserLoginFilter implements CriteriaCommand {
         try {
             DateFormat format = new SimpleDateFormat("yyyy-MM-dd HH");
             Date startDate = format.parse(value);
-            DateTime dt = new DateTime(startDate.getTime());
+            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
             dt = dt.plusHours(1);
-            Date endDate = dt.toDate();
+            Date endDate = Date.from(dt.toInstant());
             criteria.add(Restrictions.between("loginAttemptDate", startDate, endDate));
         } catch (Exception e) {
             // Do nothing
@@ -107,9 +108,9 @@ public class AuditUserLoginFilter implements CriteriaCommand {
         try {
             DateFormat format = new SimpleDateFormat("yyyy-MM-dd HH:mm");
             Date startDate = format.parse(value);
-            DateTime dt = new DateTime(startDate.getTime());
+            ZonedDateTime dt = startDate.toInstant().atZone(ZoneId.systemDefault());
             dt = dt.plusMinutes(1);
-            Date endDate = dt.toDate();
+            Date endDate = Date.from(dt.toInstant());
             criteria.add(Restrictions.between("loginAttemptDate", startDate, endDate));
         } catch (Exception e) {
             // Do nothing

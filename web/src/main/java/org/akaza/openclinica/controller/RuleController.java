@@ -48,10 +48,8 @@ import org.akaza.openclinica.logic.odmExport.MetaDataCollector;
 import org.akaza.openclinica.service.rule.RuleSetServiceInterface;
 import org.akaza.openclinica.service.rule.RulesPostImportContainerService;
 import org.apache.commons.dbcp.BasicDataSource;
-import org.joda.time.DateTime;
-import org.joda.time.Duration;
-import org.joda.time.format.PeriodFormatter;
-import org.joda.time.format.PeriodFormatterBuilder;
+import java.time.Duration;
+import java.time.Instant;
 import org.openclinica.ns.response.v31.MessagesType;
 import org.openclinica.ns.response.v31.Response;
 import org.openclinica.ns.rules.v31.*;
@@ -468,13 +466,11 @@ public class RuleController {
         ExpressionProcessor ep = ExpressionProcessorFactory.createExpressionProcessor(eow);
 
         // Run expression with populated HashMap
-        DateTime start = new DateTime();
+        Instant start = Instant.now();
         HashMap<String, String> result = ep.testEvaluateExpression(p);
-        DateTime end = new DateTime();
-        Duration dur = new Duration(start, end);
-        PeriodFormatter yearsAndMonths =
-                new PeriodFormatterBuilder().printZeroAlways().appendSecondsWithMillis().appendSuffix(" second", " seconds").toFormatter();
-        yearsAndMonths.print(dur.toPeriod());
+        Instant end = Instant.now();
+        Duration dur = Duration.between(start, end);
+        String durationLabel = String.format("%.3f seconds", dur.toMillis() / 1000.0);
 
         // Run expression with empty HashMap to check rule validity, because
         // using illegal test values will cause invalidity
@@ -492,10 +488,10 @@ public class RuleController {
         // result.remove("ruleValidationFailMessage");
         // }
         // Put on screen
-        // request.setAttribute("duration", yearsAndMonths.print(dur.toPeriod()));
+        // request.setAttribute("duration", durationLabel);
         RulesTestMessagesType messageType = new RulesTestMessagesType();
         messageType.setKey("duration");
-        messageType.setValue(yearsAndMonths.print(dur.toPeriod()));
+        messageType.setValue(durationLabel);
         ruleTest.getRulesTestMessages().add(messageType);
 
         return ruleTest;
