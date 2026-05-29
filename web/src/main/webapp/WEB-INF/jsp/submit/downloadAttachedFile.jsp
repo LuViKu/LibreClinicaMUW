@@ -1,5 +1,5 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
 <%@ page import="java.io.*" %>
 <jsp:useBean scope='session' id='pageMessage' class='java.lang.String'/>
 <jsp:useBean scope='request' id='downloadStatus' class='java.lang.String'/>

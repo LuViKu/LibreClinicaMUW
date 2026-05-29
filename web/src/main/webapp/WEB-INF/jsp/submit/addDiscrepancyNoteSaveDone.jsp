@@ -1,6 +1,6 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 <jsp:useBean scope='request' id='strResStatus' class='java.lang.String' />
 <jsp:useBean scope='request' id='writeToDB' class='java.lang.String' />
 <jsp:useBean scope='request' id='submitClose' class='java.lang.String' />
