@@ -106,7 +106,14 @@ public class BatchCRFMigrationController implements Runnable {
     @Autowired
     private CrfVersionDao crfVersionDao;
 
-    @Autowired
+    // Phase B.5: inject the JPA EntityManagerFactory and unwrap to
+    // Hibernate's SessionFactory at use-site. There's no standalone
+    // sessionFactory bean — Hibernate 6's SessionFactory extends
+    // EntityManagerFactory, so a parallel bean would clash with the JPA
+    // entityManagerFactory for type-based resolution.
+    @jakarta.persistence.PersistenceUnit
+    private jakarta.persistence.EntityManagerFactory entityManagerFactory;
+
     private SessionFactory sessionFactory;
 
     private HelperObject helperObject;
@@ -764,6 +771,12 @@ public class BatchCRFMigrationController implements Runnable {
        helperObject.setStudyEventDao(studyEventDao);
        helperObject.setStudySubjectDao(studySubjectDao);
        helperObject.setCrfVersionDao(crfVersionDao);
+       // Phase B.5: unwrap to Hibernate SessionFactory at use-site. See field
+       // declarations above for the rationale (no standalone sessionFactory bean
+       // in the Hibernate-6 / JPA Spring config).
+       if (sessionFactory == null && entityManagerFactory != null) {
+           sessionFactory = entityManagerFactory.unwrap(SessionFactory.class);
+       }
        helperObject.setSessionFactory(sessionFactory);
    }
 

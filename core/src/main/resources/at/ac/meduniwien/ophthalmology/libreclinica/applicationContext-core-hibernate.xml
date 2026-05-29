@@ -86,6 +86,14 @@
         </property>
     </bean>
 
+  <!-- Phase B.5: no standalone `sessionFactory` bean. Hibernate 6's
+       SessionFactory extends EntityManagerFactory, so a parallel bean would
+       collide with the entityManagerFactory for @PersistenceContext /
+       @PersistenceUnit type-based resolution (and `autowire-candidate=false`
+       blocks @Qualifier too). The two legacy callers
+       (HelperObject + BatchCRFMigrationController) inject EntityManagerFactory
+       via @PersistenceUnit and call unwrap(SessionFactory.class) at use site. -->
+
   <!-- Phase B.5: JpaTransactionManager replaces HibernateTransactionManager.
        Wraps the EntityManagerFactory declared above; AbstractDomainDao now
        uses @PersistenceContext to get the EntityManager and unwraps to

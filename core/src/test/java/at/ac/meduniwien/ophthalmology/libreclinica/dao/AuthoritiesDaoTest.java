@@ -53,11 +53,15 @@ public class AuthoritiesDaoTest extends HibernateOcDbTestCase {
     }
   
     public void testSaveOrUpdate() {
-    	//AuthoritiesDao authoritiesDao = (AuthoritiesDao) getContext().getBean("authoritiesDao");
         AuthoritiesBean authorities = new AuthoritiesBean();
         authorities.setUsername("root");
         authorities.setAuthority("ROLE_USER");
         authorities.setId(-1);
+        // Phase B.5: Hibernate 6 strictly requires a non-null @Version on an
+        // entity that's being treated as detached (id manually set). Hibernate
+        // 5 was lenient and accepted null → 0 on insert. Initialise to 0 to
+        // match the new contract.
+        authorities.setVersion(0);
         authorities = authoritiesDao.saveOrUpdate(authorities);
 
         assertNotNull("Persistant id is null", authorities.getId());
