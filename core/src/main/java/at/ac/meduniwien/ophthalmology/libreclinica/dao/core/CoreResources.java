@@ -433,6 +433,19 @@ public class CoreResources implements ResourceLoaderAware {
         String url = null, driver = null, hibernateDialect = null;
         if (database.equalsIgnoreCase("postgres")) {
             url = "jdbc:postgresql:" + "//" + DATAINFO.getProperty("dbHost") + ":" + DATAINFO.getProperty("dbPort") + "/" + DATAINFO.getProperty("db");
+            // Phase C.3 (decision ratified 2026-05-28): optional JDBC URL
+            // hardening (CVE-2025-49146 + CVE-2026-42198). Append
+            // sslMode + scramMaxIterations if datainfo.properties carries
+            // those keys. Dev compose leaves them blank (the bundled
+            // postgres:14-alpine has no SSL cert); prod operators set
+            // jdbc.sslMode=verify-full and jdbc.scramMaxIterations=10000
+            // in datainfo.properties before deploying. The full Spring
+            // Boot @ConfigurationProperties migration of the JDBC URL
+            // lands later (interlocked with C.8 placeholder retire).
+            String jdbcParams = buildOptionalJdbcUrlParams();
+            if (!jdbcParams.isEmpty()) {
+                url = url + (url.contains("?") ? "&" : "?") + jdbcParams;
+            }
             driver = "org.postgresql.Driver";
             hibernateDialect = "org.hibernate.dialect.PostgreSQLDialect";
         }
@@ -447,6 +460,30 @@ public class CoreResources implements ResourceLoaderAware {
         DATAINFO.setProperty("hibernate.dialect", hibernateDialect);
         DATAINFO.setProperty("driver", driver);
 
+    }
+
+    /**
+     * Build the optional JDBC URL parameter suffix from
+     * datainfo.properties keys {@code jdbc.sslMode} and
+     * {@code jdbc.scramMaxIterations}. Returns the joined parameter
+     * string (e.g. {@code "sslMode=verify-full&scramMaxIterations=10000"})
+     * or the empty string if neither key is set. Phase C.3 — see
+     * {@code setDatabaseProperties} for context.
+     */
+    private String buildOptionalJdbcUrlParams() {
+        StringBuilder params = new StringBuilder();
+        String sslMode = DATAINFO.getProperty("jdbc.sslMode");
+        if (sslMode != null && !sslMode.isEmpty()) {
+            params.append("sslMode=").append(sslMode);
+        }
+        String scramIterations = DATAINFO.getProperty("jdbc.scramMaxIterations");
+        if (scramIterations != null && !scramIterations.isEmpty()) {
+            if (params.length() > 0) {
+                params.append('&');
+            }
+            params.append("scramMaxIterations=").append(scramIterations);
+        }
+        return params.toString();
     }
 
     private void copyBaseToDest(ResourceLoader resourceLoader) {
