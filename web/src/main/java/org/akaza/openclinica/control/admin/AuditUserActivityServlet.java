@@ -11,28 +11,34 @@ package org.akaza.openclinica.control.admin;
 
 import java.util.Locale;
 
-import org.akaza.openclinica.control.SpringServletAccess;
 import org.akaza.openclinica.control.core.SecureController;
-import org.akaza.openclinica.dao.hibernate.AuditUserLoginDao;
 import org.akaza.openclinica.i18n.core.LocaleResolver;
 import org.akaza.openclinica.view.Page;
 import org.akaza.openclinica.web.InsufficientPermissionException;
 
 /**
- * Servlet for creating a table.
+ * Servlet for the audit-user-activity page. Phase B.4 jmesa PR 4a:
+ * the deleted {@code AuditUserLoginTableFactory} used to render the
+ * full table as an HTML string here; the JSP now ships an empty
+ * {@code <table>} skeleton and the rows arrive via the
+ * {@link AuditUserActivityDataServlet} AJAX endpoint.
+ *
+ * <p>Responsibility split:
+ * <ul>
+ *   <li>{@code AuditUserActivityServlet} (this class) — renders the
+ *       JSP shell, enforces sysadmin-only access.</li>
+ *   <li>{@code AuditUserActivityDataServlet} — JSON endpoint at
+ *       {@code /AuditUserActivityData}, returns one DataTables page
+ *       per AJAX request.</li>
+ * </ul>
  *
  * @author Krikor Krumlian
  */
 public class AuditUserActivityServlet extends SecureController {
 
     private static final long serialVersionUID = 1L;
-    private AuditUserLoginDao auditUserLoginDao;
     Locale locale;
 
-    /*
-     * (non-Javadoc)
-     * @see org.akaza.openclinica.control.core.SecureController#mayProceed()
-     */
     @Override
     protected void mayProceed() throws InsufficientPermissionException {
 
@@ -48,23 +54,11 @@ public class AuditUserActivityServlet extends SecureController {
 
     @Override
     protected void processRequest() throws Exception {
-        AuditUserLoginTableFactory factory = new AuditUserLoginTableFactory();
-        factory.setAuditUserLoginDao(getAuditUserLoginDao());
-        String auditUserLoginHtml = factory.createTable(request, response).render();
-        request.setAttribute("auditUserLoginHtml", auditUserLoginHtml);
         forwardPage(Page.AUDIT_USER_ACTIVITY);
-
     }
 
     @Override
     protected String getAdminServlet() {
         return SecureController.ADMIN_SERVLET_CODE;
-    }
-
-    public AuditUserLoginDao getAuditUserLoginDao() {
-        auditUserLoginDao =
-            this.auditUserLoginDao != null ? auditUserLoginDao : (AuditUserLoginDao) SpringServletAccess.getApplicationContext(context).getBean(
-                    "auditUserLoginDao");
-        return auditUserLoginDao;
     }
 }

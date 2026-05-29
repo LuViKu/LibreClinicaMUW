@@ -13,24 +13,16 @@
 <jsp:include page="../include/sideAlert.jsp"/>
 
 
-<link rel="stylesheet" href="includes/jmesa/jmesa.css" type="text/css">
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.min.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jmesa.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery-migrate-1.1.1.js"></script> 
+<%-- Phase B.4 jmesa PR 4a: jmesa-rendered HTML blob replaced with
+     a DataTables.net 2.x server-side-processing init. The rows are
+     fetched via AJAX from /AuditUserActivityData (see
+     AuditUserActivityDataServlet). Operator drops the DataTables JS+CSS
+     bundle at /includes/js/datatables/ — see the README in that dir. --%>
+<link rel="stylesheet" type="text/css"
+      href="${pageContext.request.contextPath}/includes/js/datatables/datatables.min.css"/>
+<script type="text/javascript"
+        src="${pageContext.request.contextPath}/includes/js/datatables/datatables.min.js"></script>
 
-<script type="text/javascript">
-    function onInvokeAction(id,action) {
-        if(id.indexOf('userLogins') == -1)  {
-        setExportToLimit(id, '');
-        }
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        location.href = '${pageContext.request.contextPath}/AuditUserActivity?'+ parameterString;
-    }
-</script>
 
 <!-- then instructions-->
 <tr id="sidebar_Instructions_open" style="display: none">
@@ -65,13 +57,41 @@
 
 <jsp:useBean id="now" class="java.util.Date" />
 <P><I><fmt:message key="server_time_info" bundle="${resword}"/> <fmt:formatDate value="${now}" pattern="yyyy-MM-dd hh:mm"/>.</I></P>
+
 <div id="auditUserLoginDiv">
-    <form  action="${pageContext.request.contextPath}/AuditUserActivity">
-        <input type="hidden" name="module" value="admin">
-        <input type="hidden" name="crfId" value="${crf.id}">
-        ${auditUserLoginHtml}
-    </form>
+    <table id="auditUserLogin" class="datatable display" style="width:100%"></table>
 </div>
+
+<script type="text/javascript">
+  document.addEventListener('DOMContentLoaded', function() {
+    new DataTable('#auditUserLogin', {
+      serverSide: true,
+      processing: true,
+      ajax: '${pageContext.request.contextPath}/AuditUserActivityData',
+      pageLength: 25,
+      lengthMenu: [10, 25, 50, 100],
+      stateSave: true,
+      order: [[1, 'desc']],
+      columns: [
+        { data: 'userName',         title: '<fmt:message key="user_name" bundle="${resword}"/>' },
+        { data: 'loginAttemptDate', title: '<fmt:message key="attempt_date" bundle="${resword}"/>' },
+        { data: 'loginStatus',      title: '<fmt:message key="status" bundle="${resword}"/>' },
+        { data: 'details',          title: '<fmt:message key="details" bundle="${resword}"/>' },
+        {
+          data: 'userAccountId',
+          title: '<fmt:message key="actions" bundle="${resword}"/>',
+          orderable: false,
+          searchable: false,
+          render: function(userAccountId) {
+            if (userAccountId == null) { return ''; }
+            var url = '${pageContext.request.contextPath}/ViewUserAccount?userId=' + encodeURIComponent(userAccountId) + '&viewFull=yes';
+            return '<a href="' + url + '" title="View"><img hspace="6" border="0" align="left" alt="View" src="images/bt_View.gif"/></a>';
+          }
+        }
+      ]
+    });
+  });
+</script>
 
 
 <br>
