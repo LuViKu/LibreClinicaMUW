@@ -252,7 +252,12 @@
 	        <input type="hidden" name="crfId" value="0">
 	        <%-- the destination JSP page after removal or adding SDV for an eventCRF --%>
 	        <input type="hidden" name="redirection" value="viewAllSubjectSDVtmp">
-	        ${sdvMatrix}
+	        <%-- Phase B.4 jmesa PR 9 (cohort 7): server-rendered jmesa
+	             table replaced by vanilla-JS fragment. The fragment
+	             reads studyId from request attribute and fetches
+	             /pages/viewAllSubjectSdvData. --%>
+	        <c:set var="studyId" value="${study.id}" scope="request"/>
+	        <jsp:include page="include/viewAllSubjectSdvTable.jsp"/>
 	        <br />
 	        <c:if test="${!(study.status.locked)}">        
 	             <input type="submit" name="sdvAllFormSubmit" class="button_medium" value="<fmt:message key="submit" bundle="${resword}"/>" onclick="this.form.method='POST';this.form.action='${pageContext.request.contextPath}/pages/handleSDVPost';this.form.submit();"/>

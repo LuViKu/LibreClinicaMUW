@@ -237,11 +237,10 @@ public class MainMenuServlet extends SecureController {
     }
 
     private void setupSubjectSDVTable() {
-
+        // Phase B.4 jmesa PR 9 (cohort 7): SDV table is rendered
+        // client-side via /pages/viewAllSubjectSdvData. Only the
+        // studyId request attribute is needed by the JSP fragment.
         request.setAttribute("studyId", currentStudy.getId());
-        request.setAttribute("showMoreLink", "true");
-        String sdvMatrix = getSDVUtil().renderEventCRFTableWithLimit(request, currentStudy.getId(), "");
-        request.setAttribute("sdvMatrix", sdvMatrix);
     }
 
     /*

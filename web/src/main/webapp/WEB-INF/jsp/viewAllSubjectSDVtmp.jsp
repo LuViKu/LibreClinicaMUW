@@ -32,22 +32,8 @@
 
 <jsp:include page="include/sideInfo.jsp"/>
 
-<link rel="stylesheet" href="${pageContext.request.contextPath}/includes/jmesa/jmesa.css" type="text/css">
-<script type="text/JavaScript" src="${pageContext.request.contextPath}/includes/jmesa/jquery.min.js"></script>
-<script type="text/JavaScript" src="${pageContext.request.contextPath}/includes/jmesa/jmesa.js"></script>
-<script type="text/JavaScript" src="${pageContext.request.contextPath}/includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/javascript" src="${pageContext.request.contextPath}/includes/jmesa/jquery-migrate-1.1.1.js"></script>
-
-<%-- view all subjects starts here --%>
-<script type="text/javascript">
-    function onInvokeAction(id,action) {
-        setExportToLimit(id, '');
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-    }
-</script>
+<%-- Phase B.4 jmesa PR 9 (cohort 7): jmesa scripts removed — table
+     rendered client-side by include/viewAllSubjectSdvTable.jsp. --%>
 
 <h1><span class="title_manage"><fmt:message key="sdv_sdv_for" bundle="${resword}"/> <c:out value="${study.name}"/></span></h1>
 
@@ -93,8 +79,7 @@
         <input type="hidden" name="crfId" value="0">
         <%-- the destination JSP page after removal or adding SDV for an eventCRF --%>
         <input type="hidden" name="redirection" value="viewAllSubjectSDVtmp">
-        <%--<input type="hidden" name="decorator" value="mydecorator">--%>
-        ${sdvTableAttribute}
+        <jsp:include page="include/viewAllSubjectSdvTable.jsp"/>
         <br />
             <c:if test="${!(study.status.locked)}">
                <input type="submit" name="sdvAllFormSubmit" class="button_medium" value="<fmt:message key="sdv_all_checked" bundle="${resword}"/>" onclick="this.form.method='POST';this.form.action='${pageContext.request.contextPath}/pages/handleSDVPost';this.form.submit();"/>

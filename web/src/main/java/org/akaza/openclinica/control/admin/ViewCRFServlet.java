@@ -9,10 +9,7 @@
  */
 package org.akaza.openclinica.control.admin;
 
-import static org.jmesa.facade.TableFacadeFactory.createTableFacade;
-
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.List;
 
 import org.akaza.openclinica.bean.admin.CRFBean;
@@ -28,11 +25,6 @@ import org.akaza.openclinica.dao.submit.CRFVersionDAO;
 import org.akaza.openclinica.dao.submit.ItemDAO;
 import org.akaza.openclinica.view.Page;
 import org.akaza.openclinica.web.InsufficientPermissionException;
-import org.akaza.openclinica.web.table.sdv.SDVUtil;
-import org.jmesa.facade.TableFacade;
-import org.jmesa.view.html.component.HtmlColumn;
-import org.jmesa.view.html.component.HtmlRow;
-import org.jmesa.view.html.component.HtmlTable;
 
 /**
  * @author jxu
@@ -108,8 +100,9 @@ public class ViewCRFServlet extends SecureController {
 
                 studyBeans = findStudiesForCRFId(crfId, studyDAO);
                 //Create the Jmesa table for the studies associated with the CRF
-                String studyHtml = renderStudiesTable(studyBeans);
-                request.setAttribute("studiesTableHTML", studyHtml);
+                // Phase B.4 jmesa PR 9 (cohort 7): jmesa renderStudiesTable
+                // gone — JSP now iterates studyBeans directly via c:forEach.
+                request.setAttribute("studyBeans", studyBeans);
                 //>>
             }
              request.setAttribute(CRF, crf);
@@ -167,67 +160,10 @@ public class ViewCRFServlet extends SecureController {
 	     }
 	   	 return results;
 	}
-    /*
-    Create a JMesa-based table for showing the studies associated with a CRF.
-     */
-    private String renderStudiesTable(List<StudyBean> studyBeans) {
-
-        Collection<StudyRowContainer> items = getStudyRows(studyBeans);
-        TableFacade tableFacade = createTableFacade("studies", request);
-        tableFacade.setColumnProperties("name", "uniqueProtocolid", "actions");
-
-        tableFacade.setItems(items);
-        //Fix column titles
-        HtmlTable table = (HtmlTable) tableFacade.getTable();
-        //i18n caption; TODO: convert to Spring messages
-        /*
-        ResourceBundle resourceBundle = ResourceBundle.getBundle("org.akaza.openclinica.i18n.words", LocaleResolver.getLocale(request));
-        String captionText = resourceBundle.getString("studies_using_crf");
-        if (captionText == null || "".equalsIgnoreCase(captionText)) {
-            captionText = "Studies Using this CRF for Data Entry";
-        }
-        table.setCaption(captionText);
-        */
-        HtmlRow row = table.getRow();
-        SDVUtil sDVUtil = new SDVUtil();
-
-        String[] colNames = new String[] { "name", "uniqueProtocolid", "actions" };
-        sDVUtil.setHtmlCellEditors(tableFacade, colNames, true);
-
-        HtmlColumn firstName = row.getColumn("name");
-        firstName.setTitle("Study Name");
-
-        HtmlColumn protocol = row.getColumn("uniqueProtocolid");
-        protocol.setTitle("Unique Protocol Id");
-
-        HtmlColumn actions = row.getColumn("actions");
-        actions.setTitle("Actions");
-
-        return tableFacade.render();
-    }
-
-    /*
-    Generate the rows for the study table. Each row represents a StudyBean domain object.
-     */
-    private Collection<StudyRowContainer> getStudyRows(List<StudyBean> studyBeans) {
-
-        Collection<StudyRowContainer> allRows = new ArrayList<StudyRowContainer>();
-        StudyRowContainer tempBean = null;
-        StringBuilder actions = new StringBuilder("");
-        for (StudyBean studBean : studyBeans) {
-            tempBean = new StudyRowContainer();
-            tempBean.setName(studBean.getName());
-            tempBean.setUniqueProtocolid(studBean.getIdentifier());
-            tempBean.setStudyBean(studBean);
-            actions.append(StudyRowContainer.VIEW_STUDY_DETAILS_URL).append(studBean.getId()).append(StudyRowContainer.VIEW_STUDY_DETAILS_SUFFIX);
-            tempBean.setActions(actions.toString());
-            allRows.add(tempBean);
-
-            actions = new StringBuilder("");
-        }
-
-        return allRows;
-    }
+    // Phase B.4 jmesa PR 9 (cohort 7): renderStudiesTable() jmesa
+    // helper + StudyRowContainer-based getStudyRows() removed. The
+    // viewCRF.jsp page now iterates the studyBeans request attribute
+    // directly via JSTL c:forEach.
 
     /*
     Fetch the studies associated with a CRF, via an event definition that uses the CRF.

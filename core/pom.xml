@@ -134,11 +134,10 @@
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
 		</dependency>
-		<!-- @pgawade 16-NOV-2010 jmesa library for unit tests -->
-		<dependency>
-			<groupId>org.jmesa</groupId>
-			<artifactId>jmesa</artifactId>
-		</dependency>
+		<!-- Phase B.4 jmesa PR 9 (cohort 7): jmesa dependency dropped.
+		     All TableFactory subclasses migrated to vanilla-JS data
+		     endpoints across cohorts 1-7. -->
+
 		<dependency>
 			<groupId>at.ac.meduniwien.ophthalmology.libreclinica.odm</groupId>
 			<artifactId>LibreClinica-odm</artifactId>
