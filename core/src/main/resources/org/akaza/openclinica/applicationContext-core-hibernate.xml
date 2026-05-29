@@ -135,10 +135,15 @@
                 <prop key="hibernate.format_sql">true</prop>
                 <prop key="hibernate.dialect">s[hibernate.dialect]</prop>
                 <prop key="hibernate.generate_statistics">true</prop>
-                <prop key="hibernate.cache.region.factory_class">org.hibernate.cache.ehcache.SingletonEhCacheRegionFactory</prop>
-                <prop key="hibernate.cache.use_query_cache">true</prop>
-                <prop key="hibernate.cache.use_second_level_cache">true</prop>
-                <prop key="hibernate.cache.provider_configuration_file_resource_path">/org/akaza/openclinica/ehcache.xml</prop>
+                <!-- Phase B.4 cliff: 2L cache temporarily disabled.
+                     hibernate-ehcache 5.x is javax-only with no jakarta-namespaced
+                     sibling at 5.6.x; the WIP commit dropped the dependency from
+                     core/pom.xml in preparation for B.5 (Hibernate 6.4 + jcache +
+                     ehcache 3). Re-enable in B.5 with:
+                       org.hibernate.cache.jcache.JCacheRegionFactory
+                       + ehcache 3.x JSR-107 provider. -->
+                <prop key="hibernate.cache.use_query_cache">false</prop>
+                <prop key="hibernate.cache.use_second_level_cache">false</prop>
                 <prop key="hibernate.allow_update_outside_transaction">true</prop>
                 <!-- Uncommenting the following line allows better logging of Hibernate errors for debugging purposes. Must be commented out for production use. -->
                 <!-- prop key="hibernate.jdbc.batch_size">0</prop -->

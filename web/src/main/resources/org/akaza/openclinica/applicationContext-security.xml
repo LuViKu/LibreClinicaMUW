@@ -4,18 +4,24 @@
     xmlns:p="http://www.springframework.org/schema/p"
     xmlns:util="http://www.springframework.org/schema/util"
     xmlns:security="http://www.springframework.org/schema/security"
-    xmlns:oauth="http://www.springframework.org/schema/security/oauth2"
     xsi:schemaLocation="http://www.springframework.org/schema/beans
                            http://www.springframework.org/schema/beans/spring-beans.xsd
                            http://www.springframework.org/schema/util
                            http://www.springframework.org/schema/util/spring-util.xsd
                            http://www.springframework.org/schema/security
-                           http://www.springframework.org/schema/security/spring-security.xsd
-                           http://www.springframework.org/schema/security/oauth2 
-                           http://www.springframework.org/schema/security/spring-security-oauth2.xsd">
+                           http://www.springframework.org/schema/security/spring-security.xsd">
 
 
-  <security:http entry-point-ref="authenticationProcessingFilterEntryPoint" use-expressions="true">
+  <!-- Phase B.4 cliff: Spring Security 6 needs an explicit
+       authentication-manager-ref. Without it, <security:http> creates its
+       own AuthenticationManagerFactoryBean which then tries to look up the
+       user-defined `authenticationManager` alias and loops on itself
+       (BeanCurrentlyInCreationException). The alias is registered in
+       applicationContext-core-security.xml. -->
+  <security:http entry-point-ref="authenticationProcessingFilterEntryPoint"
+                 authentication-manager-ref="authenticationManager"
+                 request-matcher="ant"
+                 use-expressions="true">
     
     <security:anonymous />
     <security:intercept-url pattern="/pages/login/login" access="permitAll"/>
@@ -137,38 +143,16 @@
         <property name="dataSource" ref="dataSource"/>
     </bean>
     
-    <bean id="inMemoryTokenStore" class="org.springframework.security.oauth2.provider.token.store.InMemoryTokenStore">
-        <property name="flushInterval" value="30"/>
-    </bean>
+    <!--
+      Phase B.4 cliff: spring-security-oauth (2.3.5) was removed alongside
+      Spring 6 + jakarta. The legacy authorization-server block + JDBC/InMemory
+      token stores live'd here for the Participant Portal designer hand-off,
+      but nothing in core/web actually consumed any of these beans (no
+      @Autowired ClientDetailsService / DefaultTokenServices anywhere). A
+      modern OAuth2 server (spring-authorization-server) can be reintroduced
+      in a Phase D auth iteration if the Participant Portal is reactivated.
+    -->
 
-    <bean id="jdbcTokenStore" class="org.springframework.security.oauth2.provider.token.store.JdbcTokenStore">
-        <constructor-arg>
-            <ref bean="dataSource"/>
-        </constructor-arg>
-    </bean>
-
-    <bean id="tokenServices"
-          class="org.springframework.security.oauth2.provider.token.DefaultTokenServices">
-        <property name="tokenStore" ref="inMemoryTokenStore" />
-        <property name="supportRefreshToken" value="true" />
-        <property name="clientDetailsService" ref="clientDetails" />
-    </bean>
-
-    <oauth:client-details-service id="clientDetails">
-        <oauth:client client-id="test" authorized-grant-types="password,authorization_code,refresh-token"/>
-        <oauth:client client-id="my-trusted-client" authorized-grant-types="password,authorization_code,refresh_token"/>
-        <oauth:client client-id="my-less-trusted-client" authorized-grant-types="authorization_code"/>
-        <oauth:client client-id="designer" authorized-grant-types="authorization_code,refresh_token"/>
-    </oauth:client-details-service>
-
-    <oauth:authorization-server
-            client-details-service-ref="clientDetails" token-services-ref="tokenServices">
-        <oauth:authorization-code />
-        <oauth:implicit />
-        <oauth:refresh-token />
-        <oauth:client-credentials />
-    </oauth:authorization-server>
-    
     
     	<bean id="metadataCollectorResource" class="org.akaza.openclinica.web.restful.MetadataCollectorResource" name="metadataCollectorResource">
 <property name="dataSource" ref="dataSource"></property>

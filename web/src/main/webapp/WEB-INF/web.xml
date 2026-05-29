@@ -9,12 +9,19 @@
     <context-param>
         <param-name>contextConfigLocation</param-name>
         <param-value>
+            <!-- Phase B.4 cliff: core-security.xml hoisted ahead of
+                 applicationContext-security.xml. Spring Security 6's
+                 HttpSecurityBeanDefinitionParser eagerly resolves
+                 authentication-manager-ref at parse time and requires the
+                 referenced bean to be registered already; the legacy order
+                 (security.xml first) worked in 5.x because the parser was
+                 lazy. -->
+            classpath:org/akaza/openclinica/applicationContext-core-security.xml
             classpath:org/akaza/openclinica/applicationContext-security.xml
             classpath:org/akaza/openclinica/applicationContext-web-beans.xml
             classpath:org/akaza/openclinica/application-context-web-beans.xml
             classpath:org/akaza/openclinica/applicationContext-core-timer.xml
             classpath:org/akaza/openclinica/applicationContext-core-spring.xml
-            classpath:org/akaza/openclinica/applicationContext-core-security.xml
             classpath:org/akaza/openclinica/applicationContext-core-service.xml
             classpath:org/akaza/openclinica/applicationContext-core-scheduler.xml
             classpath:org/akaza/openclinica/applicationContext-core-hibernate.xml
@@ -109,46 +116,13 @@
         <filter-name>localeFilter</filter-name>
         <url-pattern>/*</url-pattern>
     </filter-mapping>
-    <filter>
-        <filter-name>compressFilter</filter-name>
-        <filter-class>net.sf.ehcache.constructs.web.filter.GzipFilter</filter-class>
-    </filter>
-    <filter-mapping>
-        <filter-name>compressFilter</filter-name>
-        <url-pattern>/InitialDataEntry</url-pattern>
-    </filter-mapping>
-    <filter-mapping>
-        <filter-name>compressFilter</filter-name>
-        <url-pattern>/ViewSectionDataEntry</url-pattern>
-    </filter-mapping>
-    <filter-mapping>
-        <filter-name>compressFilter</filter-name>
-        <url-pattern>/AdministrativeEditing</url-pattern>
-    </filter-mapping>
-    <filter-mapping>
-        <filter-name>compressFilter</filter-name>
-        <url-pattern>/DoubleDataEntry</url-pattern>
-    </filter-mapping>
-    <filter-mapping>
-        <filter-name>compressFilter</filter-name>
-        <url-pattern>/ListStudySubjects</url-pattern>
-    </filter-mapping>
-    <filter-mapping>
-        <filter-name>compressFilter</filter-name>
-        <url-pattern>/SectionPreview</url-pattern>
-    </filter-mapping>
-    <filter-mapping>
-        <filter-name>compressFilter</filter-name>
-        <url-pattern>/CreateCRFVersion</url-pattern>
-    </filter-mapping>
-    <filter-mapping>
-        <filter-name>compressFilter</filter-name>
-        <url-pattern>/CreateXformCRFVersion</url-pattern>
-    </filter-mapping>
-    <filter-mapping>
-        <filter-name>compressFilter</filter-name>
-        <url-pattern>/*</url-pattern>
-    </filter-mapping>
+    <!--
+      Phase B.4 cliff: compressFilter (net.sf.ehcache.constructs.web.filter.GzipFilter)
+      removed. The class lives in ehcache 2.x which is javax-only and has no
+      jakarta sibling; Tomcat 10's connector-level compression (server.xml
+      compression="on") covers the gzip use case without an in-app filter.
+    -->
+
     <filter>
         <filter-name>springSecurityFilterChain</filter-name>
         <filter-class>org.springframework.web.filter.DelegatingFilterProxy</filter-class>

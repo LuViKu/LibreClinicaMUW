@@ -426,12 +426,9 @@
 				<artifactId>spring-tx</artifactId>
 				<version>${spring.version}</version>
 			</dependency>
-			<dependency>
-				<groupId>org.springframework.security.oauth</groupId>
-				<artifactId>spring-security-oauth2</artifactId>
-				<version>2.3.5.RELEASE</version>
-				<scope>runtime</scope>
-			</dependency>
+			<!-- Phase B.4 cliff: spring-security-oauth 2.3.5 (javax-only, archived
+			     upstream) removed; see core/pom.xml for rationale. -->
+
 	       <dependency>
 	           <groupId>org.springframework.security</groupId>
 	           <artifactId>spring-security-web</artifactId>
@@ -926,17 +923,8 @@
 			<artifactId>spring-oxm</artifactId>
 			<version>${spring.version}</version>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.security.oauth</groupId>
-			<artifactId>spring-security-oauth2</artifactId>
-			<version>2.3.5.RELEASE</version>
-			<exclusions>
-				<exclusion>
-  					<groupId>org.codehaus.jackson</groupId>
-  					<artifactId>jackson-mapper-asl</artifactId>
-				</exclusion>
-			</exclusions>
-		</dependency>
+		<!-- Phase B.4 cliff: spring-security-oauth 2.3.5 dropped — see core/pom.xml. -->
+
 		<!-- HIBERNATE -->
       <!--
 		<dependency>

@@ -205,10 +205,15 @@
 			<groupId>jakarta.xml.bind</groupId>
 			<artifactId>jakarta.xml.bind-api</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>taglibs</groupId>
-			<artifactId>standard</artifactId>
-		</dependency>
+		<!-- Phase B.4 cliff: taglibs:standard 1.1 (Sun JSTL 1.1 RI, javax-only)
+		     removed. Replaced by jakarta.servlet.jsp.jstl-api 3.0 +
+		     org.glassfish.web:jakarta.servlet.jsp.jstl 3.x impl already
+		     declared above. The old TLD referenced
+		     javax.servlet.jsp.tagext.TagLibraryValidator which broke JSP
+		     compilation on Tomcat 10. JSP taglib URIs in *.jsp files still
+		     use http://java.sun.com/jsp/jstl/* — those keep working under
+		     JSTL 3 via the legacy URI aliases registered in the new TLDs. -->
+
 		<dependency>
 			<groupId>org.apache.poi</groupId>
 			<artifactId>poi</artifactId>

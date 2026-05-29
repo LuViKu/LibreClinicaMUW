@@ -47,7 +47,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     mv web/target/LibreClinica-web-*.war /LibreClinica-web.war;
 
 ############################################################
-FROM tomcat:9-jdk21
+FROM tomcat:10-jdk21
 
 # Phase B.1 JDK 21 baseline: legacy Spring/Hibernate reflection needs java.base
 # opens, Castor 1.4.1's BaseXercesJDK5Serializer touches an internal JDK class
@@ -55,6 +55,10 @@ FROM tomcat:9-jdk21
 # exports, and Spring-LDAP's AbstractContextSource references com.sun.jndi.ldap.LdapCtxFactory
 # from java.naming. All three are stopgaps that go away when subsequent sub-phases
 # replace Castor (B.3, DR-006), Spring 5→6 (B.4) and Hibernate 5→6 (B.5).
+#
+# Phase B.4 + B.6: Tomcat 9 → 10 — required for the jakarta.servlet 6 WAR.
+# Castor was retired in B.3 (DR-006), so the java.xml export is now dead
+# weight; left in place for one more cycle to keep diff scope tight.
 ENV CATALINA_OPTS="\
     --add-opens=java.base/java.lang=ALL-UNNAMED \
     --add-opens=java.base/java.lang.invoke=ALL-UNNAMED \

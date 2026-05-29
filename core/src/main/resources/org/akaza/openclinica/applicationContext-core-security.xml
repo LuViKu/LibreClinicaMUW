@@ -11,11 +11,13 @@
                            http://www.springframework.org/schema/security/spring-security.xsd">
 
 
-    <security:authentication-manager alias="authenticationManager">
+    <!-- Phase B.4 cliff: Spring Security 6 — use id= rather than only alias=
+         so the <security:http> child AuthenticationManagerFactoryBean (created
+         by HttpSecurityBeanDefinitionParser) can resolve the parent manager
+         under its expected reference name. -->
+    <security:authentication-manager id="authenticationManager">
         <security:authentication-provider user-service-ref="ocUserDetailsService">
             <security:password-encoder ref="openClinicaPasswordEncoder"/>
-            <!-- <security:password-encoder hash="md5" /> -->
-            <!-- <security:user-service properties="/WEB-INF/users.properties" /> -->
         </security:authentication-provider>
         <security:authentication-provider ref="ldapAuthenticationProvider"/>
     </security:authentication-manager>

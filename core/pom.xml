@@ -30,10 +30,16 @@
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-crypto</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>org.springframework.security.oauth</groupId>
-			<artifactId>spring-security-oauth2</artifactId>
-		</dependency>
+		<!-- Phase B.4 cliff: spring-security-oauth (2.3.5) dropped.
+		     The library is javax-only and was archived upstream; Spring 6's
+		     classpath scan tried to introspect WhitelabelApprovalEndpoint and
+		     threw NoClassDefFoundError on javax.servlet.http.HttpServletRequest.
+		     No core/web source references the library classes — only string
+		     URLs (e.g. "/app/oauth2") for the Participant Portal endpoint,
+		     which are unaffected. If/when an actual OAuth2 client/server is
+		     needed under Spring 6, use spring-security-oauth2-client /
+		     -resource-server / spring-authorization-server instead. -->
+
 		<dependency>
 			<groupId>org.springframework</groupId>
 			<artifactId>spring-oxm</artifactId>
