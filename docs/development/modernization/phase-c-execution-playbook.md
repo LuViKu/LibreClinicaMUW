@@ -191,6 +191,102 @@ attack tree (each fix surfaced the next blocker):
    `FilterRegistrationBean<…>.setEnabled(false)` to opt out, OR the
    web.xml entry needs to go away.
 
+### 2026-05-30 second attempt — full cliff, deeper attack-tree
+
+A second attempt went **further**: applied all five workarounds above
+PLUS the full cliff scope (drop all `<filter>` entries from `web.xml`,
+build `ServletInfraConfig` with opt-out `FilterRegistrationBean`s for
+the three XML `Filter` beans plus `FilterRegistrationBean`s for
+`encodingFilter` / `localeFilter` / `hibernateFilter` / `logFilter` /
+`apiSecurityFilter`, build `SecurityConfig` with a `SecurityFilterChain
+@Bean` translating the `<security:http>` block, drop the
+`<security:http>` block from `applicationContext-security.xml`, refactor
+`OCContextLoaderListener` to a pure `ServletContextListener`). Three
+more blockers surfaced before the smoke gate broke on auth flow:
+
+6. **`UnsatisfiedDependencyException` on `changeCRFVersionController`:
+   `sidebarInit` bean not found.** Boot's default `@ComponentScan`
+   (rooted at `LibreClinicaApplication`'s package) pulled controllers
+   into the ROOT context. Their `@Autowired @Qualifier("sidebarInit")`
+   dependency lives in the CHILD context (DispatcherServlet's
+   `pages-servlet.xml`) and isn't visible from there. → Workaround:
+   `@SpringBootApplication(scanBasePackages = ".config")` restricts
+   Boot's scan to the new `.config` package, leaving the existing
+   `<context:component-scan>` directives in
+   `applicationContext-core-spring.xml` (services) and
+   `pages-servlet.xml` (controllers) authoritative for those packages.
+
+7. **`NoClassDefFoundError org/springframework/ldap/convert/ConverterUtils`**
+   from `LdapAutoConfiguration.objectDirectoryMapper`. Boot's LDAP
+   autoconfig triggers because spring-ldap is on the classpath, but the
+   `ConverterUtils` class is missing from the pinned spring-ldap
+   version. Our LDAP usage is via the XML `contextSource` +
+   `ldapAuthenticationProvider` beans; Boot's autoconfig isn't needed.
+   → Workaround: exclude `LdapAutoConfiguration` from
+   `@SpringBootApplication`.
+
+8. **`NoClassDefFoundError: javax/servlet/Filter` from
+   `org.springframework.security.config.annotation.web.AbstractRequestMatcherRegistry.isDispatcherServlet`**
+   on every authenticated HTTP request. Spring Security 6.4 still has
+   a compat path that does `Class.forName("javax.servlet.Filter")` to
+   detect whether a DispatcherServlet is registered for MVC path
+   matching. On a jakarta-only classpath the class is loaded but
+   javax.servlet.Filter doesn't exist — surfaces as `NoClassDefFoundError`
+   rather than the expected `ClassNotFoundException` that the compat
+   path catches. → Workaround: bypass the registry's auto-detection by
+   passing explicit `AntPathRequestMatcher` instances to
+   `requestMatchers(RequestMatcher…)` instead of `requestMatchers(String…)`:
+   ```java
+   .requestMatchers(antPaths("/pages/login/login", "/SystemStatus", …))
+       .permitAll()
+   ```
+   with `antPaths(String…)` returning `AntPathRequestMatcher[]`.
+
+9. **Login page `/pages/login/login` returns 302 redirect-loop instead
+   of 200 with the login form.** With all the above workarounds, Boot
+   bootstraps cleanly, Tomcat deploys, the DispatcherServlet registers,
+   and HTTP requests reach the security filter chain — but the
+   `permitAll` for `/pages/login/login` does not match (or some other
+   filter chain in the request path forces a redirect). The auth POST
+   to `/j_spring_security_check` then redirects to `/MainMenu?continue`,
+   which redirects to `/pages/login/login`, which redirects again →
+   curl hits max 50 redirects → final URL `/error?continue` 500.
+
+   Not yet diagnosed (would benefit from a docker exec into the
+   container to read the libreclinica.auth log for the per-request
+   filter trace — currently blocked by the auto-mode classifier's
+   Production Reads policy). Likely candidates:
+   - Spring Security 6.4's `AntPathRequestMatcher` path semantics
+     against requests with `server.servlet.context-path: /LibreClinica`
+     — the matcher may need the context-relative path or the full URI
+     depending on its constructor.
+   - The DispatcherServlet's child context picking up SidebarInit /
+     SetUpUserInterceptor before the security chain decides — actually
+     the security chain runs FIRST, before DispatcherServlet hits the
+     view controller. So the matcher is the more likely culprit.
+   - The `SavedRequestAwareAuthenticationSuccessHandler` /
+     `RequestCacheAwareFilter` interaction with the new chain may be
+     replaying the original target URL into a loop.
+
+   The fix is straightforward but requires either (a) docker-exec
+   log-read authorization to trace one request, or (b) a known-good
+   `SecurityFilterChain` Java config from a similar OpenClinica/LibreClinica
+   migration as a starting point.
+
+**State after the 2026-05-30 attempt:** all code changes rolled back;
+`lc-develop` returned to the pre-cliff baseline. The attack-tree above
+documents the eight known fixes the cliff push needs; the ninth
+(login-flow redirect-loop) is the remaining diagnosis target.
+
+The cliff is now estimated at **~5-8 days** of focused work with the
+above blockers as the known critical path. The right sequencing:
+1. Land Prerequisite #1 (logback collision fix) in its own PR — frees
+   the LoggingSystem=none escape hatch as a one-cycle workaround.
+2. Land the SecurityConfig + ServletInfraConfig + Boot bootstrap in a
+   single cliff push, applying workarounds #1-#8 verbatim from the
+   attack-tree above.
+3. Iterate on #9 with full log access until the auth flow gates green.
+
 **Conclusion:** Boot's "auto-register every `Filter` bean" semantics
 fundamentally collide with web.xml's manual filter registrations.
 Sub-push 1 cannot exist as a standalone "Boot bootstrap with web.xml
