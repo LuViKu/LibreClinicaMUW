@@ -1,11 +1,11 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.page_messages" var="respage"/>
-<jsp:useBean scope='session' id='study' class='org.akaza.openclinica.bean.managestudy.StudyBean' />
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.page_messages" var="respage"/>
+<jsp:useBean scope='session' id='study' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean' />
 
 
 <c:choose>
@@ -66,8 +66,8 @@
 </tr>
 <jsp:include page="../include/sideInfo.jsp"/>
 
-<jsp:useBean scope='session' id='userBean' class='org.akaza.openclinica.bean.login.UserAccountBean'/>
-<jsp:useBean scope='request' id='crf' class='org.akaza.openclinica.bean.admin.CRFBean'/>
+<jsp:useBean scope='session' id='userBean' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean'/>
+<jsp:useBean scope='request' id='crf' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean'/>
 
 <h1><span class="title_Manage"><fmt:message key="view_CRF_details" bundle="${resword}"/></span></h1>
 <div style="width: 600px">
@@ -194,11 +194,37 @@
 <span class="title_Manage" style="font-weight: bold;"><fmt:message key="studies_using_crf" bundle="${resword}"/></span>
 
 <div id="studiesDiv">
-    <form  action="${pageContext.request.contextPath}/ViewCRF">
-        <input type="hidden" name="module" value="admin">
-        <input type="hidden" name="crfId" value="${crf.id}">
-        ${studiesTableHTML}
-    </form>
+    <%-- Phase B.4 jmesa PR 9 (cohort 7): jmesa renderStudiesTable
+         replaced by plain JSTL c:forEach. The studyBeans request
+         attribute carries StudyBean instances. --%>
+    <table id="studiesTable" class="aka_form" style="width:100%; border-collapse: collapse;">
+        <thead>
+            <tr class="aka_table_header_row">
+                <th class="aka_table_header">Study Name</th>
+                <th class="aka_table_header">Unique Protocol Id</th>
+                <th class="aka_table_header">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            <c:choose>
+                <c:when test="${empty studyBeans}">
+                    <tr><td colspan="3" style="text-align:center; padding:8px;">
+                        <fmt:message key="no_data" bundle="${resword}"/>
+                    </td></tr>
+                </c:when>
+                <c:otherwise>
+                    <c:forEach var="s" items="${studyBeans}">
+                        <tr>
+                            <td><c:out value="${s.name}"/></td>
+                            <td><c:out value="${s.identifier}"/></td>
+                            <td><a href="${pageContext.request.contextPath}/ViewStudy?id=${s.id}&viewFull=yes">
+                                <img src="images/bt_View.gif" border="0" alt="View" hspace="4"/></a></td>
+                        </tr>
+                    </c:forEach>
+                </c:otherwise>
+            </c:choose>
+        </tbody>
+    </table>
 </div>
 
  <br/>

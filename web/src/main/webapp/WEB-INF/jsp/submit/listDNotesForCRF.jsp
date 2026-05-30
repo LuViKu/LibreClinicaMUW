@@ -1,14 +1,14 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
 
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.workflow" var="resworkflow"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.terms" var="resterm"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow" var="resworkflow"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.terms" var="resterm"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
 
 
 <c:choose>
@@ -20,25 +20,9 @@
    </c:otherwise>
   </c:choose>
 
-<link rel="stylesheet" href="includes/jmesa/jmesa.css" type="text/css">
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.min.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jmesa.js"></script>
-<script type="text/javascript" language="JavaScript" src="includes/jmesa/jquery-migrate-1.1.1.js"></script>
-
-<script type="text/javascript">
-    function onInvokeAction(id,action) {
-        if(id.indexOf('listDiscNotesForCRF') == -1)  {
-        setExportToLimit(id, '');
-        }
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        location.href = '${pageContext.request.contextPath}/ListDiscNotesForCRFServlet? + module=manage&defId=' + '${defId}&' + parameterString;
-    }
-
-</script>
+<%-- Phase B.4 jmesa PR 5c (cohort 3c): jmesa scripts removed — the
+     table is rendered client-side by the include/listDNotesForCRFTable.jsp
+     fragment. --%>
 
 
 <!-- move the alert message to the sidebar-->
@@ -73,7 +57,7 @@
 <jsp:include page="../include/sideInfo.jsp"/>
 
 <!-- the object inside the array is StudySubjectBean-->
-<jsp:useBean scope='request' id='table' class='org.akaza.openclinica.web.bean.EntityBeanTable'/>
+<jsp:useBean scope='request' id='table' class='at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable'/>
 <%-- eventDefinitionId passed into the servlet --%>
 
 
@@ -290,11 +274,7 @@ function DisplaySectionTabs()
 <br><br>
 
 <div id="listDiscNotesDiv">
-    <form  action="${pageContext.request.contextPath}/ListDiscNotesForCRFServlet">
-        <input type="hidden" name="module" value="submit">
-        <input type="hidden" name="defId" value="${defId}">
-        ${listDiscNotesForCRFHtml}
-    </form>
+    <jsp:include page="include/listDNotesForCRFTable.jsp"/>
 </div>
 
 <!-- EXPANDING WORKFLOW BOX -->

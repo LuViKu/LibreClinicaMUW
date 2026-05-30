@@ -1,21 +1,21 @@
 <%@ include file="/WEB-INF/jsp/taglibs.jsp" %>
 <%@ page import="org.springframework.web.servlet.support.RequestContextUtils" %>
 <%@ page import="org.springframework.context.ApplicationContext" %>
-<%@ page import="org.akaza.openclinica.service.otp.TwoFactorService" %>
+<%@ page import="at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService" %>
 
 <!-- For Mantis Issue 6099 -->
-<jsp:useBean scope='session' id='userBean' class='org.akaza.openclinica.bean.login.UserAccountBean'/>
+<jsp:useBean scope='session' id='userBean' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean'/>
 
 <c:if test="${userBean.name!=''}">
 	<c:redirect url="/MainMenu"/>
 </c:if>
 <!-- End of 6099-->
 
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.workflow" var="resworkflow"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow" var="resworkflow"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -91,6 +91,27 @@ session.setAttribute("factorService", factorService);
             <div id="loginBox">
             <!-- Login box contents -->
                 <div id="login">
+                    <%-- Phase D.6 (DR-014): institution-agnostic SSO
+                         affordance. Only shown when libreclinica.sso.enabled=true.
+                         Click target (libreclinica.sso.entry-url) is intercepted
+                         by the reverse-proxy sidecar (Apache+mod_shib for the
+                         MedUni Wien reference deployment; any header-injecting
+                         proxy for other institutions) which terminates the
+                         SSO protocol and proxies back to LibreClinica with
+                         the configured principal header set. Provider swap
+                         = change the sidecar, not the app. --%>
+                    <c:if test="${ssoProperties.enabled}">
+                        <div id="sso-login" style="margin-bottom:18px;text-align:center;">
+                            <a href="<c:out value='${ssoProperties.entryUrl}'/>"
+                               class="loginbutton"
+                               style="display:inline-block;padding:8px 18px;text-decoration:none;">
+                                <c:out value="${ssoProperties.buttonLabel}"/>
+                            </a>
+                            <div style="margin-top:8px;color:#666;font-size:0.9em;">
+                                &mdash; or sign in with a local account &mdash;
+                            </div>
+                        </div>
+                    </c:if>
                     <form action="<c:url value='/j_spring_security_check'/>" method="post">
                         <h1><fmt:message key="login" bundle="${resword}"/></h1>
                         <b><fmt:message key="user_name" bundle="${resword}"/></b>

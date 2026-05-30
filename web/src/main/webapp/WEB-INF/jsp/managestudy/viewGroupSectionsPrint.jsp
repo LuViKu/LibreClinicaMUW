@@ -2,10 +2,10 @@
   The Print CRF JSP.
 --%>
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 <%@ taglib uri="com.akazaresearch.tags" prefix="aka_frm" %>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
 <html>
 <head><title>Print CRF</title>
   <meta http-equiv="content-type" content="text/html; charset=utf-8" />
@@ -17,9 +17,9 @@
   <link rel="stylesheet" href="includes/styles.css" type="text/css">
   <link rel="stylesheet" href="includes/print_crf.css" type="text/css">
 </head>
-<jsp:useBean scope="request" id="crfVersionBean" class="org.akaza.openclinica.bean.submit.CRFVersionBean" />
-<jsp:useBean scope="request" id="crfBean" class="org.akaza.openclinica.bean.admin.CRFBean" />
-<jsp:useBean scope="session" id="studyEvent" class="org.akaza.openclinica.bean.managestudy.StudyEventBean" />
+<jsp:useBean scope="request" id="crfVersionBean" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean" />
+<jsp:useBean scope="request" id="crfBean" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean" />
+<jsp:useBean scope="session" id="studyEvent" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean" />
 <%-- dataInvolved is a request attribute set in PrintCRFServlet and PrintDataEntryServlet --%>
 <c:set var="dataIsInvolved" value="${dataInvolved}" />
 <body>

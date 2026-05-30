@@ -1,6 +1,6 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
 
 <link rel="stylesheet" href="includes/jmesa/jmesa.css" type="text/css">
@@ -23,7 +23,7 @@
     }
 </script>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
 
 
 <jsp:include page="../include/admin-header.jsp"/>
@@ -58,18 +58,56 @@
 </tr>
 <jsp:include page="../include/sideInfo.jsp"/>
 
-<jsp:useBean scope='session' id='userBean' class='org.akaza.openclinica.bean.login.UserAccountBean'/>
-<jsp:useBean scope='request' id='crf' class='org.akaza.openclinica.bean.admin.CRFBean'/>
+<jsp:useBean scope='session' id='userBean' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean'/>
+<jsp:useBean scope='request' id='crf' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean'/>
 
 <h1><span class="title_manage"><fmt:message key="audit_database" bundle="${resword}"/></span></h1>
 
 <jsp:useBean id="now" class="java.util.Date" />
 <P><I><fmt:message key="server_time_info" bundle="${resword}"/> <fmt:formatDate value="${now}" pattern="yyyy-MM-dd hh:mm"/>.</I></P>
 <div id="auditDatabaseDiv">
-    <form  action="${pageContext.request.contextPath}/AuditDatabase">
-        <input type="hidden" name="module" value="admin">
-        ${auditDatabaseHtml}
-    </form>
+    <%-- Phase B.4 jmesa PR 9 (cohort 7): jmesa renderAuditDatabaseTable
+         replaced by JSTL c:forEach over the databaseChangeLogs request
+         attribute (List<DatabaseChangeLogBean>). --%>
+    <table id="auditDatabaseTable" class="aka_form" style="width:100%; border-collapse: collapse;">
+        <thead>
+            <tr class="aka_table_header_row">
+                <th class="aka_table_header">Id</th>
+                <th class="aka_table_header">Author</th>
+                <th class="aka_table_header">File Name</th>
+                <th class="aka_table_header">Date Executed</th>
+                <th class="aka_table_header">md5 sum</th>
+                <th class="aka_table_header">Description</th>
+                <th class="aka_table_header">Comments</th>
+                <th class="aka_table_header">Tag</th>
+                <th class="aka_table_header">Liquibase</th>
+            </tr>
+        </thead>
+        <tbody>
+            <c:choose>
+                <c:when test="${empty databaseChangeLogs}">
+                    <tr><td colspan="9" style="text-align:center; padding:8px;">
+                        <fmt:message key="no_data" bundle="${resword}"/>
+                    </td></tr>
+                </c:when>
+                <c:otherwise>
+                    <c:forEach var="cl" items="${databaseChangeLogs}">
+                        <tr>
+                            <td><c:out value="${cl.id}"/></td>
+                            <td><c:out value="${cl.author}"/></td>
+                            <td><c:out value="${cl.fileName}"/></td>
+                            <td><fmt:formatDate value="${cl.dataExecuted}" pattern="yyyy-MM-dd hh:mm:ss"/></td>
+                            <td><c:out value="${cl.md5Sum}"/></td>
+                            <td><c:out value="${cl.description}"/></td>
+                            <td><c:out value="${cl.comments}"/></td>
+                            <td><c:out value="${cl.tag}"/></td>
+                            <td><c:out value="${cl.liquibase}"/></td>
+                        </tr>
+                    </c:forEach>
+                </c:otherwise>
+            </c:choose>
+        </tbody>
+    </table>
 </div>
 
 

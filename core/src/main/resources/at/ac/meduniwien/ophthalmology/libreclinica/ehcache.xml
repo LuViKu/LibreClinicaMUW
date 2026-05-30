@@ -1,0 +1,35 @@
+<config
+    xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'
+    xmlns='http://www.ehcache.org/v3'
+    xmlns:jsr107='http://www.ehcache.org/v3/jsr107'>
+
+    <!--
+      Phase B.5: rewritten for ehcache 3 (JSR-107 / JCache).
+      Replaces the old ehcache 2.x <ehcache> root element + per-cache
+      <cache> blocks with the ehcache 3 schema.
+
+      Two roles served:
+        - The legacy DAO query cache, name="com.akaza.openclinica.dao.core.DAOCache",
+          consumed via at...libreclinica.dao.cache.EhCacheWrapper (a thin JSR-107
+          adapter). Behaviour preserved: short TTL, in-memory only, LFU eviction
+          on overflow.
+        - Hibernate 2L cache regions are auto-created at runtime
+          (hibernate.javax.cache.missing_cache_strategy=create in
+          applicationContext-core-hibernate.xml). No need to pre-declare each
+          region as the 2.x XML used to.
+
+      The historic "CachePage1CachingFilter" page-cache entries served the
+      ehcache-web GzipFilter, which was removed during the B.4 cliff
+      (web.xml). Not re-declared here.
+    -->
+
+    <cache alias="com.akaza.openclinica.dao.core.DAOCache">
+        <key-type>java.lang.String</key-type>
+        <value-type>java.util.ArrayList</value-type>
+        <expiry>
+            <ttl unit="seconds">90</ttl>
+        </expiry>
+        <heap unit="entries">10000</heap>
+    </cache>
+
+</config>

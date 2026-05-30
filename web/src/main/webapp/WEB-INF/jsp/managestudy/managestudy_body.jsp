@@ -6,19 +6,19 @@
   To change this template use File | Settings | File Templates.
 --%>
 <%@ page contentType="text/html;charset=UTF-8" language="java" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.workflow" var="resworkflow"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow" var="resworkflow"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/>
 <c:set var="dteFormat"><fmt:message key="date_format_string" bundle="${resformat}"/></c:set>
 
-<jsp:useBean scope='session' id='userBean' class='org.akaza.openclinica.bean.login.UserAccountBean'/>
-<jsp:useBean scope='session' id='study' class='org.akaza.openclinica.bean.managestudy.StudyBean' />
-<jsp:useBean scope='session' id='userRole' class='org.akaza.openclinica.bean.login.StudyUserRoleBean' />
+<jsp:useBean scope='session' id='userBean' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean'/>
+<jsp:useBean scope='session' id='study' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean' />
+<jsp:useBean scope='session' id='userRole' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean' />
 
 <jsp:useBean scope='request' id='sites' class='java.util.ArrayList' />
 <jsp:useBean scope='request' id='seds' class='java.util.ArrayList' />
@@ -47,7 +47,10 @@
         <li><a href="ListStudySubjects">Subjects</a></li>
         <li><a href="ListSubjectGroupClass">Groups</a></li>
         <li><a href="ViewStudyEvents?module=manage">Events</a></li>
-        <li><a href="ListDiscNotesSubjectServlet?module=manage">Notes & Discrepancies</a></li>
+        <%-- Phase B.4 jmesa PR 5b cleanup: was
+             "ListDiscNotesSubjectServlet?module=manage" — dead URL since
+             2014. Re-pointed at the live ViewNotes page (cohort 3a target). --%>
+        <li><a href="ViewNotes?module=manage">Notes & Discrepancies</a></li>
         <li><a href="ViewRuleAssignment">Rules</a></li>
         <li><a href="ListStudyUser">Users</a></li>
         <li><a href="ListSite">Sites</a></li>

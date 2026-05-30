@@ -1,15 +1,15 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.workflow" var="resworkflow"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.page_messages" var="resmessages"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow" var="resworkflow"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.page_messages" var="resmessages"/>
 
-<jsp:useBean scope='session' id='userBean' class='org.akaza.openclinica.bean.login.UserAccountBean'/>
-<jsp:useBean scope='session' id='study' class='org.akaza.openclinica.bean.managestudy.StudyBean' />
-<jsp:useBean scope='session' id='userRole' class='org.akaza.openclinica.bean.login.StudyUserRoleBean' />
+<jsp:useBean scope='session' id='userBean' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean'/>
+<jsp:useBean scope='session' id='study' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean' />
+<jsp:useBean scope='session' id='userRole' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean' />
 
 <!-- start of menu.jsp -->
 
@@ -17,11 +17,10 @@
 
 <jsp:include page="include/sideAlert.jsp"/>
 
-<script type="text/JavaScript" src="includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/JavaScript" src="includes/jmesa/jmesa.js"></script>
+<%-- Phase B.4 jmesa PR 4c: jmesa jQuery + CSS scripts no longer
+     needed for the subject matrix. The add-new-subject overlay still
+     needs jquery.blockUI, so load just that. --%>
 <script type="text/javascript" src="includes/jmesa/jquery.blockUI.js"></script>
-
-<link rel="stylesheet" href="includes/jmesa/jmesa.css" type="text/css">
 
 <!-- warning is study is frozen or locked -->
 <div id="box" class="dialog">
@@ -79,78 +78,130 @@
 </span>
 
 <c:if test="${userRole.investigator || userRole.researchAssistant || userRole.researchAssistant2}"> <!-- if investigator, research assistant or ra2 -->
-	<div id="findSubjectsDiv">
-    <script type="text/javascript">
-    function onInvokeAction(id,action) {
-        if(id.indexOf('findSubjects') == -1)  {
-        setExportToLimit(id, '');
-        }
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        location.href = '${pageContext.request.contextPath}/MainMenu?'+ parameterString;
-    }
-    jQuery(document).ready(function() {
-        jQuery('#addSubject').click(function() {
-            jQuery.blockUI({ message: jQuery('#addSubjectForm'), css:{left: "300px", top:"10px" } });
+    <div id="findSubjectsDiv">
+        <script type="text/javascript">
+        jQuery(document).ready(function() {
+            jQuery('#addSubject').click(function() {
+                jQuery.blockUI({ message: jQuery('#addSubjectForm'), css:{left: "300px", top:"10px" } });
+            });
+            jQuery('#cancel').click(function() {
+                jQuery.unblockUI();
+                return false;
+            });
         });
-
-        jQuery('#cancel').click(function() {
-            jQuery.unblockUI();
-            return false;
-        });
-    });
-    </script>
-    <form  action="${pageContext.request.contextPath}/ListStudySubjects">
-        <input type="hidden" name="module" value="admin">
-        ${findSubjectsHtml}
-    </form>
-</div>
+        </script>
+        <jsp:include page="managestudy/include/findSubjectsTable.jsp"/>
+    </div>
     <div id="addSubjectForm" style="display:none;">
          <c:import url="addSubjectMonitor.jsp"/>
     </div>
 </c:if>
 
 <c:if test="${userRole.coordinator || userRole.director}">										<!-- datamanager / study director -->
-    <script type="text/javascript">
-	    function onInvokeAction(id,action) {
-	        if(id.indexOf('studySiteStatistics') == -1)  {
-	            setExportToLimit(id, '');
-	        }
-	        if(id.indexOf('subjectEventStatusStatistics') == -1)  {
-	            setExportToLimit(id, '');
-	        }
-	        if(id.indexOf('studySubjectStatusStatistics') == -1)  {
-	            setExportToLimit(id, '');
-	        }
-	        createHiddenInputFieldsForLimitAndSubmit(id);
-	    }
-    </script>
+    <%-- Phase B.4 jmesa PR 3: four stats tables rendered as plain HTML
+         (1-10 rows each, no sort/filter/paginate needed). The percentage
+         column carries a simple bar graph div for visual continuity with
+         the prior jmesa-rendered version. --%>
 
 	<table>
 		<tr>
 		    <td class="statistics_td">
-		    <form  action="${pageContext.request.contextPath}/MainMenu">
-		        ${studySiteStatistics}
-		    </form>
+		        <table class="stats-table">
+		            <thead>
+		                <tr><td colspan="4" class="stats-title"><fmt:message key="subject_enrollment_for_site" bundle="${resword}"/></td></tr>
+		                <tr>
+		                    <th><fmt:message key="site" bundle="${resword}"/></th>
+		                    <th><fmt:message key="enrolled" bundle="${resword}"/></th>
+		                    <th><fmt:message key="expected_enrollment" bundle="${resword}"/></th>
+		                    <th><fmt:message key="percentage" bundle="${resword}"/></th>
+		                </tr>
+		            </thead>
+		            <tbody>
+		                <c:forEach var="row" items="${studySiteStatisticsRows}">
+		                    <tr>
+		                        <td><c:out value="${row.name}"/></td>
+		                        <td><c:out value="${row.enrolled}"/></td>
+		                        <td><c:out value="${row.expectedTotalEnrollment}"/></td>
+		                        <td>
+		                            <div class="graph"><div class="bar" style="width: ${row.percentage}%">${row.percentage}%</div></div>
+		                        </td>
+		                    </tr>
+		                </c:forEach>
+		            </tbody>
+		        </table>
 		    </td>
 		    <td class="statistics_td">
-		    <form  action="${pageContext.request.contextPath}/MainMenu">
-		        ${studyStatistics}
-		    </form>
+		        <table class="stats-table">
+		            <thead>
+		                <tr><td colspan="4" class="stats-title"><fmt:message key="subject_enrollment_for_study" bundle="${resword}"/></td></tr>
+		                <tr>
+		                    <th><fmt:message key="study" bundle="${resword}"/></th>
+		                    <th><fmt:message key="enrolled" bundle="${resword}"/></th>
+		                    <th><fmt:message key="expected_enrollment" bundle="${resword}"/></th>
+		                    <th><fmt:message key="percentage" bundle="${resword}"/></th>
+		                </tr>
+		            </thead>
+		            <tbody>
+		                <c:forEach var="row" items="${studyStatisticsRows}">
+		                    <tr>
+		                        <td><c:out value="${row.name}"/></td>
+		                        <td><c:out value="${row.enrolled}"/></td>
+		                        <td><c:out value="${row.expectedTotalEnrollment}"/></td>
+		                        <td>
+		                            <div class="graph"><div class="bar" style="width: ${row.percentage}%">${row.percentage}%</div></div>
+		                        </td>
+		                    </tr>
+		                </c:forEach>
+		            </tbody>
+		        </table>
 		    </td>
 		</tr>
 		<tr>
     		<td class="statistics_td">
-    			<form  action="${pageContext.request.contextPath}/MainMenu">
-        			${subjectEventStatusStatistics}
-    			</form>
+    		    <table class="stats-table">
+    		        <thead>
+    		            <tr><td colspan="3" class="stats-title"><fmt:message key="event_status_statistics" bundle="${resword}"/></td></tr>
+    		            <tr>
+    		                <th><fmt:message key="event_status" bundle="${resword}"/></th>
+    		                <th><fmt:message key="n_events" bundle="${resword}"/></th>
+    		                <th><fmt:message key="percentage" bundle="${resword}"/></th>
+    		            </tr>
+    		        </thead>
+    		        <tbody>
+    		            <c:forEach var="row" items="${subjectEventStatusStatisticsRows}">
+    		                <tr>
+    		                    <td><c:out value="${row.status}"/></td>
+    		                    <td><c:out value="${row.studySubjects}"/></td>
+    		                    <td>
+    		                        <div class="graph"><div class="bar" style="width: ${row.percentage}%">${row.percentage}%</div></div>
+    		                    </td>
+    		                </tr>
+    		            </c:forEach>
+    		        </tbody>
+    		    </table>
     		</td>
 			<td class="statistics_td">
-				<form  action="${pageContext.request.contextPath}/MainMenu">
-					${studySubjectStatusStatistics}
-				</form>
+			    <table class="stats-table">
+			        <thead>
+			            <tr><td colspan="3" class="stats-title"><fmt:message key="study_subject_status_statistics" bundle="${resword}"/></td></tr>
+			            <tr>
+			                <th><fmt:message key="study_subject_status" bundle="${resword}"/></th>
+			                <th><fmt:message key="n_study_subjects" bundle="${resword}"/></th>
+			                <th><fmt:message key="percentage" bundle="${resword}"/></th>
+			            </tr>
+			        </thead>
+			        <tbody>
+			            <c:forEach var="row" items="${studySubjectStatusStatisticsRows}">
+			                <tr>
+			                    <td><c:out value="${row.status}"/></td>
+			                    <td><c:out value="${row.studySubjects}"/></td>
+			                    <td>
+			                        <div class="graph"><div class="bar" style="width: ${row.percentage}%">${row.percentage}%</div></div>
+			                    </td>
+			                </tr>
+			            </c:forEach>
+			        </tbody>
+			    </table>
 			</td>
 		</tr>
 	</table>
@@ -201,7 +252,12 @@
 	        <input type="hidden" name="crfId" value="0">
 	        <%-- the destination JSP page after removal or adding SDV for an eventCRF --%>
 	        <input type="hidden" name="redirection" value="viewAllSubjectSDVtmp">
-	        ${sdvMatrix}
+	        <%-- Phase B.4 jmesa PR 9 (cohort 7): server-rendered jmesa
+	             table replaced by vanilla-JS fragment. The fragment
+	             reads studyId from request attribute and fetches
+	             /pages/viewAllSubjectSdvData. --%>
+	        <c:set var="studyId" value="${study.id}" scope="request"/>
+	        <jsp:include page="include/viewAllSubjectSdvTable.jsp"/>
 	        <br />
 	        <c:if test="${!(study.status.locked)}">        
 	             <input type="submit" name="sdvAllFormSubmit" class="button_medium" value="<fmt:message key="submit" bundle="${resword}"/>" onclick="this.form.method='POST';this.form.action='${pageContext.request.contextPath}/pages/handleSDVPost';this.form.submit();"/>

@@ -1,0 +1,74 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.oid.CrfOidGenerator;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.oid.OidGenerator;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfBean;
+import org.hibernate.query.Query;
+
+public class CrfDao extends AbstractDomainDao<CrfBean> {
+
+    @Override
+    Class<CrfBean> domainClass() {
+        // TODO Auto-generated method stub
+        return CrfBean.class;
+    }
+
+    // TODO update to CriteriaQuery 
+    @SuppressWarnings("deprecation")
+    public CrfBean findByName(String crfName) {
+        String query = "from " + getDomainClassName() + " crf  where crf.name = :crfName ";
+        Query<CrfBean> q = getCurrentSession().createQuery(query, CrfBean.class);
+        q.setParameter("crfName", crfName);
+        return q.uniqueResult();
+    }
+
+    // TODO update to CriteriaQuery 
+    @SuppressWarnings("deprecation")
+    public CrfBean findByOcOID(String OCOID) {
+        getSessionFactory().getStatistics().logSummary();
+        String query = "from " + getDomainClassName() + " do  where do.ocOid = :OCOID";
+        Query<CrfBean> q = getCurrentSession().createQuery(query, CrfBean.class);
+        q.setParameter("OCOID", OCOID);
+        return q.uniqueResult();
+    }
+
+    // TODO update to CriteriaQuery 
+    @SuppressWarnings("deprecation")
+    public CrfBean findByCrfId(Integer crfId) {
+        String query = "from " + getDomainClassName() + " crf  where crf.crfId = :crfId ";
+        Query<CrfBean> q = getCurrentSession().createQuery(query, CrfBean.class);
+        q.setParameter("crfId", crfId);
+        return q.uniqueResult();
+    }
+    
+    private String getOid(CrfBean crf, String crfName) {
+        OidGenerator oidGenerator = new CrfOidGenerator();
+        String oid;
+        try {
+            oid = crf.getOcOid() != null ? crf.getOcOid() : oidGenerator.generateOid(crfName);
+            return oid;
+        } catch (Exception e) {
+            throw new RuntimeException("CANNOT GENERATE OID");
+        }
+    }
+
+    public String getValidOid(CrfBean crfBean, String crfName) {
+        OidGenerator oidGenerator = new CrfOidGenerator();
+        String oid = getOid(crfBean, crfName);
+        String oidPreRandomization = oid;
+        while (findByOcOID(oid) != null) {
+            oid = oidGenerator.randomizeOid(oidPreRandomization);
+        }
+        return oid;
+    }
+
+}

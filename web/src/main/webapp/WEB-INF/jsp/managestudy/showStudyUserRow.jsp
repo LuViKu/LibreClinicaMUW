@@ -1,14 +1,14 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
- <%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+ <%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
 
 
 <c:set var="count" value="${param.eblRowCount}" />
 <!-- row number: <c:out value="${count}"/> -->
 
-<jsp:useBean scope="request" id="currRow" class="org.akaza.openclinica.web.bean.UserAccountRow" />
+<jsp:useBean scope="request" id="currRow" class="at.ac.meduniwien.ophthalmology.libreclinica.web.bean.UserAccountRow" />
  <c:choose>
    <c:when test="${currRow.bean.status.id ==1}">
    <tr valign="top">  

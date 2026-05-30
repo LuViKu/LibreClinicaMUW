@@ -1,0 +1,207 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.web.crfdata;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ItemDataType;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.NumericComparisonOperator;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplayItemBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.form.DiscrepancyValidator;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.form.Validation;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.form.Validator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+/*
+ * Helper methods will be placed in this class - DRY
+ */
+public class ImportHelper {
+
+    private static final Logger logger= LoggerFactory.getLogger(ImportHelper.class);
+
+    /**
+     * @param dib
+     *            A DisplayItemBean representing an input on the CRF.
+     * @return The name of the input in the HTML form.
+     */
+    public final String getInputName(DisplayItemBean dib) {
+        ItemBean ib = dib.getItem();
+        String inputName = "input" + ib.getId();
+        return inputName;
+    }
+
+    /**
+     * Peform validation on a item which has a RADIO or SINGLESELECTresponse
+     * type. This function checks that the input isn't blank, and that its value
+     * comes from the controlled vocabulary (ResponseSetBean) in the
+     * DisplayItemBean.
+     * 
+     * @param v
+     *            The Validator to add validations to.
+     * @param dib
+     *            The DisplayItemBean to validate.
+     * @return The DisplayItemBean which is validated.
+     */
+    public DisplayItemBean validateDisplayItemBeanSingleCV(DiscrepancyValidator v, DisplayItemBean dib, String inputName) {
+        if (inputName == null || inputName.trim().isEmpty()) {
+            inputName = getInputName(dib);
+        }
+        ItemFormMetadataBean ibMeta = dib.getMetadata();
+        ItemDataBean idb = dib.getData();
+        String idbValue = idb.getValue();
+		if (idbValue == null || idbValue.trim().isEmpty()) {
+            if (ibMeta.isRequired()) {
+                v.addValidation(inputName, Validator.IS_REQUIRED);
+            }
+        } else {
+            // commented out because it should be a hard edit check, tbh 05/2008
+            // v.addValidation(inputName,
+            // Validator.IN_RESPONSE_SET_SINGLE_VALUE,
+            // dib.getMetadata().getResponseSet());
+        }
+
+        return dib;
+    }
+
+    /**
+     * Peform validation on a item which has a RADIO or SINGLESELECTresponse
+     * type. This function checks that the input isn't blank, and that its value
+     * comes from the controlled vocabulary (ResponseSetBean) in the
+     * DisplayItemBean.
+     * 
+     * @param v
+     *            The Validator to add validations to.
+     * @param dib
+     *            The DisplayItemBean to validate.
+     * @return The DisplayItemBean which is validated.
+     */
+    public DisplayItemBean validateDisplayItemBeanMultipleCV(DiscrepancyValidator v, DisplayItemBean dib, String inputName) {
+        if (inputName == null || inputName.trim().isEmpty()) {
+            inputName = getInputName(dib);
+        }
+        ItemFormMetadataBean ibMeta = dib.getMetadata();
+        ItemDataBean idb = dib.getData();
+        String idbValue = idb.getValue();
+		if (idbValue == null || idbValue.trim().isEmpty()) {
+            if (ibMeta.isRequired()) {
+                v.addValidation(inputName, Validator.IS_REQUIRED);
+            }
+        } else {
+            // comment this out since it should be a hard edit check, tbh
+            // 05/2008
+            // v.addValidation(inputName, Validator.IN_RESPONSE_SET,
+            // dib.getMetadata().getResponseSet());
+        }
+        return dib;
+    }
+
+    /**
+     * Peform validation on a item which has a TEXT or TEXTAREA response type.
+     * If the item has a null value, it's automatically validated. Otherwise,
+     * it's checked against its data type.
+     * 
+     * @param v
+     *            The Validator to add validations to.
+     * @param dib
+     *            The DisplayItemBean to validate.
+     * @return The DisplayItemBean which is validated.
+     */
+    public DisplayItemBean validateDisplayItemBeanText(DiscrepancyValidator v, DisplayItemBean dib, String inputName) {
+
+        if (inputName == null || inputName.trim().isEmpty()) {// for single items
+            inputName = getInputName(dib);
+        }
+        ItemBean ib = dib.getItem();
+        ItemFormMetadataBean ibMeta = dib.getMetadata();
+        ItemDataType idt = ib.getDataType();
+        ItemDataBean idb = dib.getData();
+
+        boolean isNull = false;
+        /*
+         * ArrayList nullValues = edcb.getNullValuesList(); for (int i = 0; i <
+         * nullValues.size(); i++) { NullValue nv = (NullValue)
+         * nullValues.get(i); if (nv.getName().equals(fp.getString(inputName))) {
+         * isNull = true; } }
+         */
+
+        if (!isNull) {
+            String idbValue = idb.getValue();
+			if (idbValue == null || idbValue.trim().isEmpty()) {
+                // check required first
+                if (ibMeta.isRequired()) {
+                    v.addValidation(inputName, Validator.IS_REQUIRED);
+                }
+            } else {
+
+                if (idt.equals(ItemDataType.ST)) {
+                    // a string's size could be more than 255, which is more
+                    // than
+                    // the db field length
+                    v.addValidation(inputName, Validator.LENGTH_NUMERIC_COMPARISON, NumericComparisonOperator.LESS_THAN_OR_EQUAL_TO, 255);
+
+                } else if (idt.equals(ItemDataType.INTEGER)) {
+                    // hard edit check, will comment out for now, tbh 05/2008
+                    // v.addValidation(inputName, Validator.IS_AN_INTEGER);
+                    // v.alwaysExecuteLastValidation(inputName);
+
+                } else if (idt.equals(ItemDataType.REAL)) {
+                    // hard edit check, will comment out for now, tbh 05/08
+                    // v.addValidation(inputName, Validator.IS_A_NUMBER);
+                    // v.alwaysExecuteLastValidation(inputName);
+                } else if (idt.equals(ItemDataType.BL)) {
+                    // there is no validation here since this data type is
+                    // explicitly
+                    // allowed to be null
+                    // if the string input for this field parses to a non-zero
+                    // number, the
+                    // value will be true; otherwise, 0
+                } else if (idt.equals(ItemDataType.BN)) {
+
+                } else if (idt.equals(ItemDataType.SET)) {
+                    // v.addValidation(inputName, Validator.NO_BLANKS_SET);
+                    v.addValidation(inputName, Validator.IN_RESPONSE_SET_SINGLE_VALUE, dib.getMetadata().getResponseSet());
+                }
+
+                else if (idt.equals(ItemDataType.DATE)) {
+                    // hard edit check, will comment out for now, tbh 05/08
+                    // v.addValidation(inputName, Validator.IS_A_DATE);
+                    // v.alwaysExecuteLastValidation(inputName);
+                }
+
+                String customValidationString = dib.getMetadata().getRegexp();
+                if (!(customValidationString == null || customValidationString.trim().isEmpty())) {
+                    Validation customValidation = null;
+
+                    if (customValidationString.startsWith("func:")) {
+                        try {
+                            customValidation = Validator.processCRFValidationFunction(customValidationString);
+                        } catch (Exception e) {
+                            logger.error("Error while processing CRF validation function: ", e);
+                        }
+                    } else if (customValidationString.startsWith("regexp:")) {
+                        try {
+                            customValidation = Validator.processCRFValidationRegex(customValidationString);
+                        } catch (Exception e) {
+                            logger.error("Error while processing CRF validation regular expression: ", e);
+                        }
+                    }
+
+                    if (customValidation != null) {
+                        customValidation.setErrorMessage(dib.getMetadata().getRegexpErrorMsg());
+                        v.addValidation(inputName, customValidation);
+                    }
+                }
+            }
+        }
+        return dib;
+    }
+}

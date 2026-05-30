@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<beans
+        xmlns="http://www.springframework.org/schema/beans"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:p="http://www.springframework.org/schema/p"
+        xmlns:util="http://www.springframework.org/schema/util"
+        xmlns:context="http://www.springframework.org/schema/context"
+        xsi:schemaLocation="http://www.springframework.org/schema/beans
+                        http://www.springframework.org/schema/beans/spring-beans.xsd
+                        http://www.springframework.org/schema/util
+                        http://www.springframework.org/schema/util/spring-util.xsd
+
+                        http://www.springframework.org/schema/context
+                        http://www.springframework.org/schema/context/spring-context.xsd">
+
+    <context:component-scan base-package="at.ac.meduniwien.ophthalmology.libreclinica.service"/>
+
+    <util:properties id="dataInfo" location="classpath:datainfo.properties"/>
+    <util:properties id="extractInfo" location="classpath:extract.properties"/>
+    <util:properties id="enterpriseInfo" location="classpath:enterprise.properties"/>
+    <!--
+
+    <bean id="ocSessionContext" class="org.springframework.beans.factory.config.MethodInvokingFactoryBean">
+       <property name="targetClass"><value>at.ac.meduniwien.ophthalmology.libreclinica.control.ApplicationContextHelper</value></property>
+         <property name="targetMethod"><value>getContext</value></property>
+    </bean>
+    -->
+    <bean id="coreResources" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources">
+        <property name="dataInfo" ref="dataInfo"/>
+        <property name="extractInfo" ref="extractInfo"/>
+        <!--  <property name="messageSource" ref="messageSource"/> -->
+    </bean>
+
+    <!--
+        Phase B.3 (Castor → JAXB, DR-006): single Spring-managed JAXBContext
+        cache for the lifetime of the application context. Used by the rules
+        import/export servlets and (in subsequent B.3 PRs) the CDISC ODM,
+        OpenRosa, and XForm code paths.
+    -->
+    <bean id="odmJaxbContext" class="at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext"/>
+
+    <bean id="dataInfoProperties" factory-bean="coreResources" factory-method="getDataInfo"/>
+
+    <!-- ENABLING THIS WILL ACTIVATE I18N VIA SPRING -->
+    <bean id="messageSource"
+          class="org.springframework.context.support.ResourceBundleMessageSource">
+        <property name="basenames">
+            <list>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.admin</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.audit_events</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.exceptions</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.format</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.page_messages</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.terms</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.words</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow</value>
+                <value>at.ac.meduniwien.ophthalmology.libreclinica.i18n.ws_messages</value>
+            </list>
+        </property>
+    </bean>
+
+    <!--
+        Phase C.8 (2026-05-30): retired the legacy `s[KEY]` custom-syntax
+        PropertyPlaceholderConfigurer in favour of Spring's standard
+        ${KEY} via PropertySourcesPlaceholderConfigurer, sourced from the
+        same CoreResources-derived dataInfoProperties. This unblocks
+        Java @Configuration classes (C.3/4/5/7) which can now @Value("${...}")
+        or @Qualifier("dataInfoProperties") Properties against the same
+        source. The `s[...]` prefix originated upstream to avoid clashing
+        with JSP EL during XML config; we no longer parse Spring XML through
+        EL pipelines, so the custom prefix has no defensive value left.
+    -->
+    <bean class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
+        <property name="properties">
+            <ref bean="dataInfoProperties"/>
+        </property>
+    </bean>
+
+    <bean id="localeResolver" class="org.springframework.web.servlet.i18n.SessionLocaleResolver"/>
+</beans>

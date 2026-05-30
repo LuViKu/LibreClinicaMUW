@@ -1,0 +1,484 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.service.crfdata;
+
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Utils;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.CrfDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.CrfVersionDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.CrfVersionMediaDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemDataTypeDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemFormMetadataDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemGroupDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemGroupMetadataDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ItemReferenceTypeDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ResponseTypeDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.SectionDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.StudyDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.UserAccountDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.VersioningMapDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfVersion;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.CrfVersionMedia;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Item;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemDataType;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemFormMetadata;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemGroup;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ItemGroupMetadata;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResponseSet;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.ResponseType;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.Section;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.VersioningMap;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.VersioningMapId;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.XformContainer;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.XformGroup;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.XformItem;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.XformUtils;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto.Bind;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto.Group;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto.Html;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.dto.UserControl;
+import at.ac.meduniwien.ophthalmology.libreclinica.validator.xform.ItemValidator;
+import org.apache.commons.fileupload2.core.DiskFileItem;
+import org.apache.commons.lang.exception.ExceptionUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.validation.DataBinder;
+import org.springframework.validation.Errors;
+
+@Service
+public class XformMetaDataService {
+
+    protected final Logger logger = LoggerFactory.getLogger(getClass().getName());
+
+    @Autowired
+    private StudyDao studyDao;
+
+    @Autowired
+    private CrfDao crfDao;
+
+    @Autowired
+    private SectionDao sectionDao;
+
+    @Autowired
+    private UserAccountDao userDao;
+
+    @Autowired
+    private CrfVersionDao crfVersionDao;
+
+    @Autowired
+    private CrfVersionMediaDao crfVersionMediaDao;
+
+    @Autowired
+    private ItemGroupDao itemGroupDao;
+
+    @Autowired
+    private ItemGroupMetadataDao itemGroupMetadataDao;
+
+    @Autowired
+    private VersioningMapDao versioningMapDao;
+
+    @Autowired
+    private ItemFormMetadataDao itemFormMetadataDao;
+
+    @Autowired
+    private ItemDao itemDao;
+
+    @Autowired
+    private ItemDataTypeDao itemDataTypeDao;
+
+    @Autowired
+    private ItemReferenceTypeDao itemRefTypeDao;
+
+    @Autowired
+    private ResponseTypeDao responseTypeDao;
+
+    @Autowired
+    private ResponseSetService responseSetService;
+
+    public Errors runService(CRFVersionBean version, XformContainer container, StudyBean currentStudy, UserAccountBean ub, Html html, String submittedCrfName,
+            String submittedCrfVersionName, String submittedCrfVersionDescription, String submittedRevisionNotes, String submittedXformText,
+            List<DiskFileItem> formItems) {
+
+        // Create container for holding validation errors
+        DataBinder dataBinder = new DataBinder(new CrfVersion());
+        Errors errors = dataBinder.getBindingResult();
+
+        try {
+            createCRFMetaData(version, container, currentStudy, ub, html, submittedCrfName, submittedCrfVersionName, submittedCrfVersionDescription,
+                    submittedRevisionNotes, submittedXformText, formItems, errors);
+        } catch (Exception e) {
+            // Transaction has been rolled back due to an exception.
+            // TODO: Should we add an error message here?
+            logger.error("Error encountered while saving CRF: " + e.getMessage());
+            logger.error(ExceptionUtils.getStackTrace(e));
+        }
+        return errors;
+    }
+
+    @Transactional
+    public CrfVersion createCRFMetaData(CRFVersionBean version, XformContainer container, StudyBean currentStudy, UserAccountBean ub, Html html,
+            String submittedCrfName, String submittedCrfVersionName, String submittedCrfVersionDescription, String submittedRevisionNotes,
+            String submittedXformText, List<DiskFileItem> formItems, Errors errors) throws Exception {
+
+        // Retrieve CrfBean. Create one if it doesn't exist yet.
+        CrfBean crf = null;
+        if (version.getCrfId() > 0) {
+            crf = (CrfBean) crfDao.findById(version.getCrfId());
+            crf.setUpdateId(ub.getId());
+            crf.setDateUpdated(new Date());
+            crfDao.saveOrUpdate(crf);
+        } else {
+            crf = new CrfBean();
+            crf.setName(submittedCrfName);
+            crf.setDescription(submittedCrfVersionDescription);
+            crf.setUserAccount(userDao.findById(ub.getId()));
+            crf.setStatus(at.ac.meduniwien.ophthalmology.libreclinica.domain.Status.AVAILABLE);
+            crf.setStudy(studyDao.findById(currentStudy.getId()));
+            crf.setOcOid(crfDao.getValidOid(new CrfBean(), submittedCrfName));
+            crf.setUpdateId(ub.getId());
+            crf.setDateUpdated(new Date());
+            Integer crfId = (Integer) crfDao.save(crf);
+            crf.setCrfId(crfId);
+        }
+
+        // Create new CRF Version
+        CrfVersion crfVersion = new CrfVersion();
+        crfVersion.setName(submittedCrfVersionName);
+        crfVersion.setDescription(submittedCrfVersionDescription);
+        crfVersion.setCrf(crf);
+        crfVersion.setUserAccount(userDao.findById(ub.getId()));
+        crfVersion.setStatus(at.ac.meduniwien.ophthalmology.libreclinica.domain.Status.AVAILABLE);
+        crfVersion.setRevisionNotes(submittedRevisionNotes);
+        crfVersion.setOcOid(crfVersionDao.getValidOid(new CrfVersion(), crf.getOcOid(), crfVersion.getName()));
+        crfVersion.setXform(submittedXformText);
+        crfVersion.setXformName(container.getInstanceName());
+        Integer crfVersionId = (Integer) crfVersionDao.save(crfVersion);
+        crfVersion.setCrfVersionId(crfVersionId);
+
+        // Create Section
+        Section section = new Section();
+        section.setCrfVersion(crfVersion);
+        section.setStatus(at.ac.meduniwien.ophthalmology.libreclinica.domain.Status.AVAILABLE);
+        section.setLabel("");
+        section.setTitle("");
+        section.setSubtitle("");
+        section.setPageNumberLabel("");
+        section.setOrdinal(1);
+        section.setUserAccount(userDao.findById(ub.getId())); // not null
+        section.setBorders(0);
+        sectionDao.saveOrUpdate(section);
+        section = sectionDao.findByCrfVersionOrdinal(crfVersion.getCrfVersionId(), 1);
+
+        createGroups(container, html, submittedXformText, crf, crfVersion, section, ub, errors);
+
+        saveMedia(formItems, crf, crfVersion);
+
+        if (errors.hasErrors()) {
+            logger.error("Encounter validation errors while saving CRF.  Rolling back transaction.");
+            throw new RuntimeException("Encountered validation errors while saving CRF.");
+        }
+        return crfVersion;
+    }
+
+    private void saveMedia(List<DiskFileItem> items, CrfBean crf, CrfVersion version) {
+        boolean hasFiles = false;
+        for (DiskFileItem item : items) {
+            if (!item.isFormField() && item.getName() != null && !item.getName().isEmpty())
+                hasFiles = true;
+        }
+
+        if (hasFiles) {
+            String dir = Utils.getCrfMediaFilePath(crf, version);
+            // Save any media files
+            for (DiskFileItem item : items) {
+                if (!item.isFormField()) {
+
+                    String fileName = item.getName();
+                    // Some browsers IE 6,7 getName returns the whole path
+                    int startIndex = fileName.lastIndexOf('\\');
+                    if (startIndex != -1) {
+                        fileName = fileName.substring(startIndex + 1, fileName.length());
+                    }
+
+                    CrfVersionMedia media = new CrfVersionMedia();
+                    media.setCrfVersion(version);
+                    media.setName(fileName);
+                    media.setPath(dir);
+                    crfVersionMediaDao.saveOrUpdate(media);
+
+                }
+            }
+        }
+    }
+
+    private void createGroups(XformContainer container, Html html, String submittedXformText, CrfBean crf, CrfVersion version, Section section,
+            UserAccountBean ub, Errors errors) throws Exception {
+        Integer itemOrdinal = 1;
+        ArrayList<String> usedGroupOids = new ArrayList<String>();
+        ArrayList<String> usedItemOids = new ArrayList<String>();
+        List<Group> htmlGroups = html.getBody().getGroup();
+
+        for (Group htmlGroup : htmlGroups) {
+            XformGroup xformGroup = container.findGroupByRef(htmlGroup.getRef());
+            ItemGroup itemGroup = itemGroupDao.findByNameCrfId(xformGroup.getGroupName(), crf);
+
+            if (itemGroup == null) {
+                itemGroup = new ItemGroup();
+                itemGroup.setName(xformGroup.getGroupName());
+                itemGroup.setCrf(crf);
+                itemGroup.setStatus(at.ac.meduniwien.ophthalmology.libreclinica.domain.Status.AVAILABLE);
+                itemGroup.setUserAccount(userDao.findById(ub.getId()));
+                itemGroup.setOcOid(itemGroupDao.getValidOid(new ItemGroup(), crf.getName(), xformGroup.getGroupName(), usedGroupOids));
+                usedGroupOids.add(itemGroup.getOcOid());
+                Integer itemGroupId = (Integer) itemGroupDao.save(itemGroup);
+                itemGroup.setItemGroupId(itemGroupId);
+            }
+            List<UserControl> widgets = null;
+            boolean isRepeating = false;
+            if (htmlGroup.getRepeat() != null && htmlGroup.getRepeat().getUsercontrol() != null) {
+                widgets = htmlGroup.getRepeat().getUsercontrol();
+                isRepeating = true;
+            } else {
+                widgets = htmlGroup.getUsercontrol();
+            }
+            // Create Item specific DB entries: item, response_set,item_form_metadata,versioning_map,item_group_metadata
+            for (UserControl widget : widgets) {
+
+                // Skip reserved name and read-only items here
+                XformItem xformItem = container.findItemByGroupAndRef(xformGroup, widget.getRef());
+                String readonly = html.getHead().getModel().getBindByNodeSet(widget.getRef()).getReadOnly();
+                if (!xformItem.getItemName().equals("OC.STUDY_SUBJECT_ID") && !xformItem.getItemName().equals("OC.STUDY_SUBJECT_ID_CONFIRM") && (readonly == null || !readonly.trim().equals("true()"))) {
+                    Item item = createItem(html, widget, xformGroup, xformItem, crf, ub, usedItemOids, errors);
+                    if (item != null) {
+                        ResponseType responseType = getResponseType(html, xformItem);
+                        ResponseSet responseSet = responseSetService.getResponseSet(html, submittedXformText, xformItem, version, responseType, item, errors);
+                        createItemFormMetadata(html, xformItem, item, responseSet, section, version, itemOrdinal);
+                        createVersioningMap(version, item);
+                        createItemGroupMetadata(html, item, version, itemGroup, isRepeating, itemOrdinal);
+                        itemOrdinal++;
+                    }
+                }
+            }
+        }
+
+    }
+
+    private void createItemGroupMetadata(Html html, Item item, CrfVersion version, ItemGroup itemGroup, boolean isRepeating, Integer itemOrdinal) {
+        ItemGroupMetadata itemGroupMetadata = new ItemGroupMetadata();
+        itemGroupMetadata.setItemGroup(itemGroup);
+        itemGroupMetadata.setHeader("");
+        itemGroupMetadata.setSubheader("");
+        itemGroupMetadata.setLayout("");
+        if (isRepeating) {
+            itemGroupMetadata.setRepeatingGroup(true);
+            itemGroupMetadata.setRepeatNumber(1);
+            itemGroupMetadata.setRepeatMax(40);
+        } else {
+            itemGroupMetadata.setRepeatingGroup(false);
+            itemGroupMetadata.setRepeatNumber(1);
+            itemGroupMetadata.setRepeatMax(1);
+        }
+        itemGroupMetadata.setRepeatArray("");
+        itemGroupMetadata.setRowStartNumber(0);
+        itemGroupMetadata.setCrfVersion(version);
+        itemGroupMetadata.setItem(item);
+        itemGroupMetadata.setOrdinal(itemOrdinal);
+        itemGroupMetadata.setShowGroup(true);
+        itemGroupMetadataDao.saveOrUpdate(itemGroupMetadata);
+    }
+
+    private void createVersioningMap(CrfVersion version, Item item) {
+
+        VersioningMapId versioningMapId = new VersioningMapId();
+        versioningMapId.setCrfVersionId(version.getCrfVersionId());
+        versioningMapId.setItemId(item.getItemId());
+
+        VersioningMap versioningMap = new VersioningMap();
+        versioningMap.setCrfVersion(version);
+        versioningMap.setItem(item);
+        versioningMap.setVersionMapId(versioningMapId);
+        versioningMapDao.saveOrUpdate(versioningMap);
+    }
+
+    private void createItemFormMetadata(Html html, XformItem xformItem, Item item, ResponseSet responseSet, Section section, CrfVersion version,
+            Integer itemOrdinal) {
+        ItemFormMetadata itemFormMetadata = new ItemFormMetadata();
+        itemFormMetadata.setCrfVersionId(version.getCrfVersionId());
+        itemFormMetadata.setResponseSet(responseSet);
+        itemFormMetadata.setItem(item);
+        itemFormMetadata.setSubheader("");
+        itemFormMetadata.setHeader("");
+        itemFormMetadata.setLeftItemText(getLeftItemText(html, xformItem));
+        itemFormMetadata.setRightItemText("");
+        itemFormMetadata.setParentId(0);
+        itemFormMetadata.setSection(section);
+        itemFormMetadata.setOrdinal(itemOrdinal);
+        itemFormMetadata.setParentLabel("");
+        itemFormMetadata.setColumnNumber(0);
+        itemFormMetadata.setPageNumberLabel("");
+        itemFormMetadata.setQuestionNumberLabel("");
+        itemFormMetadata.setRegexp("");
+        itemFormMetadata.setRegexpErrorMsg("");
+        if (getItemFormMetadataRequired(html,xformItem)) itemFormMetadata.setRequired(true);
+        else itemFormMetadata.setRequired(false);
+        itemFormMetadata.setDefaultValue("");
+        itemFormMetadata.setResponseLayout("Vertical");
+        itemFormMetadata.setWidthDecimal("");
+        itemFormMetadata.setShowItem(true);
+        itemFormMetadataDao.saveOrUpdate(itemFormMetadata);
+    }
+
+    private Item createItem(Html html, UserControl widget, XformGroup xformGroup, XformItem xformItem, CrfBean crf, UserAccountBean ub,
+            ArrayList<String> usedItemOids, Errors errors) throws Exception {
+        ItemDataType newDataType = getItemDataType(html, xformItem);
+
+        if (newDataType == null) {
+            logger.error("Found unsupported item type for item: " + xformItem.getItemName());
+            return null;
+        }
+
+        Item item = itemDao.findByNameCrfId(xformItem.getItemName(), crf.getCrfId());
+        ItemDataType oldDataType = null;
+        if (item != null) {
+            oldDataType = itemDataTypeDao.findByItemDataTypeId(itemDao.getItemDataTypeId(item));
+        } else {
+            item = new Item();
+            item.setName(xformItem.getItemName());
+            item.setDescription("");
+            item.setUnits("");
+            item.setPhiStatus(false);
+            item.setItemDataType(newDataType);
+            item.setItemReferenceType(itemRefTypeDao.findByItemReferenceTypeId(1));
+            item.setStatus(at.ac.meduniwien.ophthalmology.libreclinica.domain.Status.AVAILABLE);
+            item.setUserAccount(userDao.findById(ub.getId()));
+            item.setOcOid(itemDao.getValidOid(new Item(), crf.getName(), xformItem.getItemName(), usedItemOids));
+            usedItemOids.add(item.getOcOid());
+            Integer itemId = (Integer) itemDao.save(item);
+            item.setItemId(itemId);
+        }
+        ItemValidator validator = new ItemValidator(itemDao, oldDataType, newDataType);
+        DataBinder dataBinder = new DataBinder(item);
+        Errors itemErrors = dataBinder.getBindingResult();
+        validator.validate(item, itemErrors);
+        errors.addAllErrors(itemErrors);
+
+        return itemDao.findByOcOID(item.getOcOid());
+    }
+
+    private String getLeftItemText(Html html, XformItem xformItem) {
+        for (Group group : html.getBody().getGroup()) {
+            if (group.getRepeat() != null && group.getRepeat().getUsercontrol() != null) {
+                for (UserControl control : group.getRepeat().getUsercontrol()) {
+                    if (control.getRef().equals(xformItem.getItemPath())) {
+                        if (control.getLabel() != null && control.getLabel().getLabel() != null)
+                            return control.getLabel().getLabel();
+                        else if (control.getLabel() != null && control.getLabel().getRef() != null && !control.getLabel().getRef().equals("")) {
+                            String ref = control.getLabel().getRef();
+                            String itextKey = ref.substring(ref.indexOf("'") + 1, ref.lastIndexOf("'"));
+                            return XformUtils.getDefaultTranslation(html, itextKey);
+                        } else
+                            return "";
+                    }
+                }
+
+            } else {
+                for (UserControl control : group.getUsercontrol()) {
+                    if (control.getRef().equals(xformItem.getItemPath())) {
+                        if (control.getLabel() != null && control.getLabel().getLabel() != null)
+                            return control.getLabel().getLabel();
+                        else if (control.getLabel() != null && control.getLabel().getRef() != null && !control.getLabel().getRef().equals("")) {
+                            String ref = control.getLabel().getRef();
+                            String itextKey = ref.substring(ref.indexOf("'") + 1, ref.lastIndexOf("'"));
+                            return XformUtils.getDefaultTranslation(html, itextKey);
+                        } else
+                            return "";
+                    }
+                }
+            }
+        }
+        return "";
+    }
+
+    private ItemDataType getItemDataType(Html html, XformItem xformItem) {
+        String dataType = "";
+
+        for (Bind bind : html.getHead().getModel().getBind()) {
+            if (bind.getNodeSet().equals(xformItem.getItemPath()) && bind.getType() != null && !bind.getType().equals("")) {
+                dataType = bind.getType();
+
+                if (dataType.equals("string"))
+                    return itemDataTypeDao.findByItemDataTypeCode("ST");
+                else if (dataType.equals("int"))
+                    return itemDataTypeDao.findByItemDataTypeCode("INT");
+                else if (dataType.equals("decimal"))
+                    return itemDataTypeDao.findByItemDataTypeCode("REAL");
+                else if (dataType.equals("select") || dataType.equals("select1"))
+                    return itemDataTypeDao.findByItemDataTypeCode("ST");
+                else if (dataType.equals("binary"))
+                    return itemDataTypeDao.findByItemDataTypeCode("FILE");
+                else if (dataType.equals("date"))
+                    return itemDataTypeDao.findByItemDataTypeCode("DATE");
+            }
+        }
+        return null;
+    }
+
+    private boolean getItemFormMetadataRequired(Html html, XformItem xformItem) {
+        boolean required = false;
+
+        for (Bind bind : html.getHead().getModel().getBind()) {
+            if (bind.getNodeSet().equals(xformItem.getItemPath()) && bind.getRequired() != null && !bind.getRequired().equals("")) {
+                if (bind.getRequired().equals("true()")) required = true;
+                else if (bind.getRequired().equals("false()")) required = false;
+            }
+        }
+        return required;
+    }
+
+    private ResponseType getResponseType(Html html, XformItem xformItem) {
+        String responseType = "";
+
+        for (Bind bind : html.getHead().getModel().getBind()) {
+            if (bind.getNodeSet().equals(xformItem.getItemPath()) && bind.getType() != null && !bind.getType().equals("")) {
+                responseType = bind.getType();
+
+                if (responseType.equals("string"))
+                    return responseTypeDao.findByResponseTypeName("text");
+                else if (responseType.equals("int"))
+                    return responseTypeDao.findByResponseTypeName("text");
+                else if (responseType.equals("decimal"))
+                    return responseTypeDao.findByResponseTypeName("text");
+                else if (responseType.equals("date"))
+                    return responseTypeDao.findByResponseTypeName("text");
+                else if (responseType.equals("select"))
+                    return responseTypeDao.findByResponseTypeName("checkbox");
+                else if (responseType.equals("select1"))
+                    return responseTypeDao.findByResponseTypeName("radio");
+                else if (responseType.equals("binary"))
+                    return responseTypeDao.findByResponseTypeName("file");
+                else
+                    return null;
+            }
+        }
+        return null;
+    }
+
+}

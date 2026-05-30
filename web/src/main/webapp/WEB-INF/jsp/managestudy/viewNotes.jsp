@@ -1,10 +1,10 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.terms" var="resterm"/>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.terms" var="resterm"/>
 
 <c:choose>
     <c:when test="${module eq 'manage'}">
@@ -14,22 +14,12 @@
     </c:otherwise>
 </c:choose>
 
-<link rel="stylesheet" href="includes/jmesa/jmesa.css" type="text/css">
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.min.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jmesa.js"></script>
-<script type="text/javascript" language="JavaScript" src="includes/jmesa/jquery-migrate-1.1.1.js"></script>
+<%-- Phase B.4 jmesa PR 5a (cohort 3a): jmesa scripts no longer needed
+     here — the table is rendered client-side via the
+     include/viewNotesTable.jsp fragment. The print link below still
+     reuses openDocWindow from the host scripts already loaded by the
+     header. --%>
 <script type="text/javascript">
-    function onInvokeAction(id,action) {
-        if(id.indexOf('listNotes') == -1)  {
-        setExportToLimit(id, '');
-        }
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        location.href = '${pageContext.request.contextPath}/ViewNotes?'+ parameterString;
-    }
     function openPopup() {
         openDocWindow(window.location.href +'&print=yes')
     }
@@ -64,8 +54,8 @@
   </tr>
 <jsp:include page="../include/sideInfo.jsp"/>
 
-<jsp:useBean scope='session' id='userBean' class='org.akaza.openclinica.bean.login.UserAccountBean'/>
-<jsp:useBean scope='request' id='table' class='org.akaza.openclinica.web.bean.EntityBeanTable'/>
+<jsp:useBean scope='session' id='userBean' class='at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean'/>
+<jsp:useBean scope='request' id='table' class='at.ac.meduniwien.ophthalmology.libreclinica.web.bean.EntityBeanTable'/>
 <jsp:useBean scope='request' id='message' class='java.lang.String'/>
 
 <h1><span class="title_manage"><fmt:message key="view_discrepancy_notes" bundle="${resword}"/></span></h1>
@@ -160,10 +150,9 @@
     <!-- End Of New Summary -->
 </div>
 
-<form  action="${pageContext.request.contextPath}/ViewNotes" style="clear:left; float:left;">
-        <input type="hidden" name="module" value="submit">
-        ${viewNotesHtml}
-    </form>
+<div style="clear:left; float:left; width:100%;">
+    <jsp:include page="include/viewNotesTable.jsp"/>
+</div>
 <!-- EXPANDING WORKFLOW BOX -->
 
 <div style="clear:left">

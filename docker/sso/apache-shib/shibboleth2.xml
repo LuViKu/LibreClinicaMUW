@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<!--
+    LibreClinica MUW Ophthalmology — Shibboleth SP config
+
+    Phase D.7 (DR-014): default config targeting SAMLtest.id
+    (https://samltest.id) — public free SAML test IdP. Production
+    deployments swap entityID, MetadataProvider URL, and CredentialResolver
+    cert paths for the institution-specific IdP (MedUni Wien:
+    login.meduniwien.ac.at; register SP via institutional IT).
+
+    First-time setup with SAMLtest.id:
+      1. Boot this container once via `docker compose -f compose.yaml
+         -f docker-compose.sso.yml up`. The shibd daemon generates
+         sp-cert.pem + sp-key.pem under /etc/shibboleth/ on first start.
+      2. Fetch your SP metadata from
+         `https://localhost:8443/Shibboleth.sso/Metadata` and upload it
+         to https://samltest.id/upload.php — SAMLtest.id then trusts
+         your SP and provides their IdP metadata at
+         https://samltest.id/saml/idp.
+      3. Restart the compose stack. The SAML login flow becomes
+         testable end-to-end with SAMLtest.id's test users
+         (morty/panic, rick/panic, etc.).
+
+    See docker/sso/README.md for the full procedure.
+-->
+<SPConfig xmlns="urn:mace:shibboleth:3.0:native:sp:config"
+          xmlns:conf="urn:mace:shibboleth:3.0:native:sp:config"
+          clockSkew="180">
+
+    <OutOfProcess tranLogFormat="%u|%s|%IDP|%i|%ac|%t|%attr|%n|%b|%E|%S|%SS|%L|%UA|%a" />
+
+    <!-- ApplicationDefaults.entityID is OUR SP identity. Change to a
+         stable URL under the LibreClinica deployment domain in
+         production (e.g. https://libreclinica.meduniwien.ac.at/shibboleth).
+         REMOTE_USER attribute order: prefer eduPersonPrincipalName
+         (institutional accounts), fall back to mail. -->
+    <ApplicationDefaults entityID="https://libreclinica.local/shibboleth"
+                         REMOTE_USER="eppn mail persistent-id targeted-id"
+                         cipherSuites="DEFAULT:!EXP:!LOW:!aNULL:!eNULL:!DES:!IDEA:!SEED:!RC4:!3DES:!kRSA:!SSLv2:!SSLv3:!TLSv1:!TLSv1.1">
+
+        <!-- Sessions.handlerURL = where Shibboleth's discovery + SSO
+             handlers live (e.g. /Shibboleth.sso/Login). cookieProps:
+             "https" forces secure cookies (TLS-only sessions); for
+             local development behind a non-TLS apache, override to
+             "http" or run apache with a self-signed cert. -->
+        <Sessions lifetime="28800" timeout="3600" relayState="ss:mem"
+                  checkAddress="false" handlerSSL="false" cookieProps="http"
+                  redirectLimit="exact">
+
+            <!-- SSO bootstrap: when a protected resource is hit
+                 without a valid session, redirect to SAMLtest.id's
+                 IdP entityID. -->
+            <SSO entityID="https://samltest.id/saml/idp">
+                SAML2
+            </SSO>
+
+            <Logout>SAML2 Local</Logout>
+
+            <!-- Standard handler URLs. /Shibboleth.sso/Metadata
+                 returns this SP's metadata (the file you upload
+                 to https://samltest.id/upload.php on first-time
+                 setup). -->
+            <Handler type="MetadataGenerator" Location="/Metadata" signing="false"/>
+            <Handler type="Status" Location="/Status" acl="127.0.0.1 ::1"/>
+            <Handler type="Session" Location="/Session" showAttributeValues="true"/>
+            <Handler type="DiscoveryFeed" Location="/DiscoFeed"/>
+        </Sessions>
+
+        <Errors supportContact="ophthalmology-it@meduniwien.ac.at"
+                helpLocation="/about.html"
+                styleSheet="/shibboleth-sp/main.css"/>
+
+        <!-- IdP metadata source. SAMLtest.id publishes its IdP
+             metadata at the URL below; shibd refreshes it
+             periodically (default every 4 hours). Production:
+             replace URL with the institutional IdP metadata
+             endpoint (MedUni Wien IT provides this). -->
+        <MetadataProvider type="XML"
+                          url="https://samltest.id/saml/idp"
+                          backingFilePath="samltest-id-metadata.xml"
+                          maxRefreshDelay="7200">
+        </MetadataProvider>
+
+        <AttributeExtractor type="XML" validate="true" reloadChanges="false"
+                            path="attribute-map.xml"/>
+
+        <AttributeResolver type="Query" subjectMatch="true"/>
+        <AttributeFilter type="XML" validate="true" path="attribute-policy.xml"/>
+
+        <!-- CredentialResolver: shibd auto-generates sp-cert.pem +
+             sp-key.pem in /etc/shibboleth on first start if missing.
+             For production, replace with operator-supplied long-lived
+             certs (rotate per institutional policy). -->
+        <CredentialResolver type="File" use="signing"
+                            key="sp-key.pem" certificate="sp-cert.pem"/>
+        <CredentialResolver type="File" use="encryption"
+                            key="sp-key.pem" certificate="sp-cert.pem"/>
+
+    </ApplicationDefaults>
+
+    <SecurityPolicyProvider type="XML" validate="true" path="security-policy.xml"/>
+    <ProtocolProvider type="XML" validate="true" reloadChanges="false" path="protocols.xml"/>
+
+</SPConfig>

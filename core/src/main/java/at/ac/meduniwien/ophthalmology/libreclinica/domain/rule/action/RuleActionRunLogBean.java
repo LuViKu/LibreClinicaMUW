@@ -1,0 +1,103 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.AbstractMutableDomainObject;
+import org.hibernate.annotations.GenericGenerator;
+import org.hibernate.annotations.Parameter;
+import org.hibernate.annotations.Type;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
+
+/**
+ * @author Krikor Krumlian
+ */
+
+@Entity
+@Table(name = "rule_action_run_log")
+@GenericGenerator(name = "id-generator", strategy = "native", parameters = { @Parameter(name = "sequence_name", value = "rule_action_run_log_id_seq") })
+public class RuleActionRunLogBean extends AbstractMutableDomainObject {
+
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 2955745238032042361L;
+	ActionType actionType;
+    ItemDataBean itemDataBean;
+    String value;
+    String ruleOid;
+
+    // TODO : Pending conversion of the objects below to use Hibernate
+    private Integer itemDataId;
+
+    public RuleActionRunLogBean() {
+    }
+
+    public RuleActionRunLogBean(ActionType actionType, ItemDataBean itemDataBean, String value, String ruleOid) {
+        super();
+        this.actionType = actionType;
+        this.itemDataBean = itemDataBean;
+        this.itemDataId = itemDataBean.getId();
+        this.value = value;
+        this.ruleOid = ruleOid;
+    }
+
+    @Type(at.ac.meduniwien.ophthalmology.libreclinica.domain.enumsupport.ActionTypeType.class)
+    @Column(name = "action_type", updatable = false)
+    public ActionType getActionType() {
+        return actionType;
+    }
+
+    public void setActionType(ActionType actionType) {
+        this.actionType = actionType;
+    }
+
+    @Transient
+    public ItemDataBean getItemDataBean() {
+        return itemDataBean;
+    }
+
+    public void setItemDataBean(ItemDataBean itemDataBean) {
+        if (itemDataBean.getId() > 0) {
+            this.itemDataId = itemDataBean.getId();
+        }
+        this.itemDataBean = itemDataBean;
+    }
+
+    public String getValue() {
+        return value;
+    }
+
+    public void setValue(String value) {
+        this.value = value;
+    }
+
+    @Column(name = "rule_oc_oid")
+    public String getRuleOid() {
+        return ruleOid;
+    }
+
+    public void setRuleOid(String ruleOid) {
+        this.ruleOid = ruleOid;
+    }
+
+    public Integer getItemDataId() {
+        return itemDataId;
+    }
+
+    public void setItemDataId(Integer itemDataId) {
+        this.itemDataId = itemDataId;
+    }
+
+}

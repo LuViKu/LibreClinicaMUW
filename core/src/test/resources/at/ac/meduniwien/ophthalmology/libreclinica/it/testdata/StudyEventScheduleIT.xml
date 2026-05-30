@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  DBUnit fixture for StudyEventScheduleIT. Empty: the test builds the
+  full chain (Study → StudyEventDefinition → Subject + StudySubject →
+  StudyEvent) in-memory and persists via the production DAOs.
+  REFRESH operation = empty fixture is a no-op.
+-->
+<dataset>
+</dataset>

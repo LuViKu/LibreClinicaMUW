@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!--
+        Phase C.5 (2026-05-30): the schedulerFactoryBean is now defined in
+        at.ac.meduniwien.ophthalmology.libreclinica.config.QuartzConfig. This
+        file is kept as a one-line stub so the existing classpath references
+        in web.xml + LibreClinicaApplication still resolve.
+    -->
+    <bean class="at.ac.meduniwien.ophthalmology.libreclinica.config.QuartzConfig"/>
+
+</beans>

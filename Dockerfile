@@ -1,4 +1,4 @@
-FROM docker.io/library/maven:3-eclipse-temurin-8 AS builder
+FROM docker.io/library/maven:3-eclipse-temurin-21 AS builder
 
 WORKDIR /app
 
@@ -18,7 +18,6 @@ COPY core/pom.xml core/
 COPY odm/pom.xml odm/
 COPY docs/pom.xml docs/
 COPY web/pom.xml web/
-COPY ws/pom.xml ws/
 
 RUN --mount=type=cache,target=/root/.m2 \
     set -eux; \
@@ -39,7 +38,6 @@ RUN --mount=type=cache,target=/root/.m2 \
     --mount=type=cache,target=/app/docs/target \
     --mount=type=cache,target=/app/odm/target \
     --mount=type=cache,target=/app/web/target \
-    --mount=type=cache,target=/app/ws/target \
     set -eux; \
     mvn package; \
     # Maven's default WAR name is ${artifactId}-${version}.war, so this is
@@ -49,7 +47,31 @@ RUN --mount=type=cache,target=/root/.m2 \
     mv web/target/LibreClinica-web-*.war /LibreClinica-web.war;
 
 ############################################################
-FROM tomcat:9-jdk11
+FROM tomcat:10-jdk21
+
+# Phase B.1 JDK 21 baseline: legacy Spring/Hibernate reflection needs java.base
+# opens, Castor 1.4.1's BaseXercesJDK5Serializer touches an internal JDK class
+# (com.sun.org.apache.xml.internal.serialize.XMLSerializer) that needs java.xml
+# exports, and Spring-LDAP's AbstractContextSource references com.sun.jndi.ldap.LdapCtxFactory
+# from java.naming. All three are stopgaps that go away when subsequent sub-phases
+# replace Castor (B.3, DR-006), Spring 5→6 (B.4) and Hibernate 5→6 (B.5).
+#
+# Phase B.4 + B.6: Tomcat 9 → 10 — required for the jakarta.servlet 6 WAR.
+# Castor was retired in B.3 (DR-006), so the java.xml export is now dead
+# weight; left in place for one more cycle to keep diff scope tight.
+# Phase C.14 cliff (2026-05-30): -Dorg.springframework.boot.logging.LoggingSystem=none
+# tells Boot to skip its LogbackLoggingSystem and let logback init via its own
+# auto-discovery. Required because logback.xml's 10 RollingFileAppenders share
+# a file pattern (intentional facility-by-encoder structure); Boot 3.5's
+# LogbackLoggingSystem.initialize reads StatusManager and throws on any ERROR.
+ENV CATALINA_OPTS="\
+    --add-opens=java.base/java.lang=ALL-UNNAMED \
+    --add-opens=java.base/java.lang.invoke=ALL-UNNAMED \
+    --add-opens=java.base/java.lang.reflect=ALL-UNNAMED \
+    --add-opens=java.base/java.util=ALL-UNNAMED \
+    --add-exports=java.xml/com.sun.org.apache.xml.internal.serialize=ALL-UNNAMED \
+    --add-exports=java.naming/com.sun.jndi.ldap=ALL-UNNAMED \
+    -Dorg.springframework.boot.logging.LoggingSystem=none"
 
 LABEL org.opencontainers.image.title="LibreClinica MUW Ophthalmology"
 LABEL org.opencontainers.image.description="Electronic Data Capture for the Department of Ophthalmology and Optometry, Medical University of Vienna — institutional build of LibreClinica."

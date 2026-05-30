@@ -36,7 +36,7 @@ For full installation guidance (Tomcat configuration, Postgres setup, LDAP integ
 
 After Phase C the deployment model changes to executable JAR + embedded Tomcat + Java 21.
 
-> **Note:** the LibreClinica SOAP web API is legacy upstream — "not tested and not actively developed." It is retained in this fork during Phase A and slated for removal or replacement during Phase B/C. See MIGRATION.md.
+> **Note:** the LibreClinica SOAP web API (`ws/` module) was removed in Phase B.4 (PR #31, 2026-05-29) — upstream had it marked "legacy, not tested, not actively developed", and there is no active SOAP consumer at MUW Ophthalmology. See [MIGRATION.md § Phase B](MIGRATION.md#phase-b--java-21--spring-6--jakarta-cliff).
 
 ### Contribution & development
 

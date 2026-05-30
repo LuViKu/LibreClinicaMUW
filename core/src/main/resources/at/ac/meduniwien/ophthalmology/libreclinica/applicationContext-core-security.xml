@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:p="http://www.springframework.org/schema/p"
+       xmlns:security="http://www.springframework.org/schema/security"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd
+
+
+                           http://www.springframework.org/schema/security
+                           http://www.springframework.org/schema/security/spring-security.xsd">
+
+
+    <!-- Phase B.4 cliff: Spring Security 6 — use id= rather than only alias=
+         so the <security:http> child AuthenticationManagerFactoryBean (created
+         by HttpSecurityBeanDefinitionParser) can resolve the parent manager
+         under its expected reference name.
+         Phase D.1 (2026-05-30): `openClinicaPasswordEncoder` is now an alias
+         for the `passwordEncoder` bean provided by PasswordEncoderConfig
+         (DelegatingPasswordEncoder with bcrypt + LegacyMd5Sha1 fallback).
+         The XML keeps the legacy bean ID reference to avoid touching
+         <security:password-encoder ref=…/> until the security XML retires.
+    -->
+    <security:authentication-manager id="authenticationManager">
+        <security:authentication-provider user-service-ref="ocUserDetailsService">
+            <security:password-encoder ref="passwordEncoder"/>
+        </security:authentication-provider>
+        <security:authentication-provider ref="ldapAuthenticationProvider"/>
+    </security:authentication-manager>
+
+    <!-- Phase D.1: thin stub that activates the @Configuration class
+         providing the `passwordEncoder` bean (aliased to the legacy
+         `openClinicaPasswordEncoder` name for caller-site compat).
+         Replaces the deleted shaPasswordEncoder + md5PasswordEncoder +
+         openClinicaPasswordEncoder XML beans. -->
+    <bean class="at.ac.meduniwien.ophthalmology.libreclinica.config.PasswordEncoderConfig"/>
+
+    <bean id="securityManager" class="at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager">
+        <property name="encoder" ref="passwordEncoder"/>
+        <property name="providers">
+            <list>
+                <ref bean="ldapAuthenticationProvider"/>
+                <bean class="org.springframework.security.authentication.dao.DaoAuthenticationProvider">
+                    <property name="userDetailsService" ref="ocUserDetailsService"/>
+                    <property name="passwordEncoder" ref="passwordEncoder"/>
+                </bean>
+            </list>
+        </property>
+    </bean>
+
+    <!-- 
+    <bean id="myFilter" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaAuthenticationProcessingFilter">
+        <property name="authenticationManager" ref="authenticationManager"/>
+        <property name="authenticationFailureUrl" value="/pages/login/login?action=errorLogin"/>
+        <property name="defaultTargetUrl" value="/MainMenu"/>
+        <property name="auditUserLoginDao" ref="auditUserLoginDao"/>
+        <property name="configurationDao" ref="configurationDao"/>
+        <property name="dataSource" ref="dataSource"/>
+        <property name="exceptionMappings">
+            <props>
+                <prop key="org.springframework.security.LockedException">/pages/login/login?action=errorLocked</prop>
+            </props>
+        </property>
+        <security:custom-filter position="AUTHENTICATION_PROCESSING_FILTER"/>
+    </bean>
+    -->
+
+    <bean id="ocUserDetailsService" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaJdbcService"
+          p:dataSource-ref="dataSource"
+          p:usersByUsernameQuery="SELECT user_name,passwd,enabled,account_non_locked FROM user_account WHERE user_name = ?"/>
+
+    <!--<security:global-method-security secured-annotations="enabled">
+        <security:protect-pointcut
+            expression="execution(* com.springsource..*Service.*(..))"
+            access="ROLE_USER" />
+    </security:global-method-security>
+    -->
+
+    <!-- ActiveDirectory -->
+    <bean id="contextSource" class="org.springframework.security.ldap.DefaultSpringSecurityContextSource">
+        <constructor-arg>
+            <value>${ldap.host}</value>
+        </constructor-arg>
+        <property name="userDn">
+            <value>${ldap.userDn}</value>
+        </property>
+        <property name="password">
+            <value>${ldap.password}</value>
+        </property>
+    </bean>
+
+    <bean id="ldapAuthenticationProvider" class="org.springframework.security.ldap.authentication.LdapAuthenticationProvider">
+        <constructor-arg>
+            <bean class="org.springframework.security.ldap.authentication.BindAuthenticator">
+                <constructor-arg ref="contextSource"/>
+                <property name="userSearch" ref="openClinicaLdapUserSearch"/>
+            </bean>
+        </constructor-arg>
+        <constructor-arg>
+            <bean class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaLdapAuthoritiesPopulator"/>
+        </constructor-arg>
+    </bean>
+
+    <bean id="xformParser" class="at.ac.meduniwien.ophthalmology.libreclinica.domain.xform.XformParser">
+        <property name="dataSource" ref="dataSource"></property>
+        <property name="coreResources" ref="coreResources"/>
+        <property name="odmJaxbContext" ref="odmJaxbContext"/>
+    </bean>
+
+    <bean name="apiSecurityFilter" class="at.ac.meduniwien.ophthalmology.libreclinica.web.filter.ApiSecurityFilter"/>
+
+</beans>

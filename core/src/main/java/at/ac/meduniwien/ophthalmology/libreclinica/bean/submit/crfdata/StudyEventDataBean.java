@@ -1,0 +1,90 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata;
+
+import java.util.ArrayList;
+
+import jakarta.xml.bind.annotation.XmlAccessType;
+import jakarta.xml.bind.annotation.XmlAccessorType;
+import jakarta.xml.bind.annotation.XmlAttribute;
+import jakarta.xml.bind.annotation.XmlElement;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.AuditLogsBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.odmbeans.DiscrepancyNotesBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.datamap.StudyEventDefinition;
+
+@XmlAccessorType(XmlAccessType.NONE)
+public class StudyEventDataBean {
+    @XmlElement(name = "FormData", namespace = "http://www.cdisc.org/ns/odm/v1.3")
+    private ArrayList<FormDataBean> formData;
+    @XmlAttribute(name = "StudyEventOID")
+    private String studyEventOID;
+    @XmlAttribute(name = "StudyEventRepeatKey")
+    private String studyEventRepeatKey;
+    private AuditLogsBean auditLogs;
+    private DiscrepancyNotesBean discrepancyNotes;
+    private StudyEventDefinition studyEventDefinition;
+
+    public StudyEventDataBean() {
+        formData = new ArrayList<FormDataBean>();
+        auditLogs = new AuditLogsBean();
+        discrepancyNotes = new DiscrepancyNotesBean();
+    }
+
+    public String getStudyEventRepeatKey() {
+        return studyEventRepeatKey;
+    }
+
+    public void setStudyEventRepeatKey(String studyEventRepeatKey) {
+        this.studyEventRepeatKey = studyEventRepeatKey;
+    }
+
+    public String getStudyEventOID() {
+        return studyEventOID;
+    }
+
+    public void setStudyEventOID(String studyEventOID) {
+        this.studyEventOID = studyEventOID;
+    }
+
+    public ArrayList<FormDataBean> getFormData() {
+        return formData;
+    }
+
+    public void setFormData(ArrayList<FormDataBean> formData) {
+        this.formData = formData;
+    }
+
+    public AuditLogsBean getAuditLogs() {
+        return auditLogs;
+    }
+
+    public void setAuditLogs(AuditLogsBean auditLogs) {
+        this.auditLogs = auditLogs;
+    }
+
+    public DiscrepancyNotesBean getDiscrepancyNotes() {
+        return discrepancyNotes;
+    }
+
+    public void setDiscrepancyNotes(DiscrepancyNotesBean discrepancyNotes) {
+        this.discrepancyNotes = discrepancyNotes;
+    }
+
+	public StudyEventDefinition getStudyEventDefinition() {
+	return studyEventDefinition;
+}
+
+    public void setStudyEventDefinition(StudyEventDefinition studyEventDefinition) {
+	this.studyEventDefinition = studyEventDefinition;
+}
+
+
+}

@@ -1,13 +1,13 @@
 <%@ page contentType="text/html; charset=UTF-8"%>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c"%>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt"%>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn"%>
+<%@ taglib uri="jakarta.tags.core" prefix="c"%>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt"%>
+<%@ taglib uri="jakarta.tags.functions" prefix="fn"%>
 
 
 
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword" />
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword" />
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/>
 
 
 <c:choose>
@@ -79,9 +79,9 @@
 </script>
 
 <jsp:useBean scope='session' id='userBean'
-    class='org.akaza.openclinica.bean.login.UserAccountBean' />
+    class='at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean' />
 <jsp:useBean scope='request' id='ruleSet'
-    class='org.akaza.openclinica.domain.rule.RuleSetBean' />
+    class='at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean' />
 
 
 <jsp:useBean scope="request" id="presetValues" class="java.util.HashMap" />
@@ -264,7 +264,7 @@
             <c:set var="dibKey" value="${mapEntry.key}-dib" />
             <c:choose>
                <c:when test= "${dibKey}">
-                 <c:set var="dibItemDataType" value ='<%= ((org.akaza.openclinica.bean.submit.DisplayItemBean)request.getAttribute((String)pageContext.getAttribute("dibKey"))).getItem().getItemDataTypeId() %>' />
+                 <c:set var="dibItemDataType" value ='<%= ((at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplayItemBean)request.getAttribute((String)pageContext.getAttribute("dibKey"))).getItem().getItemDataTypeId() %>' />
                </c:when>
             <c:otherwise>
             <c:set var="dibItemDataType" value="${studyEventProperty}"/>

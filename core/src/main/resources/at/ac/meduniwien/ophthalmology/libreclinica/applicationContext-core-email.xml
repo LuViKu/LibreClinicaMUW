@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!--
+        Phase C.7 (2026-05-30): the mail bean trio (mailSender,
+        openClinicaMailSender, mailNotificationService) is now defined in
+        at.ac.meduniwien.ophthalmology.libreclinica.config.MailConfig. This
+        file is kept as a one-line stub so the existing classpath references
+        in web.xml + LibreClinicaApplication + 8 test classes still resolve;
+        deleting the file would force a coordinated rename across all those
+        bootstraps and ship no functional change.
+    -->
+    <bean class="at.ac.meduniwien.ophthalmology.libreclinica.config.MailConfig"/>
+
+</beans>

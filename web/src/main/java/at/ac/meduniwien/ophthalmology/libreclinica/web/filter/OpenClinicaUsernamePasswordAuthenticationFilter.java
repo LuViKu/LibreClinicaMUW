@@ -1,0 +1,419 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.web.filter;
+
+import static org.apache.commons.lang.StringUtils.isBlank;
+
+/*
+ * Copyright 2004, 2005, 2006 Acegi Technology Pty Limited
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+import java.util.Date;
+import java.util.Locale;
+
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.servlet.http.HttpSession;
+import javax.sql.DataSource;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.login.AccountConfigurationException;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.CRFLocker;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ConfigurationDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.AuditUserLoginBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.LoginStatus;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.audit.LoginAuditService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.PasswordRehashService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.MailNotificationService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
+import org.springframework.security.authentication.AuthenticationServiceException;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.AuthenticationException;
+import org.springframework.security.web.authentication.AbstractAuthenticationProcessingFilter;
+import org.springframework.security.web.util.TextEscapeUtils;
+import org.springframework.util.Assert;
+
+/**
+ * Processes an authentication form submission. Called
+ * {@code AuthenticationProcessingFilter} prior to Spring Security
+ * 3.0.
+ * <p>
+ * Login forms must present two parameters to this filter: a username and
+ * password. The default parameter names to use are contained in the
+ * static fields {@link #SPRING_SECURITY_FORM_USERNAME_KEY} and
+ * {@link #SPRING_SECURITY_FORM_PASSWORD_KEY}.
+ * The parameter names can also be changed by setting the
+ * {@code usernameParameter} and {@code passwordParameter}
+ * properties.
+ * <p>
+ * This filter by default responds to the URL {@code /j_spring_security_check}.
+ *
+ * @author Ben Alex
+ * @author Colin Sampaleanu
+ * @author Luke Taylor
+ * @since 3.0
+ */
+public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAuthenticationProcessingFilter {
+    public static final String SPRING_SECURITY_LAST_USERNAME_KEY = "SPRING_SECURITY_LAST_USERNAME";
+    public static final String SPRING_SECURITY_FORM_USERNAME_KEY = "j_username";
+    public static final String SPRING_SECURITY_FORM_PASSWORD_KEY = "j_password";
+    public static final String SPRING_SECURITY_FORM_FACTOR = "j_factor";
+    private static final String BAD_CREDENTIALS_MESSAGE = "Bad Credentials";
+    private String usernameParameter = SPRING_SECURITY_FORM_USERNAME_KEY;
+    private String passwordParameter = SPRING_SECURITY_FORM_PASSWORD_KEY;
+    private boolean postOnly = true;
+    private AuditUserLoginDao auditUserLoginDao;
+    private ConfigurationDao configurationDao;
+    private TwoFactorService factorService;
+    private UserAccountDAO userAccountDao;
+    private DataSource dataSource;
+    private CRFLocker crfLocker;
+    private MailNotificationService mailNotificationService;
+    private PasswordRehashService passwordRehashService;
+    private LoginAuditService loginAuditService;
+    private SsoProperties ssoProperties;
+
+    public OpenClinicaUsernamePasswordAuthenticationFilter() {
+        super("/j_spring_security_check");
+    }
+
+    public void setFactorService(TwoFactorService factorService) {
+        this.factorService = factorService;
+    }
+
+    public void setMailNotificationService(MailNotificationService mailNotificationService) {
+        this.mailNotificationService = mailNotificationService;
+    }
+
+    /**
+     * Phase D.1.b (DR-015): wire the lazy bcrypt rehash service. Fires
+     * after a successful authentication; rewrites legacy MD5/SHA-1
+     * hashes as bcrypt while the plaintext is still in scope.
+     */
+    public void setPasswordRehashService(PasswordRehashService passwordRehashService) {
+        this.passwordRehashService = passwordRehashService;
+    }
+
+    /**
+     * Phase D.5 (DR-014): wire the shared audit-write service. The
+     * filter delegates auditUserLogin() to this service so the
+     * local-password path and the SSO pre-auth path write through
+     * the same code.
+     */
+    public void setLoginAuditService(LoginAuditService loginAuditService) {
+        this.loginAuditService = loginAuditService;
+    }
+
+    /**
+     * Phase D.9 (DR-014): wire SSO configuration so the local-
+     * password 2FA check can defer to the IdP for SSO-bound users
+     * when {@code libreclinica.sso.delegate-mfa-to-idp=true}.
+     */
+    public void setSsoProperties(SsoProperties ssoProperties) {
+        this.ssoProperties = ssoProperties;
+    }
+
+    @Override
+    public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException {
+        if (postOnly && !request.getMethod().equals("POST")) {
+            throw new AuthenticationServiceException("Authentication method not supported: " + request.getMethod());
+        }
+        
+        String username = obtainUsername(request);
+        String password = obtainPassword(request);
+
+        // Fail fast if anything mandatory is missing for authentication
+        if (isBlank(username) || isBlank(password)) {
+            throw new BadCredentialsException(BAD_CREDENTIALS_MESSAGE);
+        }
+
+        UsernamePasswordAuthenticationToken authRequest = new UsernamePasswordAuthenticationToken(username.trim(), password);
+
+        // Place the last username attempted into HttpSession for views
+        HttpSession session = request.getSession(false);
+
+        if (session != null || getAllowSessionCreation()) {
+            request.getSession().setAttribute(SPRING_SECURITY_LAST_USERNAME_KEY, TextEscapeUtils.escapeEntities(username));
+        }
+
+        // Allow subclasses to set the "details" property
+        setDetails(request, authRequest);
+
+        Authentication authentication = null;
+        UserAccountBean userAccountBean = null;
+        ResourceBundleProvider.updateLocale(new Locale("en_US"));
+
+        try {
+            userAccountBean = getUserAccountDao().findByUserName(username);
+
+            if (!userAccountBean.isActive()) {
+                throw new BadCredentialsException(BAD_CREDENTIALS_MESSAGE);
+            }
+
+            // Phase D.9 (DR-014): when the user is SSO-bound
+            // (external_id set) AND libreclinica.sso.delegate-mfa-to-idp
+            // is true (default), skip the local TOTP challenge. The
+            // IdP is responsible for MFA on SSO-bound users; doubling
+            // up locally creates redundant friction. The user's
+            // authsecret row is preserved so admins can re-enable
+            // local 2FA if SSO is later disabled.
+            boolean delegateMfa = ssoProperties != null
+                    && ssoProperties.isDelegateMfaToIdp()
+                    && userAccountBean.isSsoBound();
+            if (factorService.getTwoFactorActivated()
+                    && userAccountBean.isTwoFactorActivated()
+                    && !delegateMfa) {
+                String factor = request.getParameter(SPRING_SECURITY_FORM_FACTOR);
+
+                if (!factorService.verify(userAccountBean.getAuthsecret(), factor)) {
+                    throw new BadCredentialsException(BAD_CREDENTIALS_MESSAGE);
+                }
+            }
+            if (factorService.isTwoFactorActivatedLetterAndOutDated() && !userAccountBean.isTwoFactorActivated()) {
+                notifyDeniedLogin(userAccountBean);
+                throw new AccountConfigurationException();
+            }
+
+            // Manually Checking if the user is locked which should be thrown by authenticate. Mantis Issue: 9016
+            // TODO: somebody should find why getAuthenticationManager().authenticate is not working!
+            if (userAccountBean.getStatus().isLocked()) {
+                throw new LockedException("locked");
+            }
+            authentication = this.getAuthenticationManager().authenticate(authRequest);
+            auditUserLogin(username, LoginStatus.SUCCESSFUL_LOGIN, userAccountBean);
+            resetLockCounter(username, LoginStatus.SUCCESSFUL_LOGIN, userAccountBean);
+            // Phase D.1.b (DR-015): lazy bcrypt rehash on successful
+            // legacy-format login. No-op for bcrypt rows. Plaintext is
+            // held in `password` only for the lifetime of this method.
+            if (passwordRehashService != null) {
+                passwordRehashService.rehashAfterSuccessfulLogin(userAccountBean, password);
+            }
+            request.getSession().setAttribute(SecureController.USER_BEAN_NAME, userAccountBean);
+            // To remove the locking of Event CRFs previously locked by this user.
+            crfLocker.unlockAllForUser(userAccountBean.getId());
+        } catch (LockedException le) {
+            auditUserLogin(username, LoginStatus.FAILED_LOGIN_LOCKED, userAccountBean);
+            notifyDeniedLogin(userAccountBean);
+            throw le;
+        } catch (BadCredentialsException au) {
+            auditUserLogin(username, LoginStatus.FAILED_LOGIN, userAccountBean);
+            lockAccount(username, LoginStatus.FAILED_LOGIN, userAccountBean);
+            notifyDeniedLogin(userAccountBean);
+            throw au;
+        } catch (AuthenticationException ae) {
+            auditUserLogin(username, LoginStatus.FAILED_LOGIN, userAccountBean);
+            lockAccount(username, LoginStatus.FAILED_LOGIN, userAccountBean);
+            notifyDeniedLogin(userAccountBean);
+            throw ae;
+        }
+        
+        if (mailNotificationService.isMailNotificationEnabled(userAccountBean.getActiveStudyId())) {
+            mailNotificationService.sendSuccessfulLoginMail(userAccountBean);
+        }
+        
+        return authentication;
+    }
+
+    private void notifyDeniedLogin(UserAccountBean userAccount) {
+        if (userAccount != null && userAccount.isActive()) {
+            if (mailNotificationService.isMailNotificationEnabled(userAccount.getActiveStudyId())) {
+                mailNotificationService.sendDeniedLoginMail(userAccount);
+            }
+        }
+    }
+
+    /**
+     * Phase D.5 (DR-014): delegates to the shared {@link LoginAuditService}
+     * if wired; falls back to the legacy inline DAO write for
+     * deployments that don't have the new service registered (e.g.
+     * older IT setups). Preserves the legacy contract exactly:
+     * user_account_id null when user is null or not active.
+     */
+    private void auditUserLogin(String username, LoginStatus loginStatus, UserAccountBean userAccount) {
+        if (loginAuditService != null) {
+            loginAuditService.recordLocalAttempt(username, loginStatus, userAccount);
+            return;
+        }
+        // Legacy fallback path — pre-D.5 wiring.
+        AuditUserLoginBean auditUserLogin = new AuditUserLoginBean();
+        auditUserLogin.setUserName(username);
+        auditUserLogin.setLoginStatus(loginStatus);
+        auditUserLogin.setLoginAttemptDate(new Date());
+        auditUserLogin.setUserAccountId((userAccount != null && userAccount.isActive()) ? userAccount.getId() : null);
+        getAuditUserLoginDao().saveOrUpdate(auditUserLogin);
+    }
+
+    private void resetLockCounter(String username, LoginStatus loginStatus, UserAccountBean userAccount) {
+        if (userAccount != null && userAccount.isActive()) {
+            getUserAccountDao().updateLockCounter(userAccount.getId(), 0);
+        }
+    }
+
+    private void lockAccount(String username, LoginStatus loginStatus, UserAccountBean userAccount) {
+        Boolean lockFeatureActive = Boolean.valueOf(getConfigurationDao().findByKey("user.lock.switch").getValue());
+        if (userAccount != null && userAccount.isActive() && lockFeatureActive) {
+            Integer count = userAccount.getLockCounter();
+            String lockCountString = getConfigurationDao().findByKey("user.lock.allowedFailedConsecutiveLoginAttempts").getValue();
+            Integer lockThreshold = Integer.valueOf(lockCountString);
+            if (count < lockThreshold) {
+                getUserAccountDao().updateLockCounter(userAccount.getId(), ++count);
+            }
+            if (count >= lockThreshold) {
+                getUserAccountDao().lockUser(userAccount.getId());
+            }
+        }
+    }
+
+    /**
+     * Enables subclasses to override the composition of the password, such as
+     * by including additional values
+     * and a separator.
+     * <p>
+     * This might be used for example if a postcode/zipcode was required in
+     * addition to the
+     * password. A delimiter such as a pipe (|) should be used to separate the
+     * password and extended value(s). The
+     * <code>AuthenticationDao</code> will need to generate the expected
+     * password in a corresponding manner.
+     * </p>
+     *
+     * @param request so that request attributes can be retrieved
+     * @return the password that will be presented in the
+     *         <code>Authentication</code> request token to the
+     *         <code>AuthenticationManager</code>
+     */
+    protected String obtainPassword(HttpServletRequest request) {
+        return request.getParameter(passwordParameter);
+    }
+
+    /**
+     * Enables subclasses to override the composition of the username, such as
+     * by including additional values
+     * and a separator.
+     *
+     * @param request so that request attributes can be retrieved
+     * @return the username that will be presented in the
+     *         <code>Authentication</code> request token to the
+     *         <code>AuthenticationManager</code>
+     */
+    protected String obtainUsername(HttpServletRequest request) {
+        return request.getParameter(usernameParameter);
+    }
+
+    /**
+     * Provided so that subclasses may configure what is put into the
+     * authentication request's details
+     * property.
+     *
+     * @param request that an authentication request is being created for
+     * @param authRequest the authentication request object that should have its
+     *            details set
+     */
+    protected void setDetails(HttpServletRequest request, UsernamePasswordAuthenticationToken authRequest) {
+        authRequest.setDetails(authenticationDetailsSource.buildDetails(request));
+    }
+
+    /**
+     * Sets the parameter name which will be used to obtain the username from
+     * the login request.
+     *
+     * @param usernameParameter the parameter name. Defaults to "j_username".
+     */
+    public void setUsernameParameter(String usernameParameter) {
+        Assert.hasText(usernameParameter, "Username parameter must not be empty or null");
+        this.usernameParameter = usernameParameter;
+    }
+
+    /**
+     * Sets the parameter name which will be used to obtain the password from the login request
+     *
+     * @param passwordParameter the parameter name. Defaults to "j_password".
+     */
+    public void setPasswordParameter(String passwordParameter) {
+        Assert.hasText(passwordParameter, "Password parameter must not be empty or null");
+        this.passwordParameter = passwordParameter;
+    }
+
+    /**
+     * Defines whether only HTTP POST requests will be allowed by this filter.
+     * If set to true, and an authentication request is received which is not a
+     * POST request, an exception will
+     * be raised immediately and authentication will not be attempted. The
+     * <tt>unsuccessfulAuthentication()</tt> method
+     * will be called as if handling a failed authentication.
+     * <p>
+     * Defaults to <tt>true</tt> but may be overridden by subclasses.
+     */
+    public void setPostOnly(boolean postOnly) {
+        this.postOnly = postOnly;
+    }
+
+    public final String getUsernameParameter() {
+        return usernameParameter;
+    }
+
+    public final String getPasswordParameter() {
+        return passwordParameter;
+    }
+
+    public AuditUserLoginDao getAuditUserLoginDao() {
+        return auditUserLoginDao;
+    }
+
+    public void setAuditUserLoginDao(AuditUserLoginDao auditUserLoginDao) {
+        this.auditUserLoginDao = auditUserLoginDao;
+    }
+
+    public ConfigurationDao getConfigurationDao() {
+        return configurationDao;
+    }
+
+    public void setConfigurationDao(ConfigurationDao configurationDao) {
+        this.configurationDao = configurationDao;
+    }
+
+    public DataSource getDataSource() {
+        return dataSource;
+    }
+
+    public void setDataSource(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    public UserAccountDAO getUserAccountDao() {
+        return userAccountDao != null ? userAccountDao : new UserAccountDAO(dataSource);
+    }
+
+    public CRFLocker getCrfLocker() {
+        return crfLocker;
+    }
+
+    public void setCrfLocker(CRFLocker crfLocker) {
+        this.crfLocker = crfLocker;
+    }
+
+}

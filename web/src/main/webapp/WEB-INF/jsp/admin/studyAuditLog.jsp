@@ -1,36 +1,19 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/>
 
 
 <jsp:include page="../include/managestudy-header.jsp"/>
 <jsp:include page="../include/sideAlert.jsp"/>
 <%--<jsp:include page="../include/sidebar.jsp"/>--%>
 
-<link rel="stylesheet" href="includes/jmesa/jmesa.css" type="text/css">
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.min.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery.jmesa.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jmesa.js"></script>
-<script type="text/JavaScript" language="JavaScript" src="includes/jmesa/jquery-migrate-1.1.1.js"></script> 
-
-
-
-<script type="text/javascript">
-    function onInvokeAction(id,action) {
-        if(id.indexOf('studyAuditLogs') == -1)  {
-        setExportToLimit(id, '');
-        }
-        createHiddenInputFieldsForLimitAndSubmit(id);
-    }
-    function onInvokeExportAction(id) {
-        var parameterString = createParameterStringForLimit(id);
-        location.href = '${pageContext.request.contextPath}/StudyAuditLog?' + parameterString;
-    }
-</script>
+<%-- Phase B.4 jmesa PR 6a (cohort 4a): jmesa scripts removed — the
+     table is rendered client-side by the include/studyAuditLogTable.jsp
+     fragment. --%>
 
 <!-- then instructions-->
 <tr id="sidebar_Instructions_open" style="display: none">
@@ -64,10 +47,7 @@
 </span></h1>
 
 <div id="findSubjectsDiv">
-    <form  action="${pageContext.request.contextPath}/StudyAuditLog">
-        <input type="hidden" name="module" value="submit">
-        ${auditLogsHtml}
-    </form>
+    <jsp:include page="include/studyAuditLogTable.jsp"/>
 </div>
 
 

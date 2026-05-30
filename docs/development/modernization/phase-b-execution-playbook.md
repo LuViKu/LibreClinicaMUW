@@ -14,13 +14,14 @@ This playbook turns the dependency analysis into a step-by-step execution plan w
 Phase B does not start until *all* of the following are true. Skipping any of these is borrowing risk against the clinical-data system.
 
 - [ ] Phase 0 + A merged to `lc-develop` and pushed (CI green end-to-end).
-- [ ] **Castor characterisation tests** in place and passing on the current stack — see [§B.0 Castor characterisation](#b0--castor-characterisation-tests-pre-flight) below. **This is the non-negotiable gate.** Without byte-equivalent ODM XML capture, the Castor → JAXB replacement (B.3) cannot be reviewed.
+- [x] **Castor characterisation tests** in place and passing on the current stack — see [§B.0 Castor characterisation](#b0--castor-characterisation-tests-pre-flight) below. **This is the non-negotiable gate.** Without byte-equivalent ODM XML capture, the Castor → JAXB replacement (B.3) cannot be reviewed. *Marked complete 2026-05-28 after the scope-correction noted in §B.0 (the metadata / clinical-data export paths build XML by hand-concatenation; their only Castor invocation — rules embedded in a metadata export — is already pinned by `CastorRulesMarshallerCharacterisationTest`).*
 - [x] Decision record entries closed (2026-05-28):
   - [x] **[DR-006](decision-record.md#dr-006--castor-replacement-jakarta-jaxb)** — Castor replacement: **Jakarta JAXB 4**. Revisit only if a B.0 characterisation test cannot be made byte-equivalent on JAXB output even with `XmlAdapter`s.
   - [x] **[DR-010](decision-record.md#dr-010--java-package-rename-to-muw-namespace-during-phase-b11)** — Java packages `org.akaza.openclinica.*` + `org.libreclinica.*` rename to `at.ac.meduniwien.ophthalmology.libreclinica.*` during sub-phase B.11.
 - [ ] Integration test backlog in [MIGRATION.md](../../../MIGRATION.md) — at least the first 5 critical-path tests (LoginFlowIT, StudyCrudIT, SubjectEnrolmentIT, StudyEventScheduleIT, AuditTrailIT) written + green. The post-Phase-0.3 test infrastructure proved we can write them; we need them as our regression net.
   - [x] Item 3 (`LoginFlowIT.passwordEncoderRecognisesLegacyMd5`) landed 2026-05-28 as `OpenClinicaPasswordEncoderTest` (4 unit tests, Phase B.4 gate).
   - [x] B.0 characterisation framework scaffolded 2026-05-28: `CastorCharacterisationIT` abstract base + `CastorCharacterisationFrameworkTest` smoke (2/2 green) + XMLUnit dependency + golden directory. Subclasses for each ODM code path are now mechanical, but still pending.
+  - [x] B.0 exit gate closed 2026-05-28: 5 Castor characterisation tests in place — `CastorCharacterisationFrameworkTest` (2/2 framework smoke), `CastorRulesContainerCharacterisationTest` (empty `RulesPostImportContainer` round-trip via `mappingMarshallerMetadata.xml`), `CastorRulesMarshallerCharacterisationTest` (`Marshaller` shape via `mappingMarshaller.xml`), `CastorRulesUnmarshallerCharacterisationTest` (pins null-collection-on-empty behaviour via `mapping.xml`), `CastorClinicalDataUnmarshallerCharacterisationTest` (CRF data import unmarshaller via `cd_odm_mapping.xml`). Together these cover all five Castor invocation sites in the codebase. The two originally-planned DB-driven ITs (`OdmMetadataExportCharacterisationIT`, `OdmClinicalDataExportCharacterisationIT`) were dropped after the source-code investigation revealed the metadata + clinical-data export paths build XML by **hand-string-concatenation** in `MetaDataReportBean.addNodeStudy`, `AdminDataReportBean.addNodeAdminData`, and `ClinicalDataReportBean.addNodeClinicalData` — none of which call Castor. The only Castor invocation within the metadata export path is `MetaDataReportBean.handleLoadCastor` for the embedded `RulesPostImportContainer`, which is already pinned by `CastorRulesMarshallerCharacterisationTest`. The hand-built XML paths are independent of the Castor → JAXB swap; if a future regression net for the JDBC + hand-build flow is needed, it belongs in the Phase 0 integration test backlog, not B.0.
   - [ ] Items 1, 2, 4, 5, 6–20 (StudyCrudIT, SubjectEnrolmentIT, StudyEventScheduleIT, AuditTrailIT, full CRF/discrepancy/SDV/ODM coverage). Each is ~1–2 days of focused work given multi-entity DBUnit fixtures.
 - [ ] **Compose smoke test runs on every dep bump, not just on the integration profile.** Phase A.2's Quartz 2.2.3 → 2.3.2 + Spring Security 5.1 → 5.8 + project-version rename to `1.4.0rc1-muw` all passed the 67/67 integration suite but broke the compose smoke test (Dockerfile WAR-name glob, scheduler-XML `s[...]` placeholders against an incomplete `datainfo.properties`, and `jobStore.class` bypassing Spring's wiring — three stacked bugs; see commit `b75a2c287`). The integration tests do not load `applicationContext-core-scheduler.xml` and never will detect a runtime-only regression of that shape. Every Phase B sub-phase merge gate must therefore include the smoke test job — wording made explicit in the gate column of the sub-phase table below. *Sub-phase gates updated 2026-05-28.*
 - [ ] An institutional pre-Phase-B snapshot tag: `git tag -a pre-phase-b -m "..."` and pushed.
@@ -36,7 +37,7 @@ Run sub-phases in this order. Each lives on a child branch off `feature/phase-b-
 |---|-----------|--------------|-------------------------------|-------------|
 | B.0 | Castor characterisation tests | `castor-characterisation` | New tests pin every ODM import/export path to a byte-equivalent snapshot on the current stack | 2 weeks |
 | B.1 | JDK 21 baseline (still Spring 5.3) | `jdk21-baseline` | `mvn test` + integration tests + smoke green on JDK 21 | 1–2 weeks |
-| B.2 | Eclipse Transformer dry run | `eclipse-transformer-dry-run` | Throwaway branch; capture the diff size + list of unconvertible sites | 1 week |
+| B.2 | Eclipse Transformer dry run ✅ ([report](phase-b-eclipse-transformer-dry-run.md)) | `eclipse-transformer-dry-run` | Throwaway branch; capture the diff size + list of unconvertible sites | 1 week |
 | B.3 | Castor → JAXB | `castor-to-jaxb` | All B.0 characterisation tests pass byte-equivalent on JAXB output | 3–4 weeks |
 | B.4 | Spring 5 → 6 + Security 5 → 6 + WS 1.5.6 → 4.x (or remove) | `spring6` | Integration tests + smoke green on Spring 6.1 / Security 6.x | 2–3 weeks |
 | B.5 | Hibernate 5.6 → 6.4 (`jakarta.persistence`) | `hibernate6` | All DAO integration tests green; characterise HQL strictness regressions | 3–4 weeks |
@@ -75,7 +76,18 @@ The single highest-risk change in Phase B is replacing Castor with Jakarta JAXB.
 
 ### Exit criterion for B.0
 
-A reviewer (you) signs off that every ODM import/export code path has a characterisation test and the golden file content is correct ODM 1.3.
+A reviewer (you) signs off that every **Castor** invocation site in the codebase has a characterisation test pinning its current output, *and* every reviewed test's golden / pinned object graph is correct.
+
+#### B.0 scope correction (2026-05-28)
+
+The original framing of this section listed two DB-driven characterisation ITs against the metadata + clinical-data export REST endpoints. A source-code investigation while writing the first one (`OdmMetadataExportCharacterisationIT`) showed that:
+
+1. **`FullReportBean.createStudyMetaOdmXml` and `MetaDataReportBean.addNodeStudy` build the ODM XML by `StringBuffer.append(...)` concatenation** — escaping each value through `StringEscapeUtils.escapeXml`. Castor is not invoked.
+2. **`AdminDataReportBean.addNodeAdminData` and `ClinicalDataReportBean.addNodeClinicalData` do the same.**
+3. The **only** Castor invocation in the metadata export path is `MetaDataReportBean.handleLoadCastor(RulesPostImportContainer)` (line ~134), reached from `addNodeRulesData` (line ~169), and only when the study has rules to emit. Its Castor surface is the marshaller-via-`mappingMarshallerMetadata.xml` flow which is already pinned by `CastorRulesContainerCharacterisationTest`.
+4. Replacing Castor with Jakarta JAXB therefore **does not change** the metadata / clinical-data export output for a study without rules, and changes the rules sub-document via a code path that is already characterised.
+
+The two DB-driven ITs were dropped from the B.0 exit gate. If the team later wants regression coverage for the hand-built XML output itself (e.g. ahead of B.7's JSP/JSTL conversion or B.10's date-handling sweep), that belongs in the [MIGRATION.md](../../../MIGRATION.md) Phase 0 integration test backlog — same DBUnit + multi-entity fixture pattern as the other DAO ITs — not in B.0.
 
 ---
 
@@ -111,7 +123,7 @@ Bump build + runtime to JDK 21 without changing anything else. Surfaces every JD
 
 ### Steps
 
-1. Inventory every Castor usage: `grep -rn 'org.codehaus.castor\|castor\.\(xml\|core\)' core/ web/ ws/ odm/`.
+1. ~~Inventory every Castor usage: `grep -rn 'org.codehaus.castor\|castor\.\(xml\|core\)' core/ web/ ws/ odm/`.~~ Castor was entirely removed in PR #28 (2026-05-29) — DR-006 closed.
 2. Replace dependency declarations:
    - Remove `org.codehaus.castor:castor` and `org.codehaus.castor:castor-xml` from `pom.xml`.
    - Add `jakarta.xml.bind:jakarta.xml.bind-api:4.0.x` and `org.glassfish.jaxb:jaxb-runtime:4.0.x`.
@@ -149,7 +161,7 @@ Castor → JAXB is the largest blast-radius change in Phase B. Branch must merge
    - `WebSecurityConfigurerAdapter` removed → migrate to `SecurityFilterChain` bean (lambda-style DSL).
    - Password encoder default: provide a `DelegatingPasswordEncoder` that recognises legacy MD5 hashes and upgrades on next login. The existing `UserAccountBean.password` field stores MD5; do not invalidate sessions.
    - CSRF default is now ON for all stateful POSTs; some legacy form submissions may need either a CSRF token added or explicit `.csrf().disable()` on read-only paths (audit carefully — clinical-data POSTs should NOT disable CSRF).
-5. **Spring WS 1.5.6** → either bump to 4.0.x or remove. Recommendation: **remove the `ws` module** entirely if no active SOAP consumer (verify with stakeholders). The README already calls it "legacy, not tested, not actively developed."
+5. ~~**Spring WS 1.5.6** → either bump to 4.0.x or remove.~~ ✅ **Done in PR #31 (2026-05-29)** — `ws/` module deleted entirely; no active SOAP consumer confirmed at MUW Ophthalmology.
 6. Run full integration test suite.
 7. Smoke test, focusing on the login path (DelegatingPasswordEncoder + CSRF).
 
@@ -237,7 +249,7 @@ All of:
 - [ ] All Spring dependencies on 6.x / Security 6.x line
 - [ ] Hibernate on 6.x with `jakarta.persistence`
 - [ ] Tomcat 10/11; Servlet 6.0 / JSP 3.1 / JSTL 3.0
-- [ ] **Zero `javax.*` imports in `src/main/java/`** (verifiable: `! grep -rln 'import javax\.' core/src/main/java web/src/main/java ws/src/main/java`)
+- [ ] **Zero migrating `javax.*` imports in `src/main/java/`** (verifiable: `! grep -rln 'import javax\.\(servlet\|persistence\|xml\.bind\|ws\.rs\|mail\|annotation\.PostConstruct\)' core/src/main/java web/src/main/java`). JDK-shipped `javax.sql`, `javax.naming`, `javax.xml.{parsers,transform,xpath,datatype,namespace,validation}` stay. (`ws/` module removed in PR #31.)
 - [ ] All 413 JSPs updated to Jakarta taglib URIs
 - [ ] Java packages renamed to `at.ac.meduniwien.ophthalmology.libreclinica.*` (if DR-010 ratified)
 - [ ] Castor entirely removed (`! grep -rln 'org.codehaus.castor' .`)

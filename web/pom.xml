@@ -16,6 +16,37 @@
 	</properties>
 
 	<dependencies>
+		<!-- Phase C.1: Spring Boot web starter. Brings spring-webmvc +
+		     embedded Tomcat (the embedded Tomcat is excluded for now since
+		     this module still packages as WAR for external Tomcat 10
+		     deployment; C.14 will flip war→jar and re-enable embedded
+		     Tomcat). spring-boot-starter-security is delayed to C.10. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+			<exclusions>
+				<exclusion>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-starter-tomcat</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<!-- Phase C.15 (2026-05-30): Spring Boot Actuator. HTTP endpoints
+			     at /LibreClinica/actuator/* served by Boot's auto-configured
+			     `dispatcherServlet` at `/` (un-excluded in C.16 once the 215
+			     legacy servlets registered at exact URL patterns via
+			     LegacyServletRegistry — exact-match precedence wins). Only
+			     health + info are exposed by default; expand via
+			     management.endpoints.web.exposure.include in application.yml. -->
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>${project.groupId}</groupId>
 			<artifactId>LibreClinica-core</artifactId>
@@ -40,12 +71,8 @@
 			<artifactId>mockrunner-servlet</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>javax.ws.rs</groupId>
-			<artifactId>jsr311-api</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>javax.servlet</groupId>
-			<artifactId>servlet-api</artifactId>
+			<groupId>jakarta.ws.rs</groupId>
+			<artifactId>jakarta.ws.rs-api</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework</groupId>
@@ -62,6 +89,30 @@
 		<dependency>
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-web</artifactId>
+		</dependency>
+		<dependency>
+			<!-- Phase C.14 cliff (2026-05-30): SecurityConfig.java uses
+			     HttpSecurity + EnableWebSecurity. The parent pom's
+			     dependencyManagement pins this to runtime scope; override
+			     to compile here so web/'s SecurityConfig sees the types. -->
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-config</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<!-- Phase C.14 cliff: ServletInfraConfig uses
+			     OpenEntityManagerInViewFilter (org.springframework.orm.jpa.support). -->
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-orm</artifactId>
+		</dependency>
+		<dependency>
+			<!-- Phase C.11 (2026-05-30): WebMvcConfig uses
+			     org.springframework.oxm.jaxb.Jaxb2Marshaller for the CDISC ODM
+			     REST endpoints. Parent's dependencyManagement pins runtime
+			     scope; override to compile so the import resolves. -->
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-oxm</artifactId>
+			<scope>compile</scope>
 		</dependency>
 		<dependency>
 			<!-- Direct use: EnketoAPI, PFormCache (PasswordEncoder + codec.Hex). -->
@@ -85,14 +136,9 @@
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-ldap</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>joda-time</groupId>
-			<artifactId>joda-time</artifactId>
-		</dependency>
-        <dependency>
-            <groupId>org.jmesa</groupId>
-            <artifactId>jmesa</artifactId>
-        </dependency>
+        <!-- Phase B.4 jmesa PR 9 (cohort 7): jmesa dependency dropped.
+             All *TableFactory subclasses + SDVUtil rendering paths
+             migrated to vanilla-JS DataServlets across cohorts 1-7. -->
 		<dependency>
 			<groupId>commons-beanutils</groupId>
 			<artifactId>commons-beanutils</artifactId>
@@ -150,8 +196,8 @@
 			<artifactId>commons-lang</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>commons-fileupload</groupId>
-			<artifactId>commons-fileupload</artifactId>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-fileupload2-jakarta-servlet6</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>commons-io</groupId>
@@ -170,29 +216,65 @@
 			<artifactId>jdom</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>javax.servlet</groupId>
-			<artifactId>jstl</artifactId>
+			<groupId>jakarta.servlet.jsp.jstl</groupId>
+			<artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.glassfish.web</groupId>
+			<artifactId>jakarta.servlet.jsp.jstl</artifactId>
+			<!-- JSTL impl: pulled in for JSP runtime; no compile-time references in
+			     web/src — declared as runtime to satisfy analyze-only. -->
+			<scope>runtime</scope>
+		</dependency>
+		<!-- Phase B.4 cliff: explicit decls satisfying analyze-only.
+		     jakarta.annotation-api is used directly by Spring 6 @PostConstruct usage;
+		     commons-fileupload2-core supplies DiskFileItem(Factory);
+		     jsr311-api still required by transitive Jersey 1.x (will be dropped
+		     when Jersey 3 lands in a later cliff). -->
+		<dependency>
+			<groupId>jakarta.annotation</groupId>
+			<artifactId>jakarta.annotation-api</artifactId>
+		</dependency>
+		<!-- Phase B.5: BatchCRFMigrationController uses
+		     @jakarta.persistence.PersistenceUnit + EntityManagerFactory directly. -->
+		<dependency>
+			<groupId>jakarta.persistence</groupId>
+			<artifactId>jakarta.persistence-api</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-fileupload2-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>javax.ws.rs</groupId>
+			<artifactId>jsr311-api</artifactId>
+			<version>1.1.1</version>
 		</dependency>
         <dependency>
-            <groupId>javax.servlet</groupId>
-            <artifactId>javax.servlet-api</artifactId>
+            <groupId>jakarta.servlet</groupId>
+            <artifactId>jakarta.servlet-api</artifactId>
         </dependency>
 		<dependency>
- 			<groupId>javax.servlet.jsp</groupId>
- 			<artifactId>jsp-api</artifactId>
+ 			<groupId>jakarta.servlet.jsp</groupId>
+ 			<artifactId>jakarta.servlet.jsp-api</artifactId>
  		</dependency>
 		<dependency>
-			<groupId>com.sun.mail</groupId>
-			<artifactId>javax.mail</artifactId>
+			<groupId>jakarta.mail</groupId>
+			<artifactId>jakarta.mail-api</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>javax.xml.bind</groupId>
-			<artifactId>jaxb-api</artifactId>
+			<groupId>jakarta.xml.bind</groupId>
+			<artifactId>jakarta.xml.bind-api</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>taglibs</groupId>
-			<artifactId>standard</artifactId>
-		</dependency>
+		<!-- Phase B.4 cliff: taglibs:standard 1.1 (Sun JSTL 1.1 RI, javax-only)
+		     removed. Replaced by jakarta.servlet.jsp.jstl-api 3.0 +
+		     org.glassfish.web:jakarta.servlet.jsp.jstl 3.x impl already
+		     declared above. The old TLD referenced
+		     javax.servlet.jsp.tagext.TagLibraryValidator which broke JSP
+		     compilation on Tomcat 10. JSP taglib URIs in *.jsp files still
+		     use http://java.sun.com/jsp/jstl/* — those keep working under
+		     JSTL 3 via the legacy URI aliases registered in the new TLDs. -->
+
 		<dependency>
 			<groupId>org.apache.poi</groupId>
 			<artifactId>poi</artifactId>
@@ -205,10 +287,6 @@
 		<dependency>
 			<groupId>struts</groupId>
 			<artifactId>struts</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.codehaus.castor</groupId>
-			<artifactId>castor-xml</artifactId>
 		</dependency>
 		<dependency>
 		    <groupId>org.quartz-scheduler</groupId>
@@ -296,6 +374,14 @@
 			<groupId>org.mockito</groupId>
 			<artifactId>mockito-core</artifactId>
 		</dependency>
+		<!-- Selenium 4.x for the smoke-tests profile (browser-driven
+		     verification of jmesa cohort migrations). Only fetched +
+		     used when the profile is active; production WAR is not
+		     affected. -->
+		<dependency>
+			<groupId>org.seleniumhq.selenium</groupId>
+			<artifactId>selenium-java</artifactId>
+		</dependency>
       <!--
 		<dependency>
 			<groupId>com.fasterxml.jackson.core</groupId>
@@ -323,7 +409,7 @@
          <artifactId>jtidy</artifactId>
       </dependency>
       <dependency>
-         <groupId>org.hibernate</groupId>
+         <groupId>org.hibernate.orm</groupId>
          <artifactId>hibernate-core</artifactId>
       </dependency>
 	</dependencies>
@@ -359,9 +445,41 @@
 						<ignoredUnusedDeclaredDependency>org.apache.httpcomponents:httpclient</ignoredUnusedDeclaredDependency>
 						<!-- Needed by LibreClinica-web when docs module resources are used to pack the pdf manuals -->
 						<ignoredUnusedDeclaredDependency> at.ac.meduniwien.ophthalmology.libreclinica:LibreClinica-docs</ignoredUnusedDeclaredDependency>
+						<!-- Phase C.1: Spring Boot web starter — brings the embedded
+						     servlet container's transitive graph, Boot's MVC autoconfig,
+						     etc. Direct refs in LibreClinicaApplication are on
+						     spring-boot + spring-boot-autoconfigure jars (under the
+						     starter umbrella). Analyze-only doesn't credit the starter
+						     for those transitives. -->
+						<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-web</ignoredUnusedDeclaredDependency>
+						<!-- Phase C.15: Actuator starter has no compile-time refs; loaded by autoconfig. -->
+						<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-actuator</ignoredUnusedDeclaredDependency>
+						<!-- Phase C.1: Boot's BOM upgrades jakarta.mail-api to a version
+						     where the impl ships in org.eclipse.angus:jakarta.mail.
+						     Existing email code references jakarta.mail types via the
+						     api-only dep; the angus impl comes transitively from Boot. -->
+						<ignoredUnusedDeclaredDependency>jakarta.mail:jakarta.mail-api</ignoredUnusedDeclaredDependency>
 					</ignoredUnusedDeclaredDependencies>
                     <ignoredUsedUndeclaredDependencies>
                         <ignoredUsedUndeclaredDependency>javax.annotation:javax.annotation-api</ignoredUsedUndeclaredDependency>
+                        <!-- Phase C.1: angus-mail is the jakarta.mail impl Boot's BOM ships. -->
+                        <ignoredUsedUndeclaredDependency>org.eclipse.angus:jakarta.mail</ignoredUsedUndeclaredDependency>
+                        <!-- Phase B.4 smoke harness (PR #37 + #38): SmokeIT imports
+                             from selenium-api / -chrome-driver / -chromium-driver /
+                             -remote-driver / -support, all transitives of the
+                             umbrella selenium-java dep declared above. Listing
+                             each individually would be drift-prone. -->
+                        <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-api</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-chrome-driver</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-chromium-driver</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-remote-driver</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.seleniumhq.selenium:selenium-support</ignoredUsedUndeclaredDependency>
+                        <!-- Phase C.2: LibreClinicaApplication imports
+                             SpringApplication + @SpringBootApplication +
+                             autoconfig exclusion classes; all come via the
+                             starter-web transitive graph. -->
+                        <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot-autoconfigure</ignoredUsedUndeclaredDependency>
                     </ignoredUsedUndeclaredDependencies>
 		        </configuration>
 		      </plugin>

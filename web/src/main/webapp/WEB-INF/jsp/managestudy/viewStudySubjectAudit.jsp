@@ -1,18 +1,18 @@
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn" %>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.functions" prefix="fn" %>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/>
 
 <html>
 <head>
     <link rel="stylesheet" href="includes/styles.css" type="text/css">
     <script type="text/JavaScript" language="JavaScript" src="includes/global_functions_javascript.js"></script>
 </head>
-<jsp:useBean scope="request" id="subject" class="org.akaza.openclinica.bean.submit.SubjectBean"/>
-<jsp:useBean scope="request" id="study" class="org.akaza.openclinica.bean.managestudy.StudyBean"/>
-<jsp:useBean scope="request" id="studySub" class="org.akaza.openclinica.bean.managestudy.StudySubjectBean"/>
+<jsp:useBean scope="request" id="subject" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean"/>
+<jsp:useBean scope="request" id="study" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean"/>
+<jsp:useBean scope="request" id="studySub" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean"/>
 <jsp:useBean scope="request" id="events" class="java.util.ArrayList"/>
 <jsp:useBean scope="request" id="collectdob" class="java.lang.String"/>
 <jsp:useBean scope="request" id="eventCRFAudits" class="java.util.ArrayList"/>

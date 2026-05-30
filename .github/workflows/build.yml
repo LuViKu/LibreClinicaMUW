@@ -1,10 +1,15 @@
 name: Build
 
+# Triggers tuned 2026-05-28 to save GitHub Actions credits: previously
+# fired on every push to feature/**/release/**/hotfix/** plus PRs plus
+# lc-develop/master post-merge, which during autonomous Phase B work
+# burned 3+ runs per PR. Now: one run per merge to lc-develop/master,
+# release/hotfix tip pushes (rare), and explicit manual dispatch.
+# If you want pre-merge validation on a feature branch, use
+# `gh workflow run build.yml --ref <branch>` or push to release/hotfix.
 on:
   push:
-    branches: [lc-develop, master, "feature/**", "release/**", "hotfix/**"]
-  pull_request:
-    branches: [lc-develop, master]
+    branches: [lc-develop, master, "release/**", "hotfix/**"]
   workflow_dispatch:
 
 concurrency:
@@ -18,9 +23,9 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Build on the runtime JDK (11) and the build JDK (8) declared in the Dockerfile.
-        # When Phase B lands, this matrix moves to [17, 21] and the JDK 8 entry is removed.
-        java: ['8', '11']
+        # Phase B.1: single JDK 21 entry matching the Dockerfile builder + runtime
+        # (maven:3-eclipse-temurin-21 + tomcat:10-jdk21 since Phase B.6).
+        java: ['21']
     steps:
       - uses: actions/checkout@v4
 
@@ -35,14 +40,17 @@ jobs:
         run: mvn -B -ntp -DskipTests=false package
 
       - name: Upload WAR artifacts
-        if: matrix.java == '11' && success()
+        if: matrix.java == '21' && success()
         uses: actions/upload-artifact@v4
         with:
           name: libreclinica-wars
           path: |
             web/target/*.war
-            ws/target/*.war
           retention-days: 14
+          # ws/target/*.war dropped — the ws/ module was retired in
+          # Phase B.4 (PR #31). The path matched zero artifacts post-
+          # removal; if-no-files-found: warn would have surfaced this
+          # but the noise wasn't useful.
           if-no-files-found: warn
 
       - name: Upload Surefire reports on failure
@@ -55,7 +63,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload JaCoCo coverage reports
-        if: matrix.java == '11' && always()
+        if: matrix.java == '21' && always()
         uses: actions/upload-artifact@v4
         with:
           name: jacoco-coverage-jdk${{ matrix.java }}
@@ -66,7 +74,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Surface coverage summary in job log
-        if: matrix.java == '11' && always()
+        if: matrix.java == '21' && always()
         run: |
           set +e
           for csv in $(find . -path '*/target/site/jacoco/jacoco.csv' 2>/dev/null); do
@@ -112,11 +120,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 11
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '11'
+          java-version: '21'
           cache: maven
 
       - name: Maven verify (integration-tests profile)
@@ -127,7 +135,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: surefire-reports-integration
-          path: '**/target/surefire-reports/**'
+          path: |
+            **/target/surefire-reports/**
+            **/target/openclinica-test.log
           retention-days: 14
           if-no-files-found: ignore
 

@@ -1,0 +1,130 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.control.admin;
+
+import java.util.ArrayList;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+
+/**
+ * @author jxu
+ */
+@SuppressWarnings("serial")
+public class BatchCRFMigrationServlet extends SecureController {
+
+    private static String CRF_ID = "crfId";
+    private static String CRF = "crf";
+    /**
+     *
+     */
+    @Override
+    public void mayProceed() throws InsufficientPermissionException {
+        if (ub.isSysAdmin()) {
+            return;
+        }
+        if (currentRole.getRole().equals(Role.STUDYDIRECTOR) || currentRole.getRole().equals(Role.COORDINATOR)) {
+            return;
+        }
+
+        addPageMessage(respage.getString("no_have_correct_privilege_current_study") + respage.getString("change_study_contact_sysadmin"));
+        throw new InsufficientPermissionException(Page.MENU_SERVLET, resexception.getString("not_study_director"), "1");
+
+    }
+
+    @Override
+    public void processRequest() throws Exception {
+
+
+        FormProcessor fp = new FormProcessor(request);
+        
+        ArrayList<CRFVersionBean> crfVersionList=null;
+        ArrayList<StudyEventDefinitionBean> eventList = null;
+        ArrayList<StudyBean> siteList = null;
+        
+        
+        // checks which module the requests are from, manage or admin
+        String module = fp.getString(MODULE);
+        request.setAttribute(MODULE, module);
+
+        int crfId = fp.getInt(CRF_ID);
+        if (crfId == 0) {
+            addPageMessage(respage.getString("please_choose_a_CRF_to_view"));
+            forwardPage(Page.CRF_LIST);
+        } else {
+            CRFDAO cdao = new CRFDAO(sm.getDataSource());
+            CRFVersionDAO vdao = new CRFVersionDAO(sm.getDataSource());
+            CRFBean crf = (CRFBean) cdao.findByPK(crfId);
+            request.setAttribute("crfName", crf.getName());
+            ArrayList<CRFVersionBean> versions = (ArrayList<CRFVersionBean>) vdao.findAllByCRF(crfId);
+            crfVersionList = new ArrayList<CRFVersionBean>();
+             for(CRFVersionBean version:versions){
+                 if(version.getStatus().isAvailable())
+                     crfVersionList.add(version);
+             }                       
+            crf.setVersions(crfVersionList);
+            ArrayList<StudyBean> listOfSites = (ArrayList<StudyBean>) sdao().findAllByParent(currentStudy.getId());
+            siteList = new ArrayList<StudyBean>();
+            StudyBean studyBean = new StudyBean();
+            studyBean.setOid(currentStudy.getOid()); 
+            studyBean.setName(resterm.getString("Study_Level_Subjects_Only"));
+            siteList.add(studyBean);
+            for (StudyBean s : listOfSites) {
+                if (s.getStatus().isAvailable()) {
+                    siteList.add(s);
+                }
+            }
+     
+            ArrayList<StudyEventDefinitionBean> listOfDefn = seddao().findAllByStudy(currentStudy);
+            eventList = new ArrayList<StudyEventDefinitionBean>();
+            for (StudyEventDefinitionBean d : listOfDefn) {
+                if (d.getStatus().isAvailable()) {
+                    eventList.add(d);
+                }
+            }
+    
+            // if coming from change crf version -> display message
+     String crfVersionChangeMsg = fp.getString("isFromCRFVersionBatchChange");
+     if ( crfVersionChangeMsg!= null && !crfVersionChangeMsg.equals("")){
+         addPageMessage(crfVersionChangeMsg);
+    }
+
+            
+            request.setAttribute("study", currentStudy);
+            request.setAttribute("siteList", siteList);
+            request.setAttribute("eventList", eventList);
+            request.setAttribute(CRF, crf);
+            forwardPage(Page.BATCH_CRF_MIGRATION);
+
+        }
+    }
+
+    private StudyDAO sdao() {
+        return new StudyDAO(sm.getDataSource());
+    }
+
+    private StudyEventDefinitionDAO seddao() {
+        return new StudyEventDefinitionDAO(sm.getDataSource());
+    }
+
+
+
+}

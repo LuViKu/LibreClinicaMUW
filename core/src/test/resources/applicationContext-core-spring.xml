@@ -4,15 +4,27 @@
     xmlns="http://www.springframework.org/schema/beans"
     xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
     xmlns:p="http://www.springframework.org/schema/p"
-        xmlns:util="http://www.springframework.org/schema/util"
-    xsi:schemaLocation="http://www.springframework.org/schema/beans 
-                        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
-                        http://www.springframework.org/schema/util 
-                        http://www.springframework.org/schema/util/spring-util-3.0.xsd">
-    
+    xmlns:util="http://www.springframework.org/schema/util"
+    xmlns:context="http://www.springframework.org/schema/context"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+                        http://www.springframework.org/schema/beans/spring-beans.xsd
+                        http://www.springframework.org/schema/util
+                        http://www.springframework.org/schema/util/spring-util.xsd
+                        http://www.springframework.org/schema/context
+                        http://www.springframework.org/schema/context/spring-context.xsd">
+
+     <!-- Phase C.7+ (2026-05-30): registers ConfigurationClassPostProcessor +
+          AutowiredAnnotationBeanPostProcessor so that @Configuration classes
+          referenced via `<bean class="...Config"/>` in the slice XML stubs
+          (e.g. applicationContext-core-email.xml) have their @Bean methods
+          processed in the test context. The production root context gets
+          this automatically via the <context:component-scan/> in
+          src/main/resources/applicationContext-core-spring.xml. -->
+     <context:annotation-config/>
+
      <util:properties id="testInfo" location="classpath:test.properties"/>
      
-      <bean id="coreResources" class="org.akaza.openclinica.dao.core.CoreResources">
+      <bean id="coreResources" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources">
            
         <property name="dataInfo" ref="testInfo"/>
   			
@@ -22,10 +34,11 @@
      </bean>
       <bean id="testProperties" factory-bean="coreResources" factory-method="getDataInfo"/>
       
-    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer"
-        p:placeholderPrefix="s["
-        p:placeholderSuffix="]"
-     >
- <property name="properties"><ref bean="testProperties"/></property>
- </bean>
+    <!-- Phase C.8 (2026-05-30): retired the legacy `s[KEY]` custom syntax
+         in favour of Spring's standard ${KEY} via
+         PropertySourcesPlaceholderConfigurer. Mirrors the production
+         applicationContext-core-spring.xml change. -->
+    <bean class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
+        <property name="properties"><ref bean="testProperties"/></property>
+    </bean>
 </beans>

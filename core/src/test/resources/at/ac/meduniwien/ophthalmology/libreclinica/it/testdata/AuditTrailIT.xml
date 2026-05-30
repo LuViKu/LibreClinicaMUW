@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  DBUnit fixture for AuditTrailIT. Empty: the test uses the bootstrap
+  user_account row (user_id=1) and writes audit rows via the production
+  DAO method (createRowForFailedLogin). REFRESH operation = empty
+  fixture is a no-op.
+-->
+<dataset>
+</dataset>

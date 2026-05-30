@@ -1,10 +1,10 @@
 <%@page contentType="text/html;charset=UTF-8" language="java" %>
 <%@ include file="/WEB-INF/jsp/taglibs.jsp" %>
 
-<%@page import="org.akaza.openclinica.web.SQLInitServlet"%>
+<%@page import="at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet"%>
 
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/> 
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/> 
 
 <!-- Breadcrumbs -->
 

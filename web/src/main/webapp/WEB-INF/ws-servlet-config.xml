@@ -4,9 +4,9 @@
 		xmlns:tx="http://www.springframework.org/schema/tx"
 		xmlns:util="http://www.springframework.org/schema/util"
 		xsi:schemaLocation="http://www.springframework.org/schema/beans
-							http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+							http://www.springframework.org/schema/beans/spring-beans.xsd
 							http://www.springframework.org/schema/util 
-							http://www.springframework.org/schema/util/spring-util-3.0.xsd">
+							http://www.springframework.org/schema/util/spring-util.xsd">
 
      
      <!-- WSDL Definitions -->
@@ -73,30 +73,30 @@
     </bean>
 
     <bean id="jaxb2Marshaller" class="org.springframework.oxm.jaxb.Jaxb2Marshaller">
-        <property name="contextPath" value="org.akaza.openclinica.ws.generated"/>
+        <property name="contextPath" value="at.ac.meduniwien.ophthalmology.libreclinica.ws.generated"/>
         <property name="mtomEnabled" value="true"/>
     </bean>
     
     <!--  Endpoints 
-    <bean id="subjectEndpoint" class="org.akaza.openclinica.ws.SubjectEndpoint">
+    <bean id="subjectEndpoint" class="at.ac.meduniwien.ophthalmology.libreclinica.ws.SubjectEndpoint">
         <constructor-arg ref="subjectService"/>
         <constructor-arg ref="dataSource"/>
         <property name="dateFormat" value="yyyy-MM-dd"/>
     </bean>-->  
     
-    <bean id="studySubjectEndpoint" class="org.akaza.openclinica.ws.StudySubjectEndpoint">
+    <bean id="studySubjectEndpoint" class="at.ac.meduniwien.ophthalmology.libreclinica.ws.StudySubjectEndpoint">
         <constructor-arg ref="subjectService"/>
         <constructor-arg ref="dataSource"/>
         <property name="dateFormat" value="yyyy-MM-dd"/>
     </bean>
     
-    <bean id="eventEndpoint" class="org.akaza.openclinica.ws.EventEndpoint">
+    <bean id="eventEndpoint" class="at.ac.meduniwien.ophthalmology.libreclinica.ws.EventEndpoint">
         <constructor-arg ref="eventService"/>
         <constructor-arg ref="dataSource"/>
         <property name="dateFormat" value="yyyy-MM-dd"/>
     </bean>
     
-    <bean id="crfEndpoint" class="org.akaza.openclinica.ws.CrfEndpoint">
+    <bean id="crfEndpoint" class="at.ac.meduniwien.ophthalmology.libreclinica.ws.CrfEndpoint">
         <constructor-arg ref="subjectService"/>
         <constructor-arg ref="dataSource"/>
         <property name="dateFormat" value="yyyy-MM-dd"/>

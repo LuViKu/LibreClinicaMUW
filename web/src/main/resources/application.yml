@@ -1,0 +1,135 @@
+# Phase C.2 — Spring Boot application configuration.
+#
+# Dormant during WAR deployment (the legacy XML configs imported via
+# @ImportResource on LibreClinicaApplication continue to be authoritative).
+# Activated for the future `java -jar` execution path that C.14 flips on
+# when packaging changes from WAR to JAR.
+#
+# Per Phase C playbook §C.2.
+
+spring:
+  application:
+    name: libreclinica
+
+  # Phase C.6 (2026-05-30): the 3 @Service-vs-XML duplicates that forced
+  # allow-bean-definition-overriding=true in C.14 are now resolved
+  # (ruleSetListenerService + factorService dropped from XML; @Component
+  # dropped from MailNotificationService in favour of the MailConfig @Bean).
+  # Boot's strict default (false) is back in effect.
+
+  # Phase C.3 will replace the XML-declared dataSource with Spring Boot's
+  # auto-configured pool. Until then this block is read but the actual
+  # DataSource bean comes from applicationContext-core-db.xml (which has
+  # its own legacy `s[propertyName]` placeholder resolution against
+  # datainfo.properties — C.8 retires that).
+  datasource:
+    url: ${LIBRECLINICA_DB_URL:jdbc:postgresql://db:5432/libreclinica?sslMode=verify-full&scramMaxIterations=10000}
+    username: ${LIBRECLINICA_DB_USER:clinica}
+    password: ${LIBRECLINICA_DB_PASSWORD:clinica}
+
+  # Phase C.4 will translate the XML JpaProperties into this block.
+  jpa:
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  # Phase C.7 — mail config. Default targets the compose-local mailcrab
+  # SMTP container; override via env vars in real deployments.
+  mail:
+    host: ${LIBRECLINICA_SMTP_HOST:smtp}
+    port: ${LIBRECLINICA_SMTP_PORT:1025}
+
+  # Phase C.13 will replace the SpringLiquibase XML bean with this block.
+  liquibase:
+    change-log: classpath:migration/db.changelog-master.xml
+
+  # Phase C.2: don't try to bind the legacy custom `s[propertyName]`
+  # placeholder syntax through Spring Boot's standard resolver. C.8
+  # converts those sites to `${propertyName}`.
+  config:
+    import: optional:classpath:datainfo.properties
+
+logging:
+  # Preserve the existing logback.xml (mounted from docker/config/ at
+  # runtime; explicit reference keeps Spring Boot's default
+  # auto-configuration out of the way).
+  config: classpath:logback.xml
+  # Phase C.14 cliff diagnosis (2026-05-30): bump dispatcher + handler
+  # resolution to DEBUG and route to stdout so we can see why the
+  # pages DispatcherServlet's child context isn't picking up
+  # pages-servlet.xml handlers. Note: under LoggingSystem=none, these
+  # have no effect — they're documented here for the next iteration
+  # where logback patterns get a console appender.
+  level:
+    org.springframework.web.servlet: DEBUG
+    org.springframework.security: DEBUG
+
+server:
+  servlet:
+    context-path: /LibreClinica
+  port: 8080
+
+# Phase C.15 (2026-05-30): Spring Boot Actuator
+#
+# HTTP endpoints at /LibreClinica/actuator/* served by Boot's
+# auto-configured dispatcherServlet at `/`. The legacy `pages`
+# DispatcherServlet (/pages/*) and the 215 LegacyServletRegistry
+# servlets (at exact URL patterns) take precedence per servlet-spec
+# mapping rules.
+#
+# /actuator/health top-level + /actuator/info are unauthenticated
+# (k8s/load-balancer liveness probes). /actuator/health/* sub-paths
+# show details only `when-authorized` — anonymous probes see status
+# only, no JDBC URL / disk path leakage. SecurityConfig permits the
+# two unauthenticated endpoints; everything else under /actuator/**
+# falls through to `.anyRequest().hasRole("USER")`.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  info:
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+# Phase D.3 (DR-014): institution-agnostic SSO configuration.
+#
+# Disabled by default — flipping `enabled: true` activates the
+# RequestHeaderAuthenticationFilter pre-auth path. The reverse-proxy
+# sidecar (Apache+mod_shib for the MedUni Wien reference deployment;
+# mod_auth_openidc / oauth2-proxy / Keycloak Gatekeeper / AWS ALB OIDC
+# for other institutions) terminates the SSO protocol and injects the
+# configured headers. Provider swap = sidecar + env-var change, never
+# a code change.
+#
+# trusted-proxy.allowed-cidrs MUST be narrowed in production to the
+# specific reverse-proxy IP. Tomcat MUST bind to the compose-internal
+# network only; the header-spoofing defence depends on it.
+libreclinica:
+  sso:
+    enabled: ${LIBRECLINICA_SSO_ENABLED:false}
+    header:
+      principal: ${LIBRECLINICA_SSO_PRINCIPAL_HEADER:REMOTE_USER}
+      email: ${LIBRECLINICA_SSO_EMAIL_HEADER:mail}
+      display-name: ${LIBRECLINICA_SSO_DISPLAY_NAME_HEADER:displayName}
+    provider:
+      name: ${LIBRECLINICA_SSO_PROVIDER:shibboleth-meduniwien}
+    provisioning:
+      strategy: ${LIBRECLINICA_SSO_PROVISIONING:LOOKUP_ONLY}
+      default-role: ${LIBRECLINICA_SSO_DEFAULT_ROLE:ROLE_USER}
+    trusted-proxy:
+      allowed-cidrs: ${LIBRECLINICA_SSO_TRUSTED_CIDRS:127.0.0.1/32,172.16.0.0/12}
+    entry-url: ${LIBRECLINICA_SSO_ENTRY_URL:/sso/login}
+    button-label: ${LIBRECLINICA_SSO_BUTTON_LABEL:Sign in with Institutional Account}
+    delegate-mfa-to-idp: ${LIBRECLINICA_SSO_DELEGATE_MFA:true}
+    reauth:
+      enabled: ${LIBRECLINICA_SSO_REAUTH:false}
+      url-template: ${LIBRECLINICA_SSO_REAUTH_URL_TEMPLATE:/Shibboleth.sso/Login?forceAuthn=true&target={target}}

@@ -1,0 +1,37 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<!--
+  DBUnit fixture for LoginFlowIT.
+
+  One user_account row with negative id (-100) to avoid colliding with rows
+  Liquibase or bootstrap might insert. The user_name "muw-login-fixture" is
+  the lookup key for testFindByUserNameReturnsPersistedUser.
+
+  Minimal column set — many user_account columns are nullable or have
+  defaults; this fixture only populates what the DAO's findByUserName
+  result-set parsing relies on (user_id, user_name, status_id, type_id).
+  Additional columns can be added if the test runtime surfaces NOT NULL
+  violations on the real schema.
+-->
+<dataset>
+ <user_account
+   user_id="-100"
+   user_name="muw-login-fixture"
+   passwd="x"
+   first_name="MUW"
+   last_name="LoginFixture"
+   email="muw-login-fixture@example.test"
+   status_id="1"
+   user_type_id="2"
+   owner_id="1"
+   active_study="1"
+   institutional_affiliation=""
+   passwd_challenge_question=""
+   passwd_challenge_answer=""
+   phone=""
+   account_non_locked="true"
+   lock_counter="0"
+   run_webservices="false"
+   enabled="true"
+   enable_api_key="false"
+   />
+</dataset>

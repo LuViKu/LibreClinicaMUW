@@ -1,0 +1,98 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2003 - 2011 Akaza Research
+ * copyright (C) 2003 - 2019 OpenClinica
+ * copyright (C) 2020 - 2024 LibreClinica
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.control.submit;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
+import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
+
+import java.util.Locale;
+
+/**
+ * @author ssachs
+ *
+ * TODO To change the template for this generated type comment go to Window -
+ * Preferences - Java - Code Style - Code Templates
+ */
+public class SubmitDataServlet extends SecureController {
+
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = -943359686230164872L;
+	Locale locale;
+
+    // < ResourceBundleresexception,respage;
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController#processRequest()
+     */
+    @Override
+    protected void processRequest() throws Exception {
+        forwardPage(Page.SUBMIT_DATA);
+    }
+
+    public static boolean mayViewData(UserAccountBean ub, StudyUserRoleBean currentRole) {
+        if (currentRole != null) {
+            Role r = currentRole.getRole();
+            if (r != null && (r.equals(Role.COORDINATOR) || r.equals(Role.STUDYDIRECTOR) ||
+                    r.equals(Role.INVESTIGATOR) || r.equals(Role.RESEARCHASSISTANT) || r.equals(Role.RESEARCHASSISTANT2) ||r.equals(Role.MONITOR) )) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    public static boolean maySubmitData(UserAccountBean ub, StudyUserRoleBean currentRole) {
+        if (currentRole != null) {
+            Role r = currentRole.getRole();
+            if (r != null && (r.equals(Role.COORDINATOR) || r.equals(Role.STUDYDIRECTOR) ||
+                    r.equals(Role.INVESTIGATOR) || r.equals(Role.RESEARCHASSISTANT) || r.equals(Role.RESEARCHASSISTANT2))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /*
+     * (non-Javadoc)
+     *
+     * @see at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController#mayProceed()
+     */
+    @Override
+    protected void mayProceed() throws InsufficientPermissionException {
+
+        locale = LocaleResolver.getLocale(request);
+        // <
+        // resexception=ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.exceptions",locale);
+        // < respage =
+        // ResourceBundle.getBundle("at.ac.meduniwien.ophthalmology.libreclinica.i18n.page_messages",locale);
+
+        String exceptionName = resexception.getString("no_permission_to_submit_data");
+        String noAccessMessage = respage.getString("may_not_enter_data_for_this_study") + respage.getString("change_study_contact_sysadmin");
+
+        if (mayViewData(ub, currentRole)) {
+            return;
+        }
+
+        addPageMessage(noAccessMessage);
+        throw new InsufficientPermissionException(Page.MENU, exceptionName, "1");
+    }
+
+}

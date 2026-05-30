@@ -74,6 +74,15 @@
         <name>updateLockCounter</name>
         <sql>update user_account set lock_counter = ?  where user_id = ?</sql>
     </query>
+    <!-- Phase D.1.b (2026-05-30): targeted single-column update used by
+         PasswordRehashService to rewrite a legacy MD5/SHA-1 hash as
+         bcrypt after a successful legacy-format login. Sister of
+         updateLockCounter — write only the passwd + passwd_timestamp
+         columns so we don't disturb any other field on the row. -->
+    <query>
+        <name>updatePasswordHash</name>
+        <sql>update user_account set passwd = ?, passwd_timestamp = ? where user_id = ?</sql>
+    </query>
     <query>
         <name>lockUser</name>
         <sql>update user_account set account_non_locked = ? , status_id= ? where user_id = ?</sql>
@@ -85,6 +94,13 @@
     <query>
         <name>findByUserName</name>
         <sql>select * from user_account where user_name=?</sql>
+    </query>
+    <!-- Phase D.3 (DR-014): federated-identity lookup. Provider-scoped
+         so multiple SSO providers coexist (idx_user_account_external_identity
+         is composite-unique on (external_id_provider, external_id)). -->
+    <query>
+        <name>findByExternalIdentity</name>
+        <sql>select * from user_account where external_id_provider=? and external_id=?</sql>
     </query>
     <query>
         <name>findByAccessCode</name>

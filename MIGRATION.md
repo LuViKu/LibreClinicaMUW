@@ -24,7 +24,7 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 | Spring Framework | 5.1.4 | **6.1+** | B |
 | Spring Boot | n/a | **3.x** | C |
 | Spring Security | 5.1.4 | **6.x** | B |
-| Spring WS | 3.0.10 | **4.x** | B (or removed) |
+| ~~Spring WS~~ | ~~3.0.10~~ | **removed** | B (#31, 2026-05-29) |
 | Servlet API | `javax.servlet` 3.1 | **`jakarta.servlet` 6.0** | B |
 | JPA | `javax.persistence` | **`jakarta.persistence`** | B |
 | Hibernate ORM | 5.4.2 | **6.4+** | B |
@@ -92,15 +92,25 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 
   **Progress (2026-05-28):**
 
-  - **Item 3 (`LoginFlowIT.passwordEncoderRecognisesLegacyMd5`)** ✅ — landed as a unit test, [`OpenClinicaPasswordEncoderTest`](core/src/test/java/org/akaza/openclinica/core/OpenClinicaPasswordEncoderTest.java). 4 test methods pin the SHA-1 round-trip, salted-encoding equivalence, MD5 fallback path (legacy users still authenticate), and wrong-password rejection. Phase B.4 gate.
+  - **Item 3 (`LoginFlowIT.passwordEncoderRecognisesLegacyMd5`)** ✅ — landed as a unit test, [`OpenClinicaPasswordEncoderTest`](core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/core/OpenClinicaPasswordEncoderTest.java). 4 test methods pin the SHA-1 round-trip, salted-encoding equivalence, MD5 fallback path (legacy users still authenticate), and wrong-password rejection. Phase B.4 gate.
   - **Extended fixtures, not in the original 20 but pattern-proven and high-value Phase B.5 guards:**
-    - [`ConfigurationDaoTest`](core/src/test/java/org/akaza/openclinica/dao/ConfigurationDaoTest.java) 3 → 7 methods (multi-row fixture, value round-trip, null-key handling, findAll containment, saveOrUpdate update-not-insert).
-    - [`AuditUserLoginDaoTest`](core/src/test/java/org/akaza/openclinica/dao/AuditUserLoginDaoTest.java) 2 → 5 methods (multi-row fixture, findAll containment, two Hibernate-Criteria-based filter tests via `AuditUserLoginFilter` — directly pins the Phase B.5 Criteria API removal target).
-  - **Phase B.0 Castor characterisation framework scaffolded** ✅:
-    - [`CastorCharacterisationIT`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorCharacterisationIT.java) abstract base class with `assertXmlSimilarToGolden` / `assertXmlIdenticalToGolden` helpers + capture-on-first-run helper messages, golden directory at `core/src/test/resources/org/akaza/openclinica/odm/characterisation/golden/`.
-    - [`CastorCharacterisationFrameworkTest`](core/src/test/java/org/akaza/openclinica/odm/characterisation/CastorCharacterisationFrameworkTest.java) framework smoke test (2/2 green) — verifies XMLUnit is wired and the "similar" comparison behaves correctly on attribute order + whitespace + value differences. Runs in the default `mvn test` profile.
-    - `org.xmlunit:xmlunit-core` 2.10 + `xmlunit-matchers` 2.10 added to dependencyManagement (test scope) per [DR-006](docs/development/modernization/decision-record.md#dr-006--castor-replacement-jakarta-jaxb).
-    - Subclasses of `CastorCharacterisationIT` are excluded from default surefire (need live Postgres); they run under `mvn -P integration-tests test`.
+    - [`ConfigurationDaoTest`](core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/dao/ConfigurationDaoTest.java) 3 → 7 methods (multi-row fixture, value round-trip, null-key handling, findAll containment, saveOrUpdate update-not-insert).
+    - [`AuditUserLoginDaoTest`](core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/dao/AuditUserLoginDaoTest.java) 2 → 5 methods (multi-row fixture, findAll containment, two Hibernate-Criteria-based filter tests via `AuditUserLoginFilter` — directly pins the Phase B.5 Criteria API removal target).
+  - **Phase B.0 Castor characterisation framework + 5 tests green** ✅ (on `feature/phase-b-jakarta-cliff`):
+    - [`GoldenAssertions`](core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/odm/characterisation/GoldenAssertions.java) static helper class with `assertXmlSimilarToGolden` / `assertXmlIdenticalToGolden` + capture-on-first-run helper messages. Golden directory at `core/src/test/resources/at/ac/meduniwien/ophthalmology/libreclinica/odm/characterisation/golden/`.
+    - [`CastorCharacterisationIT`](core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/odm/characterisation/CastorCharacterisationIT.java) abstract base class (extends `HibernateOcDbTestCase`) for DB-driven characterisation tests; delegates to `GoldenAssertions`.
+    - [`CastorCharacterisationFrameworkTest`](core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/odm/characterisation/CastorCharacterisationFrameworkTest.java) framework smoke test (**2/2 green**) — verifies XMLUnit is wired correctly.
+    - **Concrete characterisation tests covering 4 of the 5 distinct Castor mapping files** (unit-test-level, no DB):
+      - [`CastorRulesContainerCharacterisationTest`](core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/odm/characterisation/CastorRulesContainerCharacterisationTest.java) — `mappingMarshallerMetadata.xml` via `MetaDataReportBean.handleLoadCastor`. **1/1 green**, golden captured.
+      - [`CastorRulesMarshallerCharacterisationTest`](core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/odm/characterisation/CastorRulesMarshallerCharacterisationTest.java) — `mappingMarshaller.xml` via `DownloadRuleSetXmlServlet.handleLoadCastor`. **1/1 green**, golden captured.
+      - [`CastorRulesUnmarshallerCharacterisationTest`](core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/odm/characterisation/CastorRulesUnmarshallerCharacterisationTest.java) — `mapping.xml` via `ImportRuleServlet`. **1/1 green**, asserts the *current* Castor behaviour of leaving collection fields null after parsing an empty envelope (pinned 2026-05-28 so a Phase B.3 JAXB swap surfaces if it changes this).
+      - [`CastorClinicalDataUnmarshallerCharacterisationTest`](core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/odm/characterisation/CastorClinicalDataUnmarshallerCharacterisationTest.java) — `cd_odm_mapping.xml` via `ImportCRFDataServlet`. **2/2 green**, pins ODM-envelope shape + StudyOID round-trip.
+    - `org.xmlunit:xmlunit-core` 2.10 + `xmlunit-matchers` 2.10 in dependencyManagement (test scope) per [DR-006](docs/development/modernization/decision-record.md#dr-006--castor-replacement-jakarta-jaxb). Direct deps in `core/pom.xml`.
+    - `**/odm/characterisation/*IT.java` excluded from default surefire (need live Postgres); they run under `mvn -P integration-tests test`.
+
+  **Still pending for Phase B.0 to exit** (the two DB-driven export paths — the framework supports them, they just need multi-entity DBUnit fixtures):
+  - `OdmMetadataExportCharacterisationIT` — `ODMMetadataRestResource` against a study fixture. Extends `CastorCharacterisationIT`. Needs Study + StudyEventDefinition + CRF + CRFVersion + ItemGroup + Item rows in a DBUnit fixture.
+  - `OdmClinicalDataExportCharacterisationIT` — `ODMClinicalDataController` against the same fixture plus EventCRF + ItemData rows.
 
   **Counts:** unit suite 33 → 39 (+4 password + 2 framework); integration suite 67 → 74 (+3 audit-user-login extensions; the +4 from ConfigurationDaoTest were counted in the earlier 63 → 67).
 
@@ -109,7 +119,7 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 #### Integration-test authoring pattern (post Phase 0.3)
 
 Each new test class:
-1. **Extends `HibernateOcDbTestCase`** (in `core/src/test/java/org/akaza/openclinica/templates/`). The base class opens a per-test Spring transaction in `setUp()` and rolls it back in `tearDown()` — your test writes do not leak across tests.
+1. **Extends `HibernateOcDbTestCase`** (in `core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/templates/`). The base class opens a per-test Spring transaction in `setUp()` and rolls it back in `tearDown()` — your test writes do not leak across tests.
 2. **Backed by a DBUnit XML fixture** at `core/src/test/resources/<package-as-path>/testdata/<TestClassName>.xml`. DBUnit performs `CLEAN_INSERT` against the named tables before the test runs (so the rows you declare are present + nothing else in those tables interferes). Use negative IDs (`-1`, `-2`, ...) to avoid colliding with Liquibase- or bootstrap-inserted rows.
 3. **Retrieves DAO beans from the Spring context**: `(MyDao) getContext().getBean("myDao")`. Wire identifier matches the bean `id` in `applicationContext-core-hibernate.xml`.
 4. **Asserts both the read path and the write path** in separate test methods (`testFindById`, `testFindByXxx`, `testSaveOrUpdate*`). Prefer container assertions (`assertTrue(allRows.contains(...))`) over size equality so the test doesn't break when Liquibase or bootstrap inserts additional rows.
@@ -192,7 +202,7 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 | PostgreSQL JDBC | 42.2.26 | **42.7.4** | A.1 | ✅ | |
 | Spring Framework | 5.1.4.RELEASE | **5.3.39** | A.2 | ✅ | Final 5.x release |
 | Spring Security | 5.1.4.RELEASE | **5.8.16** | A.2 | ✅ | Final 5.x; decoupled into separate `<spring.security.version>` property |
-| Spring WS | 1.5.6 | (audit — Spring WS 1.5 is from 2008; jump to 4.x during Phase B) | B | ⏳ | |
+| ~~Spring WS~~ | ~~1.5.6~~ | **removed** | B | ✅ | PR #31 (2026-05-29) — `ws/` module deleted, 3 spring-ws-* depMgmt entries dropped. README + decision: no active SOAP consumer at MUW Ophthalmology. |
 | Spring OAuth2 | 2.3.5.RELEASE | (EOL since 2022; replace with Spring Authorization Server in Phase B/C) | B | ⏳ | |
 | Hibernate ORM | 5.4.2.Final | **5.6.15.Final** | A.2 | ✅ | Verified end-to-end against live Postgres |
 | Hibernate Validator | (audit) | **6.2.x** | A.2 | ⏳ | Not currently a direct dep |
@@ -233,7 +243,7 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 1. **Java 21 baseline first.** Bump build + runtime to JDK 21. Fix warnings. Update Maven compiler plugin. Verify everything in Phase A still works on JDK 21. (1–2 weeks)
 2. **Eclipse Transformer dry run.** Run Eclipse Transformer (or IntelliJ's javax→jakarta refactor) against a throwaway branch to discover the scope of mechanical changes vs. manual reconciliation work. Capture the diff size and any unconvertible sites. (1 week)
 3. **Replace Castor 1.4.1 → JAXB (or Jackson XML).** Castor has no Jakarta variant. This is a *forced* replacement and touches every CDISC ODM code path. Treated as a sub-phase. (3–4 weeks)
-4. **Spring 5 → 6, Security 5 → 6, WS 3 → 4** in lockstep. (2–3 weeks)
+4. **Spring 5 → 6, Security 5 → 6** in lockstep. ~~Spring WS 3 → 4~~ N/A — `ws/` module removed in PR #31 (2026-05-29). (2–3 weeks)
 5. **Hibernate 5.6 → 6.4** with `jakarta.persistence`. Highest-risk single library — HQL strictness changes, sequence generator behavior, removal of `Criteria` API. (3–4 weeks)
 6. **Tomcat 9 → 10/11**. Servlet 5+ / `jakarta.servlet`. (1–2 weeks)
 7. **JSTL 1.1 → 3.0** + 413 JSPs updated to new taglib URIs. Mechanical but voluminous. Eclipse Transformer handles most. (1–2 weeks)
@@ -289,24 +299,54 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 
 ---
 
-## Phase D — Remaining library replacement
+## Phase D — Authentication modernization + library long-tail
 
-**Goal:** retire the abandoned-library long tail.
-**Timeline:** 2–3 months (can overlap C)
-**Risk:** medium per library — but they're independent so risk doesn't compound
+**Status (2026-05-30 evening):** **D-Sec substantially complete** — 10 of 11 sub-phases shipped on `lc-develop @ 63ebc5009`. Institution-agnostic SSO works end-to-end (DR-014), bcrypt + lazy rehash live (DR-015), SSO audit codes 6+7 verified, login JSP institutional button wired, e-sig re-auth scaffolded behind flag, Apache+mod_shib sidecar opt-in compose overlay ready. Operator tasks remain: SAMLtest.id SP-metadata upload, MedUni Wien IT institutional SP registration for production cutover, full sso-deployment-guide.md cookbook. D-Libs untouched (long tail of abandoned libraries). Full closure block in [phase-d-execution-playbook.md § Exit criteria](docs/development/modernization/phase-d-execution-playbook.md#exit-criteria-for-phase-d-sec).
 
-| Library | Replacement | Touchpoints | Notes |
-|---------|------------|-----------|------|
-| Castor 1.4.1 | **Jakarta JAXB or Jackson XML** | ODM import/export (`odm` module, `ImportCRFDataServlet`, `ODMMetadataRestResource`) | **Forced by Phase B** — done as part of B. Listed here for completeness. |
-| iText 2.1.2 | **OpenPDF 1.4+** (LGPL fork of iText 4) or **Apache PDFBox 3.x** | PDF generation (audit logs, subject reports, CRF blank prints) | License-driven (post-2.1 iText is AGPL). OpenPDF is the drop-in replacement. |
-| Apache POI 3.0.1 | **Apache POI 5.3** | Excel CRF upload, Excel exports | API changes: HSSFWorkbook → XSSF in places. Surface area not huge. |
-| Apache FOP 1.0 | **Apache FOP 2.9** | XSL-FO → PDF (some reports) | |
-| Quartz 2.2.3 | **Quartz 2.5.0** | Scheduled jobs (cleanup, notifications, recurring exports) | |
-| GWT-compiled menu widget | **removed** — replace with vanilla HTML / framework-native nav | Top nav bar | GWT is abandoned. Compile artifact only; source presumably elsewhere. Treat as opaque static asset to be replaced. |
-| Prototype.js 1.6 / Scriptaculous | **removed** | ~20 JSP screens using `$()` / `Effect.*` | Either rewrite in vanilla JS or rely on jQuery 3 (already present via JMesa). |
-| EhCache 2.10 | **Ehcache 3 / JCache** (`javax.cache` → `jakarta.cache`) | Hibernate L2 cache | Re-evaluate need; consider Caffeine + JCache. |
-| log4jdbc4 1.2 (abandoned) | **log4jdbc-log4j2 1.16** or remove | SQL logging | Optional; only active in dev profiles. |
-| JMesa 2.4.2-oc (local OC fork) | **DataTables.net 2.x** (during Phase E) | All admin tables | Defer to UI phase. |
+**Goal:** finish the security work the modernization started (MD5/SHA-1 → bcrypt; institution-agnostic SSO) and retire the abandoned-library long tail.
+
+**Timeline:** D-Sec ~1.5–2 weeks (sequential); D-Libs ~2–3 months (parallel; each lib is one PR).
+**Risk:** D-Sec medium-high (clinical auth surface); D-Libs medium per library, independent so risk doesn't compound.
+
+**Scope split** — Phase D bundles two distinct workstreams:
+
+### D-Sec — authentication modernization (primary, sequential)
+
+Production-deployment-blocking. Full plan: [phase-d-execution-playbook.md](docs/development/modernization/phase-d-execution-playbook.md). Pre-flight inventory: [phase-d-pre-flight-inventory.md](docs/development/modernization/phase-d-pre-flight-inventory.md).
+
+| Sub-phase | What | Risk |
+|-----------|------|------|
+| D.0 | Characterisation tests pinning current auth + audit-login flow | Low |
+| D.1 | `DelegatingPasswordEncoder` + bcrypt; legacy MD5/SHA-1 fallback + lazy rehash | Medium (per DR-015) |
+| D.2 | Liquibase: `user_account.external_id` + `external_id_provider` columns | Low |
+| D.3 | `RequestHeaderAuthenticationFilter` wired into `SecurityConfig` behind `libreclinica.sso.enabled` | Medium |
+| D.4 | `UserProvisioningStrategy` interface (`LookupOnlyStrategy` default; `JitProvisioningStrategy` opt-in) | Medium |
+| D.5 | `audit_user_login` enum + `LoginAuditService` extraction | Low |
+| D.6 | Login JSP affordance — configurable institutional-SSO button | Low |
+| D.7 | Docker compose `mod_shib` sidecar (MedUni Wien reference deployment) | Medium |
+| D.8 | SSO deployment cookbook (Shibboleth, OIDC, AWS ALB, Cloudflare Access, no-SSO) | Low (docs) |
+| D.9 | 2FA reconciliation — TOTP skipped for SSO-bound users | Low |
+| D.10 | E-signature re-auth scaffolding (flag OFF; production-deferred pending legal ratification) | Medium |
+| D.11 | Reconciliation + memory updates + lc-develop tag | — |
+
+**Architecture (DR-014 Accepted 2026-05-30):** institution-agnostic SSO via reverse-proxy pre-authentication. App speaks one in-app protocol — header-based pre-auth — and delegates the SSO protocol (SAML/OIDC/OAuth) entirely to the reverse-proxy choice. Provider swap = sidecar + env-var change; **never a code change**. MedUni Wien Shibboleth is the reference deployment; the same code supports Azure AD / Okta / Keycloak / AWS ALB OIDC / Cloudflare Access / no-SSO unchanged.
+
+### D-Libs — library long-tail (parallel, separately scheduled)
+
+Independent of D-Sec; one PR per library. Pick up opportunistically.
+
+| Library | Current | Replacement | Touchpoints | Notes |
+|---------|---------|-------------|-------------|-------|
+| Castor 1.4.1 | **REMOVED in B.3** | Jakarta JAXB 4 | (done) | Forced by Phase B. PRs #27/#28. |
+| iText | **2.1.2** | OpenPDF 1.4+ (LGPL fork) or PDFBox 3.x | PDF generation (audit logs, subject reports, CRF blank prints) | License-driven (post-2.1 iText is AGPL). OpenPDF is the drop-in replacement. See DR-007. |
+| Apache POI | 3.0.1 (legacy refs) | **POI 5.3+** | Excel CRF upload, Excel exports — `SpreadsheetPreview`, `SpreadSheetTable*`, `CreateCRFVersionServlet` | API changes: HSSFWorkbook → XSSF in places. |
+| Apache FOP | 1.0 (legacy refs) | **FOP 2.9+** | XSL-FO → PDF reports | |
+| Quartz | 2.2.3 baseline | **Quartz 2.5.0** | Scheduled jobs (cleanup, notifications, recurring exports) | Now pinned at Spring Boot's managed version after Phase C.5; verify before bumping. |
+| GWT-compiled menu widget | nocache.js at `web/src/main/webapp/gwt/GwtMenu/` | **removed** — vanilla HTML / framework-native nav | Top nav bar | GWT abandoned. Phase E may subsume. |
+| Prototype.js + Scriptaculous | 1.6 / unversioned | **removed** | ~20 JSP screens using `$()` / `Effect.*` | Rewrite in vanilla JS. (JMesa removed in B.4 so jQuery is no longer transitively available.) |
+| EhCache | **3.10.8** (already on EhCache 3 post B.5) | (stay) or Caffeine + JCache | Hibernate L2 cache | See DR-013. |
+| log4jdbc4 | 1.2 (abandoned) | log4jdbc-log4j2 1.16 or remove | SQL logging (dev profiles only) | Optional. |
+| JMesa | **REMOVED in B.4** | DataTables.net + vanilla JS | (done — 9 cohort PRs #32–#49) | Phase B eviction; ~5000 LOC retired. |
 
 **Per-library protocol:** characterization tests first → replacement library introduced behind interface → switch over → delete old dep. One library per PR, never bundle replacements.
 

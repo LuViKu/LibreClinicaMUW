@@ -1,11 +1,11 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.format" var="resformat"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>    
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/> 
-<fmt:setBundle basename="org.akaza.openclinica.i18n.workflow" var="resworkflow"/> 
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.format" var="resformat"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>    
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/> 
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow" var="resworkflow"/> 
 <c:set var="dteFormat"><fmt:message key="date_format_string" bundle="${resformat}"/></c:set>
 
 <jsp:include page="../include/managestudy-header.jsp"/>
@@ -40,12 +40,12 @@
   </tr>
 <jsp:include page="../include/sideInfo.jsp"/>
 
-<!-- org.akaza.openclinica.bean.core.AuditableEntityBean -->
+<!-- at.ac.meduniwien.ophthalmology.libreclinica.bean.core.AuditableEntityBean -->
 
-<jsp:useBean scope="request" id="displayStudy" class="org.akaza.openclinica.bean.admin.DisplayStudyBean"/>
-<jsp:useBean scope="session" id="study" class="org.akaza.openclinica.bean.managestudy.StudyBean"/>
-<jsp:useBean scope="request" id="subject" class="org.akaza.openclinica.bean.submit.SubjectBean"/>
-<jsp:useBean scope="request" id="studySub" class="org.akaza.openclinica.bean.managestudy.StudySubjectBean"/>
+<jsp:useBean scope="request" id="displayStudy" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.DisplayStudyBean"/>
+<jsp:useBean scope="session" id="study" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean"/>
+<jsp:useBean scope="request" id="subject" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean"/>
+<jsp:useBean scope="request" id="studySub" class="at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean"/>
 <h1><span class="title_manage">
 <fmt:message key="reassign_study_subject" bundle="${resworkflow}"/> 
 </span></h1>

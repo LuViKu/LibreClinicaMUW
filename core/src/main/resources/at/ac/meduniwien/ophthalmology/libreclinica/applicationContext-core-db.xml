@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
+
+    <!--
+        Phase C.3-finish + C.13 (2026-05-30): dataSource + queryStore +
+        liquibase are now defined in
+        at.ac.meduniwien.ophthalmology.libreclinica.config.DataSourceConfig.
+        This file is kept as a one-line stub so the existing classpath
+        references in web.xml + LibreClinicaApplication + 9 HibernateOcDbTestCase
+        descendants still resolve.
+    -->
+    <bean class="at.ac.meduniwien.ophthalmology.libreclinica.config.DataSourceConfig"/>
+
+</beans>

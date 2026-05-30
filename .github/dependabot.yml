@@ -14,7 +14,9 @@ updates:
         patterns:
           - "org.springframework*"
           - "org.springframework.security*"
-          - "org.springframework.ws*"
+          # org.springframework.ws* dropped — the ws/ module was retired
+          # in Phase B.4 (PR #31). The pattern matched zero packages
+          # post-removal; keeping it was misleading.
       jackson:
         patterns:
           - "com.fasterxml.jackson*"

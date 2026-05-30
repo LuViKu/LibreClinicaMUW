@@ -1,6 +1,6 @@
 <%@ page contentType="text/html; charset=UTF-8" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
-<%@ taglib uri="http://java.sun.com/jsp/jstl/fmt" prefix="fmt" %>
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%@ taglib uri="jakarta.tags.fmt" prefix="fmt" %>
 <jsp:useBean scope='session' id='pageMessage' class='java.lang.String'/>
 <jsp:useBean scope='session' id='mayProcessUploading' class='java.lang.String'/>
 <jsp:useBean scope='request' id='fileItemId' class='java.lang.String'/>
@@ -8,9 +8,9 @@
 <jsp:useBean scope='request' id='inputName' class='java.lang.String'/>
 <jsp:useBean scope='request' id='attachedFilePath' class='java.lang.String'/>
 <jsp:useBean scope='request' id='uploadFileStatus' class='java.lang.String'/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.notes" var="restext"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.words" var="resword"/>
-<fmt:setBundle basename="org.akaza.openclinica.i18n.workflow" var="resworkflow"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.notes" var="restext"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.words" var="resword"/>
+<fmt:setBundle basename="at.ac.meduniwien.ophthalmology.libreclinica.i18n.workflow" var="resworkflow"/>
 
 <link rel="stylesheet" href="includes/styles.css" type="text/css">
 

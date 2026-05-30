@@ -11,23 +11,30 @@
     </properties>
     <dependencies>
         <dependency>
-            <groupId>javax.xml.bind</groupId>
-            <artifactId>jaxb-api</artifactId>
-            <version>2.3.1</version>
+            <groupId>jakarta.xml.bind</groupId>
+            <artifactId>jakarta.xml.bind-api</artifactId>
+            <version>4.0.2</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish.jaxb</groupId>
             <artifactId>jaxb-runtime</artifactId>
-            <version>2.3.1</version>
+            <version>4.0.5</version>
         </dependency>
     </dependencies>
     <build>
         <plugins>
             <!-- Automate the creation of binding classes for XML schemas - JAXB marshall/ unmarshall -->
+            <!-- Phase B.4: xjc regeneration disabled. The generated sources
+                 under src/main/java/ are committed to the repo and were
+                 sed-rewritten to jakarta.xml.bind in this PR. Re-enable
+                 when bumping jaxb2-maven-plugin to a version that handles
+                 our schema set with jakarta XJC (current 3.1.0 fails on
+                 the multi-schema ODM tree). -->
+            <!--
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>jaxb2-maven-plugin</artifactId>
-                <version>2.5.0</version>
+                <version>3.1.0</version>
                 <executions>
                     <execution>
                         <id>schemas-generate</id>
@@ -46,6 +53,13 @@
                         </configuration>
                     </execution>
                 </executions>
+            </plugin>
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>jaxb2-maven-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions/>
             </plugin>
             <!-- Needed to run the xjc plugin with jdk8 -->
             <plugin>
