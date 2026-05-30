@@ -1,5 +1,15 @@
 target/
-odm/src/main/java/
+# Phase D-Sec audit (2026-05-30): `odm/src/main/java/` removed — the
+# JAXB-generated XML-binding classes under that directory are now
+# committed per the documented Phase B.4 intent ("The generated
+# sources under src/main/java/ are committed to the repo" — see
+# the jaxb2-maven-plugin comment in odm/pom.xml). Previously the
+# gitignore was excluding them while xjc was disabled in the build,
+# leaving CI unable to compile web/ (which imports the generated
+# org.cdisc.ns.odm.* + org.openclinica.ns.* packages). 513 files
+# checked in once; re-enable xjc when jaxb2-maven-plugin gains
+# jakarta-XJC support for the multi-schema ODM tree, then re-add
+# this gitignore entry.
 odm/target/
 pom.xml.tag
 pom.xml.releaseBackup
