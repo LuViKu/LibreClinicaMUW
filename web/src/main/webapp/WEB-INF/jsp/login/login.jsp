@@ -91,6 +91,27 @@ session.setAttribute("factorService", factorService);
             <div id="loginBox">
             <!-- Login box contents -->
                 <div id="login">
+                    <%-- Phase D.6 (DR-014): institution-agnostic SSO
+                         affordance. Only shown when libreclinica.sso.enabled=true.
+                         Click target (libreclinica.sso.entry-url) is intercepted
+                         by the reverse-proxy sidecar (Apache+mod_shib for the
+                         MedUni Wien reference deployment; any header-injecting
+                         proxy for other institutions) which terminates the
+                         SSO protocol and proxies back to LibreClinica with
+                         the configured principal header set. Provider swap
+                         = change the sidecar, not the app. --%>
+                    <c:if test="${ssoProperties.enabled}">
+                        <div id="sso-login" style="margin-bottom:18px;text-align:center;">
+                            <a href="<c:out value='${ssoProperties.entryUrl}'/>"
+                               class="loginbutton"
+                               style="display:inline-block;padding:8px 18px;text-decoration:none;">
+                                <c:out value="${ssoProperties.buttonLabel}"/>
+                            </a>
+                            <div style="margin-top:8px;color:#666;font-size:0.9em;">
+                                &mdash; or sign in with a local account &mdash;
+                            </div>
+                        </div>
+                    </c:if>
                     <form action="<c:url value='/j_spring_security_check'/>" method="post">
                         <h1><fmt:message key="login" bundle="${resword}"/></h1>
                         <b><fmt:message key="user_name" bundle="${resword}"/></b>

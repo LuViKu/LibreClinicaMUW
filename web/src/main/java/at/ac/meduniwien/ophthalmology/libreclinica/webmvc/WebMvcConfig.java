@@ -152,6 +152,17 @@ public class WebMvcConfig {
         InternalResourceViewResolver r = new InternalResourceViewResolver();
         r.setPrefix("/WEB-INF/jsp/");
         r.setSuffix(".jsp");
+        // Phase D.6 (DR-014): expose Spring beans as JSP request
+        // attributes so login.jsp can read ${ssoProperties.enabled}
+        // for the institutional-SSO button visibility. The existing
+        // ${factorService.twoFactorActivated} expression in the same
+        // JSP relied on this pattern in the legacy XML config; this
+        // line restores it under the Java config. Scoped to a
+        // specific set of beans rather than exposing the entire
+        // context (defence-in-depth — JSP authors can only reach
+        // the listed beans via EL).
+        r.setExposeContextBeansAsAttributes(true);
+        r.setExposedContextBeanNames("factorService", "ssoProperties");
         return r;
     }
 }
