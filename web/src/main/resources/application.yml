@@ -11,6 +11,17 @@ spring:
   application:
     name: libreclinica
 
+  # Phase C.14 cliff (2026-05-30): Boot 3.5 defaults
+  # allow-bean-definition-overriding=false. Several @Service-annotated
+  # service classes are also XML-bean-defined in
+  # applicationContext-core-service.xml — the legacy
+  # <context:component-scan base-package=".service"/> picks them up via
+  # annotation, and the XML defines them again. Legacy ContextLoaderListener
+  # tolerated this; Boot's stricter default does not. Set to true here;
+  # follow-up C.6 drops the XML <bean> entries in favour of @Service.
+  main:
+    allow-bean-definition-overriding: true
+
   # Phase C.3 will replace the XML-declared dataSource with Spring Boot's
   # auto-configured pool. Until then this block is read but the actual
   # DataSource bean comes from applicationContext-core-db.xml (which has
@@ -49,6 +60,15 @@ logging:
   # runtime; explicit reference keeps Spring Boot's default
   # auto-configuration out of the way).
   config: classpath:logback.xml
+  # Phase C.14 cliff diagnosis (2026-05-30): bump dispatcher + handler
+  # resolution to DEBUG and route to stdout so we can see why the
+  # pages DispatcherServlet's child context isn't picking up
+  # pages-servlet.xml handlers. Note: under LoggingSystem=none, these
+  # have no effect — they're documented here for the next iteration
+  # where logback patterns get a console appender.
+  level:
+    org.springframework.web.servlet: DEBUG
+    org.springframework.security: DEBUG
 
 server:
   servlet:

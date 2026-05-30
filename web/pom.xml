@@ -80,6 +80,21 @@
 			<artifactId>spring-security-web</artifactId>
 		</dependency>
 		<dependency>
+			<!-- Phase C.14 cliff (2026-05-30): SecurityConfig.java uses
+			     HttpSecurity + EnableWebSecurity. The parent pom's
+			     dependencyManagement pins this to runtime scope; override
+			     to compile here so web/'s SecurityConfig sees the types. -->
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-config</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
+			<!-- Phase C.14 cliff: ServletInfraConfig uses
+			     OpenEntityManagerInViewFilter (org.springframework.orm.jpa.support). -->
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-orm</artifactId>
+		</dependency>
+		<dependency>
 			<!-- Direct use: EnketoAPI, PFormCache (PasswordEncoder + codec.Hex). -->
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-crypto</artifactId>

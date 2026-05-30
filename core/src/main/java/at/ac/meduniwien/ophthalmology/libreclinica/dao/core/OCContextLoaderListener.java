@@ -12,13 +12,21 @@ package at.ac.meduniwien.ophthalmology.libreclinica.dao.core;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
-import org.springframework.web.context.ContextLoaderListener;
 
 import jakarta.servlet.ServletContextEvent;
+import jakarta.servlet.ServletContextListener;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 
-public class OCContextLoaderListener extends ContextLoaderListener {
+/**
+ * Phase C.14 cliff (2026-05-30): pure {@link ServletContextListener} doing
+ * MDC + hostname setup only. Was previously a subclass of Spring's
+ * {@code ContextLoaderListener} — that responsibility now belongs to
+ * {@code SpringBootServletInitializer}. Registered via
+ * {@code @Bean ServletListenerRegistrationBean} in
+ * {@link at.ac.meduniwien.ophthalmology.libreclinica.config.ServletInfraConfig}.
+ */
+public class OCContextLoaderListener implements ServletContextListener {
     private final Logger logger = LoggerFactory.getLogger(this.getClass().getName());
 
 
@@ -39,11 +47,6 @@ public class OCContextLoaderListener extends ContextLoaderListener {
             logger.error("UnknownHostException when fetching the hostname");
         }
         MDC.put("HOSTNAME", hostName);
-        // MDC.put("WEBAPP", webAppName + " FROM " + hostName);
-        // Get the liquibase logs inside the application log files using
-        // SLF4JBridgeHandler
-        //       LogFactory.getLogger().addHandler(new SLF4JBridgeHandler());
-        super.contextInitialized(event);
     }
 
     public String getWebAppName(String servletCtxRealPath) {

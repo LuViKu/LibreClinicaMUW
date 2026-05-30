@@ -6,29 +6,17 @@
     <display-name>LibreClinica</display-name>
     <description>LibreClinica Web Interface</description>
 
-    <context-param>
-        <param-name>contextConfigLocation</param-name>
-        <param-value>
-            <!-- Phase B.4 cliff: core-security.xml hoisted ahead of
-                 applicationContext-security.xml. Spring Security 6's
-                 HttpSecurityBeanDefinitionParser eagerly resolves
-                 authentication-manager-ref at parse time and requires the
-                 referenced bean to be registered already; the legacy order
-                 (security.xml first) worked in 5.x because the parser was
-                 lazy. -->
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-core-security.xml
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-security.xml
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-web-beans.xml
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/application-context-web-beans.xml
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-core-timer.xml
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-core-spring.xml
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-core-service.xml
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-core-scheduler.xml
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-core-hibernate.xml
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-core-email.xml
-            classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-core-db.xml
-        </param-value>
-    </context-param>
+    <!--
+        Phase C.14 cliff (2026-05-30): contextConfigLocation, all listeners,
+        and all filters migrated out of web.xml. Boot's
+        SpringBootServletInitializer owns root-context bootstrap;
+        ServletInfraConfig owns surviving listeners + non-security filters;
+        SecurityConfig owns the SecurityFilterChain @Bean. The 222 servlet
+        declarations stay here for now — Boot does NOT auto-register Servlet
+        beans, so they don't collide. Bulk servlet migration to
+        LegacyServletRegistry @Configuration is a post-cliff cleanup pass
+        (see phase-c14-web-xml-inventory.md).
+    -->
 
     <context-param>
         <param-name>jmesaMessagesLocation</param-name>
@@ -39,134 +27,6 @@
         <param-name>SQLInitServlet</param-name>
         <param-value>org/</param-value>
     </context-param>
-
-    <listener>
-        <!--@pgawade 01-DEC-2010 Replaced the listener with the extended class
-        <listener-class>org.springframework.web.context.ContextLoaderListener</listener-class>-->
-        <listener-class>at.ac.meduniwien.ophthalmology.libreclinica.dao.core.OCContextLoaderListener</listener-class>
-    </listener>
-
-    <!--     <listener>
-          <listener-class>net.sf.ehcache.constructs.web.ShutdownListener</listener-class>
-    </listener>  -->
-
-    <listener>
-
-
-        <listener-class>
-            org.springframework.security.web.session.HttpSessionEventPublisher
-        </listener-class>
-    </listener>
-    <listener>
-        <listener-class>at.ac.meduniwien.ophthalmology.libreclinica.control.OCServletContextListener</listener-class>
-    </listener>
-    <listener>
-
-        <listener-class>
-
-            org.springframework.web.context.request.RequestContextListener
-
-        </listener-class>
-
-    </listener>
-
-
-    <!-- <filter> -->
-    <!-- <filter-name>restODMFilter</filter-name> -->
-    <!-- <filter-class>at.ac.meduniwien.ophthalmology.libreclinica.web.filter.rest.RestODMFilter</filter-class> -->
-    <!-- <init-param> -->
-    <!--   <param-name>com.sun.jersey.spi.container.ContainerRequestFilters</param-name> -->
-    <!--   <param-value>at.ac.meduniwien.ophthalmology.libreclinica.web.filter.rest</param-value> -->
-    <!-- </init-param> -->
-    <!-- </filter> -->
-
-
-    <!-- <filter-mapping> -->
-    <!-- <filter-name>restODMFilter</filter-name> -->
-    <!-- <url-pattern>/rest/*</url-pattern> -->
-    <!-- </filter-mapping> -->
-
-
-    <filter>
-        <filter-name>encodingFilter</filter-name>
-        <filter-class>org.springframework.web.filter.CharacterEncodingFilter</filter-class>
-        <init-param>
-            <param-name>encoding</param-name>
-            <param-value>UTF-8</param-value>
-        </init-param>
-        <init-param>
-            <param-name>forceEncoding</param-name>
-            <param-value>true</param-value>
-        </init-param>
-
-
-    </filter>
-
-
-    <filter-mapping>
-        <filter-name>encodingFilter</filter-name>
-        <url-pattern>/*</url-pattern>
-    </filter-mapping>
-
-    <filter>
-        <filter-name>localeFilter</filter-name>
-        <filter-class>at.ac.meduniwien.ophthalmology.libreclinica.web.filter.LocaleFilter</filter-class>
-    </filter>
-    <filter-mapping>
-        <filter-name>localeFilter</filter-name>
-        <url-pattern>/*</url-pattern>
-    </filter-mapping>
-    <!--
-      Phase B.4 cliff: compressFilter (net.sf.ehcache.constructs.web.filter.GzipFilter)
-      removed. The class lives in ehcache 2.x which is javax-only and has no
-      jakarta sibling; Tomcat 10's connector-level compression (server.xml
-      compression="on") covers the gzip use case without an in-app filter.
-    -->
-
-    <filter>
-        <filter-name>springSecurityFilterChain</filter-name>
-        <filter-class>org.springframework.web.filter.DelegatingFilterProxy</filter-class>
-    </filter>
-    <filter-mapping>
-        <filter-name>springSecurityFilterChain</filter-name>
-        <url-pattern>/*</url-pattern>
-    </filter-mapping>
-    <filter>
-        <filter-name>hibernateFilter</filter-name>
-        <!--
-          Phase B.5 (Hibernate 6.4): replaced OpenSessionInViewFilter with
-          the JPA-style OpenEntityManagerInViewFilter. Spring 6's
-          org.springframework.orm.hibernate5 support package was compiled
-          against Hibernate 5 signatures and can't link against Hibernate 6.
-          The JPA filter targets the entityManagerFactory bean wired in
-          applicationContext-core-hibernate.xml.
-        -->
-        <filter-class>org.springframework.orm.jpa.support.OpenEntityManagerInViewFilter</filter-class>
-    </filter>
-    <filter-mapping>
-        <filter-name>hibernateFilter</filter-name>
-        <url-pattern>/*</url-pattern>
-    </filter-mapping>
-    <filter>
-        <filter-name>logFilter</filter-name>
-        <filter-class>at.ac.meduniwien.ophthalmology.libreclinica.control.core.OCServletFilter</filter-class>
-    </filter>
-    <filter-mapping>
-        <filter-name>logFilter</filter-name>
-        <url-pattern>/*</url-pattern>
-    </filter-mapping>
-    <filter>
-        <filter-name>apiSecurityFilter</filter-name>
-        <filter-class>org.springframework.web.filter.DelegatingFilterProxy</filter-class>
-        <init-param>
-            <param-name>targetBeanName</param-name>
-            <param-value>apiSecurityFilter</param-value>
-        </init-param>
-    </filter>
-    <filter-mapping>
-        <filter-name>apiSecurityFilter</filter-name>
-        <url-pattern>/pages/auth/api/*</url-pattern>
-    </filter-mapping>
 
 
     <servlet>

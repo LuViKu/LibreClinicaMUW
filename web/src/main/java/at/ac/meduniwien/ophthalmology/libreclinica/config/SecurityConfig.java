@@ -1,0 +1,114 @@
+package at.ac.meduniwien.ophthalmology.libreclinica.config;
+
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.session.ConcurrentSessionFilter;
+import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
+
+/**
+ * Phase C.14 cliff (2026-05-30): Java replacement for the
+ * {@code <security:http>} block in {@code applicationContext-security.xml}.
+ * The {@code SecurityFilterChain} @Bean is what Spring Boot 3.5's
+ * {@code SecurityFilterAutoConfiguration} expects — Boot auto-registers
+ * a {@code DelegatingFilterProxy} named {@code springSecurityFilterChain}
+ * for it, replacing the web.xml entry.
+ * <p>
+ * Preserves Phase B.4 cliff semantics: explicit
+ * {@code SecurityContextRepository} so the custom
+ * {@link OpenClinicaUsernamePasswordAuthenticationFilter} saves the
+ * {@code SecurityContext} into the SAME repository the
+ * {@code SecurityContextHolderFilter} reads back. {@code myFilter} stays
+ * at the {@code UsernamePasswordAuthenticationFilter} position;
+ * {@code concurrencyFilter} stays at the {@code ConcurrentSessionFilter}
+ * position — matches the XML's {@code <security:custom-filter position="FORM_LOGIN_FILTER" />}
+ * and {@code position="CONCURRENT_SESSION_FILTER" />}.
+ * <p>
+ * <strong>Critical:</strong> {@code requestMatchers(String...)} in Spring
+ * Security 6.4 calls {@code AbstractRequestMatcherRegistry.isDispatcherServlet}
+ * which does {@code Class.forName("javax.servlet.Filter")} — on a
+ * jakarta-only classpath the class doesn't exist and the JVM throws
+ * {@code NoClassDefFoundError} (not the {@code ClassNotFoundException} the
+ * compat path catches). Pass explicit {@link AntPathRequestMatcher} instances
+ * via {@link #antPaths(String...)} to bypass that check.
+ */
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            @Qualifier("securityContextRepository") SecurityContextRepository securityContextRepository,
+            @Qualifier("authenticationProcessingFilterEntryPoint") AuthenticationEntryPoint authenticationEntryPoint,
+            @Qualifier("myFilter") OpenClinicaUsernamePasswordAuthenticationFilter myFilter,
+            @Qualifier("concurrencyFilter") ConcurrentSessionFilter concurrencyFilter,
+            @Qualifier("sas") SessionAuthenticationStrategy sas,
+            @Qualifier("openClinicaLogoutHandler") LogoutSuccessHandler logoutSuccessHandler) throws Exception {
+
+        http
+            .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
+            .exceptionHandling(eh -> eh.authenticationEntryPoint(authenticationEntryPoint))
+            .csrf(csrf -> csrf.disable())
+            .anonymous(anon -> {})
+            .sessionManagement(sm -> sm.sessionAuthenticationStrategy(sas))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers(antPaths(
+                        "/pages/login/login",
+                        "/SystemStatus",
+                        "/RequestPassword",
+                        "/RequestAccount",
+                        "/Contact",
+                        "/includes/**",
+                        "/images/**",
+                        "/help/**",
+                        "/ws/**",
+                        "/rest2/openrosa/**",
+                        "/pages/odmk/**",
+                        "/pages/openrosa/**",
+                        "/pages/accounts/**",
+                        "/pages/itemdata/**",
+                        "/pages/auth/api/v1/studies/**",
+                        "/pages/odmss/**",
+                        "/pages/healthcheck/**",
+                        "/pages/api/v1/anonymousform/**",
+                        "/pages/api/v2/anonymousform/**",
+                        "/pages/api/v1/editform/**",
+                        "/pages/auth/api/v1/discrepancynote/**",
+                        "/pages/auth/api/v1/forms/migrate/**",
+                        "/pages/api/v1/forms/migrate/**",
+                        "/pages/auth/api/**",
+                        "/pages/auth/api/v1/system/**"
+                )).permitAll()
+                .anyRequest().hasRole("USER")
+            )
+            .addFilterAt(myFilter, UsernamePasswordAuthenticationFilter.class)
+            .addFilterAt(concurrencyFilter, ConcurrentSessionFilter.class)
+            .logout(logout -> logout
+                .logoutUrl("/j_spring_security_logout")
+                .logoutSuccessHandler(logoutSuccessHandler)
+            );
+
+        return http.build();
+    }
+
+    @SuppressWarnings("deprecation")
+    private static RequestMatcher[] antPaths(String... patterns) {
+        RequestMatcher[] matchers = new RequestMatcher[patterns.length];
+        for (int i = 0; i < patterns.length; i++) {
+            matchers[i] = new AntPathRequestMatcher(patterns[i]);
+        }
+        return matchers;
+    }
+}
