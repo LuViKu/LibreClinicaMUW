@@ -635,6 +635,18 @@ public class UserAccountBean extends AuditableEntityBean {
     }
 
     /**
+     * Phase D.9 (DR-014): true if this user has a non-null
+     * {@code external_id}, i.e. is bound to an SSO identity provider.
+     * Used by the auth filter to skip the local TOTP 2FA challenge
+     * when {@code libreclinica.sso.delegate-mfa-to-idp=true} —
+     * the IdP enforces MFA for SSO-bound users, so doubling up via
+     * local TOTP is redundant.
+     */
+    public boolean isSsoBound() {
+        return externalId != null && !externalId.isEmpty();
+    }
+
+    /**
 	 * Returns true if according user has actives 2-FA - false otherwise.
 	 */
     public boolean isTwoFactorActivated() {

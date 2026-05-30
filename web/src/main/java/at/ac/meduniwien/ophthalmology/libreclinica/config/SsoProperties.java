@@ -13,8 +13,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.springframework.boot.context.properties.ConfigurationProperties;
-
 /**
  * Phase D.3 (DR-014): institution-agnostic SSO configuration bound
  * from {@code application.yml} via {@code @ConfigurationProperties}.
@@ -59,7 +57,6 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  *
  * @see <a href="../../../../../../../docs/development/modernization/decision-record.md#dr-014--institution-agnostic-sso-via-reverse-proxy-pre-authentication">DR-014</a>
  */
-@ConfigurationProperties("libreclinica.sso")
 public class SsoProperties {
 
     /**

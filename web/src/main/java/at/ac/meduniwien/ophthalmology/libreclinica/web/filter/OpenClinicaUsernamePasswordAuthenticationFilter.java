@@ -33,6 +33,7 @@ import jakarta.servlet.http.HttpSession;
 import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.login.AccountConfigurationException;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.CRFLocker;
@@ -94,6 +95,7 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
     private MailNotificationService mailNotificationService;
     private PasswordRehashService passwordRehashService;
     private LoginAuditService loginAuditService;
+    private SsoProperties ssoProperties;
 
     public OpenClinicaUsernamePasswordAuthenticationFilter() {
         super("/j_spring_security_check");
@@ -124,6 +126,15 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
      */
     public void setLoginAuditService(LoginAuditService loginAuditService) {
         this.loginAuditService = loginAuditService;
+    }
+
+    /**
+     * Phase D.9 (DR-014): wire SSO configuration so the local-
+     * password 2FA check can defer to the IdP for SSO-bound users
+     * when {@code libreclinica.sso.delegate-mfa-to-idp=true}.
+     */
+    public void setSsoProperties(SsoProperties ssoProperties) {
+        this.ssoProperties = ssoProperties;
     }
 
     @Override
@@ -163,7 +174,19 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
                 throw new BadCredentialsException(BAD_CREDENTIALS_MESSAGE);
             }
 
-            if (factorService.getTwoFactorActivated() && userAccountBean.isTwoFactorActivated()) {
+            // Phase D.9 (DR-014): when the user is SSO-bound
+            // (external_id set) AND libreclinica.sso.delegate-mfa-to-idp
+            // is true (default), skip the local TOTP challenge. The
+            // IdP is responsible for MFA on SSO-bound users; doubling
+            // up locally creates redundant friction. The user's
+            // authsecret row is preserved so admins can re-enable
+            // local 2FA if SSO is later disabled.
+            boolean delegateMfa = ssoProperties != null
+                    && ssoProperties.isDelegateMfaToIdp()
+                    && userAccountBean.isSsoBound();
+            if (factorService.getTwoFactorActivated()
+                    && userAccountBean.isTwoFactorActivated()
+                    && !delegateMfa) {
                 String factor = request.getParameter(SPRING_SECURITY_FORM_FACTOR);
 
                 if (!factorService.verify(userAccountBean.getAuthsecret(), factor)) {

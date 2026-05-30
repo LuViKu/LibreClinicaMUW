@@ -63,6 +63,11 @@
              path and the SSO pre-auth path write through the same
              code. -->
         <property name="loginAuditService" ref="loginAuditService"/>
+        <!-- Phase D.9 (DR-014): SSO config so the local-password
+             2FA check can defer to the IdP for SSO-bound users
+             when delegateMfaToIdp=true (default). Bean registered
+             as @Bean("ssoProperties") in SecurityConfig. -->
+        <property name="ssoProperties" ref="ssoProperties"/>
     </bean>
     
     <bean id="successHandler" class="org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler" >

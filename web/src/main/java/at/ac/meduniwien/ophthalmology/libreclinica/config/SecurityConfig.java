@@ -1,7 +1,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.config;
 
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -56,8 +56,21 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.TrustedProxyReques
  */
 @Configuration
 @EnableWebSecurity
-@EnableConfigurationProperties(SsoProperties.class)
 public class SecurityConfig {
+
+    /**
+     * Phase D.3 (DR-014): SSO config bean with a stable ID
+     * ({@code ssoProperties}) so the legacy
+     * {@code applicationContext-security.xml} can {@code <ref bean=…/>}
+     * it for the myFilter wiring. Registered explicitly (rather
+     * than via {@code @EnableConfigurationProperties}) because the
+     * latter generates a long auto-name that XML refs can't resolve.
+     */
+    @Bean
+    @ConfigurationProperties("libreclinica.sso")
+    public SsoProperties ssoProperties() {
+        return new SsoProperties();
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(
