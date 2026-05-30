@@ -102,16 +102,26 @@ Per [memory: project_jmesa_dead_endpoints](../../../) and the Phase B.4 PRs, sev
   - URL-mapped `UrlFilenameViewController` beans for `/login/login` and `/denied` (via `BeanNameUrlHandlerMapping`).
   - `RequestMappingHandlerMapping` + `RequestMappingHandlerAdapter` for `@Controller`-annotated classes.
 - Observed behaviour: `BeanNameUrlHandlerMapping` resolves `/denied` (which returns 302 because Spring Security intercepts before the dispatcher fires) but **fails to resolve `/login/login`**, and `RequestMappingHandlerMapping` fails to resolve `/sso/reauth` (`SsoReauthController#reauth`) and `/odmk/odm/v1/Studies` (`OdmController`).
-- Hypothesis (to be confirmed during the fix): Spring Boot's root context is also component-scanning `…libreclinica.controller` (via `LibreClinicaApplication`'s `@SpringBootApplication` at the `…libreclinica` package), which causes the `@Controller` beans to register in the root context. When the `pages` DispatcherServlet starts its child context, the `@ComponentScan` in `WebMvcConfig` sees no new beans to register (or registers duplicates that the root context's handler mapping consumes). Routes that Spring Security gates with `permitAll` (login, sso-reauth, healthcheck) reach the `pages` dispatcher with no handler available → 404; routes that Spring Security gates with `authenticated` are 302-redirected before the dispatcher gets to fail.
+- **Original hypothesis (DISPROVEN 2026-05-30 after fix attempts):** Spring Boot's root context double-registering the controller package. Refuted by [`LibreClinicaApplication.java`](../../../web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/LibreClinicaApplication.java) line 58 — the root `@SpringBootApplication` already uses `scanBasePackages = "…libreclinica.config"`, restricting to `.config` only. The controllers are not in the root context's component-scan.
+- **Corrected diagnosis:** the `pages` DispatcherServlet's child context **is empty of handlers**. Both `<context:annotation-config/>` and `<context:component-scan>` paths through [`pages-servlet.xml`](../../../web/src/main/webapp/WEB-INF/pages-servlet.xml) leave `WebMvcConfig`'s `@Bean` methods, nested `@ComponentScan`, and `BeanNameUrlHandlerMapping` bindings unregistered. The dispatcher then returns 404 internally on every `/pages/*` request; Tomcat forwards to `/error` (ERROR dispatch type bypasses Spring Security); Boot's incomplete error infrastructure returns the Whitelabel HTML "no explicit mapping for /error".
+- The team already knew this — `application.yml` lines 58–66 flag it as a Phase C.14 cliff diagnostic: *"bump dispatcher + handler resolution to DEBUG and route to stdout so we can see why the pages DispatcherServlet's child context isn't picking up pages-servlet.xml handlers."* Phase D-Sec closure shipped without resolving it.
 
-**Recommended fix (sub-phase E.0)**
+**Fix attempts on 2026-05-30 that DID NOT resolve the 404:**
 
-Two options, ratification needed before execution:
+1. ❌ Switching [`pages-servlet.xml`](../../../web/src/main/webapp/WEB-INF/pages-servlet.xml) from `<context:annotation-config/>` + `<bean class="WebMvcConfig"/>` to `<context:component-scan base-package="…webmvc"/>`. The component-scan IS a standard path for picking up `@Configuration` classes through the `ConfigurationClassPostProcessor`, but `/pages/login/login` continued to 404 after rebuild.
+2. ❌ Switching [`web.xml`](../../../web/src/main/webapp/WEB-INF/web.xml) from default config-class resolution to explicit `contextClass = AnnotationConfigWebApplicationContext` + `contextConfigLocation = …webmvc.WebMvcConfig`. This is the canonical Spring wiring for a Java-config-driven DispatcherServlet child context. `/pages/login/login` continued to 404.
 
-1. **Exclude the controller package from the root context's component-scan.** Add `excludeFilters` to `LibreClinicaApplication`'s `@SpringBootApplication` (or use `scanBasePackages` narrowed to non-controller packages) so the controllers are only registered in the `pages` DispatcherServlet's child context. Surgical; preserves the legacy contract that the `pages` dispatcher owns `/pages/*`.
-2. **Promote everything to the root context, retire the `pages` DispatcherServlet.** Remove the `web.xml` servlet declaration; let Boot's default DispatcherServlet at `/` handle `/pages/*` via the same `@Controller` mappings. Larger blast radius (every existing `<form action="pages/...">` in 413 JSPs needs no change because Boot will still match those URLs at the same path; but `pages-servlet.xml` would need deleting and `WebMvcConfig` lifting up to a Boot `WebMvcConfigurer`).
+Both attempts were reverted to leave the regression diagnosis honest. The fix surface is therefore wider than initially scoped — likely a Boot 3 + Spring 6 interaction with the legacy child-context bootstrap, the logback `LoggingSystem=none` muting all Spring INFO/DEBUG output (no init logs visible), or a `SpringBootServletInitializer` quirk with web.xml-declared servlets in WAR mode. Diagnosis needs proper logging visibility before more attempts.
 
-Recommendation: **Option 1** for Phase E.0 — minimal touch, single config-file change, fastest path to a green browser session.
+**Recommended fix (sub-phase E.0) — REVISED**
+
+The two-line surgical fix in the original validation report is insufficient. Phase E.0 should:
+
+1. **Restore Spring init-log visibility.** Move logback config from `WEB-INF/lib/.../logback.xml` (inside the core JAR) to a Boot-managed `logging.config` location at `application.yml` so the runtime overrides in lines 64–66 (`org.springframework.web.servlet: DEBUG`, `org.springframework.security: DEBUG`) actually take effect. Currently `LoggingSystem=none` is hiding every Spring init log line — without those logs, the dispatcher init failure has no debug signal.
+2. **With logs visible, diagnose properly** — confirm whether the pages dispatcher is initializing at all, whether `WebMvcConfig` runs, whether `ConfigurationClassPostProcessor` is processing it, whether `BeanNameUrlHandlerMapping` and `RequestMappingHandlerMapping` are getting populated.
+3. **Then apply the right fix.** The canonical options are still on the table (retire the pages dispatcher in favour of Boot's `/` dispatcher; or wire the child context via Java config), but they should follow the diagnosis, not precede it.
+
+Estimated E.0 effort with proper logging visibility: 1–2 days. Without it (continuing to fix-by-guess as the two attempts above): unbounded.
 
 ---
 

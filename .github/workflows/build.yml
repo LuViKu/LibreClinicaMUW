@@ -198,6 +198,36 @@ jobs:
           docker compose logs --tail 200
           exit 1
 
+      # Phase E.0 (2026-05-30): the original smoke step above only probed `/`
+      # which 302s to the login page — it never noticed when the login page
+      # itself returned 404 or 500. This step follows the redirect chain and
+      # explicitly asserts that the high-value `/pages/*` routes resolve.
+      # See post-Phase-D UI validation report + Phase E.0 sub-phase.
+      - name: Smoke key /pages/* routes
+        run: |
+          set -e
+          BASE=http://127.0.0.1:8080/LibreClinica
+          ROUTES=(
+            "/"
+            "/pages/login/login"
+            "/pages/sso/reauth"
+            "/pages/odmk/odm/v1/Studies"
+          )
+          fail=0
+          for r in "${ROUTES[@]}"; do
+            code=$(curl --silent --location --output /dev/null --write-out '%{http_code}' "$BASE$r")
+            # Treat 200, 302 (auth redirect), 401, 403 as expected; only flag 404/500.
+            case "$code" in
+              200|302|401|403) echo "  OK    $code  $r" ;;
+              *)               echo "  FAIL  $code  $r"; fail=1 ;;
+            esac
+          done
+          if [ $fail -ne 0 ]; then
+            echo "::error::At least one /pages/* route returned an error code."
+            docker compose logs --tail 200
+            exit 1
+          fi
+
       - name: Compose down
         if: always()
         run: docker compose down --volumes --remove-orphans
