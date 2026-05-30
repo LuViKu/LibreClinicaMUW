@@ -81,39 +81,65 @@ first, OR needs to inline the derived value at the call site.
 
 **Practical execution order** (a refinement of the playbook table):
 
-1. C.0 — contract tests (done; landed 3136593e6)
-2. C.1 — Spring Boot BOM + starters (done; landed 717ca3df9)
-3. C.2 — `LibreClinicaApplication` dormant (done; landed 413c05d71)
-4. C.3 partial — optional JDBC URL hardening (done; landed a7bc9d3ec). Full
-   DataSource conversion to Java config deferred — bundled with C.8.
-5. **C.8 + C.3-completion + C.4 + C.5 + C.7 bundled** — single push that:
-   * retires the `s[...]` custom placeholder configurer in favour of
-     Spring's standard `${...}` resolution against
-     `Environment` (Spring Boot reads `datainfo.properties` via
-     `spring.config.import` in `application.yml`),
-   * lifts `CoreResources.setDatabaseProperties()` derived keys into
-     a `@ConfigurationProperties` class (or keeps the derivation but
-     publishes them as standard environment keys),
-   * lands `DataSourceConfig`, `JpaConfig`, `QuartzConfig`,
-     `MailConfig` as Java `@Configuration` classes with `@Bean`
-     methods, removing the corresponding XML files,
-   * drops the autoconfig exclusions in `LibreClinicaApplication`
-     for each migrated slice.
-   This is ~2-3 days of focused work but each XML can't cleanly
-   leave the build alone.
-6. C.6 — services + component-scan. Can move ahead of C.8 if the
-   target classes don't consume placeholders.
-7. C.9 — timer XML. Tiny; rolls in with the C.5 Quartz work.
-8. C.10 — `SecurityFilterChain`. Independent of C.8 (the security XMLs
-   don't use `s[...]` placeholders) — can land any time after C.6.
-9. C.11 — `pages-servlet.xml` → `WebMvcConfigurer`.
-10. C.12 — `web.xml` filter registrations → `FilterRegistrationBean`.
-11. C.13 — Liquibase via `spring-boot-starter-liquibase`. Tiny;
-    can land any time after C.8.
-12. C.14 — WAR → JAR + embedded Tomcat. Gate: C.10 + C.12 must be
-    done so the `@SpringBootApplication` boot path is complete.
-13. C.15 — Actuator.
-14. C.16 — Reconciliation sweep + manual GCP smoke.
+1. C.0 — contract tests (done; landed `3136593e6`)
+2. C.1 — Spring Boot BOM + starters (done; landed `717ca3df9`)
+3. C.2 — `LibreClinicaApplication` dormant (done; landed `413c05d71`)
+4. C.3 partial — optional JDBC URL hardening (done; landed `a7bc9d3ec`).
+5. **C.8** — `s[…]` custom placeholder configurer retired in favour of
+   Spring's standard `${…}` (done; landed `feaaa6245`). 24 occurrences swept
+   across 5 core XML files + 11 `@Value` annotations in `LdapUserService` +
+   the test config mirror.
+6. **C.7** — mail bean trio → `MailConfig` Java `@Configuration` (done;
+   landed `3708a24d4`). XML kept as one-line stub.
+7. **C.5** — `schedulerFactoryBean` → `QuartzConfig` Java `@Configuration`
+   (done; landed `a33b49235`). `@DependsOn("liquibase")` preserved.
+8. **C.3-finish** — `dataSource` + `queryStore` → `DataSourceConfig`
+   (done; landed `b8a0ffcd7`).
+9. **C.4** — JPA infra (`entityManagerFactory`, `transactionManager`,
+   `sharedTransactionTemplate`, `PersistenceAnnotationBeanPostProcessor`,
+   `@EnableTransactionManagement`) → `JpaConfig` (done; landed `9abf4fc80`).
+   The ~50 DAO beans stay in the XML stub — would need `@Repository` per
+   impl class for component-scan to pick them up.
+10. **C.13** — `SpringLiquibase` bean → `DataSourceConfig` (done; landed
+    `609fab976`). `liquibase-core` dep scope flipped `runtime → compile`.
+    The "real" C.13 (Boot's `LiquibaseAutoConfiguration`) activates after
+    C.14; until then, an explicit `@Bean` keeps parity.
+
+### Post-C.14 cluster (deferred — Boot autoconfig dependency)
+
+The remaining sub-phases (C.6 services, C.10 `SecurityFilterChain`,
+C.11 `WebMvcConfigurer`, C.12 `FilterRegistrationBean`, C.15 Actuator)
+are **all materially cleaner under Spring Boot's autoconfig**. In the
+current WAR-on-`ContextLoaderListener` mode they each require manually
+re-defining beans that Boot autoconfig provides for free
+(`DispatcherServlet`, `RequestMappingHandlerMapping`, message converters,
+security filter chain, actuator endpoint registration). Attempting them
+in WAR mode is roughly the same Java code volume as the XML they
+replace — no real win.
+
+11. **C.14 — WAR → JAR + embedded Tomcat** (next push; multi-day).
+    The single biggest unlock. Gate: `java -jar app.jar` boots the full
+    stack; compose smoke green; container size shrinks. Sub-steps:
+    a. `web/pom.xml` packaging `war → jar` + spring-boot-maven-plugin
+       to assemble the runnable JAR
+    b. `LibreClinicaApplication` no longer needs `SpringBootServletInitializer`
+       (embedded Tomcat); drop the autoconfig exclusions for migrated slices
+    c. `web.xml` filters → `FilterRegistrationBean` (folds C.12 in)
+    d. `pages-servlet.xml` `DispatcherServlet` config → `@EnableWebMvc` +
+       message converters via Java config (folds C.11 in)
+    e. `applicationContext-security.xml` → `SecurityFilterChain` Java config
+       (folds C.10 in)
+    f. Dockerfile: drop Tomcat multi-stage; use `eclipse-temurin:21-jre` +
+       `ENTRYPOINT ["java","-jar","app.jar"]`
+12. **C.6** — services component-scan. Add `@Service` annotations to the
+    30+ classes currently bound by `<constructor-arg ref="dataSource"/>`
+    in `applicationContext-core-service.xml`, swap to `@Autowired`. Best
+    done alongside C.14 since the boot-up bean factory is now Boot-managed.
+13. **C.15** — Spring Boot Actuator. Drop-in once C.14 lands
+    (`spring-boot-starter-actuator` + a few application.yml lines).
+14. **C.16** — Reconciliation sweep. Drop the now-empty XML stubs, drop
+    `web.xml`, update Dockerfile + compose.yaml. Manual GCP-style smoke
+    pass.
 
 ---
 
