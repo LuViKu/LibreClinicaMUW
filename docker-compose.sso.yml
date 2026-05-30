@@ -1,0 +1,73 @@
+# LibreClinica MUW Ophthalmology — SSO sidecar overlay (Phase D.7)
+# Department of Ophthalmology and Optometry, Medical University of Vienna
+#
+# Opt-in overlay layered onto compose.yaml that adds the Apache +
+# mod_shib reverse-proxy sidecar (DR-014 reference deployment).
+# Default IdP target = SAMLtest.id (https://samltest.id) — public free
+# test IdP for the initial smoke. Production swaps the SAML SP config
+# to point at the institutional IdP (MedUni Wien: login.meduniwien.ac.at).
+#
+# Usage:
+#   docker compose -f compose.yaml -f docker-compose.sso.yml up --build
+#
+# Then browse https://localhost:8443/LibreClinica/MainMenu → Shibboleth
+# redirects to SAMLtest.id → after login, MainMenu renders for the
+# SSO-authenticated principal. Local username/password login still
+# works at https://localhost:8443/LibreClinica/pages/login/login
+# (Apache bypass; LibreClinica's RequestHeaderAuthenticationFilter
+# falls through when no REMOTE_USER header is set).
+#
+# First-time setup with SAMLtest.id (one-time per SP):
+#   1. `docker compose -f compose.yaml -f docker-compose.sso.yml up apache-shib`
+#   2. Fetch your SP metadata:
+#      `curl -sk https://localhost:8443/Shibboleth.sso/Metadata > sp-metadata.xml`
+#   3. Upload sp-metadata.xml to https://samltest.id/upload.php
+#   4. Restart: `docker compose -f compose.yaml -f docker-compose.sso.yml restart apache-shib`
+#   5. Login flow now works end-to-end. Test users: morty/panic,
+#      rick/panic (see https://samltest.id/test-users).
+#
+# See docker/sso/README.md for the cookbook entries covering other
+# reverse-proxy choices (mod_auth_openidc, oauth2-proxy, AWS ALB,
+# Cloudflare Access).
+
+services:
+  apache-shib:
+    build:
+      context: ./docker/sso/apache-shib
+      dockerfile: Dockerfile
+    image: libreclinica-muw-apache-shib:dev
+    container_name: libreclinica-muw-apache-shib
+    depends_on:
+      - libreclinica
+    ports:
+      # Apache+mod_shib exposed on host 8443; Tomcat (libreclinica:8080)
+      # is NOT exposed publicly when this overlay is in use — see the
+      # libreclinica service override below.
+      - "127.0.0.1:8443:443"
+      - "127.0.0.1:8081:80"
+    environment:
+      # Override the IdP URL via env if pointing at a different test
+      # or production IdP. The Dockerfile's shibboleth2.xml template
+      # supports this via envsubst — operators rebuild the image
+      # with their institutional IdP entityID + metadata URL.
+      SHIB_IDP_ENTITY_ID: "${SHIB_IDP_ENTITY_ID:-https://samltest.id/saml/idp}"
+      SHIB_IDP_METADATA_URL: "${SHIB_IDP_METADATA_URL:-https://samltest.id/saml/idp}"
+
+  libreclinica:
+    # Override the host port mapping from compose.yaml so Tomcat is
+    # NOT directly reachable from the host — only via the Apache
+    # sidecar. This is the load-bearing assumption of D.3's
+    # TrustedProxyRequestHeaderAuthenticationFilter CIDR allowlist:
+    # if Tomcat is reachable directly, a malicious client could
+    # supply REMOTE_USER:root and bypass SSO entirely.
+    #
+    # NOTE: empty ports list overrides compose.yaml's
+    # 127.0.0.1:8080:8080 mapping. Tomcat is still reachable from
+    # the apache-shib container via the compose-internal network
+    # (DNS name `libreclinica`).
+    ports: !override []
+    # Auto-enable SSO when this overlay is active. Hosts may still
+    # override via shell env (`LIBRECLINICA_SSO_ENABLED=true docker
+    # compose -f compose.yaml -f docker-compose.sso.yml up`).
+    environment:
+      LIBRECLINICA_SSO_ENABLED: "${LIBRECLINICA_SSO_ENABLED:-true}"
