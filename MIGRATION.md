@@ -299,24 +299,52 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 
 ---
 
-## Phase D — Remaining library replacement
+## Phase D — Authentication modernization + library long-tail
 
-**Goal:** retire the abandoned-library long tail.
-**Timeline:** 2–3 months (can overlap C)
-**Risk:** medium per library — but they're independent so risk doesn't compound
+**Goal:** finish the security work the modernization started (MD5/SHA-1 → bcrypt; institution-agnostic SSO) and retire the abandoned-library long tail.
 
-| Library | Replacement | Touchpoints | Notes |
-|---------|------------|-----------|------|
-| Castor 1.4.1 | **Jakarta JAXB or Jackson XML** | ODM import/export (`odm` module, `ImportCRFDataServlet`, `ODMMetadataRestResource`) | **Forced by Phase B** — done as part of B. Listed here for completeness. |
-| iText 2.1.2 | **OpenPDF 1.4+** (LGPL fork of iText 4) or **Apache PDFBox 3.x** | PDF generation (audit logs, subject reports, CRF blank prints) | License-driven (post-2.1 iText is AGPL). OpenPDF is the drop-in replacement. |
-| Apache POI 3.0.1 | **Apache POI 5.3** | Excel CRF upload, Excel exports | API changes: HSSFWorkbook → XSSF in places. Surface area not huge. |
-| Apache FOP 1.0 | **Apache FOP 2.9** | XSL-FO → PDF (some reports) | |
-| Quartz 2.2.3 | **Quartz 2.5.0** | Scheduled jobs (cleanup, notifications, recurring exports) | |
-| GWT-compiled menu widget | **removed** — replace with vanilla HTML / framework-native nav | Top nav bar | GWT is abandoned. Compile artifact only; source presumably elsewhere. Treat as opaque static asset to be replaced. |
-| Prototype.js 1.6 / Scriptaculous | **removed** | ~20 JSP screens using `$()` / `Effect.*` | Either rewrite in vanilla JS or rely on jQuery 3 (already present via JMesa). |
-| EhCache 2.10 | **Ehcache 3 / JCache** (`javax.cache` → `jakarta.cache`) | Hibernate L2 cache | Re-evaluate need; consider Caffeine + JCache. |
-| log4jdbc4 1.2 (abandoned) | **log4jdbc-log4j2 1.16** or remove | SQL logging | Optional; only active in dev profiles. |
-| JMesa 2.4.2-oc (local OC fork) | **DataTables.net 2.x** (during Phase E) | All admin tables | Defer to UI phase. |
+**Timeline:** D-Sec ~1.5–2 weeks (sequential); D-Libs ~2–3 months (parallel; each lib is one PR).
+**Risk:** D-Sec medium-high (clinical auth surface); D-Libs medium per library, independent so risk doesn't compound.
+
+**Scope split** — Phase D bundles two distinct workstreams:
+
+### D-Sec — authentication modernization (primary, sequential)
+
+Production-deployment-blocking. Full plan: [phase-d-execution-playbook.md](docs/development/modernization/phase-d-execution-playbook.md). Pre-flight inventory: [phase-d-pre-flight-inventory.md](docs/development/modernization/phase-d-pre-flight-inventory.md).
+
+| Sub-phase | What | Risk |
+|-----------|------|------|
+| D.0 | Characterisation tests pinning current auth + audit-login flow | Low |
+| D.1 | `DelegatingPasswordEncoder` + bcrypt; legacy MD5/SHA-1 fallback + lazy rehash | Medium (per DR-015) |
+| D.2 | Liquibase: `user_account.external_id` + `external_id_provider` columns | Low |
+| D.3 | `RequestHeaderAuthenticationFilter` wired into `SecurityConfig` behind `libreclinica.sso.enabled` | Medium |
+| D.4 | `UserProvisioningStrategy` interface (`LookupOnlyStrategy` default; `JitProvisioningStrategy` opt-in) | Medium |
+| D.5 | `audit_user_login` enum + `LoginAuditService` extraction | Low |
+| D.6 | Login JSP affordance — configurable institutional-SSO button | Low |
+| D.7 | Docker compose `mod_shib` sidecar (MedUni Wien reference deployment) | Medium |
+| D.8 | SSO deployment cookbook (Shibboleth, OIDC, AWS ALB, Cloudflare Access, no-SSO) | Low (docs) |
+| D.9 | 2FA reconciliation — TOTP skipped for SSO-bound users | Low |
+| D.10 | E-signature re-auth scaffolding (flag OFF; production-deferred pending legal ratification) | Medium |
+| D.11 | Reconciliation + memory updates + lc-develop tag | — |
+
+**Architecture (DR-014 Accepted 2026-05-30):** institution-agnostic SSO via reverse-proxy pre-authentication. App speaks one in-app protocol — header-based pre-auth — and delegates the SSO protocol (SAML/OIDC/OAuth) entirely to the reverse-proxy choice. Provider swap = sidecar + env-var change; **never a code change**. MedUni Wien Shibboleth is the reference deployment; the same code supports Azure AD / Okta / Keycloak / AWS ALB OIDC / Cloudflare Access / no-SSO unchanged.
+
+### D-Libs — library long-tail (parallel, separately scheduled)
+
+Independent of D-Sec; one PR per library. Pick up opportunistically.
+
+| Library | Current | Replacement | Touchpoints | Notes |
+|---------|---------|-------------|-------------|-------|
+| Castor 1.4.1 | **REMOVED in B.3** | Jakarta JAXB 4 | (done) | Forced by Phase B. PRs #27/#28. |
+| iText | **2.1.2** | OpenPDF 1.4+ (LGPL fork) or PDFBox 3.x | PDF generation (audit logs, subject reports, CRF blank prints) | License-driven (post-2.1 iText is AGPL). OpenPDF is the drop-in replacement. See DR-007. |
+| Apache POI | 3.0.1 (legacy refs) | **POI 5.3+** | Excel CRF upload, Excel exports — `SpreadsheetPreview`, `SpreadSheetTable*`, `CreateCRFVersionServlet` | API changes: HSSFWorkbook → XSSF in places. |
+| Apache FOP | 1.0 (legacy refs) | **FOP 2.9+** | XSL-FO → PDF reports | |
+| Quartz | 2.2.3 baseline | **Quartz 2.5.0** | Scheduled jobs (cleanup, notifications, recurring exports) | Now pinned at Spring Boot's managed version after Phase C.5; verify before bumping. |
+| GWT-compiled menu widget | nocache.js at `web/src/main/webapp/gwt/GwtMenu/` | **removed** — vanilla HTML / framework-native nav | Top nav bar | GWT abandoned. Phase E may subsume. |
+| Prototype.js + Scriptaculous | 1.6 / unversioned | **removed** | ~20 JSP screens using `$()` / `Effect.*` | Rewrite in vanilla JS. (JMesa removed in B.4 so jQuery is no longer transitively available.) |
+| EhCache | **3.10.8** (already on EhCache 3 post B.5) | (stay) or Caffeine + JCache | Hibernate L2 cache | See DR-013. |
+| log4jdbc4 | 1.2 (abandoned) | log4jdbc-log4j2 1.16 or remove | SQL logging (dev profiles only) | Optional. |
+| JMesa | **REMOVED in B.4** | DataTables.net + vanilla JS | (done — 9 cohort PRs #32–#49) | Phase B eviction; ~5000 LOC retired. |
 
 **Per-library protocol:** characterization tests first → replacement library introduced behind interface → switch over → delete old dep. One library per PR, never bundle replacements.
 
