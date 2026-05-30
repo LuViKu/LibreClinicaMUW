@@ -14,6 +14,7 @@ import java.util.List;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.audit.LoginAuditService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.UserProvisioningStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,16 +55,23 @@ public class SsoUserDetailsService implements
 
     private final UserProvisioningStrategy provisioningStrategy;
     private final SsoProperties ssoProperties;
+    private final LoginAuditService loginAuditService;
 
     /**
      * Phase D.4 (DR-014): delegates miss-handling to a pluggable
      * {@link UserProvisioningStrategy} (LOOKUP_ONLY default;
      * JIT opt-in via {@code libreclinica.sso.provisioning.strategy}).
+     *
+     * <p>Phase D.5 (DR-014): writes audit_user_login rows for both
+     * SSO_LOGIN (success) and SSO_LOGIN_FAILED (provisioning reject)
+     * via the shared {@link LoginAuditService}.
      */
     public SsoUserDetailsService(UserProvisioningStrategy provisioningStrategy,
-                                 SsoProperties ssoProperties) {
+                                 SsoProperties ssoProperties,
+                                 LoginAuditService loginAuditService) {
         this.provisioningStrategy = provisioningStrategy;
         this.ssoProperties = ssoProperties;
+        this.loginAuditService = loginAuditService;
     }
 
     /**
@@ -95,8 +103,17 @@ public class SsoUserDetailsService implements
         // provisioning would feed in here. Empty map is fine for
         // LOOKUP_ONLY (the default); JIT enrichment will read from
         // the request via a future filter extension.
-        UserAccountBean user = provisioningStrategy.resolveOrProvision(
-                provider, principal, Collections.<String, String>emptyMap());
+        UserAccountBean user;
+        try {
+            user = provisioningStrategy.resolveOrProvision(
+                    provider, principal, Collections.<String, String>emptyMap());
+        } catch (UsernameNotFoundException reject) {
+            // D.5: provisioning strategy rejected — audit the
+            // failure so operators can see the rejected principal
+            // in the audit-log report.
+            loginAuditService.recordSsoFailure(principal, provider);
+            throw reject;
+        }
 
         if (user == null || user.getId() <= 0) {
             // Defensive: strategies SHOULD throw rather than return null
@@ -105,10 +122,14 @@ public class SsoUserDetailsService implements
             log.warn("Provisioning strategy returned null for principal"
                     + " '{}' (provider='{}') — treating as reject",
                     principal, provider);
+            loginAuditService.recordSsoFailure(principal, provider);
             throw new UsernameNotFoundException(
                     "Provisioning strategy returned no user for SSO"
                             + " principal '" + principal + "'");
         }
+
+        // D.5: successful pre-auth → SSO_LOGIN audit row.
+        loginAuditService.recordSsoSuccess(user, principal);
 
         // Map to Spring Security User. Authorities default to the
         // configured role from libreclinica.sso.provisioning.default-role.

@@ -12,7 +12,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.LegacyMd5Sha1PasswordEncoder;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuditUserLoginDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.audit.LoginAuditService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.PasswordRehashService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -97,5 +99,18 @@ public class PasswordEncoderConfig {
             PasswordEncoder passwordEncoder,
             UserAccountDAO userAccountDao) {
         return new PasswordRehashService(passwordEncoder, userAccountDao);
+    }
+
+    /**
+     * Phase D.5 (DR-014): shared audit-write hook for all auth
+     * paths (local username/password, LDAP, SSO pre-auth). Replaces
+     * the inline auditUserLogin() private method on
+     * OpenClinicaUsernamePasswordAuthenticationFilter so the
+     * audit-trail contract holds uniformly across both the existing
+     * local path and the new SSO pre-auth path.
+     */
+    @Bean
+    public LoginAuditService loginAuditService(AuditUserLoginDao auditUserLoginDao) {
+        return new LoginAuditService(auditUserLoginDao);
     }
 }

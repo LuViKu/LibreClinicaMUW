@@ -65,19 +65,18 @@ public class LoginStatusWireCodeTest {
     }
 
     /**
-     * Phase D.5 will add codes 6 + 7. Pinning that those codes are NOT
-     * yet present makes the failure on accidental backports of D.5 work
-     * to a pre-D.5 baseline obvious.
+     * Phase D.5 (landed 2026-05-30): codes 6 + 7 are now assigned.
+     * Pin the new wire codes so any future re-numbering surfaces
+     * here.
      */
     @Test
-    public void d5ReservedCodesNotYetAssigned() {
-        assertNotNull("getByCode for an unassigned code returns null,"
-                + " not a default enum value", LoginStatus.getByCode(1));
-        // Before D.5: codes 6 + 7 are unassigned. After D.5 lands, this
-        // test extends to assert SSO_LOGIN(6) + SSO_LOGIN_FAILED(7).
-        org.junit.Assert.assertNull("code 6 reserved for D.5 SSO_LOGIN",
-                LoginStatus.getByCode(6));
-        org.junit.Assert.assertNull("code 7 reserved for D.5 SSO_LOGIN_FAILED",
-                LoginStatus.getByCode(7));
+    public void d5SsoCodesAssigned() {
+        assertNotNull(LoginStatus.SSO_LOGIN);
+        assertEquals("SSO_LOGIN must be code 6",
+                Integer.valueOf(6), LoginStatus.SSO_LOGIN.getCode());
+        assertEquals("SSO_LOGIN_FAILED must be code 7",
+                Integer.valueOf(7), LoginStatus.SSO_LOGIN_FAILED.getCode());
+        assertSame(LoginStatus.SSO_LOGIN, LoginStatus.getByCode(6));
+        assertSame(LoginStatus.SSO_LOGIN_FAILED, LoginStatus.getByCode(7));
     }
 }

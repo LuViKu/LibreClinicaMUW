@@ -42,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.AuditUserLoginBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.LoginStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.audit.LoginAuditService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.PasswordRehashService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.MailNotificationService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
@@ -92,6 +93,7 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
     private CRFLocker crfLocker;
     private MailNotificationService mailNotificationService;
     private PasswordRehashService passwordRehashService;
+    private LoginAuditService loginAuditService;
 
     public OpenClinicaUsernamePasswordAuthenticationFilter() {
         super("/j_spring_security_check");
@@ -112,6 +114,16 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
      */
     public void setPasswordRehashService(PasswordRehashService passwordRehashService) {
         this.passwordRehashService = passwordRehashService;
+    }
+
+    /**
+     * Phase D.5 (DR-014): wire the shared audit-write service. The
+     * filter delegates auditUserLogin() to this service so the
+     * local-password path and the SSO pre-auth path write through
+     * the same code.
+     */
+    public void setLoginAuditService(LoginAuditService loginAuditService) {
+        this.loginAuditService = loginAuditService;
     }
 
     @Override
@@ -211,7 +223,19 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
         }
     }
 
+    /**
+     * Phase D.5 (DR-014): delegates to the shared {@link LoginAuditService}
+     * if wired; falls back to the legacy inline DAO write for
+     * deployments that don't have the new service registered (e.g.
+     * older IT setups). Preserves the legacy contract exactly:
+     * user_account_id null when user is null or not active.
+     */
     private void auditUserLogin(String username, LoginStatus loginStatus, UserAccountBean userAccount) {
+        if (loginAuditService != null) {
+            loginAuditService.recordLocalAttempt(username, loginStatus, userAccount);
+            return;
+        }
+        // Legacy fallback path — pre-D.5 wiring.
         AuditUserLoginBean auditUserLogin = new AuditUserLoginBean();
         auditUserLogin.setUserName(username);
         auditUserLogin.setLoginStatus(loginStatus);

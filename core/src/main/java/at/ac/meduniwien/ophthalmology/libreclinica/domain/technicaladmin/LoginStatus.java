@@ -23,8 +23,20 @@ import java.util.ResourceBundle;
 
 public enum LoginStatus implements CodedEnum {
 
-    SUCCESSFUL_LOGIN(1, "successful_login"), FAILED_LOGIN(2, "failed_login"), FAILED_LOGIN_LOCKED(3, "failed_login_locked"), SUCCESSFUL_LOGOUT(4,
-            "successful_logout"),ACCESS_CODE_VIEWED(5,"access_code_viewed");
+    SUCCESSFUL_LOGIN(1, "successful_login"),
+    FAILED_LOGIN(2, "failed_login"),
+    FAILED_LOGIN_LOCKED(3, "failed_login_locked"),
+    SUCCESSFUL_LOGOUT(4, "successful_logout"),
+    ACCESS_CODE_VIEWED(5, "access_code_viewed"),
+    // Phase D.5 (DR-014): SSO pre-auth audit codes. SSO_LOGIN fires
+    // when the RequestHeaderAuthenticationFilter +
+    // PreAuthenticatedAuthenticationProvider successfully resolves
+    // the principal to a LibreClinica user. SSO_LOGIN_FAILED fires
+    // when the principal header is present (from a trusted upstream)
+    // but the UserProvisioningStrategy rejects (LOOKUP_ONLY miss, JIT
+    // policy violation, etc.).
+    SSO_LOGIN(6, "sso_login"),
+    SSO_LOGIN_FAILED(7, "sso_login_failed");
 
     private int code;
     private String description;

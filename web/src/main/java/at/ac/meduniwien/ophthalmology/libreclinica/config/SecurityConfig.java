@@ -20,6 +20,7 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.audit.LoginAuditService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.JitProvisioningStrategy;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LookupOnlyProvisioningStrategy;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.UserProvisioningStrategy;
@@ -71,7 +72,10 @@ public class SecurityConfig {
             // only attached when libreclinica.sso.enabled=true;
             // otherwise the auth flow is identical to D.2 closure.
             SsoProperties ssoProperties,
-            UserAccountDAO userAccountDao) throws Exception {
+            UserAccountDAO userAccountDao,
+            // Phase D.5 (DR-014): shared audit-write hook for both
+            // local-password and SSO pre-auth paths.
+            LoginAuditService loginAuditService) throws Exception {
 
         http
             .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
@@ -155,7 +159,7 @@ public class SecurityConfig {
                     break;
             }
             SsoUserDetailsService ssoUserDetailsService =
-                    new SsoUserDetailsService(strategy, ssoProperties);
+                    new SsoUserDetailsService(strategy, ssoProperties, loginAuditService);
             PreAuthenticatedAuthenticationProvider provider =
                     new PreAuthenticatedAuthenticationProvider();
             provider.setPreAuthenticatedUserDetailsService(ssoUserDetailsService);

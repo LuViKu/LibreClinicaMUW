@@ -58,6 +58,11 @@
              rewrites as bcrypt while the plaintext is still in scope.
              Bean defined by PasswordEncoderConfig (core). -->
         <property name="passwordRehashService" ref="passwordRehashService"/>
+        <!-- Phase D.5 (DR-014): shared audit-write hook. Filter
+             delegates auditUserLogin() to this service so the local
+             path and the SSO pre-auth path write through the same
+             code. -->
+        <property name="loginAuditService" ref="loginAuditService"/>
     </bean>
     
     <bean id="successHandler" class="org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler" >
