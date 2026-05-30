@@ -496,10 +496,19 @@
     <logger additivity="false" name="jdbc.sqltiming">
         <level value="${logLevel}"/>
         <appender-ref ref="DB_LOGFILE"/>
-    </logger>	
+    </logger>
 
+  <!-- Phase E.0 (2026-05-30): permanent root → CONSOLE at INFO. This
+       was previously commented out, hiding all framework init logs;
+       under LoggingSystem=none (set in the Dockerfile to skip Boot's
+       LogbackLoggingSystem), no diagnostic signal was reachable. The
+       Phase E.0 pages-dispatcher diagnosis depended on getting Spring
+       init lines back into docker logs. Kept at INFO post-fix so future
+       diagnoses don't repeat the fly-blind cycle. Framework-specific
+       DEBUG loggers used during the diagnosis itself were dropped once
+       the routing fix landed. -->
   <root>
-    <!-- <level value="INFO" />
-    <appender-ref ref="CONSOLE"/> -->
+    <level value="INFO"/>
+    <appender-ref ref="CONSOLE"/>
   </root>
 </configuration>
