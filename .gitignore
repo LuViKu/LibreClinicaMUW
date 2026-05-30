@@ -11,6 +11,18 @@ target/
 # jakarta-XJC support for the multi-schema ODM tree, then re-add
 # this gitignore entry.
 odm/target/
+
+# Phase D-Sec audit (2026-05-30, follow-up): jaxb2-maven-plugin's
+# "episode" files accumulate one per local mvn run
+# (`episode_schemas-generate_<N>.xjb`). The first 12 were committed
+# alongside the .java binding classes in `5d4932481`; further-numbered
+# ones are local build state that should NOT be tracked. CI does not
+# need them (each CI run is fresh; xjc reads the schemas, not the
+# episode files). The .java binding classes are source-of-truth and
+# stay committed. This pattern doesn't un-track the first 12 (git
+# never removes a tracked file because of a gitignore rule).
+odm/src/main/java/META-INF/JAXB/episode_schemas-generate_*.xjb
+
 pom.xml.tag
 pom.xml.releaseBackup
 pom.xml.versionsBackup
