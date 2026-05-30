@@ -8,7 +8,9 @@ Each entry should resolve to either:
 
 ---
 
-## 1. `/pages/login/login` returns HTTP 500
+## 1. `/pages/login/login` returns HTTP 500 → superseded by Phase D.6 fix → re-surfaced as HTTP 404
+
+**Status as of 2026-05-30:** **SUPERSEDED.** The 500 was resolved by Phase D.6 commit `b786c68c0` (duplicate `MappingJackson2HttpMessageConverter` qualified). A **different P0 — a 404 on the same URL** — surfaced in the [post-Phase-D UI validation](post-phase-d-ui-validation.md) and is the Phase E.0 entry blocker. The 404 has a distinct root cause: the `pages` DispatcherServlet child-context isn't owning the `BeanNameUrlHandlerMapping` + `@Controller` registrations because Spring Boot's root `@ComponentScan` is competing for them. The narrative below is retained for historical context only — for the current issue see the validation report.
 
 **Surfaced:** 2026-05-28, by the compose smoke test fix verification ([commit `b75a2c287`](../../..)).
 **Symptom:** `docker compose up --build` deploys the WAR successfully; `curl -I http://127.0.0.1:8080/LibreClinica/` returns `HTTP 302 Location: /LibreClinica/pages/login/login`; following the redirect (`curl -L`) yields **HTTP 500** with a 6 165-byte error body.
