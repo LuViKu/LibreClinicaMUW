@@ -129,7 +129,19 @@ public class SecurityConfig {
                         // application.yml — anonymous probes see status only.
                         "/actuator/health",
                         "/actuator/health/**",
-                        "/actuator/info"
+                        "/actuator/info",
+                        // Phase D.10 (DR-014): e-signature re-auth
+                        // scaffolding endpoint. Always permits — the
+                        // reverse proxy may strip the existing session
+                        // before re-challenge, so the 302 emitter
+                        // doesn't need a LibreClinica session. The
+                        // production-readiness of this path is gated
+                        // by libreclinica.sso.reauth.enabled (default
+                        // false); the endpoint itself is always
+                        // wired so a future Sign Subject controller
+                        // can invoke it when legal/regulatory
+                        // ratifies proxy-mediated §11.50 e-signatures.
+                        "/sso/reauth"
                 )).permitAll()
                 .anyRequest().hasRole("USER")
             )
