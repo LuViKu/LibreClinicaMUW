@@ -24,16 +24,21 @@ import org.apache.commons.dbcp.BasicDataSource;
 import org.apache.commons.io.IOUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.stereotype.Component;
 
 import com.google.common.annotations.VisibleForTesting;
 
 /**
  * Service class providing access to E-Mail notification related use cases.
- * 
+ *
+ * <p>Phase C.6 (2026-05-30): {@code @Component("mailNotificationService")}
+ * was retired. {@link at.ac.meduniwien.ophthalmology.libreclinica.config.MailConfig}
+ * owns the {@code mailNotificationService} bean now as an explicit
+ * {@code @Bean} (replacing the legacy XML bean). With both registrations
+ * Boot 3.x's strict {@code allow-bean-definition-overriding=false}
+ * threw on conflict.
+ *
  * @author jbley
  */
-@Component("mailNotificationService")
 public class MailNotificationService {
     @Autowired
     private OpenClinicaMailSender mailSender;

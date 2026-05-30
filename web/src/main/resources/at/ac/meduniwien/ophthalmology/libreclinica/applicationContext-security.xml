@@ -150,8 +150,12 @@
     <property name="odmJaxbContext" ref="odmJaxbContext"/>
 </bean>
 
-<bean id="openRosaSubmissionController" class="at.ac.meduniwien.ophthalmology.libreclinica.controller.openrosa.OpenRosaSubmissionController" autowire="byName">
-</bean>
+<!-- Phase C.6 (2026-05-30): openRosaSubmissionController bean retired
+     here. The class is @Controller and gets component-scanned into the
+     ROOT context by <context:component-scan base-package=".controller.openrosa"/>
+     in applicationContext-core-service.xml — the ref="openRosaSubmissionController"
+     in openRosaServices above resolves to that scan-registered bean. -->
+
 
 
 </beans>

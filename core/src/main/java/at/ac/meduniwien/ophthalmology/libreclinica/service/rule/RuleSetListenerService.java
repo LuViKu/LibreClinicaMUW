@@ -29,8 +29,13 @@ public class RuleSetListenerService implements ApplicationListener<OnStudyEventU
 
     protected final Logger LOGGER = LoggerFactory.getLogger(getClass().getName());
 
+	// Phase C.6 (2026-05-30): @Autowired so the @Service bean's setters
+	// fire without the legacy XML <property name="..." ref="..."/> wiring
+	// in applicationContext-core-service.xml.
+	@org.springframework.beans.factory.annotation.Autowired
 	private RuleSetService ruleSetService;
 
+	@org.springframework.beans.factory.annotation.Autowired
 	private RuleSetDao ruleSetDao;
 
 

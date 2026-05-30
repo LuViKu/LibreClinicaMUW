@@ -113,7 +113,12 @@ import org.springframework.context.annotation.ImportResource;
         "classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-core-timer.xml",
         "classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-security.xml",
         "classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-web-beans.xml",
-        "classpath:at/ac/meduniwien/ophthalmology/libreclinica/application-context-web-beans.xml",
+        // Phase C.6 (2026-05-30): application-context-web-beans.xml (note the
+        // dash variant in the filename) was a near-exact duplicate of
+        // applicationContext-web-beans.xml — both defined the sdvUtil bean.
+        // The legacy ContextLoaderListener with permissive overriding
+        // silently tolerated the duplicate; Boot 3.x's
+        // allow-bean-definition-overriding=false rejects it.
 })
 public class LibreClinicaApplication extends SpringBootServletInitializer {
 

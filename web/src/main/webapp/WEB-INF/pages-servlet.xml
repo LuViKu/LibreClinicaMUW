@@ -1,86 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<beans
-        xmlns="http://www.springframework.org/schema/beans"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xmlns:p="http://www.springframework.org/schema/p"
-        xmlns:context="http://www.springframework.org/schema/context"
-        xmlns:mvc="http://www.springframework.org/schema/mvc"
-        xmlns:oxm="http://www.springframework.org/schema/oxm"
-        xmlns:util="http://www.springframework.org/schema/util"
-        xsi:schemaLocation="
-            http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans.xsd
-            http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
-            http://www.springframework.org/schema/mvc http://www.springframework.org/schema/mvc/spring-mvc.xsd
-            http://www.springframework.org/schema/util http://www.springframework.org/schema/util/spring-util.xsd
-            http://www.springframework.org/schema/oxm http://www.springframework.org/schema/oxm/spring-oxm.xsd">
 
-    <!-- Simple redirects to internal resources; URL path substring becomes view name (e.g. '/login.htm' -> 'login') -->
-    <bean name="/login/login" class="org.springframework.web.servlet.mvc.UrlFilenameViewController" />
-    <bean name="/denied" class="org.springframework.web.servlet.mvc.UrlFilenameViewController"/>
-    
-    <bean class="org.springframework.web.servlet.mvc.SimpleControllerHandlerAdapter" />
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd
+                           http://www.springframework.org/schema/context
+                           http://www.springframework.org/schema/context/spring-context.xsd">
 
-    <!-- Scans the classpath of this application for @Components to deploy as beans -->
-    <context:component-scan base-package="at.ac.meduniwien.ophthalmology.libreclinica.controller" />
+    <!--
+        Phase C.11 (2026-05-30): the DispatcherServlet child context's bean
+        graph is now defined in
+        at.ac.meduniwien.ophthalmology.libreclinica.config.WebMvcConfig.
+        This file is kept as a one-line stub so the legacy `pages`
+        DispatcherServlet (declared in web.xml without a contextConfigLocation
+        init-param) finds its default config path `/WEB-INF/pages-servlet.xml`.
 
-    <bean class="at.ac.meduniwien.ophthalmology.libreclinica.controller.SidebarInit" name="sidebarInit">
-        <property name="alertsBoxSetup" value="OPENALERTS" />
-        <property name="enableIconsBoxSetup" value="DISABLEICONS"/>
-        <property name="infoBoxSetup" value="OPENINFO" />
-        <property name="instructionsBoxSetup" value="OPENINSTRUCTIONS"/>
-    </bean>
+        <context:annotation-config/> activates ConfigurationClassPostProcessor
+        for the @Configuration class below — the DispatcherServlet's child
+        context doesn't inherit the root context's annotation processors,
+        so we register them locally.
+    -->
+    <context:annotation-config/>
 
-    <bean name="setUpUserInterceptor" class="at.ac.meduniwien.ophthalmology.libreclinica.controller.helper.SetUpUserInterceptor">
-    	<property name="dataSource" ref="dataSource"/>
-    </bean>
-
-    <!-- Phase B.4 jmesa PR 7b (cohort 5b): sdvFactory bean deleted along
-         with the SubjectIdSDVFactory class. SDVController now exposes
-         /viewSubjectAggregateData as a JSON endpoint. -->
-   
-   
-    <!-- Phase B.4 jmesa PR 7c (cohort 5c): scheduledJobTableFactory bean
-         deleted along with the class. ScheduledJobController now
-         emits JSON at /pages/listCurrentScheduledJobsData. -->
-
-    <oxm:jaxb2-marshaller id="jaxbMarshaller" context-path="org.cdisc.ns.odm.v130:org.cdisc.ns.odm.v130_api:org.openclinica.ns.odm_ext_v130.v31_api:org.openclinica.ns.odm_ext_v130.v31:org.openclinica.ns.rules.v31:org.openclinica.ns.response.v31:org.openclinica.ns.rules_test.v31"/>
-    
-    <bean id="marshallingHttpMessageConverter"  class="org.springframework.http.converter.xml.MarshallingHttpMessageConverter">
-        <property name="marshaller" ref="jaxbMarshaller" />
-        <property name="unmarshaller" ref="jaxbMarshaller" />
-        <property name="supportedMediaTypes" value="application/xml"/>
-    </bean>
-    
-    <bean id="stringHttpMessageConverter" class="org.springframework.http.converter.StringHttpMessageConverter"/>
- 
-    <bean id="jacksonMessageConverter" class="org.springframework.http.converter.json.MappingJackson2HttpMessageConverter">
-        <property name="supportedMediaTypes" value="application/json"/>
-    </bean>
-
-    <bean class="org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping"/>
-    
-    <bean class="org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerAdapter">
-        <property name="messageConverters">
-            <util:list id="beanList">
-                <ref bean="marshallingHttpMessageConverter"/>
-                <ref bean="jacksonMessageConverter"/>
-            </util:list>
-        </property>
-    </bean>
-    
-    <!-- This tag registers the DefaultAnnotationHandlerMapping and AnnotationMethodHandlerAdapter 
-         beans that are required for Spring MVC to dispatch requests to @Controllers.
-         KK - commented this out and manually created the beans to configure converters. 
-    <mvc:annotation-driven />  
-    --> 
-	
-	<bean class="org.springframework.web.servlet.handler.BeanNameUrlHandlerMapping"/>
-	
-    
-    <!-- Resolves logical view names to JSP views -->
-    <bean class="org.springframework.web.servlet.view.InternalResourceViewResolver" id="internalViewResolver"
-          p:prefix="/WEB-INF/jsp/" p:suffix=".jsp" />
-         
-     
+    <bean class="at.ac.meduniwien.ophthalmology.libreclinica.config.WebMvcConfig"/>
 
 </beans>

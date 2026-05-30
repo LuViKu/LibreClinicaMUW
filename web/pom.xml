@@ -95,6 +95,15 @@
 			<artifactId>spring-orm</artifactId>
 		</dependency>
 		<dependency>
+			<!-- Phase C.11 (2026-05-30): WebMvcConfig uses
+			     org.springframework.oxm.jaxb.Jaxb2Marshaller for the CDISC ODM
+			     REST endpoints. Parent's dependencyManagement pins runtime
+			     scope; override to compile so the import resolves. -->
+			<groupId>org.springframework</groupId>
+			<artifactId>spring-oxm</artifactId>
+			<scope>compile</scope>
+		</dependency>
+		<dependency>
 			<!-- Direct use: EnketoAPI, PFormCache (PasswordEncoder + codec.Hex). -->
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-crypto</artifactId>

@@ -90,10 +90,12 @@
         <constructor-arg ref="dataSource"/>
     </bean>
 
-    <bean id="ruleSetListenerService" class="at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetListenerService">
-        <property name="ruleSetService" ref="ruleSetService"/>
-        <property name="ruleSetDao" ref="ruleSetDao"/>
-    </bean>
+    <!-- Phase C.6 (2026-05-30): ruleSetListenerService bean retired.
+         The class is @Service-annotated and picked up by the
+         <context:component-scan base-package=".service"/> in
+         applicationContext-core-spring.xml. Setter @Autowired added
+         on the class. -->
+
 
     <bean id="generateExtractFileService" class="at.ac.meduniwien.ophthalmology.libreclinica.service.extract.GenerateExtractFileService">
         <constructor-arg ref="dataSource"/>
@@ -143,9 +145,10 @@
        <constructor-arg ref="dataSource"/>
     </bean>
 
-    <bean id="factorService" class="at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService">
-       <property name="coreResources" ref="coreResources" />
-    </bean>
+    <!-- Phase C.6 (2026-05-30): factorService bean retired. TwoFactorService
+         is @Component("factorService"). Setter @Autowired added on the
+         coreResources field. -->
+
     
     <context:component-scan base-package="at.ac.meduniwien.ophthalmology.libreclinica.controller.openrosa"/>
 </beans>

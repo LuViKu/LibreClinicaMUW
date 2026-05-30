@@ -59,7 +59,11 @@ public class TwoFactorService {
     @VisibleForTesting
     static final String TWO_FACTOR_ACTIVATED_SETTING = "2fa.activated";
     private final CodeVerifier verifier = new DefaultCodeVerifier(new DefaultCodeGenerator(), new SystemTimeProvider());
+    // Phase C.6 (2026-05-30): @Autowired added so the @Component("factorService")
+    // bean injects coreResources without needing the legacy XML
+    // <bean id="factorService"><property name="coreResources" ref="coreResources"/></bean>.
     @VisibleForTesting
+    @org.springframework.beans.factory.annotation.Autowired
     CoreResources coreResources;
 
     public void setCoreResources(CoreResources coreResources) {
