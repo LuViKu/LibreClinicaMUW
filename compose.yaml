@@ -10,6 +10,25 @@ services:
       - "127.0.0.1:8080:8080"
     depends_on:
       - db
+    # Phase D.3 (DR-014): forward libreclinica.sso.* env vars from the
+    # host shell so deployments can flip SSO on/off and override
+    # institutional defaults (provider name, trusted-proxy CIDRs,
+    # button label, etc.) without rebuilding the image. All keys
+    # default to safe values in application.yml; the `:-` fallbacks
+    # here let `docker compose up` work with none set on the host.
+    environment:
+      LIBRECLINICA_SSO_ENABLED: "${LIBRECLINICA_SSO_ENABLED:-false}"
+      LIBRECLINICA_SSO_PRINCIPAL_HEADER: "${LIBRECLINICA_SSO_PRINCIPAL_HEADER:-REMOTE_USER}"
+      LIBRECLINICA_SSO_EMAIL_HEADER: "${LIBRECLINICA_SSO_EMAIL_HEADER:-mail}"
+      LIBRECLINICA_SSO_DISPLAY_NAME_HEADER: "${LIBRECLINICA_SSO_DISPLAY_NAME_HEADER:-displayName}"
+      LIBRECLINICA_SSO_PROVIDER: "${LIBRECLINICA_SSO_PROVIDER:-shibboleth-meduniwien}"
+      LIBRECLINICA_SSO_PROVISIONING: "${LIBRECLINICA_SSO_PROVISIONING:-LOOKUP_ONLY}"
+      LIBRECLINICA_SSO_DEFAULT_ROLE: "${LIBRECLINICA_SSO_DEFAULT_ROLE:-ROLE_USER}"
+      LIBRECLINICA_SSO_TRUSTED_CIDRS: "${LIBRECLINICA_SSO_TRUSTED_CIDRS:-127.0.0.1/32,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16}"
+      LIBRECLINICA_SSO_ENTRY_URL: "${LIBRECLINICA_SSO_ENTRY_URL:-/sso/login}"
+      LIBRECLINICA_SSO_BUTTON_LABEL: "${LIBRECLINICA_SSO_BUTTON_LABEL:-Sign in with Institutional Account}"
+      LIBRECLINICA_SSO_DELEGATE_MFA: "${LIBRECLINICA_SSO_DELEGATE_MFA:-true}"
+      LIBRECLINICA_SSO_REAUTH: "${LIBRECLINICA_SSO_REAUTH:-false}"
     develop:
       watch:
         # restart on config file changes
