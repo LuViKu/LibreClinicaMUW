@@ -2,7 +2,16 @@
 Generate LegacyServletRegistry.java from web.xml.
 
 Reads the 222 <servlet> + <servlet-mapping> entries and emits one
-@Bean ServletRegistrationBean per servlet. Output goes to:
+ServletContextInitializer @Bean that registers each legacy servlet via
+ServletContext.addServlet(name, Class) for LAZY instantiation —
+matches the legacy web.xml lifecycle (Tomcat creates the servlet
+instance on first request, after the application context is fully
+initialised). Pre-instantiating via `new ServletRegistrationBean(new
+ServletClass())` at @Bean creation time fires the servlets' static
+initializers too early — e.g., CreateDiscrepancyNoteServlet's static
+resexception ResourceBundle reference NPEs.
+
+Output goes to:
   web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/config/LegacyServletRegistry.java
 """
 
@@ -37,28 +46,32 @@ for m in mappings:
     if name and name.group(1).strip() in servlet_map:
         servlet_map[name.group(1).strip()]['urls'].extend(urls)
 
-# Filter: skip the `pages` DispatcherServlet (stays in web.xml's <servlet>),
-# skip the `ws` MessageDispatcherServlet (zombie — verify before deleting),
-# skip the 2 Jersey servlets (zombies).
+DEAD_SERVLET_CLASSES = {
+    'at.ac.meduniwien.ophthalmology.libreclinica.control.urlRewrite.UrlRewriteServlet',
+    'at.ac.meduniwien.ophthalmology.libreclinica.web.openrosa.OpenRosaFormDownloadServlet',
+    'at.ac.meduniwien.ophthalmology.libreclinica.control.submit.DataEntryServlet',  # abstract
+}
+
 skipped = set()
 for n, d in servlet_map.items():
     if d['cls'] == 'org.springframework.web.servlet.DispatcherServlet':
         skipped.add(n)
-    elif 'spring.ws' in d['cls'] or 'jersey' in d['cls'].lower():
+    elif d['cls'].startswith('org.springframework.ws.') or 'jersey' in d['cls'].lower():
+        skipped.add(n)
+    elif d['cls'] in DEAD_SERVLET_CLASSES:
         skipped.add(n)
 
-# Collect needed imports (classes referenced in @Bean methods)
 imports = set()
 for n, d in servlet_map.items():
     if n in skipped:
         continue
     imports.add(d['cls'])
 
-# Generate java
 lines = []
 lines.append('package at.ac.meduniwien.ophthalmology.libreclinica.config;')
 lines.append('')
-lines.append('import org.springframework.boot.web.servlet.ServletRegistrationBean;')
+lines.append('import jakarta.servlet.ServletRegistration;')
+lines.append('import org.springframework.boot.web.servlet.ServletContextInitializer;')
 lines.append('import org.springframework.context.annotation.Bean;')
 lines.append('import org.springframework.context.annotation.Configuration;')
 lines.append('')
@@ -66,30 +79,38 @@ for cls in sorted(imports):
     lines.append(f'import {cls};')
 lines.append('')
 lines.append('/**')
-lines.append(' * Phase C.16 (2026-05-30): Java replacement for the 218 legacy LibreClinica')
-lines.append(' * servlet declarations in {@code web.xml}. Each {@code @Bean ServletRegistrationBean}')
-lines.append(' * mirrors one {@code <servlet>} + {@code <servlet-mapping>} pair from the')
-lines.append(' * pre-cliff web.xml. Generated mechanically from the auto-generated')
-lines.append(' * inventory at')
-lines.append(' * {@code docs/development/modernization/phase-c14-web-xml-inventory.md}.')
+lines.append(' * Phase C.16 (2026-05-30): Java replacement for the 215 legacy LibreClinica')
+lines.append(' * servlet declarations in {@code web.xml}. Single')
+lines.append(' * {@link ServletContextInitializer} @Bean registers each legacy servlet via')
+lines.append(' * {@code ServletContext.addServlet(name, Class)} — Tomcat then')
+lines.append(' * <strong>lazily</strong> instantiates the servlet on its first request,')
+lines.append(' * matching the original web.xml lifecycle. Pre-instantiating via')
+lines.append(' * {@code new ServletRegistrationBean(new MyServlet())} at @Bean creation')
+lines.append(' * time fires servlet static initializers too early (some reference')
+lines.append(' * ResourceBundles loaded later by the application context — e.g.')
+lines.append(' * {@code CreateDiscrepancyNoteServlet.resexception}).')
 lines.append(' * <p>')
 lines.append(' * Skipped:')
 lines.append(' * <ul>')
 lines.append(' *   <li>{@code pages} ({@code DispatcherServlet}) — stays as a {@code <servlet>}')
-lines.append(' *       entry in {@code web.xml} until C.16 finishes the WAR→JAR flip; serves')
-lines.append(' *       its child context via {@code config.WebMvcConfig}.</li>')
+lines.append(' *       entry in {@code web.xml}; loads pages-servlet.xml → WebMvcConfig.</li>')
 lines.append(' *   <li>{@code ws} ({@code MessageDispatcherServlet}) + {@code OpenClinicaJersey} /')
-lines.append(' *       {@code OpenClinicaJersey2} ({@code SpringServlet}) — flagged as zombie')
-lines.append(' *       candidates in the cliff inventory; the underlying frameworks fail to')
-lines.append(' *       link against jakarta.servlet 6 ({@code NoClassDefFoundError: javax.servlet.Filter}).')
-lines.append(' *       Tomcat marks them unavailable at deploy time. They stay as web.xml')
-lines.append(' *       entries (Tomcat skips the broken servlets gracefully) until verified')
-lines.append(' *       as unused and removed in a follow-up.</li>')
+lines.append(' *       {@code OpenClinicaJersey2} ({@code SpringServlet}) — zombies; underlying')
+lines.append(' *       frameworks reference javax.servlet.Filter and fail to link against')
+lines.append(' *       jakarta.servlet 6. Tomcat marked them unavailable at deploy time.</li>')
+lines.append(' *   <li>{@code DataEntryServlet} — abstract; concrete subclasses')
+lines.append(' *       (InitialDataEntryServlet, etc.) handle the actual routes.</li>')
+lines.append(' *   <li>{@code urlRewriterServlet} ({@code UrlRewriteServlet}) +')
+lines.append(' *       {@code OpenRosaFormDownloadServlet} — class no longer exists in')
+lines.append(' *       the source tree (removed in earlier phases without web.xml cleanup).</li>')
 lines.append(' * </ul>')
 lines.append(' */')
 lines.append('@Configuration')
 lines.append('public class LegacyServletRegistry {')
 lines.append('')
+lines.append('    @Bean')
+lines.append('    public ServletContextInitializer legacyServletsInitializer() {')
+lines.append('        return ctx -> {')
 
 method_count = 0
 for name in sorted(servlet_map):
@@ -97,35 +118,28 @@ for name in sorted(servlet_map):
         continue
     d = servlet_map[name]
     cls_short = d['cls'].split('.')[-1]
-    method_name = name[0].lower() + name[1:] if name else 'servlet'
-    # ensure valid Java identifier — replace non-identifier chars
-    method_name = re.sub(r'[^a-zA-Z0-9_]', '_', method_name)
-    if not method_name[0].isalpha():
-        method_name = 'servlet_' + method_name
-    method_name = method_name + 'Registration'
-    if not d['urls']:
-        urls_arg = '/* unmapped */ ""'
-    else:
-        urls_arg = ', '.join(f'"{u}"' for u in d['urls'])
-    lines.append(f'    @Bean')
-    lines.append(f'    public ServletRegistrationBean<{cls_short}> {method_name}() {{')
-    lines.append(f'        ServletRegistrationBean<{cls_short}> reg =')
-    lines.append(f'                new ServletRegistrationBean<>(new {cls_short}(), {urls_arg});')
-    lines.append(f'        reg.setName("{name}");')
+    urls = d['urls']
+    var = f'reg{method_count}'
+    lines.append(f'            ServletRegistration.Dynamic {var} = ctx.addServlet("{name}", {cls_short}.class);')
+    if urls:
+        url_args = ', '.join(f'"{u}"' for u in urls)
+        lines.append(f'            {var}.addMapping({url_args});')
     if d['load'] is not None:
-        lines.append(f'        reg.setLoadOnStartup({d["load"]});')
+        lines.append(f'            {var}.setLoadOnStartup({d["load"]});')
     for p_name, p_value in d['init_params']:
-        lines.append(f'        reg.addInitParameter("{p_name}", "{p_value}");')
-    lines.append(f'        return reg;')
-    lines.append(f'    }}')
-    lines.append(f'')
+        # Escape backslashes + double-quotes for Java string literal
+        p_value_escaped = p_value.replace('\\', '\\\\').replace('"', '\\"')
+        lines.append(f'            {var}.setInitParameter("{p_name}", "{p_value_escaped}");')
+    lines.append('')
     method_count += 1
 
+lines.append('        };')
+lines.append('    }')
 lines.append('}')
 
 with open(OUT_PATH, 'w') as out:
     out.write('\n'.join(lines))
 
 print(f'wrote {OUT_PATH}')
-print(f'methods: {method_count}')
+print(f'servlets registered: {method_count}')
 print(f'skipped: {sorted(skipped)}')
