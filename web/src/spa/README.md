@@ -92,12 +92,12 @@ src/
 |---|---|---|
 | E.1 — Vue 3 scaffolding | ✅ shipped 2026-05-30 | This README, vite.config.ts, main.ts, router/index.ts |
 | E.2 — Tailwind v4 + MUW tokens + check-tokens guard | ✅ shipped 2026-05-30 | [src/style.css](src/style.css), [scripts/check-tokens.mjs](scripts/check-tokens.mjs) |
-| E.3 — Shared component library | 🟢 in progress (8/10 primitives) | TopBar, SideRail, StatusPill, DenseTable, FormPrimitives (×5), Modal, DiffCard, Timeline, Wizard |
+| E.3 — Shared component library | ✅ 10/10 primitives | TopBar, SideRail, StatusPill, DenseTable, FormPrimitives (×5), Modal, DiffCard, Timeline, Wizard, ConfirmationWithPreflight, ESignatureBlock |
 | E.4 — Backend API surface review | ✅ first-pass shipped 2026-05-30 | [docs/.../phase-e/api-surface.md](../../../docs/development/modernization/phase-e/api-surface.md) |
 | E.5 — Investigator workflow | 🟢 3/3 screens shipped (Subject Matrix + Add Subject + CRF Entry) | [SubjectMatrixView.vue](src/views/SubjectMatrixView.vue), [AddSubjectView.vue](src/views/AddSubjectView.vue), [CrfEntryView.vue](src/views/CrfEntryView.vue), [stores/subjects.ts](src/stores/subjects.ts), [stores/crfEntry.ts](src/stores/crfEntry.ts) |
-| E.6 — Monitor workflow | 🟢 3/3 screens shipped (SDV + Notes & Discrepancies + Study Audit Log) + Add Query modal | [SdvView.vue](src/views/SdvView.vue), [NotesDiscrepanciesView.vue](src/views/NotesDiscrepanciesView.vue), [StudyAuditLogView.vue](src/views/StudyAuditLogView.vue), [stores/sdv.ts](src/stores/sdv.ts), [stores/notes.ts](src/stores/notes.ts), [stores/auditLog.ts](src/stores/auditLog.ts) |
-| E.7 — Data Manager workflow | pending | TBD |
-| E.8 — Auth integration | pending | TBD |
+| E.6 — Monitor workflow | 🟢 4/5 screens (SDV + Notes + Audit Log + Add Query modal + Read-only CRF carry-over) | [SdvView.vue](src/views/SdvView.vue), [NotesDiscrepanciesView.vue](src/views/NotesDiscrepanciesView.vue), [StudyAuditLogView.vue](src/views/StudyAuditLogView.vue) |
+| E.7 — Data Manager workflow | 🟢 4/7 screens shipped (Build Study + Manage Users + Sign Subject + Import CRF wizard) | [BuildStudyView.vue](src/views/BuildStudyView.vue), [ManageUsersView.vue](src/views/ManageUsersView.vue), [SignSubjectView.vue](src/views/SignSubjectView.vue), [ImportCrfDataView.vue](src/views/ImportCrfDataView.vue) |
+| E.8 — Auth integration | 🟢 core shipped (LoginView + FirstLogin wizard + auth store + router guard + logout) | [LoginView.vue](src/views/LoginView.vue), [FirstLoginView.vue](src/views/FirstLoginView.vue), [stores/auth.ts](src/stores/auth.ts), [router/index.ts](src/router/index.ts) |
 | E.9 — Accessibility + i18n | pending (vue-i18n wired) | TBD |
 | E.10 — Usability testing | pending | TBD |
 | E.11 — Cutover + JSP retirement | pending | TBD |

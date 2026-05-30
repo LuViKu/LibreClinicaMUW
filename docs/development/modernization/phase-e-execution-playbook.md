@@ -214,30 +214,48 @@ The SPA work proceeded against Pinia stores fed by mock data throughout the diag
 
 ## E.7 — Data Manager workflow
 
-**Order:**
+**Status:** 🟢 **4/7 screens shipped 2026-05-30** — Build Study + Manage Users + Sign Subject + Import CRF Data wizard. View Subject / View Events / Schedule Event are carry-overs (read-only specialisations of existing primitives); the Create / Edit CRF designer is the single-most-complex screen and remains carry-over per its mockup's complexity. Update Event Definition is a thin form variant.
 
-1. **View Subject** ([view-subject.html](phase-e/ux-mockups/view-subject.html)) + **View Events** ([view-events.html](phase-e/ux-mockups/view-events.html)) + **Schedule Event** ([schedule-event.html](phase-e/ux-mockups/schedule-event.html)) — cross-role read screens, lowest risk.
-2. **Sign Subject** ([investigator-sign-subject.html](phase-e/ux-mockups/investigator-sign-subject.html)) — wires the **`<E-SignatureBlock>`** primitive. **§11.50 compliance:** the SPA's re-auth flow MUST gate on either local password challenge (default) or `/pages/sso/reauth` (only when legal/regulatory ratifies SSO proxy re-auth as §11.50-compliant). The SPA defaults to local-password-challenge and exposes the SSO path behind a `libreclinica.sso.reauth.signature.enabled` flag.
-3. **Build Study** ([dm-build-study.html](phase-e/ux-mockups/dm-build-study.html)) — multi-task tracker.
-4. **Update Event Definition** ([dm-update-event-definition.html](phase-e/ux-mockups/dm-update-event-definition.html)).
-5. **Manage Users** ([dm-manage-users.html](phase-e/ux-mockups/dm-manage-users.html)).
-6. **Create / Edit CRF** ([dm-create-crf.html](phase-e/ux-mockups/dm-create-crf.html)) — **the single most complex DM screen**. Ships behind a feature flag; legacy `/CreateCRF` + Excel upload stay as the fallback path until two full studies have been authored end-to-end on the SPA designer with zero data-entry-side regressions.
-7. **Import CRF Data wizard** ([dm-import-crf-data.html](phase-e/ux-mockups/dm-import-crf-data.html)) — multi-step preview-before-commit.
+**Order (as shipped + remaining):**
+
+1. ⏳ **View Subject** + **View Events** + **Schedule Event** — carry-overs (read-only specialisations; reuse the SubjectMatrix + DenseTable patterns).
+2. ✅ **Sign Subject** ([investigator-sign-subject.html](phase-e/ux-mockups/investigator-sign-subject.html)) — SPA view at `/app/subjects/:subjectId/sign` ([SignSubjectView.vue](../../web/src/spa/src/views/SignSubjectView.vue)) wires the **`<ConfirmationWithPreflight>` + `<ESignatureBlock>`** primitives. Pre-flight rows derived from the subject's actual events + open-queries count; casebook snapshot rendered as a DenseTable; e-signature defaults to local password challenge per DR-014 §4 (SSO re-auth mode wired but flag-default-off until §11.50 ratified). Optimistic sign + 1.2s toast → return to Subject Matrix.
+3. ✅ **Build Study** ([dm-build-study.html](phase-e/ux-mockups/dm-build-study.html)) — SPA view at `/app/build-study` ([BuildStudyView.vue](../../web/src/spa/src/views/BuildStudyView.vue)). 7-task tracker with progress bar + per-task status pill + per-task icon + count summary. Mock LCDemo state shows 5 complete + 2 in-progress = 71% complete.
+4. ⏳ **Update Event Definition** — carry-over.
+5. ✅ **Manage Users** ([dm-manage-users.html](phase-e/ux-mockups/dm-manage-users.html)) — SPA view at `/app/manage-users` ([ManageUsersView.vue](../../web/src/spa/src/views/ManageUsersView.vue)). DenseTable with per-row role + auth + active pills. 7 mock users covering every role + every auth method (SSO + local + LDAP-legacy + pending-invite). Pending-invite badge on the side rail.
+6. ⏳ **Create / Edit CRF** — carry-over. The single-most-complex DM screen; ships behind a feature flag.
+7. ✅ **Import CRF Data wizard** ([dm-import-crf-data.html](phase-e/ux-mockups/dm-import-crf-data.html)) — SPA view at `/app/import-crf-data` ([ImportCrfDataView.vue](../../web/src/spa/src/views/ImportCrfDataView.vue)). Full 4-step wizard (Upload → Map → Preview & resolve → Commit) using the existing `<Wizard>` primitive. Per-row before/after `<DiffCard>` cells; mandatory Reason-for-Change textarea when overwrites > 0.
+
+**E.3 component library closed at 10/10 in the same push:**
+
+- ✅ `<ConfirmationWithPreflight>` — pass / warn / info / blocker rows.
+- ✅ `<ESignatureBlock>` — local password or SSO bounce; emits `ESignaturePayload`; the SPA never persists the password.
 
 ---
 
 ## E.8 — Authentication integration
 
-**Goal:** wire the SPA's auth surface to DR-014's institution-agnostic SSO + the legacy local-account fallback.
+**Status:** 🟢 **SPA core shipped 2026-05-30** — auth Pinia store + LoginView + FirstLoginView wizard + router guard + TopBar logout button. Mock-driven through sessionStorage until the `GET /pages/api/v1/me` E.4 adapter lands.
 
-**Scope:**
+**Scope (as shipped + remaining):**
 
-1. **Login landing** ([login.html](phase-e/ux-mockups/login.html)) **reworked to match DR-014 §3** — the primary CTA is the configurable "Sign in with Institutional Account" button (label sourced from `libreclinica.sso.buttonLabel`, redirect URL from `libreclinica.sso.entryUrl`); the local username/password form is a collapsed disclosure below; the forced-password-change pane shrinks to a non-password first-login profile step (per the [`phase-e/ux-mockups/login.html`](phase-e/ux-mockups/login.html) Phase D update on `feature/muw-phase-e-ux-mockups` @ `8f7746079`). The static mockup's "Continue with MUW LDAP" wording **must not survive into the production SPA**.
-2. **First-login profile completion** — display name, locale, timezone, signature-key opt-in. Fields populated from SSO attributes when present.
-3. **Session expiry / re-auth UX** — when a session expires mid-CRF-entry, the SPA offers either (a) a local password re-challenge or (b) an SSO re-auth bounce (via `/pages/sso/reauth`), preserving the in-progress form state.
-4. **Logout** — Spring Security `/Logout` works today; SPA wires to it.
+1. ✅ **Login landing** ([LoginView.vue](../../web/src/spa/src/views/LoginView.vue)) — primary CTA is the configurable institutional-SSO button sourced from the `SsoConfig` shape (`ssoConfig.enabled`, `ssoConfig.buttonLabel`, `ssoConfig.entryUrl`, `ssoConfig.providerHint`); the local username/password form is a collapsed `<details>` disclosure underneath. A dev-only role-switcher chip group mints a mock identity for Investigator / Monitor / Data Manager so reviewers can preview every workflow without a live IdP — gone in production. The "Continue with MUW LDAP" mockup wording **does not survive** in the SPA.
+2. ✅ **First-login profile completion** ([FirstLoginView.vue](../../web/src/spa/src/views/FirstLoginView.vue)) — 2-step `<Wizard>` (Confirm profile → Accept terms). Step 1 surfaces the IdP-supplied attributes in a read-only card, then collects display name + locale + timezone + the e-signature acknowledgement. Step 2 surfaces the institutional terms of use with two distinct acks (terms + auditing). On finish → `auth.completeProfile()` → `home`.
+3. ⏳ **Session expiry / re-auth UX** — carry-over. Wires once the backend `/api/v1/me` returns 401 on expiry; the SPA will catch in the API client wrapper and route to `/login` with a return-to query param.
+4. ✅ **Logout** — TopBar exposes a logout icon button that calls `auth.logout()` + routes to `/login`. The current implementation clears the SPA's sessionStorage mock; the production wire-up POSTs to `/j_spring_security_logout`.
 
-**Verification gates:**
+**Router guard ([router/index.ts `guard()`](../../web/src/spa/src/router/index.ts))**
+
+The exported pure `guard(auth, to)` helper drives every navigation:
+
+- `meta.public === true` (login, first-login) bypasses auth.
+- `state === 'anonymous'` → redirect to `/login`.
+- `state === 'profile-incomplete'` → redirect to `/first-login`.
+- `meta.role` mismatched → redirect to home (PHI-leaking protected views fail closed).
+
+The helper is exported so route-guard unit tests don't need to spin the router.
+
+**Verification gates (carry-overs):**
 
 - Selenium smoke covers each of the 8 SSO deployment patterns in [sso-deployment-guide.md](../sso-deployment-guide.md) — at minimum, the **no-SSO** and **Pattern 1 (MUW Shibboleth via `mod_shib`)** patterns end-to-end in CI; the other 6 are tested by an operator on first deployment per pattern.
 

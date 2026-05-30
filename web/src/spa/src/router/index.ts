@@ -1,16 +1,19 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 
 /**
  * Phase E.1 (2026-05-30): minimal vue-router scaffold.
+ * Phase E.8 (2026-05-30 evening): auth-aware global guard added.
  *
- * Routes are added per-sub-phase as workflows ship. The history base
- * matches Vite's `base` config so dev and prod URLs are stable.
+ * Guard rules:
+ *  - `meta.public = true` routes (login, first-login) bypass auth.
+ *  - `state === 'anonymous'` → redirect to /login.
+ *  - `state === 'profile-incomplete'` → redirect to /first-login.
+ *  - `meta.role` mismatched → redirect to home (the role chip on the
+ *    target page would have lied, and routes that demand a specific
+ *    role often surface PHI-sensitive data — fail closed).
  *
- * Route ordering follows the Phase E execution playbook:
- * - E.5 Investigator: subject-matrix, add-subject, crf-entry, sign-subject
- * - E.6 Monitor:     sdv, crf-readonly, add-query, audit-log
- * - E.7 Data Manager: build-study, manage-users, create-crf, import-crf-data
- * - E.8 Auth:        login, profile-complete, sso-bounce
+ * Routes are added per-sub-phase as workflows ship.
  */
 const router = createRouter({
   history: createWebHistory('/LibreClinica/app/'),
@@ -89,6 +92,19 @@ const router = createRouter({
       component: () => import('@/views/SignSubjectView.vue'),
       meta: { title: 'Sign Subject', role: 'Investigator' as const },
     },
+    /* Phase E.8 — Auth. */
+    {
+      path: '/login',
+      name: 'login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: { title: 'Sign in', public: true },
+    },
+    {
+      path: '/first-login',
+      name: 'first-login',
+      component: () => import('@/views/FirstLoginView.vue'),
+      meta: { title: 'First-login profile', public: true },
+    },
   ],
 })
 
@@ -98,5 +114,42 @@ router.afterEach((to) => {
     document.title = title ? `${title} · LibreClinica MUW` : 'LibreClinica MUW'
   }
 })
+
+router.beforeEach((to, _from) => {
+  const auth = useAuthStore()
+  return guard(auth, to)
+})
+
+/** Pure helper — separated so unit tests can drive it without the router. */
+export function guard(
+  auth: ReturnType<typeof useAuthStore>,
+  to: RouteLocationNormalized,
+): boolean | { name: string } {
+  const isPublic = to.meta.public === true
+
+  // First-login wizard requires an authenticated-but-incomplete identity.
+  if (to.name === 'first-login') {
+    return auth.needsProfile ? true : { name: auth.isAuthenticated ? 'home' : 'login' }
+  }
+
+  // Login route is public; redirect already-authenticated users home.
+  if (to.name === 'login') {
+    return auth.isAnonymous ? true : { name: auth.needsProfile ? 'first-login' : 'home' }
+  }
+
+  if (isPublic) return true
+
+  if (auth.isAnonymous) return { name: 'login' }
+  if (auth.needsProfile) return { name: 'first-login' }
+
+  const requiredRole = to.meta.role as
+    | 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'
+    | undefined
+  if (requiredRole && auth.user?.role !== requiredRole) {
+    return { name: 'home' }
+  }
+
+  return true
+}
 
 export default router

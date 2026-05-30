@@ -416,5 +416,58 @@
       "firstSignature": "Keine vorherige Signatur",
       "alreadySigned": "Teilnehmer bereits signiert — Re-Signatur wird als neues Audit-Ereignis erfasst"
     }
+  },
+  "login": {
+    "brandLine": "Universitätsklinik für Augenheilkunde und Optometrie · Medizinische Universität Wien",
+    "title": "Anmelden",
+    "subtitle": "Mit Ihren institutionellen Credentials anmelden.",
+    "delegatedHint": "2-Faktor-Verifikation, Passwort-Resets und Account-Sperren übernimmt Ihr Identity Provider.",
+    "orLocal": "Oder lokal anmelden",
+    "localAccountSummary": "Mit lokalem LibreClinica-Konto anmelden",
+    "username": "Benutzername",
+    "password": "Passwort",
+    "signInLocal": "Lokal anmelden",
+    "localPurpose": "Für Sponsor-Monitore, externes Personal und Notfallzugänge ohne institutionelle Identität.",
+    "devShortcuts": "Dev-Rollenwechsel (Mock-Identität)",
+    "terms": "AGB",
+    "privacy": "Datenschutz",
+    "complianceTell": "Dies ist ein GCP / 21 CFR Part 11 konformes klinisches Datensystem. Alle Aktionen werden auditiert."
+  },
+  "firstLogin": {
+    "title": "Willkommen, {name}",
+    "subTrail": "Profil-Bestätigung bei der Erstanmeldung",
+    "intro": "Wenige Angaben zu bestätigen, bevor Sie die Anwendung erreichen. 2FA, Passwort-Lebenszyklus und Account-Sperren werden vom Identity Provider verwaltet; die untenstehenden Felder sind LibreClinica-lokal.",
+    "fromIdp": "Aus Ihrem Identity Provider",
+    "readOnly": "Schreibgeschützt",
+    "mfaVerified": "MFA bestätigt",
+    "mfaNotVerified": "MFA nicht bestätigt",
+    "step": {
+      "confirmProfile": "Profil bestätigen",
+      "acceptTerms": "AGB akzeptieren"
+    },
+    "field": {
+      "email": "E-Mail",
+      "role": "Rolle",
+      "source": "Auth-Quelle",
+      "mfa": "MFA",
+      "displayName": "Bevorzugter Anzeigename",
+      "locale": "Sprache",
+      "timezone": "Zeitzone"
+    },
+    "helper": {
+      "displayName": "Erscheint im Audit Trail, in Signatur-Bestätigungen und in Diskussions-Threads."
+    },
+    "eSignatureHeading": "Elektronische Signaturen",
+    "eSignatureExplain": "Klinische Signaturen (Sign Subject, Sign Event) re-authentifizieren über Ihren Identity Provider mit forceAuthn=true gemäß 21 CFR Part 11 §11.50.",
+    "eSignatureAck": "Ich verstehe, dass die Re-Authentifizierung über den Identity Provider das bindende Signatur-Ereignis für klinische Bestätigungen ist.",
+    "terms": {
+      "heading": "Nutzungsbedingungen",
+      "body1": "Ich verstehe, dass LibreClinica MUW ein klinisches Datensystem unter ICH-GCP und 21 CFR Part 11 §11.10 ist. Jede meiner Aktionen wird in einem unveränderlichen Audit Trail festgehalten.",
+      "body2": "Ich werde meine Credentials nicht teilen, mich vom System abmelden, wenn ich meinen Arbeitsplatz verlasse, und identifizierende Daten am Bildschirm schützen.",
+      "body3": "Ich verstehe, dass meine Rolle den Zugriff nur auf Daten und Aktionen gewährt, die mit meiner Studienzuordnung übereinstimmen; Zugriffe außerhalb dieses Rahmens werden im Audit Trail markiert und überprüft.",
+      "ackTerms": "Ich habe die obigen Bedingungen gelesen und akzeptiert.",
+      "ackAuditing": "Ich verstehe, dass jede meiner Aktionen dokumentiert und auditierbar ist.",
+      "finishCta": "Akzeptieren und LibreClinica öffnen"
+    }
   }
 }

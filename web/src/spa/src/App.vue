@@ -1,44 +1,67 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterView, useRoute } from 'vue-router'
+import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const router = useRouter()
+const auth = useAuthStore()
+
+function logout() {
+  auth.logout()
+  router.push({ name: 'login' })
+}
 
 interface Crumb { label: string; to?: string }
 
 const breadcrumb = computed<Crumb[]>(() => {
   const crumbs: Crumb[] = [{ label: 'LCDemo' }, { label: 'München' }]
   const routeTitle = route.meta?.title as string | undefined
-  if (routeTitle && route.name !== 'home') crumbs.push({ label: routeTitle })
+  if (routeTitle && route.name !== 'home' && route.name !== 'login' && route.name !== 'first-login') {
+    crumbs.push({ label: routeTitle })
+  }
   return crumbs
 })
 
-type RoleMeta = 'Investigator' | 'Monitor' | 'Data Manager'
+const displayUserName = computed(() => auth.user?.username ?? '')
 
-const userName = computed(() => {
-  // Wired to a single mock user per role until the auth store (E.8) takes over.
-  switch (route.meta?.role as RoleMeta | undefined) {
-    case 'Monitor':       return 'monitor_demo'
-    case 'Data Manager':  return 'dm_demo'
-    case 'Investigator':
-    default:              return 'user_demo'
-  }
+const userRole = computed<'Investigator' | 'Monitor' | 'Data Manager' | null>(() => {
+  if (!auth.user) return null
+  if (auth.user.role === 'Administrator' || auth.user.role === 'CRC') return null
+  return auth.user.role
 })
 
-const userRole = computed<RoleMeta>(() => {
-  const meta = route.meta?.role as RoleMeta | undefined
-  return meta ?? 'Investigator'
-})
+const showTopBar = computed(() => route.name !== 'login' && route.name !== 'first-login')
 </script>
 
 <template>
   <div class="min-h-screen bg-white text-slate-900 text-sm">
     <TopBar
+      v-if="showTopBar && auth.isAuthenticated"
       :breadcrumb="breadcrumb"
-      :user-name="userName"
+      :user-name="displayUserName"
       :user-role="userRole"
+      :on-logout="logout"
     />
+    <!-- Minimal "Sign in" affordance for anonymous routes that still want chrome. -->
+    <header
+      v-else-if="showTopBar"
+      class="border-b border-slate-200 sticky top-0 z-30 bg-white/95 backdrop-blur"
+    >
+      <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+        <RouterLink to="/" class="flex items-center gap-2.5">
+          <svg class="w-7 h-7 text-muw-blue" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="16" cy="16" r="14" stroke-width="1.4" />
+            <path d="M12 8v16M20 8v16M8 12h16M8 20h16" stroke-width="1.75" />
+          </svg>
+          <span class="muw-display font-semibold text-muw-blue tracking-tight whitespace-nowrap">
+            LibreClinica<em class="not-italic font-medium text-muw-coral-700 text-[0.7em] uppercase tracking-[0.08em] ml-1.5 align-middle">MUW</em>
+          </span>
+        </RouterLink>
+        <RouterLink to="/login" class="text-xs text-muw-blue hover:underline">Sign in</RouterLink>
+      </div>
+    </header>
     <RouterView />
   </div>
 </template>

@@ -416,5 +416,58 @@
       "firstSignature": "No previous signature on this subject",
       "alreadySigned": "Subject already signed — re-signature recorded as a new audit event"
     }
+  },
+  "login": {
+    "brandLine": "Department of Ophthalmology and Optometry · Medical University of Vienna",
+    "title": "Sign in",
+    "subtitle": "Use your institutional credentials.",
+    "delegatedHint": "2FA, password resets, and account lockout are handled by your identity provider.",
+    "orLocal": "Or sign in with a local account",
+    "localAccountSummary": "Sign in with a local LibreClinica account",
+    "username": "Username",
+    "password": "Password",
+    "signInLocal": "Sign in with local account",
+    "localPurpose": "For sponsor monitors, external personnel, and break-glass accounts that don't have an institutional identity.",
+    "devShortcuts": "Dev role-switcher (mock identity)",
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "complianceTell": "This is a GCP / 21 CFR Part 11 compliant clinical-data system. All actions are audited."
+  },
+  "firstLogin": {
+    "title": "Welcome, {name}",
+    "subTrail": "First-login profile completion",
+    "intro": "A few details to confirm before you reach the application. 2FA, password lifecycle, and account lockout are managed by your identity provider; the fields below are LibreClinica-local.",
+    "fromIdp": "From your identity provider",
+    "readOnly": "Read-only",
+    "mfaVerified": "MFA-verified",
+    "mfaNotVerified": "MFA not verified",
+    "step": {
+      "confirmProfile": "Confirm profile",
+      "acceptTerms": "Accept terms"
+    },
+    "field": {
+      "email": "Email",
+      "role": "Role",
+      "source": "Auth source",
+      "mfa": "MFA",
+      "displayName": "Preferred display name",
+      "locale": "Locale",
+      "timezone": "Time zone"
+    },
+    "helper": {
+      "displayName": "Shown in the audit log, sign-off attestations, and discrepancy threads."
+    },
+    "eSignatureHeading": "Electronic signatures",
+    "eSignatureExplain": "Clinical sign-offs (Sign Subject, Sign Event) re-authenticate you through your identity provider with forceAuthn=true per 21 CFR Part 11 §11.50.",
+    "eSignatureAck": "I understand that re-authenticating via the identity provider is the binding signature event for clinical attestations.",
+    "terms": {
+      "heading": "Terms of use",
+      "body1": "I understand that LibreClinica MUW is a clinical-data system under ICH-GCP and 21 CFR Part 11 §11.10. Every action I take is recorded in an immutable audit log.",
+      "body2": "I will not share my credentials, will sign off the system when I leave my workstation, and will protect any subject identifiers visible on screen.",
+      "body3": "I understand that my role grants access only to data and actions consistent with my study assignment; access outside that scope is flagged in the audit log and reviewed.",
+      "ackTerms": "I have read and accept the terms above.",
+      "ackAuditing": "I understand that every action I take is recorded and auditable.",
+      "finishCta": "Accept and enter LibreClinica"
+    }
   }
 }

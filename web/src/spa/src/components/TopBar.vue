@@ -13,12 +13,15 @@ interface Props {
   userName?: string
   /** Active user's role label (Investigator | Monitor | Data Manager). */
   userRole?: 'Investigator' | 'Monitor' | 'Data Manager' | null
+  /** Optional logout handler — when set, a sign-out icon button renders. */
+  onLogout?: () => void
 }
 
 const props = withDefaults(defineProps<Props>(), {
   breadcrumb: () => [],
   userName: '',
   userRole: null,
+  onLogout: undefined,
 })
 
 /**
@@ -79,6 +82,19 @@ const userInitials = computed(() => {
           <span v-if="userRole" class="rounded-full text-[10px] px-1.5 py-0.5 font-medium" :class="roleClasses.chip">
             {{ userRole }}
           </span>
+        </button>
+        <button
+          v-if="onLogout"
+          type="button"
+          class="text-xs text-slate-500 hover:text-slate-900 px-2 py-1 rounded-md hover:bg-slate-100"
+          :title="'Sign out'"
+          @click="onLogout"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+            <polyline points="16 17 21 12 16 7" />
+            <line x1="21" x2="9" y1="12" y2="12" />
+          </svg>
         </button>
       </div>
     </div>
