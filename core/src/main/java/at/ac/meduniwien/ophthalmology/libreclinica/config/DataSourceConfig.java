@@ -3,9 +3,11 @@ package at.ac.meduniwien.ophthalmology.libreclinica.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.ExtendedBasicDataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.QueryStore;
+import liquibase.integration.spring.SpringLiquibase;
 
 /**
  * Phase C.3-finish: Java replacement for the dataSource + queryStore beans
@@ -21,11 +23,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.QueryStore;
  *   <li>{@code queryStore}  — query catalog initialised against the DataSource;
  *       consumed by {@code viewNotesDao}.</li>
  * </ul>
- * The {@code liquibase} bean stays in the XML stub for now;
- * C.13 retires it in favour of {@code spring-boot-starter-liquibase}
- * autoconfig, which removes the {@code liquibase-core} runtime-scope quirk
- * (a compile-scope dep would be needed to define the {@code SpringLiquibase}
- * bean from Java).
+ * The {@code liquibase} bean (Phase C.13, 2026-05-30) is also defined
+ * here as an explicit {@link SpringLiquibase} {@code @Bean}. Spring Boot's
+ * {@code LiquibaseAutoConfiguration} activates only after C.14 flips the
+ * WAR → JAR; until then, the explicit bean keeps Liquibase parity with
+ * the prior {@code <bean id="liquibase"/>} XML form.
  * <p>
  * JDBC URL hardening ({@code sslMode}, {@code scramMaxIterations}, opt-in via
  * {@code datainfo.properties}) is appended by {@code CoreResources.setDatabaseProperties()}
@@ -73,5 +75,14 @@ public class DataSourceConfig {
         QueryStore queryStore = new QueryStore();
         queryStore.setDataSource(dataSource);
         return queryStore;
+    }
+
+    @Bean
+    @DependsOn("coreResources")
+    public SpringLiquibase liquibase(ExtendedBasicDataSource dataSource) {
+        SpringLiquibase liquibase = new SpringLiquibase();
+        liquibase.setDataSource(dataSource);
+        liquibase.setChangeLog("classpath:migration/master.xml");
+        return liquibase;
     }
 }

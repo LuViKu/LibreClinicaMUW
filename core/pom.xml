@@ -320,7 +320,12 @@
 		<dependency>
 			<groupId>org.liquibase</groupId>
 			<artifactId>liquibase-core</artifactId>
-			<scope>runtime</scope>
+			<!-- Phase C.13 (2026-05-30): compile scope (was runtime) so
+			     DataSourceConfig can reference SpringLiquibase directly
+			     instead of through XML-by-reflection. Spring Boot's
+			     liquibase autoconfig (full C.13 target) activates after
+			     C.14 (WAR → JAR) — until then, an explicit @Bean keeps
+			     parity with the prior <bean id="liquibase"/> XML. -->
 		</dependency>
         <!-- Phase B.4 cliff: javax.annotation-api 1.3.2 dropped — replaced
              by jakarta.annotation-api declared above. -->
