@@ -14,7 +14,7 @@
     </bean>        
         
     <bean id="dataSource" class="at.ac.meduniwien.ophthalmology.libreclinica.core.ExtendedBasicDataSource">
-        <property name="driverClassName" value="s[driver]"/>
+        <property name="driverClassName" value="${driver}"/>
         <property name="maxActive" value="50"/>
         <property name="maxIdle" value="2"/>
         <property name="maxWait" value="180000"/>
@@ -25,9 +25,9 @@
         <property name="testOnReturn" value="true"/>
         <property name="timeBetweenEvictionRunsMillis" value="300000"/>
         <property name="minEvictableIdleTimeMillis" value="600000"/>
-        <property name="url" value="s[url]"/>
-        <property name="username" value="s[username]"/>
-        <property name="password" value="s[password]"/>
+        <property name="url" value="${url}"/>
+        <property name="username" value="${username}"/>
+        <property name="password" value="${password}"/>
         <property name="bigStringTryClob" value="true"/>
     </bean>
       

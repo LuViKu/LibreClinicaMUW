@@ -78,13 +78,13 @@
     <!-- ActiveDirectory -->
     <bean id="contextSource" class="org.springframework.security.ldap.DefaultSpringSecurityContextSource">
         <constructor-arg>
-            <value>s[ldap.host]</value>
+            <value>${ldap.host}</value>
         </constructor-arg>
         <property name="userDn">
-            <value>s[ldap.userDn]</value>
+            <value>${ldap.userDn}</value>
         </property>
         <property name="password">
-            <value>s[ldap.password]</value>
+            <value>${ldap.password}</value>
         </property>
     </bean>
 

@@ -22,10 +22,11 @@
      </bean>
       <bean id="testProperties" factory-bean="coreResources" factory-method="getDataInfo"/>
       
-    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer"
-        p:placeholderPrefix="s["
-        p:placeholderSuffix="]"
-     >
- <property name="properties"><ref bean="testProperties"/></property>
- </bean>
+    <!-- Phase C.8 (2026-05-30): retired the legacy `s[KEY]` custom syntax
+         in favour of Spring's standard ${KEY} via
+         PropertySourcesPlaceholderConfigurer. Mirrors the production
+         applicationContext-core-spring.xml change. -->
+    <bean class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
+        <property name="properties"><ref bean="testProperties"/></property>
+    </bean>
 </beans>

@@ -61,14 +61,21 @@
         </property>
     </bean>
 
-    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer"
-          p:placeholderPrefix="s["
-          p:placeholderSuffix="]"
-    >
+    <!--
+        Phase C.8 (2026-05-30): retired the legacy `s[KEY]` custom-syntax
+        PropertyPlaceholderConfigurer in favour of Spring's standard
+        ${KEY} via PropertySourcesPlaceholderConfigurer, sourced from the
+        same CoreResources-derived dataInfoProperties. This unblocks
+        Java @Configuration classes (C.3/4/5/7) which can now @Value("${...}")
+        or @Qualifier("dataInfoProperties") Properties against the same
+        source. The `s[...]` prefix originated upstream to avoid clashing
+        with JSP EL during XML config; we no longer parse Spring XML through
+        EL pipelines, so the custom prefix has no defensive value left.
+    -->
+    <bean class="org.springframework.context.support.PropertySourcesPlaceholderConfigurer">
         <property name="properties">
             <ref bean="dataInfoProperties"/>
         </property>
-
     </bean>
 
     <bean id="localeResolver" class="org.springframework.web.servlet.i18n.SessionLocaleResolver"/>

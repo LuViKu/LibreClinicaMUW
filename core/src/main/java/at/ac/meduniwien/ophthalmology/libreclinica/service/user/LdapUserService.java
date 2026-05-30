@@ -40,37 +40,37 @@ public class LdapUserService {
     @Autowired
     private ContextSource contextSource;
 
-    @Value("s[ldap.enabled]")
+    @Value("${ldap.enabled}")
     private String ldapEnabledProperty;
 
-    @Value("s[ldap.loginQuery]")
+    @Value("${ldap.loginQuery}")
     private String loginQuery;
 
-    @Value("s[ldap.passwordRecoveryURL]")
+    @Value("${ldap.passwordRecoveryURL}")
     private String passwordRecoveryURL;
 
-    @Value("s[ldap.userSearch.query]")
+    @Value("${ldap.userSearch.query}")
     private String userSearchQuery;
 
-    @Value("s[ldap.userSearch.baseDn]")
+    @Value("${ldap.userSearch.baseDn}")
     private String userSearchBase;
 
-    @Value("s[ldap.userData.distinguishedName]")
+    @Value("${ldap.userData.distinguishedName}")
     private String keyDistinguishedName;
 
-    @Value("s[ldap.userData.username]")
+    @Value("${ldap.userData.username}")
     private String keyUsername;
 
-    @Value("s[ldap.userData.firstName]")
+    @Value("${ldap.userData.firstName}")
     private String keyFirstName;
 
-    @Value("s[ldap.userData.lastName]")
+    @Value("${ldap.userData.lastName}")
     private String keyLastname;
 
-    @Value("s[ldap.userData.email]")
+    @Value("${ldap.userData.email}")
     private String keyEmail;
 
-    @Value("s[ldap.userData.organization]")
+    @Value("${ldap.userData.organization}")
     private String keyOrganization;
 
     private SpringSecurityLdapTemplate ldapTemplate;
