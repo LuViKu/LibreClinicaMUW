@@ -10,7 +10,9 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.web.pform;
 
 import java.net.URL;
-
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Calendar;
 import java.util.Date;
 
@@ -22,10 +24,9 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.crypto.password.MessageDigestPasswordEncoder;
+import org.springframework.security.crypto.codec.Hex;
 import org.springframework.web.client.RestTemplate;
 
-@SuppressWarnings("deprecation")
 public class EnketoAPI {
 
     private String enketoURL = null;
@@ -112,8 +113,12 @@ public class EnketoAPI {
             Calendar cal = Calendar.getInstance();
             cal.setTime(new Date());
             String hashString = ecid + "." + String.valueOf(cal.getTimeInMillis());
-            MessageDigestPasswordEncoder encoder = new MessageDigestPasswordEncoder("SHA-256");
-            String instanceId = encoder.encode(hashString);
+            // Phase D-Sec audit (2026-05-30): hash-for-keying, not password
+            // storage — was abusing Spring Security's deprecated
+            // MessageDigestPasswordEncoder which added a `{salt}` prefix
+            // to what should be a plain hex digest. Plain MessageDigest
+            // + Hex.encode drops the deprecation noise.
+            String instanceId = sha256Hex(hashString);
 
             URL eURL = new URL(enketoURL + "/api/v1/instance/iframe");
             String userPasswdCombo = new String(Base64.encodeBase64((token + ":").getBytes()));
@@ -138,4 +143,21 @@ public class EnketoAPI {
         return null;
     }
 
+    /**
+     * Hex-encoded SHA-256 of the input — used to mint opaque
+     * Enketo instance identifiers. NOT a password-storage hash;
+     * just a deterministic token derived from (ecid, timestamp).
+     * SHA-256 is guaranteed available on every JVM, so the
+     * NoSuchAlgorithmException branch is unreachable in practice
+     * but wrapped to a runtime exception for clarity.
+     */
+    private static String sha256Hex(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            return new String(Hex.encode(digest));
+        } catch (NoSuchAlgorithmException nsae) {
+            throw new IllegalStateException("SHA-256 unavailable on this JVM", nsae);
+        }
+    }
 }

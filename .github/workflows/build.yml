@@ -46,8 +46,11 @@ jobs:
           name: libreclinica-wars
           path: |
             web/target/*.war
-            ws/target/*.war
           retention-days: 14
+          # ws/target/*.war dropped — the ws/ module was retired in
+          # Phase B.4 (PR #31). The path matched zero artifacts post-
+          # removal; if-no-files-found: warn would have surfaced this
+          # but the noise wasn't useful.
           if-no-files-found: warn
 
       - name: Upload Surefire reports on failure

@@ -9,13 +9,15 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.web.pform;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 
 import jakarta.servlet.ServletContext;
 
-import org.springframework.security.crypto.password.MessageDigestPasswordEncoder;
+import org.springframework.security.crypto.codec.Hex;
 
-@SuppressWarnings("deprecation")
 public class PFormCache {
     
     //HashMap of study, HashMap of crfVersionOID, pFormURL
@@ -111,8 +113,7 @@ public class PFormCache {
         contextMap.put("crfVersionOID", crfVersionOID);
         
         String hashString = studySubjectOID + "." + studyEventDefinitionID + "." + studyEventOrdinal + "." + crfVersionOID;
-        MessageDigestPasswordEncoder encoder = new MessageDigestPasswordEncoder("SHA-256");
-        String hashOutput = encoder.encode(hashString);
+        String hashOutput = sha256Hex(hashString);
         subjectContextCache.put(hashOutput, contextMap);
         return hashOutput;
     }
@@ -126,10 +127,25 @@ public class PFormCache {
         contextMap.put("studyEventOrdinal", "1");
         
         String hashString = studyOID + "." + crfVersionOID;
-        MessageDigestPasswordEncoder encoder = new MessageDigestPasswordEncoder("SHA-256");
-        String hashOutput = encoder.encode(hashString);
+        String hashOutput = sha256Hex(hashString);
         subjectContextCache.put(hashOutput, contextMap);
         return hashOutput;
     }
 
+    /**
+     * Phase D-Sec audit (2026-05-30): hex-encoded SHA-256 of the
+     * input — used to mint deterministic cache keys for the in-
+     * memory subjectContextCache. NOT password storage; the
+     * previous usage of Spring Security's deprecated
+     * MessageDigestPasswordEncoder was API abuse.
+     */
+    private static String sha256Hex(String input) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            return new String(Hex.encode(digest));
+        } catch (NoSuchAlgorithmException nsae) {
+            throw new IllegalStateException("SHA-256 unavailable on this JVM", nsae);
+        }
+    }
 }
