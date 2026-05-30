@@ -68,5 +68,68 @@
       "status": "Status",
       "active": "Active"
     }
+  },
+  "addSubject": {
+    "title": "Add Study Subject",
+    "subTrail": "subject enrolment",
+    "intro": "Once saved, the subject's identifying fields cannot be changed without contacting the Study Coordinator. Do not include personally identifying information in Secondary ID.",
+    "section": {
+      "identification": "Identification",
+      "enrolment": "Enrolment"
+    },
+    "field": {
+      "subjectId": "Study Subject ID",
+      "secondaryId": "Secondary ID",
+      "enrolledOn": "Date of Enrolment",
+      "gender": "Gender",
+      "yearOfBirth": "Year of Birth",
+      "groupLabel": "Group assignment"
+    },
+    "placeholder": {
+      "subjectId": "e.g. M-042",
+      "secondaryId": "Optional",
+      "yearOfBirth": "yyyy"
+    },
+    "helper": {
+      "subjectId": "The identifier used in source documents. Cannot be edited after save.",
+      "yearOfBirth": "Optional — depends on study configuration."
+    },
+    "phiWarning": "Never include name, hospital ID, social security number, or any other identifying data.",
+    "gender": {
+      "female": "Female",
+      "male": "Male",
+      "other": "Other",
+      "unknown": "Unknown"
+    },
+    "group": {
+      "notAssigned": "— Not assigned —"
+    },
+    "preview": "Live preview:",
+    "cancelLink": "Cancel and return to Subject Matrix",
+    "action": {
+      "saveAndAddNext": "Save & add next subject",
+      "saveAndFinish": "Save & finish",
+      "saveAndSchedule": "Save & schedule first event"
+    },
+    "modesHelp": "Save modes: \"Schedule first event\" opens the subject view (event scheduler lands in a later sub-phase). \"Add next\" keeps you here with a clean form. \"Finish\" returns to the Subject Matrix."
+  },
+  "crfEntry": {
+    "title": "CRF data entry",
+    "railHeading": "Sections",
+    "unsaved": "Unsaved changes",
+    "saving": "Auto-saving…",
+    "lastSaved": "Last saved at {at}",
+    "notSavedYet": "Not saved yet",
+    "cancelLink": "Cancel — return to Subject Matrix",
+    "status": {
+      "not-started": "Not started",
+      "in-progress": "In progress",
+      "complete": "Complete",
+      "locked": "Locked"
+    },
+    "action": {
+      "saveDraft": "Save draft",
+      "markComplete": "Mark CRF complete"
+    }
   }
 }

@@ -68,5 +68,68 @@
       "status": "Status",
       "active": "Aktiv"
     }
+  },
+  "addSubject": {
+    "title": "Studienteilnehmer aufnehmen",
+    "subTrail": "Teilnehmer-Aufnahme",
+    "intro": "Nach dem Speichern können die identifizierenden Felder nur durch den Studienkoordinator geändert werden. Keine identifizierenden Personendaten in die Sekundär-ID übernehmen.",
+    "section": {
+      "identification": "Identifikation",
+      "enrolment": "Aufnahme"
+    },
+    "field": {
+      "subjectId": "Studien-Teilnehmer-ID",
+      "secondaryId": "Sekundär-ID",
+      "enrolledOn": "Aufnahmedatum",
+      "gender": "Geschlecht",
+      "yearOfBirth": "Geburtsjahr",
+      "groupLabel": "Gruppenzuordnung"
+    },
+    "placeholder": {
+      "subjectId": "z. B. M-042",
+      "secondaryId": "Optional",
+      "yearOfBirth": "JJJJ"
+    },
+    "helper": {
+      "subjectId": "Die in den Quelldokumenten verwendete Kennung. Nach dem Speichern nicht mehr änderbar.",
+      "yearOfBirth": "Optional — abhängig von der Studienkonfiguration."
+    },
+    "phiWarning": "Niemals Name, Krankenhaus-ID, Sozialversicherungsnummer oder andere identifizierende Daten verwenden.",
+    "gender": {
+      "female": "Weiblich",
+      "male": "Männlich",
+      "other": "Divers",
+      "unknown": "Unbekannt"
+    },
+    "group": {
+      "notAssigned": "— Nicht zugewiesen —"
+    },
+    "preview": "Live-Vorschau:",
+    "cancelLink": "Abbrechen — zurück zur Übersicht",
+    "action": {
+      "saveAndAddNext": "Speichern & nächste/n Teilnehmer/in",
+      "saveAndFinish": "Speichern & Abschluss",
+      "saveAndSchedule": "Speichern & erste Visite planen"
+    },
+    "modesHelp": "Speicher-Modi: »Erste Visite planen« öffnet die Teilnehmer-Ansicht (der Visitenplaner folgt in einer späteren Sub-Phase). »Nächste/r Teilnehmer/in« lässt Sie auf dieser Seite mit leerem Formular. »Abschluss« kehrt zur Übersicht zurück."
+  },
+  "crfEntry": {
+    "title": "CRF-Datenerfassung",
+    "railHeading": "Abschnitte",
+    "unsaved": "Ungespeicherte Änderungen",
+    "saving": "Automatisches Speichern…",
+    "lastSaved": "Zuletzt gespeichert um {at}",
+    "notSavedYet": "Noch nicht gespeichert",
+    "cancelLink": "Abbrechen — zurück zur Übersicht",
+    "status": {
+      "not-started": "Nicht begonnen",
+      "in-progress": "In Bearbeitung",
+      "complete": "Abgeschlossen",
+      "locked": "Gesperrt"
+    },
+    "action": {
+      "saveDraft": "Entwurf speichern",
+      "markComplete": "CRF als abgeschlossen markieren"
+    }
   }
 }

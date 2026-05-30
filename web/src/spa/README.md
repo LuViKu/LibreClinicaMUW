@@ -94,7 +94,7 @@ src/
 | E.2 — Tailwind v4 + MUW tokens + check-tokens guard | ✅ shipped 2026-05-30 | [src/style.css](src/style.css), [scripts/check-tokens.mjs](scripts/check-tokens.mjs) |
 | E.3 — Shared component library | 🟢 in progress (8/10 primitives) | TopBar, SideRail, StatusPill, DenseTable, FormPrimitives (×5), Modal, DiffCard, Timeline, Wizard |
 | E.4 — Backend API surface review | ✅ first-pass shipped 2026-05-30 | [docs/.../phase-e/api-surface.md](../../../docs/development/modernization/phase-e/api-surface.md) |
-| E.5 — Investigator workflow | 🟡 1/3 screens (Subject Matrix shipped) | [SubjectMatrixView.vue](src/views/SubjectMatrixView.vue), [stores/subjects.ts](src/stores/subjects.ts) |
+| E.5 — Investigator workflow | 🟢 3/3 screens shipped (Subject Matrix + Add Subject + CRF Entry) | [SubjectMatrixView.vue](src/views/SubjectMatrixView.vue), [AddSubjectView.vue](src/views/AddSubjectView.vue), [CrfEntryView.vue](src/views/CrfEntryView.vue), [stores/subjects.ts](src/stores/subjects.ts), [stores/crfEntry.ts](src/stores/crfEntry.ts) |
 | E.4 — Backend API surface review | pending | TBD |
 | E.5 — Investigator workflow | pending | TBD |
 | E.6 — Monitor workflow | pending | TBD |

@@ -1,6 +1,22 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { useSubjectsStore } from '../subjects'
+import {
+  AddSubjectValidationError,
+  useSubjectsStore,
+  validateAddSubject,
+  type AddSubjectInput,
+} from '../subjects'
+
+const baseInput: AddSubjectInput = {
+  id: 'M-101',
+  secondaryId: null,
+  siteOid: 'TDS0004',
+  siteLabel: 'München',
+  gender: 'F',
+  yearOfBirth: 1990,
+  groupLabel: 'Arm A',
+  enrolledOn: '2026-05-30',
+}
 
 describe('useSubjectsStore', () => {
   beforeEach(() => {
@@ -90,5 +106,83 @@ describe('useSubjectsStore', () => {
     expect(store.statusFilter).toBe('all')
     expect(store.onlyWithQueries).toBe(false)
     expect(store.filtered).toHaveLength(store.rows.length)
+  })
+})
+
+describe('validateAddSubject', () => {
+  it('returns no errors for a valid input', () => {
+    const errors = validateAddSubject(baseInput, [], { today: '2026-05-30' })
+    expect(errors).toEqual([])
+  })
+
+  it('flags a missing subject id', () => {
+    const errors = validateAddSubject({ ...baseInput, id: '   ' }, [], { today: '2026-05-30' })
+    expect(errors).toContainEqual(expect.objectContaining({ field: 'id' }))
+  })
+
+  it('flags duplicate subject id case-insensitively', async () => {
+    const pinia = createPinia()
+    setActivePinia(pinia)
+    const store = useSubjectsStore()
+    await store.load()
+    const existingId = store.rows[0]!.id // e.g. 'M-001'
+    const errors = validateAddSubject({ ...baseInput, id: existingId.toLowerCase() }, store.rows, { today: '2026-05-30' })
+    expect(errors).toContainEqual(expect.objectContaining({ field: 'id' }))
+  })
+
+  it('flags an 8+ digit run in the secondary id (PHI risk)', () => {
+    const errors = validateAddSubject({ ...baseInput, secondaryId: 'BORN19720115' }, [], { today: '2026-05-30' })
+    expect(errors).toContainEqual(expect.objectContaining({ field: 'secondaryId' }))
+  })
+
+  it('flags a future enrolment date', () => {
+    const errors = validateAddSubject({ ...baseInput, enrolledOn: '2026-12-31' }, [], { today: '2026-05-30' })
+    expect(errors).toContainEqual(expect.objectContaining({ field: 'enrolledOn' }))
+  })
+
+  it('flags missing gender', () => {
+    const errors = validateAddSubject({ ...baseInput, gender: '' as 'F' }, [], { today: '2026-05-30' })
+    expect(errors).toContainEqual(expect.objectContaining({ field: 'gender' }))
+  })
+
+  it('flags an out-of-range year of birth', () => {
+    const tooOld = validateAddSubject({ ...baseInput, yearOfBirth: 1799 }, [], { today: '2026-05-30' })
+    const future = validateAddSubject({ ...baseInput, yearOfBirth: 2099 }, [], { today: '2026-05-30' })
+    expect(tooOld).toContainEqual(expect.objectContaining({ field: 'yearOfBirth' }))
+    expect(future).toContainEqual(expect.objectContaining({ field: 'yearOfBirth' }))
+  })
+})
+
+describe('useSubjectsStore — add()', () => {
+  beforeEach(() => setActivePinia(createPinia()))
+
+  it('appends the subject when validation passes', async () => {
+    const store = useSubjectsStore()
+    await store.load()
+    const before = store.totalCount
+    const subject = await store.add(baseInput)
+    expect(subject.id).toBe('M-101')
+    expect(store.totalCount).toBe(before + 1)
+    expect(store.rows.at(-1)?.id).toBe('M-101')
+  })
+
+  it('seeds the new subject with not-scheduled events in the planned order', async () => {
+    const store = useSubjectsStore()
+    await store.load()
+    const expectedLabels = store.rows[0]!.events.map((e) => e.label)
+    const subject = await store.add(baseInput)
+    expect(subject.events.map((e) => e.label)).toEqual(expectedLabels)
+    expect(subject.events.every((e) => e.status === 'not-scheduled')).toBe(true)
+    expect(subject.signed).toBe(false)
+    expect(subject.openQueries).toBe(0)
+  })
+
+  it('throws AddSubjectValidationError on a duplicate id and does NOT append', async () => {
+    const store = useSubjectsStore()
+    await store.load()
+    const existingId = store.rows[0]!.id
+    const before = store.totalCount
+    await expect(store.add({ ...baseInput, id: existingId })).rejects.toBeInstanceOf(AddSubjectValidationError)
+    expect(store.totalCount).toBe(before)
   })
 })

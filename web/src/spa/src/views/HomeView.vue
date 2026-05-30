@@ -35,6 +35,38 @@ const { t } = useI18n()
         </p>
       </RouterLink>
 
+      <RouterLink
+        to="/event-crfs/EC_M001_V1_DEMO"
+        class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group"
+      >
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-teal-500" aria-hidden="true"></span>
+          <span class="font-medium text-muw-blue">Investigator</span>
+        </div>
+        <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+          {{ t('crfEntry.title') }}
+        </div>
+        <p class="text-slate-500 text-xs leading-relaxed">
+          M-001 · V1 Inclusion · Demographics — section-based entry with inline validation + save / mark-complete.
+        </p>
+      </RouterLink>
+
+      <RouterLink
+        to="/subjects/new"
+        class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group"
+      >
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-teal-500" aria-hidden="true"></span>
+          <span class="font-medium text-muw-blue">Investigator</span>
+        </div>
+        <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+          {{ t('nav.addSubject') }}
+        </div>
+        <p class="text-slate-500 text-xs leading-relaxed">
+          Enrol a study subject. PHI-aware validation, gender selector, three save modes.
+        </p>
+      </RouterLink>
+
       <div
         class="rounded-muw border border-slate-200 bg-slate-50 p-5 text-slate-400"
         aria-disabled="true"
@@ -44,7 +76,7 @@ const { t } = useI18n()
           <span class="font-medium">More workflows…</span>
         </div>
         <p class="text-xs leading-relaxed">
-          SDV, CRF entry, Sign Subject, Build Study, etc. land per the Phase E execution playbook.
+          SDV, Sign Subject, Build Study, etc. land per the Phase E execution playbook.
         </p>
       </div>
     </section>

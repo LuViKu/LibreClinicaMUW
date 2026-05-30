@@ -27,6 +27,18 @@ const router = createRouter({
       component: () => import('@/views/SubjectMatrixView.vue'),
       meta: { title: 'Subject Matrix', role: 'Investigator' as const },
     },
+    {
+      path: '/subjects/new',
+      name: 'subject-new',
+      component: () => import('@/views/AddSubjectView.vue'),
+      meta: { title: 'Add Subject', role: 'Investigator' as const },
+    },
+    {
+      path: '/event-crfs/:eventCrfOid',
+      name: 'crf-entry',
+      component: () => import('@/views/CrfEntryView.vue'),
+      meta: { title: 'CRF Entry', role: 'Investigator' as const },
+    },
   ],
 })
 

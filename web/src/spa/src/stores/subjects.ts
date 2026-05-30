@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { EventStatus, Subject } from '@/types/subject'
+import type { EventStatus, Gender, Subject } from '@/types/subject'
 
 /**
  * Phase E.5 — Subjects store.
@@ -70,6 +70,61 @@ export const useSubjectsStore = defineStore('subjects', () => {
     onlyWithQueries.value = false
   }
 
+  /**
+   * Phase E.5.2 — enrol a new subject.
+   *
+   * Local-first: validates the input against the existing rows
+   * (subject-id uniqueness) and the shape constraints from
+   * `validateAddSubject` below, then optimistically appends a Subject
+   * with `not-scheduled` event cells. Returns the new Subject so the
+   * caller can navigate or chain into Schedule Event.
+   *
+   * When the E.4 adapter at `POST /pages/api/v1/subjects` lands, swap
+   * the optimistic append for an awaited `apiPost<Subject>` and remove
+   * the local id-generation — the backend will own the id allocation.
+   */
+  async function add(input: AddSubjectInput): Promise<Subject> {
+    const errors = validateAddSubject(input, rows.value)
+    if (errors.length > 0) {
+      const message = errors.map((e) => e.message).join('; ')
+      throw new AddSubjectValidationError(message, errors)
+    }
+
+    isLoading.value = true
+    error.value = null
+    try {
+      // TODO(E.4): replace with apiPost<Subject>('/pages/api/v1/subjects', input).
+      await new Promise((resolve) => setTimeout(resolve, 30))
+
+      const subject: Subject = {
+        id: input.id.trim(),
+        secondaryId: input.secondaryId?.trim() || null,
+        siteOid: input.siteOid,
+        siteLabel: input.siteLabel,
+        gender: input.gender,
+        yearOfBirth: input.yearOfBirth ?? null,
+        groupLabel: input.groupLabel ?? null,
+        enrolledOn: input.enrolledOn,
+        signed: false,
+        openQueries: 0,
+        events: EVENT_LABELS.map((label, i) => ({
+          eventDefinitionOid: EVENT_OIDS[i]!,
+          label,
+          status: 'not-scheduled',
+          openQueries: 0,
+        })),
+      }
+      rows.value = [...rows.value, subject]
+      return subject
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Unknown error adding subject'
+      error.value = msg
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   return {
     // state
     rows,
@@ -85,8 +140,91 @@ export const useSubjectsStore = defineStore('subjects', () => {
     // actions
     load,
     clearFilters,
+    add,
   }
 })
+
+/** Form payload from the Add Subject view. */
+export interface AddSubjectInput {
+  id: string
+  secondaryId?: string | null
+  siteOid: string
+  siteLabel: string
+  gender: Gender
+  yearOfBirth?: number | null
+  groupLabel?: string | null
+  /** ISO `YYYY-MM-DD`. */
+  enrolledOn: string
+}
+
+export type AddSubjectErrorField =
+  | 'id'
+  | 'secondaryId'
+  | 'enrolledOn'
+  | 'gender'
+  | 'yearOfBirth'
+
+export interface AddSubjectError {
+  field: AddSubjectErrorField
+  message: string
+}
+
+export class AddSubjectValidationError extends Error {
+  constructor(message: string, public readonly errors: AddSubjectError[]) {
+    super(message)
+    this.name = 'AddSubjectValidationError'
+  }
+}
+
+/**
+ * Local validation that mirrors the `/AddNewSubject` servlet's checks:
+ *  - Subject ID required + unique within the site.
+ *  - Secondary ID may not contain obvious PHI tokens (the legacy
+ *    servlet leaves this to a study-config rule; we keep a soft
+ *    client-side check matching the mockup's red ErrorText).
+ *  - Enrolment date must be present + not in the future.
+ *  - Gender must be one of the allowed codes.
+ *  - Year of birth must be plausible (1900–current year).
+ *
+ * The backend remains authoritative — the SPA's validation is for UX
+ * feedback only. Per DR-008 the server-side rules engine is still the
+ * source of truth.
+ */
+export function validateAddSubject(
+  input: AddSubjectInput,
+  existing: ReadonlyArray<Subject>,
+  options: { today?: string } = {},
+): AddSubjectError[] {
+  const errors: AddSubjectError[] = []
+  const today = options.today ?? new Date().toISOString().slice(0, 10)
+
+  const id = input.id?.trim() ?? ''
+  if (!id) errors.push({ field: 'id', message: 'Subject ID is required.' })
+  else if (id.length > 30) errors.push({ field: 'id', message: 'Subject ID is too long (max 30 characters).' })
+  else if (existing.some((s) => s.id.toLowerCase() === id.toLowerCase()))
+    errors.push({ field: 'id', message: `Subject ID "${id}" already exists at this site.` })
+
+  const secondary = input.secondaryId?.trim() ?? ''
+  if (secondary && /[0-9]{8,}/.test(secondary))
+    errors.push({ field: 'secondaryId', message: 'Secondary ID must not contain an 8+ digit run — risks PHI exposure.' })
+
+  if (!input.enrolledOn) errors.push({ field: 'enrolledOn', message: 'Enrolment date is required.' })
+  else if (input.enrolledOn > today)
+    errors.push({ field: 'enrolledOn', message: 'Enrolment date must not be in the future.' })
+
+  if (!input.gender) errors.push({ field: 'gender', message: 'Gender is required.' })
+  else if (!(['F', 'M', 'O', 'U'] as const).includes(input.gender))
+    errors.push({ field: 'gender', message: `"${input.gender}" is not a valid gender code.` })
+
+  if (input.yearOfBirth != null) {
+    const year = Number(input.yearOfBirth)
+    const thisYear = Number(today.slice(0, 4))
+    if (!Number.isInteger(year) || year < 1900 || year > thisYear)
+      errors.push({ field: 'yearOfBirth', message: `Year of birth must be between 1900 and ${thisYear}.` })
+  }
+
+  return errors
+}
 
 /**
  * Mock data loader. The shape matches the planned

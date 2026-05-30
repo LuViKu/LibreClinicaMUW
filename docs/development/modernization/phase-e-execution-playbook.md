@@ -168,15 +168,20 @@ A sub-phase is **closed** when all five gates are green and the PR description's
 
 ## E.5 — Investigator workflow (POC → first clinical-rotation feedback)
 
-**Status:** 🟡 **Started 2026-05-30** — Subject Matrix view shipped against a Pinia store fed by mock data shaped exactly like the planned API response.
+**Status:** 🟢 **3/3 screens shipped 2026-05-30** — Subject Matrix + Add Subject + CRF Entry (v0 — repetition groups, rule-driven show/hide, inline discrepancy threads deferred to follow-ups). All three views are wired to Pinia stores that hydrate from mock data shaped exactly like the planned API responses; backend adapters from E.4 swap in without view-side changes.
 
 **Goal:** ship the Investigator's three highest-traffic screens end-to-end as the first SPA POC; run an in-clinic walkthrough.
 
-**Order:**
+**Order (as shipped):**
 
-1. ✅ **Subject Matrix** ([investigator-subject-matrix.html](phase-e/ux-mockups/investigator-subject-matrix.html)) — replaces `/ListStudySubjects`. SPA view at `/LibreClinica/app/subjects` ([SubjectMatrixView.vue](../../web/src/spa/src/views/SubjectMatrixView.vue)) consumes the [subjects Pinia store](../../web/src/spa/src/stores/subjects.ts) with 8 Vitest cases covering free-text filter, status filter, only-with-queries flag, and clearFilters. Backend adapter `GET /pages/api/v1/subjects?siteOid=…` deferred — store hydrates from mock data with the production shape until E.0 + E.4-B adapter land.
-2. **Add Subject** ([investigator-add-subject.html](phase-e/ux-mockups/investigator-add-subject.html)) — replaces `/AddNewSubject`.
-3. **CRF Data Entry** ([investigator-crf-entry.html](phase-e/ux-mockups/investigator-crf-entry.html)) — replaces `/InitialDataEntry`. **Highest risk** — the JSP at [viewSectionDataEntry.jsp](../../web/src/main/webapp/WEB-INF/jsp/managestudy/viewSectionDataEntry.jsp) is 964 LOC of dynamic field generation, repetition groups, rule-driven show/hide, inline discrepancy modals, multi-stage workflow gates.
+1. ✅ **Subject Matrix** ([investigator-subject-matrix.html](phase-e/ux-mockups/investigator-subject-matrix.html)) — replaces `/ListStudySubjects`. SPA view at `/LibreClinica/app/subjects` ([SubjectMatrixView.vue](../../web/src/spa/src/views/SubjectMatrixView.vue)) consumes the [subjects Pinia store](../../web/src/spa/src/stores/subjects.ts) with 8 Vitest cases covering free-text filter, status filter, only-with-queries flag, and clearFilters.
+2. ✅ **Add Subject** ([investigator-add-subject.html](phase-e/ux-mockups/investigator-add-subject.html)) — replaces `/AddNewSubject`. SPA view at `/LibreClinica/app/subjects/new` ([AddSubjectView.vue](../../web/src/spa/src/views/AddSubjectView.vue)) wires `validateAddSubject` (mirrors the legacy servlet's checks: id required + unique, PHI-detector on secondary id, future-date guard, gender required, year-of-birth range) and `subjects.add()` with three save modes. 7 more Vitest cases covering the validator + the store action.
+3. ✅ **CRF Data Entry** ([investigator-crf-entry.html](phase-e/ux-mockups/investigator-crf-entry.html)) — replaces `/InitialDataEntry`. SPA view at `/LibreClinica/app/event-crfs/:eventCrfOid` ([CrfEntryView.vue](../../web/src/spa/src/views/CrfEntryView.vue)). New [crfEntry Pinia store](../../web/src/spa/src/stores/crfEntry.ts) carries the CRF schema + values + status + sticky `pendingChanges` flag for the "Unsaved · auto-saving…" tell. `computeItemErrors` runs the full validation matrix (required, integer / real bounds, date format, select-one allowed codes, select-multi allowed codes). 10 Vitest cases pin every validation path + the markComplete refusal contract.
+   **What's deferred to follow-up CRF Entry PRs (documented in [api-surface.md](phase-e/api-surface.md) §3 category C):**
+   - Repetition groups (`ItemGroup.repeating === true`)
+   - Rule-driven `showWhen` / `requiredWhen` predicates
+   - Per-item inline discrepancy threads (the legacy popup pattern)
+   - Multi-stage workflow gates (mark-complete → sign → admin reset)
 
 **Verification gates per sub-PR:**
 
