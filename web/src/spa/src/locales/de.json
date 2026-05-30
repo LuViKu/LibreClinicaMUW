@@ -113,6 +113,141 @@
     },
     "modesHelp": "Speicher-Modi: »Erste Visite planen« öffnet die Teilnehmer-Ansicht (der Visitenplaner folgt in einer späteren Sub-Phase). »Nächste/r Teilnehmer/in« lässt Sie auf dieser Seite mit leerem Formular. »Abschluss« kehrt zur Übersicht zurück."
   },
+  "sdv": {
+    "title": "Quelldatenvergleich",
+    "subTrail": "Alle Standorte · Visite × CRF",
+    "searchPlaceholder": "Teilnehmer, Visite oder CRF suchen…",
+    "showingCount": "{visible} von {total} sichtbar · {verifiable} prüfbar",
+    "openQueriesTooltip": "{count} offene Rückfrage(n)",
+    "empty": "Keine CRFs für den aktuellen Filter.",
+    "selectionAriaLabel": "Bereich für Stapel-Verifikation",
+    "selectAllAriaLabel": "Alle prüfbaren CRFs in der aktuellen Ansicht auswählen",
+    "selectRowAriaLabel": "{subject} · {crf} auswählen",
+    "selectedCount": "{count} ausgewählt",
+    "status": {
+      "all": "Alle Status",
+      "pending": "Ausstehend",
+      "query": "Rückfrage",
+      "verified": "Verifiziert",
+      "locked": "Gesperrt"
+    },
+    "requirement": {
+      "all": "Alle SDV-Anforderungen",
+      "required-100": "100 % erforderlich",
+      "required-partial": "Teilweise erforderlich",
+      "not-required": "Nicht erforderlich"
+    },
+    "filter": {
+      "onlyWithQueries": "Nur mit offenen Rückfragen"
+    },
+    "column": {
+      "subject": "Teilnehmer",
+      "site": "Standort",
+      "event": "Visite",
+      "eventDate": "Visitendatum",
+      "crf": "CRF",
+      "requirement": "Anforderung",
+      "status": "Status"
+    },
+    "action": {
+      "markAsVerified": "{count} als verifiziert markieren (SDV)",
+      "cancelSelection": "Abbrechen",
+      "addQuery": "Rückfrage stellen",
+      "openCrf": "CRF öffnen"
+    },
+    "toast": {
+      "verifiedCount": "{count} CRF(s) als verifiziert markiert."
+    },
+    "confirm": {
+      "title": "Als verifiziert markieren?",
+      "body": "Alle {count} ausgewählten CRFs werden auf »Verifiziert« (SDV) gesetzt. Der Vorgang wird im Audit Trail dokumentiert.",
+      "note": "Werden Daten an einem verifizierten CRF später geändert, wird der SDV-Status automatisch auf »Ausstehend« zurückgesetzt.",
+      "auditNote": "Audit-Trail-Eintrag mit monitor_demo + Zeitstempel.",
+      "cta": "{count} als verifiziert markieren"
+    },
+    "query": {
+      "title": "Anmerkung hinzufügen",
+      "noteType": "Art der Anmerkung",
+      "descriptionLabel": "Beschreibung",
+      "descriptionPlaceholder": "Was ist klärungsbedürftig? Quelldokument-Referenz angeben…",
+      "submit": "Rückfrage absenden",
+      "auditTrailTell": "Audit-Trail-Eintrag mit monitor_demo · Zeitstempel",
+      "type": {
+        "query": "Rückfrage",
+        "failed-validation": "Fehlgeschlagene Validierung",
+        "annotation": "Notiz",
+        "reason-for-change": "Änderungsgrund"
+      }
+    }
+  },
+  "notes": {
+    "title": "Rückfragen & Diskrepanzen",
+    "subTrail": "Alle Standorte",
+    "searchPlaceholder": "Teilnehmer, Item oder Beschreibung suchen…",
+    "showingCount": "{visible} von {total} sichtbar",
+    "empty": "Keine Einträge für den aktuellen Filter.",
+    "summary": {
+      "openTotal": "Offen (alle Arten)",
+      "openTotalSub": "{total} insgesamt erfasst",
+      "openSub": "aktuell offen"
+    },
+    "filter": {
+      "assignedToMe": "Mir zugewiesen"
+    },
+    "type": {
+      "all": "Alle Arten",
+      "query": "Rückfrage",
+      "failed-validation": "Fehlgeschlagene Validierung",
+      "annotation": "Notiz",
+      "reason-for-change": "Änderungsgrund"
+    },
+    "status": {
+      "openOnly": "Nur offen",
+      "all": "Alle Status",
+      "new": "Neu",
+      "updated": "Aktualisiert",
+      "resolution-proposed": "Lösung vorgeschlagen",
+      "closed": "Geschlossen",
+      "not-applicable": "Nicht zutreffend"
+    },
+    "column": {
+      "type": "Art",
+      "status": "Status",
+      "subject": "Teilnehmer",
+      "item": "Item",
+      "description": "Beschreibung",
+      "assigned": "Zugewiesen",
+      "daysOpen": "Offene Tage"
+    }
+  },
+  "auditLog": {
+    "title": "Audit Trail der Studie",
+    "subTrail": "Alle Standorte · regulatorische Historie",
+    "intro": "Jede Datenänderung, Signatur, jeder SDV-Vorgang, jede Rückfrage und jede administrative Aktion. Unveränderlich. Filter schränken die Sicht ein; nichts wird je verborgen.",
+    "showingCount": "{visible} von {total} Ereignissen sichtbar",
+    "empty": "Keine Ereignisse für den aktuellen Filter.",
+    "by": "von",
+    "heading": {
+      "today": "Heute",
+      "yesterday": "Gestern"
+    },
+    "filter": {
+      "actor": "Akteur/-in",
+      "allActors": "Alle Akteur/-innen",
+      "variant": "Ereignistyp",
+      "subject": "Teilnehmer",
+      "allSubjects": "Alle Teilnehmer"
+    },
+    "variant": {
+      "all": "Alle Ereignistypen",
+      "signed": "Signatur",
+      "reason-for-change": "Änderungsgrund",
+      "sdv": "SDV",
+      "admin": "Administration",
+      "data": "Datenerfassung",
+      "query": "Rückfrage"
+    }
+  },
   "crfEntry": {
     "title": "CRF-Datenerfassung",
     "railHeading": "Abschnitte",

@@ -67,16 +67,64 @@ const { t } = useI18n()
         </p>
       </RouterLink>
 
+      <RouterLink
+        to="/sdv"
+        class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group"
+      >
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-sky-500" aria-hidden="true"></span>
+          <span class="font-medium text-muw-blue">Monitor</span>
+        </div>
+        <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+          {{ t('sdv.title') }}
+        </div>
+        <p class="text-slate-500 text-xs leading-relaxed">
+          Completed CRFs across all subjects with SDV requirement, bulk-verify, inline Add Query modal.
+        </p>
+      </RouterLink>
+
+      <RouterLink
+        to="/notes"
+        class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group"
+      >
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-sky-500" aria-hidden="true"></span>
+          <span class="font-medium text-muw-blue">Monitor</span>
+        </div>
+        <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+          {{ t('notes.title') }}
+        </div>
+        <p class="text-slate-500 text-xs leading-relaxed">
+          Cross-subject query + annotation list with status / type / assigned-to-me filters.
+        </p>
+      </RouterLink>
+
+      <RouterLink
+        to="/audit-log"
+        class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group"
+      >
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-sky-500" aria-hidden="true"></span>
+          <span class="font-medium text-muw-blue">Monitor</span>
+        </div>
+        <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+          {{ t('auditLog.title') }}
+        </div>
+        <p class="text-slate-500 text-xs leading-relaxed">
+          Lückenlose Zeitleiste mit Diff-Karten bei Änderungsgründen. Filterung nach Akteur / Ereignistyp / Teilnehmer.
+        </p>
+      </RouterLink>
+
       <div
         class="rounded-muw border border-slate-200 bg-slate-50 p-5 text-slate-400"
         aria-disabled="true"
       >
         <div class="flex items-center gap-2 mb-2">
           <span class="w-1.5 h-1.5 rounded-full bg-slate-300" aria-hidden="true"></span>
-          <span class="font-medium">More workflows…</span>
+          <span class="font-medium">Data Manager workflows…</span>
         </div>
         <p class="text-xs leading-relaxed">
-          SDV, Sign Subject, Build Study, etc. land per the Phase E execution playbook.
+          Build Study, CRF Designer, Import wizard, Manage Users — land in Phase E.7.
         </p>
       </div>
     </section>

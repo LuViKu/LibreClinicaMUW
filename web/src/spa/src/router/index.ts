@@ -39,6 +39,24 @@ const router = createRouter({
       component: () => import('@/views/CrfEntryView.vue'),
       meta: { title: 'CRF Entry', role: 'Investigator' as const },
     },
+    {
+      path: '/sdv',
+      name: 'sdv',
+      component: () => import('@/views/SdvView.vue'),
+      meta: { title: 'Source Data Verification', role: 'Monitor' as const },
+    },
+    {
+      path: '/notes',
+      name: 'notes',
+      component: () => import('@/views/NotesDiscrepanciesView.vue'),
+      meta: { title: 'Notes & Discrepancies', role: 'Monitor' as const },
+    },
+    {
+      path: '/audit-log',
+      name: 'audit-log',
+      component: () => import('@/views/StudyAuditLogView.vue'),
+      meta: { title: 'Study Audit Log', role: 'Monitor' as const },
+    },
   ],
 })
 

@@ -197,15 +197,22 @@ A sub-phase is **closed** when all five gates are green and the PR description's
 
 ## E.6 — Monitor workflow
 
-**Order:**
+**Status:** 🟢 **3/5 screens shipped 2026-05-30** — SDV + Notes & Discrepancies + Study Audit Log + Add Query modal embedded in SDV. Read-only CRF view is the carry-over to a follow-up PR (it's a thin specialisation of CrfEntryView).
 
-1. **SDV Table** ([monitor-sdv.html](phase-e/ux-mockups/monitor-sdv.html)) — replaces `/pages/viewAllSubjectSDVtmp`.
-2. **Read-only CRF View** ([monitor-crf-readonly.html](phase-e/ux-mockups/monitor-crf-readonly.html)) — replaces `/ViewSectionDataEntry`.
-3. **Add Query modal** ([monitor-add-query.html](phase-e/ux-mockups/monitor-add-query.html)) — replaces the legacy popup-window discrepancy-note flow.
-4. **Notes & Discrepancies** ([notes-discrepancies.html](phase-e/ux-mockups/notes-discrepancies.html)) — replaces `/ViewNotes` (with the per-subject `/ListSubjectDiscNote` retired per validation report).
-5. **Study Audit Log** ([study-audit-log.html](phase-e/ux-mockups/study-audit-log.html)) — replaces `/ViewAuditLog`.
+**Order (as shipped + remaining):**
+
+1. ✅ **SDV Table** ([monitor-sdv.html](phase-e/ux-mockups/monitor-sdv.html)) — replaces `/pages/viewAllSubjectSDVtmp`. SPA view at `/app/sdv` ([SdvView.vue](../../web/src/spa/src/views/SdvView.vue)) consumes the [sdv Pinia store](../../web/src/spa/src/stores/sdv.ts) with 9 Vitest cases pinning the filter dimensions + the bulk-verify state machine. Bulk selection only allows pending rows; toggleAllInView respects the active filter; verifySelected is optimistic and flips selected rows to `verified` in one tick.
+2. ⏳ **Read-only CRF view** ([monitor-crf-readonly.html](phase-e/ux-mockups/monitor-crf-readonly.html)) — carry-over. The existing CrfEntryView accepts a `readOnly` flag in the planned adapter contract — the read-only variant ships as a `<router-link>` from the SDV row plus a `readOnly = true` query param + a thin `CrfReadonlyView.vue` that mirrors the layout without the editable bindings.
+3. ✅ **Add Query modal** ([monitor-add-query.html](phase-e/ux-mockups/monitor-add-query.html)) — replaces the legacy popup-window discrepancy-note flow. Embedded in `SdvView.vue` as a row action; uses the `<Modal>` primitive with a segmented 4-up note-type control + description textarea + audit-trail tell in the footer. Optimistically bumps the row's `openQueries` count + flips status to `query`.
+4. ✅ **Notes & Discrepancies** ([notes-discrepancies.html](phase-e/ux-mockups/notes-discrepancies.html)) — replaces `/ViewNotes` (with the per-subject `/ListSubjectDiscNote` retired per validation report). SPA view at `/app/notes` ([NotesDiscrepanciesView.vue](../../web/src/spa/src/views/NotesDiscrepanciesView.vue)). Summary cards per type (open count), status + type + assigned-to-me filters, status pill + open-only filter default.
+5. ✅ **Study Audit Log** ([study-audit-log.html](phase-e/ux-mockups/study-audit-log.html)) — replaces `/ViewAuditLog`. SPA view at `/app/audit-log` ([StudyAuditLogView.vue](../../web/src/spa/src/views/StudyAuditLogView.vue)) uses the `<Timeline>` + `<TimelineMarker>` + `<TimelineEvent>` + `<DiffCard>` primitives. Events grouped by day descending; date markers say "Today" / "Yesterday" / `dd-MMM-yyyy`; Reason-for-Change events render the before/after diff card inline.
 
 **Risk:** SDV is the regulator-facing surface. **Every status pill + filter combination must match the legacy view's set of legal states.** Cross-reference each pill state against [monitor-features.md](phase-e/monitor-features.md) before shipping.
+
+**Plumbing landed alongside E.6:**
+
+- `TopBar`'s role chip now derives from `route.meta.role` in `App.vue`, so Investigator routes show the muw-teal chip + `user_demo` and Monitor routes show the muw-sky chip + `monitor_demo`. Data Manager (E.7) routes will pick `dm_demo` + the muw-coral chip via the same lookup.
+- Home view's tile grid grew six tiles (3 Investigator + 3 Monitor) + a placeholder DM card.
 
 ---
 

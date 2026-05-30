@@ -95,22 +95,21 @@ src/
 | E.3 — Shared component library | 🟢 in progress (8/10 primitives) | TopBar, SideRail, StatusPill, DenseTable, FormPrimitives (×5), Modal, DiffCard, Timeline, Wizard |
 | E.4 — Backend API surface review | ✅ first-pass shipped 2026-05-30 | [docs/.../phase-e/api-surface.md](../../../docs/development/modernization/phase-e/api-surface.md) |
 | E.5 — Investigator workflow | 🟢 3/3 screens shipped (Subject Matrix + Add Subject + CRF Entry) | [SubjectMatrixView.vue](src/views/SubjectMatrixView.vue), [AddSubjectView.vue](src/views/AddSubjectView.vue), [CrfEntryView.vue](src/views/CrfEntryView.vue), [stores/subjects.ts](src/stores/subjects.ts), [stores/crfEntry.ts](src/stores/crfEntry.ts) |
-| E.4 — Backend API surface review | pending | TBD |
-| E.5 — Investigator workflow | pending | TBD |
-| E.6 — Monitor workflow | pending | TBD |
+| E.6 — Monitor workflow | 🟢 3/3 screens shipped (SDV + Notes & Discrepancies + Study Audit Log) + Add Query modal | [SdvView.vue](src/views/SdvView.vue), [NotesDiscrepanciesView.vue](src/views/NotesDiscrepanciesView.vue), [StudyAuditLogView.vue](src/views/StudyAuditLogView.vue), [stores/sdv.ts](src/stores/sdv.ts), [stores/notes.ts](src/stores/notes.ts), [stores/auditLog.ts](src/stores/auditLog.ts) |
 | E.7 — Data Manager workflow | pending | TBD |
 | E.8 — Auth integration | pending | TBD |
 | E.9 — Accessibility + i18n | pending (vue-i18n wired) | TBD |
 | E.10 — Usability testing | pending | TBD |
 | E.11 — Cutover + JSP retirement | pending | TBD |
 
-## Phase E.0 entry blocker
+## Phase E.0 entry blocker — **resolved**
 
-The legacy `/pages/login/login` JSP path returns HTTP 404 on `lc-develop @ 5d4932481` —
-see [post-Phase-D UI validation report](../../../docs/development/modernization/phase-e/post-phase-d-ui-validation.md).
-The SPA scaffolding does **not** depend on that being green (the SPA
-serves from `/app/`, not `/pages/`), so E.1–E.3 ship in parallel with
-E.0 diagnosis.
+The legacy `/pages/login/login` JSP 404 reported in the [post-Phase-D UI
+validation report](../../../docs/development/modernization/phase-e/post-phase-d-ui-validation.md)
+was fixed on `lc-develop @ dccfc86e2` (tag `phase-e0-pages-dispatcher-fix`,
+2026-05-30 evening). `/pages/login/login`, `/pages/sso/reauth`, and
+`/pages/odmk/odm/v1/Studies` all resolve. SPA work proceeded in parallel
+during the diagnosis, so E.1–E.6 are already on top.
 
 ## Known caveats (Phase E.0 → E.3)
 

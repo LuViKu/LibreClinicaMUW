@@ -113,6 +113,141 @@
     },
     "modesHelp": "Save modes: \"Schedule first event\" opens the subject view (event scheduler lands in a later sub-phase). \"Add next\" keeps you here with a clean form. \"Finish\" returns to the Subject Matrix."
   },
+  "sdv": {
+    "title": "Source Data Verification",
+    "subTrail": "All sites · view by Event CRF",
+    "searchPlaceholder": "Find subject, event, or CRF…",
+    "showingCount": "{visible} of {total} shown · {verifiable} verifiable",
+    "openQueriesTooltip": "{count} open query/queries",
+    "empty": "No CRFs match the current filter.",
+    "selectionAriaLabel": "Bulk-verify action bar",
+    "selectAllAriaLabel": "Select all verifiable CRFs in the current view",
+    "selectRowAriaLabel": "Select {subject} · {crf}",
+    "selectedCount": "{count} selected",
+    "status": {
+      "all": "All statuses",
+      "pending": "Pending",
+      "query": "Query",
+      "verified": "Verified",
+      "locked": "Locked"
+    },
+    "requirement": {
+      "all": "All SDV requirements",
+      "required-100": "100% required",
+      "required-partial": "Partial required",
+      "not-required": "Not required"
+    },
+    "filter": {
+      "onlyWithQueries": "Only with open queries"
+    },
+    "column": {
+      "subject": "Subject",
+      "site": "Site",
+      "event": "Event",
+      "eventDate": "Event date",
+      "crf": "CRF",
+      "requirement": "Requirement",
+      "status": "Status"
+    },
+    "action": {
+      "markAsVerified": "Mark {count} as verified (SDV)",
+      "cancelSelection": "Cancel",
+      "addQuery": "Add query",
+      "openCrf": "Open CRF"
+    },
+    "toast": {
+      "verifiedCount": "{count} CRF/CRFs marked verified."
+    },
+    "confirm": {
+      "title": "Mark as verified?",
+      "body": "All {count} selected CRFs will be flipped to Verified (SDV). The action is recorded in the audit log.",
+      "note": "If data on a verified CRF is later changed, its SDV status resets to Pending automatically.",
+      "auditNote": "Audit trail entry will reference monitor_demo + the timestamp.",
+      "cta": "Mark {count} as verified"
+    },
+    "query": {
+      "title": "Add Note",
+      "noteType": "Note type",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "What needs clarifying? Reference the source document if relevant…",
+      "submit": "Submit query",
+      "auditTrailTell": "Audit trail entry will reference: monitor_demo · timestamp",
+      "type": {
+        "query": "Query",
+        "failed-validation": "Failed validation",
+        "annotation": "Annotation",
+        "reason-for-change": "Reason for change"
+      }
+    }
+  },
+  "notes": {
+    "title": "Notes & Discrepancies",
+    "subTrail": "All sites",
+    "searchPlaceholder": "Find subject, item, or description…",
+    "showingCount": "{visible} of {total} shown",
+    "empty": "No discrepancies match the current filter.",
+    "summary": {
+      "openTotal": "Open (all types)",
+      "openTotalSub": "{total} total recorded",
+      "openSub": "currently open"
+    },
+    "filter": {
+      "assignedToMe": "Assigned to me"
+    },
+    "type": {
+      "all": "All types",
+      "query": "Query",
+      "failed-validation": "Failed validation",
+      "annotation": "Annotation",
+      "reason-for-change": "Reason for change"
+    },
+    "status": {
+      "openOnly": "Open only",
+      "all": "All statuses",
+      "new": "New",
+      "updated": "Updated",
+      "resolution-proposed": "Resolution proposed",
+      "closed": "Closed",
+      "not-applicable": "Not applicable"
+    },
+    "column": {
+      "type": "Type",
+      "status": "Status",
+      "subject": "Subject",
+      "item": "Item",
+      "description": "Description",
+      "assigned": "Assigned",
+      "daysOpen": "Days open"
+    }
+  },
+  "auditLog": {
+    "title": "Study Audit Log",
+    "subTrail": "All sites · regulatory history",
+    "intro": "Every data change, sign-off, SDV event, query, and administrative action. Immutable. Filters narrow the view; nothing is ever hidden.",
+    "showingCount": "{visible} of {total} events shown",
+    "empty": "No events match the current filter.",
+    "by": "by",
+    "heading": {
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
+    "filter": {
+      "actor": "Actor",
+      "allActors": "All actors",
+      "variant": "Event type",
+      "subject": "Subject",
+      "allSubjects": "All subjects"
+    },
+    "variant": {
+      "all": "All event types",
+      "signed": "Sign-off",
+      "reason-for-change": "Reason for change",
+      "sdv": "SDV",
+      "admin": "Admin",
+      "data": "Data entry",
+      "query": "Query"
+    }
+  },
   "crfEntry": {
     "title": "CRF data entry",
     "railHeading": "Sections",
