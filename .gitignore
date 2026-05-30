@@ -30,6 +30,7 @@ ws/.DS_Store
 nb-configuration.xml
 /.README.md.html
 .m2-cache/
+.m2-cache-it/
 
 # Test-run pollution: tests evaluate `filePath=${catalina.home}/...` outside Tomcat,
 # leaving a literal-named directory. See core/src/test/resources/datainfo.properties.
