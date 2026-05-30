@@ -1,0 +1,25 @@
+{
+  "app": {
+    "name": "LibreClinica MUW",
+    "tagline": "Clinical study data platform of the Ophthalmology Department"
+  },
+  "nav": {
+    "subjectMatrix": "Subject Matrix",
+    "viewEvents": "View Events",
+    "notes": "Notes & Discrepancies",
+    "sdv": "Source Data Verification",
+    "auditLog": "Audit Trail",
+    "buildStudy": "Build Study",
+    "manageUsers": "Manage Users"
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back",
+    "next": "Next",
+    "search": "Search",
+    "filter": "Filter",
+    "clear": "Clear"
+  }
+}

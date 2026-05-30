@@ -69,58 +69,66 @@ A sub-phase is **closed** when all five gates are green and the PR description's
 
 ---
 
-## E.1 — Framework bake-off and DR-008 decision
+## E.1 — Vue 3 SPA scaffolding (bake-off waived)
 
-**Goal:** ratify the SPA framework, the build pipeline, and the deployment-into-WAR strategy.
+**Status:** ✅ **Shipped 2026-05-30** ([web/src/spa/](../../web/src/spa/), wired into [web/pom.xml](../../web/pom.xml)).
 
-**Scope:**
+**Goal:** stand up the SPA project structure, lock the build pipeline, and bind the bundle into the WAR.
 
-1. Two-week timeboxed bake-off: implement the **Investigator Subject Matrix** ([investigator-subject-matrix.html](phase-e/ux-mockups/investigator-subject-matrix.html)) once in **React 19** and once in **Vue 3.4**, each consuming a mock backend over the existing `/pages/listSubjectsRest`-shape JSON.
-2. Score the two implementations on: bundle size, TTI, ergonomics for a JSP-trained team, ecosystem for the Phase E component surface (table + form + modal + wizard), Tailwind v4 + headlessui-equivalent maturity.
-3. Wire the chosen framework into the `web/` Maven module via the **Frontend Maven Plugin** so the SPA bundle is produced by `mvn package` and lands at `webapp/app/`. Spring Security CSRF + same-origin so no CORS headaches.
+**Scope (as shipped):**
 
-**Verification gates:**
+1. **No bake-off.** DR-008 (Vue 3) was settled directly without comparing React/Vue/Svelte implementations. The differences are real but not catastrophic, and the team's prior is strong; the bake-off's risk-reduction value did not justify two weeks. See [DR-008 §Why no bake-off](decision-record.md#dr-008--ui-framework-for-phase-e-vue-3) for the full reasoning.
+2. **Vue 3 SPA scaffold** under [`web/src/spa/`](../../web/src/spa/): package.json + vite.config.ts + tsconfig.json + index.html + src/main.ts + src/App.vue + src/router/ + src/locales/ (DE + EN) + src/style.css with Tailwind v4 + MUW `@theme` directives (per E.2 specification, shipped together).
+3. **Frontend Maven Plugin** wired into [`web/pom.xml`](../../web/pom.xml). `mvn package` runs `pnpm install` + `pnpm build` automatically. Vite outputs to `web/src/main/webapp/app/`, maven-war-plugin packages it into the WAR. Skip during fast Java iteration via `mvn package -DskipSpa=true`.
 
-- Bake-off implementations checked in under `web/src/spa-bakeoff/{react,vue}/` for archival.
-- Decision documented as **DR-008 Accepted** before E.2 starts.
-- A passing Vite production build runs in CI alongside the Maven build.
+**Verification gates (as shipped):**
 
-**Risks:**
+- ✅ Vue 3 SPA renders a smoke-test landing view at `/LibreClinica/app/` after `mvn package + docker compose up`. The HomeView uses MUW Dunkelblau + Newsreader serif + coral accent + i18n switching between `de-AT` and `en`.
+- ✅ DR-008 documented as **Accepted** ([decision-record.md](decision-record.md)).
+- ✅ The SPA build runs alongside the Maven build via the Frontend Maven Plugin.
+- ⏳ A Vue-specific CI job (`pnpm test` + `pnpm build`) is not yet wired — added in E.4 alongside the backend API surface review.
 
-- Pick-and-stick — switching frameworks after E.4 doubles total Phase E effort.
-- Tailwind v4 minor churn during the bake-off period (acceptable; v4 is stable).
+**Carry-overs into E.2:**
+
+- Vendor the actual WOFF2 font files for Newsreader / Inter / JetBrains Mono into `web/src/spa/src/assets/fonts/` so institutional networks aren't reliant on Google Fonts.
+- Set up the `pnpm check-tokens` script that fails the build if any SPA component uses a colour outside the locked MUW palette.
 
 ---
 
 ## E.2 — Tailwind production build and design-token lockdown
 
+**Status:** 🟡 **Partial — shipped 2026-05-30 alongside E.1.** Token port complete; font vendoring + `check-tokens` script deferred.
+
 **Goal:** lift the MUW design system from the CDN-driven mockup style into a real Tailwind build, locked behind a CI gate.
 
-**Scope:**
+**Scope (as shipped 2026-05-30):**
 
-1. Wire **Tailwind v4** with `@theme` blocks consuming the [muw-tokens.css](phase-e/design-system/project/muw-tokens.css) palette + Newsreader / Inter / JetBrains Mono fonts (replace the [muw-tailwind-config.js](phase-e/design-system/project/muw-tailwind-config.js) CDN-shaped config).
-2. Lock the colour palette in a **`design-tokens.json`** (the format consumed by Style Dictionary) so Figma + dev share one source of truth.
-3. Add a **`pnpm run check-tokens`** script that fails the build if any SPA component uses a colour outside the locked palette.
-4. Vendor `Newsreader`, `Inter`, `JetBrains Mono` as WOFF2 files under `webapp/app/fonts/` (institutional networks cannot rely on Google Fonts).
+1. ✅ **Tailwind v4 wired** in [web/src/spa/src/style.css](../../web/src/spa/src/style.css) with `@theme` directives covering the full MUW palette (muw-blue + muw-sky + muw-teal + muw-coral with 50–900 shade scales), Newsreader / Inter / JetBrains Mono font stacks, MUW radius (`--radius-muw`), and MUW shadows (`--shadow-muw-card` / `--shadow-muw-elev`). The new `@theme` block uses Tailwind v4's CSS custom-property convention (`--color-muw-blue-800`, etc.) so `bg-muw-blue-800` / `text-muw-coral-700` style classes work natively without a separate `tailwind.config.js`.
+2. ⏳ **`design-tokens.json` Style Dictionary export** — deferred. Will land alongside the Figma handoff loop in E.5.
+3. ⏳ **`pnpm check-tokens` CI gate** — wired as a script entry in [package.json](../../web/src/spa/package.json) but the implementation script (regex over `src/**/*.{vue,ts}` flagging non-MUW colour utilities) is not written yet. Land in E.3 once enough primitives exist to test against.
+4. ⏳ **Vendor WOFF2 fonts** to `web/src/spa/src/assets/fonts/` — directory created, files not yet committed. Carry-over into E.2's second pass.
 
-**Verification gates:**
+**Verification gates (carry-overs):**
 
 - `pnpm build` produces a deterministic CSS bundle whose hash matches across two consecutive runs.
 - `pnpm run check-tokens` is wired into CI and fails on a synthetic violation in the test suite.
+- The vendored fonts are loaded with `font-display: swap` and `<link rel="preload">` headers for the two display-weight cuts used above the fold.
 
 ---
 
 ## E.3 — Shared component library extraction
 
+**Status:** 🟡 **3/10 primitives shipped 2026-05-30** ([web/src/spa/src/components/](../../web/src/spa/src/components/)). Histoire wired.
+
 **Goal:** build the primitives every later sub-phase depends on, once.
 
 **Scope (component → mockup it was extracted from):**
 
-| Primitive | Source mockup | Use sites (sub-phases) |
-|---|---|---|
-| `<TopBar>` (logo + breadcrumb + role chip + role switcher) | every mockup | E.4–E.9 |
-| `<SideRail>` (role-conditional nav) | every mockup | E.4–E.9 |
-| `<StatusPill>` (dot + icon + label) | [investigator-subject-matrix](phase-e/ux-mockups/investigator-subject-matrix.html) | E.4–E.9 |
+| Primitive | Source mockup | Use sites (sub-phases) | Status |
+|---|---|---|---|
+| `<TopBar>` (logo + breadcrumb + role chip) | every mockup | E.4–E.9 | ✅ shipped |
+| `<SideRail>` (role-conditional nav) | every mockup | E.4–E.9 | ✅ shipped |
+| `<StatusPill>` (dot + icon + label) | [investigator-subject-matrix](phase-e/ux-mockups/investigator-subject-matrix.html) | E.4–E.9 | ✅ shipped + Vitest + Histoire story |
 | `<DenseTable>` (sticky header + filter row + bulk action) | [monitor-sdv](phase-e/ux-mockups/monitor-sdv.html) | E.5, E.6, E.7 |
 | `<FormPrimitives>` (input, select, radio, checkbox, asterisk, helper, error) | [investigator-add-subject](phase-e/ux-mockups/investigator-add-subject.html) | E.4, E.7, E.8 |
 | `<Modal>` (over-context, segmented type control) | [monitor-add-query](phase-e/ux-mockups/monitor-add-query.html) | E.6, E.7 |

@@ -1,0 +1,25 @@
+{
+  "app": {
+    "name": "LibreClinica MUW",
+    "tagline": "Klinische Studiendaten-Plattform der Augenklinik"
+  },
+  "nav": {
+    "subjectMatrix": "Studienteilnehmer",
+    "viewEvents": "Visiten",
+    "notes": "Rückfragen",
+    "sdv": "Quelldatenvergleich",
+    "auditLog": "Audit Trail",
+    "buildStudy": "Studienaufbau",
+    "manageUsers": "Nutzer verwalten"
+  },
+  "common": {
+    "loading": "Wird geladen…",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "search": "Suche",
+    "filter": "Filter",
+    "clear": "Zurücksetzen"
+  }
+}

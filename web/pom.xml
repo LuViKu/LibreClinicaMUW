@@ -13,6 +13,14 @@
 
 	<properties>
 		<assembly.name>LibreClinica</assembly.name>
+		<!--
+			Phase E.1 (2026-05-30): skip the Vue 3 SPA build during local
+			Maven iteration with `mvn package -DskipSpa=true`. Default
+			false so `mvn package` produces a complete WAR. The Frontend
+			Maven Plugin downloads Node + pnpm into target/spa-tooling
+			the first time it runs (~30 MB, cached for subsequent runs).
+		-->
+		<skipSpa>false</skipSpa>
 	</properties>
 
 	<dependencies>
@@ -509,7 +517,65 @@
 							</includes>
 						</overlay>
 					</overlays>
+					<!--
+						Phase E.1 (2026-05-30): the SPA bundle produced by
+						the Frontend Maven Plugin (under src/main/webapp/app/)
+						is included in the WAR automatically because it
+						sits under webResource srcs. No extra configuration here.
+					-->
 				</configuration>
+			</plugin>
+			<!--
+				Phase E.1 (2026-05-30): wire the Vue 3 SPA build into mvn package.
+				`mvn package` runs `pnpm install` + `pnpm build` inside
+				web/src/spa/; Vite's `outDir` (vite.config.ts) points at
+				web/src/main/webapp/app/ so the bundle lands where
+				maven-war-plugin will pick it up.
+				Skip in local iteration with `mvn package -DskipSpa=true`.
+				Per DR-008.
+			-->
+			<plugin>
+				<groupId>com.github.eirslett</groupId>
+				<artifactId>frontend-maven-plugin</artifactId>
+				<version>1.15.1</version>
+				<configuration>
+					<workingDirectory>src/spa</workingDirectory>
+					<installDirectory>target/spa-tooling</installDirectory>
+					<skip>${skipSpa}</skip>
+				</configuration>
+				<executions>
+					<execution>
+						<id>install-node-and-pnpm</id>
+						<phase>generate-resources</phase>
+						<goals>
+							<goal>install-node-and-pnpm</goal>
+						</goals>
+						<configuration>
+							<nodeVersion>v20.17.0</nodeVersion>
+							<pnpmVersion>9.10.0</pnpmVersion>
+						</configuration>
+					</execution>
+					<execution>
+						<id>pnpm-install</id>
+						<phase>generate-resources</phase>
+						<goals>
+							<goal>pnpm</goal>
+						</goals>
+						<configuration>
+							<arguments>install --frozen-lockfile --prefer-offline</arguments>
+						</configuration>
+					</execution>
+					<execution>
+						<id>pnpm-build</id>
+						<phase>prepare-package</phase>
+						<goals>
+							<goal>pnpm</goal>
+						</goals>
+						<configuration>
+							<arguments>build</arguments>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 		<pluginManagement>
