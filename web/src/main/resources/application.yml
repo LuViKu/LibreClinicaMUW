@@ -99,3 +99,37 @@ management:
       enabled: true
     os:
       enabled: true
+
+# Phase D.3 (DR-014): institution-agnostic SSO configuration.
+#
+# Disabled by default — flipping `enabled: true` activates the
+# RequestHeaderAuthenticationFilter pre-auth path. The reverse-proxy
+# sidecar (Apache+mod_shib for the MedUni Wien reference deployment;
+# mod_auth_openidc / oauth2-proxy / Keycloak Gatekeeper / AWS ALB OIDC
+# for other institutions) terminates the SSO protocol and injects the
+# configured headers. Provider swap = sidecar + env-var change, never
+# a code change.
+#
+# trusted-proxy.allowed-cidrs MUST be narrowed in production to the
+# specific reverse-proxy IP. Tomcat MUST bind to the compose-internal
+# network only; the header-spoofing defence depends on it.
+libreclinica:
+  sso:
+    enabled: ${LIBRECLINICA_SSO_ENABLED:false}
+    header:
+      principal: ${LIBRECLINICA_SSO_PRINCIPAL_HEADER:REMOTE_USER}
+      email: ${LIBRECLINICA_SSO_EMAIL_HEADER:mail}
+      display-name: ${LIBRECLINICA_SSO_DISPLAY_NAME_HEADER:displayName}
+    provider:
+      name: ${LIBRECLINICA_SSO_PROVIDER:shibboleth-meduniwien}
+    provisioning:
+      strategy: ${LIBRECLINICA_SSO_PROVISIONING:LOOKUP_ONLY}
+      default-role: ${LIBRECLINICA_SSO_DEFAULT_ROLE:ROLE_USER}
+    trusted-proxy:
+      allowed-cidrs: ${LIBRECLINICA_SSO_TRUSTED_CIDRS:127.0.0.1/32,172.16.0.0/12}
+    entry-url: ${LIBRECLINICA_SSO_ENTRY_URL:/sso/login}
+    button-label: ${LIBRECLINICA_SSO_BUTTON_LABEL:Sign in with Institutional Account}
+    delegate-mfa-to-idp: ${LIBRECLINICA_SSO_DELEGATE_MFA:true}
+    reauth:
+      enabled: ${LIBRECLINICA_SSO_REAUTH:false}
+      url-template: ${LIBRECLINICA_SSO_REAUTH_URL_TEMPLATE:/Shibboleth.sso/Login?forceAuthn=true&target={target}}

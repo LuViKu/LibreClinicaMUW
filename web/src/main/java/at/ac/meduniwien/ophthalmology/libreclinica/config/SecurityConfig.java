@@ -1,21 +1,28 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.config;
 
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
+import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationProvider;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.session.ConcurrentSessionFilter;
 import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SsoUserDetailsService;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.TrustedProxyRequestHeaderAuthenticationFilter;
 
 /**
  * Phase C.14 cliff (2026-05-30): Java replacement for the
@@ -45,6 +52,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernam
  */
 @Configuration
 @EnableWebSecurity
+@EnableConfigurationProperties(SsoProperties.class)
 public class SecurityConfig {
 
     @Bean
@@ -55,7 +63,12 @@ public class SecurityConfig {
             @Qualifier("myFilter") OpenClinicaUsernamePasswordAuthenticationFilter myFilter,
             @Qualifier("concurrencyFilter") ConcurrentSessionFilter concurrencyFilter,
             @Qualifier("sas") SessionAuthenticationStrategy sas,
-            @Qualifier("openClinicaLogoutHandler") LogoutSuccessHandler logoutSuccessHandler) throws Exception {
+            @Qualifier("openClinicaLogoutHandler") LogoutSuccessHandler logoutSuccessHandler,
+            // Phase D.3 (DR-014): SSO pre-auth wiring. The filter is
+            // only attached when libreclinica.sso.enabled=true;
+            // otherwise the auth flow is identical to D.2 closure.
+            SsoProperties ssoProperties,
+            UserAccountDAO userAccountDao) throws Exception {
 
         http
             .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
@@ -106,6 +119,34 @@ public class SecurityConfig {
                 .logoutUrl("/j_spring_security_logout")
                 .logoutSuccessHandler(logoutSuccessHandler)
             );
+
+        // Phase D.3 (DR-014): institution-agnostic SSO pre-auth.
+        // Wired AHEAD of myFilter (the local username/password filter)
+        // so a valid pre-auth header short-circuits the local path.
+        // CIDR allowlist refuses pre-auth claims from untrusted
+        // upstream IPs (header-spoofing defence).
+        if (ssoProperties.isEnabled()) {
+            TrustedProxyRequestHeaderAuthenticationFilter preAuthFilter =
+                    new TrustedProxyRequestHeaderAuthenticationFilter(
+                            ssoProperties.getTrustedProxy().getAllowedCidrs());
+            preAuthFilter.setPrincipalRequestHeader(
+                    ssoProperties.getHeader().getPrincipal());
+            // exceptionIfHeaderMissing=false → header-absent requests
+            // fall through to the local username/password path; only
+            // a present-AND-trusted header attempts pre-auth.
+            preAuthFilter.setExceptionIfHeaderMissing(false);
+
+            SsoUserDetailsService ssoUserDetailsService =
+                    new SsoUserDetailsService(userAccountDao, ssoProperties);
+            PreAuthenticatedAuthenticationProvider provider =
+                    new PreAuthenticatedAuthenticationProvider();
+            provider.setPreAuthenticatedUserDetailsService(ssoUserDetailsService);
+            AuthenticationManager preAuthMgr = new ProviderManager(provider);
+            preAuthFilter.setAuthenticationManager(preAuthMgr);
+
+            http.addFilterBefore(preAuthFilter,
+                    OpenClinicaUsernamePasswordAuthenticationFilter.class);
+        }
 
         return http.build();
     }
