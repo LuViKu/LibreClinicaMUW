@@ -41,8 +41,14 @@ public class LogFilterOther extends LogFilterBase {
     public int getLogFacilityCode(String loggerName) {
         int logFacilityCode = -1;
 
-        if ((loggerName.contains(".login")) || (loggerName.contains("core.OpenClinicaPasswordEncoder"))
- || (loggerName.contains("domain.user")))
+        // Phase D.1 (2026-05-30): "core.OpenClinicaPasswordEncoder" string
+        // dropped — that class was deleted; new auth-facility-relevant
+        // logger names are "core.LegacyMd5Sha1PasswordEncoder" (legacy
+        // hash matching) + "config.PasswordEncoderConfig" (encoder bean).
+        if ((loggerName.contains(".login"))
+                || (loggerName.contains("core.LegacyMd5Sha1PasswordEncoder"))
+                || (loggerName.contains("config.PasswordEncoderConfig"))
+                || (loggerName.contains("domain.user")))
             {
             logFacilityCode = SYSLOG_FACILITY_AUTH;
             }

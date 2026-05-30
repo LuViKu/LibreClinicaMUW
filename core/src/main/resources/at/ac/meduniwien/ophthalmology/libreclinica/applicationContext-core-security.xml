@@ -14,34 +14,35 @@
     <!-- Phase B.4 cliff: Spring Security 6 — use id= rather than only alias=
          so the <security:http> child AuthenticationManagerFactoryBean (created
          by HttpSecurityBeanDefinitionParser) can resolve the parent manager
-         under its expected reference name. -->
+         under its expected reference name.
+         Phase D.1 (2026-05-30): `openClinicaPasswordEncoder` is now an alias
+         for the `passwordEncoder` bean provided by PasswordEncoderConfig
+         (DelegatingPasswordEncoder with bcrypt + LegacyMd5Sha1 fallback).
+         The XML keeps the legacy bean ID reference to avoid touching
+         <security:password-encoder ref=…/> until the security XML retires.
+    -->
     <security:authentication-manager id="authenticationManager">
         <security:authentication-provider user-service-ref="ocUserDetailsService">
-            <security:password-encoder ref="openClinicaPasswordEncoder"/>
+            <security:password-encoder ref="passwordEncoder"/>
         </security:authentication-provider>
         <security:authentication-provider ref="ldapAuthenticationProvider"/>
     </security:authentication-manager>
 
-    <bean id="shaPasswordEncoder" class="org.springframework.security.crypto.password.MessageDigestPasswordEncoder">
-    	<constructor-arg value="SHA-1"/>
-    </bean>
-    <bean id="md5PasswordEncoder" class="org.springframework.security.crypto.password.MessageDigestPasswordEncoder">
-    	<constructor-arg value="MD5"/>
-    </bean>
-
-    <bean id="openClinicaPasswordEncoder" class="at.ac.meduniwien.ophthalmology.libreclinica.core.OpenClinicaPasswordEncoder">
-        <property name="currentPasswordEncoder" ref="shaPasswordEncoder"/>
-        <property name="oldPasswordEncoder" ref="md5PasswordEncoder"/>
-    </bean>
+    <!-- Phase D.1: thin stub that activates the @Configuration class
+         providing the `passwordEncoder` bean (aliased to the legacy
+         `openClinicaPasswordEncoder` name for caller-site compat).
+         Replaces the deleted shaPasswordEncoder + md5PasswordEncoder +
+         openClinicaPasswordEncoder XML beans. -->
+    <bean class="at.ac.meduniwien.ophthalmology.libreclinica.config.PasswordEncoderConfig"/>
 
     <bean id="securityManager" class="at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager">
-        <property name="encoder" ref="openClinicaPasswordEncoder"/>
+        <property name="encoder" ref="passwordEncoder"/>
         <property name="providers">
             <list>
                 <ref bean="ldapAuthenticationProvider"/>
                 <bean class="org.springframework.security.authentication.dao.DaoAuthenticationProvider">
                     <property name="userDetailsService" ref="ocUserDetailsService"/>
-                    <property name="passwordEncoder" ref="openClinicaPasswordEncoder"/>
+                    <property name="passwordEncoder" ref="passwordEncoder"/>
                 </bean>
             </list>
         </property>
