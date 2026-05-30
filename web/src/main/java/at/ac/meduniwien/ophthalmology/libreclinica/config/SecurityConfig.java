@@ -141,7 +141,10 @@ public class SecurityConfig {
                         // wired so a future Sign Subject controller
                         // can invoke it when legal/regulatory
                         // ratifies proxy-mediated §11.50 e-signatures.
-                        "/sso/reauth"
+                        // Resolved on the pages dispatcher because
+                        // Boot's root @ComponentScan does not include
+                        // the controller package.
+                        "/pages/sso/reauth"
                 )).permitAll()
                 .anyRequest().hasRole("USER")
             )

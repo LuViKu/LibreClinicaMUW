@@ -52,6 +52,16 @@ import org.springframework.web.servlet.view.RedirectView;
  * because the reverse proxy may strip the session before the
  * re-challenge — the endpoint just emits a 302 with a public URL,
  * no LibreClinica session required.
+ *
+ * <p><strong>URL path:</strong> {@code /pages/sso/reauth} (under the
+ * legacy {@code pages} DispatcherServlet's {@code /pages/*} mapping).
+ * The {@code WebMvcConfig.@ComponentScan("controller")} picks this
+ * class up for the pages dispatcher's child context. Boot's
+ * auto-registered dispatcher at {@code /} does NOT scan the
+ * {@code controller} package (LibreClinicaApplication scans only
+ * {@code .config}), so the natural shorter {@code /sso/reauth}
+ * 404s; the {@code /pages} prefix lands the request on the
+ * dispatcher that knows about this controller.
  */
 @Controller
 public class SsoReauthController {
@@ -77,7 +87,7 @@ public class SsoReauthController {
      * returns 302 to {@code /pages/login/login} as a safe fallback
      * (re-auth via the local-password path).
      */
-    @GetMapping("/sso/reauth")
+    @GetMapping("/sso/reauth")  // resolved relative to /pages — full URL is /pages/sso/reauth
     public RedirectView reauth(
             @RequestParam(value = "target", required = false, defaultValue = "/MainMenu")
                     String target) {
