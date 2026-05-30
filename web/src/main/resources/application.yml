@@ -69,3 +69,33 @@ server:
   servlet:
     context-path: /LibreClinica
   port: 8080
+
+# Phase C.15 (2026-05-30): Spring Boot Actuator
+#
+# HTTP endpoints at /LibreClinica/actuator/* served by Boot's
+# auto-configured dispatcherServlet at `/`. The legacy `pages`
+# DispatcherServlet (/pages/*) and the 215 LegacyServletRegistry
+# servlets (at exact URL patterns) take precedence per servlet-spec
+# mapping rules.
+#
+# /actuator/health top-level + /actuator/info are unauthenticated
+# (k8s/load-balancer liveness probes). /actuator/health/* sub-paths
+# show details only `when-authorized` — anonymous probes see status
+# only, no JDBC URL / disk path leakage. SecurityConfig permits the
+# two unauthenticated endpoints; everything else under /actuator/**
+# falls through to `.anyRequest().hasRole("USER")`.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+  info:
+    java:
+      enabled: true
+    os:
+      enabled: true

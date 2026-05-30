@@ -89,7 +89,14 @@ public class SecurityConfig {
                         "/pages/auth/api/v1/forms/migrate/**",
                         "/pages/api/v1/forms/migrate/**",
                         "/pages/auth/api/**",
-                        "/pages/auth/api/v1/system/**"
+                        "/pages/auth/api/v1/system/**",
+                        // Phase C.15 (2026-05-30): unauthenticated probes for
+                        // k8s/load-balancer liveness + info. /actuator/health/*
+                        // sub-paths show details only `when-authorized` per
+                        // application.yml — anonymous probes see status only.
+                        "/actuator/health",
+                        "/actuator/health/**",
+                        "/actuator/info"
                 )).permitAll()
                 .anyRequest().hasRole("USER")
             )

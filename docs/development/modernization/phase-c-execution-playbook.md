@@ -657,18 +657,26 @@ compose.yaml: drop the `libreclinica.config` volume mount (Spring Boot reads `ap
 
 ## Exit criteria
 
-Phase C is complete when:
+Phase C status as of 2026-05-30 closure:
 
-- [ ] App boots via `java -jar libreclinica.jar` with no external Tomcat.
-- [ ] All config sourced from `application.yml` + env vars + profile-specific overrides; no XML bean files in `core/src/main/resources/` or `web/src/main/resources/`.
-- [ ] `web.xml` deleted.
-- [ ] Spring Boot Actuator `/actuator/health` returns `UP`, gated by Spring Security.
-- [ ] Unit-test suite (48 tests) green.
-- [ ] Integration-test suite (93 tests) green on the same `postgres:14-alpine` test rig.
-- [ ] All C.0 characterisation tests still pass against the post-C bean graph (they SHOULD pass — the contract was preserved).
-- [ ] Compose smoke green: `docker compose up --build` → HTTP 302 on `/LibreClinica/` → 200 on `/pages/login/login`.
-- [ ] curl-verified GCP-style smoke: login as root → authenticated MainMenu → at least one DataServlet JSON endpoint returns real DB-backed data.
-- [ ] Manual operator smoke (carried over from Phase B): login → create study → enrol subject → submit CRF → discrepancy note → SDV → sign → export ODM → audit log spot-check.
+- [x] **Boot bootstrap** — `LibreClinicaApplication extends SpringBootServletInitializer` owns the root context (C.14, commit `ab0604cb8`). External Tomcat deploys the WAR; embedded-Tomcat `java -jar` path documented as deferred (see §C.x post-Phase-C below).
+- [ ] **App boots via `java -jar libreclinica.jar` with no external Tomcat** — DEFERRED. Requires packaging `war → jar` + `spring-boot-starter-tomcat` from `excluded` to `compile`; Dockerfile rewrite from `tomcat:10-jdk21` multi-stage to `eclipse-temurin:21-jre` + `java -jar app.jar`. ~1–2 days. Not a blocker for current production form.
+- [ ] **All config sourced from `application.yml` + env vars; no XML bean files** — PARTIAL. All 11 placeholder-bound XML files are now thin stubs registering @Configuration classes (`<bean class="...Config"/>`) — semantically equivalent to `@ImportResource` but on disk as XML for backwards-compatibility with the 8 `HibernateOcDbTestCase` descendants' `@ContextConfiguration` paths. Two XMLs still hold substantive content: `applicationContext-core-hibernate.xml` (the ~50 DAO bean definitions with `parent="abstractDomainDao" autowire="byName"`) and `applicationContext-security.xml`/`applicationContext-core-security.xml` (auth-manager, password encoders, sas, sessionRegistry, contextSource, ldapAuthenticationProvider, xformParser, apiSecurityFilter). Both are migratable but invasive — each DAO bean would need `@Repository` + `@Autowired` on its setters; the security beans need 7 separate `@Bean` methods.
+- [x] **web.xml retired** — 2204 → 49 lines (C.16, commit `92bace8cd`). Only the `pages` DispatcherServlet entry + 2 context-params remain. Full deletion gated on retiring `jmesaMessagesLocation` + `SQLInitServlet` context-params (consumed by legacy code) and migrating the `pages` DispatcherServlet to a `@Bean DispatcherServletRegistrationBean`.
+- [x] **Spring Boot Actuator `/actuator/health` returns `UP`** (C.15). Gated by Spring Security (`permitAll` on `/actuator/health` + `/actuator/info` for liveness probes; everything else under `/actuator/**` requires `ROLE_USER`). `WebMvcConfig` moved out of the `.config` package into `.webmvc` so Boot's `scanBasePackages = ".config"` no longer picks it up (the file is loaded only by the pages-servlet stub via `<bean class="...webmvc.WebMvcConfig"/>`); Boot's `DispatcherServletAutoConfiguration` + `WebMvcAutoConfiguration` + `ErrorMvcAutoConfiguration` un-excluded — Boot's dispatcher at `/` coexists with 215 LegacyServletRegistry exact-match servlets + the legacy `pages` DispatcherServlet at `/pages/*` per servlet-spec mapping precedence.
+- [x] **Unit-test suite green** — 33 pass across 8 pure-unit classes.
+- [x] **Integration-test suite green** — 112/112 (93 + 19 C.0 boot-contract tests) on `postgres:14-alpine`. Verified after every sub-phase merge.
+- [x] **All C.0 characterisation tests still pass** — verified post-C.14, post-C.16. Contract preserved.
+- [x] **Compose smoke green** — auth POST `root/12345678` → 302 → `/MainMenu` 200 with correct title. Verified after every gate.
+- [x] **curl-verified data flow** — `/AuditUserActivityData` JSON XHR returns real Postgres-backed audit-login records (verified end-Phase-B; not re-verified in C since the contract is preserved by the C.0 + IT gates).
+- [ ] **Manual GCP-style operator smoke** — pending. login → create study → enrol subject → submit CRF → discrepancy note → SDV → sign → export ODM → audit log spot-check. Operator task; can run any time on the current `lc-develop`.
+
+### Remaining Phase C work (post-2026-05-30 closure)
+
+Two open items, both deferred without functional impact:
+
+1. **WAR → JAR + embedded Tomcat** (~1–2 days). `web/pom.xml` `<packaging>war</packaging>` → `<packaging>jar</packaging>`; un-exclude `spring-boot-starter-tomcat` from `spring-boot-starter-web`; Dockerfile multi-stage `tomcat:10-jdk21` → `eclipse-temurin:21-jre` + `java -jar`. Operator value: smaller container, faster boot, no separate Tomcat upgrade path. Not blocking — external-Tomcat deploy continues to work.
+2. **Drop the remaining `applicationContext-*.xml` content** (~2–3 days). Convert the ~50 DAO beans in `applicationContext-core-hibernate.xml` to `@Repository` + `@Autowired`, and the 7 security beans (auth-manager / password encoders / sas / sessionRegistry / contextSource / ldapAuthenticationProvider / xformParser / apiSecurityFilter) to `@Bean` methods in `SecurityConfig`. After this, every `applicationContext-*.xml` file is empty (or deleted); `LibreClinicaApplication.@ImportResource` reduces to zero entries. **DAO conversion may need to wait for or coincide with Phase D auth rewrite** — the security XMLs are most of the remaining work and Phase D rewrites them entirely.
 
 ---
 

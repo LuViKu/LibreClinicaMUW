@@ -37,6 +37,17 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
+			<!-- Phase C.15 (2026-05-30): Spring Boot Actuator. HTTP endpoints
+			     at /LibreClinica/actuator/* served by Boot's auto-configured
+			     `dispatcherServlet` at `/` (un-excluded in C.16 once the 215
+			     legacy servlets registered at exact URL patterns via
+			     LegacyServletRegistry — exact-match precedence wins). Only
+			     health + info are exposed by default; expand via
+			     management.endpoints.web.exposure.include in application.yml. -->
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>${project.groupId}</groupId>
 			<artifactId>LibreClinica-core</artifactId>
 			<version>${project.version}</version>
@@ -441,6 +452,8 @@
 						     starter umbrella). Analyze-only doesn't credit the starter
 						     for those transitives. -->
 						<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-web</ignoredUnusedDeclaredDependency>
+						<!-- Phase C.15: Actuator starter has no compile-time refs; loaded by autoconfig. -->
+						<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-actuator</ignoredUnusedDeclaredDependency>
 						<!-- Phase C.1: Boot's BOM upgrades jakarta.mail-api to a version
 						     where the impl ships in org.eclipse.angus:jakarta.mail.
 						     Existing email code references jakarta.mail types via the

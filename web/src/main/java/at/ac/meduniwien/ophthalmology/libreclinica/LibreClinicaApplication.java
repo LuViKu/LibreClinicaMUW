@@ -19,9 +19,6 @@ import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfigurat
 import org.springframework.boot.autoconfigure.quartz.QuartzAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityFilterAutoConfiguration;
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.DispatcherServletAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.WebMvcAutoConfiguration;
-import org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.web.servlet.support.SpringBootServletInitializer;
 import org.springframework.context.annotation.ImportResource;
@@ -86,21 +83,22 @@ import org.springframework.context.annotation.ImportResource;
                 // our pinned spring-ldap version. LDAP usage is via
                 // contextSource + ldapAuthenticationProvider XML beans.
                 LdapAutoConfiguration.class,
-                // Phase C.14: keep the legacy `pages` DispatcherServlet
-                // from web.xml as the sole MVC dispatcher. Boot's
-                // DispatcherServletAutoConfiguration would register a
-                // second `dispatcherServlet` at `/`, and its `/error`
-                // mapping (ErrorMvcAutoConfiguration's BasicErrorController)
-                // intercepts container-level errors before the legacy
-                // DispatcherServlet's NoHandlerFoundException-based 404
-                // can fall through to Tomcat's error pages. The legacy
-                // pages-servlet.xml is a self-contained MVC config
-                // (RequestMappingHandlerMapping + InternalResourceViewResolver
-                // + message converters); Boot's WebMvc autoconfig adds no
-                // value alongside it.
-                DispatcherServletAutoConfiguration.class,
-                WebMvcAutoConfiguration.class,
-                ErrorMvcAutoConfiguration.class,
+                // Phase C.14 kept DispatcherServletAutoConfiguration +
+                // WebMvcAutoConfiguration + ErrorMvcAutoConfiguration
+                // excluded so the legacy `pages` DispatcherServlet was
+                // the sole MVC dispatcher (Boot's auto-registered one at
+                // `/` would have collided with 222 legacy servlet paths).
+                //
+                // Phase C.15 + C.16 (2026-05-30): un-excluded. The 215
+                // legacy servlets now register at exact URL patterns via
+                // LegacyServletRegistry's ServletContextInitializer — per
+                // servlet-spec mapping precedence, exact matches and the
+                // /pages/* path-prefix beat Boot's `/`. Boot's dispatcher
+                // catches only unmapped URLs (typically /actuator/* and
+                // /error). WebMvcConfig was moved to `.webmvc` so Boot's
+                // scanBasePackages = ".config" doesn't pick it up (it's
+                // meant only for the pages DispatcherServlet child
+                // context, loaded via pages-servlet.xml stub).
         })
 @ImportResource({
         "classpath:at/ac/meduniwien/ophthalmology/libreclinica/applicationContext-core-db.xml",

@@ -1,4 +1,4 @@
-package at.ac.meduniwien.ophthalmology.libreclinica.config;
+package at.ac.meduniwien.ophthalmology.libreclinica.webmvc;
 
 import java.util.List;
 
