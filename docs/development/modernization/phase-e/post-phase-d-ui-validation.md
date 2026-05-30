@@ -73,7 +73,13 @@ Per [memory: project_jmesa_dead_endpoints](../../../) and the Phase B.4 PRs, sev
 
 ---
 
-## 🔴 P0 regression — Phase E entry blocker
+## 🔴 P0 regression — Phase E entry blocker — **RESOLVED 2026-05-30 evening**
+
+**Resolution:** Phase 0-D backend agent shipped the fix on `lc-develop @ dccfc86e2` (tag `phase-e0-pages-dispatcher-fix`, 2026-05-30 evening, CI green). `/pages/login/login`, `/pages/sso/reauth`, and `/pages/odmk/odm/v1/Studies` all resolve end-to-end in a browser session. The fix re-binds the `pages` DispatcherServlet to its `WebMvcConfig` child context properly, adds a `SsoConfigInterceptor`, and exposes JSP context beans (`ssoProperties` etc.) so the institutional-SSO button renders on the login JSP when the flag is on. The P1 routes ride along for free since they shared the same root cause.
+
+**Phase E impact:** the SPA work proceeded against mock data in parallel during the diagnosis, so no rework is required on the SPA side. The next step for E.4 is to land the planned B-category adapter PRs under `/pages/api/v1/**` and swap the Pinia stores' `loadMock()` calls for `apiGet` calls — see [api-surface.md](api-surface.md) for the per-mockup contract.
+
+The narrative below is retained as historical context for the diagnosis arc.
 
 ### `/pages/login/login` returns HTTP 404 — login JSP entry path unreachable in a browser
 

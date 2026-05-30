@@ -51,21 +51,17 @@ A sub-phase is **closed** when all five gates are green and the PR description's
 
 ## E.0 — Known-issues triage (entry gate to all other sub-phases)
 
-**Goal:** close every entry-blocker surfaced by the validation report.
+**Status:** ✅ **CLOSED 2026-05-30 evening** by the Phase 0-D backend agent. Tag `phase-e0-pages-dispatcher-fix` @ `lc-develop @ dccfc86e2` (CI green).
 
-**Scope:**
+**What landed:** `fix(phase-e.0): pages dispatcher routing — /pages/login/login + /pages/sso/reauth + JSP context-bean exposure restored`. The `pages` DispatcherServlet is now correctly bound to its `WebMvcConfig` child context; a new `SsoConfigInterceptor` exposes JSP context beans (`ssoProperties` etc.) so the institutional-SSO button on the login JSP renders when the flag is on. `application.yml` lines 58–66 (the Phase C.14 diagnostic note) are now stale; the dispatcher init logs are visible again at the bump-to-DEBUG levels.
 
-1. Fix the **`/pages/login/login` + `/pages/sso/reauth` + `/pages/odmk/odm/v1/Studies` 404** (single shared root cause: the `pages` DispatcherServlet's child context isn't owning the `@Controller` and `BeanNameUrlHandlerMapping` registrations). Recommended fix: exclude the controller package from the root context's component-scan in [`LibreClinicaApplication`](../../web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/LibreClinicaApplication.java) via `@SpringBootApplication(scanBasePackages = …)` so the controllers register only in the `pages` child context. Surgical — single config change.
-2. **Tighten the CI smoke step** so it asserts `curl -fL http://127.0.0.1:8080/LibreClinica/pages/login/login` returns 200, not just that the redirect-from-root happens.
-3. **Refresh the Phase E feature catalogue** to mark the 3 intentional retirements identified by the validation report (per-subject Notes JSP, DataTables vendor bundle, jmesa dead endpoints).
-4. **Operator runbook** for seeding a local admin account after Phase D.1's password-encoder migration.
+The SPA work proceeded against Pinia stores fed by mock data throughout the diagnosis arc, so no rework on the phase-e branch was required when the fix landed. The next E.4 task is the planned B-category adapter PRs under `/pages/api/v1/**` — see [api-surface.md](phase-e/api-surface.md).
 
-**Verification gates:**
+**Carry-overs (deferred to specific sub-phases):**
 
-- A new `LoginPageRenderSmokeIT` extends `SmokeIT` and asserts `/pages/login/login` returns a parseable HTML body with a `<form action="/LibreClinica/j_spring_security_check">` and (when SSO is enabled) the `Sign in with Institutional Account` button.
-- All three 404'd routes return 200 after the fix.
-
-**Exit:** the validation report's "Phase E entry checklist" closes. Phase E.1 begins.
+- **CI smoke-step tightening** — already shipped during the E.0 diagnostic on commit `85c24c34c` (new "Smoke key /pages/* routes" step probes `/`, `/pages/login/login`, `/pages/sso/reauth`, `/pages/odmk/odm/v1/Studies`). Should now go from "expected red" to green on the next CI run on this branch.
+- **Phase E feature catalogue refresh** (per-subject Notes JSP, DataTables vendor bundle, jmesa dead endpoints) — already documented in the [post-Phase-D UI validation report §⚠️ Intentional retirements](phase-e/post-phase-d-ui-validation.md) and the [api-surface.md](phase-e/api-surface.md). Bookkeeping refresh of the role catalogues lands in a follow-up doc PR.
+- **Operator runbook** for seeding a local admin account after Phase D.1's password-encoder migration — folds into the SSO deployment cookbook the backend agent ships in the same wave.
 
 ---
 
