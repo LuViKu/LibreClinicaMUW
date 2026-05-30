@@ -145,65 +145,182 @@ hard to roll back.
 The plan below splits the cliff into **two sub-pushes** with independent
 gates:
 
-#### Cliff sub-push 1 — Boot bootstrap alongside web.xml (low-risk prep)
+#### Cliff sub-push 1 (DOES NOT cleanly split — see 2026-05-30 finding below)
 
-Goal: enable `java -jar app.war` while keeping the WAR deployable to
-external Tomcat. No behaviour change on the existing compose stack.
+The intent of sub-push 1 was: enable `SpringBootServletInitializer` as
+the WAR's root-context bootstrap, drop `OCContextLoaderListener` from
+`web.xml`, leave servlets and filters in `web.xml` for now.
 
-a. `LibreClinicaApplication extends SpringBootServletInitializer`,
-   overriding `configure(SpringApplicationBuilder)` to return
-   `builder.sources(LibreClinicaApplication.class)`. **Without** dropping
-   `OCContextLoaderListener` from `web.xml` yet — this stays a no-op
-   change for the external-Tomcat path.
-b. `web/pom.xml`: add `spring-boot-maven-plugin` with `<repackage>`
-   goal bound to the `package` phase. Output is now a Boot-repackaged
-   `LibreClinica-web.war` runnable via `java -jar`.
-c. `spring-boot-starter-tomcat` already declared (C.1) — keeps `compile`
-   scope; for external-Tomcat deploy, Tomcat's classpath takes precedence
-   so the bundled one stays inert.
-d. Compose smoke against the new WAR file (still deployed to external
-   Tomcat): must be identical to pre-cliff.
-e. Optional: a separate compose service tries `java -jar` startup.
+**2026-05-30 attempt revealed the cliff doesn't split this way.** The
+attack tree (each fix surfaced the next blocker):
 
-This is `~2-3 days` and lands a working dual-bootstrap WAR. **No** servlet/filter
-migration yet — they all stay in `web.xml`.
+1. **`NoClassDefFoundError: ch.qos.logback.core.util.StatusPrinter2`.**
+   Boot 3.5's `LogbackLoggingSystem` needs logback 1.5+; the pin in
+   `pom.xml` is 1.4.14. → Workaround: bump logback to 1.5.13.
+2. **`IllegalStateException: Logback configuration error detected`.**
+   The legacy `logback.xml` has 10 `RollingFileAppender`s colliding
+   on a shared file pattern by design (one appender per syslog
+   facility, all writing to the same file). Logback emits "Collisions
+   detected … Aborting" — non-fatal under the legacy bootstrap, but
+   Boot 3.5's `LogbackLoggingSystem.initialize` reads the
+   `StatusManager` and throws on any ERROR. → Workaround:
+   `-Dorg.springframework.boot.logging.LoggingSystem=none` JVM arg
+   skips Boot's logging integration and lets logback init via its
+   own auto-discovery.
+3. **`BeanDefinitionOverrideException`** for `ruleSetListenerService`
+   (and several other `@Service`-annotated services that are also
+   XML-bean-defined). Boot 3.x defaults
+   `allow-bean-definition-overriding=false`. → Workaround:
+   `spring.main.allow-bean-definition-overriding: true` in
+   `application.yml`.
+4. **`Failed to register 'filter springSecurityFilterChain' on the
+   servlet context. Possibly already registered?`** Boot's
+   `SecurityFilterAutoConfiguration` auto-registers the
+   `springSecurityFilterChain` bean as a `DelegatingFilterProxy`
+   filter, colliding with `web.xml`'s own `DelegatingFilterProxy`
+   entry for the same name. → Workaround: exclude
+   `SecurityFilterAutoConfiguration` from `@SpringBootApplication`.
+5. **`Failed to register 'filter apiSecurityFilter'`.** Same
+   mechanism: Boot's `ServletContextInitializerBeans` iterates over
+   every `Filter` bean in the context and creates a
+   `FilterRegistrationBean` for each. `apiSecurityFilter` is defined
+   as a `Filter` bean in `applicationContext-core-security.xml`;
+   `web.xml` also registers it via `DelegatingFilterProxy`.
+   **There is no global "skip all auto-registrations" property** —
+   each colliding `Filter` bean needs an explicit
+   `FilterRegistrationBean<…>.setEnabled(false)` to opt out, OR the
+   web.xml entry needs to go away.
 
-#### Cliff sub-push 2 — drop web.xml + activate Boot autoconfigs (the real cliff)
+**Conclusion:** Boot's "auto-register every `Filter` bean" semantics
+fundamentally collide with web.xml's manual filter registrations.
+Sub-push 1 cannot exist as a standalone "Boot bootstrap with web.xml
+still in charge of filters" state — every filter bean defined in the
+imported XML configs would need an explicit opt-out registration. The
+cliff is **one push, not two**:
 
-Goal: remove `web.xml` entirely; `LibreClinicaApplication` becomes the
-sole bootstrap.
+> **C.14 cliff = `SpringBootServletInitializer` + drop ALL filters
+> from `web.xml` (move to `FilterRegistrationBean`) + drop the
+> `springSecurityFilterChain` `DelegatingFilterProxy` (Boot's
+> `SecurityFilterAutoConfiguration` re-registers it once we let it) +
+> the prerequisites listed below.** Servlets can stay in `web.xml` —
+> Boot does not auto-register a `ServletRegistrationBean` for every
+> `Servlet` bean, so the 222 legacy servlets are independent.
 
-f. Drop the `<listener>OCContextLoaderListener</listener>` +
-   `<context-param>contextConfigLocation</context-param>` from `web.xml`.
-   Boot's `SpringBootServletInitializer` now provides the root context.
-   Hoist `OCContextLoaderListener`'s MDC + hostname setup into a
-   `@PostConstruct` on a `@Component`.
-g. Build `LegacyServletRegistry @Configuration` enumerating
-   `ServletRegistrationBean` for all 218 LibreClinica servlets — generated
-   from [phase-c14-web-xml-inventory.md](phase-c14-web-xml-inventory.md).
-   ~250 LOC of mechanical bean methods. Optionally fold the `pages`
-   `DispatcherServlet` mapping here (or keep that as a separate
-   `WebMvcConfig` — folds C.11 in either way).
-h. Convert filters one-by-one to `FilterRegistrationBean` per the
-   inventory's filter table (folds C.12 in). The two security filters
-   (`springSecurityFilterChain`, `apiSecurityFilter`) live or die with
-   the C.10 `SecurityFilterChain` Java config conversion.
-i. Convert `applicationContext-security.xml`'s `<security:http>` block
-   to Java `SecurityFilterChain @Bean` (folds C.10 in). The cliff PR
-   that lands this is the same PR that owns h + g.
+The original sub-push 1 / sub-push 2 split in this playbook is
+retired; treat the cliff as a single ~5-day effort.
+
+#### Cliff prerequisites (required in their own focused PRs)
+
+**Prerequisite #1 — logback collision fix.**
+The current `core/src/main/resources/logback.xml` declares 10
+`RollingFileAppender`s (`LOGFILE-LPR`, `-USER`, `-MAIL`, `-AUTH`,
+`-UUCP`, `-CRON`, `-AUTHPRIV`, `-DAEMON`, `-NEWS`, `-OTHER`) that all
+roll to the same file pattern `${log.dir}.%d{yyyy-MM-dd}.log`
+intentionally — each appender's encoder hardcodes a different syslog
+facility label (LPR / USER / MAIL / …) into the log line. Logback emits
+"FileNamePattern collision … Aborting" for the duplicate appenders, but
+the legacy non-Boot bootstrap silently tolerated it. **Spring Boot 3.5's
+`LogbackLoggingSystem` reads the status manager during the early
+`starting` event and throws `IllegalStateException: Logback
+configuration error detected` on any status-ERROR — fatal for the
+`SpringBootServletInitializer` boot path.** Fix is required *before*
+sub-push 1: collapse the 10-appender pattern into a single
+`RollingFileAppender` with `%X{FACILITY}` (or a custom
+`MaskingPatternLayout`) reading the facility from MDC. Operator impact:
+the single-file output is preserved, only the appender-count drops.
+Estimate: 1 day.
+
+**Prerequisite #2 — logback version bump.** Spring Boot 3.5's
+`LogbackLoggingSystem` requires `ch.qos.logback.core.util.StatusPrinter2`
+(logback 1.5+). The current pin `<logback.version>1.4.14</logback.version>`
+in `pom.xml` must move to 1.5.13+ once Prerequisite #1 is resolved.
+(Alternative if Prerequisite #1 is not feasible: ship
+`-Dorg.springframework.boot.logging.LoggingSystem=none` in
+`CATALINA_OPTS` to disable Boot's logging integration entirely. Verified
+working in the 2026-05-30 attempt.)
+
+**Prerequisite #3 — bean override toleration.** Several
+`@Service`-annotated classes in
+`at.ac.meduniwien.ophthalmology.libreclinica.service` are also
+XML-bean-defined in `applicationContext-core-service.xml`. The legacy
+`<context:component-scan>` + XML overlap was silently tolerated by
+the legacy bootstrap; Boot 3.x defaults
+`allow-bean-definition-overriding=false`. Either set
+`spring.main.allow-bean-definition-overriding=true` in
+`application.yml` (escape hatch — fine for one cycle) or do C.6 work
+in tandem (drop the XML `<bean id="…">` entries for the duplicated
+services).
+
+#### Cliff push — combined web.xml retirement (the real cliff)
+
+Goal: drop web.xml's filters + listeners + `OCContextLoaderListener`;
+`LibreClinicaApplication` becomes the sole bootstrap. **All in one
+push**, per the 2026-05-30 finding above.
+
+a. `LibreClinicaApplication extends SpringBootServletInitializer`
+   (override `configure(SpringApplicationBuilder)`).
+b. Refactor `OCContextLoaderListener` to a pure
+   `ServletContextListener` (drop the `ContextLoaderListener` super);
+   keep MDC + hostname setup only.
+c. Drop the `<listener>OCContextLoaderListener</listener>` +
+   `<context-param>contextConfigLocation</context-param>` +
+   `<listener>RequestContextListener</listener>` from `web.xml`.
+   Boot's `SpringBootServletInitializer` now provides the root
+   context.
+d. New `web/src/main/java/.../config/ServletInfraConfig.java`
+   registers the surviving listeners
+   (`HttpSessionEventPublisher`, `OCServletContextListener`, the
+   refactored `OCContextLoaderListener`) via
+   `@Bean ServletListenerRegistrationBean`.
+e. **Drop ALL `<filter>` + `<filter-mapping>` entries from
+   `web.xml`** (springSecurityFilterChain, apiSecurityFilter,
+   encodingFilter, localeFilter, hibernateFilter, logFilter,
+   restODMFilter) — Boot's auto-registration of `Filter` beans
+   would collide if any remained. For each retired filter, either:
+   * let Boot autoconfig take over (e.g. encodingFilter is replaced
+     by `HttpEncodingAutoConfiguration` via
+     `spring.servlet.encoding.charset=UTF-8`), or
+   * declare an explicit `FilterRegistrationBean<…>` in
+     `ServletInfraConfig` if it's a custom filter (LocaleFilter,
+     OCServletFilter, RestODMFilter), or
+   * let Boot's `SecurityFilterAutoConfiguration` register the
+     `springSecurityFilterChain` `DelegatingFilterProxy` once C.10's
+     `SecurityFilterChain @Bean` lands — this folds C.10 into the
+     cliff push.
+f. Servlets stay in `web.xml` for now — Boot does NOT auto-register
+   a `ServletRegistrationBean` for every `Servlet` bean. The 222
+   legacy servlets keep working via their existing `<servlet>` +
+   `<servlet-mapping>` entries; their migration to
+   `LegacyServletRegistry @Configuration` is C.14's optional
+   follow-up cleanup (no functional impact).
+g. Convert `applicationContext-security.xml`'s `<security:http>`
+   block to Java `SecurityFilterChain @Bean` (folds C.10 in). This
+   is required because Boot's
+   `SecurityFilterAutoConfiguration` needs the bean named
+   `springSecurityFilterChain` to be a
+   `org.springframework.security.web.SecurityFilterChain` — the
+   XML namespace produces a `FilterChainProxy` which is not what
+   the autoconfig binds to.
+h. Compose smoke + full 112-IT suite green.
+
+**Follow-up cleanup pass (post-cliff, no functional impact):**
+
+i. Build `LegacyServletRegistry @Configuration` enumerating
+   `ServletRegistrationBean` for all 218 LibreClinica servlets —
+   generated from
+   [phase-c14-web-xml-inventory.md](phase-c14-web-xml-inventory.md).
+   ~250 LOC of mechanical bean methods.
 j. Verify zombie candidates: `spring-ws` `MessageDispatcherServlet`
    entry + 2 Jersey servlet entries + 2 `ws-servlet-config.xml` beans.
    If unused in production, delete the entries + the dep pins.
-k. `web.xml` is now empty (or removed entirely). Packaging stays `war`
-   for compatibility OR flips to `jar` (decision: stay `war` for one
-   more cycle, flip to `jar` in C.16).
-l. Dockerfile: still based on the official Tomcat image; the WAR is
+k. Drop all `<servlet>` + `<servlet-mapping>` entries from `web.xml`
+   once `LegacyServletRegistry` is in place. `web.xml` is now empty
+   (or removed entirely).
+l. Packaging stays `war` for compatibility OR flips to `jar` (decision:
+   stay `war` for one more cycle, flip to `jar` in C.16).
+m. Dockerfile: still based on the official Tomcat image; the WAR is
    self-bootstrapping but external Tomcat hosts it. C.16 flips to
    JRE-only base with `ENTRYPOINT ["java","-jar","app.war"]`.
-m. Drop the autoconfig exclusions in `LibreClinicaApplication` for the
-   migrated slices (`SecurityAutoConfiguration`, `UserDetailsServiceAutoConfiguration`)
-   — Boot's `SecurityFilterAutoConfiguration` now provides the chain.
-n. Compose smoke + the full 112-IT suite green.
 
 This is the **real cliff** — `~3-5 days` of focused work. The
 [phase-c14-web-xml-inventory.md](phase-c14-web-xml-inventory.md) is the
