@@ -118,7 +118,7 @@ A sub-phase is **closed** when all five gates are green and the PR description's
 
 ## E.3 — Shared component library extraction
 
-**Status:** 🟡 **3/10 primitives shipped 2026-05-30** ([web/src/spa/src/components/](../../web/src/spa/src/components/)). Histoire wired.
+**Status:** 🟢 **7/10 primitives shipped 2026-05-30** ([web/src/spa/src/components/](../../web/src/spa/src/components/)). Histoire wired; `pnpm check-tokens` guard green across 25 source files.
 
 **Goal:** build the primitives every later sub-phase depends on, once.
 
@@ -129,14 +129,14 @@ A sub-phase is **closed** when all five gates are green and the PR description's
 | `<TopBar>` (logo + breadcrumb + role chip) | every mockup | E.4–E.9 | ✅ shipped |
 | `<SideRail>` (role-conditional nav) | every mockup | E.4–E.9 | ✅ shipped |
 | `<StatusPill>` (dot + icon + label) | [investigator-subject-matrix](phase-e/ux-mockups/investigator-subject-matrix.html) | E.4–E.9 | ✅ shipped + Vitest + Histoire story |
-| `<DenseTable>` (sticky header + filter row + bulk action) | [monitor-sdv](phase-e/ux-mockups/monitor-sdv.html) | E.5, E.6, E.7 |
-| `<FormPrimitives>` (input, select, radio, checkbox, asterisk, helper, error) | [investigator-add-subject](phase-e/ux-mockups/investigator-add-subject.html) | E.4, E.7, E.8 |
-| `<Modal>` (over-context, segmented type control) | [monitor-add-query](phase-e/ux-mockups/monitor-add-query.html) | E.6, E.7 |
-| `<Wizard>` (stepper, prev/next, preview-before-commit) | [dm-import-crf-data](phase-e/ux-mockups/dm-import-crf-data.html) | E.8 |
-| `<DiffCard>` (before/after side-by-side) | [study-audit-log](phase-e/ux-mockups/study-audit-log.html) | E.6, E.8 |
-| `<E-SignatureBlock>` (re-auth + attestation) | [investigator-sign-subject](phase-e/ux-mockups/investigator-sign-subject.html) | E.5, E.9 |
-| `<ConfirmationWithPreflight>` (pass/warn/info rows + casebook snapshot) | [investigator-sign-subject](phase-e/ux-mockups/investigator-sign-subject.html) | E.5, E.7 |
-| `<Timeline>` (date markers + per-event-type icons) | [study-audit-log](phase-e/ux-mockups/study-audit-log.html) | E.6 |
+| `<DenseTable>` (sticky header + status-bar + slot-based body) | [monitor-sdv](phase-e/ux-mockups/monitor-sdv.html) | E.5, E.6, E.7 | ✅ shipped + Histoire story |
+| Form primitives (`FieldLabel`, `TextInput`, `SelectInput`, `HelperText`, `ErrorText`) | [investigator-add-subject](phase-e/ux-mockups/investigator-add-subject.html) | E.4, E.7, E.8 | ✅ shipped + Histoire story (with disabled/readonly/error/prefix-icon variants) |
+| `<Modal>` (Teleport + Transition + scrim + Esc / scrim-click close + body-scroll lock) | [monitor-add-query](phase-e/ux-mockups/monitor-add-query.html) | E.6, E.7 | ✅ shipped + Histoire story + Vitest tests (a11y + keyboard + cleanup) |
+| `<DiffCard>` (stacked + compact `before → after`) | [study-audit-log](phase-e/ux-mockups/study-audit-log.html), [dm-import-crf-data](phase-e/ux-mockups/dm-import-crf-data.html) | E.6, E.8 | ✅ shipped + Histoire story |
+| `<Timeline>` + `<TimelineMarker>` + `<TimelineEvent>` (rail + per-variant bullet + slot-driven event card) | [study-audit-log](phase-e/ux-mockups/study-audit-log.html) | E.6 | ✅ shipped + Histoire story |
+| `<Wizard>` (stepper, prev/next, preview-before-commit) | [dm-import-crf-data](phase-e/ux-mockups/dm-import-crf-data.html) | E.8 | ⏳ pending |
+| `<E-SignatureBlock>` (re-auth + attestation) | [investigator-sign-subject](phase-e/ux-mockups/investigator-sign-subject.html) | E.5, E.9 | ⏳ pending |
+| `<ConfirmationWithPreflight>` (pass/warn/info rows + casebook snapshot) | [investigator-sign-subject](phase-e/ux-mockups/investigator-sign-subject.html) | E.5, E.7 | ⏳ pending |
 
 **Verification gates:**
 
