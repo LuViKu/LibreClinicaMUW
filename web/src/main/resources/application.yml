@@ -11,6 +11,21 @@ spring:
   application:
     name: libreclinica
 
+  # Phase E.0 (2026-05-30): JSP view prefix/suffix so Boot's
+  # auto-configured InternalResourceViewResolver forwards view names
+  # to /WEB-INF/jsp/<view>.jsp. Without this the resolver forwards
+  # to the raw view name (e.g. "login/login") and the dispatch
+  # re-enters the pages servlet and 404s via static-resource lookup.
+  # Boot's resolver wins over WebMvcConfig's @Bean in the
+  # ContentNegotiatingViewResolver chain regardless of setOrder — JSP
+  # context-bean exposure (the SSO button visibility) is handled by
+  # a separate HandlerInterceptor in WebMvcConfig instead of
+  # InternalResourceViewResolver.setExposeContextBeansAsAttributes.
+  mvc:
+    view:
+      prefix: /WEB-INF/jsp/
+      suffix: .jsp
+
   # Phase C.6 (2026-05-30): the 3 @Service-vs-XML duplicates that forced
   # allow-bean-definition-overriding=true in C.14 are now resolved
   # (ruleSetListenerService + factorService dropped from XML; @Component

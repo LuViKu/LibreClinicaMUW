@@ -20,9 +20,12 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.springframework.web.servlet.view.InternalResourceViewResolver;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.SidebarEnumConstants;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.SidebarInit;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.helper.SetUpUserInterceptor;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.helper.SsoConfigInterceptor;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
 
 /**
  * Phase C.11 (2026-05-30): Java replacement for {@code pages-servlet.xml}.
@@ -60,6 +63,20 @@ import at.ac.meduniwien.ophthalmology.libreclinica.controller.helper.SetUpUserIn
 @Configuration
 @ComponentScan("at.ac.meduniwien.ophthalmology.libreclinica.controller")
 public class WebMvcConfig {
+
+    /**
+     * Phase E.0 (2026-05-30): {@link SsoConfigInterceptor} bean. Wired
+     * directly onto the handler mappings below (NOT via
+     * {@code WebMvcConfigurer.addInterceptors} — that machinery is
+     * Boot's root-context {@code DelegatingWebMvcConfiguration} and
+     * does not reach the pages DispatcherServlet's child context).
+     */
+    @Bean
+    public SsoConfigInterceptor ssoConfigInterceptor(SsoProperties ssoProperties,
+                                                     @Qualifier("factorService") TwoFactorService factorService) {
+        return new SsoConfigInterceptor(ssoProperties, factorService);
+    }
+
 
     @Bean(name = "/login/login")
     public UrlFilenameViewController loginLoginController() {
@@ -129,8 +146,23 @@ public class WebMvcConfig {
     }
 
     @Bean
-    public RequestMappingHandlerMapping requestMappingHandlerMapping() {
-        return new RequestMappingHandlerMapping();
+    public RequestMappingHandlerMapping requestMappingHandlerMapping(
+            SsoConfigInterceptor ssoConfigInterceptor) {
+        RequestMappingHandlerMapping mapping = new RequestMappingHandlerMapping();
+        // Phase E.0 (2026-05-30): explicit order = 0 (highest priority)
+        // so this beats Boot's WebMvcAutoConfiguration-provided
+        // SimpleUrlHandlerMapping resource handler. Without this, the
+        // resource handler at `/webjars/**, /**` (Ordered.LOWEST_PRECEDENCE-1)
+        // catches every /pages/* request before @Controller @GetMapping
+        // can match — every /pages/sso/reauth, /pages/odmk/*, etc.
+        // returned 404 from the resource handler's NoResourceFoundException
+        // path. See docs/development/modernization/phase-e/post-phase-d-ui-validation.md.
+        mapping.setOrder(0);
+        // Phase E.0: expose ssoProperties + factorService as request
+        // attributes for JSP EL evaluation (D.6 SSO button + existing
+        // 2FA conditional).
+        mapping.setInterceptors(ssoConfigInterceptor);
+        return mapping;
     }
 
     @Bean
@@ -153,8 +185,22 @@ public class WebMvcConfig {
     }
 
     @Bean
-    public BeanNameUrlHandlerMapping beanNameUrlHandlerMapping() {
-        return new BeanNameUrlHandlerMapping();
+    public BeanNameUrlHandlerMapping beanNameUrlHandlerMapping(
+            SsoConfigInterceptor ssoConfigInterceptor) {
+        BeanNameUrlHandlerMapping mapping = new BeanNameUrlHandlerMapping();
+        // Phase E.0 (2026-05-30): explicit order = 1 so /login/login +
+        // /denied beans win over Boot's resource handler
+        // (Ordered.LOWEST_PRECEDENCE-1) but still come after the @Controller
+        // RequestMappingHandlerMapping at order 0. Default order is
+        // Ordered.LOWEST_PRECEDENCE which let the resource handler win,
+        // causing /pages/login/login to 404 via NoResourceFoundException
+        // instead of resolving to the UrlFilenameViewController. See
+        // docs/development/modernization/phase-e/post-phase-d-ui-validation.md.
+        mapping.setOrder(1);
+        // Phase E.0: ssoConfigInterceptor exposes ssoProperties +
+        // factorService for the login JSP EL evaluation.
+        mapping.setInterceptors(ssoConfigInterceptor);
+        return mapping;
     }
 
     @Bean
@@ -173,6 +219,15 @@ public class WebMvcConfig {
         // the listed beans via EL).
         r.setExposeContextBeansAsAttributes(true);
         r.setExposedContextBeanNames("factorService", "ssoProperties");
+        // Phase E.0 (2026-05-30): explicit order so this resolver
+        // wins over Boot's auto-configured InternalResourceViewResolver
+        // (default order Ordered.LOWEST_PRECEDENCE). Boot's version
+        // honours spring.mvc.view.prefix/.suffix from application.yml
+        // but does NOT carry exposeContextBeansAsAttributes — so when
+        // Boot's resolver wins, JSPs can't read ${ssoProperties.*}
+        // and the D.6 SSO button stays hidden. Order 0 makes this
+        // bean the sole resolver for the pages dispatcher.
+        r.setOrder(0);
         return r;
     }
 }
