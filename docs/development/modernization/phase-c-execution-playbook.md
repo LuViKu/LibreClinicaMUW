@@ -118,19 +118,10 @@ in WAR mode is roughly the same Java code volume as the XML they
 replace — no real win.
 
 11. **C.14 — WAR → JAR + embedded Tomcat** (next push; multi-day).
-    The single biggest unlock. Gate: `java -jar app.jar` boots the full
-    stack; compose smoke green; container size shrinks. Sub-steps:
-    a. `web/pom.xml` packaging `war → jar` + spring-boot-maven-plugin
-       to assemble the runnable JAR
-    b. `LibreClinicaApplication` no longer needs `SpringBootServletInitializer`
-       (embedded Tomcat); drop the autoconfig exclusions for migrated slices
-    c. `web.xml` filters → `FilterRegistrationBean` (folds C.12 in)
-    d. `pages-servlet.xml` `DispatcherServlet` config → `@EnableWebMvc` +
-       message converters via Java config (folds C.11 in)
-    e. `applicationContext-security.xml` → `SecurityFilterChain` Java config
-       (folds C.10 in)
-    f. Dockerfile: drop Tomcat multi-stage; use `eclipse-temurin:21-jre` +
-       `ENTRYPOINT ["java","-jar","app.jar"]`
+    The single biggest unlock. See the [C.14 cliff plan](#c14-cliff-plan-2026-05-30)
+    section below for the full migration matrix; the matrix is backed by the
+    auto-generated [phase-c14-web-xml-inventory.md](phase-c14-web-xml-inventory.md)
+    (222 servlets, 7 filters, 5 listeners enumerated with per-package tables).
 12. **C.6** — services component-scan. Add `@Service` annotations to the
     30+ classes currently bound by `<constructor-arg ref="dataSource"/>`
     in `applicationContext-core-service.xml`, swap to `@Autowired`. Best
@@ -140,6 +131,83 @@ replace — no real win.
 14. **C.16** — Reconciliation sweep. Drop the now-empty XML stubs, drop
     `web.xml`, update Dockerfile + compose.yaml. Manual GCP-style smoke
     pass.
+
+### C.14 cliff plan (2026-05-30)
+
+The naive read of C.14 is "flip packaging from `war` to `jar` and let Boot
+take over." In practice, this codebase has 222 legacy servlets registered
+via `web.xml`, plus 7 filters, 5 listeners, the SiteMesh decorator
+plumbing, and a custom `OCContextLoaderListener` that wraps the standard
+`ContextLoaderListener` with MDC + hostname setup. A "single commit"
+attack on the cliff is high-risk for a partial-state regression that's
+hard to roll back.
+
+The plan below splits the cliff into **two sub-pushes** with independent
+gates:
+
+#### Cliff sub-push 1 — Boot bootstrap alongside web.xml (low-risk prep)
+
+Goal: enable `java -jar app.war` while keeping the WAR deployable to
+external Tomcat. No behaviour change on the existing compose stack.
+
+a. `LibreClinicaApplication extends SpringBootServletInitializer`,
+   overriding `configure(SpringApplicationBuilder)` to return
+   `builder.sources(LibreClinicaApplication.class)`. **Without** dropping
+   `OCContextLoaderListener` from `web.xml` yet — this stays a no-op
+   change for the external-Tomcat path.
+b. `web/pom.xml`: add `spring-boot-maven-plugin` with `<repackage>`
+   goal bound to the `package` phase. Output is now a Boot-repackaged
+   `LibreClinica-web.war` runnable via `java -jar`.
+c. `spring-boot-starter-tomcat` already declared (C.1) — keeps `compile`
+   scope; for external-Tomcat deploy, Tomcat's classpath takes precedence
+   so the bundled one stays inert.
+d. Compose smoke against the new WAR file (still deployed to external
+   Tomcat): must be identical to pre-cliff.
+e. Optional: a separate compose service tries `java -jar` startup.
+
+This is `~2-3 days` and lands a working dual-bootstrap WAR. **No** servlet/filter
+migration yet — they all stay in `web.xml`.
+
+#### Cliff sub-push 2 — drop web.xml + activate Boot autoconfigs (the real cliff)
+
+Goal: remove `web.xml` entirely; `LibreClinicaApplication` becomes the
+sole bootstrap.
+
+f. Drop the `<listener>OCContextLoaderListener</listener>` +
+   `<context-param>contextConfigLocation</context-param>` from `web.xml`.
+   Boot's `SpringBootServletInitializer` now provides the root context.
+   Hoist `OCContextLoaderListener`'s MDC + hostname setup into a
+   `@PostConstruct` on a `@Component`.
+g. Build `LegacyServletRegistry @Configuration` enumerating
+   `ServletRegistrationBean` for all 218 LibreClinica servlets — generated
+   from [phase-c14-web-xml-inventory.md](phase-c14-web-xml-inventory.md).
+   ~250 LOC of mechanical bean methods. Optionally fold the `pages`
+   `DispatcherServlet` mapping here (or keep that as a separate
+   `WebMvcConfig` — folds C.11 in either way).
+h. Convert filters one-by-one to `FilterRegistrationBean` per the
+   inventory's filter table (folds C.12 in). The two security filters
+   (`springSecurityFilterChain`, `apiSecurityFilter`) live or die with
+   the C.10 `SecurityFilterChain` Java config conversion.
+i. Convert `applicationContext-security.xml`'s `<security:http>` block
+   to Java `SecurityFilterChain @Bean` (folds C.10 in). The cliff PR
+   that lands this is the same PR that owns h + g.
+j. Verify zombie candidates: `spring-ws` `MessageDispatcherServlet`
+   entry + 2 Jersey servlet entries + 2 `ws-servlet-config.xml` beans.
+   If unused in production, delete the entries + the dep pins.
+k. `web.xml` is now empty (or removed entirely). Packaging stays `war`
+   for compatibility OR flips to `jar` (decision: stay `war` for one
+   more cycle, flip to `jar` in C.16).
+l. Dockerfile: still based on the official Tomcat image; the WAR is
+   self-bootstrapping but external Tomcat hosts it. C.16 flips to
+   JRE-only base with `ENTRYPOINT ["java","-jar","app.war"]`.
+m. Drop the autoconfig exclusions in `LibreClinicaApplication` for the
+   migrated slices (`SecurityAutoConfiguration`, `UserDetailsServiceAutoConfiguration`)
+   — Boot's `SecurityFilterAutoConfiguration` now provides the chain.
+n. Compose smoke + the full 112-IT suite green.
+
+This is the **real cliff** — `~3-5 days` of focused work. The
+[phase-c14-web-xml-inventory.md](phase-c14-web-xml-inventory.md) is the
+source-of-truth migration matrix.
 
 ---
 
