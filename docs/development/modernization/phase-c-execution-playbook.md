@@ -126,8 +126,28 @@ replace — no real win.
     30+ classes currently bound by `<constructor-arg ref="dataSource"/>`
     in `applicationContext-core-service.xml`, swap to `@Autowired`. Best
     done alongside C.14 since the boot-up bean factory is now Boot-managed.
-13. **C.15** — Spring Boot Actuator. Drop-in once C.14 lands
-    (`spring-boot-starter-actuator` + a few application.yml lines).
+13. **C.15** — Spring Boot Actuator. **Attempted 2026-05-30, deferred.**
+    Adding `spring-boot-starter-actuator` and un-excluding
+    `DispatcherServletAutoConfiguration` + `WebMvcAutoConfiguration` +
+    `ErrorMvcAutoConfiguration` triggers a
+    `BeanDefinitionOverrideException` on `requestMappingHandlerMapping`:
+    `WebMvcConfig` (in `.config` package, picked up by Boot's
+    `scanBasePackages = ".config"`) AND Boot's `WebMvcAutoConfiguration`
+    both register the bean in the root context.
+    `WebMvcConfig` is **intended** to live only in the `pages`
+    DispatcherServlet's child context (loaded via the
+    `pages-servlet.xml` stub `<bean class="WebMvcConfig"/>`); Boot
+    picking it up in root is the bug. Fix is to move `WebMvcConfig` out
+    of the `.config` package (e.g. to `.webmvc.WebMvcConfig`) so Boot's
+    scan doesn't see it, then update the `pages-servlet.xml` stub class
+    reference. The actuator endpoints then live at
+    `/LibreClinica/actuator/*` via Boot's auto-registered
+    `dispatcherServlet` at `/` (the 215 legacy servlets at exact URL
+    patterns + `pages` at `/pages/*` win per servlet-spec mapping
+    precedence). Estimated effort: 1 focused push (~half day) once a
+    full Docker rebuild cycle is available — initial attempt this
+    session was blocked by stale `.config.WebMvcConfig.class` in
+    BuildKit's layer cache.
 14. **C.16** — Reconciliation sweep. Drop the now-empty XML stubs, drop
     `web.xml`, update Dockerfile + compose.yaml. Manual GCP-style smoke
     pass.
