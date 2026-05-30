@@ -1,0 +1,66 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase D.2 (DR-014): federated-identity columns on user_account.
+
+        - external_id (VARCHAR 255, nullable) — the principal value
+          from the SSO header (eppn / sub / oid / x-amzn-oidc-identity /
+          etc.). Single canonical column that the in-app
+          RequestHeaderAuthenticationFilter writes during JIT
+          provisioning and reads via UserAccountDAO.findByExternalIdentity.
+
+        - external_id_provider (VARCHAR 64, nullable) — the provider
+          namespace ('shibboleth-meduniwien', 'azure-ad-tenant-xyz',
+          'okta-prod', etc.). Lets multiple SSO providers coexist in
+          one deployment if needed; an 'okta:user-abc' principal does
+          not collide with a 'shibboleth-meduniwien:user-abc'.
+
+        - idx_user_account_external_identity — composite unique index
+          on (external_id_provider, external_id). Provider-scoped
+          uniqueness. The index is NOT a UNIQUE constraint to keep
+          NULL rows (local accounts) unconstrained; the partial
+          uniqueness is enforced via Postgres' "WHERE external_id IS
+          NOT NULL" predicate.
+
+        Both columns are nullable so existing local-account rows (and
+        the bootstrap root sysadmin) keep working unchanged. Adding
+        nullable columns to a populated Postgres 13+ table is a
+        metadata-only ALTER, no row rewrite needed.
+
+        Phase D.3 (RequestHeaderAuthenticationFilter) reads these
+        columns; Phase D.4 (UserProvisioningStrategy) writes them on
+        JIT provisioning. The columns are inert in D.2 — no in-app
+        code references them yet.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-05-30-add-external-identity">
+        <addColumn tableName="user_account">
+            <column name="external_id" type="VARCHAR(255)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="external_id_provider" type="VARCHAR(64)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+
+        <createIndex
+            indexName="idx_user_account_external_identity"
+            tableName="user_account"
+            unique="true">
+            <column name="external_id_provider"/>
+            <column name="external_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex
+                indexName="idx_user_account_external_identity"
+                tableName="user_account"/>
+            <dropColumn tableName="user_account" columnName="external_id"/>
+            <dropColumn tableName="user_account" columnName="external_id_provider"/>
+        </rollback>
+    </changeSet>
+</databaseChangeLog>

@@ -95,6 +95,13 @@
         <name>findByUserName</name>
         <sql>select * from user_account where user_name=?</sql>
     </query>
+    <!-- Phase D.3 (DR-014): federated-identity lookup. Provider-scoped
+         so multiple SSO providers coexist (idx_user_account_external_identity
+         is composite-unique on (external_id_provider, external_id)). -->
+    <query>
+        <name>findByExternalIdentity</name>
+        <sql>select * from user_account where external_id_provider=? and external_id=?</sql>
+    </query>
     <query>
         <name>findByAccessCode</name>
         <sql>select * from user_account where access_code=?</sql>

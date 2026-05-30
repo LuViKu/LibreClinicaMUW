@@ -106,6 +106,9 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         this.setTypeExpected(27, TypeNames.STRING);    // api_key
         this.setTypeExpected(28, TypeNames.STRING);    // authtype
         this.setTypeExpected(29, TypeNames.STRING);    // authsecret
+        // Phase D.2 (DR-014): federated-identity columns.
+        this.setTypeExpected(30, TypeNames.STRING);    // external_id
+        this.setTypeExpected(31, TypeNames.STRING);    // external_id_provider
     }
 
     public void setPrivilegeTypesExpected() {
@@ -268,6 +271,35 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         variables.put(2, new java.sql.Date(System.currentTimeMillis()));
         variables.put(3, userId);
         this.executeUpdate(digester.getQuery("updatePasswordHash"), variables);
+    }
+
+    /**
+     * Phase D.3 (DR-014): look up a user by their federated identity.
+     * Used by the SSO pre-auth path
+     * ({@code RequestHeaderAuthenticationFilter} →
+     * {@code SsoUserDetailsService}). Returns a fresh
+     * {@link UserAccountBean} with {@code id = 0} (the upstream "no
+     * such user" sentinel) when no row matches the provider/principal
+     * pair.
+     *
+     * @param provider   the SSO provider namespace
+     *     ({@code shibboleth-meduniwien}, {@code okta-prod}, …)
+     * @param externalId the principal value from the SSO header
+     *     (eppn / sub / oid / x-amzn-oidc-identity / …)
+     */
+    public UserAccountBean findByExternalIdentity(String provider, String externalId) {
+        this.setTypesExpected();
+        HashMap<Integer, Object> variables = new HashMap<>();
+        variables.put(1, provider);
+        variables.put(2, externalId);
+
+        ArrayList<HashMap<String, Object>> alist =
+                this.select(digester.getQuery("findByExternalIdentity"), variables);
+        UserAccountBean eb = new UserAccountBean();
+        if (alist != null && alist.size() > 0) {
+            eb = this.getEntityFromHashMap(alist.get(0), true);
+        }
+        return eb;
     }
 
     public void lockUser(Integer id) {
@@ -458,6 +490,10 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         eb.setApiKey(apiKey);
         eb.setAuthsecret(authsecret);
         eb.setAuthtype(authtype);
+        // Phase D.2 (DR-014): federated-identity columns. Null for
+        // local accounts; populated by the SSO pre-auth path (D.3 + D.4).
+        eb.setExternalId((String) hm.get("external_id"));
+        eb.setExternalIdProvider((String) hm.get("external_id_provider"));
         eb.setOwnerId(ownerId);
         eb.setUpdaterId(updateId);
 

@@ -60,6 +60,10 @@ public class UserAccountBean extends AuditableEntityBean {
     private String apiKey;
     private String authtype = AuthType.STANDARD.name();
     private String authsecret;
+    // Phase D.2 (DR-014): federated-identity columns. Null for local
+    // accounts; populated by the SSO pre-auth path (D.3 + D.4).
+    private String externalId;
+    private String externalIdProvider;
 
     /**
      * Counts the number of times the user visited Main Menu servlet.
@@ -603,6 +607,31 @@ public class UserAccountBean extends AuditableEntityBean {
 
     public void setAuthsecret(String authsecret) {
         this.authsecret = authsecret;
+    }
+
+    /**
+     * Phase D.2 (DR-014): SSO principal value (eppn / sub / oid / …)
+     * scoped by {@link #getExternalIdProvider()}. Null for local accounts.
+     */
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    /**
+     * Phase D.2 (DR-014): SSO provider namespace ('shibboleth-meduniwien',
+     * 'okta-prod', …). Composite-unique with {@link #getExternalId()} so
+     * multiple SSO providers can coexist in one deployment.
+     */
+    public String getExternalIdProvider() {
+        return externalIdProvider;
+    }
+
+    public void setExternalIdProvider(String externalIdProvider) {
+        this.externalIdProvider = externalIdProvider;
     }
 
     /**

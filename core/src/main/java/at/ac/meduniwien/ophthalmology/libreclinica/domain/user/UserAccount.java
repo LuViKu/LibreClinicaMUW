@@ -86,6 +86,10 @@ public class UserAccount extends DataMapDomainObject {
     private String apiKey;
     private AuthType authtype = STANDARD;
     private String authsecret;
+    // Phase D.2 (DR-014): federated-identity columns. Populated by
+    // the SSO pre-auth path (Phase D.3 + D.4); null for local accounts.
+    private String externalId;
+    private String externalIdProvider;
     private List<Item> items;
     private List<Section> sections;
     private List<ItemGroup> itemGroups;
@@ -394,6 +398,36 @@ public class UserAccount extends DataMapDomainObject {
 
     public void setAuthsecret(String authsecret) {
         this.authsecret = authsecret;
+    }
+
+    /**
+     * Phase D.2 (DR-014): federated-identity principal value from the
+     * SSO header. Examples: Shibboleth eppn, OIDC sub, AWS ALB
+     * x-amzn-oidc-identity. Null for local-account users.
+     */
+    @Column(name = "external_id", length = 255)
+    public String getExternalId() {
+        return externalId;
+    }
+
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
+    /**
+     * Phase D.2 (DR-014): provider namespace for the external_id.
+     * Examples: 'shibboleth-meduniwien', 'azure-ad-tenant-xyz',
+     * 'okta-prod', 'aws-alb-eu-west-1'. Null for local-account users.
+     * Composite unique index with external_id allows multiple SSO
+     * providers to coexist in one deployment.
+     */
+    @Column(name = "external_id_provider", length = 64)
+    public String getExternalIdProvider() {
+        return externalIdProvider;
+    }
+
+    public void setExternalIdProvider(String externalIdProvider) {
+        this.externalIdProvider = externalIdProvider;
     }
 
     @OneToMany(mappedBy = "userAccount")
