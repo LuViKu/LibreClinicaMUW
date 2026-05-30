@@ -118,7 +118,7 @@ A sub-phase is **closed** when all five gates are green and the PR description's
 
 ## E.3 — Shared component library extraction
 
-**Status:** 🟢 **7/10 primitives shipped 2026-05-30** ([web/src/spa/src/components/](../../web/src/spa/src/components/)). Histoire wired; `pnpm check-tokens` guard green across 25 source files.
+**Status:** 🟢 **8/10 primitives shipped 2026-05-30** ([web/src/spa/src/components/](../../web/src/spa/src/components/)). Histoire wired; `pnpm check-tokens` guard green across 30 source files. `Wizard` added in the same push as E.4 + E.5 start.
 
 **Goal:** build the primitives every later sub-phase depends on, once.
 
@@ -134,7 +134,7 @@ A sub-phase is **closed** when all five gates are green and the PR description's
 | `<Modal>` (Teleport + Transition + scrim + Esc / scrim-click close + body-scroll lock) | [monitor-add-query](phase-e/ux-mockups/monitor-add-query.html) | E.6, E.7 | ✅ shipped + Histoire story + Vitest tests (a11y + keyboard + cleanup) |
 | `<DiffCard>` (stacked + compact `before → after`) | [study-audit-log](phase-e/ux-mockups/study-audit-log.html), [dm-import-crf-data](phase-e/ux-mockups/dm-import-crf-data.html) | E.6, E.8 | ✅ shipped + Histoire story |
 | `<Timeline>` + `<TimelineMarker>` + `<TimelineEvent>` (rail + per-variant bullet + slot-driven event card) | [study-audit-log](phase-e/ux-mockups/study-audit-log.html) | E.6 | ✅ shipped + Histoire story |
-| `<Wizard>` (stepper, prev/next, preview-before-commit) | [dm-import-crf-data](phase-e/ux-mockups/dm-import-crf-data.html) | E.8 | ⏳ pending |
+| `<Wizard>` (stepper, prev/next, preview-before-commit) | [dm-import-crf-data](phase-e/ux-mockups/dm-import-crf-data.html) | E.8 | ✅ shipped + Histoire story (Import 4-step + first-login 2-step) |
 | `<E-SignatureBlock>` (re-auth + attestation) | [investigator-sign-subject](phase-e/ux-mockups/investigator-sign-subject.html) | E.5, E.9 | ⏳ pending |
 | `<ConfirmationWithPreflight>` (pass/warn/info rows + casebook snapshot) | [investigator-sign-subject](phase-e/ux-mockups/investigator-sign-subject.html) | E.5, E.7 | ⏳ pending |
 
@@ -162,15 +162,19 @@ A sub-phase is **closed** when all five gates are green and the PR description's
 - A `phase-e-api-surface.md` table inventory shipped to `docs/development/modernization/phase-e/`.
 - Every gap-closure adapter ships with a `*ControllerIT.java` MockMvc test.
 
+**Status as of 2026-05-30:** ✅ **First pass shipped** ([api-surface.md](phase-e/api-surface.md)). Per-mockup inventory of 18 mockups → legacy URL → category A/B/C. Aggregate: 1 × A (JSON-ready), 17 × B (JSP-only, needs adapter), 6 × C (greenfield additions, bundled into B PRs). Adapter PR template documented. Carry-over: the 17 B-adapter PRs land per-workflow during E.5–E.7.
+
 ---
 
 ## E.5 — Investigator workflow (POC → first clinical-rotation feedback)
+
+**Status:** 🟡 **Started 2026-05-30** — Subject Matrix view shipped against a Pinia store fed by mock data shaped exactly like the planned API response.
 
 **Goal:** ship the Investigator's three highest-traffic screens end-to-end as the first SPA POC; run an in-clinic walkthrough.
 
 **Order:**
 
-1. **Subject Matrix** ([investigator-subject-matrix.html](phase-e/ux-mockups/investigator-subject-matrix.html)) — replaces `/ListStudySubjects`.
+1. ✅ **Subject Matrix** ([investigator-subject-matrix.html](phase-e/ux-mockups/investigator-subject-matrix.html)) — replaces `/ListStudySubjects`. SPA view at `/LibreClinica/app/subjects` ([SubjectMatrixView.vue](../../web/src/spa/src/views/SubjectMatrixView.vue)) consumes the [subjects Pinia store](../../web/src/spa/src/stores/subjects.ts) with 8 Vitest cases covering free-text filter, status filter, only-with-queries flag, and clearFilters. Backend adapter `GET /pages/api/v1/subjects?siteOid=…` deferred — store hydrates from mock data with the production shape until E.0 + E.4-B adapter land.
 2. **Add Subject** ([investigator-add-subject.html](phase-e/ux-mockups/investigator-add-subject.html)) — replaces `/AddNewSubject`.
 3. **CRF Data Entry** ([investigator-crf-entry.html](phase-e/ux-mockups/investigator-crf-entry.html)) — replaces `/InitialDataEntry`. **Highest risk** — the JSP at [viewSectionDataEntry.jsp](../../web/src/main/webapp/WEB-INF/jsp/managestudy/viewSectionDataEntry.jsp) is 964 LOC of dynamic field generation, repetition groups, rule-driven show/hide, inline discrepancy modals, multi-stage workflow gates.
 

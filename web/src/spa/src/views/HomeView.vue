@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import { RouterLink } from 'vue-router'
 
 const { t } = useI18n()
 </script>
@@ -13,21 +14,39 @@ const { t } = useI18n()
     <h1 class="muw-display text-5xl font-medium text-muw-blue leading-[1.05] mb-5">
       {{ t('app.name') }}
     </h1>
-    <p class="text-slate-600 text-base leading-relaxed max-w-2xl">
+    <p class="text-slate-600 text-base leading-relaxed max-w-2xl mb-10">
       {{ t('app.tagline') }}
     </p>
 
-    <div class="mt-10 rounded-muw border border-slate-200 bg-muw-blue-50/40 p-6">
-      <div class="text-[11px] uppercase tracking-[0.14em] text-muw-coral-700 font-medium mb-3">
-        Smoke test
+    <section class="grid grid-cols-2 gap-4 max-w-3xl">
+      <RouterLink
+        to="/subjects"
+        class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group"
+      >
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-teal-500" aria-hidden="true"></span>
+          <span class="font-medium text-muw-blue">Investigator</span>
+        </div>
+        <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+          {{ t('subjectMatrix.title') }}
+        </div>
+        <p class="text-slate-500 text-xs leading-relaxed">
+          Site-scoped subject list with per-event status. Search, filter, schedule new event, sign subject.
+        </p>
+      </RouterLink>
+
+      <div
+        class="rounded-muw border border-slate-200 bg-slate-50 p-5 text-slate-400"
+        aria-disabled="true"
+      >
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-slate-300" aria-hidden="true"></span>
+          <span class="font-medium">More workflows…</span>
+        </div>
+        <p class="text-xs leading-relaxed">
+          SDV, CRF entry, Sign Subject, Build Study, etc. land per the Phase E execution playbook.
+        </p>
       </div>
-      <p class="text-slate-700 text-sm leading-relaxed">
-        If you can read this page, the Vue 3 SPA scaffolding from Phase E.1 is
-        rendering, the Tailwind v4 + MUW token bundle from Phase E.2 is loaded,
-        and vue-i18n is switching between
-        <code class="font-mono text-xs">de-AT</code> /
-        <code class="font-mono text-xs">en</code>.
-      </p>
-    </div>
+    </section>
   </div>
 </template>

@@ -4,7 +4,9 @@
     "tagline": "Klinische Studiendaten-Plattform der Augenklinik"
   },
   "nav": {
+    "home": "Start",
     "subjectMatrix": "Studienteilnehmer",
+    "addSubject": "Teilnehmer aufnehmen",
     "viewEvents": "Visiten",
     "notes": "Rückfragen",
     "sdv": "Quelldatenvergleich",
@@ -20,6 +22,51 @@
     "next": "Weiter",
     "search": "Suche",
     "filter": "Filter",
-    "clear": "Zurücksetzen"
+    "clear": "Zurücksetzen",
+    "export": "Export"
+  },
+  "subjectMatrix": {
+    "title": "Studienteilnehmer-Übersicht",
+    "subjectsCountTrail": "Teilnehmer",
+    "addSubject": "Teilnehmer aufnehmen",
+    "searchPlaceholder": "Teilnehmer per ID suchen…",
+    "showingCount": "{visible} von {total} sichtbar",
+    "rowsPerPage": "Zeilen",
+    "empty": "Keine Teilnehmer für den aktuellen Filter.",
+    "openSubject": "Öffnen →",
+    "signed": "Signiert",
+    "openQueriesTooltip": "{count} offene Rückfrage(n)",
+    "ariaSigned": "Teilnehmer {id}, signiert",
+    "ariaUnsigned": "Teilnehmer {id}, nicht signiert",
+    "column": {
+      "subject": "Teilnehmer",
+      "gender": "Geschl.",
+      "group": "Gruppe",
+      "enrolled": "Aufnahme",
+      "signed": "Signiert"
+    },
+    "filter": {
+      "all": "Alle",
+      "openEvents": "Mit offenen Visiten",
+      "allComplete": "Alle Visiten abgeschlossen",
+      "signed": "Signiert",
+      "onlyWithQueries": "Nur mit offenen Rückfragen"
+    },
+    "status": {
+      "not-scheduled": "Nicht geplant",
+      "scheduled": "Geplant",
+      "in-progress": "In Bearbeitung",
+      "complete": "Abgeschlossen",
+      "signed": "Signiert",
+      "locked": "Gesperrt"
+    },
+    "studyCard": {
+      "pi": "Studienleitung",
+      "start": "Start",
+      "subjects": "Teilnehmer",
+      "enrolled": "aufgenommen",
+      "status": "Status",
+      "active": "Aktiv"
+    }
   }
 }

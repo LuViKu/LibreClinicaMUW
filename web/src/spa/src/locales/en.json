@@ -4,7 +4,9 @@
     "tagline": "Clinical study data platform of the Ophthalmology Department"
   },
   "nav": {
+    "home": "Home",
     "subjectMatrix": "Subject Matrix",
+    "addSubject": "Add Subject",
     "viewEvents": "View Events",
     "notes": "Notes & Discrepancies",
     "sdv": "Source Data Verification",
@@ -20,6 +22,51 @@
     "next": "Next",
     "search": "Search",
     "filter": "Filter",
-    "clear": "Clear"
+    "clear": "Clear",
+    "export": "Export"
+  },
+  "subjectMatrix": {
+    "title": "Subject Matrix",
+    "subjectsCountTrail": "subjects",
+    "addSubject": "Add Subject",
+    "searchPlaceholder": "Find subject by ID…",
+    "showingCount": "{visible} of {total} shown",
+    "rowsPerPage": "Rows",
+    "empty": "No subjects match the current filter.",
+    "openSubject": "Open →",
+    "signed": "Signed",
+    "openQueriesTooltip": "{count} open query/queries",
+    "ariaSigned": "Subject {id}, signed",
+    "ariaUnsigned": "Subject {id}, not signed",
+    "column": {
+      "subject": "Subject",
+      "gender": "Gender",
+      "group": "Group",
+      "enrolled": "Enrolled",
+      "signed": "Signed"
+    },
+    "filter": {
+      "all": "All",
+      "openEvents": "Open events",
+      "allComplete": "All events complete",
+      "signed": "Signed",
+      "onlyWithQueries": "Only with open queries"
+    },
+    "status": {
+      "not-scheduled": "Not scheduled",
+      "scheduled": "Scheduled",
+      "in-progress": "In progress",
+      "complete": "Complete",
+      "signed": "Signed",
+      "locked": "Locked"
+    },
+    "studyCard": {
+      "pi": "Site PI",
+      "start": "Start",
+      "subjects": "Subjects",
+      "enrolled": "enrolled",
+      "status": "Status",
+      "active": "Active"
+    }
   }
 }

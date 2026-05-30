@@ -21,6 +21,12 @@ const router = createRouter({
       component: () => import('@/views/HomeView.vue'),
       meta: { title: 'Home' },
     },
+    {
+      path: '/subjects',
+      name: 'subject-matrix',
+      component: () => import('@/views/SubjectMatrixView.vue'),
+      meta: { title: 'Subject Matrix', role: 'Investigator' as const },
+    },
   ],
 })
 

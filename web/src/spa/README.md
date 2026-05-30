@@ -92,7 +92,9 @@ src/
 |---|---|---|
 | E.1 — Vue 3 scaffolding | ✅ shipped 2026-05-30 | This README, vite.config.ts, main.ts, router/index.ts |
 | E.2 — Tailwind v4 + MUW tokens + check-tokens guard | ✅ shipped 2026-05-30 | [src/style.css](src/style.css), [scripts/check-tokens.mjs](scripts/check-tokens.mjs) |
-| E.3 — Shared component library | 🟢 in progress (7/10 primitives) | TopBar, SideRail, StatusPill, DenseTable, FormPrimitives (×5), Modal, DiffCard, Timeline |
+| E.3 — Shared component library | 🟢 in progress (8/10 primitives) | TopBar, SideRail, StatusPill, DenseTable, FormPrimitives (×5), Modal, DiffCard, Timeline, Wizard |
+| E.4 — Backend API surface review | ✅ first-pass shipped 2026-05-30 | [docs/.../phase-e/api-surface.md](../../../docs/development/modernization/phase-e/api-surface.md) |
+| E.5 — Investigator workflow | 🟡 1/3 screens (Subject Matrix shipped) | [SubjectMatrixView.vue](src/views/SubjectMatrixView.vue), [stores/subjects.ts](src/stores/subjects.ts) |
 | E.4 — Backend API surface review | pending | TBD |
 | E.5 — Investigator workflow | pending | TBD |
 | E.6 — Monitor workflow | pending | TBD |
