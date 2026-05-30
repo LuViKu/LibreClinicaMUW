@@ -1,118 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <beans xmlns="http://www.springframework.org/schema/beans"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xmlns:tx="http://www.springframework.org/schema/tx"
-        xmlns:aop="http://www.springframework.org/schema/aop"
-	    xsi:schemaLocation="http://www.springframework.org/schema/beans
-                            http://www.springframework.org/schema/beans/spring-beans.xsd
-                            http://www.springframework.org/schema/tx
-                            http://www.springframework.org/schema/tx/spring-tx.xsd
-                            http://www.springframework.org/schema/aop
-                            http://www.springframework.org/schema/aop/spring-aop.xsd"
-                            >
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+                           http://www.springframework.org/schema/beans/spring-beans.xsd">
 
+  <!--
+      Phase C.4 (2026-05-30): entityManagerFactory + transactionManager +
+      sharedTransactionTemplate + PersistenceAnnotationBeanPostProcessor +
+      <tx:annotation-driven/> are now defined in
+      at.ac.meduniwien.ophthalmology.libreclinica.config.JpaConfig
+      (with @EnableTransactionManagement(proxyTargetClass=true) replacing the
+      annotation-driven XML directive).
 
-
-    <!-- JPA EntityManagerFactory + Hibernate JPA provider.
-         Phase B.5 (Hibernate 6.4): switched from Spring's hibernate5
-         LocalSessionFactoryBean (which can't link against Hibernate 6 —
-         org.springframework.orm.hibernate5 was compiled against Hibernate 5
-         method signatures) to the JPA-style LocalContainerEntityManagerFactoryBean
-         with HibernateJpaVendorAdapter. DAOs that need a Hibernate Session
-         unwrap it from the injected EntityManager.
-
-         typedefs.hbm.xml was retired here — Hibernate 6 removed the
-         <typedef> element. The four enum UserTypes (status / ruleContext /
-         actionType / loginStatus) now live as concrete CodedEnumType subclasses
-         under domain.enumsupport.{StatusType, RuleContextType, ActionTypeType,
-         LoginStatusType} and are referenced from @Type(SubclassName.class)
-         annotations on domain entities. -->
-    <bean id="entityManagerFactory" class="org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean">
-        <property name="dataSource" ref="dataSource"/>
-        <property name="persistenceUnitName" value="libreclinica"/>
-        <property name="jpaVendorAdapter">
-            <bean class="org.springframework.orm.jpa.vendor.HibernateJpaVendorAdapter"/>
-        </property>
-        <!-- Phase B.5: replaced the previous LocalSessionFactoryBean's explicit
-             annotatedClasses list (~150 entries) with packagesToScan. Spring's
-             JPA persistence-unit scanner walks the domain package tree and
-             registers every @Entity / @MappedSuperclass it finds — works on
-             Hibernate 6 without per-class enumeration. -->
-        <property name="packagesToScan">
-            <list>
-                <value>at.ac.meduniwien.ophthalmology.libreclinica.domain</value>
-            </list>
-        </property>
-        <property name="jpaProperties">
-            <props>
-                <prop key="hibernate.show_sql">false</prop>
-                <prop key="hibernate.format_sql">true</prop>
-                <prop key="hibernate.dialect">${hibernate.dialect}</prop>
-                <prop key="hibernate.generate_statistics">true</prop>
-                <!-- Phase B.5: 2L cache re-enabled via JCache (JSR-107) +
-                     ehcache 3 (jakarta classifier). Hibernate 6's
-                     hibernate-jcache module bridges to whichever JSR-107
-                     provider is on the classpath. -->
-                <prop key="hibernate.cache.use_query_cache">true</prop>
-                <prop key="hibernate.cache.use_second_level_cache">true</prop>
-                <prop key="hibernate.cache.region.factory_class">jcache</prop>
-                <prop key="hibernate.javax.cache.provider">org.ehcache.jsr107.EhcacheCachingProvider</prop>
-                <prop key="hibernate.javax.cache.missing_cache_strategy">create</prop>
-                <prop key="hibernate.allow_update_outside_transaction">true</prop>
-                <prop key="hibernate.implicit_naming_strategy">at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.cfg.LegacyImprovedImplicitNamingStrategy</prop>
-                <!-- Phase B.5: Hibernate 6 enforces that @SequenceGenerator's
-                     allocationSize matches the DB sequence's actual INCREMENT BY.
-                     The LibreClinica schema uses INCREMENT BY 1 sequences but
-                     the entities default to allocationSize=50. Switch the
-                     strategy from the default EXCEPTION to LOG so Hibernate
-                     warns rather than refusing to start. (FIX would rewrite
-                     the entity mapping at runtime to match the DB; not what
-                     we want.) -->
-                <prop key="hibernate.id.sequence.increment_size_mismatch_strategy">LOG</prop>
-                <!-- Phase B.5: disable Hibernate 6's pooled-optimizer for
-                     sequence id generators. The optimizer assumes the DB
-                     sequence increments by N (allocationSize) and reserves N
-                     values locally; the LibreClinica schema has INCREMENT BY 1
-                     sequences, so without this disable Hibernate hands out
-                     duplicate IDs and we hit "duplicate key value violates
-                     unique constraint" on the first auto-generated insert.
-                     "none" forces a database round-trip per id allocation,
-                     matching the Hibernate 5 default behaviour. -->
-                <prop key="hibernate.id.optimizer.pooled.preferred">none</prop>
-                <!-- Uncommenting the following line allows better logging of Hibernate errors for debugging purposes. Must be commented out for production use. -->
-                <!-- prop key="hibernate.jdbc.batch_size">0</prop -->
-            </props>
-        </property>
-    </bean>
-
-  <!-- Phase B.5: no standalone `sessionFactory` bean. Hibernate 6's
-       SessionFactory extends EntityManagerFactory, so a parallel bean would
-       collide with the entityManagerFactory for @PersistenceContext /
-       @PersistenceUnit type-based resolution (and `autowire-candidate=false`
-       blocks @Qualifier too). The two legacy callers
-       (HelperObject + BatchCRFMigrationController) inject EntityManagerFactory
-       via @PersistenceUnit and call unwrap(SessionFactory.class) at use site. -->
-
-  <!-- Phase B.5: JpaTransactionManager replaces HibernateTransactionManager.
-       Wraps the EntityManagerFactory declared above; AbstractDomainDao now
-       uses @PersistenceContext to get the EntityManager and unwraps to
-       Hibernate Session where Session-specific APIs are still in use. -->
-  <bean id="transactionManager" class="org.springframework.orm.jpa.JpaTransactionManager">
-    <property name="entityManagerFactory" ref="entityManagerFactory"/>
-  </bean>
-
-  <bean id="sharedTransactionTemplate" class="org.springframework.transaction.support.TransactionTemplate">
-    <property name="transactionManager" ref="transactionManager"/>
-  </bean>
-
-  <!-- Phase B.5: @PersistenceUnit/@PersistenceContext annotation processing
-       (no longer auto-registered by <context:annotation-config> in Spring 6
-       outside JPA-aware contexts). -->
-  <bean class="org.springframework.orm.jpa.support.PersistenceAnnotationBeanPostProcessor"/>
-
-  <!-- Instructs the container to look for beans with @Transactional and decorate them -->
-  <tx:annotation-driven transaction-manager="transactionManager" proxy-target-class="true"/>
+      The ~50 DAO beans below still live here — they all use the
+      parent="abstractDomainDao" + autowire="byName" pattern that's awkward
+      to express in Java without manually enumerating every @Bean. Component-
+      scanning them would require adding @Repository to each impl class.
+      They can move in a follow-up sub-phase; the gate-relevant infrastructure
+      is what C.4 owns.
+  -->
+  <bean class="at.ac.meduniwien.ophthalmology.libreclinica.config.JpaConfig"/>
 
   <bean id="abstractDomainDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AbstractDomainDao" abstract="true"/>
 
