@@ -395,6 +395,58 @@ Phase E execution playbook §E.1 is updated from "framework bake-off → DR-008"
 
 ---
 
+## DR-019 — Phase E usability-acceptance bar
+
+**Date:** 2026-05-30
+**Status:** **Accepted.** Sets the quantitative criteria the Phase E.10 usability tests must meet before the SPA is approved for clinical use at MedUni Wien Ophthalmology.
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** [DR-004](#dr-004--clinical-use-deferred-until-modernization-completes), [DR-005](#dr-005--muw-ophthalmology-branding-applied), [DR-008](#dr-008--ui-framework-for-phase-e-vue-3), Phase E execution playbook §§ E.9 + E.10
+
+**Context.** Phase E ships clinician-facing screens that replace the legacy JSP UI. Without an objective acceptance bar, "ready for clinical use" becomes a judgment call by whoever is in the room — risky for a GCP-validated system. DR-019 fixes the bar so the Phase E exit gate is unambiguous.
+
+The test protocol (`docs/development/modernization/phase-e/usability-test-protocol.md`) operationalises this DR.
+
+### Decision — the four-dimension bar
+
+To pass the E.10 acceptance gate, the SPA must clear **all four** dimensions across a panel of ≥5 clinicians per role (Investigator + Monitor + Data Manager — so ≥15 sessions total, ≥45 task attempts).
+
+| Dimension | Target | Source |
+|---|---|---|
+| **Task success rate** | ≥ 80 % of canonical task attempts complete unaided within the time budget | Per-scenario success/fail captured by the observer |
+| **System Usability Scale (SUS)** | Median SUS score ≥ 70 across the panel | Standard 10-item SUS questionnaire, administered after each session |
+| **Critical errors** | **0** per role | Critical error = a flow that could compromise clinical data integrity (wrong subject selected for sign-off, query attached to wrong item, CRF data lost on navigation, etc.). One critical error in any session fails the role gate |
+| **Severe pain points** | ≤ 2 distinct **severe** findings per role across the panel | Severe = a pattern that prevents a non-trivial subset of users from completing the workflow without help, even if the task technically succeeded |
+
+### Why these specific numbers
+
+1. **Task success ≥ 80 %.** Below this, the SPA isn't usable end-to-end for the average study-team member. The 80 % figure is the standard benchmark in clinical-software usability literature (e.g. NIST IR 7741) and matches the bar the Phase D-Sec team's pen-test report used for "ready for clinical use" sign-off.
+2. **SUS ≥ 70.** Standard SUS interpretation places 68 as the median across consumer software, ≥ 70 as "good", ≥ 80 as "excellent". A median ≥ 70 on a clinical-trial-data UI — where users are time-pressed, the data is dense, and the consequences of errors are real — is a meaningful bar.
+3. **Critical errors = 0.** Non-negotiable. A clinical-data system that ever silently writes wrong data is GCP-non-compliant. The protocol's observer checklist enumerates the critical errors per scenario.
+4. **Severe findings ≤ 2 per role.** Allows for two distinct rough edges per role that we then commit to fixing as carry-overs without failing the gate outright — anything more suggests structural rework.
+
+### Sample size justification
+
+Five users per role is the **minimum** Nielsen / NIST guidance for usability testing to surface ≥ 80 % of issues. The protocol allows the institutional team to scale up to seven per role when scheduling permits; the four-dimension bar applies regardless.
+
+### Stopping rules
+
+- **Critical error in any session ⇒ stop that role's testing immediately**, fix the cause, re-test from session 1 of that role.
+- **SUS median < 70 after the first 3 sessions** ⇒ pause + revisit the panel composition / scenarios / interpreter quality before scheduling more sessions.
+- **All four dimensions clear ⇒ role passes.** When all three roles pass, the E.10 gate closes and the SPA enters the institutional GCP-validation cycle.
+
+### Consequences
+
+- The four-dimension bar lands in the institutional validation plan as a documented Phase E exit criterion.
+- The Phase E execution playbook's E.10 success criteria + the closure tag (`phase-e-closure`) reference this DR.
+- The protocol carries enough operational detail (scenarios, scoring rubric, SUS form, observer template) that the next operator can run the sessions without re-deriving the bar.
+
+### Revisit triggers
+
+- A protocol revision after the first round of testing surfaces a dimension that doesn't map cleanly to the SUS / success-rate framework.
+- An institutional QM/GCP reviewer pushes back on the ≥ 80 % / ≥ 70 / 0-critical / ≤ 2-severe numbers — in which case the bar is renegotiated transparently in this DR.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)

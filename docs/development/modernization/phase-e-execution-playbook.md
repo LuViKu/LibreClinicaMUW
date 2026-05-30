@@ -292,13 +292,22 @@ The helper is exported so route-guard unit tests don't need to spin the router.
 
 **Goal:** evidence-based "ready for clinical use" decision.
 
+**Status:** 🟢 **Protocol pack + acceptance bar shipped 2026-05-30**, ready to schedule. The first session needs ≥ 1 calendar week of recruiting lead time + a deployment of `feature/muw-phase-e-ux-mockups` at `test-libreclinica.meduniwien.ac.at` (or equivalent).
+
 **Scope:**
 
-1. **N ≥ 5** Augenklinik clinicians (mix of Prüfärzte + Studienassistenz). Each runs three canonical scenarios (enrol subject + complete first CRF + respond to a query) on a sample study.
-2. Task success rate, time-on-task, error rate, SUS score per user, qualitative feedback.
-3. DR-019 acceptance bar: ≥80% task success, SUS ≥ 70, zero critical errors. Any miss → backlog into a Phase E.10b cycle.
+1. ✅ **DR-019 — Phase E usability-acceptance bar** ([decision-record.md](decision-record.md#dr-019--phase-e-usability-acceptance-bar)) — four-dimension bar: task success ≥ 80 % | SUS median ≥ 70 | 0 critical errors | ≤ 2 severe findings per role. Justified against NIST IR 7741 + Brooke 1986 SUS guidance. Stopping rules + sample-size justification + revisit triggers included.
+2. ✅ **Protocol pack** ([phase-e/usability/](phase-e/usability/)):
+   - [usability-test-protocol.md](phase-e/usability/usability-test-protocol.md) — panel composition (3 roles × ≥5 clinicians = ≥15 sessions, ≥45 task attempts), session format (~60 min), scoring rubric, observer + moderator pair, recording rules, test environment, result-reporting hand-off, risk register.
+   - [usability-scenarios.md](phase-e/usability/usability-scenarios.md) — nine scenario cards (I-1 enrol new subject + I-2 CRF entry + I-3 sign subject + M-1 bulk-verify SDV + M-2 add-query + M-3 audit-log Reason-for-Change + DM-1 pending-invite + DM-2 build-study progress + DM-3 import-CRF-data wizard). Each card carries participant narrative + success criteria + per-scenario critical-error list + moderator-only notes.
+   - [consent-template.md](phase-e/usability/consent-template.md) — bilingual DE primary + EN summary; 25 € voucher compensation; 90-day retention.
+   - [sus-questionnaire.md](phase-e/usability/sus-questionnaire.md) — Brooke 1986 standard 10-item form, bilingual, + analyst scoring sheet.
+   - [observer-template.md](phase-e/usability/observer-template.md) — one A4 sheet per scenario × participant: header / outcome / critical-error catalogue / severe findings / minor backlog / quotes / observer interpretation.
+   - [results-template.md](phase-e/usability/results-template.md) — one MD per role authored by the analyst; this is the only artefact the Phase E exit gate reads.
+3. ⏳ **Run the panel** — gated on the test deployment + recruiting cycle. ≥ 15 sessions across 3 roles.
+4. ⏳ **Author per-role results MDs** + apply gate decision per DR-019.
 
-**Verification gate:** DR-019 written + accepted, ratifying the quantitative bar before the test.
+**Verification gate:** DR-019 accepted + the per-role `results-YYYY-MM-DD-<role>.md` reports document pass on every dimension. The Phase E closure tag (`phase-e-closure`) blocks until all three role reports show pass.
 
 ---
 
