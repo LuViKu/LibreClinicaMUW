@@ -2,6 +2,16 @@
 
 Inventory of every UI feature reachable in LibreClinica today, organized per role, so the Phase E SPA rewrite has a complete checklist of features to preserve.
 
+## Intentional retirements (do NOT reproduce in the SPA)
+
+Three features captured by the live walkthrough are deliberately **not** reproduced in the Phase E SPA. They surfaced during the [post-Phase-D UI validation](post-phase-d-ui-validation.md) and are kept here as a flag so the SPA-feature-parity matrix doesn't accidentally re-implement dead paths.
+
+| Retired feature | Replaced by | Source |
+|---|---|---|
+| **`/ListSubjectDiscNote`** — per-subject Notes & Discrepancies path (`listSubjectDiscNote.jsp`) | The cross-subject `/ViewNotes` workflow + the per-CRF inline discrepancy thread already mocked in [`notes-discrepancies.html`](ux-mockups/notes-discrepancies.html) | Phase B.4 PR #43 (commit `3d53ce430`) — "delete dead per-subject Notes-and-Discrepancies path" |
+| **DataTables.net 2.x vendor bundle** at `includes/js/datatables/` | Vanilla `fetch` + DOM render per cohort 2a — see [`includes/js/datatables/README.md`](../../../web/src/main/webapp/includes/js/datatables/README.md) | Phase B.4 cohort 2a (incompatible with the legacy `prototype.js` `Element.prototype` mutations) |
+| **jmesa dead endpoints** (cohorts 3b + 3c) | Already unmapped in `web.xml` since 2014; factories deleted without reaching any reachable URL | Phase B.4 cohort 3 work |
+
 ## Role catalogues
 
 - **[investigator-features.md](investigator-features.md)** — physician / study-assistant: data entry, subject management, event scheduling, signing

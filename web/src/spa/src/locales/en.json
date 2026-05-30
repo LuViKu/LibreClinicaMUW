@@ -12,7 +12,8 @@
     "sdv": "Source Data Verification",
     "auditLog": "Audit Trail",
     "buildStudy": "Build Study",
-    "manageUsers": "Manage Users"
+    "manageUsers": "Manage Users",
+    "importCrfData": "Import CRF Data"
   },
   "common": {
     "loading": "Loading…",
@@ -251,6 +252,7 @@
   "crfEntry": {
     "title": "CRF data entry",
     "railHeading": "Sections",
+    "readOnlyTell": "Read-only · Monitor view",
     "unsaved": "Unsaved changes",
     "saving": "Auto-saving…",
     "lastSaved": "Last saved at {at}",
@@ -265,6 +267,154 @@
     "action": {
       "saveDraft": "Save draft",
       "markComplete": "Mark CRF complete"
+    }
+  },
+  "buildStudy": {
+    "title": "Build Study",
+    "subTrail": "{study} {version} · setup tracker",
+    "intro": "Seven setup tasks. Complete them in any order; each card deep-links to its workflow when the supporting view ships.",
+    "progress": "Tasks complete",
+    "completion": "Setup completion",
+    "progressAriaLabel": "Setup {percent}% complete",
+    "taskListAriaLabel": "Study setup tasks",
+    "sites": "Sites",
+    "enrolledSubjects": "Enrolled subjects",
+    "noDeepLinkYet": "View pending",
+    "status": {
+      "not-started": "Not started",
+      "in-progress": "In progress",
+      "complete": "Complete"
+    },
+    "task": {
+      "create-study": { "title": "Create study", "summary": "{count} active", "description": "Study metadata, version, OID, sponsor + protocol number." },
+      "crf":          { "title": "Design CRFs", "summary": "{count} CRFs", "description": "Form library: item grids, response sets, repeating groups." },
+      "events":       { "title": "Define events", "summary": "{count} events", "description": "Visit schedule with per-event CRF assignment + SDV requirement." },
+      "groups":       { "title": "Subject groups", "summary": "{count} groups", "description": "Randomisation arms + stratification rules." },
+      "rules":        { "title": "Validation rules", "summary": "{count} rules", "description": "Field-level and cross-form predicates with action types." },
+      "sites":        { "title": "Sites", "summary": "{count} sites", "description": "Per-site PI, address, recruitment cap." },
+      "users":        { "title": "Users", "summary": "{count} users", "description": "Per-site Investigators, Monitors, Data Managers, CRCs." }
+    }
+  },
+  "manageUsers": {
+    "title": "Manage Users",
+    "subTrail": "LCDemo · all roles",
+    "searchPlaceholder": "Find user by name, username or email…",
+    "showingCount": "{visible} of {total} shown",
+    "empty": "No users match the current filter.",
+    "inviteAction": "Invite user",
+    "onlyActive": "Active only",
+    "studyWide": "Study-wide",
+    "activeYes": "Active",
+    "activeNo": "Inactive",
+    "role": {
+      "all": "All roles",
+      "Investigator": "Investigator",
+      "Monitor": "Monitor",
+      "Data Manager": "Data Manager",
+      "Administrator": "Administrator",
+      "CRC": "CRC"
+    },
+    "auth": {
+      "all": "All auth modes",
+      "sso": "SSO",
+      "local": "Local",
+      "ldap": "LDAP (legacy)",
+      "pending-invite": "Pending invite"
+    },
+    "column": {
+      "user": "User",
+      "role": "Role",
+      "site": "Site",
+      "auth": "Auth",
+      "lastLogin": "Last login",
+      "active": "Active"
+    }
+  },
+  "importCrf": {
+    "title": "Import CRF Data",
+    "subTrail": "LCDemo · bulk-load existing data",
+    "intro": "Bulk-load completed CRFs from CDISC ODM XML. The import is staged — nothing is committed until you confirm at the final step.",
+    "step": {
+      "upload": "Upload",
+      "map": "Map",
+      "preview": "Preview & resolve",
+      "commit": "Commit"
+    },
+    "upload": {
+      "heading": "Upload CDISC ODM 1.3 XML",
+      "description": "Subject / event / CRF / item must already be defined in the study.",
+      "cta": "Choose a file or drag-and-drop",
+      "hint": "Accepted: .xml · maximum 50 MB"
+    },
+    "map": {
+      "heading": "Detected counts",
+      "description": "The file was parsed and auto-mapped against the study's structure. Resolve any conflicts in the next step.",
+      "subjects": "Subjects",
+      "events": "Events",
+      "crfs": "CRFs",
+      "rows": "Rows"
+    },
+    "preview": {
+      "readyHeading": "Ready",
+      "overwriteHeading": "Overwrite",
+      "warningHeading": "Warnings",
+      "errorHeading": "Errors · will skip",
+      "errorBadValue": "Bad value — expected one of 1, 2, 3, 4, 5",
+      "errorUnknownItem": "Unknown item OID in the current CRF version",
+      "warnRange": "Out-of-range value — will import + flag for SDV",
+      "reasonHeading": "Reason for change",
+      "reasonHint": "{count} overwrites require a Reason for Change note. Recorded against every overwritten item in the audit log.",
+      "reasonPlaceholder": "e.g. Site sent corrected ODM after on-site source-data reconciliation.",
+      "cta": "Continue to Commit",
+      "column": {
+        "status": "Status",
+        "subject": "Subject",
+        "event": "Event",
+        "item": "CRF · item",
+        "delta": "Existing → incoming"
+      },
+      "status": {
+        "ready": "Ready",
+        "overwrite": "Overwrite",
+        "warning": "Warning",
+        "error": "Error"
+      }
+    },
+    "commit": {
+      "workingHeading": "Committing…",
+      "workingDetail": "Writing rows + audit-trail entries.",
+      "successHeading": "Import complete",
+      "successDetail": "{ready} new + {overwrite} overwritten · {error} skipped."
+    }
+  },
+  "signSubject": {
+    "title": "Sign Subject {id}",
+    "subTrail": "subject sign-off",
+    "intro": "Signing attests that the data is complete and accurate to the best of your knowledge. The action is recorded in the audit log and cannot be reversed without an administrator reset.",
+    "preflightHeading": "Pre-flight checks",
+    "casebookHeading": "Subject casebook — to be attested",
+    "casebookPdf": "Download PDF preview",
+    "submitLabel": "Sign subject {id}",
+    "signedToast": "{id} signed. Returning to the Subject Matrix…",
+    "attestation": "By signing below, I, {name} (Investigator, site {site}), attest that to the best of my knowledge the data captured for subject {id} is complete, accurate, and reflects the source documents. This electronic signature is recorded in the regulatory audit log per ICH-GCP and 21 CFR Part 11 §11.50.",
+    "acknowledgement": "I understand that signing locks all CRFs against further edit by site personnel until an administrator reset.",
+    "column": {
+      "event": "Event",
+      "status": "Status",
+      "openQueries": "Open queries"
+    },
+    "preflight": {
+      "eventsCompleteTitle": "All scheduled events have at least one CRF completed",
+      "eventsCompleteDetail": "Every event has data — see the casebook below for the per-event status.",
+      "eventsIncompleteTitle": "Some events still have CRFs in progress",
+      "eventsIncompleteDetail": "Signing is allowed; CRFs in progress will be locked at their current state.",
+      "crfsCompleteTitle": "All required CRFs are marked complete",
+      "crfsIncompleteTitle": "Some required CRFs are not marked complete",
+      "openQueriesTitle": "{count} open discrepancies attached to this subject",
+      "openQueriesDetail": "Open queries do not block signing, but you should reconcile them first when possible.",
+      "noOpenQueriesTitle": "No open discrepancies on this subject",
+      "firstSignature": "No previous signature on this subject",
+      "alreadySigned": "Subject already signed — re-signature recorded as a new audit event"
     }
   }
 }

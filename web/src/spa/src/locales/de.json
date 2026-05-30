@@ -12,7 +12,8 @@
     "sdv": "Quelldatenvergleich",
     "auditLog": "Audit Trail",
     "buildStudy": "Studienaufbau",
-    "manageUsers": "Nutzer verwalten"
+    "manageUsers": "Nutzer verwalten",
+    "importCrfData": "CRF-Daten importieren"
   },
   "common": {
     "loading": "Wird geladen…",
@@ -251,6 +252,7 @@
   "crfEntry": {
     "title": "CRF-Datenerfassung",
     "railHeading": "Abschnitte",
+    "readOnlyTell": "Schreibgeschützt · Monitor-Ansicht",
     "unsaved": "Ungespeicherte Änderungen",
     "saving": "Automatisches Speichern…",
     "lastSaved": "Zuletzt gespeichert um {at}",
@@ -265,6 +267,154 @@
     "action": {
       "saveDraft": "Entwurf speichern",
       "markComplete": "CRF als abgeschlossen markieren"
+    }
+  },
+  "buildStudy": {
+    "title": "Studienaufbau",
+    "subTrail": "{study} {version} · Aufbau-Tracker",
+    "intro": "Sieben Aufbauaufgaben. Beliebige Reihenfolge; jede Karte verlinkt in den entsprechenden Workflow, sobald die Folge-Ansicht ausgeliefert ist.",
+    "progress": "Erledigte Aufgaben",
+    "completion": "Aufbau-Fortschritt",
+    "progressAriaLabel": "Aufbau zu {percent}% abgeschlossen",
+    "taskListAriaLabel": "Aufgaben für den Studienaufbau",
+    "sites": "Standorte",
+    "enrolledSubjects": "Aufgenommene Teilnehmer",
+    "noDeepLinkYet": "Ansicht ausstehend",
+    "status": {
+      "not-started": "Nicht begonnen",
+      "in-progress": "In Bearbeitung",
+      "complete": "Abgeschlossen"
+    },
+    "task": {
+      "create-study": { "title": "Studie anlegen", "summary": "{count} aktiv", "description": "Studien-Metadaten, Version, OID, Sponsor + Protokollnummer." },
+      "crf":          { "title": "CRFs gestalten", "summary": "{count} CRFs", "description": "Formularbibliothek: Item-Raster, Antwortsätze, Wiederholungsgruppen." },
+      "events":       { "title": "Visiten definieren", "summary": "{count} Visiten", "description": "Visitenplan mit CRF-Zuordnung + SDV-Anforderung pro Visite." },
+      "groups":       { "title": "Teilnehmergruppen", "summary": "{count} Gruppen", "description": "Randomisierungsarme + Stratifizierungsregeln." },
+      "rules":        { "title": "Validierungsregeln", "summary": "{count} Regeln", "description": "Feld- und formularübergreifende Prädikate mit Aktionstypen." },
+      "sites":        { "title": "Standorte", "summary": "{count} Standorte", "description": "Pro Standort PI, Anschrift, Rekrutierungs-Obergrenze." },
+      "users":        { "title": "Nutzer/-innen", "summary": "{count} Personen", "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs." }
+    }
+  },
+  "manageUsers": {
+    "title": "Nutzerverwaltung",
+    "subTrail": "LCDemo · alle Rollen",
+    "searchPlaceholder": "Nutzer/-in nach Name, Username oder E-Mail suchen…",
+    "showingCount": "{visible} von {total} sichtbar",
+    "empty": "Keine Nutzer/-innen für den aktuellen Filter.",
+    "inviteAction": "Nutzer/-in einladen",
+    "onlyActive": "Nur aktive",
+    "studyWide": "Studienweit",
+    "activeYes": "Aktiv",
+    "activeNo": "Inaktiv",
+    "role": {
+      "all": "Alle Rollen",
+      "Investigator": "Prüfarzt/-ärztin",
+      "Monitor": "Monitor",
+      "Data Manager": "Datenmanager/-in",
+      "Administrator": "Administrator/-in",
+      "CRC": "CRC"
+    },
+    "auth": {
+      "all": "Alle Auth-Modi",
+      "sso": "SSO",
+      "local": "Lokal",
+      "ldap": "LDAP (Legacy)",
+      "pending-invite": "Einladung offen"
+    },
+    "column": {
+      "user": "Nutzer/-in",
+      "role": "Rolle",
+      "site": "Standort",
+      "auth": "Auth",
+      "lastLogin": "Letzte Anmeldung",
+      "active": "Aktiv"
+    }
+  },
+  "importCrf": {
+    "title": "CRF-Daten importieren",
+    "subTrail": "LCDemo · Massendaten-Import",
+    "intro": "Bestehende CRF-Daten aus CDISC ODM XML laden. Der Import wird gestaged — nichts wird committed, bis Sie im letzten Schritt bestätigen.",
+    "step": {
+      "upload": "Hochladen",
+      "map": "Mappen",
+      "preview": "Vorschau & Auflösung",
+      "commit": "Commit"
+    },
+    "upload": {
+      "heading": "CDISC ODM 1.3 XML hochladen",
+      "description": "Teilnehmer / Visite / CRF / Item müssen bereits in der Studie definiert sein.",
+      "cta": "Datei wählen oder per Drag-and-Drop ablegen",
+      "hint": "Akzeptiert: .xml · maximal 50 MB"
+    },
+    "map": {
+      "heading": "Erkannte Mengen",
+      "description": "Die Datei wurde geparst und automatisch gegen die Studienstruktur abgeglichen. Konflikte im nächsten Schritt auflösen.",
+      "subjects": "Teilnehmer",
+      "events": "Visiten",
+      "crfs": "CRFs",
+      "rows": "Zeilen"
+    },
+    "preview": {
+      "readyHeading": "Bereit",
+      "overwriteHeading": "Überschreibt",
+      "warningHeading": "Warnungen",
+      "errorHeading": "Fehler · wird übersprungen",
+      "errorBadValue": "Ungültiger Wert — erwartet 1, 2, 3, 4, 5",
+      "errorUnknownItem": "Unbekannte Item-OID in der aktuellen CRF-Version",
+      "warnRange": "Wert außerhalb des Normbereichs — Import + SDV-Flag",
+      "reasonHeading": "Änderungsgrund",
+      "reasonHint": "{count} Überschreibungen erfordern einen Änderungsgrund. Wird im Audit Trail bei jedem überschriebenen Item dokumentiert.",
+      "reasonPlaceholder": "z. B. Standort hat korrigierte ODM nach Vor-Ort-Quelldatenabgleich gesendet.",
+      "cta": "Weiter zum Commit",
+      "column": {
+        "status": "Status",
+        "subject": "Teilnehmer",
+        "event": "Visite",
+        "item": "CRF · Item",
+        "delta": "Bestand → eingehend"
+      },
+      "status": {
+        "ready": "Bereit",
+        "overwrite": "Überschreibt",
+        "warning": "Warnung",
+        "error": "Fehler"
+      }
+    },
+    "commit": {
+      "workingHeading": "Commit läuft…",
+      "workingDetail": "Zeilen und Audit-Trail-Einträge werden geschrieben.",
+      "successHeading": "Import abgeschlossen",
+      "successDetail": "{ready} neu + {overwrite} überschrieben · {error} übersprungen."
+    }
+  },
+  "signSubject": {
+    "title": "Teilnehmer {id} signieren",
+    "subTrail": "Teilnehmer-Freigabe",
+    "intro": "Mit der Signatur bestätigen Sie, dass die Daten nach bestem Wissen vollständig und korrekt sind. Der Vorgang wird im Audit Trail dokumentiert und kann nur durch eine/n Administrator/-in zurückgesetzt werden.",
+    "preflightHeading": "Pre-Flight-Prüfungen",
+    "casebookHeading": "Casebook des Teilnehmers — zu bestätigen",
+    "casebookPdf": "PDF-Vorschau",
+    "submitLabel": "Teilnehmer {id} signieren",
+    "signedToast": "{id} signiert. Rückkehr zur Übersicht…",
+    "attestation": "Mit der untenstehenden Signatur erkläre ich, {name} (Prüfarzt/-ärztin, Standort {site}), dass die für Teilnehmer {id} erfassten Daten nach bestem Wissen vollständig, korrekt und mit den Quelldokumenten übereinstimmend sind. Die elektronische Signatur wird gemäß ICH-GCP und 21 CFR Part 11 §11.50 im Audit Trail dokumentiert.",
+    "acknowledgement": "Ich verstehe, dass die Signatur alle CRFs gegen weitere Bearbeitung durch das Standort-Personal sperrt, bis eine administrative Rücksetzung erfolgt.",
+    "column": {
+      "event": "Visite",
+      "status": "Status",
+      "openQueries": "Offene Rückfragen"
+    },
+    "preflight": {
+      "eventsCompleteTitle": "Alle geplanten Visiten haben mindestens ein abgeschlossenes CRF",
+      "eventsCompleteDetail": "Jede Visite enthält Daten — siehe Casebook unten.",
+      "eventsIncompleteTitle": "Einige Visiten haben noch CRFs in Bearbeitung",
+      "eventsIncompleteDetail": "Signatur ist möglich; CRFs in Bearbeitung werden im aktuellen Zustand gesperrt.",
+      "crfsCompleteTitle": "Alle erforderlichen CRFs sind als abgeschlossen markiert",
+      "crfsIncompleteTitle": "Einige erforderliche CRFs sind nicht abgeschlossen",
+      "openQueriesTitle": "{count} offene Diskrepanzen zu diesem Teilnehmer",
+      "openQueriesDetail": "Offene Rückfragen blockieren die Signatur nicht, sollten aber wenn möglich vorher geklärt werden.",
+      "noOpenQueriesTitle": "Keine offenen Diskrepanzen",
+      "firstSignature": "Keine vorherige Signatur",
+      "alreadySigned": "Teilnehmer bereits signiert — Re-Signatur wird als neues Audit-Ereignis erfasst"
     }
   }
 }

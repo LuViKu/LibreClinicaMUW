@@ -57,6 +57,38 @@ const router = createRouter({
       component: () => import('@/views/StudyAuditLogView.vue'),
       meta: { title: 'Study Audit Log', role: 'Monitor' as const },
     },
+    /* Phase E.6 carry-over — Read-only CRF (Monitor's "View Within Record" path). */
+    {
+      path: '/event-crfs/:eventCrfOid/readonly',
+      name: 'crf-readonly',
+      component: () => import('@/views/CrfEntryView.vue'),
+      meta: { title: 'Read-only CRF', role: 'Monitor' as const, readOnly: true },
+    },
+    /* Phase E.7 — Data Manager workflow. */
+    {
+      path: '/build-study',
+      name: 'build-study',
+      component: () => import('@/views/BuildStudyView.vue'),
+      meta: { title: 'Build Study', role: 'Data Manager' as const },
+    },
+    {
+      path: '/manage-users',
+      name: 'manage-users',
+      component: () => import('@/views/ManageUsersView.vue'),
+      meta: { title: 'Manage Users', role: 'Data Manager' as const },
+    },
+    {
+      path: '/import-crf-data',
+      name: 'import-crf-data',
+      component: () => import('@/views/ImportCrfDataView.vue'),
+      meta: { title: 'Import CRF Data', role: 'Data Manager' as const },
+    },
+    {
+      path: '/subjects/:subjectId/sign',
+      name: 'sign-subject',
+      component: () => import('@/views/SignSubjectView.vue'),
+      meta: { title: 'Sign Subject', role: 'Investigator' as const },
+    },
   ],
 })
 

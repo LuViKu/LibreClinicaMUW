@@ -115,18 +115,69 @@ const { t } = useI18n()
         </p>
       </RouterLink>
 
-      <div
-        class="rounded-muw border border-slate-200 bg-slate-50 p-5 text-slate-400"
-        aria-disabled="true"
+      <RouterLink
+        to="/build-study"
+        class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group"
       >
         <div class="flex items-center gap-2 mb-2">
-          <span class="w-1.5 h-1.5 rounded-full bg-slate-300" aria-hidden="true"></span>
-          <span class="font-medium">Data Manager workflows…</span>
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-coral-500" aria-hidden="true"></span>
+          <span class="font-medium text-muw-blue">Data Manager</span>
         </div>
-        <p class="text-xs leading-relaxed">
-          Build Study, CRF Designer, Import wizard, Manage Users — land in Phase E.7.
+        <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+          {{ t('buildStudy.title') }}
+        </div>
+        <p class="text-slate-500 text-xs leading-relaxed">
+          7-task setup tracker with progress bar and per-task status.
         </p>
-      </div>
+      </RouterLink>
+
+      <RouterLink
+        to="/manage-users"
+        class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group"
+      >
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-coral-500" aria-hidden="true"></span>
+          <span class="font-medium text-muw-blue">Data Manager</span>
+        </div>
+        <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+          {{ t('manageUsers.title') }}
+        </div>
+        <p class="text-slate-500 text-xs leading-relaxed">
+          Per-user role + site + auth method; pending invites badge.
+        </p>
+      </RouterLink>
+
+      <RouterLink
+        to="/import-crf-data"
+        class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group"
+      >
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-coral-500" aria-hidden="true"></span>
+          <span class="font-medium text-muw-blue">Data Manager</span>
+        </div>
+        <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+          {{ t('importCrf.title') }}
+        </div>
+        <p class="text-slate-500 text-xs leading-relaxed">
+          Multi-step wizard: Upload → Map → Preview & resolve → Commit. Per-row before/after diffs.
+        </p>
+      </RouterLink>
+
+      <RouterLink
+        to="/subjects/M-001/sign"
+        class="rounded-muw border border-slate-200 bg-white p-5 hover:border-muw-blue-200 hover:shadow-muw-card transition group"
+      >
+        <div class="flex items-center gap-2 mb-2">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-teal-500" aria-hidden="true"></span>
+          <span class="font-medium text-muw-blue">Investigator</span>
+        </div>
+        <div class="font-semibold text-slate-900 group-hover:underline mb-1">
+          {{ t('signSubject.title', { id: 'M-001' }) }}
+        </div>
+        <p class="text-slate-500 text-xs leading-relaxed">
+          Pre-flight checklist + casebook snapshot + e-signature attestation. 21 CFR Part 11 §11.50.
+        </p>
+      </RouterLink>
     </section>
   </div>
 </template>

@@ -3,6 +3,14 @@ import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
+/**
+ * Phase E.6 carry-over (2026-05-30): the Read-only CRF view alias.
+ * Mounted by the `/event-crfs/:eventCrfOid/readonly` route via
+ * `meta.readOnly = true`. In read-only mode every input is disabled,
+ * the save + mark-complete buttons disappear, and the page header
+ * shows a "Read-only — Monitor view" tell.
+ */
+
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
@@ -20,6 +28,7 @@ const router = useRouter()
 const store = useCrfEntryStore()
 
 const eventCrfOid = computed(() => String(route.params.eventCrfOid))
+const isReadOnly = computed(() => route.meta?.readOnly === true)
 
 onMounted(() => store.load(eventCrfOid.value))
 watch(eventCrfOid, (oid) => { void store.load(oid) })
@@ -103,10 +112,11 @@ async function onMarkComplete() {
             {{ store.schema.name }} <span class="text-slate-400 font-normal text-sm ml-1">{{ store.schema.version }}</span>
           </h1>
           <StatusPill :variant="statusVariant(store.status)">{{ statusLabel(store.status) }}</StatusPill>
-          <span v-if="store.pendingChanges && !store.isSaving" class="text-[11px] text-amber-700">
+          <StatusPill v-if="isReadOnly" variant="monitor">{{ t('crfEntry.readOnlyTell') }}</StatusPill>
+          <span v-if="!isReadOnly && store.pendingChanges && !store.isSaving" class="text-[11px] text-amber-700">
             {{ t('crfEntry.unsaved') }}
           </span>
-          <span v-if="store.isSaving" class="text-[11px] text-muw-blue">{{ t('crfEntry.saving') }}</span>
+          <span v-if="!isReadOnly && store.isSaving" class="text-[11px] text-muw-blue">{{ t('crfEntry.saving') }}</span>
         </div>
       </div>
 
@@ -120,6 +130,7 @@ async function onMarkComplete() {
         novalidate
         @submit.prevent="onMarkComplete"
       >
+        <fieldset :disabled="isReadOnly" class="space-y-6 [&:disabled_input]:cursor-not-allowed [&:disabled_select]:cursor-not-allowed">
         <section
           v-for="section in store.schema!.sections"
           :id="section.oid"
@@ -193,8 +204,13 @@ async function onMarkComplete() {
           {{ store.error }}
         </div>
 
+        </fieldset>
+
         <!-- Save action row -->
-        <div class="flex items-center justify-between sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-200 -mx-8 px-8 py-3">
+        <div
+          v-if="!isReadOnly"
+          class="flex items-center justify-between sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-200 -mx-8 px-8 py-3"
+        >
           <div class="text-xs text-slate-500">
             <span v-if="store.entry.lastSavedAt">
               {{ t('crfEntry.lastSaved', { at: new Date(store.entry.lastSavedAt).toLocaleTimeString() }) }}
