@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -7,6 +8,7 @@ import { useAuthStore } from '@/stores/auth'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { t } = useI18n()
 
 function logout() {
   auth.logout()
@@ -37,6 +39,9 @@ const showTopBar = computed(() => route.name !== 'login' && route.name !== 'firs
 
 <template>
   <div class="min-h-screen bg-white text-slate-900 text-sm">
+    <!-- WCAG 2.4.1 — bypass blocks. Visible only when focused. -->
+    <a href="#main-content" class="skip-link">{{ t('a11y.skipToMain') }}</a>
+
     <TopBar
       v-if="showTopBar && auth.isAuthenticated"
       :breadcrumb="breadcrumb"
@@ -59,9 +64,11 @@ const showTopBar = computed(() => route.name !== 'login' && route.name !== 'firs
             LibreClinica<em class="not-italic font-medium text-muw-coral-700 text-[0.7em] uppercase tracking-[0.08em] ml-1.5 align-middle">MUW</em>
           </span>
         </RouterLink>
-        <RouterLink to="/login" class="text-xs text-muw-blue hover:underline">Sign in</RouterLink>
+        <RouterLink to="/login" class="text-xs text-muw-blue hover:underline">{{ t('a11y.signInLink') }}</RouterLink>
       </div>
     </header>
-    <RouterView />
+    <main id="main-content" tabindex="-1" class="outline-none">
+      <RouterView />
+    </main>
   </div>
 </template>

@@ -15,6 +15,10 @@
     "manageUsers": "Nutzer verwalten",
     "importCrfData": "CRF-Daten importieren"
   },
+  "a11y": {
+    "skipToMain": "Zum Hauptinhalt springen",
+    "signInLink": "Anmelden"
+  },
   "common": {
     "loading": "Wird geladen…",
     "save": "Speichern",

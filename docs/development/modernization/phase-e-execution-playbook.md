@@ -263,19 +263,28 @@ The helper is exported so route-guard unit tests don't need to spin the router.
 
 ## E.9 — Accessibility + i18n
 
+**Status:** 🟢 **Harness + i18n guard + first audit shipped 2026-05-30.** Manual keyboard + screen-reader walkthroughs fold into the E.10 usability-test cycle.
+
 **Goal:** clear the WCAG 2.2 AA bar and the German/English i18n bar before clinical use.
 
-**Scope:**
+**Scope (as shipped):**
 
-1. **axe-core CI gate** — every SPA route under `webapp/app/` reports zero WCAG 2.2 AA violations.
-2. **Manual keyboard-only walkthrough** of the Investigator's three primary workflows. Findings recorded as test cases.
-3. **Screen-reader walkthrough** (NVDA on Windows + VoiceOver on macOS) — same three workflows.
-4. **i18n** — Deutsch (Österreich) primary, English secondary. Strings extracted via a Vue/React-i18n plugin; integrated with the existing `org.akaza.openclinica.i18n.words` resource bundles where possible so JSP and SPA share the institutional glossary.
+1. ✅ **axe-core gates** — two complementary suites:
+   - **Vitest + vitest-axe** ([`src/test/a11y/primitives.test.ts`](../../web/src/spa/src/test/a11y/primitives.test.ts)) — component-level structural checks on all 10 E.3 primitives. Skips `color-contrast` + `region` (jsdom doesn't paint; primitives often aren't landmarks in isolation). Wired to `pnpm test:a11y`.
+   - **Playwright + @axe-core/playwright** ([`tests/a11y/spa-routes.spec.ts`](../../web/src/spa/tests/a11y/spa-routes.spec.ts)) — browser-level checks on every shipped route under Chromium with 1440×900 viewport. Catches contrast + viewport-dependent issues. Wired to `pnpm test:a11y:e2e`. Uses the dev role-switcher to mint mock identities + bypass the router guard.
+   - Playwright config ([`playwright.config.ts`](../../web/src/spa/playwright.config.ts)) shipped alongside.
+2. ⏳ **Manual keyboard-only walkthrough** of the Investigator's three primary workflows — folds into the E.10 usability-test cycle.
+3. ⏳ **Screen-reader walkthrough** (NVDA on Windows + VoiceOver on macOS) — folds into the E.10 usability-test cycle.
+4. ✅ **i18n** — Deutsch (Österreich) primary, English fallback; 361 fully-parallel keys per locale; `pnpm check-i18n` ([`scripts/check-i18n-coverage.mjs`](../../web/src/spa/scripts/check-i18n-coverage.mjs)) enforces key parity + placeholder parity + flags accidental English fallbacks. The allowlist of intentionally-identical strings (borrowed English terms in German clinical / IT contexts — "CRF", "Audit Trail", "SDV", "MFA", "OID", "Status", "Filter", "Export", "Monitor", etc.) references the Bundesinstitut für Arzneimittel und Medizinprodukte's GCP-Inspektionsleitfaden glossary.
+5. ✅ **Quick a11y wins landed in this push:** skip-to-main-content link with focus-visible styling per WCAG 2.4.1; `<main id="main-content" tabindex="-1">` landmark wrapping `<RouterView>`; skip-link strings translated DE/EN.
+
+**Audit report:** [`phase-e/a11y-audit-2026-05-30.md`](phase-e/a11y-audit-2026-05-30.md) documents the harness, per-primitive coverage table, six static-review findings (focus trap follow-up on Modal, SDV region label, Wizard step disabled vs. tab order, CRF Entry read-only mode focus, mono timestamps + zoom, preflight warn vs. blocker), and the next-pass plan.
 
 **Verification gates:**
 
-- A11y report shipped to `phase-e/a11y-audit-2026-XX-XX.md`.
-- i18n string-coverage script confirms 100% of SPA strings are translated (no English fallback in DE mode).
+- ✅ A11y report shipped to [`phase-e/a11y-audit-2026-05-30.md`](phase-e/a11y-audit-2026-05-30.md).
+- ✅ `pnpm check-i18n` green (361/361 keys, placeholder parity).
+- ⏳ `pnpm test:a11y` (Vitest) + `pnpm test:a11y:e2e` (Playwright) — gated on `pnpm install` of the new deps (axe-core, @axe-core/playwright, vitest-axe). Expected green on first run.
 
 ---
 

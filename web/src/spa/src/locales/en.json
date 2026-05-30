@@ -15,6 +15,10 @@
     "manageUsers": "Manage Users",
     "importCrfData": "Import CRF Data"
   },
+  "a11y": {
+    "skipToMain": "Skip to main content",
+    "signInLink": "Sign in"
+  },
   "common": {
     "loading": "Loading…",
     "save": "Save",

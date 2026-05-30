@@ -98,6 +98,7 @@ src/
 | E.6 — Monitor workflow | 🟢 4/5 screens (SDV + Notes + Audit Log + Add Query modal + Read-only CRF carry-over) | [SdvView.vue](src/views/SdvView.vue), [NotesDiscrepanciesView.vue](src/views/NotesDiscrepanciesView.vue), [StudyAuditLogView.vue](src/views/StudyAuditLogView.vue) |
 | E.7 — Data Manager workflow | 🟢 4/7 screens shipped (Build Study + Manage Users + Sign Subject + Import CRF wizard) | [BuildStudyView.vue](src/views/BuildStudyView.vue), [ManageUsersView.vue](src/views/ManageUsersView.vue), [SignSubjectView.vue](src/views/SignSubjectView.vue), [ImportCrfDataView.vue](src/views/ImportCrfDataView.vue) |
 | E.8 — Auth integration | 🟢 core shipped (LoginView + FirstLogin wizard + auth store + router guard + logout) | [LoginView.vue](src/views/LoginView.vue), [FirstLoginView.vue](src/views/FirstLoginView.vue), [stores/auth.ts](src/stores/auth.ts), [router/index.ts](src/router/index.ts) |
+| E.9 — Accessibility + i18n | 🟢 harness + i18n guard + audit shipped (manual walks in E.10) | [src/test/a11y/](src/test/a11y/), [tests/a11y/](tests/a11y/), [scripts/check-i18n-coverage.mjs](scripts/check-i18n-coverage.mjs), [a11y-audit-2026-05-30.md](../../../docs/development/modernization/phase-e/a11y-audit-2026-05-30.md) |
 | E.9 — Accessibility + i18n | pending (vue-i18n wired) | TBD |
 | E.10 — Usability testing | pending | TBD |
 | E.11 — Cutover + JSP retirement | pending | TBD |
