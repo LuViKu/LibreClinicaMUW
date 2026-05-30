@@ -405,7 +405,16 @@ i. Build `LegacyServletRegistry @Configuration` enumerating
    `ServletRegistrationBean` for all 218 LibreClinica servlets —
    generated from
    [phase-c14-web-xml-inventory.md](phase-c14-web-xml-inventory.md).
-   ~250 LOC of mechanical bean methods.
+   ~2000 LOC of mechanical bean methods. Generator script at
+   [gen-legacy-servlet-registry.py](gen-legacy-servlet-registry.py)
+   produces the @Configuration class from web.xml. Must land in the
+   same commit that removes the 222 `<servlet>` + 223 `<servlet-mapping>`
+   entries from `web.xml` — otherwise Tomcat double-registers each
+   servlet name and fails to deploy. Skipped by the script:
+   `pages` (DispatcherServlet, stays in web.xml until WAR→JAR),
+   `OpenClinicaJersey` / `OpenClinicaJersey2` (Jersey servlets — fail
+   to link against jakarta.servlet 6, Tomcat marks unavailable),
+   `ws` (Spring-WS MessageDispatcherServlet — Phase B zombie).
 j. Verify zombie candidates: `spring-ws` `MessageDispatcherServlet`
    entry + 2 Jersey servlet entries + 2 `ws-servlet-config.xml` beans.
    If unused in production, delete the entries + the dep pins.
