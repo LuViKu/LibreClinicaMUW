@@ -136,7 +136,17 @@ public class WebMvcConfig {
     @Bean
     public RequestMappingHandlerAdapter requestMappingHandlerAdapter(
             MarshallingHttpMessageConverter marshallingHttpMessageConverter,
-            MappingJackson2HttpMessageConverter jacksonMessageConverter) {
+            // Phase D.6 (DR-014): explicit @Qualifier — Phase C.15
+            // un-excluded WebMvcAutoConfiguration which registers its
+            // own `mappingJackson2HttpMessageConverter` bean alongside
+            // our `jacksonMessageConverter`. Without the qualifier,
+            // by-type injection here was ambiguous → the `pages`
+            // DispatcherServlet failed to initialise → GET
+            // /pages/login/login returned HTTP 500 on every request.
+            // The qualifier is the surgical fix; the root issue is
+            // logged in the Phase E known-issues file. Now resolved.
+            @org.springframework.beans.factory.annotation.Qualifier("jacksonMessageConverter")
+                    MappingJackson2HttpMessageConverter jacksonMessageConverter) {
         RequestMappingHandlerAdapter a = new RequestMappingHandlerAdapter();
         a.setMessageConverters(List.of(marshallingHttpMessageConverter, jacksonMessageConverter));
         return a;
