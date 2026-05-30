@@ -53,6 +53,11 @@
         <property name="factorService" ref="factorService"/>
         <!-- E-Mail notification -->
         <property name="mailNotificationService" ref="mailNotificationService"/>
+        <!-- Phase D.1.b (DR-015): lazy bcrypt rehash service. Inspects
+             user.passwd after successful auth; if legacy (MD5/SHA-1),
+             rewrites as bcrypt while the plaintext is still in scope.
+             Bean defined by PasswordEncoderConfig (core). -->
+        <property name="passwordRehashService" ref="passwordRehashService"/>
     </bean>
     
     <bean id="successHandler" class="org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler" >

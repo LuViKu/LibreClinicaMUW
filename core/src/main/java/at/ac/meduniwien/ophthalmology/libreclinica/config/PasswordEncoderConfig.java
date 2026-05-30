@@ -12,6 +12,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.LegacyMd5Sha1PasswordEncoder;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.PasswordRehashService;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -82,5 +84,18 @@ public class PasswordEncoderConfig {
         delegating.setDefaultPasswordEncoderForMatches(new LegacyMd5Sha1PasswordEncoder());
 
         return delegating;
+    }
+
+    /**
+     * Phase D.1.b: lazy bcrypt rehash service. Wired into the auth
+     * filter ({@code applicationContext-security.xml} myFilter bean);
+     * fires after a successful authentication to detect legacy
+     * hashes and rewrite them as bcrypt.
+     */
+    @Bean
+    public PasswordRehashService passwordRehashService(
+            PasswordEncoder passwordEncoder,
+            UserAccountDAO userAccountDao) {
+        return new PasswordRehashService(passwordEncoder, userAccountDao);
     }
 }

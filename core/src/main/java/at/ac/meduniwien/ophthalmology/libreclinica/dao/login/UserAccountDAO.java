@@ -254,6 +254,22 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         this.executeUpdate(digester.getQuery("updateLockCounter"), variables);
     }
 
+    /**
+     * Phase D.1.b (2026-05-30): targeted single-column update used by
+     * {@code PasswordRehashService} to rewrite a legacy MD5/SHA-1 hash
+     * as bcrypt after a successful legacy-format login. Sister of
+     * {@link #updateLockCounter} — writes only the {@code passwd} and
+     * {@code passwd_timestamp} columns, leaving the rest of the row
+     * untouched.
+     */
+    public void updatePasswordHash(Integer userId, String newHash) {
+        HashMap<Integer, Object> variables = new HashMap<>();
+        variables.put(1, newHash);
+        variables.put(2, new java.sql.Date(System.currentTimeMillis()));
+        variables.put(3, userId);
+        this.executeUpdate(digester.getQuery("updatePasswordHash"), variables);
+    }
+
     public void lockUser(Integer id) {
         HashMap<Integer, Object> variables = variables(false, Status.LOCKED.getId(), id);
         this.executeUpdate(digester.getQuery("lockUser"), variables);

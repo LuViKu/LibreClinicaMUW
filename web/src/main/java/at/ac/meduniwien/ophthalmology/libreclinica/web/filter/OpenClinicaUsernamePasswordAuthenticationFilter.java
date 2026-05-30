@@ -42,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.AuditUserLoginBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.technicaladmin.LoginStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.PasswordRehashService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.MailNotificationService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
 import org.springframework.security.authentication.AuthenticationServiceException;
@@ -90,6 +91,7 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
     private DataSource dataSource;
     private CRFLocker crfLocker;
     private MailNotificationService mailNotificationService;
+    private PasswordRehashService passwordRehashService;
 
     public OpenClinicaUsernamePasswordAuthenticationFilter() {
         super("/j_spring_security_check");
@@ -98,10 +100,19 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
     public void setFactorService(TwoFactorService factorService) {
         this.factorService = factorService;
     }
-    
+
     public void setMailNotificationService(MailNotificationService mailNotificationService) {
         this.mailNotificationService = mailNotificationService;
-    }     
+    }
+
+    /**
+     * Phase D.1.b (DR-015): wire the lazy bcrypt rehash service. Fires
+     * after a successful authentication; rewrites legacy MD5/SHA-1
+     * hashes as bcrypt while the plaintext is still in scope.
+     */
+    public void setPasswordRehashService(PasswordRehashService passwordRehashService) {
+        this.passwordRehashService = passwordRehashService;
+    }
 
     @Override
     public Authentication attemptAuthentication(HttpServletRequest request, HttpServletResponse response) throws AuthenticationException {
@@ -160,6 +171,12 @@ public class OpenClinicaUsernamePasswordAuthenticationFilter extends AbstractAut
             authentication = this.getAuthenticationManager().authenticate(authRequest);
             auditUserLogin(username, LoginStatus.SUCCESSFUL_LOGIN, userAccountBean);
             resetLockCounter(username, LoginStatus.SUCCESSFUL_LOGIN, userAccountBean);
+            // Phase D.1.b (DR-015): lazy bcrypt rehash on successful
+            // legacy-format login. No-op for bcrypt rows. Plaintext is
+            // held in `password` only for the lifetime of this method.
+            if (passwordRehashService != null) {
+                passwordRehashService.rehashAfterSuccessfulLogin(userAccountBean, password);
+            }
             request.getSession().setAttribute(SecureController.USER_BEAN_NAME, userAccountBean);
             // To remove the locking of Event CRFs previously locked by this user.
             crfLocker.unlockAllForUser(userAccountBean.getId());
