@@ -20,6 +20,9 @@ import org.springframework.security.web.util.matcher.AntPathRequestMatcher;
 import org.springframework.security.web.util.matcher.RequestMatcher;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.JitProvisioningStrategy;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LookupOnlyProvisioningStrategy;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.UserProvisioningStrategy;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SsoUserDetailsService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.TrustedProxyRequestHeaderAuthenticationFilter;
@@ -136,8 +139,23 @@ public class SecurityConfig {
             // a present-AND-trusted header attempts pre-auth.
             preAuthFilter.setExceptionIfHeaderMissing(false);
 
+            // Phase D.4 (DR-014): select the provisioning strategy
+            // from configuration. LOOKUP_ONLY (default) rejects
+            // unknown principals; JIT scaffold currently behaves
+            // like LOOKUP_ONLY pending the row-creation impl per
+            // its class Javadoc.
+            UserProvisioningStrategy strategy;
+            switch (ssoProperties.getProvisioning().getStrategy()) {
+                case JIT:
+                    strategy = new JitProvisioningStrategy(userAccountDao);
+                    break;
+                case LOOKUP_ONLY:
+                default:
+                    strategy = new LookupOnlyProvisioningStrategy(userAccountDao);
+                    break;
+            }
             SsoUserDetailsService ssoUserDetailsService =
-                    new SsoUserDetailsService(userAccountDao, ssoProperties);
+                    new SsoUserDetailsService(strategy, ssoProperties);
             PreAuthenticatedAuthenticationProvider provider =
                     new PreAuthenticatedAuthenticationProvider();
             provider.setPreAuthenticatedUserDetailsService(ssoUserDetailsService);

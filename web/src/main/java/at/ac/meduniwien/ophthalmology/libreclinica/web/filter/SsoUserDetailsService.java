@@ -9,11 +9,12 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.web.filter;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.UserProvisioningStrategy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.core.GrantedAuthority;
@@ -22,7 +23,6 @@ import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationToken;
-import org.springframework.security.web.authentication.preauth.PreAuthenticatedGrantedAuthoritiesUserDetailsService;
 
 /**
  * Phase D.3 (DR-014): resolves a pre-authenticated SSO principal
@@ -52,12 +52,17 @@ public class SsoUserDetailsService implements
     private static final Logger log =
             LoggerFactory.getLogger(SsoUserDetailsService.class);
 
-    private final UserAccountDAO userAccountDao;
+    private final UserProvisioningStrategy provisioningStrategy;
     private final SsoProperties ssoProperties;
 
-    public SsoUserDetailsService(UserAccountDAO userAccountDao,
+    /**
+     * Phase D.4 (DR-014): delegates miss-handling to a pluggable
+     * {@link UserProvisioningStrategy} (LOOKUP_ONLY default;
+     * JIT opt-in via {@code libreclinica.sso.provisioning.strategy}).
+     */
+    public SsoUserDetailsService(UserProvisioningStrategy provisioningStrategy,
                                  SsoProperties ssoProperties) {
-        this.userAccountDao = userAccountDao;
+        this.provisioningStrategy = provisioningStrategy;
         this.ssoProperties = ssoProperties;
     }
 
@@ -69,10 +74,8 @@ public class SsoUserDetailsService implements
      * @param token the pre-auth token carrying the principal (from
      *     the SSO header) as its name
      * @return a {@link UserDetails} for the resolved user
-     * @throws UsernameNotFoundException when no
-     *     {@code user_account} row matches the (provider, principal)
-     *     pair — caller (D.4) decides whether to JIT-provision or
-     *     reject
+     * @throws UsernameNotFoundException when the configured
+     *     provisioning strategy rejects the principal
      */
     @Override
     public UserDetails loadUserDetails(PreAuthenticatedAuthenticationToken token)
@@ -88,21 +91,28 @@ public class SsoUserDetailsService implements
                     "SSO principal header was empty");
         }
 
-        UserAccountBean user = userAccountDao.findByExternalIdentity(provider, principal);
+        // D.4 (DR-014): attribute headers consumed during JIT
+        // provisioning would feed in here. Empty map is fine for
+        // LOOKUP_ONLY (the default); JIT enrichment will read from
+        // the request via a future filter extension.
+        UserAccountBean user = provisioningStrategy.resolveOrProvision(
+                provider, principal, Collections.<String, String>emptyMap());
+
         if (user == null || user.getId() <= 0) {
-            log.info("SSO principal '{}' (provider='{}') not found in"
-                    + " user_account — LOOKUP_ONLY rejects",
+            // Defensive: strategies SHOULD throw rather than return null
+            // (interface contract). This branch protects against a buggy
+            // custom strategy that returns null instead of throwing.
+            log.warn("Provisioning strategy returned null for principal"
+                    + " '{}' (provider='{}') — treating as reject",
                     principal, provider);
             throw new UsernameNotFoundException(
-                    "No LibreClinica user bound to SSO principal '"
-                            + principal + "' under provider '"
-                            + provider + "'");
+                    "Provisioning strategy returned no user for SSO"
+                            + " principal '" + principal + "'");
         }
 
-        // Map to Spring Security User. Authorities default to a
-        // single ROLE_USER — Phase D.4 enriches via attribute
-        // mapping if configured. Phase D's role mapping (DR-017)
-        // refines this further once finalised.
+        // Map to Spring Security User. Authorities default to the
+        // configured role from libreclinica.sso.provisioning.default-role.
+        // Attribute-driven role mapping is deferred to DR-017 (open).
         String role = ssoProperties.getProvisioning().getDefaultRole();
         List<GrantedAuthority> authorities = Arrays.asList(new SimpleGrantedAuthority(role));
 
@@ -121,16 +131,4 @@ public class SsoUserDetailsService implements
                 authorities);
     }
 
-    /**
-     * Used internally — the
-     * {@link PreAuthenticatedGrantedAuthoritiesUserDetailsService}
-     * alternative just builds {@code UserDetails} from the token's
-     * authorities without a DB lookup. We always do the lookup so we
-     * can apply the LOOKUP_ONLY policy.
-     */
-    @SuppressWarnings("unused")
-    private void ignore() {
-        // intentionally empty — silences the unused-import warning
-        new PreAuthenticatedGrantedAuthoritiesUserDetailsService();
-    }
 }
