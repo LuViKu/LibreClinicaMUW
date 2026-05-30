@@ -301,6 +301,8 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 
 ## Phase D — Authentication modernization + library long-tail
 
+**Status (2026-05-30 evening):** **D-Sec substantially complete** — 10 of 11 sub-phases shipped on `lc-develop @ 63ebc5009`. Institution-agnostic SSO works end-to-end (DR-014), bcrypt + lazy rehash live (DR-015), SSO audit codes 6+7 verified, login JSP institutional button wired, e-sig re-auth scaffolded behind flag, Apache+mod_shib sidecar opt-in compose overlay ready. Operator tasks remain: SAMLtest.id SP-metadata upload, MedUni Wien IT institutional SP registration for production cutover, full sso-deployment-guide.md cookbook. D-Libs untouched (long tail of abandoned libraries). Full closure block in [phase-d-execution-playbook.md § Exit criteria](docs/development/modernization/phase-d-execution-playbook.md#exit-criteria-for-phase-d-sec).
+
 **Goal:** finish the security work the modernization started (MD5/SHA-1 → bcrypt; institution-agnostic SSO) and retire the abandoned-library long tail.
 
 **Timeline:** D-Sec ~1.5–2 weeks (sequential); D-Libs ~2–3 months (parallel; each lib is one PR).
