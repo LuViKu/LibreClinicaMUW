@@ -5,7 +5,6 @@ import { useRouter } from 'vue-router'
 
 import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
-import ErrorText from '@/components/ErrorText.vue'
 
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/auth'

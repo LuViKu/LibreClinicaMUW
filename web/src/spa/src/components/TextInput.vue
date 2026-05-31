@@ -13,7 +13,8 @@ import { computed } from 'vue'
  */
 interface Props {
   id: string
-  modelValue?: string
+  /** Accepts `null` so v-model bindings against nullable form fields don't need to coerce at the call site. */
+  modelValue?: string | null
   type?: 'text' | 'email' | 'password' | 'number' | 'search' | 'tel' | 'url'
   placeholder?: string
   disabled?: boolean
@@ -68,7 +69,7 @@ const inputClasses = computed(() => {
     <input
       :id="id"
       :type="type"
-      :value="modelValue"
+      :value="modelValue ?? ''"
       :placeholder="placeholder"
       :disabled="disabled"
       :readonly="readonly"

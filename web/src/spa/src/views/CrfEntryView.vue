@@ -56,11 +56,16 @@ function showError(item: CrfItem): string | null {
 }
 
 function inputBindings(item: CrfItem) {
+  // The store carries item values as `unknown` (each item declares its own
+  // dataType separately), but the form primitives expect `string | null`.
+  // The cast is safe because text-binding inputs only flow through here;
+  // numeric inputs are bound directly in the template.
+  const raw = store.values[item.oid]
   return {
     id: `item-${item.oid}`,
-    modelValue: store.values[item.oid],
+    modelValue: (raw == null ? '' : String(raw)) as string,
     error: showError(item) != null,
-    'onUpdate:modelValue': (v: unknown) => store.setValue(item.oid, v),
+    'onUpdate:modelValue': (v: string) => store.setValue(item.oid, v),
   }
 }
 

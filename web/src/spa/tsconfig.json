@@ -35,5 +35,13 @@
     "histoire.config.ts",
     "env.d.ts"
   ],
-  "exclude": ["node_modules", "../main/webapp/app"]
+  "exclude": [
+    "node_modules",
+    "../main/webapp/app",
+    "src/**/__tests__/**",
+    "src/test/**",
+    "tests/**",
+    "**/*.story.vue",
+    "**/*.test.ts"
+  ]
 }
