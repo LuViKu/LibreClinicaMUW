@@ -1,21 +1,33 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
 import type { EventStatus, Gender, Subject } from '@/types/subject'
 
 /**
- * Phase E.5 — Subjects store.
+ * Phase E.5 + E.4 — Subjects store.
  *
- * Backs the SubjectMatrixView. Until the E.4 backend adapter at
- * `GET /pages/api/v1/subjects` ships (gated on the E.0 dispatcher fix),
- * the store hydrates from in-memory mock data shaped exactly like the
- * planned API response. When the adapter lands, swap the `loadMock`
- * call in `load()` for `apiGet<Subject[]>(...)` and nothing in the
- * consuming view changes.
+ * Calls `GET /pages/api/v1/subjects` (adapter shipped in E.4 slice #1).
+ * The backend currently returns identity columns only (id, secondaryId,
+ * gender, yearOfBirth, group, enrolled, site); per-event status cells,
+ * sign-off state, and open-query counts ship in the follow-up adapter.
+ * The store reuses the SPA `Subject` shape verbatim — empty `events: []`
+ * + `signed: false` + `openQueries: 0` are normal until that lands.
+ *
+ * Fallback policy:
+ *  - In dev (Vite proxy reaches the backend) the real call is preferred.
+ *  - If the call fails with a network error (backend not running, dev
+ *    proxy mis-configured) we fall back to the mock fixture so the
+ *    matrix still renders for offline UX work.
+ *  - Set `VITE_USE_MOCK_API=true` in `.env.local` to bypass the network
+ *    entirely (useful when iterating on the view without a backend).
+ *  - Auth errors (401/403) are NOT fallback-eligible — they propagate
+ *    so the router-level guard can redirect to /login.
  *
  * Filter state lives in the store so navigating away from the matrix
  * and back keeps the user's filter context (the existing JSP also does
  * this via session-scoped state).
  */
+const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === 'true'
 export const useSubjectsStore = defineStore('subjects', () => {
   const rows = ref<Subject[]>([])
   const isLoading = ref(false)
@@ -55,8 +67,36 @@ export const useSubjectsStore = defineStore('subjects', () => {
     isLoading.value = true
     error.value = null
     try {
-      // TODO(E.4): replace with `await apiGet<Subject[]>(siteOid ? ...)`.
-      rows.value = await loadMock()
+      if (USE_MOCK_API) {
+        rows.value = await loadMock()
+        return
+      }
+      try {
+        rows.value = await apiGet<Subject[]>('/pages/api/v1/subjects')
+      } catch (e) {
+        if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+          // Let the router-level auth guard handle these — propagate so
+          // the calling view doesn't silently render a fallback list.
+          throw e
+        }
+        if (e instanceof ApiNetworkError) {
+          // Backend unreachable — fall back to mock so the SPA keeps
+          // working for offline UX iteration. Surface a soft error so
+          // the user knows the data is stale.
+          rows.value = await loadMock()
+          error.value = 'Backend nicht erreichbar — Demo-Daten werden angezeigt.'
+          return
+        }
+        if (e instanceof ApiError) {
+          // 4xx (e.g. 400 — no active study bound) and 5xx land here.
+          // Fall back to mock so the user sees *something* while we
+          // surface the underlying message.
+          rows.value = await loadMock()
+          error.value = e.message
+          return
+        }
+        throw e
+      }
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Unknown error loading subjects'
     } finally {
