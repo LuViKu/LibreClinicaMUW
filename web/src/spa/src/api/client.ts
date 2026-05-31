@@ -65,6 +65,19 @@ interface RequestOptions {
   headers?: Record<string, string>
 }
 
+/**
+ * Tomcat context path the WAR is deployed at. Callers pass logical
+ * paths starting with `/pages/...` or `/MainMenu`; this prefix is
+ * applied transparently so call sites don't repeat it. In dev the
+ * Vite proxy forwards `^/LibreClinica/(pages|MainMenu|...)` to
+ * `http://127.0.0.1:8080`; in prod the SPA is co-served from the
+ * same origin so the prefix is a same-origin path.
+ *
+ * If the WAR is ever renamed (e.g. to `/`), change this single
+ * constant + the Vite proxy regex.
+ */
+const CONTEXT_PATH = '/LibreClinica'
+
 async function request<T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
   path: string,
@@ -77,9 +90,11 @@ async function request<T>(
   }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
+  const url = path.startsWith(CONTEXT_PATH) ? path : `${CONTEXT_PATH}${path}`
+
   let response: Response
   try {
-    response = await fetch(path, {
+    response = await fetch(url, {
       method,
       credentials: 'include',
       headers,
@@ -87,7 +102,7 @@ async function request<T>(
       signal: opts.signal,
     })
   } catch (cause) {
-    throw new ApiNetworkError(`Network failure calling ${method} ${path}`, cause)
+    throw new ApiNetworkError(`Network failure calling ${method} ${url}`, cause)
   }
 
   if (response.status === 204) return undefined as T
@@ -100,7 +115,7 @@ async function request<T>(
     const message =
       (isJson && parsed && typeof parsed === 'object' && 'message' in parsed
         ? String((parsed as { message: unknown }).message)
-        : undefined) ?? `${method} ${path} → ${response.status}`
+        : undefined) ?? `${method} ${url} → ${response.status}`
     throw new ApiError(response.status, message, parsed)
   }
 
@@ -112,7 +127,7 @@ async function request<T>(
   if (!isJson) {
     throw new ApiError(
       401,
-      `${method} ${path}: expected application/json but got ${contentType || '<unset>'} — likely auth redirect`,
+      `${method} ${url}: expected application/json but got ${contentType || '<unset>'} — likely auth redirect`,
       parsed,
     )
   }

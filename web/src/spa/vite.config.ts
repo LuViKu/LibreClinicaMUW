@@ -52,9 +52,12 @@ export default defineConfig({
     proxy: {
       // Forward backend-bound calls to the Spring Boot WAR running in
       // Docker Compose. The SPA never talks to the backend through `/app/`;
-      // it calls `/MainMenu`, `/pages/*`, `/actuator/health`, etc.
-      // directly. Keep this list in sync with the OpenAPI inventory.
-      '^/(MainMenu|pages|actuator|j_spring_security_check|j_spring_security_logout|Logout|Login|ListStudySubjects|ViewStudySubject)': {
+      // it calls `/LibreClinica/MainMenu`, `/LibreClinica/pages/*`,
+      // `/LibreClinica/actuator/health`, etc. (the WAR's context path is
+      // `/LibreClinica`). The api/client.ts wrapper prepends the prefix
+      // transparently. Keep the alternation in sync with the OpenAPI
+      // inventory in docs/development/modernization/phase-e/api-surface.md.
+      '^/LibreClinica/(MainMenu|pages|actuator|j_spring_security_check|j_spring_security_logout|Logout|Login|ListStudySubjects|ViewStudySubject)': {
         target: 'http://127.0.0.1:8080',
         changeOrigin: true,
       },
