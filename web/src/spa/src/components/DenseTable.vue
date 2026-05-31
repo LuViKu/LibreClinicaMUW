@@ -18,12 +18,24 @@
  * cells, action button stacks, inline forms). A row-and-column-driven
  * API would balloon into per-cell-renderer props that are harder to
  * audit for a clinical-data UI than plain slot-based composition.
+ *
+ * Sticky-header rendering (2026-05-31): sticky is applied to each
+ * `<th>` cell rather than the `<thead>` wrapper. Two reasons:
+ *  1. Backgrounds on `<thead>` don't paint reliably between cells in
+ *     HTML tables — the row underneath bleeds through, producing the
+ *     overlapping artefact seen in the early E.6 Subject Matrix
+ *     screenshots.
+ *  2. The bordered shell uses `overflow-clip` (NOT `overflow-hidden`)
+ *     so it can clip the table's rounded corners without creating a
+ *     scrolling context that would scope the sticky element away from
+ *     the viewport. `overflow: clip` ships in every browser ≥ Chrome
+ *     90 / Firefox 81 / Safari 16.
  */
 
 interface Props {
   /**
    * Sticky-header offset (px) — usually the top-bar height. When set,
-   * `<thead>` becomes sticky at this offset.
+   * each `<th>` becomes sticky at this offset.
    */
   stickyHeaderOffset?: number
   /** Add a hover surface to body rows. Default true. */
@@ -42,15 +54,19 @@ withDefaults(defineProps<Props>(), {
 <template>
   <div
     :class="[
-      bordered ? 'border border-slate-200 rounded-muw overflow-hidden bg-white' : 'bg-white',
+      bordered
+        ? 'border border-slate-200 rounded-muw bg-white dense-table-shell'
+        : 'bg-white',
     ]"
   >
     <table class="w-full text-left text-[13px]">
       <thead
         v-if="$slots.header"
-        class="bg-slate-50 text-xs text-slate-600"
-        :class="[stickyHeaderOffset !== undefined ? 'sticky z-10' : '']"
-        :style="stickyHeaderOffset !== undefined ? { top: `${stickyHeaderOffset}px` } : undefined"
+        class="text-xs text-slate-600"
+        :class="[
+          stickyHeaderOffset !== undefined ? 'dense-thead-sticky' : 'bg-slate-50',
+        ]"
+        :style="stickyHeaderOffset !== undefined ? { '--dense-sticky-top': `${stickyHeaderOffset}px` } : undefined"
       >
         <slot name="header" />
       </thead>
@@ -72,3 +88,22 @@ withDefaults(defineProps<Props>(), {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* The bordered shell clips its rounded corners without becoming a
+ * scrolling context — `overflow: clip` does NOT scope sticky
+ * descendants the way `overflow: hidden` does. */
+.dense-table-shell {
+  overflow: clip;
+}
+
+/* Per-th sticky positioning + opaque background. The `<th>` cells
+ * come from the slot, so the rule descends via `:deep()`. The CSS
+ * variable carries the offset from the template's inline style. */
+.dense-thead-sticky :deep(th) {
+  position: sticky;
+  top: var(--dense-sticky-top, 0);
+  background-color: rgb(248 250 252); /* slate-50 — #f8fafc */
+  z-index: 10;
+}
+</style>

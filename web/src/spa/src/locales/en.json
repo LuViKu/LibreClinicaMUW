@@ -473,5 +473,25 @@
       "ackAuditing": "I understand that every action I take is recorded and auditable.",
       "finishCta": "Accept and enter LibreClinica"
     }
+  },
+  "subjectDetail": {
+    "subTrail": "subject detail",
+    "notSigned": "Not signed",
+    "notFound": "Subject {id} not found in the current study.",
+    "backToMatrix": "Back to Subject Matrix",
+    "identityHeading": "Identity & enrolment",
+    "eventsHeading": "Scheduled events",
+    "eventsCount": "events",
+    "openQueries": "Open queries",
+    "openEvent": "Open CRFs →",
+    "column": {
+      "event": "Event",
+      "status": "Status",
+      "openQueries": "Open queries"
+    },
+    "actions": {
+      "downloadCasebook": "Download casebook",
+      "signSubject": "Sign subject"
+    }
   }
 }

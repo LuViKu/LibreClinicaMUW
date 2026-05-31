@@ -92,6 +92,12 @@ const router = createRouter({
       component: () => import('@/views/SignSubjectView.vue'),
       meta: { title: 'Sign Subject', role: 'Investigator' as const },
     },
+    {
+      path: '/subjects/:subjectId',
+      name: 'subject-detail',
+      component: () => import('@/views/SubjectDetailView.vue'),
+      meta: { title: 'Subject', role: 'Investigator' as const },
+    },
     /* Phase E.8 — Auth. */
     {
       path: '/login',

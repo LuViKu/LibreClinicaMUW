@@ -134,7 +134,7 @@ const ariaSortLabel = (subject: Subject) =>
       </div>
 
       <!-- Filter row -->
-      <div class="flex items-center gap-3 mb-4 text-xs">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-2 mb-4 text-xs">
         <div class="w-72">
           <TextInput
             id="subject-matrix-search"
@@ -152,12 +152,12 @@ const ariaSortLabel = (subject: Subject) =>
           </TextInput>
         </div>
 
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1 shrink-0">
           <button
             v-for="f in filters"
             :key="f.id"
             type="button"
-            class="px-2.5 py-1 rounded-full border text-xs font-medium transition-colors"
+            class="px-2.5 py-1 rounded-full border text-xs font-medium transition-colors whitespace-nowrap shrink-0"
             :class="
               subjects.statusFilter === f.id
                 ? 'border-muw-blue-200 bg-muw-blue-50 text-muw-blue-700'
@@ -169,7 +169,7 @@ const ariaSortLabel = (subject: Subject) =>
           </button>
         </div>
 
-        <label class="inline-flex items-center gap-1.5 text-slate-600 cursor-pointer">
+        <label class="inline-flex items-center gap-1.5 text-slate-600 cursor-pointer whitespace-nowrap shrink-0">
           <input v-model="subjects.onlyWithQueries" type="checkbox" class="rounded text-muw-blue" />
           {{ t('subjectMatrix.filter.onlyWithQueries') }}
         </label>
@@ -177,13 +177,13 @@ const ariaSortLabel = (subject: Subject) =>
         <button
           v-if="subjects.query || subjects.statusFilter !== 'all' || subjects.onlyWithQueries"
           type="button"
-          class="ml-2 text-slate-500 hover:text-slate-900"
+          class="ml-2 text-slate-500 hover:text-slate-900 whitespace-nowrap shrink-0"
           @click="subjects.clearFilters()"
         >
           {{ t('common.clear') }}
         </button>
 
-        <div class="ml-auto text-slate-500">
+        <div class="ml-auto text-slate-500 whitespace-nowrap shrink-0">
           {{ t('subjectMatrix.showingCount', { visible: subjects.visibleCount, total: subjects.totalCount }) }}
         </div>
       </div>

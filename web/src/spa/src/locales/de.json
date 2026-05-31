@@ -473,5 +473,25 @@
       "ackAuditing": "Ich verstehe, dass jede meiner Aktionen dokumentiert und auditierbar ist.",
       "finishCta": "Akzeptieren und LibreClinica öffnen"
     }
+  },
+  "subjectDetail": {
+    "subTrail": "Probandendetail",
+    "notSigned": "Nicht signiert",
+    "notFound": "Proband {id} wurde in der aktuellen Studie nicht gefunden.",
+    "backToMatrix": "Zurück zur Probandenmatrix",
+    "identityHeading": "Identität & Einschluss",
+    "eventsHeading": "Geplante Visiten",
+    "eventsCount": "Visiten",
+    "openQueries": "Offene Rückfragen",
+    "openEvent": "CRFs öffnen →",
+    "column": {
+      "event": "Visite",
+      "status": "Status",
+      "openQueries": "Offene Rückfragen"
+    },
+    "actions": {
+      "downloadCasebook": "Patient-Casebook herunterladen",
+      "signSubject": "Probanden signieren"
+    }
   }
 }
