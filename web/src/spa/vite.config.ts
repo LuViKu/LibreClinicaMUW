@@ -60,6 +60,15 @@ export default defineConfig({
       '^/LibreClinica/(MainMenu|pages|actuator|j_spring_security_check|j_spring_security_logout|Logout|Login|ListStudySubjects|ViewStudySubject)': {
         target: 'http://127.0.0.1:8080',
         changeOrigin: true,
+        // Spring's LoginUrlAuthenticationEntryPoint + SavedRequestAwareAuthenticationSuccessHandler
+        // emit absolute Location headers (e.g.
+        // `Location: http://127.0.0.1:8080/LibreClinica/MainMenu`). Without
+        // rewrite the browser bounces from :5173 to :8080 cross-origin,
+        // losing the JSESSIONID and breaking the SPA's authenticated state.
+        // `autoRewrite: true` rewrites the host/port in Location headers to
+        // match the inbound Host (i.e. 127.0.0.1:5173), keeping the whole
+        // login/302 flow same-origin.
+        autoRewrite: true,
       },
     },
   },
