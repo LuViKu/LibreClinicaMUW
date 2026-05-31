@@ -179,12 +179,54 @@ function validateItem(item: CrfItem, raw: unknown): string | null {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Mock loader — production-shape CrfEntry for M-001 · V1 Inclusion ·         */
-/* Demographics. Replace with `apiGet<CrfEntry>` when the E.4 adapter lands.   */
+/* Mock loader — production-shape CrfEntry. Subject + event are decoded from   */
+/* the eventCrfOid so links from the Subject Matrix / Detail / Sign Subject    */
+/* views land on the correct contextual header. Replace with                   */
+/* `apiGet<CrfEntry>` when the E.4 adapter lands.                              */
+/*                                                                             */
+/* OID convention used by mock links:                                          */
+/*   EC_<subjectNoHyphen>_<event-tokens...>_<crfShort>                         */
+/* e.g. EC_M001_V1_INCLUSION_DEMO, EC_M042_V3_DAY90_DEMO                       */
 /* -------------------------------------------------------------------------- */
+
+const KNOWN_EVENTS: Record<string, string> = {
+  'V1_INCLUSION': 'V1 Inclusion',
+  'V2_DAY30': 'V2 Day 30',
+  'V3_DAY90': 'V3 Day 90',
+  'V4_DAY180': 'V4 Day 180',
+}
+
+/** Humanise an OID token (`V2_DAY30` → "V2 Day 30") with title-case words. */
+function humaniseTokens(tokens: string[]): string {
+  return tokens
+    .map((t) => t.charAt(0) + t.slice(1).toLowerCase())
+    .join(' ')
+}
+
+function decodeContext(eventCrfOid: string): { subjectId: string; eventLabel: string } {
+  // Strip the leading EC_ prefix when present, then split.
+  const body = eventCrfOid.replace(/^EC_/, '')
+  const parts = body.split('_').filter(Boolean)
+  if (parts.length < 2) {
+    return { subjectId: 'M-001', eventLabel: 'V1 Inclusion' }
+  }
+
+  // Subject token: e.g. M001 → M-001. Accepts any letter-prefix + digits shape.
+  const subjectMatch = parts[0]!.match(/^([A-Z]+)(\d+)$/)
+  const subjectId = subjectMatch ? `${subjectMatch[1]}-${subjectMatch[2]}` : parts[0]!
+
+  // Everything between subject and the trailing CRF short token is the event.
+  const eventTokens = parts.slice(1, parts.length > 2 ? -1 : undefined)
+  const eventKey = eventTokens.join('_').toUpperCase()
+  const eventLabel = KNOWN_EVENTS[eventKey] ?? humaniseTokens(eventTokens)
+
+  return { subjectId, eventLabel }
+}
 
 async function loadMock(eventCrfOid: string): Promise<CrfEntry> {
   await new Promise((resolve) => setTimeout(resolve, 30))
+
+  const { subjectId, eventLabel } = decodeContext(eventCrfOid)
 
   const schema: CrfSchema = {
     oid: 'F_DEMOGRAPHICS_V1',
@@ -218,7 +260,7 @@ async function loadMock(eventCrfOid: string): Promise<CrfEntry> {
       {
         oid: 'S_VITALS',
         title: 'Vitals',
-        instructions: 'Captured at the V1 visit, before any study intervention.',
+        instructions: `Captured at the ${eventLabel.split(' ')[0]} visit, before any study intervention.`,
         items: [
           {
             oid: 'I_HEIGHT_CM',
@@ -254,8 +296,8 @@ async function loadMock(eventCrfOid: string): Promise<CrfEntry> {
 
   return {
     eventCrfOid,
-    subjectId: 'M-001',
-    eventLabel: 'V1 Inclusion',
+    subjectId,
+    eventLabel,
     schema,
     values: {},
     status: 'not-started',
