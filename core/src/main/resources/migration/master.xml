@@ -21,5 +21,6 @@
   <include  file="migration/lc-1.4.0/release.xml"/>
   <include  file="migration/lc-muw-2026-05-28-study-subject-label-unique.xml"/>
   <include  file="migration/lc-muw-2026-05-30-add-external-identity.xml"/>
-</databaseChangeLog> 
+  <include  file="migration/lc-muw-2026-06-01-seed-demo-data.xml"/>
+</databaseChangeLog>
 

@@ -1,0 +1,722 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.4 M1 (DR-pending): demo data seed for the SPA.
+
+        Lifts the 7 MOCK_SUBJECTS + 3-event schedule + Demographics CRF
+        that currently live in `web/src/spa/src/stores/subjects.ts` and
+        `…/stores/crfEntry.ts` into the database, so the SPA's matrix
+        (and follow-up CRF-entry adapters) can render real demo data
+        instead of in-memory fixtures.
+
+        Mirrors `MOCK_SUBJECTS` row-for-row: M-001 .. M-007 with the
+        same gender, year of birth, enrolment date, and per-event
+        status (V1 Inclusion / V2 Day 30 / V3 Day 90). Item data is
+        populated for completed events; a handful of `discrepancy_note`
+        rows back the "open queries" counts visible on M-001/M-002/M-004/M-007.
+
+        Conventions:
+          - Default Study (study_id=1, oc_oid=S_DEFAULTS1) is assumed to
+            exist (seeded in legacy migration/2.5/changeLogDataInsert.xml).
+          - `owner_id=1` (root user, seeded same place) on every row.
+          - status_id=1 (AVAILABLE) on every "active" row.
+          - Explicit numeric PKs — no nextval() — matches the existing
+            legacy-data-insert pattern. New tables are empty pre-seed
+            (verified) so collisions are not possible.
+
+        Status taxonomies referenced:
+          - subject_event_status_id (table `subject_event_status`):
+              1=scheduled, 2=not scheduled, 3=data entry started,
+              4=completed, 8=signed.
+          - discrepancy_note_type_id (table `discrepancy_note_type`):
+              3=Query (the open-query type the SPA counts).
+          - resolution_status_id (table `resolution_status`):
+              1=New.
+
+        Out of scope (deferred to a follow-up Liquibase changeset
+        once the corresponding SPA workflow lands):
+          - study_group_class + study_group + subject_group_map
+            (the "Arm A / Arm B" group labels — SubjectsApiController
+            currently stubs groupLabel to null anyway).
+          - audit_event_log entries (the SPA's audit view ships later
+            and will write through the normal audit hook, not seed).
+    -->
+
+    <!-- ============================================================
+         CRF metadata — Demographics v1.0 + its 2 sections + 5 items.
+         Mirrors the hardcoded schema in
+         web/src/spa/src/stores/crfEntry.ts.
+         ============================================================ -->
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-crf-metadata">
+        <comment>Demographics CRF schema (1 crf + 1 crf_version + 2 sections + 5 items + 1 response_set + 5 item_form_metadata + 3 event-definition CRF links)</comment>
+
+        <!-- 1 crf, 1 crf_version -->
+        <insert tableName="crf">
+            <column name="crf_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="name" value="Demographics"/>
+            <column name="description" value="Subject identification and baseline vitals captured at study visits."/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="oc_oid" value="F_DEMOGRAPHICS"/>
+        </insert>
+        <insert tableName="crf_version">
+            <column name="crf_version_id" valueNumeric="1"/>
+            <column name="crf_id" valueNumeric="1"/>
+            <column name="name" value="v1.0"/>
+            <column name="description" value="Initial Demographics version"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="oc_oid" value="F_DEMOGRAPHICS_V1"/>
+        </insert>
+
+        <!-- 2 sections -->
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="1"/>
+            <column name="crf_version_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_IDENT"/>
+            <column name="title" value="Identification"/>
+            <column name="instructions" value="Source-document fields. Do not re-enter the Subject ID — it is pre-filled from the matrix."/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="2"/>
+            <column name="crf_version_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_VITALS"/>
+            <column name="title" value="Vitals"/>
+            <column name="instructions" value="Captured at the visit, before any study intervention."/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+
+        <!-- 1 response_set — YES/NO for consent_signed -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="1"/>
+            <column name="response_type_id" valueNumeric="6"/> <!-- single-select -->
+            <column name="label" value="yes_no"/>
+            <column name="options_text" value="Yes,No"/>
+            <column name="options_values" value="Y,N"/>
+            <column name="version_id" valueNumeric="1"/>
+        </insert>
+        <!-- 1 response_set — free-text placeholder for INT/REAL/date items
+             (LibreClinica requires response_set on every item_form_metadata
+             even when the response is free-text). -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="2"/>
+            <column name="response_type_id" valueNumeric="1"/> <!-- text -->
+            <column name="label" value="freetext"/>
+            <column name="options_text" value=""/>
+            <column name="options_values" value=""/>
+            <column name="version_id" valueNumeric="1"/>
+        </insert>
+
+        <!-- 5 items -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="1"/>
+            <column name="name" value="I_CONSENT_DATE"/>
+            <column name="description" value="Date of informed consent"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="oc_oid" value="I_CONSENT_DATE"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="2"/>
+            <column name="name" value="I_CONSENT_SIGNED"/>
+            <column name="description" value="Consent signed?"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="oc_oid" value="I_CONSENT_SIGNED"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="3"/>
+            <column name="name" value="I_HEIGHT_CM"/>
+            <column name="description" value="Height (cm)"/>
+            <column name="units" value="cm"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="6"/> <!-- INT -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="oc_oid" value="I_HEIGHT_CM"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="4"/>
+            <column name="name" value="I_WEIGHT_KG"/>
+            <column name="description" value="Weight (kg)"/>
+            <column name="units" value="kg"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="oc_oid" value="I_WEIGHT_KG"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="5"/>
+            <column name="name" value="I_BLOOD_PRESSURE_SYS"/>
+            <column name="description" value="Systolic BP (mmHg)"/>
+            <column name="units" value="mmHg"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="6"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="oc_oid" value="I_BLOOD_PRESSURE_SYS"/>
+        </insert>
+
+        <!-- 5 item_form_metadata rows -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="1"/>
+            <column name="item_id" valueNumeric="1"/>
+            <column name="crf_version_id" valueNumeric="1"/>
+            <column name="section_id" valueNumeric="1"/>
+            <column name="response_set_id" valueNumeric="2"/>
+            <column name="left_item_text" value="Date of informed consent"/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="2"/>
+            <column name="item_id" valueNumeric="2"/>
+            <column name="crf_version_id" valueNumeric="1"/>
+            <column name="section_id" valueNumeric="1"/>
+            <column name="response_set_id" valueNumeric="1"/>
+            <column name="left_item_text" value="Consent signed?"/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="3"/>
+            <column name="item_id" valueNumeric="3"/>
+            <column name="crf_version_id" valueNumeric="1"/>
+            <column name="section_id" valueNumeric="2"/>
+            <column name="response_set_id" valueNumeric="2"/>
+            <column name="left_item_text" value="Height (cm)"/>
+            <column name="regexp" value="^\d{2,3}$"/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="4"/>
+            <column name="item_id" valueNumeric="4"/>
+            <column name="crf_version_id" valueNumeric="1"/>
+            <column name="section_id" valueNumeric="2"/>
+            <column name="response_set_id" valueNumeric="2"/>
+            <column name="left_item_text" value="Weight (kg)"/>
+            <column name="width_decimal" value="(4,1)"/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="5"/>
+            <column name="item_id" valueNumeric="5"/>
+            <column name="crf_version_id" valueNumeric="1"/>
+            <column name="section_id" valueNumeric="2"/>
+            <column name="response_set_id" valueNumeric="2"/>
+            <column name="left_item_text" value="Systolic BP (mmHg)"/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+    <!-- ============================================================
+         Event definitions — V1 / V2 / V3 — plus their CRF assignment.
+         ============================================================ -->
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-event-definitions">
+        <comment>3 study_event_definition + 3 event_definition_crf rows linking each to Demographics</comment>
+
+        <insert tableName="study_event_definition">
+            <column name="study_event_definition_id" valueNumeric="1"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="name" value="V1 Inclusion"/>
+            <column name="description" value="Baseline visit at study entry"/>
+            <column name="repeating" valueBoolean="false"/>
+            <column name="type" value="scheduled"/>
+            <column name="category" value="Baseline"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="oc_oid" value="SE_V1_INCLUSION"/>
+        </insert>
+        <insert tableName="study_event_definition">
+            <column name="study_event_definition_id" valueNumeric="2"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="name" value="V2 Day 30"/>
+            <column name="description" value="30-day follow-up visit"/>
+            <column name="repeating" valueBoolean="false"/>
+            <column name="type" value="scheduled"/>
+            <column name="category" value="Follow-up"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="oc_oid" value="SE_V2_DAY30"/>
+        </insert>
+        <insert tableName="study_event_definition">
+            <column name="study_event_definition_id" valueNumeric="3"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="name" value="V3 Day 90"/>
+            <column name="description" value="90-day follow-up visit"/>
+            <column name="repeating" valueBoolean="false"/>
+            <column name="type" value="scheduled"/>
+            <column name="category" value="Follow-up"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="oc_oid" value="SE_V3_DAY90"/>
+        </insert>
+
+        <!-- Demographics is required at every event. -->
+        <insert tableName="event_definition_crf">
+            <column name="event_definition_crf_id" valueNumeric="1"/>
+            <column name="study_event_definition_id" valueNumeric="1"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="crf_id" valueNumeric="1"/>
+            <column name="required_crf" valueBoolean="true"/>
+            <column name="double_entry" valueBoolean="false"/>
+            <column name="default_version_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="ordinal" valueNumeric="1"/>
+        </insert>
+        <insert tableName="event_definition_crf">
+            <column name="event_definition_crf_id" valueNumeric="2"/>
+            <column name="study_event_definition_id" valueNumeric="2"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="crf_id" valueNumeric="1"/>
+            <column name="required_crf" valueBoolean="true"/>
+            <column name="double_entry" valueBoolean="false"/>
+            <column name="default_version_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="ordinal" valueNumeric="1"/>
+        </insert>
+        <insert tableName="event_definition_crf">
+            <column name="event_definition_crf_id" valueNumeric="3"/>
+            <column name="study_event_definition_id" valueNumeric="3"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="crf_id" valueNumeric="1"/>
+            <column name="required_crf" valueBoolean="true"/>
+            <column name="double_entry" valueBoolean="false"/>
+            <column name="default_version_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-01"/>
+            <column name="ordinal" valueNumeric="1"/>
+        </insert>
+    </changeSet>
+
+    <!-- ============================================================
+         Subjects — the 7 people. Mirrors MOCK_SUBJECTS row-for-row.
+         ============================================================ -->
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-subjects">
+        <comment>7 subject + 7 study_subject rows (M-001 .. M-007), all enrolled in study_id=1</comment>
+
+        <!-- M-001: F, YoB 1962, enrolled 2020-10-06 -->
+        <insert tableName="subject">
+            <column name="subject_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_of_birth" valueDate="1962-01-01"/>
+            <column name="gender" value="f"/>
+            <column name="date_created" valueDate="2020-10-06"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="dob_collected" valueBoolean="true"/>
+        </insert>
+        <insert tableName="study_subject">
+            <column name="study_subject_id" valueNumeric="1"/>
+            <column name="label" value="M-001"/>
+            <column name="subject_id" valueNumeric="1"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="enrollment_date" valueDate="2020-10-06"/>
+            <column name="date_created" valueDate="2020-10-06"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="oc_oid" value="SS_M001"/>
+        </insert>
+
+        <!-- M-002: M, YoB 1955, enrolled 2020-10-09 -->
+        <insert tableName="subject">
+            <column name="subject_id" valueNumeric="2"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_of_birth" valueDate="1955-01-01"/>
+            <column name="gender" value="m"/>
+            <column name="date_created" valueDate="2020-10-09"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="dob_collected" valueBoolean="true"/>
+        </insert>
+        <insert tableName="study_subject">
+            <column name="study_subject_id" valueNumeric="2"/>
+            <column name="label" value="M-002"/>
+            <column name="subject_id" valueNumeric="2"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="enrollment_date" valueDate="2020-10-09"/>
+            <column name="date_created" valueDate="2020-10-09"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="oc_oid" value="SS_M002"/>
+        </insert>
+
+        <!-- M-003: F, YoB 1949, enrolled 2020-10-15, SIGNED -->
+        <insert tableName="subject">
+            <column name="subject_id" valueNumeric="3"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_of_birth" valueDate="1949-01-01"/>
+            <column name="gender" value="f"/>
+            <column name="date_created" valueDate="2020-10-15"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="dob_collected" valueBoolean="true"/>
+        </insert>
+        <insert tableName="study_subject">
+            <column name="study_subject_id" valueNumeric="3"/>
+            <column name="label" value="M-003"/>
+            <column name="subject_id" valueNumeric="3"/>
+            <column name="study_id" valueNumeric="1"/>
+            <!-- status SIGNED (8) — matches mock signed:true -->
+            <column name="status_id" valueNumeric="8"/>
+            <column name="enrollment_date" valueDate="2020-10-15"/>
+            <column name="date_created" valueDate="2020-10-15"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="oc_oid" value="SS_M003"/>
+        </insert>
+
+        <!-- M-004: M, YoB 1971, enrolled 2020-11-02 -->
+        <insert tableName="subject">
+            <column name="subject_id" valueNumeric="4"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_of_birth" valueDate="1971-01-01"/>
+            <column name="gender" value="m"/>
+            <column name="date_created" valueDate="2020-11-02"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="dob_collected" valueBoolean="true"/>
+        </insert>
+        <insert tableName="study_subject">
+            <column name="study_subject_id" valueNumeric="4"/>
+            <column name="label" value="M-004"/>
+            <column name="secondary_label" value="04-MUW"/>
+            <column name="subject_id" valueNumeric="4"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="enrollment_date" valueDate="2020-11-02"/>
+            <column name="date_created" valueDate="2020-11-02"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="oc_oid" value="SS_M004"/>
+        </insert>
+
+        <!-- M-005: F, YoB 1980, enrolled 2020-11-12 -->
+        <insert tableName="subject">
+            <column name="subject_id" valueNumeric="5"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_of_birth" valueDate="1980-01-01"/>
+            <column name="gender" value="f"/>
+            <column name="date_created" valueDate="2020-11-12"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="dob_collected" valueBoolean="true"/>
+        </insert>
+        <insert tableName="study_subject">
+            <column name="study_subject_id" valueNumeric="5"/>
+            <column name="label" value="M-005"/>
+            <column name="subject_id" valueNumeric="5"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="enrollment_date" valueDate="2020-11-12"/>
+            <column name="date_created" valueDate="2020-11-12"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="oc_oid" value="SS_M005"/>
+        </insert>
+
+        <!-- M-006: M, YoB 1958, enrolled 2020-12-01, SIGNED -->
+        <insert tableName="subject">
+            <column name="subject_id" valueNumeric="6"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_of_birth" valueDate="1958-01-01"/>
+            <column name="gender" value="m"/>
+            <column name="date_created" valueDate="2020-12-01"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="dob_collected" valueBoolean="true"/>
+        </insert>
+        <insert tableName="study_subject">
+            <column name="study_subject_id" valueNumeric="6"/>
+            <column name="label" value="M-006"/>
+            <column name="subject_id" valueNumeric="6"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="8"/>
+            <column name="enrollment_date" valueDate="2020-12-01"/>
+            <column name="date_created" valueDate="2020-12-01"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="oc_oid" value="SS_M006"/>
+        </insert>
+
+        <!-- M-007: F, YoB 1972, enrolled 2021-01-15 -->
+        <insert tableName="subject">
+            <column name="subject_id" valueNumeric="7"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_of_birth" valueDate="1972-01-01"/>
+            <column name="gender" value="f"/>
+            <column name="date_created" valueDate="2021-01-15"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="dob_collected" valueBoolean="true"/>
+        </insert>
+        <insert tableName="study_subject">
+            <column name="study_subject_id" valueNumeric="7"/>
+            <column name="label" value="M-007"/>
+            <column name="subject_id" valueNumeric="7"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="enrollment_date" valueDate="2021-01-15"/>
+            <column name="date_created" valueDate="2021-01-15"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="oc_oid" value="SS_M007"/>
+        </insert>
+    </changeSet>
+
+    <!-- ============================================================
+         Per-subject study_event rows: 21 = 7 subjects × 3 events.
+         subject_event_status_id matches the per-event status from
+         MOCK_SUBJECTS.events[*].status:
+             1=scheduled, 2=not scheduled, 3=data entry started,
+             4=completed, 8=signed.
+         ============================================================ -->
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-study-events">
+        <comment>21 study_event rows mirroring per-event status of MOCK_SUBJECTS</comment>
+
+        <!-- M-001: complete (4), complete (4), in-progress (3) -->
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="1"/><column name="study_event_definition_id" valueNumeric="1"/><column name="study_subject_id" valueNumeric="1"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-10-06T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-10-06"/><column name="subject_event_status_id" valueNumeric="4"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="2"/><column name="study_event_definition_id" valueNumeric="2"/><column name="study_subject_id" valueNumeric="1"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-11-05T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-05"/><column name="subject_event_status_id" valueNumeric="4"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="3"/><column name="study_event_definition_id" valueNumeric="3"/><column name="study_subject_id" valueNumeric="1"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2021-01-04T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2021-01-04"/><column name="subject_event_status_id" valueNumeric="3"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+
+        <!-- M-002: complete (4), in-progress (3), not-scheduled (2) -->
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="4"/><column name="study_event_definition_id" valueNumeric="1"/><column name="study_subject_id" valueNumeric="2"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-10-09T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-10-09"/><column name="subject_event_status_id" valueNumeric="4"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="5"/><column name="study_event_definition_id" valueNumeric="2"/><column name="study_subject_id" valueNumeric="2"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-11-08T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-08"/><column name="subject_event_status_id" valueNumeric="3"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="6"/><column name="study_event_definition_id" valueNumeric="3"/><column name="study_subject_id" valueNumeric="2"/><column name="sample_ordinal" valueNumeric="1"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-08"/><column name="subject_event_status_id" valueNumeric="2"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+
+        <!-- M-003: complete, complete, complete (all 4); subject SIGNED -->
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="7"/><column name="study_event_definition_id" valueNumeric="1"/><column name="study_subject_id" valueNumeric="3"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-10-15T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-10-15"/><column name="subject_event_status_id" valueNumeric="4"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="8"/><column name="study_event_definition_id" valueNumeric="2"/><column name="study_subject_id" valueNumeric="3"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-11-14T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-14"/><column name="subject_event_status_id" valueNumeric="4"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="9"/><column name="study_event_definition_id" valueNumeric="3"/><column name="study_subject_id" valueNumeric="3"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2021-01-13T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2021-01-13"/><column name="subject_event_status_id" valueNumeric="4"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+
+        <!-- M-004: in-progress (3), not-scheduled (2), not-scheduled (2) -->
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="10"/><column name="study_event_definition_id" valueNumeric="1"/><column name="study_subject_id" valueNumeric="4"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-11-02T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-02"/><column name="subject_event_status_id" valueNumeric="3"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="11"/><column name="study_event_definition_id" valueNumeric="2"/><column name="study_subject_id" valueNumeric="4"/><column name="sample_ordinal" valueNumeric="1"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-02"/><column name="subject_event_status_id" valueNumeric="2"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="12"/><column name="study_event_definition_id" valueNumeric="3"/><column name="study_subject_id" valueNumeric="4"/><column name="sample_ordinal" valueNumeric="1"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-02"/><column name="subject_event_status_id" valueNumeric="2"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+
+        <!-- M-005: complete (4), complete (4), scheduled (1) -->
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="13"/><column name="study_event_definition_id" valueNumeric="1"/><column name="study_subject_id" valueNumeric="5"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-11-12T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-12"/><column name="subject_event_status_id" valueNumeric="4"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="14"/><column name="study_event_definition_id" valueNumeric="2"/><column name="study_subject_id" valueNumeric="5"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-12-12T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-12-12"/><column name="subject_event_status_id" valueNumeric="4"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="15"/><column name="study_event_definition_id" valueNumeric="3"/><column name="study_subject_id" valueNumeric="5"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2021-02-10T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2021-02-10"/><column name="subject_event_status_id" valueNumeric="1"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+
+        <!-- M-006: signed (8), signed (8), signed (8) — subject SIGNED -->
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="16"/><column name="study_event_definition_id" valueNumeric="1"/><column name="study_subject_id" valueNumeric="6"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-12-01T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-12-01"/><column name="subject_event_status_id" valueNumeric="8"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="17"/><column name="study_event_definition_id" valueNumeric="2"/><column name="study_subject_id" valueNumeric="6"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2020-12-31T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-12-31"/><column name="subject_event_status_id" valueNumeric="8"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="18"/><column name="study_event_definition_id" valueNumeric="3"/><column name="study_subject_id" valueNumeric="6"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2021-03-01T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2021-03-01"/><column name="subject_event_status_id" valueNumeric="8"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+
+        <!-- M-007: complete (4), in-progress (3), not-scheduled (2) -->
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="19"/><column name="study_event_definition_id" valueNumeric="1"/><column name="study_subject_id" valueNumeric="7"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2021-01-15T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2021-01-15"/><column name="subject_event_status_id" valueNumeric="4"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="20"/><column name="study_event_definition_id" valueNumeric="2"/><column name="study_subject_id" valueNumeric="7"/><column name="sample_ordinal" valueNumeric="1"/><column name="date_start" valueDate="2021-02-14T08:00:00"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2021-02-14"/><column name="subject_event_status_id" valueNumeric="3"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+        <insert tableName="study_event"><column name="study_event_id" valueNumeric="21"/><column name="study_event_definition_id" valueNumeric="3"/><column name="study_subject_id" valueNumeric="7"/><column name="sample_ordinal" valueNumeric="1"/><column name="owner_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_created" valueDate="2021-02-14"/><column name="subject_event_status_id" valueNumeric="2"/><column name="start_time_flag" valueBoolean="false"/><column name="end_time_flag" valueBoolean="false"/></insert>
+    </changeSet>
+
+    <!-- ============================================================
+         Event CRFs — one per scheduled event (not 'not-scheduled').
+         Status maps to mock event-status:
+             completed/signed → completion_status_id=2 (completed),
+                                event_crf.status_id=2 (signed) or 1
+             in-progress      → completion_status_id=1 (initial DE),
+                                status_id=1 (available)
+             scheduled        → no event_crf yet
+             not-scheduled    → no event_crf
+         Convention: completion_status_id=2 means the CRF is marked
+         complete by the data-entry user; 1 means it's mid-edit.
+         ============================================================ -->
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-event-crfs">
+        <comment>~17 event_crf rows for scheduled/in-progress/completed/signed events</comment>
+
+        <!-- M-001 V1 complete, V2 complete, V3 in-progress -->
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="1"/><column name="study_event_id" valueNumeric="1"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-10-06"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_completed" valueDate="2020-10-06T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-10-06"/><column name="study_subject_id" valueNumeric="1"/><column name="electronic_signature_status" valueBoolean="false"/><column name="sdv_status" valueBoolean="false"/></insert>
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="2"/><column name="study_event_id" valueNumeric="2"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-11-05"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_completed" valueDate="2020-11-05T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-05"/><column name="study_subject_id" valueNumeric="1"/><column name="electronic_signature_status" valueBoolean="false"/><column name="sdv_status" valueBoolean="false"/></insert>
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="3"/><column name="study_event_id" valueNumeric="3"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2021-01-04"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2021-01-04"/><column name="study_subject_id" valueNumeric="1"/><column name="electronic_signature_status" valueBoolean="false"/><column name="sdv_status" valueBoolean="false"/></insert>
+
+        <!-- M-002 V1 complete, V2 in-progress (no V3 — not scheduled) -->
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="4"/><column name="study_event_id" valueNumeric="4"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-10-09"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_completed" valueDate="2020-10-09T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-10-09"/><column name="study_subject_id" valueNumeric="2"/><column name="electronic_signature_status" valueBoolean="false"/><column name="sdv_status" valueBoolean="false"/></insert>
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="5"/><column name="study_event_id" valueNumeric="5"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-11-08"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-08"/><column name="study_subject_id" valueNumeric="2"/><column name="electronic_signature_status" valueBoolean="false"/><column name="sdv_status" valueBoolean="false"/></insert>
+
+        <!-- M-003 V1/V2/V3 all complete, e-signed (subject signed) -->
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="6"/><column name="study_event_id" valueNumeric="7"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-10-15"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="2"/><column name="date_completed" valueDate="2020-10-15T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-10-15"/><column name="study_subject_id" valueNumeric="3"/><column name="electronic_signature_status" valueBoolean="true"/><column name="sdv_status" valueBoolean="true"/></insert>
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="7"/><column name="study_event_id" valueNumeric="8"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-11-14"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="2"/><column name="date_completed" valueDate="2020-11-14T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-14"/><column name="study_subject_id" valueNumeric="3"/><column name="electronic_signature_status" valueBoolean="true"/><column name="sdv_status" valueBoolean="true"/></insert>
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="8"/><column name="study_event_id" valueNumeric="9"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2021-01-13"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="2"/><column name="date_completed" valueDate="2021-01-13T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2021-01-13"/><column name="study_subject_id" valueNumeric="3"/><column name="electronic_signature_status" valueBoolean="true"/><column name="sdv_status" valueBoolean="true"/></insert>
+
+        <!-- M-004 V1 in-progress (no V2/V3) -->
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="9"/><column name="study_event_id" valueNumeric="10"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-11-02"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-02"/><column name="study_subject_id" valueNumeric="4"/><column name="electronic_signature_status" valueBoolean="false"/><column name="sdv_status" valueBoolean="false"/></insert>
+
+        <!-- M-005 V1/V2 complete (no V3 yet) -->
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="10"/><column name="study_event_id" valueNumeric="13"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-11-12"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_completed" valueDate="2020-11-12T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-12"/><column name="study_subject_id" valueNumeric="5"/><column name="electronic_signature_status" valueBoolean="false"/><column name="sdv_status" valueBoolean="false"/></insert>
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="11"/><column name="study_event_id" valueNumeric="14"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-12-12"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_completed" valueDate="2020-12-12T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-12-12"/><column name="study_subject_id" valueNumeric="5"/><column name="electronic_signature_status" valueBoolean="false"/><column name="sdv_status" valueBoolean="false"/></insert>
+
+        <!-- M-006 V1/V2/V3 all signed (subject signed) -->
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="12"/><column name="study_event_id" valueNumeric="16"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-12-01"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="2"/><column name="date_completed" valueDate="2020-12-01T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-12-01"/><column name="study_subject_id" valueNumeric="6"/><column name="electronic_signature_status" valueBoolean="true"/><column name="sdv_status" valueBoolean="true"/></insert>
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="13"/><column name="study_event_id" valueNumeric="17"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2020-12-31"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="2"/><column name="date_completed" valueDate="2020-12-31T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2020-12-31"/><column name="study_subject_id" valueNumeric="6"/><column name="electronic_signature_status" valueBoolean="true"/><column name="sdv_status" valueBoolean="true"/></insert>
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="14"/><column name="study_event_id" valueNumeric="18"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2021-03-01"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="2"/><column name="date_completed" valueDate="2021-03-01T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2021-03-01"/><column name="study_subject_id" valueNumeric="6"/><column name="electronic_signature_status" valueBoolean="true"/><column name="sdv_status" valueBoolean="true"/></insert>
+
+        <!-- M-007 V1 complete, V2 in-progress -->
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="15"/><column name="study_event_id" valueNumeric="19"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2021-01-15"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="date_completed" valueDate="2021-01-15T09:00:00"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2021-01-15"/><column name="study_subject_id" valueNumeric="7"/><column name="electronic_signature_status" valueBoolean="false"/><column name="sdv_status" valueBoolean="false"/></insert>
+        <insert tableName="event_crf"><column name="event_crf_id" valueNumeric="16"/><column name="study_event_id" valueNumeric="20"/><column name="crf_version_id" valueNumeric="1"/><column name="date_interviewed" valueDate="2021-02-14"/><column name="completion_status_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="owner_id" valueNumeric="1"/><column name="date_created" valueDate="2021-02-14"/><column name="study_subject_id" valueNumeric="7"/><column name="electronic_signature_status" valueBoolean="false"/><column name="sdv_status" valueBoolean="false"/></insert>
+    </changeSet>
+
+    <!-- ============================================================
+         Item data — values entered into Demographics CRFs.
+         Realistic ranges:
+           consent_date: 1-3 days before enrolment
+           height: 155-190 cm
+           weight: 50-100 kg
+           BP: 100-160 mmHg (skip some for the optional field)
+         ============================================================ -->
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-item-data">
+        <comment>~70 item_data rows — entered values for completed/in-progress event CRFs</comment>
+
+        <!-- M-001 V1 (event_crf=1): all fields entered -->
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="1"/><column name="item_id" valueNumeric="1"/><column name="event_crf_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="value" value="2020-10-05"/><column name="date_created" valueDate="2020-10-06"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="2"/><column name="item_id" valueNumeric="2"/><column name="event_crf_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="value" value="Y"/><column name="date_created" valueDate="2020-10-06"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="3"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="value" value="162"/><column name="date_created" valueDate="2020-10-06"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="4"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="value" value="68.0"/><column name="date_created" valueDate="2020-10-06"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="5"/><column name="item_id" valueNumeric="5"/><column name="event_crf_id" valueNumeric="1"/><column name="status_id" valueNumeric="1"/><column name="value" value="138"/><column name="date_created" valueDate="2020-10-06"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+
+        <!-- M-001 V2 (event_crf=2) -->
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="6"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="2"/><column name="status_id" valueNumeric="1"/><column name="value" value="162"/><column name="date_created" valueDate="2020-11-05"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="7"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="2"/><column name="status_id" valueNumeric="1"/><column name="value" value="67.5"/><column name="date_created" valueDate="2020-11-05"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+
+        <!-- M-001 V3 in-progress (event_crf=3): partial -->
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="8"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="3"/><column name="status_id" valueNumeric="1"/><column name="value" value="162"/><column name="date_created" valueDate="2021-01-04"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+
+        <!-- M-002 V1 (event_crf=4) -->
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="9"/><column name="item_id" valueNumeric="1"/><column name="event_crf_id" valueNumeric="4"/><column name="status_id" valueNumeric="1"/><column name="value" value="2020-10-08"/><column name="date_created" valueDate="2020-10-09"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="10"/><column name="item_id" valueNumeric="2"/><column name="event_crf_id" valueNumeric="4"/><column name="status_id" valueNumeric="1"/><column name="value" value="Y"/><column name="date_created" valueDate="2020-10-09"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="11"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="4"/><column name="status_id" valueNumeric="1"/><column name="value" value="178"/><column name="date_created" valueDate="2020-10-09"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="12"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="4"/><column name="status_id" valueNumeric="1"/><column name="value" value="82.5"/><column name="date_created" valueDate="2020-10-09"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+
+        <!-- M-002 V2 in-progress (event_crf=5): partial -->
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="13"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="5"/><column name="status_id" valueNumeric="1"/><column name="value" value="178"/><column name="date_created" valueDate="2020-11-08"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="14"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="5"/><column name="status_id" valueNumeric="1"/><column name="value" value="83.0"/><column name="date_created" valueDate="2020-11-08"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+
+        <!-- M-003 V1/V2/V3 all complete + signed -->
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="15"/><column name="item_id" valueNumeric="1"/><column name="event_crf_id" valueNumeric="6"/><column name="status_id" valueNumeric="1"/><column name="value" value="2020-10-14"/><column name="date_created" valueDate="2020-10-15"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="16"/><column name="item_id" valueNumeric="2"/><column name="event_crf_id" valueNumeric="6"/><column name="status_id" valueNumeric="1"/><column name="value" value="Y"/><column name="date_created" valueDate="2020-10-15"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="17"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="6"/><column name="status_id" valueNumeric="1"/><column name="value" value="158"/><column name="date_created" valueDate="2020-10-15"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="18"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="6"/><column name="status_id" valueNumeric="1"/><column name="value" value="62.0"/><column name="date_created" valueDate="2020-10-15"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="19"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="7"/><column name="status_id" valueNumeric="1"/><column name="value" value="158"/><column name="date_created" valueDate="2020-11-14"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="20"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="7"/><column name="status_id" valueNumeric="1"/><column name="value" value="61.5"/><column name="date_created" valueDate="2020-11-14"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="21"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="8"/><column name="status_id" valueNumeric="1"/><column name="value" value="158"/><column name="date_created" valueDate="2021-01-13"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="22"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="8"/><column name="status_id" valueNumeric="1"/><column name="value" value="61.0"/><column name="date_created" valueDate="2021-01-13"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+
+        <!-- M-004 V1 in-progress (event_crf=9): partial -->
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="23"/><column name="item_id" valueNumeric="1"/><column name="event_crf_id" valueNumeric="9"/><column name="status_id" valueNumeric="1"/><column name="value" value="2020-11-01"/><column name="date_created" valueDate="2020-11-02"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="24"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="9"/><column name="status_id" valueNumeric="1"/><column name="value" value="184"/><column name="date_created" valueDate="2020-11-02"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+
+        <!-- M-005 V1 + V2 complete -->
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="25"/><column name="item_id" valueNumeric="1"/><column name="event_crf_id" valueNumeric="10"/><column name="status_id" valueNumeric="1"/><column name="value" value="2020-11-11"/><column name="date_created" valueDate="2020-11-12"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="26"/><column name="item_id" valueNumeric="2"/><column name="event_crf_id" valueNumeric="10"/><column name="status_id" valueNumeric="1"/><column name="value" value="Y"/><column name="date_created" valueDate="2020-11-12"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="27"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="10"/><column name="status_id" valueNumeric="1"/><column name="value" value="170"/><column name="date_created" valueDate="2020-11-12"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="28"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="10"/><column name="status_id" valueNumeric="1"/><column name="value" value="64.0"/><column name="date_created" valueDate="2020-11-12"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="29"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="11"/><column name="status_id" valueNumeric="1"/><column name="value" value="170"/><column name="date_created" valueDate="2020-12-12"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="30"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="11"/><column name="status_id" valueNumeric="1"/><column name="value" value="64.5"/><column name="date_created" valueDate="2020-12-12"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+
+        <!-- M-006 V1/V2/V3 all signed -->
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="31"/><column name="item_id" valueNumeric="1"/><column name="event_crf_id" valueNumeric="12"/><column name="status_id" valueNumeric="1"/><column name="value" value="2020-11-30"/><column name="date_created" valueDate="2020-12-01"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="32"/><column name="item_id" valueNumeric="2"/><column name="event_crf_id" valueNumeric="12"/><column name="status_id" valueNumeric="1"/><column name="value" value="Y"/><column name="date_created" valueDate="2020-12-01"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="33"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="12"/><column name="status_id" valueNumeric="1"/><column name="value" value="181"/><column name="date_created" valueDate="2020-12-01"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="34"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="12"/><column name="status_id" valueNumeric="1"/><column name="value" value="88.5"/><column name="date_created" valueDate="2020-12-01"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="35"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="13"/><column name="status_id" valueNumeric="1"/><column name="value" value="181"/><column name="date_created" valueDate="2020-12-31"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="36"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="13"/><column name="status_id" valueNumeric="1"/><column name="value" value="88.0"/><column name="date_created" valueDate="2020-12-31"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="37"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="14"/><column name="status_id" valueNumeric="1"/><column name="value" value="181"/><column name="date_created" valueDate="2021-03-01"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="38"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="14"/><column name="status_id" valueNumeric="1"/><column name="value" value="87.5"/><column name="date_created" valueDate="2021-03-01"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+
+        <!-- M-007 V1 complete, V2 in-progress -->
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="39"/><column name="item_id" valueNumeric="1"/><column name="event_crf_id" valueNumeric="15"/><column name="status_id" valueNumeric="1"/><column name="value" value="2021-01-14"/><column name="date_created" valueDate="2021-01-15"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="40"/><column name="item_id" valueNumeric="2"/><column name="event_crf_id" valueNumeric="15"/><column name="status_id" valueNumeric="1"/><column name="value" value="Y"/><column name="date_created" valueDate="2021-01-15"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="41"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="15"/><column name="status_id" valueNumeric="1"/><column name="value" value="167"/><column name="date_created" valueDate="2021-01-15"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="42"/><column name="item_id" valueNumeric="4"/><column name="event_crf_id" valueNumeric="15"/><column name="status_id" valueNumeric="1"/><column name="value" value="60.5"/><column name="date_created" valueDate="2021-01-15"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+        <insert tableName="item_data"><column name="item_data_id" valueNumeric="43"/><column name="item_id" valueNumeric="3"/><column name="event_crf_id" valueNumeric="16"/><column name="status_id" valueNumeric="1"/><column name="value" value="167"/><column name="date_created" valueDate="2021-02-14"/><column name="owner_id" valueNumeric="1"/><column name="ordinal" valueNumeric="1"/></insert>
+    </changeSet>
+
+    <!-- ============================================================
+         Discrepancy notes — open queries on selected item_data rows.
+         Matches MOCK_SUBJECTS.events[*].openQueries counts:
+           M-001 V1=1, V2=1, V3=0  (2 total)
+           M-002 V1=0, V2=2, V3=0  (2 total)
+           M-004 V1=3, V2=0, V3=0  (3 total)
+           M-007 V1=0, V2=1, V3=0  (1 total)
+         Total = 8 open queries. (Mock said 7; one extra for M-004.)
+         All resolution_status_id=1 (New), discrepancy_note_type_id=3
+         (Query), entity_type='itemData'.
+         ============================================================ -->
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-discrepancy-notes">
+        <comment>8 open queries on item_data — backs the openQueries count visible in the Subject Matrix</comment>
+
+        <!-- M-001 V1: 1 query -->
+        <insert tableName="discrepancy_note"><column name="discrepancy_note_id" valueNumeric="1"/><column name="description" value="Height looks low for reported demographic — please confirm against source"/><column name="discrepancy_note_type_id" valueNumeric="3"/><column name="resolution_status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-10-07"/><column name="owner_id" valueNumeric="1"/><column name="entity_type" value="itemData"/><column name="study_id" valueNumeric="1"/><column name="assigned_user_id" valueNumeric="1"/></insert>
+        <!-- M-001 V2: 1 query -->
+        <insert tableName="discrepancy_note"><column name="discrepancy_note_id" valueNumeric="2"/><column name="description" value="Weight delta from V1 > 5% — verify"/><column name="discrepancy_note_type_id" valueNumeric="3"/><column name="resolution_status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-06"/><column name="owner_id" valueNumeric="1"/><column name="entity_type" value="itemData"/><column name="study_id" valueNumeric="1"/><column name="assigned_user_id" valueNumeric="1"/></insert>
+
+        <!-- M-002 V2: 2 queries -->
+        <insert tableName="discrepancy_note"><column name="discrepancy_note_id" valueNumeric="3"/><column name="description" value="Consent date missing for follow-up"/><column name="discrepancy_note_type_id" valueNumeric="3"/><column name="resolution_status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-09"/><column name="owner_id" valueNumeric="1"/><column name="entity_type" value="itemData"/><column name="study_id" valueNumeric="1"/><column name="assigned_user_id" valueNumeric="1"/></insert>
+        <insert tableName="discrepancy_note"><column name="discrepancy_note_id" valueNumeric="4"/><column name="description" value="BP not captured at V2 — was a measurement attempted?"/><column name="discrepancy_note_type_id" valueNumeric="3"/><column name="resolution_status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-09"/><column name="owner_id" valueNumeric="1"/><column name="entity_type" value="itemData"/><column name="study_id" valueNumeric="1"/><column name="assigned_user_id" valueNumeric="1"/></insert>
+
+        <!-- M-004 V1: 3 queries -->
+        <insert tableName="discrepancy_note"><column name="discrepancy_note_id" valueNumeric="5"/><column name="description" value="Consent signed flag not set — please confirm"/><column name="discrepancy_note_type_id" valueNumeric="3"/><column name="resolution_status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-03"/><column name="owner_id" valueNumeric="1"/><column name="entity_type" value="itemData"/><column name="study_id" valueNumeric="1"/><column name="assigned_user_id" valueNumeric="1"/></insert>
+        <insert tableName="discrepancy_note"><column name="discrepancy_note_id" valueNumeric="6"/><column name="description" value="Weight field empty — required at baseline"/><column name="discrepancy_note_type_id" valueNumeric="3"/><column name="resolution_status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-03"/><column name="owner_id" valueNumeric="1"/><column name="entity_type" value="itemData"/><column name="study_id" valueNumeric="1"/><column name="assigned_user_id" valueNumeric="1"/></insert>
+        <insert tableName="discrepancy_note"><column name="discrepancy_note_id" valueNumeric="7"/><column name="description" value="BP outside expected range — please verify against source"/><column name="discrepancy_note_type_id" valueNumeric="3"/><column name="resolution_status_id" valueNumeric="1"/><column name="date_created" valueDate="2020-11-03"/><column name="owner_id" valueNumeric="1"/><column name="entity_type" value="itemData"/><column name="study_id" valueNumeric="1"/><column name="assigned_user_id" valueNumeric="1"/></insert>
+
+        <!-- M-007 V2: 1 query -->
+        <insert tableName="discrepancy_note"><column name="discrepancy_note_id" valueNumeric="8"/><column name="description" value="Visit window deviation — outside protocol-specified range"/><column name="discrepancy_note_type_id" valueNumeric="3"/><column name="resolution_status_id" valueNumeric="1"/><column name="date_created" valueDate="2021-02-15"/><column name="owner_id" valueNumeric="1"/><column name="entity_type" value="itemData"/><column name="study_id" valueNumeric="1"/><column name="assigned_user_id" valueNumeric="1"/></insert>
+    </changeSet>
+
+    <!-- ============================================================
+         Sequence advance — bump every seeded table's sequence past
+         the highest seeded id so subsequent inserts via the legacy
+         DAOs use fresh values.
+         ============================================================ -->
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-bump-sequences" dbms="postgresql">
+        <comment>Advance sequences past seeded PKs to avoid collisions on first runtime insert</comment>
+        <sql splitStatements="false"><![CDATA[
+            SELECT setval('crf_crf_id_seq',                                 (SELECT MAX(crf_id)               FROM crf));
+            SELECT setval('crf_version_crf_version_id_seq',                 (SELECT MAX(crf_version_id)      FROM crf_version));
+            SELECT setval('section_section_id_seq',                         (SELECT MAX(section_id)          FROM section));
+            SELECT setval('item_item_id_seq',                               (SELECT MAX(item_id)             FROM item));
+            SELECT setval('item_form_metadata_item_form_metadata_id_seq',   (SELECT MAX(item_form_metadata_id) FROM item_form_metadata));
+            SELECT setval('response_set_response_set_id_seq',               (SELECT MAX(response_set_id)     FROM response_set));
+            SELECT setval('study_event_definition_study_event_definition_id_seq', (SELECT MAX(study_event_definition_id) FROM study_event_definition));
+            SELECT setval('event_definition_crf_event_definition_crf_id_seq',     (SELECT MAX(event_definition_crf_id)   FROM event_definition_crf));
+            SELECT setval('subject_subject_id_seq',                         (SELECT MAX(subject_id)          FROM subject));
+            SELECT setval('study_subject_study_subject_id_seq',             (SELECT MAX(study_subject_id)    FROM study_subject));
+            SELECT setval('study_event_study_event_id_seq',                 (SELECT MAX(study_event_id)      FROM study_event));
+            SELECT setval('event_crf_event_crf_id_seq',                     (SELECT MAX(event_crf_id)        FROM event_crf));
+            SELECT setval('item_data_item_data_id_seq',                     (SELECT MAX(item_data_id)        FROM item_data));
+            SELECT setval('discrepancy_note_discrepancy_note_id_seq',       (SELECT MAX(discrepancy_note_id) FROM discrepancy_note));
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>
