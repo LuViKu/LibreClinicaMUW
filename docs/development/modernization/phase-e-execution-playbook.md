@@ -1,0 +1,383 @@
+# Phase E — execution playbook
+
+**Date:** 2026-05-30
+**Status:** Draft. Approves entry once the [post-Phase-D UI validation](phase-e/post-phase-d-ui-validation.md)'s Phase E entry checklist closes.
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Sibling playbooks:** [phase-b](phase-b-execution-playbook.md) · [phase-c](phase-c-execution-playbook.md) · [phase-d](phase-d-execution-playbook.md)
+
+The Phase E SPA rewrite replaces the JSP + jQuery 1.9 + Prototype.js + GWT-compiled chrome with a modern single-page application built on the [MUW design system](phase-e/design-system/) and bound to the existing legacy servlet + Spring MVC controller surface (preserved verbatim by Phase C.11/14's `LegacyServletRegistry` and Phase D.6's `WebMvcConfig`). This playbook breaks the work into 12 sub-phases (E.0–E.11) with explicit verification gates per sub-phase.
+
+---
+
+## Decisions feeding this playbook
+
+| Decision | Status | Notes |
+|---|---|---|
+| [DR-004](decision-record.md) — Phase E may overlap with first clinical use; admin screens stay JSP | Accepted | Constrains Phase E scope to high-traffic clinician screens |
+| [DR-005](decision-record.md) — MUW Ophthalmology branding | Accepted | Applied via [muw-tailwind-config.js + muw-tokens.css](phase-e/design-system/project/) |
+| [DR-008](decision-record.md) — UI framework (React / Vue 3 / Svelte) | **Open — required for E.1 gate** | Tentative recommendation: **React 19** for the size of the candidate-developer pool at MedUni Wien IT and the maturity of the React data-table / form ecosystem; final pick made at the E.1 framework-bake-off |
+| [DR-014](decision-record.md) — Institution-agnostic SSO via reverse-proxy pre-auth | Accepted | Login screen must adopt the configurable "Sign in with Institutional Account" button (not the LDAP-specific button left in the static mockup) |
+| DR-018 (new) — JSP retirement strategy | **Open — required for E.11 gate** | Choices: (a) retire JSPs as their SPA equivalent ships, JSP/SPA toggle behind a feature flag; (b) keep JSPs alive in parallel for a 6-month bake-in window; (c) hard-cutover at end of Phase E |
+| DR-019 (new) — Acceptance gate: usability + accessibility | **Open — required for E.10 gate** | Defines what "ready for clinical use" means quantitatively (WCAG 2.2 AA + N-user usability tests with success criteria) |
+
+---
+
+## Pre-flight checklist
+
+Before E.0 begins:
+
+- [ ] Validation report's **Phase E entry checklist** closed (see [post-Phase-D UI validation §Phase E entry checklist](phase-e/post-phase-d-ui-validation.md#phase-e-entry-checklist)).
+- [ ] **CI smoke-test step tightened** to also assert `curl -fL /pages/login/login` succeeds — i.e. that no future Phase E PR can silently regress the browser session entry point.
+- [ ] Local environment baseline: `docker compose up --build` → 302 on `/`, **200** on `/pages/login/login`, `mvn test` green, `mvn verify -P integration-tests` green.
+- [ ] Operator runbook for **seeding a Phase-D-complete password-reset / fresh admin user**, so Selenium smoke + manual QA can drive browser sessions.
+- [ ] Phase E catalogue refresh PR merged (mark the 3 intentional retirements from validation §⚠️).
+- [ ] The MUW design system reference bundle ([phase-e/design-system/](phase-e/design-system/)) reviewed by the lead developer; any rebrand changes that should land in the canonical mockup set lifted out of the bundle.
+
+---
+
+## Sub-phase ordering and verification gates
+
+Each sub-phase ships its own PR (or PR train where noted) and is gated by:
+
+1. **Build gate** — `mvn -DskipTests=false clean verify` green on the SPA module + the existing core/web modules.
+2. **CI gate** — every job on `.github/workflows/build.yml` green on the PR HEAD; smoke step now asserts both `/` and `/pages/login/login` succeed.
+3. **Visual gate** — for any sub-phase that ships a new SPA route, a Playwright screenshot of the new view checked in to `phase-e/screenshots/spa/`, manually compared against the corresponding mockup PNG in `phase-e/overview/images/` or `phase-e/design-system/project/`.
+4. **Accessibility gate** — from E.4 onwards, axe-core run on the new SPA route reports **zero** WCAG 2.2 AA violations.
+5. **Backend-contract gate** — for any sub-phase consuming a legacy URL, a new `web/src/test/.../<Feature>SmokeIT.java` Selenium test extends the existing harness (per [smoke-testing.md](../smoke-testing.md)) and asserts end-to-end render.
+
+A sub-phase is **closed** when all five gates are green and the PR description's "Test plan" lists which smoke must pass.
+
+---
+
+## E.0 — Known-issues triage (entry gate to all other sub-phases)
+
+**Status:** ✅ **CLOSED 2026-05-30 evening** by the Phase 0-D backend agent. Tag `phase-e0-pages-dispatcher-fix` @ `lc-develop @ dccfc86e2` (CI green).
+
+**What landed:** `fix(phase-e.0): pages dispatcher routing — /pages/login/login + /pages/sso/reauth + JSP context-bean exposure restored`. The `pages` DispatcherServlet is now correctly bound to its `WebMvcConfig` child context; a new `SsoConfigInterceptor` exposes JSP context beans (`ssoProperties` etc.) so the institutional-SSO button on the login JSP renders when the flag is on. `application.yml` lines 58–66 (the Phase C.14 diagnostic note) are now stale; the dispatcher init logs are visible again at the bump-to-DEBUG levels.
+
+The SPA work proceeded against Pinia stores fed by mock data throughout the diagnosis arc, so no rework on the phase-e branch was required when the fix landed. The next E.4 task is the planned B-category adapter PRs under `/pages/api/v1/**` — see [api-surface.md](phase-e/api-surface.md).
+
+**Carry-overs (deferred to specific sub-phases):**
+
+- **CI smoke-step tightening** — already shipped during the E.0 diagnostic on commit `85c24c34c` (new "Smoke key /pages/* routes" step probes `/`, `/pages/login/login`, `/pages/sso/reauth`, `/pages/odmk/odm/v1/Studies`). Should now go from "expected red" to green on the next CI run on this branch.
+- **Phase E feature catalogue refresh** (per-subject Notes JSP, DataTables vendor bundle, jmesa dead endpoints) — already documented in the [post-Phase-D UI validation report §⚠️ Intentional retirements](phase-e/post-phase-d-ui-validation.md) and the [api-surface.md](phase-e/api-surface.md). Bookkeeping refresh of the role catalogues lands in a follow-up doc PR.
+- **Operator runbook** for seeding a local admin account after Phase D.1's password-encoder migration — folds into the SSO deployment cookbook the backend agent ships in the same wave.
+
+---
+
+## E.1 — Vue 3 SPA scaffolding (bake-off waived)
+
+**Status:** ✅ **Shipped 2026-05-30** ([web/src/spa/](../../web/src/spa/), wired into [web/pom.xml](../../web/pom.xml)).
+
+**Goal:** stand up the SPA project structure, lock the build pipeline, and bind the bundle into the WAR.
+
+**Scope (as shipped):**
+
+1. **No bake-off.** DR-008 (Vue 3) was settled directly without comparing React/Vue/Svelte implementations. The differences are real but not catastrophic, and the team's prior is strong; the bake-off's risk-reduction value did not justify two weeks. See [DR-008 §Why no bake-off](decision-record.md#dr-008--ui-framework-for-phase-e-vue-3) for the full reasoning.
+2. **Vue 3 SPA scaffold** under [`web/src/spa/`](../../web/src/spa/): package.json + vite.config.ts + tsconfig.json + index.html + src/main.ts + src/App.vue + src/router/ + src/locales/ (DE + EN) + src/style.css with Tailwind v4 + MUW `@theme` directives (per E.2 specification, shipped together).
+3. **Frontend Maven Plugin** wired into [`web/pom.xml`](../../web/pom.xml). `mvn package` runs `pnpm install` + `pnpm build` automatically. Vite outputs to `web/src/main/webapp/app/`, maven-war-plugin packages it into the WAR. Skip during fast Java iteration via `mvn package -DskipSpa=true`.
+
+**Verification gates (as shipped):**
+
+- ✅ Vue 3 SPA renders a smoke-test landing view at `/LibreClinica/app/` after `mvn package + docker compose up`. The HomeView uses MUW Dunkelblau + Newsreader serif + coral accent + i18n switching between `de-AT` and `en`.
+- ✅ DR-008 documented as **Accepted** ([decision-record.md](decision-record.md)).
+- ✅ The SPA build runs alongside the Maven build via the Frontend Maven Plugin.
+- ⏳ A Vue-specific CI job (`pnpm test` + `pnpm build`) is not yet wired — added in E.4 alongside the backend API surface review.
+
+**Carry-overs into E.2:**
+
+- Vendor the actual WOFF2 font files for Newsreader / Inter / JetBrains Mono into `web/src/spa/src/assets/fonts/` so institutional networks aren't reliant on Google Fonts.
+- Set up the `pnpm check-tokens` script that fails the build if any SPA component uses a colour outside the locked MUW palette.
+
+---
+
+## E.2 — Tailwind production build and design-token lockdown
+
+**Status:** 🟡 **Partial — shipped 2026-05-30 alongside E.1.** Token port complete; font vendoring + `check-tokens` script deferred.
+
+**Goal:** lift the MUW design system from the CDN-driven mockup style into a real Tailwind build, locked behind a CI gate.
+
+**Scope (as shipped 2026-05-30):**
+
+1. ✅ **Tailwind v4 wired** in [web/src/spa/src/style.css](../../web/src/spa/src/style.css) with `@theme` directives covering the full MUW palette (muw-blue + muw-sky + muw-teal + muw-coral with 50–900 shade scales), Newsreader / Inter / JetBrains Mono font stacks, MUW radius (`--radius-muw`), and MUW shadows (`--shadow-muw-card` / `--shadow-muw-elev`). The new `@theme` block uses Tailwind v4's CSS custom-property convention (`--color-muw-blue-800`, etc.) so `bg-muw-blue-800` / `text-muw-coral-700` style classes work natively without a separate `tailwind.config.js`.
+2. ⏳ **`design-tokens.json` Style Dictionary export** — deferred. Will land alongside the Figma handoff loop in E.5.
+3. ⏳ **`pnpm check-tokens` CI gate** — wired as a script entry in [package.json](../../web/src/spa/package.json) but the implementation script (regex over `src/**/*.{vue,ts}` flagging non-MUW colour utilities) is not written yet. Land in E.3 once enough primitives exist to test against.
+4. ⏳ **Vendor WOFF2 fonts** to `web/src/spa/src/assets/fonts/` — directory created, files not yet committed. Carry-over into E.2's second pass.
+
+**Verification gates (carry-overs):**
+
+- `pnpm build` produces a deterministic CSS bundle whose hash matches across two consecutive runs.
+- `pnpm run check-tokens` is wired into CI and fails on a synthetic violation in the test suite.
+- The vendored fonts are loaded with `font-display: swap` and `<link rel="preload">` headers for the two display-weight cuts used above the fold.
+
+---
+
+## E.3 — Shared component library extraction
+
+**Status:** 🟢 **8/10 primitives shipped 2026-05-30** ([web/src/spa/src/components/](../../web/src/spa/src/components/)). Histoire wired; `pnpm check-tokens` guard green across 30 source files. `Wizard` added in the same push as E.4 + E.5 start.
+
+**Goal:** build the primitives every later sub-phase depends on, once.
+
+**Scope (component → mockup it was extracted from):**
+
+| Primitive | Source mockup | Use sites (sub-phases) | Status |
+|---|---|---|---|
+| `<TopBar>` (logo + breadcrumb + role chip) | every mockup | E.4–E.9 | ✅ shipped |
+| `<SideRail>` (role-conditional nav) | every mockup | E.4–E.9 | ✅ shipped |
+| `<StatusPill>` (dot + icon + label) | [investigator-subject-matrix](phase-e/ux-mockups/investigator-subject-matrix.html) | E.4–E.9 | ✅ shipped + Vitest + Histoire story |
+| `<DenseTable>` (sticky header + status-bar + slot-based body) | [monitor-sdv](phase-e/ux-mockups/monitor-sdv.html) | E.5, E.6, E.7 | ✅ shipped + Histoire story |
+| Form primitives (`FieldLabel`, `TextInput`, `SelectInput`, `HelperText`, `ErrorText`) | [investigator-add-subject](phase-e/ux-mockups/investigator-add-subject.html) | E.4, E.7, E.8 | ✅ shipped + Histoire story (with disabled/readonly/error/prefix-icon variants) |
+| `<Modal>` (Teleport + Transition + scrim + Esc / scrim-click close + body-scroll lock) | [monitor-add-query](phase-e/ux-mockups/monitor-add-query.html) | E.6, E.7 | ✅ shipped + Histoire story + Vitest tests (a11y + keyboard + cleanup) |
+| `<DiffCard>` (stacked + compact `before → after`) | [study-audit-log](phase-e/ux-mockups/study-audit-log.html), [dm-import-crf-data](phase-e/ux-mockups/dm-import-crf-data.html) | E.6, E.8 | ✅ shipped + Histoire story |
+| `<Timeline>` + `<TimelineMarker>` + `<TimelineEvent>` (rail + per-variant bullet + slot-driven event card) | [study-audit-log](phase-e/ux-mockups/study-audit-log.html) | E.6 | ✅ shipped + Histoire story |
+| `<Wizard>` (stepper, prev/next, preview-before-commit) | [dm-import-crf-data](phase-e/ux-mockups/dm-import-crf-data.html) | E.8 | ✅ shipped + Histoire story (Import 4-step + first-login 2-step) |
+| `<E-SignatureBlock>` (re-auth + attestation) | [investigator-sign-subject](phase-e/ux-mockups/investigator-sign-subject.html) | E.5, E.9 | ⏳ pending |
+| `<ConfirmationWithPreflight>` (pass/warn/info rows + casebook snapshot) | [investigator-sign-subject](phase-e/ux-mockups/investigator-sign-subject.html) | E.5, E.7 | ⏳ pending |
+
+**Verification gates:**
+
+- **Storybook** (or Histoire for Vue) covers every primitive with a default + accessibility-stress state. Stories double as the design-token integration test.
+- axe-core run inside Storybook reports zero WCAG 2.2 AA violations on every story.
+
+**Exit:** every later sub-phase can import a primitive instead of building inline.
+
+---
+
+## E.4 — Backend API surface review
+
+**Goal:** before any SPA workflow ships, enumerate the JSON endpoints the SPA will consume and identify the gap between (a) what the legacy `@Controller`s already expose as JSON, (b) what the legacy servlets expose only as JSP-forwarding handlers, and (c) what the SPA needs that doesn't exist at all.
+
+**Scope:**
+
+1. Grep the 28 `@Controller` classes + 216 `LegacyServletRegistry` servlets for `@ResponseBody`, `@RestController`, `MappingJackson2*`, `application/json` produces — produces the **JSON-already-exposed inventory**.
+2. Map each mockup to the legacy URL it replaces ([design-notes.md](phase-e/ux-mockups/design-notes.md) has the existing table); for each entry, flag the gap category.
+3. **Gap closures** for category (b) go in dedicated `feature/phase-e.4-<endpoint>-json-adapter` branches: a tiny `@RestController` wraps the legacy servlet's domain layer and returns JSON; the servlet stays alive for the JSP UI in parallel until E.11.
+
+**Verification gates:**
+
+- A `phase-e-api-surface.md` table inventory shipped to `docs/development/modernization/phase-e/`.
+- Every gap-closure adapter ships with a `*ControllerIT.java` MockMvc test.
+
+**Status as of 2026-05-30:** ✅ **First pass shipped** ([api-surface.md](phase-e/api-surface.md)). Per-mockup inventory of 18 mockups → legacy URL → category A/B/C. Aggregate: 1 × A (JSON-ready), 17 × B (JSP-only, needs adapter), 6 × C (greenfield additions, bundled into B PRs). Adapter PR template documented. Carry-over: the 17 B-adapter PRs land per-workflow during E.5–E.7.
+
+---
+
+## E.5 — Investigator workflow (POC → first clinical-rotation feedback)
+
+**Status:** 🟢 **3/3 screens shipped 2026-05-30** — Subject Matrix + Add Subject + CRF Entry (v0 — repetition groups, rule-driven show/hide, inline discrepancy threads deferred to follow-ups). All three views are wired to Pinia stores that hydrate from mock data shaped exactly like the planned API responses; backend adapters from E.4 swap in without view-side changes.
+
+**Goal:** ship the Investigator's three highest-traffic screens end-to-end as the first SPA POC; run an in-clinic walkthrough.
+
+**Order (as shipped):**
+
+1. ✅ **Subject Matrix** ([investigator-subject-matrix.html](phase-e/ux-mockups/investigator-subject-matrix.html)) — replaces `/ListStudySubjects`. SPA view at `/LibreClinica/app/subjects` ([SubjectMatrixView.vue](../../web/src/spa/src/views/SubjectMatrixView.vue)) consumes the [subjects Pinia store](../../web/src/spa/src/stores/subjects.ts) with 8 Vitest cases covering free-text filter, status filter, only-with-queries flag, and clearFilters.
+2. ✅ **Add Subject** ([investigator-add-subject.html](phase-e/ux-mockups/investigator-add-subject.html)) — replaces `/AddNewSubject`. SPA view at `/LibreClinica/app/subjects/new` ([AddSubjectView.vue](../../web/src/spa/src/views/AddSubjectView.vue)) wires `validateAddSubject` (mirrors the legacy servlet's checks: id required + unique, PHI-detector on secondary id, future-date guard, gender required, year-of-birth range) and `subjects.add()` with three save modes. 7 more Vitest cases covering the validator + the store action.
+3. ✅ **CRF Data Entry** ([investigator-crf-entry.html](phase-e/ux-mockups/investigator-crf-entry.html)) — replaces `/InitialDataEntry`. SPA view at `/LibreClinica/app/event-crfs/:eventCrfOid` ([CrfEntryView.vue](../../web/src/spa/src/views/CrfEntryView.vue)). New [crfEntry Pinia store](../../web/src/spa/src/stores/crfEntry.ts) carries the CRF schema + values + status + sticky `pendingChanges` flag for the "Unsaved · auto-saving…" tell. `computeItemErrors` runs the full validation matrix (required, integer / real bounds, date format, select-one allowed codes, select-multi allowed codes). 10 Vitest cases pin every validation path + the markComplete refusal contract.
+   **What's deferred to follow-up CRF Entry PRs (documented in [api-surface.md](phase-e/api-surface.md) §3 category C):**
+   - Repetition groups (`ItemGroup.repeating === true`)
+   - Rule-driven `showWhen` / `requiredWhen` predicates
+   - Per-item inline discrepancy threads (the legacy popup pattern)
+   - Multi-stage workflow gates (mark-complete → sign → admin reset)
+
+**Verification gates per sub-PR:**
+
+- Backend gap-closure adapter passes its `*ControllerIT.java`.
+- New SPA route renders end-to-end (Selenium smoke + visual diff against the design-system PNG).
+- Feature-parity matrix entry for each replaced legacy URL ticked.
+
+**Acceptance milestone after all three ship:**
+
+- **Walk-through with 2–3 Augenklinik investigators** in the actual outpatient clinic, on a real laptop, on a sample protocol set up by the Data Manager. Findings → `phase-e-investigator-feedback.md`. Blocking issues fold into E.7.
+
+---
+
+## E.6 — Monitor workflow
+
+**Status:** 🟢 **3/5 screens shipped 2026-05-30** — SDV + Notes & Discrepancies + Study Audit Log + Add Query modal embedded in SDV. Read-only CRF view is the carry-over to a follow-up PR (it's a thin specialisation of CrfEntryView).
+
+**Order (as shipped + remaining):**
+
+1. ✅ **SDV Table** ([monitor-sdv.html](phase-e/ux-mockups/monitor-sdv.html)) — replaces `/pages/viewAllSubjectSDVtmp`. SPA view at `/app/sdv` ([SdvView.vue](../../web/src/spa/src/views/SdvView.vue)) consumes the [sdv Pinia store](../../web/src/spa/src/stores/sdv.ts) with 9 Vitest cases pinning the filter dimensions + the bulk-verify state machine. Bulk selection only allows pending rows; toggleAllInView respects the active filter; verifySelected is optimistic and flips selected rows to `verified` in one tick.
+2. ⏳ **Read-only CRF view** ([monitor-crf-readonly.html](phase-e/ux-mockups/monitor-crf-readonly.html)) — carry-over. The existing CrfEntryView accepts a `readOnly` flag in the planned adapter contract — the read-only variant ships as a `<router-link>` from the SDV row plus a `readOnly = true` query param + a thin `CrfReadonlyView.vue` that mirrors the layout without the editable bindings.
+3. ✅ **Add Query modal** ([monitor-add-query.html](phase-e/ux-mockups/monitor-add-query.html)) — replaces the legacy popup-window discrepancy-note flow. Embedded in `SdvView.vue` as a row action; uses the `<Modal>` primitive with a segmented 4-up note-type control + description textarea + audit-trail tell in the footer. Optimistically bumps the row's `openQueries` count + flips status to `query`.
+4. ✅ **Notes & Discrepancies** ([notes-discrepancies.html](phase-e/ux-mockups/notes-discrepancies.html)) — replaces `/ViewNotes` (with the per-subject `/ListSubjectDiscNote` retired per validation report). SPA view at `/app/notes` ([NotesDiscrepanciesView.vue](../../web/src/spa/src/views/NotesDiscrepanciesView.vue)). Summary cards per type (open count), status + type + assigned-to-me filters, status pill + open-only filter default.
+5. ✅ **Study Audit Log** ([study-audit-log.html](phase-e/ux-mockups/study-audit-log.html)) — replaces `/ViewAuditLog`. SPA view at `/app/audit-log` ([StudyAuditLogView.vue](../../web/src/spa/src/views/StudyAuditLogView.vue)) uses the `<Timeline>` + `<TimelineMarker>` + `<TimelineEvent>` + `<DiffCard>` primitives. Events grouped by day descending; date markers say "Today" / "Yesterday" / `dd-MMM-yyyy`; Reason-for-Change events render the before/after diff card inline.
+
+**Risk:** SDV is the regulator-facing surface. **Every status pill + filter combination must match the legacy view's set of legal states.** Cross-reference each pill state against [monitor-features.md](phase-e/monitor-features.md) before shipping.
+
+**Plumbing landed alongside E.6:**
+
+- `TopBar`'s role chip now derives from `route.meta.role` in `App.vue`, so Investigator routes show the muw-teal chip + `user_demo` and Monitor routes show the muw-sky chip + `monitor_demo`. Data Manager (E.7) routes will pick `dm_demo` + the muw-coral chip via the same lookup.
+- Home view's tile grid grew six tiles (3 Investigator + 3 Monitor) + a placeholder DM card.
+
+---
+
+## E.7 — Data Manager workflow
+
+**Status:** 🟢 **4/7 screens shipped 2026-05-30** — Build Study + Manage Users + Sign Subject + Import CRF Data wizard. View Subject / View Events / Schedule Event are carry-overs (read-only specialisations of existing primitives); the Create / Edit CRF designer is the single-most-complex screen and remains carry-over per its mockup's complexity. Update Event Definition is a thin form variant.
+
+**Order (as shipped + remaining):**
+
+1. ⏳ **View Subject** + **View Events** + **Schedule Event** — carry-overs (read-only specialisations; reuse the SubjectMatrix + DenseTable patterns).
+2. ✅ **Sign Subject** ([investigator-sign-subject.html](phase-e/ux-mockups/investigator-sign-subject.html)) — SPA view at `/app/subjects/:subjectId/sign` ([SignSubjectView.vue](../../web/src/spa/src/views/SignSubjectView.vue)) wires the **`<ConfirmationWithPreflight>` + `<ESignatureBlock>`** primitives. Pre-flight rows derived from the subject's actual events + open-queries count; casebook snapshot rendered as a DenseTable; e-signature defaults to local password challenge per DR-014 §4 (SSO re-auth mode wired but flag-default-off until §11.50 ratified). Optimistic sign + 1.2s toast → return to Subject Matrix.
+3. ✅ **Build Study** ([dm-build-study.html](phase-e/ux-mockups/dm-build-study.html)) — SPA view at `/app/build-study` ([BuildStudyView.vue](../../web/src/spa/src/views/BuildStudyView.vue)). 7-task tracker with progress bar + per-task status pill + per-task icon + count summary. Mock LCDemo state shows 5 complete + 2 in-progress = 71% complete.
+4. ⏳ **Update Event Definition** — carry-over.
+5. ✅ **Manage Users** ([dm-manage-users.html](phase-e/ux-mockups/dm-manage-users.html)) — SPA view at `/app/manage-users` ([ManageUsersView.vue](../../web/src/spa/src/views/ManageUsersView.vue)). DenseTable with per-row role + auth + active pills. 7 mock users covering every role + every auth method (SSO + local + LDAP-legacy + pending-invite). Pending-invite badge on the side rail.
+6. ⏳ **Create / Edit CRF** — carry-over. The single-most-complex DM screen; ships behind a feature flag.
+7. ✅ **Import CRF Data wizard** ([dm-import-crf-data.html](phase-e/ux-mockups/dm-import-crf-data.html)) — SPA view at `/app/import-crf-data` ([ImportCrfDataView.vue](../../web/src/spa/src/views/ImportCrfDataView.vue)). Full 4-step wizard (Upload → Map → Preview & resolve → Commit) using the existing `<Wizard>` primitive. Per-row before/after `<DiffCard>` cells; mandatory Reason-for-Change textarea when overwrites > 0.
+
+**E.3 component library closed at 10/10 in the same push:**
+
+- ✅ `<ConfirmationWithPreflight>` — pass / warn / info / blocker rows.
+- ✅ `<ESignatureBlock>` — local password or SSO bounce; emits `ESignaturePayload`; the SPA never persists the password.
+
+---
+
+## E.8 — Authentication integration
+
+**Status:** 🟢 **SPA core shipped 2026-05-30** — auth Pinia store + LoginView + FirstLoginView wizard + router guard + TopBar logout button. Mock-driven through sessionStorage until the `GET /pages/api/v1/me` E.4 adapter lands.
+
+**Scope (as shipped + remaining):**
+
+1. ✅ **Login landing** ([LoginView.vue](../../web/src/spa/src/views/LoginView.vue)) — primary CTA is the configurable institutional-SSO button sourced from the `SsoConfig` shape (`ssoConfig.enabled`, `ssoConfig.buttonLabel`, `ssoConfig.entryUrl`, `ssoConfig.providerHint`); the local username/password form is a collapsed `<details>` disclosure underneath. A dev-only role-switcher chip group mints a mock identity for Investigator / Monitor / Data Manager so reviewers can preview every workflow without a live IdP — gone in production. The "Continue with MUW LDAP" mockup wording **does not survive** in the SPA.
+2. ✅ **First-login profile completion** ([FirstLoginView.vue](../../web/src/spa/src/views/FirstLoginView.vue)) — 2-step `<Wizard>` (Confirm profile → Accept terms). Step 1 surfaces the IdP-supplied attributes in a read-only card, then collects display name + locale + timezone + the e-signature acknowledgement. Step 2 surfaces the institutional terms of use with two distinct acks (terms + auditing). On finish → `auth.completeProfile()` → `home`.
+3. ⏳ **Session expiry / re-auth UX** — carry-over. Wires once the backend `/api/v1/me` returns 401 on expiry; the SPA will catch in the API client wrapper and route to `/login` with a return-to query param.
+4. ✅ **Logout** — TopBar exposes a logout icon button that calls `auth.logout()` + routes to `/login`. The current implementation clears the SPA's sessionStorage mock; the production wire-up POSTs to `/j_spring_security_logout`.
+
+**Router guard ([router/index.ts `guard()`](../../web/src/spa/src/router/index.ts))**
+
+The exported pure `guard(auth, to)` helper drives every navigation:
+
+- `meta.public === true` (login, first-login) bypasses auth.
+- `state === 'anonymous'` → redirect to `/login`.
+- `state === 'profile-incomplete'` → redirect to `/first-login`.
+- `meta.role` mismatched → redirect to home (PHI-leaking protected views fail closed).
+
+The helper is exported so route-guard unit tests don't need to spin the router.
+
+**Verification gates (carry-overs):**
+
+- Selenium smoke covers each of the 8 SSO deployment patterns in [sso-deployment-guide.md](../sso-deployment-guide.md) — at minimum, the **no-SSO** and **Pattern 1 (MUW Shibboleth via `mod_shib`)** patterns end-to-end in CI; the other 6 are tested by an operator on first deployment per pattern.
+
+---
+
+## E.9 — Accessibility + i18n
+
+**Status:** 🟢 **Harness + i18n guard + first audit shipped 2026-05-30.** Manual keyboard + screen-reader walkthroughs fold into the E.10 usability-test cycle.
+
+**Goal:** clear the WCAG 2.2 AA bar and the German/English i18n bar before clinical use.
+
+**Scope (as shipped):**
+
+1. ✅ **axe-core gates** — two complementary suites:
+   - **Vitest + vitest-axe** ([`src/test/a11y/primitives.test.ts`](../../web/src/spa/src/test/a11y/primitives.test.ts)) — component-level structural checks on all 10 E.3 primitives. Skips `color-contrast` + `region` (jsdom doesn't paint; primitives often aren't landmarks in isolation). Wired to `pnpm test:a11y`.
+   - **Playwright + @axe-core/playwright** ([`tests/a11y/spa-routes.spec.ts`](../../web/src/spa/tests/a11y/spa-routes.spec.ts)) — browser-level checks on every shipped route under Chromium with 1440×900 viewport. Catches contrast + viewport-dependent issues. Wired to `pnpm test:a11y:e2e`. Uses the dev role-switcher to mint mock identities + bypass the router guard.
+   - Playwright config ([`playwright.config.ts`](../../web/src/spa/playwright.config.ts)) shipped alongside.
+2. ⏳ **Manual keyboard-only walkthrough** of the Investigator's three primary workflows — folds into the E.10 usability-test cycle.
+3. ⏳ **Screen-reader walkthrough** (NVDA on Windows + VoiceOver on macOS) — folds into the E.10 usability-test cycle.
+4. ✅ **i18n** — Deutsch (Österreich) primary, English fallback; 361 fully-parallel keys per locale; `pnpm check-i18n` ([`scripts/check-i18n-coverage.mjs`](../../web/src/spa/scripts/check-i18n-coverage.mjs)) enforces key parity + placeholder parity + flags accidental English fallbacks. The allowlist of intentionally-identical strings (borrowed English terms in German clinical / IT contexts — "CRF", "Audit Trail", "SDV", "MFA", "OID", "Status", "Filter", "Export", "Monitor", etc.) references the Bundesinstitut für Arzneimittel und Medizinprodukte's GCP-Inspektionsleitfaden glossary.
+5. ✅ **Quick a11y wins landed in this push:** skip-to-main-content link with focus-visible styling per WCAG 2.4.1; `<main id="main-content" tabindex="-1">` landmark wrapping `<RouterView>`; skip-link strings translated DE/EN.
+
+**Audit report:** [`phase-e/a11y-audit-2026-05-30.md`](phase-e/a11y-audit-2026-05-30.md) documents the harness, per-primitive coverage table, six static-review findings (focus trap follow-up on Modal, SDV region label, Wizard step disabled vs. tab order, CRF Entry read-only mode focus, mono timestamps + zoom, preflight warn vs. blocker), and the next-pass plan.
+
+**Verification gates:**
+
+- ✅ A11y report shipped to [`phase-e/a11y-audit-2026-05-30.md`](phase-e/a11y-audit-2026-05-30.md).
+- ✅ `pnpm check-i18n` green (361/361 keys, placeholder parity).
+- ⏳ `pnpm test:a11y` (Vitest) + `pnpm test:a11y:e2e` (Playwright) — gated on `pnpm install` of the new deps (axe-core, @axe-core/playwright, vitest-axe). Expected green on first run.
+
+---
+
+## E.10 — Usability testing with clinical users
+
+**Goal:** evidence-based "ready for clinical use" decision.
+
+**Status:** 🟢 **Protocol pack + acceptance bar shipped 2026-05-30**, ready to schedule. The first session needs ≥ 1 calendar week of recruiting lead time + a deployment of `feature/muw-phase-e-ux-mockups` at `test-libreclinica.meduniwien.ac.at` (or equivalent).
+
+**Scope:**
+
+1. ✅ **DR-019 — Phase E usability-acceptance bar** ([decision-record.md](decision-record.md#dr-019--phase-e-usability-acceptance-bar)) — four-dimension bar: task success ≥ 80 % | SUS median ≥ 70 | 0 critical errors | ≤ 2 severe findings per role. Justified against NIST IR 7741 + Brooke 1986 SUS guidance. Stopping rules + sample-size justification + revisit triggers included.
+2. ✅ **Protocol pack** ([phase-e/usability/](phase-e/usability/)):
+   - [usability-test-protocol.md](phase-e/usability/usability-test-protocol.md) — panel composition (3 roles × ≥5 clinicians = ≥15 sessions, ≥45 task attempts), session format (~60 min), scoring rubric, observer + moderator pair, recording rules, test environment, result-reporting hand-off, risk register.
+   - [usability-scenarios.md](phase-e/usability/usability-scenarios.md) — nine scenario cards (I-1 enrol new subject + I-2 CRF entry + I-3 sign subject + M-1 bulk-verify SDV + M-2 add-query + M-3 audit-log Reason-for-Change + DM-1 pending-invite + DM-2 build-study progress + DM-3 import-CRF-data wizard). Each card carries participant narrative + success criteria + per-scenario critical-error list + moderator-only notes.
+   - [consent-template.md](phase-e/usability/consent-template.md) — bilingual DE primary + EN summary; 25 € voucher compensation; 90-day retention.
+   - [sus-questionnaire.md](phase-e/usability/sus-questionnaire.md) — Brooke 1986 standard 10-item form, bilingual, + analyst scoring sheet.
+   - [observer-template.md](phase-e/usability/observer-template.md) — one A4 sheet per scenario × participant: header / outcome / critical-error catalogue / severe findings / minor backlog / quotes / observer interpretation.
+   - [results-template.md](phase-e/usability/results-template.md) — one MD per role authored by the analyst; this is the only artefact the Phase E exit gate reads.
+3. ⏳ **Run the panel** — gated on the test deployment + recruiting cycle. ≥ 15 sessions across 3 roles.
+4. ⏳ **Author per-role results MDs** + apply gate decision per DR-019.
+
+**Verification gate:** DR-019 accepted + the per-role `results-YYYY-MM-DD-<role>.md` reports document pass on every dimension. The Phase E closure tag (`phase-e-closure`) blocks until all three role reports show pass.
+
+---
+
+## E.11 — Cutover and JSP retirement
+
+**Goal:** decide DR-018, execute it.
+
+**Strategy (recommended):** **option (a) feature-flag toggle, retire JSPs as their SPA equivalent ships**.
+
+**Scope:**
+
+1. Each SPA route ships behind a `libreclinica.spa.<feature>.enabled` flag (default off in the first PR, default on after the in-clinic walkthrough closes successfully).
+2. When the flag flips to default-on, the **legacy JSP path stays reachable** for a **6-month bake-in window** via the explicit URL (`/legacy/<jsp-path>`). After that window, the JSP is deleted in a dedicated `chore(phase-e.11-retire-<feature>)` commit.
+3. **Cross-reference each retirement against [DR-004](decision-record.md)**: admin / low-frequency screens (CRF upload, study config, user mgmt) may stay JSP indefinitely — Phase E does not force them into the SPA.
+
+**Verification gates:**
+
+- A `phase-e-retirement-log.md` records every retired JSP + the commit that removed it + the date the bake-in window opened and closed.
+- CI smoke step asserts the legacy `/legacy/<jsp-path>` works as long as the JSP is still in tree.
+
+---
+
+## E.reconciliation
+
+Closing sub-phase. The Phase D-Sec pattern. Cross-references every gap noted during E.0–E.11 in `phase-e-reconciliation.md`; any item that remains open at this stage is deferred to a documented Phase E.12 follow-up or closed as "won't fix".
+
+---
+
+## Risk register
+
+| ID | Risk | Likelihood | Impact | Mitigation |
+|----|------|------------|--------|------------|
+| E-R1 | The `/pages/login/login` 404 root-cause fix has a wider blast radius than expected (root-context vs. child-context bean visibility breaks an unrelated endpoint) | M | H | The fix lands first as a no-op refactor (component-scan boundary change only), then a separate PR adds the smoke-test assertion; bisect surface is small |
+| E-R2 | Picked framework (DR-008) shows ecosystem gaps for the CRF Designer's grid-with-properties-panel interaction model | M | H | Bake-off in E.1 explicitly probes this pattern; both candidates implement the same scenario before scoring |
+| E-R3 | First clinical use begins mid-Phase-E ([DR-004](decision-record.md) §2) and freezes part of the SPA at v0 while other screens iterate | M | M | Feature-flag every SPA route per E.11; first clinical study can run on the frozen subset while the rest evolves |
+| E-R4 | Tailwind v4 minor-version churn during a long Phase E timeline | L | L | Pin the patch version per major-PR train; upgrade explicitly between sub-phases |
+| E-R5 | SSO proxy re-auth (DR-014 §4) is not ratified as §11.50-compliant by legal/regulatory in time for E.7's Sign Subject sub-phase | M | M | Sign Subject defaults to local-password re-challenge (works without SSO); SSO re-auth wires behind a flag |
+| E-R6 | The MUW design system tokens drift from the institutional styleguide if the styleguide updates mid-Phase-E (e.g. 2026 refresh) | L | L | Re-pull the styleguide PDF at each major sub-phase exit; diff against `muw-tokens.css`; update tokens before the next sub-phase starts |
+| E-R7 | Phase E developer turnover mid-flight | M | M | Storybook (E.3) + Phase E execution playbook (this doc) + per-PR design-system compliance gates document the work well enough for handoff; reference [DR-002 R4 §Risk register](decision-record.md) |
+| E-R8 | The 6-month JSP bake-in window (E.11) blocks the institutional team from cleaning up Prototype.js / jQuery 1.9 in time for a hypothetical Phase F security pass | M | L | The bake-in is per-feature; cumulative cleanup happens piecewise, not as a single cutover event |
+
+---
+
+## Rollback strategy
+
+Phase E is feature-flag-gated end to end. Any sub-phase can be **disabled via the per-feature `libreclinica.spa.<feature>.enabled` flag** without a deploy; the legacy JSP path becomes the live UI again. The institutional validation plan must list both the SPA path and the JSP path as accepted UIs for any feature whose flag is in "may be toggled" status.
+
+For sub-phases without a flagged-legacy fallback (E.1's framework bake-off → wrong-pick rollback = throwaway), the rollback is a `git revert` of the merge commit + a CI green-bar reverification before the next sub-phase opens.
+
+---
+
+## Exit criteria for Phase E
+
+Phase E is **complete** when:
+
+1. Every workflow in the [Phase E feature catalogue](phase-e/README.md) has a feature-flagged SPA equivalent, gated to default-on after the in-clinic walkthrough closes.
+2. WCAG 2.2 AA gate is green on every SPA route (E.9).
+3. DR-019's quantitative usability bar is met (E.10).
+4. JSP retirement log (E.11) records the date every retired JSP was deleted + the bake-in window outcomes.
+5. CI smoke step covers both the legacy `/pages/login/login` entry point (until DR-018 retires it) and the SPA's `/app/` entry point.
+6. Reconciliation closure-tag (`phase-e-closure`) on `lc-develop`, mirroring the Phase D-Sec closure pattern.
+
+---
+
+## Reference
+
+- [Phase E feature catalogue](phase-e/README.md)
+- [post-Phase-D UI validation report](phase-e/post-phase-d-ui-validation.md)
+- [Phase E mockup set + design system](phase-e/ux-mockups/) + [phase-e/design-system/](phase-e/design-system/)
+- [DR-014 — Institution-agnostic SSO](decision-record.md)
+- [SSO deployment guide (D.8 cookbook)](sso-deployment-guide.md)
+- [Phase D execution playbook](phase-d-execution-playbook.md) — sibling format
+- Phase D-Sec closure tag: `phase-d-sec-closure` @ `lc-develop @ 5d4932481`

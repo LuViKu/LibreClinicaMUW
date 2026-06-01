@@ -1,0 +1,522 @@
+{
+  "app": {
+    "name": "LibreClinica MUW",
+    "tagline": "Klinische Studiendaten-Plattform der Augenklinik"
+  },
+  "nav": {
+    "home": "Start",
+    "subjectMatrix": "Studienteilnehmer",
+    "addSubject": "Teilnehmer aufnehmen",
+    "viewEvents": "Visiten",
+    "notes": "Rückfragen",
+    "sdv": "Quelldatenvergleich",
+    "auditLog": "Audit Trail",
+    "buildStudy": "Studienaufbau",
+    "manageUsers": "Nutzer verwalten",
+    "importCrfData": "CRF-Daten importieren"
+  },
+  "a11y": {
+    "skipToMain": "Zum Hauptinhalt springen",
+    "signInLink": "Anmelden"
+  },
+  "common": {
+    "loading": "Wird geladen…",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "back": "Zurück",
+    "next": "Weiter",
+    "search": "Suche",
+    "filter": "Filter",
+    "clear": "Zurücksetzen",
+    "export": "Export"
+  },
+  "subjectMatrix": {
+    "title": "Studienteilnehmer-Übersicht",
+    "subjectsCountTrail": "Teilnehmer",
+    "addSubject": "Teilnehmer aufnehmen",
+    "searchPlaceholder": "Teilnehmer per ID suchen…",
+    "showingCount": "{visible} von {total} sichtbar",
+    "rowsPerPage": "Zeilen",
+    "empty": "Keine Teilnehmer für den aktuellen Filter.",
+    "openSubject": "Öffnen →",
+    "signed": "Signiert",
+    "openQueriesTooltip": "{count} offene Rückfrage(n)",
+    "ariaSigned": "Teilnehmer {id}, signiert",
+    "ariaUnsigned": "Teilnehmer {id}, nicht signiert",
+    "column": {
+      "subject": "Teilnehmer",
+      "gender": "Geschl.",
+      "group": "Gruppe",
+      "enrolled": "Aufnahme",
+      "signed": "Signiert"
+    },
+    "filter": {
+      "all": "Alle",
+      "openEvents": "Mit offenen Visiten",
+      "allComplete": "Alle Visiten abgeschlossen",
+      "signed": "Signiert",
+      "onlyWithQueries": "Nur mit offenen Rückfragen"
+    },
+    "status": {
+      "not-scheduled": "Nicht geplant",
+      "scheduled": "Geplant",
+      "in-progress": "In Bearbeitung",
+      "complete": "Abgeschlossen",
+      "signed": "Signiert",
+      "locked": "Gesperrt"
+    },
+    "studyCard": {
+      "pi": "Studienleitung",
+      "start": "Start",
+      "subjects": "Teilnehmer",
+      "enrolled": "aufgenommen",
+      "status": "Status",
+      "active": "Aktiv"
+    }
+  },
+  "addSubject": {
+    "title": "Studienteilnehmer aufnehmen",
+    "subTrail": "Teilnehmer-Aufnahme",
+    "intro": "Nach dem Speichern können die identifizierenden Felder nur durch den Studienkoordinator geändert werden. Keine identifizierenden Personendaten in die Sekundär-ID übernehmen.",
+    "section": {
+      "identification": "Identifikation",
+      "enrolment": "Aufnahme"
+    },
+    "field": {
+      "subjectId": "Studien-Teilnehmer-ID",
+      "secondaryId": "Sekundär-ID",
+      "enrolledOn": "Aufnahmedatum",
+      "gender": "Geschlecht",
+      "yearOfBirth": "Geburtsjahr",
+      "groupLabel": "Gruppenzuordnung"
+    },
+    "placeholder": {
+      "subjectId": "z. B. M-042",
+      "secondaryId": "Optional",
+      "yearOfBirth": "JJJJ"
+    },
+    "helper": {
+      "subjectId": "Die in den Quelldokumenten verwendete Kennung. Nach dem Speichern nicht mehr änderbar.",
+      "yearOfBirth": "Optional — abhängig von der Studienkonfiguration."
+    },
+    "phiWarning": "Niemals Name, Krankenhaus-ID, Sozialversicherungsnummer oder andere identifizierende Daten verwenden.",
+    "gender": {
+      "female": "Weiblich",
+      "male": "Männlich",
+      "other": "Divers",
+      "unknown": "Unbekannt"
+    },
+    "group": {
+      "notAssigned": "— Nicht zugewiesen —"
+    },
+    "preview": "Live-Vorschau:",
+    "cancelLink": "Abbrechen — zurück zur Übersicht",
+    "action": {
+      "saveAndAddNext": "Speichern & nächste/n Teilnehmer/in",
+      "saveAndFinish": "Speichern & Abschluss",
+      "saveAndSchedule": "Speichern & erste Visite planen"
+    },
+    "modesHelp": "Speicher-Modi: »Erste Visite planen« öffnet die Teilnehmer-Ansicht (der Visitenplaner folgt in einer späteren Sub-Phase). »Nächste/r Teilnehmer/in« lässt Sie auf dieser Seite mit leerem Formular. »Abschluss« kehrt zur Übersicht zurück."
+  },
+  "sdv": {
+    "title": "Quelldatenvergleich",
+    "subTrail": "Alle Standorte · Visite × CRF",
+    "searchPlaceholder": "Teilnehmer, Visite oder CRF suchen…",
+    "showingCount": "{visible} von {total} sichtbar · {verifiable} prüfbar",
+    "openQueriesTooltip": "{count} offene Rückfrage(n)",
+    "empty": "Keine CRFs für den aktuellen Filter.",
+    "selectionAriaLabel": "Bereich für Stapel-Verifikation",
+    "selectAllAriaLabel": "Alle prüfbaren CRFs in der aktuellen Ansicht auswählen",
+    "selectRowAriaLabel": "{subject} · {crf} auswählen",
+    "selectedCount": "{count} ausgewählt",
+    "status": {
+      "all": "Alle Status",
+      "pending": "Ausstehend",
+      "query": "Rückfrage",
+      "verified": "Verifiziert",
+      "locked": "Gesperrt"
+    },
+    "requirement": {
+      "all": "Alle SDV-Anforderungen",
+      "required-100": "100 % erforderlich",
+      "required-partial": "Teilweise erforderlich",
+      "not-required": "Nicht erforderlich"
+    },
+    "filter": {
+      "onlyWithQueries": "Nur mit offenen Rückfragen"
+    },
+    "column": {
+      "subject": "Teilnehmer",
+      "site": "Standort",
+      "event": "Visite",
+      "eventDate": "Visitendatum",
+      "crf": "CRF",
+      "requirement": "Anforderung",
+      "status": "Status"
+    },
+    "action": {
+      "markAsVerified": "{count} als verifiziert markieren (SDV)",
+      "cancelSelection": "Abbrechen",
+      "addQuery": "Rückfrage stellen",
+      "openCrf": "CRF öffnen"
+    },
+    "toast": {
+      "verifiedCount": "{count} CRF(s) als verifiziert markiert."
+    },
+    "confirm": {
+      "title": "Als verifiziert markieren?",
+      "body": "Alle {count} ausgewählten CRFs werden auf »Verifiziert« (SDV) gesetzt. Der Vorgang wird im Audit Trail dokumentiert.",
+      "note": "Werden Daten an einem verifizierten CRF später geändert, wird der SDV-Status automatisch auf »Ausstehend« zurückgesetzt.",
+      "auditNote": "Audit-Trail-Eintrag mit monitor_demo + Zeitstempel.",
+      "cta": "{count} als verifiziert markieren"
+    },
+    "query": {
+      "title": "Anmerkung hinzufügen",
+      "noteType": "Art der Anmerkung",
+      "descriptionLabel": "Beschreibung",
+      "descriptionPlaceholder": "Was ist klärungsbedürftig? Quelldokument-Referenz angeben…",
+      "submit": "Rückfrage absenden",
+      "auditTrailTell": "Audit-Trail-Eintrag mit monitor_demo · Zeitstempel",
+      "type": {
+        "query": "Rückfrage",
+        "failed-validation": "Fehlgeschlagene Validierung",
+        "annotation": "Notiz",
+        "reason-for-change": "Änderungsgrund"
+      }
+    }
+  },
+  "notes": {
+    "title": "Rückfragen & Diskrepanzen",
+    "subTrail": "Alle Standorte",
+    "searchPlaceholder": "Teilnehmer, Item oder Beschreibung suchen…",
+    "showingCount": "{visible} von {total} sichtbar",
+    "empty": "Keine Einträge für den aktuellen Filter.",
+    "summary": {
+      "openTotal": "Offen (alle Arten)",
+      "openTotalSub": "{total} insgesamt erfasst",
+      "openSub": "aktuell offen"
+    },
+    "filter": {
+      "assignedToMe": "Mir zugewiesen"
+    },
+    "type": {
+      "all": "Alle Arten",
+      "query": "Rückfrage",
+      "failed-validation": "Fehlgeschlagene Validierung",
+      "annotation": "Notiz",
+      "reason-for-change": "Änderungsgrund"
+    },
+    "status": {
+      "openOnly": "Nur offen",
+      "all": "Alle Status",
+      "new": "Neu",
+      "updated": "Aktualisiert",
+      "resolution-proposed": "Lösung vorgeschlagen",
+      "closed": "Geschlossen",
+      "not-applicable": "Nicht zutreffend"
+    },
+    "column": {
+      "type": "Art",
+      "status": "Status",
+      "subject": "Teilnehmer",
+      "item": "Item",
+      "description": "Beschreibung",
+      "assigned": "Zugewiesen",
+      "daysOpen": "Offene Tage"
+    }
+  },
+  "auditLog": {
+    "title": "Audit Trail der Studie",
+    "subTrail": "Alle Standorte · regulatorische Historie",
+    "intro": "Jede Datenänderung, Signatur, jeder SDV-Vorgang, jede Rückfrage und jede administrative Aktion. Unveränderlich. Filter schränken die Sicht ein; nichts wird je verborgen.",
+    "showingCount": "{visible} von {total} Ereignissen sichtbar",
+    "empty": "Keine Ereignisse für den aktuellen Filter.",
+    "by": "von",
+    "heading": {
+      "today": "Heute",
+      "yesterday": "Gestern"
+    },
+    "filter": {
+      "actor": "Akteur/-in",
+      "allActors": "Alle Akteur/-innen",
+      "variant": "Ereignistyp",
+      "subject": "Teilnehmer",
+      "allSubjects": "Alle Teilnehmer"
+    },
+    "variant": {
+      "all": "Alle Ereignistypen",
+      "signed": "Signatur",
+      "reason-for-change": "Änderungsgrund",
+      "sdv": "SDV",
+      "admin": "Administration",
+      "data": "Datenerfassung",
+      "query": "Rückfrage"
+    }
+  },
+  "crfEntry": {
+    "title": "CRF-Datenerfassung",
+    "railHeading": "Abschnitte",
+    "readOnlyTell": "Schreibgeschützt · Monitor-Ansicht",
+    "unsaved": "Ungespeicherte Änderungen",
+    "saving": "Automatisches Speichern…",
+    "lastSaved": "Zuletzt gespeichert um {at}",
+    "notSavedYet": "Noch nicht gespeichert",
+    "cancelLink": "Abbrechen — zurück zur Übersicht",
+    "status": {
+      "not-started": "Nicht begonnen",
+      "in-progress": "In Bearbeitung",
+      "complete": "Abgeschlossen",
+      "locked": "Gesperrt"
+    },
+    "action": {
+      "saveDraft": "Entwurf speichern",
+      "markComplete": "CRF als abgeschlossen markieren"
+    }
+  },
+  "buildStudy": {
+    "title": "Studienaufbau",
+    "subTrail": "{study} {version} · Aufbau-Tracker",
+    "intro": "Sieben Aufbauaufgaben. Beliebige Reihenfolge; jede Karte verlinkt in den entsprechenden Workflow, sobald die Folge-Ansicht ausgeliefert ist.",
+    "progress": "Erledigte Aufgaben",
+    "completion": "Aufbau-Fortschritt",
+    "progressAriaLabel": "Aufbau zu {percent}% abgeschlossen",
+    "taskListAriaLabel": "Aufgaben für den Studienaufbau",
+    "sites": "Standorte",
+    "enrolledSubjects": "Aufgenommene Teilnehmer",
+    "noDeepLinkYet": "Ansicht ausstehend",
+    "status": {
+      "not-started": "Nicht begonnen",
+      "in-progress": "In Bearbeitung",
+      "complete": "Abgeschlossen"
+    },
+    "task": {
+      "create-study": { "title": "Studie anlegen", "summary": "{count} aktiv", "description": "Studien-Metadaten, Version, OID, Sponsor + Protokollnummer." },
+      "crf":          { "title": "CRFs gestalten", "summary": "{count} CRFs", "description": "Formularbibliothek: Item-Raster, Antwortsätze, Wiederholungsgruppen." },
+      "events":       { "title": "Visiten definieren", "summary": "{count} Visiten", "description": "Visitenplan mit CRF-Zuordnung + SDV-Anforderung pro Visite." },
+      "groups":       { "title": "Teilnehmergruppen", "summary": "{count} Gruppen", "description": "Randomisierungsarme + Stratifizierungsregeln." },
+      "rules":        { "title": "Validierungsregeln", "summary": "{count} Regeln", "description": "Feld- und formularübergreifende Prädikate mit Aktionstypen." },
+      "sites":        { "title": "Standorte", "summary": "{count} Standorte", "description": "Pro Standort PI, Anschrift, Rekrutierungs-Obergrenze." },
+      "users":        { "title": "Nutzer/-innen", "summary": "{count} Personen", "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs." }
+    }
+  },
+  "manageUsers": {
+    "title": "Nutzerverwaltung",
+    "subTrail": "LCDemo · alle Rollen",
+    "searchPlaceholder": "Nutzer/-in nach Name, Username oder E-Mail suchen…",
+    "showingCount": "{visible} von {total} sichtbar",
+    "empty": "Keine Nutzer/-innen für den aktuellen Filter.",
+    "inviteAction": "Nutzer/-in einladen",
+    "onlyActive": "Nur aktive",
+    "studyWide": "Studienweit",
+    "activeYes": "Aktiv",
+    "activeNo": "Inaktiv",
+    "role": {
+      "all": "Alle Rollen",
+      "Investigator": "Prüfarzt/-ärztin",
+      "Monitor": "Monitor",
+      "Data Manager": "Datenmanager/-in",
+      "Administrator": "Administrator/-in",
+      "CRC": "CRC"
+    },
+    "auth": {
+      "all": "Alle Auth-Modi",
+      "sso": "SSO",
+      "local": "Lokal",
+      "ldap": "LDAP (Legacy)",
+      "pending-invite": "Einladung offen"
+    },
+    "column": {
+      "user": "Nutzer/-in",
+      "role": "Rolle",
+      "site": "Standort",
+      "auth": "Auth",
+      "lastLogin": "Letzte Anmeldung",
+      "active": "Aktiv"
+    }
+  },
+  "importCrf": {
+    "title": "CRF-Daten importieren",
+    "subTrail": "LCDemo · Massendaten-Import",
+    "intro": "Bestehende CRF-Daten aus CDISC ODM XML laden. Der Import wird gestaged — nichts wird committed, bis Sie im letzten Schritt bestätigen.",
+    "step": {
+      "upload": "Hochladen",
+      "map": "Mappen",
+      "preview": "Vorschau & Auflösung",
+      "commit": "Commit"
+    },
+    "upload": {
+      "heading": "CDISC ODM 1.3 XML hochladen",
+      "description": "Teilnehmer / Visite / CRF / Item müssen bereits in der Studie definiert sein.",
+      "cta": "Datei wählen oder per Drag-and-Drop ablegen",
+      "hint": "Akzeptiert: .xml · maximal 50 MB"
+    },
+    "map": {
+      "heading": "Erkannte Mengen",
+      "description": "Die Datei wurde geparst und automatisch gegen die Studienstruktur abgeglichen. Konflikte im nächsten Schritt auflösen.",
+      "subjects": "Teilnehmer",
+      "events": "Visiten",
+      "crfs": "CRFs",
+      "rows": "Zeilen"
+    },
+    "preview": {
+      "readyHeading": "Bereit",
+      "overwriteHeading": "Überschreibt",
+      "warningHeading": "Warnungen",
+      "errorHeading": "Fehler · wird übersprungen",
+      "errorBadValue": "Ungültiger Wert — erwartet 1, 2, 3, 4, 5",
+      "errorUnknownItem": "Unbekannte Item-OID in der aktuellen CRF-Version",
+      "warnRange": "Wert außerhalb des Normbereichs — Import + SDV-Flag",
+      "reasonHeading": "Änderungsgrund",
+      "reasonHint": "{count} Überschreibungen erfordern einen Änderungsgrund. Wird im Audit Trail bei jedem überschriebenen Item dokumentiert.",
+      "reasonPlaceholder": "z. B. Standort hat korrigierte ODM nach Vor-Ort-Quelldatenabgleich gesendet.",
+      "cta": "Weiter zum Commit",
+      "column": {
+        "status": "Status",
+        "subject": "Teilnehmer",
+        "event": "Visite",
+        "item": "CRF · Item",
+        "delta": "Bestand → eingehend"
+      },
+      "status": {
+        "ready": "Bereit",
+        "overwrite": "Überschreibt",
+        "warning": "Warnung",
+        "error": "Fehler"
+      }
+    },
+    "commit": {
+      "workingHeading": "Commit läuft…",
+      "workingDetail": "Zeilen und Audit-Trail-Einträge werden geschrieben.",
+      "successHeading": "Import abgeschlossen",
+      "successDetail": "{ready} neu + {overwrite} überschrieben · {error} übersprungen."
+    }
+  },
+  "signSubject": {
+    "title": "Teilnehmer {id} signieren",
+    "subTrail": "Teilnehmer-Freigabe",
+    "intro": "Mit der Signatur bestätigen Sie, dass die Daten nach bestem Wissen vollständig und korrekt sind. Der Vorgang wird im Audit Trail dokumentiert und kann nur durch eine/n Administrator/-in zurückgesetzt werden.",
+    "preflightHeading": "Pre-Flight-Prüfungen",
+    "casebookHeading": "Casebook des Teilnehmers — zu bestätigen",
+    "casebookPdf": "PDF-Vorschau",
+    "submitLabel": "Teilnehmer {id} signieren",
+    "signedToast": "{id} signiert. Öffne die Probandendetail-Seite…",
+    "error": {
+      "passwordRequired": "Passwort ist erforderlich, um die E-Signatur zu protokollieren.",
+      "badPassword": "Passwort stimmt nicht überein — Signatur nicht erfasst.",
+      "alreadySigned": "Proband bereits signiert — die Signatur ist nicht widerrufbar.",
+      "preflightBlocked": "Pre-Flight-Prüfungen blockieren diese Signatur — bitte zuerst die fehlgeschlagenen Prüfungen klären.",
+      "unknown": "Signatur konnte nicht erfasst werden — bitte erneut versuchen."
+    },
+    "attestation": "Mit der untenstehenden Signatur erkläre ich, {name} (Prüfarzt/-ärztin, Standort {site}), dass die für Teilnehmer {id} erfassten Daten nach bestem Wissen vollständig, korrekt und mit den Quelldokumenten übereinstimmend sind. Die elektronische Signatur wird gemäß ICH-GCP und 21 CFR Part 11 §11.50 im Audit Trail dokumentiert.",
+    "acknowledgement": "Ich verstehe, dass die Signatur alle CRFs gegen weitere Bearbeitung durch das Standort-Personal sperrt, bis eine administrative Rücksetzung erfolgt.",
+    "column": {
+      "event": "Visite",
+      "status": "Status",
+      "openQueries": "Offene Rückfragen"
+    },
+    "preflight": {
+      "eventsCompleteTitle": "Alle geplanten Visiten haben mindestens ein abgeschlossenes CRF",
+      "eventsCompleteDetail": "Jede Visite enthält Daten — siehe Casebook unten.",
+      "eventsIncompleteTitle": "Einige Visiten haben noch CRFs in Bearbeitung",
+      "eventsIncompleteDetail": "Signatur ist möglich; CRFs in Bearbeitung werden im aktuellen Zustand gesperrt.",
+      "crfsCompleteTitle": "Alle erforderlichen CRFs sind als abgeschlossen markiert",
+      "crfsIncompleteTitle": "Einige erforderliche CRFs sind nicht abgeschlossen",
+      "openQueriesTitle": "{count} offene Diskrepanzen zu diesem Teilnehmer",
+      "openQueriesDetail": "Offene Rückfragen blockieren die Signatur nicht, sollten aber wenn möglich vorher geklärt werden.",
+      "noOpenQueriesTitle": "Keine offenen Diskrepanzen",
+      "firstSignature": "Keine vorherige Signatur",
+      "alreadySigned": "Teilnehmer bereits signiert — Re-Signatur wird als neues Audit-Ereignis erfasst"
+    }
+  },
+  "login": {
+    "brandLine": "Universitätsklinik für Augenheilkunde und Optometrie · Medizinische Universität Wien",
+    "title": "Anmelden",
+    "subtitle": "Mit Ihren institutionellen Credentials anmelden.",
+    "delegatedHint": "2-Faktor-Verifikation, Passwort-Resets und Account-Sperren übernimmt Ihr Identity Provider.",
+    "orLocal": "Oder lokal anmelden",
+    "localAccountSummary": "Mit lokalem LibreClinica-Konto anmelden",
+    "username": "Benutzername",
+    "password": "Passwort",
+    "signInLocal": "Lokal anmelden",
+    "localPurpose": "Für Sponsor-Monitore, externes Personal und Notfallzugänge ohne institutionelle Identität.",
+    "devShortcuts": "Dev-Rollenwechsel (Mock-Identität)",
+    "terms": "AGB",
+    "privacy": "Datenschutz",
+    "complianceTell": "Dies ist ein GCP / 21 CFR Part 11 konformes klinisches Datensystem. Alle Aktionen werden auditiert."
+  },
+  "firstLogin": {
+    "title": "Willkommen, {name}",
+    "subTrail": "Profil-Bestätigung bei der Erstanmeldung",
+    "intro": "Wenige Angaben zu bestätigen, bevor Sie die Anwendung erreichen. 2FA, Passwort-Lebenszyklus und Account-Sperren werden vom Identity Provider verwaltet; die untenstehenden Felder sind LibreClinica-lokal.",
+    "fromIdp": "Aus Ihrem Identity Provider",
+    "readOnly": "Schreibgeschützt",
+    "mfaVerified": "MFA bestätigt",
+    "mfaNotVerified": "MFA nicht bestätigt",
+    "step": {
+      "confirmProfile": "Profil bestätigen",
+      "acceptTerms": "AGB akzeptieren"
+    },
+    "field": {
+      "email": "E-Mail",
+      "role": "Rolle",
+      "source": "Auth-Quelle",
+      "mfa": "MFA",
+      "displayName": "Bevorzugter Anzeigename",
+      "locale": "Sprache",
+      "timezone": "Zeitzone"
+    },
+    "helper": {
+      "displayName": "Erscheint im Audit Trail, in Signatur-Bestätigungen und in Diskussions-Threads."
+    },
+    "eSignatureHeading": "Elektronische Signaturen",
+    "eSignatureExplain": "Klinische Signaturen (Sign Subject, Sign Event) re-authentifizieren über Ihren Identity Provider mit forceAuthn=true gemäß 21 CFR Part 11 §11.50.",
+    "eSignatureAck": "Ich verstehe, dass die Re-Authentifizierung über den Identity Provider das bindende Signatur-Ereignis für klinische Bestätigungen ist.",
+    "terms": {
+      "heading": "Nutzungsbedingungen",
+      "body1": "Ich verstehe, dass LibreClinica MUW ein klinisches Datensystem unter ICH-GCP und 21 CFR Part 11 §11.10 ist. Jede meiner Aktionen wird in einem unveränderlichen Audit Trail festgehalten.",
+      "body2": "Ich werde meine Credentials nicht teilen, mich vom System abmelden, wenn ich meinen Arbeitsplatz verlasse, und identifizierende Daten am Bildschirm schützen.",
+      "body3": "Ich verstehe, dass meine Rolle den Zugriff nur auf Daten und Aktionen gewährt, die mit meiner Studienzuordnung übereinstimmen; Zugriffe außerhalb dieses Rahmens werden im Audit Trail markiert und überprüft.",
+      "ackTerms": "Ich habe die obigen Bedingungen gelesen und akzeptiert.",
+      "ackAuditing": "Ich verstehe, dass jede meiner Aktionen dokumentiert und auditierbar ist.",
+      "finishCta": "Akzeptieren und LibreClinica öffnen"
+    }
+  },
+  "studyPicker": {
+    "title": "Studie auswählen",
+    "subtitle": "Willkommen, {name}. Wählen Sie die Studie, an der Sie arbeiten möchten. Sie können später in der oberen Leiste wechseln.",
+    "empty": "Sie haben noch keine Rolle in einer Studie. Bitten Sie den Data Manager um Zugang.",
+    "activeBadge": "Aktiv",
+    "siteBadge": "Standort",
+    "binding": "Wird gebunden…",
+    "signOut": "Abmelden"
+  },
+  "subjectDetail": {
+    "subTrail": "Probandendetail",
+    "notSigned": "Nicht signiert",
+    "notFound": "Proband {id} wurde in der aktuellen Studie nicht gefunden.",
+    "backToMatrix": "Zurück zur Probandenmatrix",
+    "identityHeading": "Identität & Einschluss",
+    "eventsHeading": "Geplante Visiten",
+    "eventsCount": "Visiten",
+    "openQueries": "Offene Rückfragen",
+    "openEvent": "CRFs öffnen →",
+    "column": {
+      "event": "Visite",
+      "dateStart": "Startdatum",
+      "status": "Status",
+      "dataEntryStage": "Erfassungsstand",
+      "openQueries": "Offene Rückfragen"
+    },
+    "dataEntryStage": {
+      "not-started": "Nicht begonnen",
+      "data-being-entered": "In Erfassung",
+      "initial-data-entry-completed": "Erfassung abgeschlossen",
+      "validation-completed": "Validiert",
+      "locked": "Gesperrt"
+    },
+    "actions": {
+      "downloadCasebook": "Patient-Casebook herunterladen",
+      "signSubject": "Probanden signieren"
+    }
+  }
+}

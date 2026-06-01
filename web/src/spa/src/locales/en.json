@@ -1,0 +1,522 @@
+{
+  "app": {
+    "name": "LibreClinica MUW",
+    "tagline": "Clinical study data platform of the Ophthalmology Department"
+  },
+  "nav": {
+    "home": "Home",
+    "subjectMatrix": "Subject Matrix",
+    "addSubject": "Add Subject",
+    "viewEvents": "View Events",
+    "notes": "Notes & Discrepancies",
+    "sdv": "Source Data Verification",
+    "auditLog": "Audit Trail",
+    "buildStudy": "Build Study",
+    "manageUsers": "Manage Users",
+    "importCrfData": "Import CRF Data"
+  },
+  "a11y": {
+    "skipToMain": "Skip to main content",
+    "signInLink": "Sign in"
+  },
+  "common": {
+    "loading": "Loading…",
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back",
+    "next": "Next",
+    "search": "Search",
+    "filter": "Filter",
+    "clear": "Clear",
+    "export": "Export"
+  },
+  "subjectMatrix": {
+    "title": "Subject Matrix",
+    "subjectsCountTrail": "subjects",
+    "addSubject": "Add Subject",
+    "searchPlaceholder": "Find subject by ID…",
+    "showingCount": "{visible} of {total} shown",
+    "rowsPerPage": "Rows",
+    "empty": "No subjects match the current filter.",
+    "openSubject": "Open →",
+    "signed": "Signed",
+    "openQueriesTooltip": "{count} open query/queries",
+    "ariaSigned": "Subject {id}, signed",
+    "ariaUnsigned": "Subject {id}, not signed",
+    "column": {
+      "subject": "Subject",
+      "gender": "Gender",
+      "group": "Group",
+      "enrolled": "Enrolled",
+      "signed": "Signed"
+    },
+    "filter": {
+      "all": "All",
+      "openEvents": "Open events",
+      "allComplete": "All events complete",
+      "signed": "Signed",
+      "onlyWithQueries": "Only with open queries"
+    },
+    "status": {
+      "not-scheduled": "Not scheduled",
+      "scheduled": "Scheduled",
+      "in-progress": "In progress",
+      "complete": "Complete",
+      "signed": "Signed",
+      "locked": "Locked"
+    },
+    "studyCard": {
+      "pi": "Site PI",
+      "start": "Start",
+      "subjects": "Subjects",
+      "enrolled": "enrolled",
+      "status": "Status",
+      "active": "Active"
+    }
+  },
+  "addSubject": {
+    "title": "Add Study Subject",
+    "subTrail": "subject enrolment",
+    "intro": "Once saved, the subject's identifying fields cannot be changed without contacting the Study Coordinator. Do not include personally identifying information in Secondary ID.",
+    "section": {
+      "identification": "Identification",
+      "enrolment": "Enrolment"
+    },
+    "field": {
+      "subjectId": "Study Subject ID",
+      "secondaryId": "Secondary ID",
+      "enrolledOn": "Date of Enrolment",
+      "gender": "Gender",
+      "yearOfBirth": "Year of Birth",
+      "groupLabel": "Group assignment"
+    },
+    "placeholder": {
+      "subjectId": "e.g. M-042",
+      "secondaryId": "Optional",
+      "yearOfBirth": "yyyy"
+    },
+    "helper": {
+      "subjectId": "The identifier used in source documents. Cannot be edited after save.",
+      "yearOfBirth": "Optional — depends on study configuration."
+    },
+    "phiWarning": "Never include name, hospital ID, social security number, or any other identifying data.",
+    "gender": {
+      "female": "Female",
+      "male": "Male",
+      "other": "Other",
+      "unknown": "Unknown"
+    },
+    "group": {
+      "notAssigned": "— Not assigned —"
+    },
+    "preview": "Live preview:",
+    "cancelLink": "Cancel and return to Subject Matrix",
+    "action": {
+      "saveAndAddNext": "Save & add next subject",
+      "saveAndFinish": "Save & finish",
+      "saveAndSchedule": "Save & schedule first event"
+    },
+    "modesHelp": "Save modes: \"Schedule first event\" opens the subject view (event scheduler lands in a later sub-phase). \"Add next\" keeps you here with a clean form. \"Finish\" returns to the Subject Matrix."
+  },
+  "sdv": {
+    "title": "Source Data Verification",
+    "subTrail": "All sites · view by Event CRF",
+    "searchPlaceholder": "Find subject, event, or CRF…",
+    "showingCount": "{visible} of {total} shown · {verifiable} verifiable",
+    "openQueriesTooltip": "{count} open query/queries",
+    "empty": "No CRFs match the current filter.",
+    "selectionAriaLabel": "Bulk-verify action bar",
+    "selectAllAriaLabel": "Select all verifiable CRFs in the current view",
+    "selectRowAriaLabel": "Select {subject} · {crf}",
+    "selectedCount": "{count} selected",
+    "status": {
+      "all": "All statuses",
+      "pending": "Pending",
+      "query": "Query",
+      "verified": "Verified",
+      "locked": "Locked"
+    },
+    "requirement": {
+      "all": "All SDV requirements",
+      "required-100": "100% required",
+      "required-partial": "Partial required",
+      "not-required": "Not required"
+    },
+    "filter": {
+      "onlyWithQueries": "Only with open queries"
+    },
+    "column": {
+      "subject": "Subject",
+      "site": "Site",
+      "event": "Event",
+      "eventDate": "Event date",
+      "crf": "CRF",
+      "requirement": "Requirement",
+      "status": "Status"
+    },
+    "action": {
+      "markAsVerified": "Mark {count} as verified (SDV)",
+      "cancelSelection": "Cancel",
+      "addQuery": "Add query",
+      "openCrf": "Open CRF"
+    },
+    "toast": {
+      "verifiedCount": "{count} CRF/CRFs marked verified."
+    },
+    "confirm": {
+      "title": "Mark as verified?",
+      "body": "All {count} selected CRFs will be flipped to Verified (SDV). The action is recorded in the audit log.",
+      "note": "If data on a verified CRF is later changed, its SDV status resets to Pending automatically.",
+      "auditNote": "Audit trail entry will reference monitor_demo + the timestamp.",
+      "cta": "Mark {count} as verified"
+    },
+    "query": {
+      "title": "Add Note",
+      "noteType": "Note type",
+      "descriptionLabel": "Description",
+      "descriptionPlaceholder": "What needs clarifying? Reference the source document if relevant…",
+      "submit": "Submit query",
+      "auditTrailTell": "Audit trail entry will reference: monitor_demo · timestamp",
+      "type": {
+        "query": "Query",
+        "failed-validation": "Failed validation",
+        "annotation": "Annotation",
+        "reason-for-change": "Reason for change"
+      }
+    }
+  },
+  "notes": {
+    "title": "Notes & Discrepancies",
+    "subTrail": "All sites",
+    "searchPlaceholder": "Find subject, item, or description…",
+    "showingCount": "{visible} of {total} shown",
+    "empty": "No discrepancies match the current filter.",
+    "summary": {
+      "openTotal": "Open (all types)",
+      "openTotalSub": "{total} total recorded",
+      "openSub": "currently open"
+    },
+    "filter": {
+      "assignedToMe": "Assigned to me"
+    },
+    "type": {
+      "all": "All types",
+      "query": "Query",
+      "failed-validation": "Failed validation",
+      "annotation": "Annotation",
+      "reason-for-change": "Reason for change"
+    },
+    "status": {
+      "openOnly": "Open only",
+      "all": "All statuses",
+      "new": "New",
+      "updated": "Updated",
+      "resolution-proposed": "Resolution proposed",
+      "closed": "Closed",
+      "not-applicable": "Not applicable"
+    },
+    "column": {
+      "type": "Type",
+      "status": "Status",
+      "subject": "Subject",
+      "item": "Item",
+      "description": "Description",
+      "assigned": "Assigned",
+      "daysOpen": "Days open"
+    }
+  },
+  "auditLog": {
+    "title": "Study Audit Log",
+    "subTrail": "All sites · regulatory history",
+    "intro": "Every data change, sign-off, SDV event, query, and administrative action. Immutable. Filters narrow the view; nothing is ever hidden.",
+    "showingCount": "{visible} of {total} events shown",
+    "empty": "No events match the current filter.",
+    "by": "by",
+    "heading": {
+      "today": "Today",
+      "yesterday": "Yesterday"
+    },
+    "filter": {
+      "actor": "Actor",
+      "allActors": "All actors",
+      "variant": "Event type",
+      "subject": "Subject",
+      "allSubjects": "All subjects"
+    },
+    "variant": {
+      "all": "All event types",
+      "signed": "Sign-off",
+      "reason-for-change": "Reason for change",
+      "sdv": "SDV",
+      "admin": "Admin",
+      "data": "Data entry",
+      "query": "Query"
+    }
+  },
+  "crfEntry": {
+    "title": "CRF data entry",
+    "railHeading": "Sections",
+    "readOnlyTell": "Read-only · Monitor view",
+    "unsaved": "Unsaved changes",
+    "saving": "Auto-saving…",
+    "lastSaved": "Last saved at {at}",
+    "notSavedYet": "Not saved yet",
+    "cancelLink": "Cancel — return to Subject Matrix",
+    "status": {
+      "not-started": "Not started",
+      "in-progress": "In progress",
+      "complete": "Complete",
+      "locked": "Locked"
+    },
+    "action": {
+      "saveDraft": "Save draft",
+      "markComplete": "Mark CRF complete"
+    }
+  },
+  "buildStudy": {
+    "title": "Build Study",
+    "subTrail": "{study} {version} · setup tracker",
+    "intro": "Seven setup tasks. Complete them in any order; each card deep-links to its workflow when the supporting view ships.",
+    "progress": "Tasks complete",
+    "completion": "Setup completion",
+    "progressAriaLabel": "Setup {percent}% complete",
+    "taskListAriaLabel": "Study setup tasks",
+    "sites": "Sites",
+    "enrolledSubjects": "Enrolled subjects",
+    "noDeepLinkYet": "View pending",
+    "status": {
+      "not-started": "Not started",
+      "in-progress": "In progress",
+      "complete": "Complete"
+    },
+    "task": {
+      "create-study": { "title": "Create study", "summary": "{count} active", "description": "Study metadata, version, OID, sponsor + protocol number." },
+      "crf":          { "title": "Design CRFs", "summary": "{count} CRFs", "description": "Form library: item grids, response sets, repeating groups." },
+      "events":       { "title": "Define events", "summary": "{count} events", "description": "Visit schedule with per-event CRF assignment + SDV requirement." },
+      "groups":       { "title": "Subject groups", "summary": "{count} groups", "description": "Randomisation arms + stratification rules." },
+      "rules":        { "title": "Validation rules", "summary": "{count} rules", "description": "Field-level and cross-form predicates with action types." },
+      "sites":        { "title": "Sites", "summary": "{count} sites", "description": "Per-site PI, address, recruitment cap." },
+      "users":        { "title": "Users", "summary": "{count} users", "description": "Per-site Investigators, Monitors, Data Managers, CRCs." }
+    }
+  },
+  "manageUsers": {
+    "title": "Manage Users",
+    "subTrail": "LCDemo · all roles",
+    "searchPlaceholder": "Find user by name, username or email…",
+    "showingCount": "{visible} of {total} shown",
+    "empty": "No users match the current filter.",
+    "inviteAction": "Invite user",
+    "onlyActive": "Active only",
+    "studyWide": "Study-wide",
+    "activeYes": "Active",
+    "activeNo": "Inactive",
+    "role": {
+      "all": "All roles",
+      "Investigator": "Investigator",
+      "Monitor": "Monitor",
+      "Data Manager": "Data Manager",
+      "Administrator": "Administrator",
+      "CRC": "CRC"
+    },
+    "auth": {
+      "all": "All auth modes",
+      "sso": "SSO",
+      "local": "Local",
+      "ldap": "LDAP (legacy)",
+      "pending-invite": "Pending invite"
+    },
+    "column": {
+      "user": "User",
+      "role": "Role",
+      "site": "Site",
+      "auth": "Auth",
+      "lastLogin": "Last login",
+      "active": "Active"
+    }
+  },
+  "importCrf": {
+    "title": "Import CRF Data",
+    "subTrail": "LCDemo · bulk-load existing data",
+    "intro": "Bulk-load completed CRFs from CDISC ODM XML. The import is staged — nothing is committed until you confirm at the final step.",
+    "step": {
+      "upload": "Upload",
+      "map": "Map",
+      "preview": "Preview & resolve",
+      "commit": "Commit"
+    },
+    "upload": {
+      "heading": "Upload CDISC ODM 1.3 XML",
+      "description": "Subject / event / CRF / item must already be defined in the study.",
+      "cta": "Choose a file or drag-and-drop",
+      "hint": "Accepted: .xml · maximum 50 MB"
+    },
+    "map": {
+      "heading": "Detected counts",
+      "description": "The file was parsed and auto-mapped against the study's structure. Resolve any conflicts in the next step.",
+      "subjects": "Subjects",
+      "events": "Events",
+      "crfs": "CRFs",
+      "rows": "Rows"
+    },
+    "preview": {
+      "readyHeading": "Ready",
+      "overwriteHeading": "Overwrite",
+      "warningHeading": "Warnings",
+      "errorHeading": "Errors · will skip",
+      "errorBadValue": "Bad value — expected one of 1, 2, 3, 4, 5",
+      "errorUnknownItem": "Unknown item OID in the current CRF version",
+      "warnRange": "Out-of-range value — will import + flag for SDV",
+      "reasonHeading": "Reason for change",
+      "reasonHint": "{count} overwrites require a Reason for Change note. Recorded against every overwritten item in the audit log.",
+      "reasonPlaceholder": "e.g. Site sent corrected ODM after on-site source-data reconciliation.",
+      "cta": "Continue to Commit",
+      "column": {
+        "status": "Status",
+        "subject": "Subject",
+        "event": "Event",
+        "item": "CRF · item",
+        "delta": "Existing → incoming"
+      },
+      "status": {
+        "ready": "Ready",
+        "overwrite": "Overwrite",
+        "warning": "Warning",
+        "error": "Error"
+      }
+    },
+    "commit": {
+      "workingHeading": "Committing…",
+      "workingDetail": "Writing rows + audit-trail entries.",
+      "successHeading": "Import complete",
+      "successDetail": "{ready} new + {overwrite} overwritten · {error} skipped."
+    }
+  },
+  "signSubject": {
+    "title": "Sign Subject {id}",
+    "subTrail": "subject sign-off",
+    "intro": "Signing attests that the data is complete and accurate to the best of your knowledge. The action is recorded in the audit log and cannot be reversed without an administrator reset.",
+    "preflightHeading": "Pre-flight checks",
+    "casebookHeading": "Subject casebook — to be attested",
+    "casebookPdf": "Download PDF preview",
+    "submitLabel": "Sign subject {id}",
+    "signedToast": "{id} signed. Opening the subject detail page…",
+    "error": {
+      "passwordRequired": "Password is required to record the e-signature.",
+      "badPassword": "Password does not match — signature not recorded.",
+      "alreadySigned": "Subject is already signed — signing is a one-way action.",
+      "preflightBlocked": "Pre-flight checks block this sign action — resolve the failed checks first.",
+      "unknown": "Could not record the signature — please try again."
+    },
+    "attestation": "By signing below, I, {name} (Investigator, site {site}), attest that to the best of my knowledge the data captured for subject {id} is complete, accurate, and reflects the source documents. This electronic signature is recorded in the regulatory audit log per ICH-GCP and 21 CFR Part 11 §11.50.",
+    "acknowledgement": "I understand that signing locks all CRFs against further edit by site personnel until an administrator reset.",
+    "column": {
+      "event": "Event",
+      "status": "Status",
+      "openQueries": "Open queries"
+    },
+    "preflight": {
+      "eventsCompleteTitle": "All scheduled events have at least one CRF completed",
+      "eventsCompleteDetail": "Every event has data — see the casebook below for the per-event status.",
+      "eventsIncompleteTitle": "Some events still have CRFs in progress",
+      "eventsIncompleteDetail": "Signing is allowed; CRFs in progress will be locked at their current state.",
+      "crfsCompleteTitle": "All required CRFs are marked complete",
+      "crfsIncompleteTitle": "Some required CRFs are not marked complete",
+      "openQueriesTitle": "{count} open discrepancies attached to this subject",
+      "openQueriesDetail": "Open queries do not block signing, but you should reconcile them first when possible.",
+      "noOpenQueriesTitle": "No open discrepancies on this subject",
+      "firstSignature": "No previous signature on this subject",
+      "alreadySigned": "Subject already signed — re-signature recorded as a new audit event"
+    }
+  },
+  "login": {
+    "brandLine": "Department of Ophthalmology and Optometry · Medical University of Vienna",
+    "title": "Sign in",
+    "subtitle": "Use your institutional credentials.",
+    "delegatedHint": "2FA, password resets, and account lockout are handled by your identity provider.",
+    "orLocal": "Or sign in with a local account",
+    "localAccountSummary": "Sign in with a local LibreClinica account",
+    "username": "Username",
+    "password": "Password",
+    "signInLocal": "Sign in with local account",
+    "localPurpose": "For sponsor monitors, external personnel, and break-glass accounts that don't have an institutional identity.",
+    "devShortcuts": "Dev role-switcher (mock identity)",
+    "terms": "Terms",
+    "privacy": "Privacy",
+    "complianceTell": "This is a GCP / 21 CFR Part 11 compliant clinical-data system. All actions are audited."
+  },
+  "firstLogin": {
+    "title": "Welcome, {name}",
+    "subTrail": "First-login profile completion",
+    "intro": "A few details to confirm before you reach the application. 2FA, password lifecycle, and account lockout are managed by your identity provider; the fields below are LibreClinica-local.",
+    "fromIdp": "From your identity provider",
+    "readOnly": "Read-only",
+    "mfaVerified": "MFA-verified",
+    "mfaNotVerified": "MFA not verified",
+    "step": {
+      "confirmProfile": "Confirm profile",
+      "acceptTerms": "Accept terms"
+    },
+    "field": {
+      "email": "Email",
+      "role": "Role",
+      "source": "Auth source",
+      "mfa": "MFA",
+      "displayName": "Preferred display name",
+      "locale": "Locale",
+      "timezone": "Time zone"
+    },
+    "helper": {
+      "displayName": "Shown in the audit log, sign-off attestations, and discrepancy threads."
+    },
+    "eSignatureHeading": "Electronic signatures",
+    "eSignatureExplain": "Clinical sign-offs (Sign Subject, Sign Event) re-authenticate you through your identity provider with forceAuthn=true per 21 CFR Part 11 §11.50.",
+    "eSignatureAck": "I understand that re-authenticating via the identity provider is the binding signature event for clinical attestations.",
+    "terms": {
+      "heading": "Terms of use",
+      "body1": "I understand that LibreClinica MUW is a clinical-data system under ICH-GCP and 21 CFR Part 11 §11.10. Every action I take is recorded in an immutable audit log.",
+      "body2": "I will not share my credentials, will sign off the system when I leave my workstation, and will protect any subject identifiers visible on screen.",
+      "body3": "I understand that my role grants access only to data and actions consistent with my study assignment; access outside that scope is flagged in the audit log and reviewed.",
+      "ackTerms": "I have read and accept the terms above.",
+      "ackAuditing": "I understand that every action I take is recorded and auditable.",
+      "finishCta": "Accept and enter LibreClinica"
+    }
+  },
+  "studyPicker": {
+    "title": "Choose a study",
+    "subtitle": "Welcome, {name}. Pick the study you want to work on. You can switch later from the top bar.",
+    "empty": "You do not have a role on any study yet. Ask the Data Manager to grant you access.",
+    "activeBadge": "Active",
+    "siteBadge": "Site",
+    "binding": "Binding…",
+    "signOut": "Sign out"
+  },
+  "subjectDetail": {
+    "subTrail": "subject detail",
+    "notSigned": "Not signed",
+    "notFound": "Subject {id} not found in the current study.",
+    "backToMatrix": "Back to Subject Matrix",
+    "identityHeading": "Identity & enrolment",
+    "eventsHeading": "Scheduled events",
+    "eventsCount": "events",
+    "openQueries": "Open queries",
+    "openEvent": "Open CRFs →",
+    "column": {
+      "event": "Event",
+      "dateStart": "Start date",
+      "status": "Status",
+      "dataEntryStage": "Data entry stage",
+      "openQueries": "Open queries"
+    },
+    "dataEntryStage": {
+      "not-started": "Not started",
+      "data-being-entered": "Being entered",
+      "initial-data-entry-completed": "Entry complete",
+      "validation-completed": "Validated",
+      "locked": "Locked"
+    },
+    "actions": {
+      "downloadCasebook": "Download casebook",
+      "signSubject": "Sign subject"
+    }
+  }
+}

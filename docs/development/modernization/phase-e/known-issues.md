@@ -8,7 +8,9 @@ Each entry should resolve to either:
 
 ---
 
-## 1. `/pages/login/login` returns HTTP 500
+## 1. `/pages/login/login` returns HTTP 500 → HTTP 404 → **RESOLVED 2026-05-30 evening**
+
+**Status as of 2026-05-30 evening:** **RESOLVED.** The Phase 0-D backend agent landed [`fix(phase-e.0): pages dispatcher routing — /pages/login/login + /pages/sso/reauth + JSP context-bean exposure restored`](https://github.com/LuViKu/LibreClinicaMUW/commit/dccfc86e2) on `lc-develop @ dccfc86e2` (tag `phase-e0-pages-dispatcher-fix`, CI green). The fix re-binds the `pages` DispatcherServlet to its `WebMvcConfig` child context, adds an `SsoConfigInterceptor`, and exposes the JSP context beans (`ssoProperties` etc.) so the institutional-SSO button renders correctly. All three URLs from the post-Phase-D validation (`/pages/login/login`, `/pages/sso/reauth`, `/pages/odmk/odm/v1/Studies`) resolve in a browser session. **The narrative below is retained for historical context.** The arc from 500 → diagnosis-corrected 404 → fix is documented in the [post-Phase-D UI validation report](post-phase-d-ui-validation.md); see also the Phase E execution playbook §E.0 update.
 
 **Surfaced:** 2026-05-28, by the compose smoke test fix verification ([commit `b75a2c287`](../../..)).
 **Symptom:** `docker compose up --build` deploys the WAR successfully; `curl -I http://127.0.0.1:8080/LibreClinica/` returns `HTTP 302 Location: /LibreClinica/pages/login/login`; following the redirect (`curl -L`) yields **HTTP 500** with a 6 165-byte error body.

@@ -329,10 +329,127 @@ Each entry specifies the sidecar config and the `LIBRECLINICA_SSO_*` env var val
 
 ---
 
+## DR-008 — UI framework for Phase E: Vue 3
+
+**Date:** 2026-05-30
+**Status:** **Accepted.** Settled without the E.1 bake-off; reasoning below.
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** [DR-002](#dr-002--full-backend-re-platform-not-incremental-modernization), [DR-004](#dr-004--clinical-use-deferred-until-modernization-completes), [DR-005](#dr-005--muw-ophthalmology-branding-applied), Phase E execution playbook §E.1
+
+**Context.** Phase E replaces 413 JSPs + Prototype.js 1.6 + jQuery 1.9 + a GWT-compiled menu with a modern SPA. The three candidates short-listed in 2026-05-28 planning were React 19, Vue 3.4, and Svelte 5. The Phase E execution playbook's E.1 sub-phase originally timeboxed a two-week bake-off to score the candidates against the Investigator Subject Matrix mockup. The bake-off is now waived; the team commits to Vue 3 directly.
+
+### Decision
+
+**Vue 3.4+ with `<script setup>` Composition API, TypeScript strict mode, Vite 5, Pinia for state, vue-i18n for DE/EN, Tailwind v4 for styling.**
+
+Vendored fonts. Frontend Maven Plugin wires `pnpm build` into `mvn package`. SPA bundle lands at `web/src/main/webapp/app/`.
+
+### Why Vue, not React or Svelte
+
+1. **The existing mockups port more naturally.** All 18 Phase E mockups are already structured as HTML+Tailwind. Vue Single File Component templates accept that markup near-verbatim; the migration is "paste into `<template>`, gradually add `v-for` / `v-if` / `v-model`." React requires JSX rewrites of every screen — `class=` to `className=`, attribute renaming, fragment wrapping. Estimated 2–3 weeks of unproductive translation cost recovered.
+2. **Form-heavy clinical work matches Vue's strengths.** The single highest-value, highest-risk screen is CRF Data Entry (964 LOC of dynamic field generation in the legacy JSP). Vue's `v-model` two-way binding maps directly to "field value ↔ model field", exactly what each CRF row needs. In React, the same pattern requires per-input ceremony or an additional library (React Hook Form / TanStack Form), adding a runtime + a maintenance surface for the 5–10 year clinical lifetime.
+3. **Smaller surface to audit for a GCP-validated UI.** Vue's reactivity is one mechanism. React requires understanding hook rules, memoisation, render cycles, Strict-Mode double-renders. For a clinical-data system where a regulatory inspector may ask "why did this screen re-render?", Vue's model is simpler to defend in the institutional validation plan.
+4. **Approachable for a backend-heavy team.** The lead developer's primary stack is Java/Spring/Hibernate. Vue's `<script setup>` + Composition API reads more like imperative code than React's hooks-everywhere model. Lower mental tax per component for the person carrying the project; the team has been small-and-stable, and is likely to stay that way.
+5. **Svelte rejected.** Significantly smaller hiring pool, smaller ecosystem for the dense-table + accessibility primitives Phase E needs (SDV table + Audit Log are non-trivial), Svelte 5's runes are still settling into community practice.
+
+### Why not React (the runner-up)
+
+- **Institutional hiring pool** is React's primary win. This argument would dominate if the team were larger or expected to churn — but the team has been small-and-stable and is likely to stay that way.
+- **Dense-table ecosystem** (TanStack Table, AG Grid React) is excellent but not materially better than Vue equivalents — TanStack Table ships for Vue 3 with full feature parity; AG Grid Vue is production-grade; PrimeVue covers the headless-component surface.
+- **Tailwind + headless-component patterns** (Radix UI, React Aria) are React-leaning, but Vue 3 has analogous coverage via Headless UI Vue, Radix Vue, and PrimeVue. Not a differentiator for our component surface.
+
+### Why no bake-off
+
+Two reasons:
+1. **The differences are real but not catastrophic.** Either framework would ship a working Phase E. The cost of the bake-off (two weeks × the implementation cost of the Subject Matrix in both frameworks + scoring overhead) exceeds the marginal information gained by a team that has already discussed the tradeoffs.
+2. **The institutional team has decided.** The bake-off was a risk-reduction mechanism for a team without a strong prior. The team has a strong prior: Vue's ergonomics, the existing-mockup port advantage, the smaller audit surface.
+
+Phase E execution playbook §E.1 is updated from "framework bake-off → DR-008" to "Vue 3 scaffolding into the Maven build" — see the playbook update commit landing alongside this DR.
+
+### Stack pin
+
+| Layer | Choice | Reason |
+|---|---|---|
+| Framework | Vue 3.4+ | This DR |
+| Language | TypeScript 5.x (strict) | Audit-friendly; pairs with `<script setup lang="ts">` |
+| Build | Vite 5 | Vue's reference build tool; fastest dev loop |
+| Styling | Tailwind v4 with `@theme` | Native CSS variables; matches the `muw-tokens.css` already drafted |
+| State | Pinia | Vue 3 reference store; smaller surface than Vuex |
+| Routing | vue-router 4 | Reference; supports SSR if Phase E ever needs SEO |
+| i18n | vue-i18n 9 (Composition API) | DE/EN per Phase E.9; integrates with `org.akaza.openclinica.i18n.words` extraction |
+| Forms | Native v-model + Zod for validation | v-model covers 80% of CRF inputs without an extra form library |
+| Testing | Vitest + Vue Test Utils + Playwright | Vitest pairs with Vite; Playwright covers SPA E2E and integrates with the existing `SmokeIT` harness |
+| Component catalogue | Histoire 0.17 | Vue-native; lighter than Storybook 8 for a small primitive set |
+| HTTP | Native `fetch` + thin wrapper; OpenAPI schemas via `openapi-typescript` | Avoids `axios`; OpenAPI schemas auto-generate types from the backend's existing `@RestController` surface |
+
+### Consequences
+
+- Two weeks of E.1 bake-off effort redirected to E.2 (Tailwind production build + design-token lockdown) and the start of E.3 (component library extraction).
+- Phase E execution playbook's R-E1 risk (wrong framework pick discovered after E.4) becomes a known accepted risk: if Vue proves wrong for the CRF Designer screen, the rewrite cost is real (~3 months) but recoverable.
+- Open job-spec text for Phase E reinforcement: *"Vue 3 + TypeScript + Tailwind, healthcare/eCRF context preferred."*
+
+### Revisit triggers
+
+- Vue 3 deprecation announcement (extremely unlikely near-term; Vue's release cadence is conservative).
+- The CRF Designer screen hits a structural Vue limitation during E.7. If this happens, document the limitation, score React / Solid as escape paths, and either escape or accept.
+
+---
+
+## DR-019 — Phase E usability-acceptance bar
+
+**Date:** 2026-05-30
+**Status:** **Accepted.** Sets the quantitative criteria the Phase E.10 usability tests must meet before the SPA is approved for clinical use at MedUni Wien Ophthalmology.
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** [DR-004](#dr-004--clinical-use-deferred-until-modernization-completes), [DR-005](#dr-005--muw-ophthalmology-branding-applied), [DR-008](#dr-008--ui-framework-for-phase-e-vue-3), Phase E execution playbook §§ E.9 + E.10
+
+**Context.** Phase E ships clinician-facing screens that replace the legacy JSP UI. Without an objective acceptance bar, "ready for clinical use" becomes a judgment call by whoever is in the room — risky for a GCP-validated system. DR-019 fixes the bar so the Phase E exit gate is unambiguous.
+
+The test protocol (`docs/development/modernization/phase-e/usability-test-protocol.md`) operationalises this DR.
+
+### Decision — the four-dimension bar
+
+To pass the E.10 acceptance gate, the SPA must clear **all four** dimensions across a panel of ≥5 clinicians per role (Investigator + Monitor + Data Manager — so ≥15 sessions total, ≥45 task attempts).
+
+| Dimension | Target | Source |
+|---|---|---|
+| **Task success rate** | ≥ 80 % of canonical task attempts complete unaided within the time budget | Per-scenario success/fail captured by the observer |
+| **System Usability Scale (SUS)** | Median SUS score ≥ 70 across the panel | Standard 10-item SUS questionnaire, administered after each session |
+| **Critical errors** | **0** per role | Critical error = a flow that could compromise clinical data integrity (wrong subject selected for sign-off, query attached to wrong item, CRF data lost on navigation, etc.). One critical error in any session fails the role gate |
+| **Severe pain points** | ≤ 2 distinct **severe** findings per role across the panel | Severe = a pattern that prevents a non-trivial subset of users from completing the workflow without help, even if the task technically succeeded |
+
+### Why these specific numbers
+
+1. **Task success ≥ 80 %.** Below this, the SPA isn't usable end-to-end for the average study-team member. The 80 % figure is the standard benchmark in clinical-software usability literature (e.g. NIST IR 7741) and matches the bar the Phase D-Sec team's pen-test report used for "ready for clinical use" sign-off.
+2. **SUS ≥ 70.** Standard SUS interpretation places 68 as the median across consumer software, ≥ 70 as "good", ≥ 80 as "excellent". A median ≥ 70 on a clinical-trial-data UI — where users are time-pressed, the data is dense, and the consequences of errors are real — is a meaningful bar.
+3. **Critical errors = 0.** Non-negotiable. A clinical-data system that ever silently writes wrong data is GCP-non-compliant. The protocol's observer checklist enumerates the critical errors per scenario.
+4. **Severe findings ≤ 2 per role.** Allows for two distinct rough edges per role that we then commit to fixing as carry-overs without failing the gate outright — anything more suggests structural rework.
+
+### Sample size justification
+
+Five users per role is the **minimum** Nielsen / NIST guidance for usability testing to surface ≥ 80 % of issues. The protocol allows the institutional team to scale up to seven per role when scheduling permits; the four-dimension bar applies regardless.
+
+### Stopping rules
+
+- **Critical error in any session ⇒ stop that role's testing immediately**, fix the cause, re-test from session 1 of that role.
+- **SUS median < 70 after the first 3 sessions** ⇒ pause + revisit the panel composition / scenarios / interpreter quality before scheduling more sessions.
+- **All four dimensions clear ⇒ role passes.** When all three roles pass, the E.10 gate closes and the SPA enters the institutional GCP-validation cycle.
+
+### Consequences
+
+- The four-dimension bar lands in the institutional validation plan as a documented Phase E exit criterion.
+- The Phase E execution playbook's E.10 success criteria + the closure tag (`phase-e-closure`) reference this DR.
+- The protocol carries enough operational detail (scenarios, scoring rubric, SUS form, observer template) that the next operator can run the sessions without re-deriving the bar.
+
+### Revisit triggers
+
+- A protocol revision after the first round of testing surfaces a dimension that doesn't map cleanly to the SUS / success-rate framework.
+- An institutional QM/GCP reviewer pushes back on the ≥ 80 % / ≥ 70 / 0-critical / ≤ 2-severe numbers — in which case the bar is renegotiated transparently in this DR.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)
-- DR-008 — UI framework for Phase E: React vs. Vue 3 vs. Svelte (decide before Phase E)
 - DR-009 — Spring Authorization Server adoption (replaces deprecated Spring Security OAuth2 — superseded by DR-014's reverse-proxy SSO architecture; close as obsolete)
 - DR-011 — Database connection pool: HikariCP vs. DBCP2 (recommend HikariCP; decide during Phase C)
 - DR-012 — Date/time API: Joda-Time → `java.time` (recommend `java.time`; decide during Phase B)

@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>Edit CRF · Adverse Events · LCDemo · LibreClinica MUW</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { font-family: 'Inter', system-ui, sans-serif; }
+    body { font-feature-settings: "cv11", "ss01", "ss03"; }
+    .icon { width: 16px; height: 16px; stroke-width: 1.75; }
+    .icon-sm { width: 14px; height: 14px; stroke-width: 1.75; }
+    .icon-xs { width: 12px; height: 12px; stroke-width: 1.75; }
+    .req::after { content: '*'; color: #e11d48; margin-left: 2px; }
+    table.dense th, table.dense td { font-size: 12px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 text-sm">
+
+  <!-- Top bar -->
+  <header class="h-12 border-b border-slate-200 bg-white flex items-center px-4 sticky top-0 z-30">
+    <a href="index.html" class="flex items-center gap-2 mr-6 text-slate-900">
+      <svg class="w-7 h-7 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v18M16 3v18M3 8h18M3 16h18" stroke-width="1.5"/></svg>
+      <span class="font-semibold tracking-tight">LibreClinica MUW</span>
+    </a>
+    <nav class="flex items-center gap-1.5 text-xs text-slate-500">
+      <button class="hover:text-slate-900 font-medium text-slate-700">LCDemo</button>
+      <svg class="icon-sm text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg>
+      <a href="dm-build-study.html" class="hover:text-slate-900">Build Study</a>
+      <svg class="icon-sm text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="hover:text-slate-900">CRFs</span>
+      <svg class="icon-sm text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-slate-900 font-medium">Adverse Events · v2.1 (draft)</span>
+    </nav>
+    <div class="ml-auto flex items-center gap-2">
+      <span class="text-xs text-slate-500 inline-flex items-center gap-1">
+        <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>
+        Unsaved changes
+      </span>
+      <button class="px-3 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700">Save draft</button>
+      <button class="px-3 py-1 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium">Publish version</button>
+      <button class="flex items-center gap-2 pl-2 pr-3 py-1 hover:bg-slate-100 rounded-md text-xs ml-2">
+        <span class="w-6 h-6 rounded-full bg-violet-100 text-violet-700 inline-flex items-center justify-center text-[10px] font-semibold">DM</span>
+        <span class="text-slate-700">dm_demo</span>
+        <span class="rounded-full bg-violet-50 text-violet-700 text-[10px] px-1.5 py-0.5 font-medium">Data Manager</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="flex">
+
+    <!-- Left rail: sections -->
+    <aside class="w-56 border-r border-slate-200 bg-slate-50 min-h-[calc(100vh-3rem)] px-3 py-4 text-sm">
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2 px-2.5">Sections</div>
+      <nav class="space-y-0.5">
+        <a href="#" class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
+          <span class="truncate">1 · Cover</span>
+          <span class="text-[10px] text-slate-400 font-mono">3</span>
+        </a>
+        <a href="#" class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md bg-blue-50 text-blue-700 font-medium">
+          <span class="truncate">2 · AE Details</span>
+          <span class="text-[10px] text-blue-700 font-mono">9</span>
+        </a>
+        <a href="#" class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
+          <span class="truncate">3 · Treatment</span>
+          <span class="text-[10px] text-slate-400 font-mono">5</span>
+        </a>
+        <a href="#" class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
+          <span class="truncate">4 · Outcome</span>
+          <span class="text-[10px] text-slate-400 font-mono">4</span>
+        </a>
+        <button class="w-full mt-2 flex items-center gap-2 px-2.5 py-1.5 rounded-md text-blue-600 hover:bg-blue-50 text-xs">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+          Add section
+        </button>
+      </nav>
+
+      <hr class="my-4 border-slate-200" />
+
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2 px-2.5">Validation</div>
+      <ul class="space-y-1 text-xs px-1">
+        <li class="flex items-center gap-1.5 text-emerald-700">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+          21 items mapped
+        </li>
+        <li class="flex items-center gap-1.5 text-amber-700">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+          2 items without OID
+        </li>
+        <li class="flex items-center gap-1.5 text-slate-600">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+          5 rules attached
+        </li>
+      </ul>
+    </aside>
+
+    <!-- Main: item-grid designer -->
+    <main class="flex-1 px-8 py-6 min-w-0">
+
+      <!-- CRF metadata bar -->
+      <div class="bg-white border border-slate-200 rounded-lg p-4 mb-4 grid grid-cols-12 gap-4">
+        <div class="col-span-4">
+          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">CRF name</label>
+          <input type="text" value="Adverse Events" class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Version</label>
+          <div class="flex items-center gap-2">
+            <input type="text" value="2.1" class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+            <span class="inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 text-[11px] font-medium">Draft</span>
+          </div>
+        </div>
+        <div class="col-span-3">
+          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">OID</label>
+          <input type="text" value="F_ADVERSE_EVENTS_V21" class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm font-mono focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+        </div>
+        <div class="col-span-3">
+          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Replaces</label>
+          <select class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm bg-white">
+            <option>Adverse Events v2.0 (current)</option>
+            <option>None — new CRF</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Section header -->
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <div class="text-xs text-slate-500 mb-0.5">Section 2 of 4</div>
+          <h1 class="text-lg font-semibold tracking-tight">AE Details</h1>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+            Section settings
+          </button>
+          <button class="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            Preview as Investigator
+          </button>
+        </div>
+      </div>
+
+      <!-- Item grid -->
+      <div class="bg-white border border-slate-200 rounded-lg overflow-hidden mb-4">
+        <table class="dense w-full text-left">
+          <thead class="bg-slate-50 text-xs text-slate-600">
+            <tr class="border-b border-slate-200">
+              <th class="px-2 py-2 w-8"></th>
+              <th class="px-3 py-2 font-medium">Label</th>
+              <th class="px-3 py-2 font-medium w-44">OID</th>
+              <th class="px-3 py-2 font-medium w-32">Response type</th>
+              <th class="px-3 py-2 font-medium w-32">Validation</th>
+              <th class="px-3 py-2 font-medium w-16 text-center">Req</th>
+              <th class="px-3 py-2 font-medium w-16 text-center">SDV</th>
+              <th class="px-3 py-2 font-medium w-12 text-right"></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-100">
+
+            <!-- ItemGroup header: non-repeating -->
+            <tr class="bg-slate-50/70">
+              <td colspan="8" class="px-3 py-1.5 text-[11px] uppercase tracking-wider text-slate-500 font-semibold flex items-center gap-2">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 12 15 18 9"/></svg>
+                Group · Header (non-repeating)
+              </td>
+            </tr>
+
+            <tr class="hover:bg-slate-50">
+              <td class="px-2 text-slate-300 cursor-move" title="Drag to reorder">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg>
+              </td>
+              <td class="px-3 py-2">
+                <input type="text" value="Date of AE onset" class="w-full px-2 py-1 border border-slate-200 rounded text-sm hover:border-slate-300 focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2 font-mono text-xs text-slate-600">
+                <input type="text" value="ae_onset_date" class="w-full px-2 py-1 border border-slate-200 rounded text-xs hover:border-slate-300 focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2">
+                <select class="w-full px-2 py-1 border border-slate-200 rounded text-xs bg-white">
+                  <option>Date (dd-MMM-yyyy)</option>
+                </select>
+              </td>
+              <td class="px-3 py-2 text-xs text-slate-500">≤ today</td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" checked class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" checked class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-right text-slate-400 hover:text-slate-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></td>
+            </tr>
+
+            <tr class="hover:bg-slate-50">
+              <td class="px-2 text-slate-300 cursor-move"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></td>
+              <td class="px-3 py-2">
+                <input type="text" value="Reported by" class="w-full px-2 py-1 border border-slate-200 rounded text-sm hover:border-slate-300 focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2 font-mono text-xs text-slate-600">
+                <input type="text" value="ae_reported_by" class="w-full px-2 py-1 border border-slate-200 rounded text-xs hover:border-slate-300 focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2">
+                <select class="w-full px-2 py-1 border border-slate-200 rounded text-xs bg-white">
+                  <option>Text (single line)</option>
+                </select>
+              </td>
+              <td class="px-3 py-2 text-xs text-slate-400">—</td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" checked class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-right text-slate-400 hover:text-slate-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></td>
+            </tr>
+
+            <!-- ItemGroup header: repeating -->
+            <tr class="bg-amber-50/40">
+              <td colspan="8" class="px-3 py-1.5 text-[11px] uppercase tracking-wider text-amber-800 font-semibold flex items-center gap-2">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 12 15 18 9"/></svg>
+                Group · AE Event <span class="font-normal italic">(repeating — investigator can add up to 10 instances)</span>
+                <button class="ml-auto text-amber-700 hover:underline">Edit group</button>
+              </td>
+            </tr>
+
+            <tr class="hover:bg-slate-50">
+              <td class="px-2 text-slate-300 cursor-move"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></td>
+              <td class="px-3 py-2">
+                <input type="text" value="Description (verbatim)" class="w-full px-2 py-1 border border-slate-200 rounded text-sm hover:border-slate-300 focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2 font-mono text-xs text-slate-600">
+                <input type="text" value="ae_description" class="w-full px-2 py-1 border border-slate-200 rounded text-xs hover:border-slate-300 focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2">
+                <select class="w-full px-2 py-1 border border-slate-200 rounded text-xs bg-white">
+                  <option>Text (multi-line)</option>
+                </select>
+              </td>
+              <td class="px-3 py-2 text-xs text-slate-500">max 500 chars</td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" checked class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" checked class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-right text-slate-400 hover:text-slate-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></td>
+            </tr>
+
+            <!-- Selected/focused item -->
+            <tr class="bg-blue-50/40 ring-1 ring-blue-200">
+              <td class="px-2 text-blue-400 cursor-move"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></td>
+              <td class="px-3 py-2">
+                <input type="text" value="Severity" class="w-full px-2 py-1 border border-blue-300 rounded text-sm bg-white focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2 font-mono text-xs text-slate-600">
+                <input type="text" value="ae_severity" class="w-full px-2 py-1 border border-blue-300 rounded text-xs bg-white focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2">
+                <select class="w-full px-2 py-1 border border-blue-300 rounded text-xs bg-white">
+                  <option>Single select</option>
+                  <option>Multi select</option>
+                  <option>Radio (horizontal)</option>
+                </select>
+              </td>
+              <td class="px-3 py-2 text-xs text-slate-500">CTCAE 1–5</td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" checked class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" checked class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-right">
+                <button class="text-blue-600"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 12 15 18 9"/></svg></button>
+              </td>
+            </tr>
+
+            <tr class="hover:bg-slate-50">
+              <td class="px-2 text-slate-300 cursor-move"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></td>
+              <td class="px-3 py-2">
+                <input type="text" value="Related to study drug?" class="w-full px-2 py-1 border border-slate-200 rounded text-sm hover:border-slate-300 focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2 font-mono text-xs text-slate-600">
+                <input type="text" value="ae_related" class="w-full px-2 py-1 border border-slate-200 rounded text-xs hover:border-slate-300 focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2">
+                <select class="w-full px-2 py-1 border border-slate-200 rounded text-xs bg-white">
+                  <option>Single select</option>
+                </select>
+              </td>
+              <td class="px-3 py-2 text-xs text-slate-500">5-level scale</td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" checked class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" checked class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-right text-slate-400 hover:text-slate-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></td>
+            </tr>
+
+            <!-- Item with warning -->
+            <tr class="hover:bg-slate-50">
+              <td class="px-2 text-slate-300 cursor-move"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/></svg></td>
+              <td class="px-3 py-2">
+                <input type="text" value="Concomitant medication" class="w-full px-2 py-1 border border-slate-200 rounded text-sm hover:border-slate-300 focus:border-blue-500 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2">
+                <input type="text" placeholder="OID required" class="w-full px-2 py-1 border border-amber-400 rounded text-xs bg-amber-50 placeholder:text-amber-700 focus:outline-none" />
+              </td>
+              <td class="px-3 py-2">
+                <select class="w-full px-2 py-1 border border-slate-200 rounded text-xs bg-white">
+                  <option>Text (single line)</option>
+                </select>
+              </td>
+              <td class="px-3 py-2 text-xs text-slate-400">—</td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-center"><input type="checkbox" class="rounded text-blue-600" /></td>
+              <td class="px-3 py-2 text-right text-slate-400 hover:text-slate-700"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg></td>
+            </tr>
+
+          </tbody>
+        </table>
+
+        <div class="border-t border-slate-200 bg-slate-50 px-3 py-2 flex items-center justify-between">
+          <button class="px-2.5 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded-md inline-flex items-center gap-1.5 font-medium">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+            Add item
+          </button>
+          <div class="flex items-center gap-2">
+            <button class="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+              Add group
+            </button>
+            <button class="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1">
+              <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
+              Import items (Excel)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live preview strip -->
+      <div class="bg-white border border-slate-200 rounded-lg p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">Live preview · Investigator view</h2>
+          <span class="text-[11px] text-slate-500">Updates as you edit on the left</span>
+        </div>
+        <div class="bg-slate-50 border border-slate-200 rounded-md p-4 max-w-xl">
+          <div class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">AE Details · AE Event 1 of 1</div>
+          <div class="space-y-3">
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Description (verbatim) *</label>
+              <textarea rows="2" class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs" placeholder="500 chars max"></textarea>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Severity *</label>
+              <select class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white">
+                <option>— select —</option>
+                <option>1 — Mild</option>
+                <option>2 — Moderate</option>
+                <option>3 — Severe</option>
+                <option>4 — Life-threatening</option>
+                <option>5 — Death</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-700 mb-1">Related to study drug? *</label>
+              <select class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-xs bg-white">
+                <option>— select —</option>
+                <option>Definitely</option>
+                <option>Probably</option>
+                <option>Possibly</option>
+                <option>Unlikely</option>
+                <option>Not related</option>
+              </select>
+            </div>
+          </div>
+          <button class="mt-3 text-xs text-blue-600 hover:underline">+ Add another AE Event</button>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- Right panel: response set / rules editor -->
+    <aside class="w-80 border-l border-slate-200 bg-white min-h-[calc(100vh-3rem)] p-4 text-sm">
+
+      <div class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Editing item</div>
+      <div class="font-semibold text-slate-900 mb-0.5">Severity</div>
+      <div class="font-mono text-[11px] text-slate-500 mb-4">ae_severity</div>
+
+      <!-- Tabs -->
+      <div class="flex items-center gap-1 mb-4 text-xs border-b border-slate-200">
+        <button class="px-2 py-1.5 border-b-2 border-blue-600 text-blue-700 font-medium">Response set</button>
+        <button class="px-2 py-1.5 text-slate-500 hover:text-slate-700">Rules</button>
+        <button class="px-2 py-1.5 text-slate-500 hover:text-slate-700">i18n</button>
+      </div>
+
+      <!-- Response set editor -->
+      <div class="space-y-2 mb-4">
+        <div class="grid grid-cols-12 gap-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">
+          <span class="col-span-3">Code</span>
+          <span class="col-span-8">Label</span>
+        </div>
+        <div class="grid grid-cols-12 gap-1">
+          <input type="text" value="1" class="col-span-3 px-2 py-1 border border-slate-200 rounded text-xs font-mono" />
+          <input type="text" value="Mild" class="col-span-8 px-2 py-1 border border-slate-200 rounded text-xs" />
+          <button class="col-span-1 text-slate-400 hover:text-rose-600"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        </div>
+        <div class="grid grid-cols-12 gap-1">
+          <input type="text" value="2" class="col-span-3 px-2 py-1 border border-slate-200 rounded text-xs font-mono" />
+          <input type="text" value="Moderate" class="col-span-8 px-2 py-1 border border-slate-200 rounded text-xs" />
+          <button class="col-span-1 text-slate-400 hover:text-rose-600"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        </div>
+        <div class="grid grid-cols-12 gap-1">
+          <input type="text" value="3" class="col-span-3 px-2 py-1 border border-slate-200 rounded text-xs font-mono" />
+          <input type="text" value="Severe" class="col-span-8 px-2 py-1 border border-slate-200 rounded text-xs" />
+          <button class="col-span-1 text-slate-400 hover:text-rose-600"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        </div>
+        <div class="grid grid-cols-12 gap-1">
+          <input type="text" value="4" class="col-span-3 px-2 py-1 border border-slate-200 rounded text-xs font-mono" />
+          <input type="text" value="Life-threatening" class="col-span-8 px-2 py-1 border border-slate-200 rounded text-xs" />
+          <button class="col-span-1 text-slate-400 hover:text-rose-600"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        </div>
+        <div class="grid grid-cols-12 gap-1">
+          <input type="text" value="5" class="col-span-3 px-2 py-1 border border-slate-200 rounded text-xs font-mono" />
+          <input type="text" value="Death" class="col-span-8 px-2 py-1 border border-slate-200 rounded text-xs" />
+          <button class="col-span-1 text-slate-400 hover:text-rose-600"><svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>
+        </div>
+        <button class="text-xs text-blue-600 hover:underline inline-flex items-center gap-1 mt-1">
+          <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+          Add option
+        </button>
+      </div>
+
+      <hr class="my-4 border-slate-200" />
+
+      <!-- Properties -->
+      <div class="space-y-3">
+        <div>
+          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Help text</label>
+          <textarea rows="2" class="w-full px-2 py-1.5 border border-slate-300 rounded-md text-xs">CTCAE v5.0 grading scale. Use clinical judgement.</textarea>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2">
+          <label class="flex items-center gap-1.5 text-xs">
+            <input type="checkbox" class="rounded text-blue-600" checked />
+            <span>Required</span>
+          </label>
+          <label class="flex items-center gap-1.5 text-xs">
+            <input type="checkbox" class="rounded text-blue-600" checked />
+            <span>SDV target</span>
+          </label>
+          <label class="flex items-center gap-1.5 text-xs">
+            <input type="checkbox" class="rounded text-blue-600" />
+            <span>PHI sensitive</span>
+          </label>
+          <label class="flex items-center gap-1.5 text-xs">
+            <input type="checkbox" class="rounded text-blue-600" />
+            <span>Read-only after entry</span>
+          </label>
+        </div>
+      </div>
+
+      <hr class="my-4 border-slate-200" />
+
+      <!-- Compatibility warning -->
+      <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-900 flex items-start gap-2">
+        <svg class="icon-sm mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+        <span><strong>Backward-incompatible change:</strong> v2.0 used codes 1–4. Existing data for code 5 will need migration before publish.</span>
+      </div>
+    </aside>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>Sign in · LibreClinica MUW</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { font-family: 'Inter', system-ui, sans-serif; }
+    body { font-feature-settings: "cv11", "ss01", "ss03"; }
+    .icon { width: 16px; height: 16px; stroke-width: 1.75; }
+    .icon-sm { width: 14px; height: 14px; stroke-width: 1.75; }
+    .req::after { content: '*'; color: #e11d48; margin-left: 2px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 text-sm min-h-screen">
+
+  <!-- Mockup note bar at the top -->
+  <div class="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-900 flex items-center justify-between">
+    <div class="flex items-center gap-2">
+      <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span><strong>Mockup:</strong> two login states shown side-by-side. <em>Left:</em> normal sign-in. <em>Right:</em> first-login forced password change. In production only one would render at a time.</span>
+    </div>
+    <a href="index.html" class="text-amber-900 hover:underline">Back to mockup index &rsaquo;</a>
+  </div>
+
+  <div class="grid grid-cols-2 min-h-[calc(100vh-2.5rem)]">
+
+    <!-- Left: normal login -->
+    <section class="flex flex-col items-center justify-center px-6 py-12 bg-white border-r border-slate-200">
+
+      <div class="w-full max-w-sm">
+
+        <!-- Brand lockup -->
+        <div class="text-center mb-8">
+          <div class="inline-flex items-center gap-2 mb-3">
+            <svg class="w-10 h-10 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v18M16 3v18M3 8h18M3 16h18" stroke-width="1.5"/></svg>
+            <span class="text-xl font-semibold tracking-tight">LibreClinica MUW</span>
+          </div>
+          <p class="text-xs text-slate-500 leading-relaxed">
+            Department of Ophthalmology and Optometry<br/>
+            Medical University of Vienna
+          </p>
+        </div>
+
+        <h1 class="text-lg font-semibold tracking-tight mb-1">Sign in</h1>
+        <p class="text-xs text-slate-500 mb-5">Use your institutional credentials.</p>
+
+        <!-- Inline error (example) -->
+        <div class="mb-3 rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-800 flex items-start gap-2">
+          <svg class="icon-sm mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+          <span>Account locked after 3 failed attempts. Contact a study administrator to unlock.</span>
+        </div>
+
+        <form class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1 req">Username</label>
+            <input type="text" autofocus
+              class="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+          </div>
+
+          <div>
+            <div class="flex items-baseline justify-between mb-1">
+              <label class="block text-xs font-medium text-slate-700 req">Password</label>
+              <a href="#" class="text-[11px] text-blue-600 hover:underline">Forgot password?</a>
+            </div>
+            <div class="relative">
+              <input type="password"
+                class="w-full px-3 py-2 pr-9 border border-slate-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+              <button type="button" class="absolute right-2 top-1.5 p-1 hover:bg-slate-100 rounded text-slate-500" title="Show password">
+                <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="w-full px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium inline-flex items-center justify-center gap-1.5">
+            Sign in
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+
+          <div class="relative my-5">
+            <div class="absolute inset-0 flex items-center"><div class="w-full border-t border-slate-200"></div></div>
+            <div class="relative flex justify-center"><span class="bg-white px-2 text-[11px] uppercase tracking-wider text-slate-400">or</span></div>
+          </div>
+
+          <button type="button" class="w-full px-4 py-2 text-sm border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 font-medium inline-flex items-center justify-center gap-2">
+            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/></svg>
+            Continue with MUW LDAP
+          </button>
+        </form>
+
+        <!-- Footer chips -->
+        <div class="mt-8 flex items-center justify-center gap-2 text-[11px] text-slate-400">
+          <span>Version 1.4.0rc1-muw</span>
+          <span>·</span>
+          <a href="#" class="hover:text-slate-600">Terms</a>
+          <span>·</span>
+          <a href="#" class="hover:text-slate-600">Privacy</a>
+          <span>·</span>
+          <select class="bg-transparent">
+            <option>English</option>
+            <option>Deutsch</option>
+            <option>Français</option>
+            <option>Español</option>
+          </select>
+        </div>
+
+        <div class="mt-3 rounded-md bg-blue-50 border border-blue-100 px-3 py-2 text-[11px] text-blue-900 flex items-start gap-2">
+          <svg class="icon-sm mt-0.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          <span>This is a GCP / 21 CFR Part 11 compliant clinical-data system. All actions are audited.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Right: forced password change (first login) -->
+    <section class="flex flex-col items-center justify-center px-6 py-12 bg-slate-50">
+
+      <div class="w-full max-w-sm">
+
+        <!-- Stepper -->
+        <ol class="flex items-center gap-2 text-[11px] mb-6">
+          <li class="flex items-center gap-1.5 text-blue-700 font-medium">
+            <span class="w-5 h-5 rounded-full bg-blue-600 text-white inline-flex items-center justify-center font-semibold">1</span>
+            Set password
+          </li>
+          <span class="flex-1 h-px bg-slate-300"></span>
+          <li class="flex items-center gap-1.5 text-slate-500">
+            <span class="w-5 h-5 rounded-full border border-slate-300 bg-white inline-flex items-center justify-center text-slate-500 font-semibold">2</span>
+            Enrol 2FA
+          </li>
+          <span class="flex-1 h-px bg-slate-300"></span>
+          <li class="flex items-center gap-1.5 text-slate-500">
+            <span class="w-5 h-5 rounded-full border border-slate-300 bg-white inline-flex items-center justify-center text-slate-500 font-semibold">3</span>
+            Accept terms
+          </li>
+        </ol>
+
+        <h1 class="text-lg font-semibold tracking-tight mb-1">Set a new password</h1>
+        <p class="text-xs text-slate-500 mb-5">
+          Signed in as <span class="font-mono text-slate-900">user_demo</span> ·
+          last reset by admin <span class="text-slate-700">25-May-2026</span>. Change required on first login.
+        </p>
+
+        <form class="space-y-4">
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1 req">Current (temporary) password</label>
+            <input type="password" value="LibreClinica" readonly
+              class="w-full px-3 py-2 border border-slate-300 rounded-md bg-slate-100 text-slate-500" />
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1 req">New password</label>
+            <input type="password" placeholder="At least 8 characters"
+              class="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+
+            <!-- Strength meter -->
+            <div class="mt-2">
+              <div class="grid grid-cols-4 gap-1.5">
+                <div class="h-1 rounded bg-emerald-500"></div>
+                <div class="h-1 rounded bg-emerald-500"></div>
+                <div class="h-1 rounded bg-emerald-500"></div>
+                <div class="h-1 rounded bg-slate-200"></div>
+              </div>
+              <div class="mt-1 text-[11px] text-emerald-700 font-medium">Strong — good to go</div>
+            </div>
+
+            <ul class="mt-2 space-y-1 text-[11px]">
+              <li class="flex items-center gap-1.5 text-emerald-700">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+                ≥ 8 characters
+              </li>
+              <li class="flex items-center gap-1.5 text-emerald-700">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+                Includes a number and a symbol
+              </li>
+              <li class="flex items-center gap-1.5 text-emerald-700">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+                Mix of upper- and lowercase letters
+              </li>
+              <li class="flex items-center gap-1.5 text-slate-500">
+                <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+                Not one of your last 5 passwords
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <label class="block text-xs font-medium text-slate-700 mb-1 req">Confirm new password</label>
+            <input type="password"
+              class="w-full px-3 py-2 border border-slate-300 rounded-md focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+          </div>
+
+          <!-- Security question -->
+          <div class="rounded-md border border-slate-200 bg-white p-3 space-y-2">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Account recovery</div>
+            <div>
+              <label class="block text-xs text-slate-700 mb-1 req">Security question</label>
+              <select class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm bg-white">
+                <option>What was the name of your first pet?</option>
+                <option>In what city were you born?</option>
+                <option>Custom question…</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs text-slate-700 mb-1 req">Answer</label>
+              <input type="text"
+                class="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+            </div>
+          </div>
+
+          <button type="submit" class="w-full px-4 py-2 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium inline-flex items-center justify-center gap-1.5">
+            Save and continue to 2FA enrolment
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="5" x2="19" y1="12" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+
+          <p class="text-[11px] text-slate-500 text-center">
+            You cannot return to the application until this step is complete.
+          </p>
+        </form>
+      </div>
+    </section>
+
+  </div>
+
+</body>
+</html>

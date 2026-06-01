@@ -1,0 +1,152 @@
+/*
+ * MUW LibreClinica — Global tokens + primitives
+ * Companion to muw-tailwind-config.js.
+ *
+ * Loaded once per page. Anything page-specific stays inline in that page's
+ * <style> block. This file is for tokens, typography defaults, and tiny
+ * primitives used in every mockup (.icon, .req, .muw-logo).
+ */
+
+/* === Tokens as CSS custom properties (mirror of Tailwind palette) ============ */
+:root {
+  --muw-blue:         #111d4e;
+  --muw-blue-50:      #f3f4f9;
+  --muw-blue-100:     #e3e6ef;
+  --muw-blue-200:     #c6cce0;
+  --muw-blue-600:     #243366;
+  --muw-blue-700:     #1a2658;
+
+  --muw-sky:          #5fb4e5;
+  --muw-sky-50:       #e7f3fb;
+  --muw-sky-100:      #cfe8f6;
+  --muw-sky-700:      #1d6c98;
+
+  --muw-teal:         #2f8e91;
+  --muw-teal-50:      #e4f2ef;
+  --muw-teal-100:     #c8e5df;
+  --muw-teal-700:     #1d595c;
+
+  --muw-coral:        #f0a794;
+  --muw-coral-50:     #fdf0eb;
+  --muw-coral-100:    #fce1d8;
+  --muw-coral-600:    #d96849;
+  --muw-coral-700:    #b04a30;
+
+  /* Coral 40 % — used by MUW for info-heavy backgrounds */
+  --muw-coral-40-bg:  #fad9cd;
+
+  /* Semantic non-MUW (kept neutral for accessibility) */
+  --warn-700:         #b45309;
+  --warn-50:          #fef3c7;
+  --danger-700:       #b91c1c;
+  --danger-50:        #fef2f2;
+
+  --type-display:     'Newsreader', Georgia, 'Times New Roman', serif;
+  --type-ui:          'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* === Page defaults ========================================================== */
+html, body {
+  font-family: var(--type-ui);
+  font-feature-settings: "cv11", "ss01", "ss03";
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Serif accent — applied to .font-serif, page <h1>s, and the brand wordmark */
+.font-serif,
+.muw-display {
+  font-family: var(--type-display);
+  font-feature-settings: normal;
+  letter-spacing: -0.012em;
+  font-variation-settings: "opsz" 36;
+}
+
+/* === Inline-SVG icon sizing (used everywhere) =============================== */
+.icon     { width: 16px; height: 16px; stroke-width: 1.75; }
+.icon-sm  { width: 14px; height: 14px; stroke-width: 1.75; }
+.icon-lg  { width: 20px; height: 20px; stroke-width: 1.6; }
+.icon-xl  { width: 24px; height: 24px; stroke-width: 1.5; }
+
+/* Required-field asterisk */
+.req::after {
+  content: '*';
+  color: var(--danger-700);
+  margin-left: 2px;
+  font-weight: 500;
+}
+
+/* === Brand wordmark ========================================================= */
+/* Usage:
+   <a href="…" class="muw-brand">
+     <svg class="muw-mark">…</svg>
+     <span class="muw-wordmark">LibreClinica <em>MUW</em></span>
+   </a>
+*/
+.muw-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--muw-blue);
+  text-decoration: none;
+}
+.muw-mark {
+  width: 28px;
+  height: 28px;
+  color: var(--muw-blue);
+  flex-shrink: 0;
+}
+.muw-wordmark {
+  font-family: var(--type-display);
+  font-weight: 600;
+  font-size: 1.0625rem;
+  letter-spacing: -0.015em;
+  color: var(--muw-blue);
+  line-height: 1;
+  white-space: nowrap;
+}
+.muw-wordmark em {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--muw-coral-700);
+  margin-left: 0.18em;
+  letter-spacing: 0.04em;
+  font-size: 0.78em;
+  text-transform: uppercase;
+  font-family: var(--type-ui);
+}
+
+/* === Focus ring (consistent across inputs, buttons, links) ================== */
+.muw-focus:focus,
+.muw-focus:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(17, 29, 78, 0.18);
+  border-color: var(--muw-blue) !important;
+}
+
+/* === Subtle "siegel" accent — used by section header underlines ============= */
+.muw-rule {
+  display: block;
+  width: 32px;
+  height: 2px;
+  background: var(--muw-coral);
+  border-radius: 999px;
+}
+
+/* === Status pill primitive (used as fallback; most pills are still inline) == */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+}

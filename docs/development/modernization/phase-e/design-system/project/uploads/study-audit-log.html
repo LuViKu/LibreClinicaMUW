@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1440" />
+  <title>Study Audit Log · LCDemo · LibreClinica MUW</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    html, body { font-family: 'Inter', system-ui, sans-serif; }
+    body { font-feature-settings: "cv11", "ss01", "ss03"; }
+    .icon { width: 16px; height: 16px; stroke-width: 1.75; }
+    .icon-sm { width: 14px; height: 14px; stroke-width: 1.75; }
+    .icon-xs { width: 12px; height: 12px; stroke-width: 1.75; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 text-sm">
+
+  <!-- Top bar -->
+  <header class="h-12 border-b border-slate-200 bg-white flex items-center px-4 sticky top-0 z-30">
+    <a href="index.html" class="flex items-center gap-2 mr-6 text-slate-900">
+      <svg class="w-7 h-7 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3v18M16 3v18M3 8h18M3 16h18" stroke-width="1.5"/></svg>
+      <span class="font-semibold tracking-tight">LibreClinica MUW</span>
+    </a>
+    <nav class="flex items-center gap-1.5 text-xs text-slate-500">
+      <button class="hover:text-slate-900 font-medium text-slate-700">LCDemo</button>
+      <svg class="icon-sm text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></svg>
+      <span class="text-slate-900 font-medium">Study Audit Log</span>
+    </nav>
+
+    <!-- Role switcher (mockup-only) -->
+    <div class="ml-6 flex items-center gap-1 text-xs">
+      <span class="text-slate-400 mr-1">View as:</span>
+      <button class="px-2 py-1 rounded text-slate-600 hover:bg-slate-100">Investigator</button>
+      <button class="px-2 py-1 rounded bg-sky-50 text-sky-800 font-medium">Monitor</button>
+      <button class="px-2 py-1 rounded text-slate-600 hover:bg-slate-100">Data Manager</button>
+    </div>
+
+    <div class="ml-auto flex items-center gap-2">
+      <button class="flex items-center gap-2 pl-2 pr-3 py-1 hover:bg-slate-100 rounded-md text-xs">
+        <span class="w-6 h-6 rounded-full bg-sky-100 text-sky-700 inline-flex items-center justify-center text-[10px] font-semibold">MD</span>
+        <span class="text-slate-700">monitor_demo</span>
+        <span class="rounded-full bg-sky-50 text-sky-700 text-[10px] px-1.5 py-0.5 font-medium">Monitor</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="flex">
+    <!-- Side rail -->
+    <aside class="w-56 border-r border-slate-200 bg-slate-50 min-h-[calc(100vh-3rem)] px-3 py-4 text-sm">
+      <nav class="space-y-0.5">
+        <a href="#" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+          Home
+        </a>
+        <a href="monitor-sdv.html" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Source Data Verification
+        </a>
+        <a href="notes-discrepancies.html" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 15a4 4 0 0 0 4 4h12V5a2 2 0 0 0-2-2H8a4 4 0 0 0-4 4z"/></svg>
+          Notes & Discrepancies
+        </a>
+        <a href="view-events.html" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/></svg>
+          View Events
+        </a>
+        <a href="#" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md bg-blue-50 text-blue-700 font-medium">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+          Study Audit Log
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Main -->
+    <main class="flex-1 px-8 py-6">
+
+      <div class="flex items-end justify-between mb-4">
+        <div>
+          <div class="text-xs text-slate-500 mb-1">LCDemo · all sites · regulatory history</div>
+          <h1 class="text-xl font-semibold tracking-tight">Study Audit Log</h1>
+          <p class="text-xs text-slate-500 mt-0.5">
+            Every data change, sign-off, lock, role grant, and CRF version migration. Immutable. Used by the
+            Monitor for SDV, by the sponsor for regulatory inspection. Filters narrow the view; nothing is
+            ever hidden.
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+            Export (CSV)
+          </button>
+          <button class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5">
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>
+            Export (PDF · regulatory)
+          </button>
+        </div>
+      </div>
+
+      <!-- Activity summary cards -->
+      <section class="mb-5 grid grid-cols-5 gap-2">
+        <div class="rounded-lg border border-slate-200 p-3 bg-white">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold">Events today</div>
+          <div class="mt-1 text-2xl font-semibold text-slate-900">42</div>
+          <div class="text-xs text-slate-500">vs 31 yesterday</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 p-3 bg-white">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>Data edits
+          </div>
+          <div class="mt-1 text-2xl font-semibold text-slate-900">28</div>
+          <div class="text-xs text-slate-500">9 with reason-for-change</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 p-3 bg-white">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>Sign-offs
+          </div>
+          <div class="mt-1 text-2xl font-semibold text-slate-900">3</div>
+          <div class="text-xs text-slate-500">1 re-sign after edit</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 p-3 bg-white">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span>SDV verifications
+          </div>
+          <div class="mt-1 text-2xl font-semibold text-slate-900">8</div>
+          <div class="text-xs text-slate-500">monitor_demo · 6</div>
+        </div>
+        <div class="rounded-lg border border-slate-200 p-3 bg-white">
+          <div class="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-violet-500"></span>Admin actions
+          </div>
+          <div class="mt-1 text-2xl font-semibold text-slate-900">3</div>
+          <div class="text-xs text-slate-500">1 user role grant, 2 CRF reset</div>
+        </div>
+      </section>
+
+      <!-- Filter bar -->
+      <div class="bg-white border border-slate-200 rounded-lg px-4 py-3 mb-4 grid grid-cols-12 gap-3 text-xs">
+        <div class="col-span-3">
+          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Date range</label>
+          <div class="flex items-center gap-1">
+            <input type="text" value="01-May-2026" class="w-full px-2 py-1.5 border border-slate-300 rounded-md text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+            <span class="text-slate-400">→</span>
+            <input type="text" value="28-May-2026" class="w-full px-2 py-1.5 border border-slate-300 rounded-md text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+          </div>
+        </div>
+        <div class="col-span-2">
+          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">User</label>
+          <select class="w-full px-2 py-1.5 border border-slate-300 rounded-md text-xs bg-white">
+            <option>All users</option>
+            <option>user_demo</option>
+            <option>monitor_demo</option>
+            <option>dm_demo</option>
+          </select>
+        </div>
+        <div class="col-span-2">
+          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Action type</label>
+          <select class="w-full px-2 py-1.5 border border-slate-300 rounded-md text-xs bg-white">
+            <option>All actions</option>
+            <option>Data edit (Reason for change)</option>
+            <option>Sign-off</option>
+            <option>SDV</option>
+            <option>Admin</option>
+          </select>
+        </div>
+        <div class="col-span-2">
+          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Subject</label>
+          <input type="text" placeholder="e.g. M-001" class="w-full px-2 py-1.5 border border-slate-300 rounded-md text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-100 focus:outline-none" />
+        </div>
+        <div class="col-span-2">
+          <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Site</label>
+          <select class="w-full px-2 py-1.5 border border-slate-300 rounded-md text-xs bg-white">
+            <option>All sites</option>
+            <option>München</option>
+            <option>Wien</option>
+          </select>
+        </div>
+        <div class="col-span-1 flex items-end gap-1">
+          <button class="flex-1 px-2 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700">Clear</button>
+          <button class="flex-1 px-2 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700">Apply</button>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 mb-3 text-xs">
+        <div class="text-slate-500">Showing 18 of 1 287 events</div>
+        <div class="ml-auto flex items-center gap-1">
+          <button class="px-2 py-1 rounded-md bg-blue-50 text-blue-700 font-medium">Timeline</button>
+          <button class="px-2 py-1 rounded-md text-slate-600 hover:bg-slate-100">Table</button>
+        </div>
+      </div>
+
+      <!-- Timeline -->
+      <div class="relative pl-8">
+        <div class="absolute left-3 top-2 bottom-0 w-px bg-slate-200"></div>
+
+        <!-- Date marker -->
+        <div class="relative flex items-center mb-3 -ml-8">
+          <div class="w-6 h-6 rounded-full bg-white border border-slate-300 inline-flex items-center justify-center z-10">
+            <svg class="icon-xs text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="18" height="18" x="3" y="4" rx="2"/></svg>
+          </div>
+          <div class="ml-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Today · 28-May-2026</div>
+        </div>
+
+        <!-- Sign-off event -->
+        <article class="relative mb-3 -ml-8 flex gap-3">
+          <div class="w-6 h-6 rounded-full bg-emerald-100 inline-flex items-center justify-center z-10 shrink-0 mt-2">
+            <svg class="icon-sm text-emerald-700" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          </div>
+          <div class="flex-1 bg-white border border-slate-200 rounded-lg p-3 hover:border-slate-300">
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-slate-900">Subject sign-off</span>
+                <span class="inline-flex items-center gap-1 rounded-full bg-emerald-50 text-emerald-700 px-2 py-0.5 text-[11px] font-medium">M-001</span>
+                <span class="text-slate-500">by</span>
+                <span class="font-mono text-slate-700">user_demo</span>
+                <span class="rounded-full bg-emerald-50 text-emerald-700 text-[10px] px-1.5 py-0.5 font-medium">Investigator</span>
+              </div>
+              <span class="text-slate-500 font-mono">15:42:08 CEST</span>
+            </div>
+            <p class="text-xs text-slate-600 mt-1.5">Electronic signature recorded for subject M-001. All 11 CRFs locked against site edit. IP 10.0.4.21 · München</p>
+            <div class="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
+              <button class="hover:text-blue-600 hover:underline inline-flex items-center gap-1">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                View signature record
+              </button>
+              <span>·</span>
+              <span>Audit ID: <span class="font-mono">aud-7821</span></span>
+            </div>
+          </div>
+        </article>
+
+        <!-- Reason for change event -->
+        <article class="relative mb-3 -ml-8 flex gap-3">
+          <div class="w-6 h-6 rounded-full bg-violet-100 inline-flex items-center justify-center z-10 shrink-0 mt-2">
+            <svg class="icon-sm text-violet-700" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+          </div>
+          <div class="flex-1 bg-white border border-slate-200 rounded-lg p-3 hover:border-slate-300">
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-slate-900">Data edit · Reason for change</span>
+                <span class="font-mono text-slate-600">M-001 · Adverse Events · event_severity</span>
+                <span class="text-slate-500">by</span>
+                <span class="font-mono text-slate-700">user_demo</span>
+              </div>
+              <span class="text-slate-500 font-mono">14:31:55 CEST</span>
+            </div>
+            <div class="mt-2 grid grid-cols-2 gap-3 text-xs">
+              <div class="bg-rose-50 border border-rose-200 rounded p-2">
+                <div class="text-[10px] uppercase tracking-wider text-rose-700 font-semibold">Before</div>
+                <div class="font-mono text-rose-900 mt-0.5">Severe</div>
+              </div>
+              <div class="bg-emerald-50 border border-emerald-200 rounded p-2">
+                <div class="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">After</div>
+                <div class="font-mono text-emerald-900 mt-0.5">Moderate</div>
+              </div>
+            </div>
+            <p class="text-xs text-slate-600 italic mt-2">"Re-graded after consult with PI. Original entry erroneously logged Grade 3 instead of Grade 2."</p>
+          </div>
+        </article>
+
+        <!-- SDV event -->
+        <article class="relative mb-3 -ml-8 flex gap-3">
+          <div class="w-6 h-6 rounded-full bg-sky-100 inline-flex items-center justify-center z-10 shrink-0 mt-2">
+            <svg class="icon-sm text-sky-700" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div class="flex-1 bg-white border border-slate-200 rounded-lg p-3 hover:border-slate-300">
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-slate-900">SDV verified</span>
+                <span class="font-mono text-slate-600">M-002 · V1 Inclusion · Demographics</span>
+                <span class="text-slate-500">by</span>
+                <span class="font-mono text-slate-700">monitor_demo</span>
+                <span class="rounded-full bg-sky-50 text-sky-700 text-[10px] px-1.5 py-0.5 font-medium">Monitor</span>
+              </div>
+              <span class="text-slate-500 font-mono">11:08:14 CEST</span>
+            </div>
+            <p class="text-xs text-slate-600 mt-1.5">All 12 items in CRF verified against source documents during on-site visit.</p>
+          </div>
+        </article>
+
+        <!-- Admin action -->
+        <article class="relative mb-3 -ml-8 flex gap-3">
+          <div class="w-6 h-6 rounded-full bg-amber-100 inline-flex items-center justify-center z-10 shrink-0 mt-2">
+            <svg class="icon-sm text-amber-700" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33"/></svg>
+          </div>
+          <div class="flex-1 bg-white border border-slate-200 rounded-lg p-3 hover:border-slate-300">
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-slate-900">Admin · CRF reset</span>
+                <span class="font-mono text-slate-600">M-003 · Vitals (sign reverted)</span>
+                <span class="text-slate-500">by</span>
+                <span class="font-mono text-slate-700">dm_demo</span>
+                <span class="rounded-full bg-violet-50 text-violet-700 text-[10px] px-1.5 py-0.5 font-medium">Data Manager</span>
+              </div>
+              <span class="text-slate-500 font-mono">09:54:31 CEST</span>
+            </div>
+            <p class="text-xs text-slate-600 italic mt-1.5">"Investigator needs to correct data entry error in vital signs. Sign-off reverted per SOP-04-12."</p>
+            <div class="mt-2 text-[11px] text-amber-700 inline-flex items-center gap-1">
+              <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+              Subject M-003 sign-off requires re-attestation after edit.
+            </div>
+          </div>
+        </article>
+
+        <!-- Date marker -->
+        <div class="relative flex items-center mb-3 -ml-8 mt-6">
+          <div class="w-6 h-6 rounded-full bg-white border border-slate-300 inline-flex items-center justify-center z-10">
+            <svg class="icon-xs text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect width="18" height="18" x="3" y="4" rx="2"/></svg>
+          </div>
+          <div class="ml-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Yesterday · 27-May-2026</div>
+        </div>
+
+        <article class="relative mb-3 -ml-8 flex gap-3">
+          <div class="w-6 h-6 rounded-full bg-blue-100 inline-flex items-center justify-center z-10 shrink-0 mt-2">
+            <svg class="icon-sm text-blue-700" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7Z"/></svg>
+          </div>
+          <div class="flex-1 bg-white border border-slate-200 rounded-lg p-3 hover:border-slate-300">
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-slate-900">Data entry · CRF marked complete</span>
+                <span class="font-mono text-slate-600">M-001 · V3 Day 90 · Final Visit Summary</span>
+                <span class="text-slate-500">by</span>
+                <span class="font-mono text-slate-700">user_demo</span>
+              </div>
+              <span class="text-slate-500 font-mono">16:11:09 CEST</span>
+            </div>
+            <p class="text-xs text-slate-600 mt-1.5">14 items entered, 0 failed validations, 0 queries.</p>
+          </div>
+        </article>
+
+        <article class="relative mb-3 -ml-8 flex gap-3">
+          <div class="w-6 h-6 rounded-full bg-rose-100 inline-flex items-center justify-center z-10 shrink-0 mt-2">
+            <svg class="icon-sm text-rose-700" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 15a4 4 0 0 0 4 4h12V5a2 2 0 0 0-2-2H8a4 4 0 0 0-4 4z"/></svg>
+          </div>
+          <div class="flex-1 bg-white border border-slate-200 rounded-lg p-3 hover:border-slate-300">
+            <div class="flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="font-medium text-slate-900">Query opened</span>
+                <span class="font-mono text-slate-600">M-001 · Demographics · date_einverst</span>
+                <span class="text-slate-500">by</span>
+                <span class="font-mono text-slate-700">monitor_demo</span>
+              </div>
+              <span class="text-slate-500 font-mono">14:02:33 CEST</span>
+            </div>
+            <p class="text-xs text-slate-600 italic mt-1.5">"Source document shows 05-Oct-2020 — please verify."</p>
+          </div>
+        </article>
+
+        <div class="-ml-8 pl-9 pt-2 text-center">
+          <button class="text-xs text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1">
+            Load 1 269 earlier events
+            <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+</body>
+</html>

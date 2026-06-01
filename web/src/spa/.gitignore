@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.histoire-output/
+.vite/
+coverage/
+playwright-report/
+test-results/
+
+# Tooling caches
+.eslintcache
+*.tsbuildinfo
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# pnpm leaves a lockfile + workspace metadata; commit lockfile so reproducible
+# builds work in CI. Don't commit per-user pnpm temp dirs.
+.pnpm-debug.log
+.pnpm-store/
