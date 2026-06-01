@@ -1,21 +1,30 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import type { DiscrepancyNote, NoteStatus, NoteType } from '@/types/note'
 
 /**
- * Phase E.6 — Discrepancy-notes store.
+ * Phase E.6 + E.4 M7 — Discrepancy-notes store.
  *
- * Backs the NotesDiscrepanciesView. Mock-hydrated; the planned adapter
- * lives at `GET /pages/api/v1/discrepancies` per api-surface.md row 7.
+ * Backs the NotesDiscrepanciesView. Hydrates from
+ * `GET /pages/api/v1/discrepancies` (the M7 adapter); the optional
+ * `assignedTo` / `subjectId` / `status` query params let the server
+ * narrow the SQL before the response ships. Filter state mirrors the
+ * legacy session-scoped JSP context: status, type, free text,
+ * only-assigned-to-me. Client-side filters are applied on top of
+ * whatever the server returns so the UX stays responsive without a
+ * round-trip per keypress.
  *
- * Filter state mirrors the legacy session-scoped JSP context: status,
- * type, free text, only-assigned-to-me. The "assigned-to-me" flag uses
- * the currentUser from a future auth store; for now we pass it in via
- * the `me` ref.
+ * Mock removal — per the polished-jumping-swan plan's "hard removal"
+ * policy: the previous `loadMock()` helper + 7-row MOCK constant are
+ * deleted in this PR. If the backend is unreachable the store sets
+ * `error` so the view can render an explicit message rather than
+ * silently displaying stale demo data.
  */
 export const useNotesStore = defineStore('notes', () => {
   const rows = ref<DiscrepancyNote[]>([])
   const isLoading = ref(false)
+  const isSubmitting = ref(false)
   const error = ref<string | null>(null)
 
   const query = ref('')
@@ -77,18 +86,66 @@ export const useNotesStore = defineStore('notes', () => {
     isLoading.value = true
     error.value = null
     try {
-      // TODO(E.4): apiGet<DiscrepancyNote[]>('/pages/api/v1/discrepancies?...').
-      rows.value = await loadMock()
+      rows.value = await apiGet<DiscrepancyNote[]>('/pages/api/v1/discrepancies')
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Unknown error loading discrepancies'
+      rows.value = []
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Discrepancies können nicht geladen werden. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Fehler beim Laden der Discrepancies (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Laden der Discrepancies.'
+      }
     } finally {
       isLoading.value = false
+    }
+  }
+
+  async function add(input: {
+    subjectId: string
+    itemOid: string
+    description: string
+    assignedTo?: string | null
+  }): Promise<DiscrepancyNote | null> {
+    isSubmitting.value = true
+    error.value = null
+    try {
+      const created = await apiPost<DiscrepancyNote>('/pages/api/v1/discrepancies', {
+        subjectId: input.subjectId,
+        itemOid: input.itemOid,
+        description: input.description,
+        assignedTo: input.assignedTo ?? null,
+      })
+      rows.value = [created, ...rows.value]
+      return created
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Query kann nicht angelegt werden. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Anlegen fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Anlegen.'
+      }
+      return null
+    } finally {
+      isSubmitting.value = false
     }
   }
 
   return {
     rows,
     isLoading,
+    isSubmitting,
     error,
     query,
     statusFilter,
@@ -102,24 +159,6 @@ export const useNotesStore = defineStore('notes', () => {
     openTypeTotals,
     clearFilters,
     load,
+    add,
   }
 })
-
-/* -------------------------------------------------------------------------- */
-/* Mock loader                                                                */
-/* -------------------------------------------------------------------------- */
-
-async function loadMock(): Promise<DiscrepancyNote[]> {
-  await new Promise((resolve) => setTimeout(resolve, 30))
-  return MOCK
-}
-
-const MOCK: DiscrepancyNote[] = [
-  { id: 'n-001', type: 'query',             status: 'new',                 subjectId: 'M-001', itemOid: 'date_einverst',    description: 'Source document shows 05-Oct-2020 — please verify and correct if needed.', assignedTo: 'user_demo',    daysOpen: 2, lastActivityAt: '2026-05-28T14:02:33Z' },
-  { id: 'n-002', type: 'query',             status: 'updated',             subjectId: 'M-001', itemOid: 'weight_kg',        description: 'Out-of-range value 155 — confirmed correct by site.', assignedTo: 'monitor_demo', daysOpen: 5, lastActivityAt: '2026-05-25T09:11:00Z' },
-  { id: 'n-003', type: 'query',             status: 'resolution-proposed', subjectId: 'M-002', itemOid: 'consent_signed',   description: 'Annotated and reconciled with paper form.', assignedTo: 'monitor_demo', daysOpen: 7, lastActivityAt: '2026-05-23T10:30:00Z' },
-  { id: 'n-004', type: 'failed-validation', status: 'new',                 subjectId: 'M-002', itemOid: 'vials_dispensed',  description: 'Must be 0–240 — entered 250.', assignedTo: 'user_demo',    daysOpen: 3, lastActivityAt: '2026-05-27T15:00:00Z' },
-  { id: 'n-005', type: 'annotation',        status: 'not-applicable',      subjectId: 'M-001', itemOid: 'ekg_normal',       description: 'EKG-Bericht abgelegt unter ID 4421.', assignedTo: null,          daysOpen: 0, lastActivityAt: '2026-05-29T11:00:00Z' },
-  { id: 'n-006', type: 'reason-for-change', status: 'not-applicable',      subjectId: 'M-003', itemOid: 'enrolment_date',   description: 'Corrected after CRF completion: transposition typo.', assignedTo: null,          daysOpen: 0, lastActivityAt: '2026-05-30T08:00:00Z' },
-  { id: 'n-007', type: 'query',             status: 'closed',              subjectId: 'M-003', itemOid: 'height_cm',        description: 'Reconciled with source — closed.', assignedTo: null,          daysOpen: 0, lastActivityAt: '2026-05-22T12:00:00Z' },
-]

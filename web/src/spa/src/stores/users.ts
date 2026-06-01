@@ -1,12 +1,21 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
 import type { StudyUser, UserAuth, UserRole } from '@/types/user'
 
 /**
- * Phase E.7 — Study-users store.
+ * Phase E.7 + E.4 M12 — Study-users store.
  *
- * Mock-hydrated; the planned adapter sits at
- * `GET /pages/api/v1/users?siteOid=…&role=…` per api-surface.md row 12.
+ * Hydrates from `GET /pages/api/v1/users` (the M12 adapter). Filter
+ * state mirrors the legacy "Manage Users" controls; the client-side
+ * filters layer on top of whatever the server returns so dropdown
+ * changes don't trigger a round-trip per keypress.
+ *
+ * Mock removal — per the polished-jumping-swan plan's hard-removal
+ * policy: the previous `loadMock()` helper + 7-row MOCK fixture
+ * are deleted in this PR. If the backend is unreachable the store
+ * sets `error` so the view can render an explicit message rather
+ * than silently displaying stale demo data.
  */
 export const useUsersStore = defineStore('users', () => {
   const rows = ref<StudyUser[]>([])
@@ -47,9 +56,21 @@ export const useUsersStore = defineStore('users', () => {
     isLoading.value = true
     error.value = null
     try {
-      rows.value = await loadMock()
+      rows.value = await apiGet<StudyUser[]>('/pages/api/v1/users')
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Unknown error loading users'
+      rows.value = []
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Nutzer können nicht geladen werden. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Fehler beim Laden der Nutzer (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Laden der Nutzer.'
+      }
     } finally {
       isLoading.value = false
     }
@@ -71,18 +92,3 @@ export const useUsersStore = defineStore('users', () => {
     load,
   }
 })
-
-async function loadMock(): Promise<StudyUser[]> {
-  await new Promise((resolve) => setTimeout(resolve, 30))
-  return MOCK
-}
-
-const MOCK: StudyUser[] = [
-  { id: 'u-1', username: 'm.mueller',    displayName: 'Dr. Maria Müller',     email: 'm.mueller@meduniwien.ac.at', role: 'Investigator',  siteLabel: 'München', auth: 'sso',     lastLoginAt: '2026-05-30T08:14:00Z', active: true },
-  { id: 'u-2', username: 'k.huber',      displayName: 'Dr. Karl Huber',       email: 'k.huber@meduniwien.ac.at',   role: 'Investigator',  siteLabel: 'Wien',    auth: 'sso',     lastLoginAt: '2026-05-29T16:05:00Z', active: true },
-  { id: 'u-3', username: 'monitor_demo', displayName: 'Mona Demo',            email: 'mona@example.org',           role: 'Monitor',       siteLabel: null,      auth: 'local',   lastLoginAt: '2026-05-30T09:08:00Z', active: true },
-  { id: 'u-4', username: 'dm_demo',      displayName: 'Dora Manager',         email: 'dora@meduniwien.ac.at',      role: 'Data Manager',  siteLabel: null,      auth: 'sso',     lastLoginAt: '2026-05-30T11:00:00Z', active: true },
-  { id: 'u-5', username: 'crc_muenchen', displayName: 'Lisa Koordinator',     email: 'l.koordinator@example.org',  role: 'CRC',           siteLabel: 'München', auth: 'local',   lastLoginAt: '2026-05-25T13:45:00Z', active: true },
-  { id: 'u-6', username: 's.legacy',     displayName: 'Sieglinde Legacy',     email: 's.legacy@meduniwien.ac.at',  role: 'Investigator',  siteLabel: 'Wien',    auth: 'ldap',    lastLoginAt: '2025-12-12T08:30:00Z', active: false },
-  { id: 'u-7', username: 'pending.fritz', displayName: 'Fritz Berger (pending)', email: 'f.berger@meduniwien.ac.at', role: 'Investigator',  siteLabel: 'München', auth: 'pending-invite', lastLoginAt: null, active: true },
-]
