@@ -100,3 +100,47 @@ export interface SubjectDetail extends Omit<Subject, 'events'> {
   /** Richer per-event metadata (dateStart, location, dataEntryStage). */
   events: EventCellDetail[]
 }
+
+/**
+ * Phase E.4 M3 + M8 — sign-preflight wire types.
+ *
+ * Mirrors the backend `SignPreflightDto` byte-for-byte. The five
+ * `id`-keyed checks correspond to the regulatory rules the M3
+ * controller computes from `study_event` / `event_crf` /
+ * `discrepancy_note` state plus the current user's role:
+ *
+ *  - `events-complete`     — all scheduled events have data
+ *  - `crfs-complete`       — all required CRFs marked complete
+ *  - `open-queries`        — warn-only, never blocks
+ *  - `subject-not-signed`  — subject hasn't been signed yet
+ *  - `user-role-can-sign`  — user is Investigator or Study Director
+ *
+ * `status` is `'pass'` / `'warn'` / `'fail'`. The M8 view collapses
+ * these to `'pass'` / `'warn'` / `'blocker'` for the
+ * {@link ConfirmationWithPreflight} primitive — see
+ * `SignSubjectView.vue` for the mapping.
+ */
+export interface PreflightCheck {
+  /** Stable id; SPA keys off this. */
+  id:
+    | 'events-complete'
+    | 'crfs-complete'
+    | 'open-queries'
+    | 'subject-not-signed'
+    | 'user-role-can-sign'
+  status: 'pass' | 'warn' | 'fail'
+  title: string
+  detail: string
+}
+
+export interface SignPreflight {
+  checks: PreflightCheck[]
+  /** Number of `status === 'fail'` rows (including subject-not-signed). */
+  blockingFailures: number
+  /** Number of `status === 'warn'` rows. */
+  warnings: number
+  /** Convenience flag — true if the subject's status is already SIGNED. */
+  subjectAlreadySigned: boolean
+  /** Convenience flag — true if the user's role is Investigator or Study Director. */
+  userRoleCanSign: boolean
+}

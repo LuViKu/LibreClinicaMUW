@@ -399,7 +399,14 @@
     "casebookHeading": "Subject casebook — to be attested",
     "casebookPdf": "Download PDF preview",
     "submitLabel": "Sign subject {id}",
-    "signedToast": "{id} signed. Returning to the Subject Matrix…",
+    "signedToast": "{id} signed. Opening the subject detail page…",
+    "error": {
+      "passwordRequired": "Password is required to record the e-signature.",
+      "badPassword": "Password does not match — signature not recorded.",
+      "alreadySigned": "Subject is already signed — signing is a one-way action.",
+      "preflightBlocked": "Pre-flight checks block this sign action — resolve the failed checks first.",
+      "unknown": "Could not record the signature — please try again."
+    },
     "attestation": "By signing below, I, {name} (Investigator, site {site}), attest that to the best of my knowledge the data captured for subject {id} is complete, accurate, and reflects the source documents. This electronic signature is recorded in the regulatory audit log per ICH-GCP and 21 CFR Part 11 §11.50.",
     "acknowledgement": "I understand that signing locks all CRFs against further edit by site personnel until an administrator reset.",
     "column": {

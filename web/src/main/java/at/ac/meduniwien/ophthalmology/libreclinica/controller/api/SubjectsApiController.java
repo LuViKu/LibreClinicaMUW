@@ -37,6 +37,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDe
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
@@ -48,6 +49,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -116,10 +120,13 @@ public class SubjectsApiController {
     private static final Logger LOG = LoggerFactory.getLogger(SubjectsApiController.class);
 
     private final DataSource dataSource;
+    private final SecurityManager securityManager;
 
     @Autowired
-    public SubjectsApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public SubjectsApiController(@Qualifier("dataSource") DataSource dataSource,
+                                 @Qualifier("securityManager") SecurityManager securityManager) {
         this.dataSource = dataSource;
+        this.securityManager = securityManager;
     }
 
     @GetMapping
@@ -285,6 +292,50 @@ public class SubjectsApiController {
             ));
         }
 
+        SignPreflightDto out = computePreflight(ss, currentStudy, currentRole, currentUser);
+
+        LOG.debug("Sign-preflight for {} (study {}, user {}): {} blocking, {} warnings",
+                ss.getOid(), currentStudy.getOid(), currentUser.getName(),
+                out.blockingFailures(), out.warnings());
+
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Phase E.4 M3 + M8 — shared preflight computation.
+     *
+     * <p>Extracted so both the {@code GET /preflightForSign} endpoint
+     * (M3 — read-only inspection) and the {@code POST /sign} endpoint
+     * (M8 — gating check before persistence) consume the same five
+     * named checks. The M3 endpoint serialises the result verbatim; the
+     * M8 endpoint inspects {@link SignPreflightDto#blockingFailures()}
+     * to decide whether to proceed (and explicitly tolerates the
+     * {@code subject-not-signed} fail because the converse is the
+     * EXPECTED state when invoking sign — see M8 brief).
+     *
+     * <p>Check semantics (per M3 + the mockup at
+     * {@code docs/development/modernization/phase-e/ux-mockups/investigator-sign-subject.html}):
+     * <ul>
+     *   <li>{@code events-complete} — pass if all scheduled events
+     *       (status ∈ {4, 8}); warn if any in-progress (3); fail if any
+     *       still scheduled with no data (1).</li>
+     *   <li>{@code crfs-complete} — pass if all event_crfs have a
+     *       date_completed; warn if some in initial data entry; fail
+     *       if zero CRFs started.</li>
+     *   <li>{@code open-queries} — warn-only (open queries do NOT
+     *       block signing per the mockup).</li>
+     *   <li>{@code subject-not-signed} — pass if not yet signed; fail
+     *       if already signed. M8 ignores this fail when computing the
+     *       proceed/abort decision (signing requires this to be a
+     *       pass — but the unsigned state is the precondition, not a
+     *       blocker, for the sign action itself).</li>
+     *   <li>{@code user-role-can-sign} — pass if Investigator or
+     *       Study Director; fail otherwise.</li>
+     * </ul>
+     */
+    private SignPreflightDto computePreflight(StudySubjectBean ss, StudyBean currentStudy,
+                                              StudyUserRoleBean currentRole,
+                                              UserAccountBean currentUser) {
         StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
         EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
 
@@ -456,18 +507,13 @@ public class SubjectsApiController {
             else if ("warn".equals(c.status())) warnings++;
         }
 
-        SignPreflightDto out = new SignPreflightDto(
+        return new SignPreflightDto(
                 checks,
                 blocking,
                 warnings,
                 alreadySigned,
                 canSign
         );
-
-        LOG.debug("Sign-preflight for {} (study {}, user {}): {} blocking, {} warnings",
-                ss.getOid(), currentStudy.getOid(), currentUser.getName(), blocking, warnings);
-
-        return ResponseEntity.ok(out);
     }
 
     /**
@@ -613,6 +659,352 @@ public class SubjectsApiController {
                 ssb.getId(), ssb.getOid(), ssb.getLabel(), currentStudy.getOid(), currentUser.getName());
 
         return ResponseEntity.status(201).body(dto);
+    }
+
+    /**
+     * Phase E.4 M8 — Sign Subject endpoint.
+     *
+     * <p>Records a regulatory e-signature on the subject and flips the
+     * subject + every event + every event_crf into the SIGNED state in
+     * one (best-effort transactional) JDBC connection.
+     *
+     * <p><strong>Signature event:</strong> For first-cut M8, password
+     * re-entry is the §11.50 signature event. DR-014's proxy-mediated
+     * SSO reauth is production-deferred per its memo; local password
+     * reauth is the path everywhere this codebase has shipped so far.
+     * The {@code attestation} flag is the click-through "I understand
+     * this is binding" acknowledgment surfaced in
+     * {@code ESignatureBlock.vue}.
+     *
+     * <p><strong>Persistence sequence</strong> (matches the legacy
+     * {@code SignStudySubjectServlet#processRequest} reference plus the
+     * extra event_crf flip the M8 brief requires):
+     * <ol>
+     *   <li>Update {@code study_subject} status to SIGNED (status_id=8),
+     *       date_updated NOW, update_id current user. The
+     *       {@code study_subject_trigger} PL/pgSQL function fires on
+     *       UPDATE and inserts {@code audit_log_event_type_id=3}
+     *       ("Study subject status changed") automatically — we do NOT
+     *       write the audit row from Java; the DB trigger owns it.</li>
+     *   <li>Update every {@code event_crf} for this subject to
+     *       status_id=8, electronic_signature_status=true,
+     *       date_validate_completed=NOW, validator_id=user,
+     *       date_updated=NOW, update_id=user. The {@code event_crf_trigger}
+     *       function only writes audit rows for specific status
+     *       transitions (1→2, 1→4, 4→2, 11); the 1→8 / 4→8 transitions
+     *       are silent. That matches the legacy behaviour — the
+     *       study_subject status-change row is the canonical audit
+     *       evidence for the signing event.</li>
+     *   <li>Update every {@code study_event} for this subject whose
+     *       {@code subject_event_status_id ∈ {3, 4}} (data entry
+     *       started, data entry completed) to status=8 SIGNED.
+     *       Not-scheduled (2) and scheduled-but-empty (1) are left
+     *       untouched — the legacy
+     *       {@code SignStudySubjectServlet#signSubjectEvents} flips ALL
+     *       events to SIGNED regardless of prior state, but per the M8
+     *       brief we honour the more conservative {3,4} restriction so
+     *       SS_M005's V3 "scheduled" event doesn't silently jump to
+     *       signed without ever having data.</li>
+     * </ol>
+     *
+     * <p><strong>Preflight reuse:</strong> The M3
+     * {@link #computePreflight} helper is invoked verbatim. If any
+     * check reports {@code status: "fail"} other than
+     * {@code subject-not-signed} — which is the EXPECTED converse of a
+     * sign action — the endpoint returns 412 with the failed checks as
+     * the body. Open queries are warnings, not blockers, per the
+     * mockup.
+     *
+     * <p><strong>Security:</strong>
+     * <ul>
+     *   <li>Never log the raw password from the request body. Log lines
+     *       only carry the subject OID + the authenticated user's name.</li>
+     *   <li>Password compare uses {@link SecurityManager#verifyPassword}
+     *       which delegates to the {@code DaoAuthenticationProvider}'s
+     *       {@code PasswordEncoder#matches} — same path the
+     *       {@code OpenClinicaUsernamePasswordAuthenticationFilter} uses
+     *       at login. Never compare hashes via {@code String.equals}.</li>
+     *   <li>Bad-password 401 leaks nothing about whether the user is
+     *       even authenticated — the chain-level
+     *       {@code .anyRequest().hasRole("USER")} gate has already
+     *       verified that.</li>
+     * </ul>
+     *
+     * @param studySubjectOid path-style OID like {@code "SS_M005"}
+     * @param body password + attestation; required
+     * @param session HTTP session (study + user bean)
+     * @return 200 + updated {@link SubjectDetailDto} on success;
+     *         400 if attestation is false or body fields are missing;
+     *         401 if password doesn't match;
+     *         403 if the subject isn't in the user's current study;
+     *         404 if the subject doesn't exist anywhere;
+     *         409 if the subject is already signed;
+     *         412 + failed checks if preflight has any non-subject-not-signed
+     *         {@code fail}.
+     */
+    @PostMapping("/{studySubjectOid}/sign")
+    public ResponseEntity<?> sign(@PathVariable("studySubjectOid") String studySubjectOid,
+                                  @RequestBody(required = false) SignSubjectRequest body,
+                                  HttpSession session) {
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session — visit /MainMenu after login."
+            ));
+        }
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+
+        // ---- Body validation (no password / attestation logging) ----
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Request body is required (fields: password, attestation)."
+            ));
+        }
+        if (body.attestation() == null || !body.attestation()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Attestation must be explicitly acknowledged before signing."
+            ));
+        }
+        if (body.password() == null || body.password().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Password is required for e-signature re-authentication."
+            ));
+        }
+
+        // ---- Subject resolution + scope guard ----
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
+        if (ss == null || ss.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Subject with OID '" + studySubjectOid + "' not found."
+            ));
+        }
+        if (ss.getStudyId() != currentStudy.getId()) {
+            // Same scope guard as M3 getOne: subject exists elsewhere →
+            // 403 (no OID leakage across studies).
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Subject is not in the currently active study."
+            ));
+        }
+
+        // ---- Already-signed guard (one-way action) ----
+        if (ss.getStatus() != null && ss.getStatus().equals(Status.SIGNED)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Subject is already signed — signing is a one-way action.",
+                    "studySubjectOid", ss.getOid()
+            ));
+        }
+
+        // ---- Password re-auth ----
+        // We deliberately fetch UserDetails from the SecurityContext
+        // rather than constructing it from the session's UserAccountBean
+        // because the SecurityManager.verifyPassword wraps the call in
+        // an AuthenticationManager round trip — passing a UserDetails
+        // that doesn't match the principal would be an integrity break.
+        UserDetails userDetails = currentUserDetails();
+        if (userDetails == null || !userDetails.getUsername().equals(currentUser.getName())) {
+            // Defence in depth — should never happen because the chain
+            // gate has already authenticated the request. If it does,
+            // refuse rather than open the path.
+            return ResponseEntity.status(401).body(Map.of(
+                    "message", "Could not re-authenticate the current user for signing."
+            ));
+        }
+        if (!securityManager.verifyPassword(body.password(), userDetails)) {
+            // Audit-worthy event — log without the password.
+            LOG.info("Sign Subject: password re-auth failed for user={} subject={} (study {})",
+                    currentUser.getName(), ss.getOid(), currentStudy.getOid());
+            return ResponseEntity.status(401).body(Map.of(
+                    "message", "Password does not match — signature not recorded."
+            ));
+        }
+
+        // ---- Preflight gate (reuse M3 helper) ----
+        SignPreflightDto preflight = computePreflight(ss, currentStudy, currentRole, currentUser);
+        List<SignPreflightDto.CheckRow> blockingFails = new ArrayList<>();
+        for (SignPreflightDto.CheckRow c : preflight.checks()) {
+            // subject-not-signed:fail is the converse precondition of a
+            // sign action — signing requires the subject to be
+            // unsigned. The 409 guard above has already excluded the
+            // already-signed case, so any subject-not-signed:fail at
+            // this point is an unreachable artifact; defensive skip.
+            if (!"fail".equals(c.status())) continue;
+            if ("subject-not-signed".equals(c.id())) continue;
+            blockingFails.add(c);
+        }
+        if (!blockingFails.isEmpty()) {
+            return ResponseEntity.status(412).body(Map.of(
+                    "message", "Preflight blocked the sign action — resolve the failed checks first.",
+                    "failedChecks", blockingFails,
+                    "preflight", preflight
+            ));
+        }
+
+        // ---- Persistence ----
+        try {
+            applySignaturePersistence(ss.getId(), currentUser.getId());
+        } catch (SQLException e) {
+            LOG.error("Sign Subject: persistence failed for subject={} (study {}, user {})",
+                    ss.getOid(), currentStudy.getOid(), currentUser.getName(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "message", "Failed to persist signature — see server log."
+            ));
+        }
+
+        // ---- Audit log ----
+        // The study_subject_trigger PL/pgSQL function inserts the
+        // audit_log_event row automatically when status_id changes; no
+        // Java-side audit write needed. The legacy
+        // SignStudySubjectServlet relies on the same trigger.
+        LOG.info("Sign Subject: signed subject={} by user={} (study {})",
+                ss.getOid(), currentUser.getName(), currentStudy.getOid());
+
+        // ---- Refetch + return ----
+        StudySubjectBean refreshed = studySubjectDAO.findByOid(studySubjectOid);
+        SubjectDAO subjectDAO = new SubjectDAO(dataSource);
+        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
+        StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(dataSource);
+        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
+        SubjectBean subj = subjectDAO.findByPK(refreshed.getSubjectId());
+        Map<Integer, StudyEventDefinitionBean> definitionCache = new HashMap<>();
+        Map<Integer, Integer> openQueriesByEvent = loadOpenQueryCountsForStudy(currentStudy.getId());
+
+        SubjectDetailDto dto = toDetailDto(refreshed, subj, currentStudy, studyEventDAO,
+                studyEventDefinitionDAO, eventCRFDAO, definitionCache, openQueriesByEvent);
+
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * Pull the {@link UserDetails} principal off the
+     * {@link SecurityContextHolder} for password re-auth.
+     *
+     * <p>The principal is set by {@code OpenClinicaUsernamePasswordAuthenticationFilter}
+     * on successful login. Returning {@code null} here means the chain
+     * is mis-configured — the legacy
+     * {@code SecureController#getUserDetails} uses the same lookup.
+     */
+    private static UserDetails currentUserDetails() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return null;
+        Object principal = auth.getPrincipal();
+        return (principal instanceof UserDetails) ? (UserDetails) principal : null;
+    }
+
+    /**
+     * Run the three signature UPDATEs in a single JDBC connection.
+     *
+     * <p>Wrapped in a manual transaction (auto-commit off + commit / rollback)
+     * because the per-DAO connection pattern doesn't compose into a
+     * Spring {@code @Transactional} without first hardening the
+     * data-access layer. The atomic guarantee we need is: either every
+     * row flips to SIGNED or none do. A partial flip would leave the
+     * subject's casebook in an inconsistent state.
+     *
+     * <p>SQL is inline (rather than via the existing DAO {@code update}
+     * methods) for two reasons: (1) the DAO methods cycle their own
+     * connection per call, breaking transaction scope; (2) the legacy
+     * {@code StudySubjectDAO.update} writes seven columns including
+     * label, secondary_label, subject_id etc. — we only want to flip
+     * status. Direct SQL keeps the audit trigger's
+     * {@code OLD.status_id <> NEW.status_id} branch the only firing
+     * condition.
+     *
+     * @param studySubjectId PK of the study_subject row to sign
+     * @param userId         current user's PK (for update_id +
+     *                       validator_id columns)
+     */
+    private void applySignaturePersistence(int studySubjectId, int userId) throws SQLException {
+        try (Connection conn = dataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                // ---- (1) study_subject ----
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE study_subject "
+                                + "   SET status_id = ?, "
+                                + "       date_updated = NOW(), "
+                                + "       update_id = ? "
+                                + " WHERE study_subject_id = ?")) {
+                    ps.setInt(1, Status.SIGNED.getId());
+                    ps.setInt(2, userId);
+                    ps.setInt(3, studySubjectId);
+                    ps.executeUpdate();
+                }
+
+                // ---- (2) event_crf — flip every CRF row for the subject ----
+                // Path: study_event.study_subject_id → event_crf.study_event_id.
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE event_crf "
+                                + "   SET status_id = ?, "
+                                + "       electronic_signature_status = TRUE, "
+                                + "       date_validate_completed = NOW(), "
+                                + "       validator_id = ?, "
+                                + "       date_updated = NOW(), "
+                                + "       update_id = ? "
+                                + " WHERE study_event_id IN ("
+                                + "         SELECT study_event_id FROM study_event WHERE study_subject_id = ?"
+                                + "       )")) {
+                    ps.setInt(1, Status.SIGNED.getId());
+                    ps.setInt(2, userId);
+                    ps.setInt(3, userId);
+                    ps.setInt(4, studySubjectId);
+                    ps.executeUpdate();
+                }
+
+                // ---- (3) study_event — flip data-entry-started + completed events ----
+                // subject_event_status_id ∈ {3, 4} → 8 SIGNED. Per the M8
+                // brief we don't touch scheduled-but-empty (1) or
+                // not-scheduled (2) events — see method JavaDoc.
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE study_event "
+                                + "   SET subject_event_status_id = ?, "
+                                + "       date_updated = NOW(), "
+                                + "       update_id = ? "
+                                + " WHERE study_subject_id = ? "
+                                + "   AND subject_event_status_id IN (3, 4)")) {
+                    ps.setInt(1, 8); // SubjectEventStatus.SIGNED
+                    ps.setInt(2, userId);
+                    ps.setInt(3, studySubjectId);
+                    ps.executeUpdate();
+                }
+
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        }
+    }
+
+    /**
+     * Request body for {@link #sign(String, SignSubjectRequest, HttpSession)}.
+     *
+     * <p>{@code password} carries the user's plaintext local password
+     * (over HTTPS in production; the SPA never persists it client-side).
+     * {@code attestation} must be explicitly {@code true}; sending false
+     * or omitting the field is a 400.
+     *
+     * <p><strong>SECURITY:</strong> The controller MUST NEVER log
+     * {@code password()}. Toast / audit messages reference subject OID +
+     * authenticated username only.
+     */
+    public record SignSubjectRequest(
+            String password,
+            Boolean attestation
+    ) {
+        @Override
+        public String toString() {
+            // Defence against accidental log-line interpolation —
+            // toString never leaks the password even if someone writes
+            // `LOG.info("body = {}", body)`.
+            return "SignSubjectRequest{password=*REDACTED*, attestation=" + attestation + "}";
+        }
     }
 
     /**

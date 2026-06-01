@@ -399,7 +399,14 @@
     "casebookHeading": "Casebook des Teilnehmers — zu bestätigen",
     "casebookPdf": "PDF-Vorschau",
     "submitLabel": "Teilnehmer {id} signieren",
-    "signedToast": "{id} signiert. Rückkehr zur Übersicht…",
+    "signedToast": "{id} signiert. Öffne die Probandendetail-Seite…",
+    "error": {
+      "passwordRequired": "Passwort ist erforderlich, um die E-Signatur zu protokollieren.",
+      "badPassword": "Passwort stimmt nicht überein — Signatur nicht erfasst.",
+      "alreadySigned": "Proband bereits signiert — die Signatur ist nicht widerrufbar.",
+      "preflightBlocked": "Pre-Flight-Prüfungen blockieren diese Signatur — bitte zuerst die fehlgeschlagenen Prüfungen klären.",
+      "unknown": "Signatur konnte nicht erfasst werden — bitte erneut versuchen."
+    },
     "attestation": "Mit der untenstehenden Signatur erkläre ich, {name} (Prüfarzt/-ärztin, Standort {site}), dass die für Teilnehmer {id} erfassten Daten nach bestem Wissen vollständig, korrekt und mit den Quelldokumenten übereinstimmend sind. Die elektronische Signatur wird gemäß ICH-GCP und 21 CFR Part 11 §11.50 im Audit Trail dokumentiert.",
     "acknowledgement": "Ich verstehe, dass die Signatur alle CRFs gegen weitere Bearbeitung durch das Standort-Personal sperrt, bis eine administrative Rücksetzung erfolgt.",
     "column": {

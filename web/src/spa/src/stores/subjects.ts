@@ -1,7 +1,14 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
-import type { Gender, Subject, SubjectDetail } from '@/types/subject'
+import type {
+  EventCellSnapshot,
+  EventStatus,
+  Gender,
+  SignPreflight,
+  Subject,
+  SubjectDetail,
+} from '@/types/subject'
 
 /**
  * Phase E.4 M2 — Subjects store (real-backend wired).
@@ -40,6 +47,14 @@ export const useSubjectsStore = defineStore('subjects', () => {
   const selected = ref<SubjectDetail | null>(null)
   const isLoadingSelected = ref(false)
   const selectedError = ref<string | null>(null)
+
+  // Phase E.4 M8 — sign-preflight cache. Single slot because the
+  // Sign Subject view is single-subject at a time; navigating to a
+  // different subject clears it via the next fetch. The view also
+  // owns its blocker computation off this ref.
+  const preflight = ref<SignPreflight | null>(null)
+  const isLoadingPreflight = ref(false)
+  const preflightError = ref<string | null>(null)
 
   // Filter state — persisted across navigation.
   const query = ref('')
@@ -240,6 +255,114 @@ export const useSubjectsStore = defineStore('subjects', () => {
     }
   }
 
+  /**
+   * Phase E.4 M8 — fetch the sign-preflight checks for a subject.
+   *
+   * Calls `GET /pages/api/v1/subjects/{oid}/preflightForSign` and
+   * caches the result on `preflight`. The Sign Subject view consumes
+   * `preflight.blockingFailures` to gate the submit button.
+   *
+   * Hard-fails on error (clears `preflight` to null) — no fallback to
+   * a synthetic preflight, per the plan's mock-removal policy.
+   */
+  async function loadPreflight(subjectIdOrOid: string): Promise<SignPreflight | null> {
+    const oid = toStudySubjectOid(subjectIdOrOid)
+    isLoadingPreflight.value = true
+    preflightError.value = null
+    try {
+      const pf = await apiGet<SignPreflight>(
+        `/pages/api/v1/subjects/${encodeURIComponent(oid)}/preflightForSign`,
+      )
+      preflight.value = pf
+      return pf
+    } catch (e) {
+      preflight.value = null
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        preflightError.value = 'Backend nicht erreichbar — bitte später erneut versuchen.'
+        return null
+      }
+      if (e instanceof ApiError) {
+        preflightError.value = e.message
+        return null
+      }
+      preflightError.value =
+        e instanceof Error ? e.message : 'Unbekannter Fehler beim Laden der Preflight-Checks.'
+      return null
+    } finally {
+      isLoadingPreflight.value = false
+    }
+  }
+
+  /**
+   * Phase E.4 M8 — submit the e-signature for a subject.
+   *
+   * Calls `POST /pages/api/v1/subjects/{oid}/sign` with the
+   * password + attestation flag. On 200 the backend returns the
+   * refreshed `SubjectDetail` with `signed: true` and every event
+   * flipped to `signed`; we update both `selected` (the detail
+   * view's source) and the matching row in `rows` (the matrix's
+   * source) so the matrix shows the new state without a re-fetch.
+   *
+   * All error paths throw — the view surfaces the message inline.
+   * - 401 → password mismatch (or the rare "lost authentication"
+   *         defence path)
+   * - 400 → attestation false or fields missing
+   * - 409 → already signed
+   * - 412 → preflight blocked the action
+   * - 403 → cross-study
+   *
+   * SECURITY: the password is sent in the body but is NEVER
+   * persisted anywhere on the SPA side. The function deliberately
+   * does not log the password — even at debug level.
+   */
+  async function signSubject(
+    subjectIdOrOid: string,
+    password: string,
+    attestation: boolean,
+  ): Promise<SubjectDetail> {
+    const oid = toStudySubjectOid(subjectIdOrOid)
+    const detail = await apiPost<SubjectDetail>(
+      `/pages/api/v1/subjects/${encodeURIComponent(oid)}/sign`,
+      { password, attestation },
+    )
+
+    // Update the detail-view source so the page that called us flips
+    // to "signed" without a manual re-fetch.
+    selected.value = detail
+
+    // Update the matrix row (if loaded). We project the detail DTO
+    // back down to the leaner matrix `Subject` shape — events get
+    // re-mapped to `EventCellSnapshot` (drops dateStart, dateEnd,
+    // location, dataEntryStage which the matrix doesn't render).
+    const idx = rows.value.findIndex((r) => r.id === detail.id)
+    if (idx >= 0) {
+      const eventSnapshots: EventCellSnapshot[] = detail.events.map((e) => ({
+        eventDefinitionOid: e.eventDefinitionOid,
+        label: e.label,
+        status: e.status as EventStatus,
+        openQueries: e.openQueries,
+      }))
+      rows.value[idx] = {
+        id: detail.id,
+        secondaryId: detail.secondaryId,
+        siteOid: detail.siteOid,
+        siteLabel: detail.siteLabel,
+        gender: detail.gender as Gender,
+        yearOfBirth: detail.yearOfBirth,
+        groupLabel: detail.groupLabel,
+        enrolledOn: detail.enrolledOn,
+        signed: detail.signed,
+        openQueries: detail.openQueries,
+        events: eventSnapshots,
+      }
+    }
+
+    return detail
+  }
+
   return {
     // state
     rows,
@@ -251,6 +374,9 @@ export const useSubjectsStore = defineStore('subjects', () => {
     selected,
     isLoadingSelected,
     selectedError,
+    preflight,
+    isLoadingPreflight,
+    preflightError,
     // derived
     filtered,
     totalCount,
@@ -260,6 +386,8 @@ export const useSubjectsStore = defineStore('subjects', () => {
     clearFilters,
     add,
     fetchOne,
+    loadPreflight,
+    signSubject,
   }
 })
 

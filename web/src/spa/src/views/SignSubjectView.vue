@@ -12,59 +12,131 @@ import type { PreflightRow } from '@/components/ConfirmationWithPreflight.vue'
 import type { ESignaturePayload } from '@/components/ESignatureBlock.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
+import { useAuthStore } from '@/stores/auth'
+import { ApiError } from '@/api/client'
 
+/**
+ * Phase E.4 M8 — Sign Subject view (real-backend wired).
+ *
+ * On mount: fetch the subject detail + sign-preflight in parallel.
+ * Renders the preflight rows above the casebook + attestation block;
+ * the submit button stays disabled until attestation is acknowledged,
+ * a password is entered, and `preflight.blockingFailures === 0`.
+ *
+ * On submit: POST `/sign` via `subjects.signSubject()`. On 200 we
+ * route to `/subjects/{id}` so the detail page renders the now-signed
+ * state from the freshly-updated `selected` ref. On error, the inline
+ * banner shows the server message.
+ *
+ * Preflight semantics (`pass | warn | fail`) collapse to the
+ * `ConfirmationWithPreflight` primitive's union
+ * (`pass | warn | blocker | info`) — fail → blocker. The
+ * `subject-not-signed` check is rendered as `info` because it
+ * communicates the precondition, not a regulatory failure.
+ */
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const subjects = useSubjectsStore()
+const auth = useAuthStore()
 
 const subjectId = computed(() => String(route.params.subjectId))
 
-onMounted(async () => {
-  if (subjects.rows.length === 0) await subjects.load()
-})
-
-const subject = computed(() => subjects.rows.find((s) => s.id === subjectId.value) ?? null)
-
-const totalOpenQueries = computed(() => subject.value?.openQueries ?? 0)
-const allEventsComplete = computed(() => subject.value?.events.every((e) => e.status === 'complete' || e.status === 'signed' || e.status === 'locked') ?? false)
-const allCrfsComplete = allEventsComplete // proxy for v0 — refined when CRF-level state lands
-
-const preflight = computed<PreflightRow[]>(() => {
-  const rows: PreflightRow[] = []
-  if (allEventsComplete.value) {
-    rows.push({ id: 'events', status: 'pass', title: t('signSubject.preflight.eventsCompleteTitle'), detail: t('signSubject.preflight.eventsCompleteDetail') })
-  } else {
-    rows.push({ id: 'events', status: 'warn', title: t('signSubject.preflight.eventsIncompleteTitle'), detail: t('signSubject.preflight.eventsIncompleteDetail') })
-  }
-  if (allCrfsComplete.value) {
-    rows.push({ id: 'crfs', status: 'pass', title: t('signSubject.preflight.crfsCompleteTitle') })
-  } else {
-    rows.push({ id: 'crfs', status: 'warn', title: t('signSubject.preflight.crfsIncompleteTitle') })
-  }
-  if (totalOpenQueries.value > 0) {
-    rows.push({ id: 'queries', status: 'warn', title: t('signSubject.preflight.openQueriesTitle', { count: totalOpenQueries.value }), detail: t('signSubject.preflight.openQueriesDetail') })
-  } else {
-    rows.push({ id: 'queries', status: 'pass', title: t('signSubject.preflight.noOpenQueriesTitle') })
-  }
-  rows.push({ id: 'history', status: 'info', title: subject.value?.signed ? t('signSubject.preflight.alreadySigned') : t('signSubject.preflight.firstSignature') })
-  return rows
-})
-
-const blockingPreflightExists = computed(() => preflight.value.some((r) => r.status === 'blocker'))
-
+const submitError = ref<string | null>(null)
+const submitting = ref(false)
 const justSigned = ref(false)
 
-function onSign(payload: ESignaturePayload) {
-  // Optimistic local update — flips the subject to signed; backend POST lands
-  // alongside the E.4 adapter (see api-surface.md row 13 — both the preflight
-  // GET and the POST /sign endpoint).
-  if (!subject.value || !payload.acknowledged) return
-  subject.value.signed = true
-  justSigned.value = true
-  setTimeout(() => {
-    router.push({ name: 'subject-matrix' })
-  }, 1_200)
+onMounted(async () => {
+  // Fetch detail + preflight in parallel. Both end up in the store;
+  // the view binds against the reactive refs below.
+  await Promise.all([
+    subjects.fetchOne(subjectId.value),
+    subjects.loadPreflight(subjectId.value),
+  ])
+})
+
+const subject = computed(() => subjects.selected)
+const preflight = computed(() => subjects.preflight)
+
+/**
+ * Render the M3 preflight rows. The `subject-not-signed` check is
+ * mapped to `info` (rather than `pass`/`blocker`) because it
+ * communicates the precondition for the action; failing this check
+ * means "subject is already signed" which the 409 guard catches
+ * separately. The other four collapse pass → pass, warn → warn,
+ * fail → blocker.
+ */
+const preflightRows = computed<PreflightRow[]>(() => {
+  if (!preflight.value) return []
+  return preflight.value.checks.map((c) => {
+    let status: PreflightRow['status']
+    if (c.id === 'subject-not-signed') {
+      status = 'info'
+    } else if (c.status === 'pass') {
+      status = 'pass'
+    } else if (c.status === 'warn') {
+      status = 'warn'
+    } else {
+      status = 'blocker'
+    }
+    return {
+      id: c.id,
+      status,
+      title: c.title,
+      detail: c.detail || undefined,
+    }
+  })
+})
+
+const blockingPreflightExists = computed(() => {
+  if (!preflight.value) return false
+  // Subject-not-signed fail is the expected precondition state, not
+  // a blocker. Mirrors the backend's M8 logic.
+  return preflight.value.checks.some(
+    (c) => c.status === 'fail' && c.id !== 'subject-not-signed',
+  )
+})
+
+const username = computed(() => auth.user?.username ?? '')
+
+async function onSign(payload: ESignaturePayload) {
+  if (!subject.value) return
+  if (!payload.acknowledged) return
+  if (!payload.password) {
+    submitError.value = t('signSubject.error.passwordRequired')
+    return
+  }
+  submitError.value = null
+  submitting.value = true
+  try {
+    await subjects.signSubject(subjectId.value, payload.password, true)
+    justSigned.value = true
+    // Brief delay so the user sees the success toast before nav.
+    setTimeout(() => {
+      router.push({ name: 'subject-detail', params: { subjectId: subjectId.value } })
+    }, 1_200)
+  } catch (e) {
+    // The store re-throws ApiError on every non-network failure;
+    // surface the server-supplied message verbatim. 401 / 409 / 412
+    // all land here.
+    if (e instanceof ApiError) {
+      if (e.status === 401) {
+        submitError.value = t('signSubject.error.badPassword')
+      } else if (e.status === 409) {
+        submitError.value = t('signSubject.error.alreadySigned')
+      } else if (e.status === 412) {
+        submitError.value = t('signSubject.error.preflightBlocked')
+      } else {
+        submitError.value = e.message
+      }
+    } else if (e instanceof Error) {
+      submitError.value = e.message
+    } else {
+      submitError.value = t('signSubject.error.unknown')
+    }
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -81,9 +153,19 @@ function onSign(payload: ESignaturePayload) {
     </SideRail>
 
     <main class="flex-1 max-w-4xl px-8 py-6">
-      <p v-if="!subject" class="text-slate-500 italic">{{ t('common.loading') }}</p>
+      <p v-if="subjects.isLoadingSelected || subjects.isLoadingPreflight" class="text-slate-500 italic">
+        {{ t('common.loading') }}
+      </p>
 
-      <template v-else>
+      <div
+        v-else-if="subjects.selectedError || subjects.preflightError"
+        class="rounded-muw bg-rose-50 border border-rose-200 px-4 py-3 text-xs text-rose-700"
+        role="alert"
+      >
+        {{ subjects.selectedError ?? subjects.preflightError }}
+      </div>
+
+      <template v-else-if="subject">
         <div class="mb-5">
           <div class="text-xs text-slate-500 mb-1">{{ t('signSubject.subTrail') }}</div>
           <h1 class="text-xl font-semibold tracking-tight flex items-center gap-3">
@@ -95,10 +177,14 @@ function onSign(payload: ESignaturePayload) {
           </p>
         </div>
 
-        <!-- Preflight -->
-        <ConfirmationWithPreflight :heading="t('signSubject.preflightHeading')" :rows="preflight" class="mb-5" />
+        <!-- Preflight rows from the M3 endpoint -->
+        <ConfirmationWithPreflight
+          :heading="t('signSubject.preflightHeading')"
+          :rows="preflightRows"
+          class="mb-5"
+        />
 
-        <!-- Casebook snapshot — mini DenseTable of events -->
+        <!-- Casebook snapshot from the subject's events[] -->
         <section class="bg-white border border-slate-200 rounded-muw overflow-hidden mb-5">
           <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">{{ t('signSubject.casebookHeading') }}</h2>
@@ -129,28 +215,37 @@ function onSign(payload: ESignaturePayload) {
           </DenseTable>
         </section>
 
-        <!-- E-signature block -->
+        <!-- E-signature block — wired to the real /sign endpoint -->
         <ESignatureBlock
-          :username="'user_demo'"
+          :username="username"
           signature-mode="local"
           :submit-label="t('signSubject.submitLabel', { id: subject.id })"
-          :disabled="blockingPreflightExists || subject.signed"
+          :disabled="blockingPreflightExists || subject.signed || submitting"
           @submit="onSign"
         >
           <template #attestation>
-            {{ t('signSubject.attestation', { id: subject.id, name: 'Dr. user_demo', site: 'München' }) }}
+            {{ t('signSubject.attestation', { id: subject.id, name: username, site: subject.siteLabel }) }}
           </template>
           <template #acknowledgement>
             {{ t('signSubject.acknowledgement') }}
           </template>
           <template #cancel>
-            <RouterLink to="/subjects" class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700">
+            <RouterLink :to="`/subjects/${subject.id}`" class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700">
               {{ t('common.cancel') }}
             </RouterLink>
           </template>
         </ESignatureBlock>
 
-        <!-- Toast on successful sign -->
+        <!-- Inline submit error -->
+        <div
+          v-if="submitError"
+          class="mt-4 rounded-muw bg-rose-50 border border-rose-200 px-4 py-3 text-xs text-rose-700"
+          role="alert"
+        >
+          {{ submitError }}
+        </div>
+
+        <!-- Success toast on signed -->
         <div
           v-if="justSigned"
           class="mt-5 rounded-muw bg-muw-teal-50 border border-muw-teal-200 px-4 py-3 text-xs text-muw-teal-700 flex items-center gap-2.5"
