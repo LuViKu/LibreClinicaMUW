@@ -11,7 +11,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
@@ -32,7 +34,8 @@ import org.springframework.test.web.servlet.MockMvc;
 class BuildStudyApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {
-        return mockMvcFor(new BuildStudyApiController(mockDataSource()));
+        return mockMvcFor(new BuildStudyApiController(mockDataSource(),
+                Mockito.mock(SiteVisibilityFilter.class)));
     }
 
     @Test

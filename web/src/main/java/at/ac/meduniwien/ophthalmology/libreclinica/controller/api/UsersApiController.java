@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
@@ -24,6 +25,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -62,10 +64,13 @@ public class UsersApiController {
     private static final Logger LOG = LoggerFactory.getLogger(UsersApiController.class);
 
     private final DataSource dataSource;
+    private final SiteVisibilityFilter siteVisibilityFilter;
 
     @Autowired
-    public UsersApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public UsersApiController(@Qualifier("dataSource") DataSource dataSource,
+                              SiteVisibilityFilter siteVisibilityFilter) {
         this.dataSource = dataSource;
+        this.siteVisibilityFilter = siteVisibilityFilter;
     }
 
     @GetMapping
@@ -88,6 +93,15 @@ public class UsersApiController {
         UserAccountDAO userDao = new UserAccountDAO(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
 
+        // A4 — per-site visibility. The legacy
+        // findAllUsersByStudy(parent) already returns roles for the
+        // parent + every site under it; for narrower views (Monitor
+        // with one site grant) we filter the result by the user's
+        // visible study set.
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                me, currentStudy, currentRole);
+
         // Roles scoped to the active study + its sites. The DAO
         // returns one StudyUserRoleBean per (user, study) pair.
         ArrayList<StudyUserRoleBean> bindings = userDao.findAllUsersByStudy(currentStudy.getId());
@@ -97,6 +111,9 @@ public class UsersApiController {
         List<StudyUserDto> out = new ArrayList<>();
 
         for (StudyUserRoleBean sur : bindings) {
+            // A4 — skip bindings outside the visible study tree.
+            if (!visibleStudyIds.contains(sur.getStudyId())) continue;
+
             UserAccountBean ua = userCache.computeIfAbsent(sur.getUserAccountId(),
                     id -> userDao.findByPK(id));
             if (ua == null || ua.getId() == 0) continue;

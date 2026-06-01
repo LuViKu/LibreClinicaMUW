@@ -488,6 +488,13 @@
                              starter-web transitive graph. -->
                         <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot</ignoredUsedUndeclaredDependency>
                         <ignoredUsedUndeclaredDependency>org.springframework.boot:spring-boot-autoconfigure</ignoredUsedUndeclaredDependency>
+                        <!-- Phase E.5 A2 + A5: MockMvc IT scaffold + tests
+                             import JUnit Jupiter + Hamcrest directly; both
+                             land transitively via spring-boot-starter-test.
+                             Declaring them explicitly would duplicate
+                             Boot's version pinning. -->
+                        <ignoredUsedUndeclaredDependency>org.junit.jupiter:junit-jupiter-api</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.hamcrest:hamcrest</ignoredUsedUndeclaredDependency>
                     </ignoredUsedUndeclaredDependencies>
 		        </configuration>
 		      </plugin>

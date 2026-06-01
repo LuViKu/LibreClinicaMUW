@@ -15,20 +15,24 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,10 +90,13 @@ public class EventsApiController {
     private static final SimpleDateFormat ISO_DATE = new SimpleDateFormat("yyyy-MM-dd", Locale.ROOT);
 
     private final DataSource dataSource;
+    private final SiteVisibilityFilter siteVisibilityFilter;
 
     @Autowired
-    public EventsApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public EventsApiController(@Qualifier("dataSource") DataSource dataSource,
+                               SiteVisibilityFilter siteVisibilityFilter) {
         this.dataSource = dataSource;
+        this.siteVisibilityFilter = siteVisibilityFilter;
     }
 
     @GetMapping
@@ -113,8 +120,21 @@ public class EventsApiController {
         StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
         StudyEventDAO seDao = new StudyEventDAO(dataSource);
         StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyDAO sDao = new StudyDAO(dataSource);
 
-        ArrayList<StudySubjectBean> subjects = ssDao.findAllByStudyId(studyId);
+        // A4 — per-site visibility. Walk the visible study set so a
+        // Monitor with site-only grants on a multi-site parent
+        // doesn't see other sites' subjects' events.
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        ArrayList<StudySubjectBean> subjects = new ArrayList<>();
+        Map<Integer, StudyBean> studyCache = new HashMap<>();
+        studyCache.put(currentStudy.getId(), currentStudy);
+        for (Integer sid : visibleStudyIds) {
+            ArrayList<StudySubjectBean> chunk = ssDao.findAllByStudyId(sid);
+            if (chunk != null) subjects.addAll(chunk);
+        }
         Map<Integer, StudyEventDefinitionBean> defCache = new HashMap<>();
 
         List<StudyEventDto> out = new ArrayList<>();
@@ -122,7 +142,13 @@ public class EventsApiController {
             if (subjectIdFilter != null && !subjectIdFilter.isBlank()
                     && !subjectIdFilter.equalsIgnoreCase(ss.getLabel())) continue;
 
-            ArrayList<StudyEventBean> events = seDao.findAllByStudyAndStudySubjectId(currentStudy, ss.getId());
+            // Pass the subject's actual owning study to the events
+            // DAO — for a Monitor walking a site, the subjects live
+            // in the site, not the parent the session was bound to.
+            StudyBean scopeStudy = studyCache.computeIfAbsent(ss.getStudyId(),
+                    id -> (id == currentStudy.getId()) ? currentStudy : (StudyBean) sDao.findByPK(id));
+            if (scopeStudy == null || scopeStudy.getId() == 0) scopeStudy = currentStudy;
+            ArrayList<StudyEventBean> events = seDao.findAllByStudyAndStudySubjectId(scopeStudy, ss.getId());
             for (StudyEventBean ev : events) {
                 StudyEventDefinitionBean def = defCache.computeIfAbsent(ev.getStudyEventDefinitionId(),
                         id -> (StudyEventDefinitionBean) sedDao.findByPK(id));
@@ -196,8 +222,27 @@ public class EventsApiController {
         StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
         StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
         StudyEventDAO seDao = new StudyEventDAO(dataSource);
+        StudyDAO sDao = new StudyDAO(dataSource);
 
-        StudySubjectBean ss = ssDao.findByLabelAndStudy(body.subjectId(), currentStudy);
+        // A4 — walk visible studies and resolve the subject inside
+        // any of them (the legacy findByLabelAndStudy is parent-only
+        // so a Monitor with site-only grants would otherwise reject
+        // every subject scheduled into the site).
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        StudySubjectBean ss = null;
+        for (Integer sid : visibleStudyIds) {
+            StudyBean scope = (sid == currentStudy.getId())
+                    ? currentStudy
+                    : (StudyBean) sDao.findByPK(sid);
+            if (scope == null || scope.getId() == 0) continue;
+            StudySubjectBean candidate = ssDao.findByLabelAndStudy(body.subjectId(), scope);
+            if (candidate != null && candidate.getId() > 0) {
+                ss = candidate;
+                break;
+            }
+        }
         if (ss == null || ss.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study subject with label '" + body.subjectId() + "' in study '" + currentStudy.getOid() + "'"));

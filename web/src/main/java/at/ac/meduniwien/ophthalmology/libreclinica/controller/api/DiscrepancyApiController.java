@@ -14,12 +14,14 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -29,10 +31,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -93,10 +97,13 @@ public class DiscrepancyApiController {
     private static final Logger LOG = LoggerFactory.getLogger(DiscrepancyApiController.class);
 
     private final DataSource dataSource;
+    private final SiteVisibilityFilter siteVisibilityFilter;
 
     @Autowired
-    public DiscrepancyApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public DiscrepancyApiController(@Qualifier("dataSource") DataSource dataSource,
+                                    SiteVisibilityFilter siteVisibilityFilter) {
         this.dataSource = dataSource;
+        this.siteVisibilityFilter = siteVisibilityFilter;
     }
 
     @GetMapping
@@ -121,7 +128,25 @@ public class DiscrepancyApiController {
         // mapping table (dn_item_data_map etc.), so entity_id stays 0 and
         // the SPA gets blank subjectId / itemOid columns.
         dnDao.setFetchMapping(true);
-        ArrayList<DiscrepancyNoteBean> notes = dnDao.findAllParentsByStudy(currentStudy);
+
+        // A4 — per-site visibility. The DN DAO has no
+        // multi-study-id method, so loop over visible studies and
+        // merge. For a top-level Admin/Director this is the
+        // unchanged behaviour (single hit on the parent); a Monitor
+        // with site-only grants ends up with site-only results.
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        ArrayList<DiscrepancyNoteBean> notes = new ArrayList<>();
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        for (Integer sid : visibleStudyIds) {
+            StudyBean scope = (sid == currentStudy.getId())
+                    ? currentStudy
+                    : (StudyBean) studyDao.findByPK(sid);
+            if (scope == null || scope.getId() == 0) continue;
+            ArrayList<DiscrepancyNoteBean> chunk = dnDao.findAllParentsByStudy(scope);
+            if (chunk != null) notes.addAll(chunk);
+        }
 
         // Caches to amortise the entity-id walk across repeated lookups.
         Map<Integer, ItemDataBean> itemDataCache = new HashMap<>();
@@ -220,9 +245,27 @@ public class DiscrepancyApiController {
                     "'subjectId' and 'itemOid' are required to attach the query to a data point"));
         }
 
-        // Resolve subject + item → item_data row inside the active study.
+        // A4 — per-site visibility. The legacy findByLabelAndStudy
+        // call is parent-only; for top-level Monitors with site-only
+        // grants we'd otherwise reject every subject by label. Walk
+        // the visible study set and stop at the first label match.
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
         StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
-        StudySubjectBean ss = ssDao.findByLabelAndStudy(body.subjectId(), currentStudy);
+        StudyDAO sDao = new StudyDAO(dataSource);
+        StudySubjectBean ss = null;
+        for (Integer sid : visibleStudyIds) {
+            StudyBean scope = (sid == currentStudy.getId())
+                    ? currentStudy
+                    : (StudyBean) sDao.findByPK(sid);
+            if (scope == null || scope.getId() == 0) continue;
+            StudySubjectBean candidate = ssDao.findByLabelAndStudy(body.subjectId(), scope);
+            if (candidate != null && candidate.getId() > 0) {
+                ss = candidate;
+                break;
+            }
+        }
         if (ss == null || ss.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study subject with label '" + body.subjectId() + "' in study '" + currentStudy.getOid() + "'"));

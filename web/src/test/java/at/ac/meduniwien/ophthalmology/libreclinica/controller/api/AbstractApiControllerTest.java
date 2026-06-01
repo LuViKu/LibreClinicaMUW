@@ -10,8 +10,13 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import javax.sql.DataSource;
 
+import java.util.Locale;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 
 import jakarta.servlet.http.HttpSession;
 import org.mockito.Mockito;
@@ -144,5 +149,31 @@ abstract class AbstractApiControllerTest {
     /** Convenience — a Mockito mock DataSource that DAO constructors will accept. */
     protected final DataSource mockDataSource() {
         return Mockito.mock(DataSource.class);
+    }
+
+    /**
+     * Session with userBean + study + a synthetic role bound. Use for
+     * A4 site-visibility tests that need a {@link StudyUserRoleBean}
+     * in session to drive {@code SiteVisibilityFilter} decisions.
+     *
+     * @param role Role enum constant (e.g. {@link Role#MONITOR}).
+     * @param roleStudyId study_id the role is bound to (site or parent).
+     */
+    protected final HttpSession authenticatedSessionWithRole(int userId, String userName,
+                                                             int studyId, String studyOid, String studyName,
+                                                             Role role, int roleStudyId) {
+        // StudyUserRoleBean's constructor calls setRole(INVALID) which
+        // triggers Term.getName → ResourceBundle lookup; bind a locale
+        // for the current test thread so the lookup succeeds.
+        ResourceBundleProvider.updateLocale(Locale.ENGLISH);
+        MockHttpSession session = (MockHttpSession)
+                authenticatedSession(userId, userName, studyId, studyOid, studyName);
+        StudyUserRoleBean sur = new StudyUserRoleBean();
+        sur.setRole(role);
+        sur.setStudyId(roleStudyId);
+        sur.setUserName(userName);
+        sur.setUserAccountId(userId);
+        session.setAttribute("userRole", sur);
+        return session;
     }
 }

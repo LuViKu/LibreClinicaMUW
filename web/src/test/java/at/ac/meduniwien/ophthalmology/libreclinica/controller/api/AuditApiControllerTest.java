@@ -9,11 +9,15 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
@@ -36,7 +40,8 @@ import org.springframework.test.web.servlet.MockMvc;
 class AuditApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {
-        return mockMvcFor(new AuditApiController(mockDataSource()));
+        return mockMvcFor(new AuditApiController(mockDataSource(),
+                Mockito.mock(SiteVisibilityFilter.class)));
     }
 
     @Test
@@ -54,6 +59,70 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("No active study")));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* A5 — value-prettification helpers                                      */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void prettifyMapsStudySubjectStatusCodesToHumanLabels() {
+        assertEquals("Available", AuditApiController.prettifyValue("study_subject", "Status", "1"));
+        assertEquals("Unavailable", AuditApiController.prettifyValue("study_subject", "Status", "2"));
+        assertEquals("Removed", AuditApiController.prettifyValue("study_subject", "Status", "5"));
+        assertEquals("Signed", AuditApiController.prettifyValue("study_subject", "Status", "8"));
+    }
+
+    @Test
+    void prettifyMapsEventCrfStatusCodesToHumanLabels() {
+        assertEquals("Available", AuditApiController.prettifyValue("event_crf", "Status", "1"));
+        assertEquals("Signed", AuditApiController.prettifyValue("event_crf", "Status", "8"));
+    }
+
+    @Test
+    void prettifyMapsStudyEventStatusCodesToHumanLabels() {
+        assertEquals("Scheduled", AuditApiController.prettifyValue("study_event", "Status", "1"));
+        assertEquals("Completed", AuditApiController.prettifyValue("study_event", "Status", "4"));
+        assertEquals("Signed", AuditApiController.prettifyValue("study_event", "Status", "8"));
+    }
+
+    @Test
+    void prettifyMapsSdvStatusBooleansToSemanticLabels() {
+        assertEquals("SDV complete",
+                AuditApiController.prettifyValue("event_crf", "EventCRF SDV Status", "TRUE"));
+        assertEquals("SDV pending",
+                AuditApiController.prettifyValue("event_crf", "EventCRF SDV Status", "FALSE"));
+    }
+
+    @Test
+    void prettifyMapsRawBooleansToYesNo() {
+        // Outside the (audit_table, type_name) status-mapped pairs,
+        // a raw TRUE/FALSE column-value still gets prettified.
+        assertEquals("yes",
+                AuditApiController.prettifyValue("event_crf", "Required",  "TRUE"));
+        assertEquals("no",
+                AuditApiController.prettifyValue("event_crf", "Required",  "FALSE"));
+        assertEquals("yes",
+                AuditApiController.prettifyValue(null, null, "true"));
+    }
+
+    @Test
+    void prettifyPassesThroughOtherValuesUnchanged() {
+        assertEquals("2026-06-01",
+                AuditApiController.prettifyValue("item_data", "value", "2026-06-01"));
+        assertEquals("free-text comment",
+                AuditApiController.prettifyValue("discrepancy_note", "Description", "free-text comment"));
+        assertNull(AuditApiController.prettifyValue(null, null, null));
+    }
+
+    @Test
+    void buildInClauseEmitsExpectedPlaceholders() {
+        assertEquals("(?)", AuditApiController.buildInClause(1));
+        assertEquals("(?,?,?)", AuditApiController.buildInClause(3));
+        // Zero-arity is a defensive case — the caller pre-clamps to
+        // at least one id (falling back to the current study) before
+        // reaching this point.
+        assertEquals("(NULL)", AuditApiController.buildInClause(0));
     }
 
     @Test

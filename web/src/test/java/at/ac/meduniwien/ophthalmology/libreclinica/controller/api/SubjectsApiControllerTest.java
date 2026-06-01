@@ -14,11 +14,19 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.util.Set;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 
 /**
  * Phase E.4 M13 — first MockMvc IT pinning the SubjectsApiController
@@ -51,7 +59,8 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
         // (the guards short-circuit before any DAO or password compare),
         // so both can be plain Mockito mocks without behaviour stubs.
         return mockMvcFor(new SubjectsApiController(mockDataSource(),
-                Mockito.mock(SecurityManager.class)));
+                Mockito.mock(SecurityManager.class),
+                Mockito.mock(SiteVisibilityFilter.class)));
     }
 
     /* ---------------------------------------------------------------------- */
@@ -118,6 +127,54 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(jsonPath("$.errors[?(@.field == 'gender')]").exists())
                 .andExpect(jsonPath("$.errors[?(@.field == 'enrolledOn')]").exists())
                 .andExpect(jsonPath("$.errors[?(@.field == 'id')]").exists());
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* A4 — SiteVisibilityFilter wiring                                       */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void listInvokesSiteVisibilityFilterForMonitorWithSiteGrant() throws Exception {
+        // A4 contract: when a Monitor with a single-site grant under a
+        // multi-site parent issues a list call, the controller must
+        // invoke SiteVisibilityFilter.visibleStudyIds(...) with the
+        // session-bound (user, currentStudy, role) triple before any
+        // DAO touches. The stubbed filter throws a sentinel exception
+        // so we can both (a) verify the invocation happened and (b)
+        // confirm the controller never reached the DAO layer (which
+        // would NPE on the mock DataSource anyway). This pattern
+        // pins the wiring contract without needing a real
+        // DataSource.
+        SiteVisibilityFilter filter = Mockito.mock(SiteVisibilityFilter.class);
+        Mockito.when(filter.visibleStudyIds(
+                        Mockito.any(UserAccountBean.class),
+                        Mockito.any(StudyBean.class),
+                        Mockito.any(StudyUserRoleBean.class)))
+                .thenThrow(new RuntimeException("FILTER_INVOKED"));
+        SubjectsApiController controller = new SubjectsApiController(
+                mockDataSource(), Mockito.mock(SecurityManager.class), filter);
+        MockMvc mockMvc = mockMvcFor(controller);
+
+        try {
+            mockMvc.perform(get("/api/v1/subjects")
+                    .session((org.springframework.mock.web.MockHttpSession)
+                            authenticatedSessionWithRole(1, "monitor1",
+                                    1, "S_DEFAULTS1", "Default Study",
+                                    Role.MONITOR, /* roleStudyId = site */ 2)));
+        } catch (Exception e) {
+            // ServletException wraps the FILTER_INVOKED sentinel.
+            if (!String.valueOf(e.getCause() == null ? e : e.getCause())
+                    .contains("FILTER_INVOKED")
+                    && !String.valueOf(e).contains("FILTER_INVOKED")) {
+                throw e;
+            }
+        }
+
+        Mockito.verify(filter, Mockito.atLeastOnce())
+                .visibleStudyIds(
+                        Mockito.any(UserAccountBean.class),
+                        Mockito.any(StudyBean.class),
+                        Mockito.any(StudyUserRoleBean.class));
     }
 
     @Test
