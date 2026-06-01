@@ -303,6 +303,7 @@
             <column name="owner_id" valueNumeric="1"/>
             <column name="date_created" valueDate="2026-06-01"/>
             <column name="ordinal" valueNumeric="1"/>
+            <column name="source_data_verification_code" valueNumeric="1"/>
         </insert>
         <insert tableName="event_definition_crf">
             <column name="event_definition_crf_id" valueNumeric="2"/>
@@ -316,6 +317,7 @@
             <column name="owner_id" valueNumeric="1"/>
             <column name="date_created" valueDate="2026-06-01"/>
             <column name="ordinal" valueNumeric="1"/>
+            <column name="source_data_verification_code" valueNumeric="1"/>
         </insert>
         <insert tableName="event_definition_crf">
             <column name="event_definition_crf_id" valueNumeric="3"/>
@@ -329,6 +331,7 @@
             <column name="owner_id" valueNumeric="1"/>
             <column name="date_created" valueDate="2026-06-01"/>
             <column name="ordinal" valueNumeric="1"/>
+            <column name="source_data_verification_code" valueNumeric="1"/>
         </insert>
     </changeSet>
 
