@@ -18,13 +18,27 @@ import java.util.List;
  * and null semantics in sync with that file; deviations break the
  * matrix render.
  *
- * <p>First-cut adapter (E.4 slice #1) populates identity columns
- * (id, secondaryId, gender, yearOfBirth, enrolledOn, site) from
- * {@code StudySubjectDAO} + {@code SubjectDAO}. Per-event status,
- * open-query count, and sign-off state come from the EventCRF /
- * DiscrepancyNote aggregations and ship in subsequent slices. For
- * now {@code events} is always an empty list, {@code openQueries}
- * is always {@code 0}, and {@code signed} is always {@code false}.
+ * <p>The adapter populates every field from the database:
+ * <ul>
+ *   <li>Identity columns ({@code id}, {@code secondaryId},
+ *       {@code gender}, {@code yearOfBirth}, {@code enrolledOn},
+ *       {@code site}) — {@code StudySubjectDAO} + {@code SubjectDAO}.</li>
+ *   <li>{@code events[]} — {@code StudyEventDAO#findAllByStudySubject}
+ *       joined with {@code StudyEventDefinitionDAO#findByPK}, ordered by
+ *       definition ordinal.</li>
+ *   <li>{@code signed} — true iff {@code study_subject.status_id = 8}
+ *       (SIGNED). The legacy sign-subject transaction updates both
+ *       study_subject + every study_event in one shot, so the subject
+ *       status is authoritative.</li>
+ *   <li>{@code openQueries} — sum of per-event open-query counts;
+ *       per-event counts join {@code discrepancy_note} via
+ *       {@code dn_item_data_map} with {@code resolution_status_id IN
+ *       (1, 2, 3)} and {@code parent_dn_id IS NULL}.</li>
+ * </ul>
+ *
+ * <p>{@code groupLabel} stays {@code null} until the
+ * {@code study_group_class} / {@code subject_group_map} workflow is
+ * wired (deferred to a later milestone).
  */
 public record SubjectListItemDto(
         String id,
@@ -40,7 +54,14 @@ public record SubjectListItemDto(
         int openQueries
 ) {
 
-    /** Stub for the per-event status cell — populated by the next adapter. */
+    /**
+     * One cell in the per-event status grid.
+     *
+     * <p>{@code status} is one of the SPA {@code EventStatus} union values:
+     * "scheduled", "not-scheduled", "in-progress", "complete", "locked",
+     * "signed". {@code openQueries} counts open discrepancy notes on
+     * {@code item_data} rows under this study event.
+     */
     public record EventCellDto(
             String eventDefinitionOid,
             String label,

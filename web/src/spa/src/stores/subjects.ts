@@ -1,33 +1,33 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
-import type { EventStatus, Gender, Subject } from '@/types/subject'
+import type { Gender, Subject } from '@/types/subject'
 
 /**
- * Phase E.5 + E.4 — Subjects store.
+ * Phase E.4 M2 — Subjects store (real-backend wired).
  *
- * Calls `GET /pages/api/v1/subjects` (adapter shipped in E.4 slice #1).
- * The backend currently returns identity columns only (id, secondaryId,
- * gender, yearOfBirth, group, enrolled, site); per-event status cells,
- * sign-off state, and open-query counts ship in the follow-up adapter.
- * The store reuses the SPA `Subject` shape verbatim — empty `events: []`
- * + `signed: false` + `openQueries: 0` are normal until that lands.
+ * Hydrates the Investigator's Subject Matrix from
+ * `GET /pages/api/v1/subjects` (M2 adapter). The response shape matches
+ * the SPA `Subject` TS type byte-for-byte: identity columns, per-event
+ * status cells (events[]), aggregate sign-off flag, and aggregate
+ * open-query count.
  *
- * Fallback policy:
- *  - In dev (Vite proxy reaches the backend) the real call is preferred.
- *  - If the call fails with a network error (backend not running, dev
- *    proxy mis-configured) we fall back to the mock fixture so the
- *    matrix still renders for offline UX work.
- *  - Set `VITE_USE_MOCK_API=true` in `.env.local` to bypass the network
- *    entirely (useful when iterating on the view without a backend).
- *  - Auth errors (401/403) are NOT fallback-eligible — they propagate
- *    so the router-level guard can redirect to /login.
+ * Mock-data policy (per plan §"Mock removal policy"): the adapter is
+ * real and complete, so there is NO fallback to mock fixtures. If the
+ * backend is unreachable or returns an error, `error` is set and
+ * `rows` stays empty — the view shows the empty state plus an error
+ * banner rather than hiding the issue behind demo data.
+ *
+ * Auth errors (401/403) still propagate untouched so the router-level
+ * guard can redirect to /login.
+ *
+ * `add()` remains optimistic-append for now (Add Subject swap lands in
+ * Phase E.4 M4 — see TODO inside).
  *
  * Filter state lives in the store so navigating away from the matrix
  * and back keeps the user's filter context (the existing JSP also does
  * this via session-scoped state).
  */
-const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === 'true'
 export const useSubjectsStore = defineStore('subjects', () => {
   const rows = ref<Subject[]>([])
   const isLoading = ref(false)
@@ -67,38 +67,27 @@ export const useSubjectsStore = defineStore('subjects', () => {
     isLoading.value = true
     error.value = null
     try {
-      if (USE_MOCK_API) {
-        rows.value = await loadMock()
-        return
-      }
-      try {
-        rows.value = await apiGet<Subject[]>('/pages/api/v1/subjects')
-      } catch (e) {
-        if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
-          // Let the router-level auth guard handle these — propagate so
-          // the calling view doesn't silently render a fallback list.
-          throw e
-        }
-        if (e instanceof ApiNetworkError) {
-          // Backend unreachable — fall back to mock so the SPA keeps
-          // working for offline UX iteration. Surface a soft error so
-          // the user knows the data is stale.
-          rows.value = await loadMock()
-          error.value = 'Backend nicht erreichbar — Demo-Daten werden angezeigt.'
-          return
-        }
-        if (e instanceof ApiError) {
-          // 4xx (e.g. 400 — no active study bound) and 5xx land here.
-          // Fall back to mock so the user sees *something* while we
-          // surface the underlying message.
-          rows.value = await loadMock()
-          error.value = e.message
-          return
-        }
+      rows.value = await apiGet<Subject[]>('/pages/api/v1/subjects')
+    } catch (e) {
+      // Always clear rows on error so the view doesn't show stale data
+      // alongside a fresh error message.
+      rows.value = []
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        // Let the router-level auth guard handle these — propagate so
+        // the calling view doesn't silently render an empty list.
         throw e
       }
-    } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Unknown error loading subjects'
+      if (e instanceof ApiNetworkError) {
+        error.value = 'Backend nicht erreichbar — bitte später erneut versuchen.'
+        return
+      }
+      if (e instanceof ApiError) {
+        // 400 ("no active study bound"), 4xx generic, 5xx — surface the
+        // server message so the user knows what's wrong.
+        error.value = e.message
+        return
+      }
+      error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Laden der Teilnehmenden.'
     } finally {
       isLoading.value = false
     }
@@ -111,17 +100,16 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
-   * Phase E.5.2 — enrol a new subject.
+   * Phase E.5.2 — enrol a new subject (optimistic local append).
    *
-   * Local-first: validates the input against the existing rows
-   * (subject-id uniqueness) and the shape constraints from
-   * `validateAddSubject` below, then optimistically appends a Subject
-   * with `not-scheduled` event cells. Returns the new Subject so the
-   * caller can navigate or chain into Schedule Event.
+   * TODO(E.4 M4): replace with `apiPost<Subject>('/pages/api/v1/subjects', input)`
+   * and remove the local id-generation / optimistic-append branch — the
+   * backend will own id allocation, secondary-id uniqueness, and the
+   * authoritative validation.
    *
-   * When the E.4 adapter at `POST /pages/api/v1/subjects` lands, swap
-   * the optimistic append for an awaited `apiPost<Subject>` and remove
-   * the local id-generation — the backend will own the id allocation.
+   * Until then the form's validation is the SPA's local
+   * {@link validateAddSubject}; we append a Subject with empty events
+   * so the matrix immediately reflects the new row.
    */
   async function add(input: AddSubjectInput): Promise<Subject> {
     const errors = validateAddSubject(input, rows.value)
@@ -133,7 +121,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
     isLoading.value = true
     error.value = null
     try {
-      // TODO(E.4): replace with apiPost<Subject>('/pages/api/v1/subjects', input).
+      // TODO(E.4 M4): apiPost<Subject>('/pages/api/v1/subjects', input).
       await new Promise((resolve) => setTimeout(resolve, 30))
 
       const subject: Subject = {
@@ -147,12 +135,10 @@ export const useSubjectsStore = defineStore('subjects', () => {
         enrolledOn: input.enrolledOn,
         signed: false,
         openQueries: 0,
-        events: EVENT_LABELS.map((label, i) => ({
-          eventDefinitionOid: EVENT_OIDS[i]!,
-          label,
-          status: 'not-scheduled',
-          openQueries: 0,
-        })),
+        // No events yet — the legacy /AddNewSubject flow only creates the
+        // study_subject row; visits are scheduled separately. The matrix
+        // shows the new row immediately with an empty event grid.
+        events: [],
       }
       rows.value = [...rows.value, subject]
       return subject
@@ -265,58 +251,3 @@ export function validateAddSubject(
 
   return errors
 }
-
-/**
- * Mock data loader. The shape matches the planned
- * `GET /pages/api/v1/subjects?siteOid=…` response exactly.
- */
-async function loadMock(): Promise<Subject[]> {
-  // Pretend the network takes a tick — gives the loading state a chance
-  // to render in dev so layout regressions are caught.
-  await new Promise((resolve) => setTimeout(resolve, 30))
-  return MOCK_SUBJECTS
-}
-
-const EVENT_LABELS = ['V1 Inclusion', 'V2 Day 30', 'V3 Day 90'] as const
-const EVENT_OIDS  = ['SE_V1_INCLUSION', 'SE_V2_DAY30', 'SE_V3_DAY90'] as const
-
-function row(
-  id: string,
-  secondaryId: string | null,
-  gender: 'F' | 'M',
-  yearOfBirth: number,
-  enrolledOn: string,
-  groupLabel: string | null,
-  statuses: [EventStatus, EventStatus, EventStatus],
-  openQueriesPerEvent: [number, number, number],
-  signed: boolean,
-): Subject {
-  return {
-    id,
-    secondaryId,
-    siteOid: 'TDS0004',
-    siteLabel: 'München',
-    gender,
-    yearOfBirth,
-    groupLabel,
-    enrolledOn,
-    signed,
-    openQueries: openQueriesPerEvent.reduce((a, b) => a + b, 0),
-    events: statuses.map((status, i) => ({
-      eventDefinitionOid: EVENT_OIDS[i],
-      label: EVENT_LABELS[i],
-      status,
-      openQueries: openQueriesPerEvent[i] ?? 0,
-    })),
-  }
-}
-
-const MOCK_SUBJECTS: Subject[] = [
-  row('M-001', null,         'F', 1962, '2020-10-06', 'Arm A', ['complete', 'complete', 'in-progress'], [1, 1, 0], false),
-  row('M-002', null,         'M', 1955, '2020-10-09', 'Arm B', ['complete', 'in-progress', 'not-scheduled'], [0, 2, 0], false),
-  row('M-003', null,         'F', 1949, '2020-10-15', 'Arm A', ['complete', 'complete', 'complete'], [0, 0, 0], true),
-  row('M-004', '04-MUW',     'M', 1971, '2020-11-02', 'Arm A', ['in-progress', 'not-scheduled', 'not-scheduled'], [3, 0, 0], false),
-  row('M-005', null,         'F', 1980, '2020-11-12', 'Arm B', ['complete', 'complete', 'scheduled'], [0, 0, 0], false),
-  row('M-006', null,         'M', 1958, '2020-12-01', 'Arm B', ['signed',  'signed',  'signed'],     [0, 0, 0], true),
-  row('M-007', null,         'F', 1972, '2021-01-15', 'Arm A', ['complete', 'in-progress', 'not-scheduled'], [0, 1, 0], false),
-]

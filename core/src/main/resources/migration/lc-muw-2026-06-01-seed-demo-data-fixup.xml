@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Phase E.4 M2 — fixup for the demo-data seed (lc-muw-2026-06-01-seed-demo-data.xml).
+
+    Why:
+    The original seed inserts 8 `discrepancy_note` rows with entity_type='itemData'
+    but does not write the corresponding `dn_item_data_map` rows. The DN→item_data
+    relationship in this schema lives EXCLUSIVELY in the map table — there is no
+    `discrepancy_note.entity_id` column. As a result every Subject-Matrix
+    open-query aggregation (and every other DN-by-item-data query) returns zero
+    for the seeded rows, and the SPA matrix shows 0 open queries for every
+    subject.
+
+    What:
+    Insert 8 `dn_item_data_map` rows linking each seeded note to a representative
+    item_data row in the targeted event_crf, matching the mock-data counts:
+
+      DN 1 → M-001 V1 height       (item_data 3, event_crf 1, study_event 1)
+      DN 2 → M-001 V2 weight       (item_data 7, event_crf 2, study_event 2)
+      DN 3 → M-002 V2 height       (item_data 13, event_crf 5, study_event 5)
+      DN 4 → M-002 V2 weight       (item_data 14, event_crf 5, study_event 5)
+      DN 5 → M-004 V1 consent date (item_data 23, event_crf 9, study_event 10)
+      DN 6 → M-004 V1 height       (item_data 24, event_crf 9, study_event 10)
+      DN 7 → M-004 V1 height       (item_data 24, event_crf 9, study_event 10)
+      DN 8 → M-007 V2 height       (item_data 43, event_crf 16, study_event 20)
+
+    Yielding per-event counts:
+      study_event 1  → 1 open query
+      study_event 2  → 1
+      study_event 5  → 2
+      study_event 10 → 3
+      study_event 20 → 1
+
+    Per-subject totals:
+      M-001 → 2  · M-002 → 2  · M-004 → 3  · M-007 → 1
+
+    Matching the MOCK_SUBJECTS openQueries field exactly (8 total).
+
+    How:
+    Standalone changeset, not an amendment to the existing seed — Liquibase
+    rejects modifications of executed changesets per the project's
+    changeset-immutability convention (CLAUDE.md). Registered AFTER the seed
+    in master.xml so the FK references resolve cleanly.
+  -->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-dn-item-data-map">
+        <comment>Backfill dn_item_data_map for the 8 seed discrepancy notes so Subject-Matrix open-query counts resolve</comment>
+        <preConditions onFail="MARK_RAN">
+            <!-- Only run if the discrepancy_note rows exist (i.e. the seed
+                 was applied). Avoids breakage on a fresh DB where the seed
+                 hasn't run yet — though in practice master.xml ordering
+                 guarantees the seed runs first. -->
+            <sqlCheck expectedResult="8">SELECT COUNT(*) FROM discrepancy_note WHERE discrepancy_note_id BETWEEN 1 AND 8</sqlCheck>
+        </preConditions>
+
+        <insert tableName="dn_item_data_map"><column name="item_data_id" valueNumeric="3"/><column name="discrepancy_note_id" valueNumeric="1"/><column name="column_name" value="value"/><column name="study_subject_id" valueNumeric="1"/><column name="activated" valueBoolean="true"/></insert>
+        <insert tableName="dn_item_data_map"><column name="item_data_id" valueNumeric="7"/><column name="discrepancy_note_id" valueNumeric="2"/><column name="column_name" value="value"/><column name="study_subject_id" valueNumeric="1"/><column name="activated" valueBoolean="true"/></insert>
+        <insert tableName="dn_item_data_map"><column name="item_data_id" valueNumeric="13"/><column name="discrepancy_note_id" valueNumeric="3"/><column name="column_name" value="value"/><column name="study_subject_id" valueNumeric="2"/><column name="activated" valueBoolean="true"/></insert>
+        <insert tableName="dn_item_data_map"><column name="item_data_id" valueNumeric="14"/><column name="discrepancy_note_id" valueNumeric="4"/><column name="column_name" value="value"/><column name="study_subject_id" valueNumeric="2"/><column name="activated" valueBoolean="true"/></insert>
+        <insert tableName="dn_item_data_map"><column name="item_data_id" valueNumeric="23"/><column name="discrepancy_note_id" valueNumeric="5"/><column name="column_name" value="value"/><column name="study_subject_id" valueNumeric="4"/><column name="activated" valueBoolean="true"/></insert>
+        <insert tableName="dn_item_data_map"><column name="item_data_id" valueNumeric="24"/><column name="discrepancy_note_id" valueNumeric="6"/><column name="column_name" value="value"/><column name="study_subject_id" valueNumeric="4"/><column name="activated" valueBoolean="true"/></insert>
+        <insert tableName="dn_item_data_map"><column name="item_data_id" valueNumeric="24"/><column name="discrepancy_note_id" valueNumeric="7"/><column name="column_name" value="value"/><column name="study_subject_id" valueNumeric="4"/><column name="activated" valueBoolean="true"/></insert>
+        <insert tableName="dn_item_data_map"><column name="item_data_id" valueNumeric="43"/><column name="discrepancy_note_id" valueNumeric="8"/><column name="column_name" value="value"/><column name="study_subject_id" valueNumeric="7"/><column name="activated" valueBoolean="true"/></insert>
+    </changeSet>
+
+</databaseChangeLog>
