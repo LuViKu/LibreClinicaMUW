@@ -15,6 +15,7 @@ import {
   useSubjectsStore,
   validateAddSubject,
   AddSubjectValidationError,
+  type AddSubjectError,
   type AddSubjectErrorField,
   type AddSubjectInput,
 } from '@/stores/subjects'
@@ -39,21 +40,43 @@ const form = reactive<AddSubjectInput>({
 
 const submitAttempted = ref(false)
 const serverError = ref<string | null>(null)
+// Once the server's authoritative error list arrives, mirror it here.
+// When populated this replaces the client-side `liveErrors` source
+// (server-authoritative — DR-008). Cleared on the next submit attempt
+// or whenever the user edits any field.
+const serverFieldErrors = ref<AddSubjectError[] | null>(null)
 
 const liveErrors = computed(() => validateAddSubject(form, subjects.rows, { today: todayIso.value }))
 
 function errorFor(field: AddSubjectErrorField): string | null {
+  // Server-side errors take precedence (authoritative): if the latest
+  // submit returned a structured 400, surface those per-field messages.
+  if (serverFieldErrors.value && serverFieldErrors.value.length > 0) {
+    const fromServer = serverFieldErrors.value.find((e) => e.field === field)
+    if (fromServer) return fromServer.message
+  }
   if (!submitAttempted.value) return null
   return liveErrors.value.find((e) => e.field === field)?.message ?? null
 }
 
 function setGender(value: Gender) {
   form.gender = value
+  // User picked a gender — wipe any stale server-side gender error so the
+  // red ring clears immediately rather than waiting for the next submit.
+  clearServerErrorFor('gender')
+}
+
+function clearServerErrorFor(field: AddSubjectErrorField) {
+  if (!serverFieldErrors.value) return
+  serverFieldErrors.value = serverFieldErrors.value.filter((e) => e.field !== field)
+  if (serverFieldErrors.value.length === 0) serverFieldErrors.value = null
 }
 
 async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
   submitAttempted.value = true
   serverError.value = null
+  // Re-running submit invalidates any stale server-side errors.
+  serverFieldErrors.value = null
   if (liveErrors.value.length > 0) return
 
   try {
@@ -74,7 +97,11 @@ async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
     }
   } catch (err) {
     if (err instanceof AddSubjectValidationError) {
-      // Fall through — liveErrors already surfaces the issue inline.
+      // Server-authoritative: replace any client-side error state with
+      // the server's list so the user sees exactly what the backend
+      // rejected (e.g. duplicate ID at this site — the SPA's local
+      // check only catches in-memory dupes; the server is the truth).
+      serverFieldErrors.value = err.errors.length > 0 ? err.errors : null
       return
     }
     serverError.value = err instanceof Error ? err.message : 'Unknown server error'

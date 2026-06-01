@@ -12,6 +12,8 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Types;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -48,6 +50,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -464,6 +468,299 @@ public class SubjectsApiController {
                 ss.getOid(), currentStudy.getOid(), currentUser.getName(), blocking, warnings);
 
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Phase E.4 M4 — Add Subject endpoint.
+     *
+     * <p>Enrols a new subject in the currently-active study. Mirrors the
+     * persistence flow of the legacy {@code /AddNewSubject} servlet
+     * (subject row → study_subject row, both with {@code status_id=1}
+     * AVAILABLE and {@code owner_id} from the session user) but emits a
+     * pure-JSON response shape suitable for the SPA's
+     * {@code AddSubjectView}.
+     *
+     * <p><strong>Authorization:</strong> chain-level
+     * {@code .anyRequest().hasRole("USER")} gates the endpoint. The
+     * legacy servlet additionally checks for Investigator / CRC /
+     * Coordinator on the bound study before allowing the action — that
+     * compliance slice is deferred until per-role authorization lands
+     * uniformly across the SPA endpoints (out of M4 scope).
+     *
+     * <p><strong>Validation:</strong> all rules are enforced server-side
+     * and the controller returns ALL failing rules in a single 400
+     * response rather than first-fail. The SPA's
+     * {@code validateAddSubject} mirror is kept as instant client-side
+     * UX feedback only — the server remains authoritative (DR-008).
+     *
+     * <p><strong>Persistence:</strong> bypasses {@link SubjectDAO#create}
+     * because that DAO silently {@code null}s any gender code outside
+     * {@code 'm'/'f'} (its {@code switch} only handles those two cases).
+     * Inline SQL keeps full control over the {@code O}/{@code U} codes
+     * the SPA accepts. The {@code study_subject} insert reuses
+     * {@link StudySubjectDAO#create} so OID generation + collision
+     * randomisation come for free.
+     *
+     * <p><strong>No transaction wrapping:</strong> matches the legacy
+     * servlet's pattern (subject insert + study_subject insert without
+     * a shared transaction). A future hardening slice can add
+     * {@code @Transactional} once the data-access layer stops opening
+     * its own connections per DAO call.
+     *
+     * @param body JSON body matching {@link AddSubjectRequest}
+     * @param session HTTP session (active study + user bean)
+     * @return 201 + {@link SubjectDetailDto} on success;
+     *         400 + {@link ValidationErrorBody} on field errors;
+     *         400 if no study is bound;
+     *         401 if no userBean (defence-in-depth — SecurityConfig
+     *         should have blocked already);
+     *         500 if persistence fails after validation passes.
+     */
+    @PostMapping
+    public ResponseEntity<?> create(@RequestBody(required = false) AddSubjectRequest body,
+                                    HttpSession session) {
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session — visit /MainMenu after login."
+            ));
+        }
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (body == null) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new ValidationErrorBody.FieldError(
+                            "id", "Request body is required."))));
+        }
+
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+
+        List<ValidationErrorBody.FieldError> errors =
+                validateAddSubject(body, currentStudy, studySubjectDAO);
+
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+
+        // ----- Persist subject row (direct SQL to preserve O/U gender codes) -----
+        String trimmedId = body.id().trim();
+        String trimmedSecondary = body.secondaryId() == null ? null : body.secondaryId().trim();
+        if (trimmedSecondary != null && trimmedSecondary.isEmpty()) trimmedSecondary = null;
+        char genderChar = Character.toLowerCase(body.gender().charAt(0));
+        java.sql.Date dob = (body.yearOfBirth() == null) ? null
+                : java.sql.Date.valueOf(LocalDate.of(body.yearOfBirth(), 1, 1));
+        boolean dobCollected = body.yearOfBirth() != null;
+        java.sql.Date enrolledOn = java.sql.Date.valueOf(LocalDate.parse(body.enrolledOn()));
+
+        int newSubjectId;
+        try {
+            newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId());
+        } catch (SQLException e) {
+            LOG.error("Failed to insert subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to create subject — see server log."));
+        }
+
+        // ----- Persist study_subject row via DAO (reuse OID generator) -----
+        StudySubjectBean ssb = new StudySubjectBean();
+        ssb.setLabel(trimmedId);
+        ssb.setSecondaryLabel(trimmedSecondary == null ? "" : trimmedSecondary);
+        ssb.setSubjectId(newSubjectId);
+        ssb.setStudyId(currentStudy.getId());
+        ssb.setStatus(Status.AVAILABLE);
+        ssb.setEnrollmentDate(enrolledOn);
+        ssb.setOwner(currentUser);
+        // groupLabel intentionally ignored per M4 scope.
+
+        try {
+            ssb = studySubjectDAO.create(ssb);
+        } catch (Exception e) {
+            LOG.error("Failed to insert study_subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to enrol subject — see server log."));
+        }
+        if (ssb == null || ssb.getId() == 0) {
+            LOG.error("study_subject insert returned no PK for label={} study={}", trimmedId, currentStudy.getOid());
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to enrol subject — no PK returned."));
+        }
+
+        // ----- Build the response DTO -----
+        // No events scheduled yet — they're created via M11 (Schedule Event).
+        // No queries either. Reuse the M3 DTO shape so the SPA can drop the
+        // new subject straight into `rows` without a refetch.
+        SubjectDetailDto dto = new SubjectDetailDto(
+                ssb.getLabel(),
+                blankToNull(ssb.getSecondaryLabel()),
+                currentStudy.getOid(),
+                currentStudy.getName(),
+                currentStudy.getOid(),
+                currentStudy.getName(),
+                mapGender(genderChar),
+                body.yearOfBirth(),
+                /* groupLabel */ null,
+                body.enrolledOn(),
+                Collections.emptyList(),
+                /* signed */ false,
+                /* openQueries */ 0
+        );
+
+        LOG.info("Add Subject: created study_subject id={} oid={} label={} (study {}, user {})",
+                ssb.getId(), ssb.getOid(), ssb.getLabel(), currentStudy.getOid(), currentUser.getName());
+
+        return ResponseEntity.status(201).body(dto);
+    }
+
+    /**
+     * Server-side validation for {@link AddSubjectRequest}.
+     *
+     * <p>Returns ALL failing rules at once (not first-fail) so the SPA
+     * can surface every issue in a single submit cycle. Order in the
+     * returned list mirrors the request body for predictable rendering.
+     */
+    private static List<ValidationErrorBody.FieldError> validateAddSubject(
+            AddSubjectRequest body, StudyBean currentStudy, StudySubjectDAO studySubjectDAO) {
+        List<ValidationErrorBody.FieldError> errors = new ArrayList<>();
+
+        // ---- id: required, trimmed, ≤30 chars, unique within study ----
+        String id = body.id() == null ? "" : body.id().trim();
+        if (id.isEmpty()) {
+            errors.add(new ValidationErrorBody.FieldError("id", "Subject ID is required."));
+        } else if (id.length() > 30) {
+            errors.add(new ValidationErrorBody.FieldError("id",
+                    "Subject ID is too long (max 30 characters)."));
+        } else {
+            StudySubjectBean existing = studySubjectDAO.findByLabelAndStudy(id, currentStudy);
+            if (existing != null && existing.getId() != 0) {
+                errors.add(new ValidationErrorBody.FieldError("id",
+                        "Subject ID '" + id + "' already exists at this site."));
+            }
+        }
+
+        // ---- secondaryId: optional, trimmed, ≤30 chars ----
+        if (body.secondaryId() != null) {
+            String sec = body.secondaryId().trim();
+            if (sec.length() > 30) {
+                errors.add(new ValidationErrorBody.FieldError("secondaryId",
+                        "Secondary ID is too long (max 30 characters)."));
+            }
+            // No PHI server-side check — SPA's soft check remains.
+        }
+
+        // ---- gender: required, in {F, M, O, U} (case-insensitive) ----
+        String gender = body.gender() == null ? "" : body.gender().trim().toUpperCase();
+        if (gender.isEmpty()) {
+            errors.add(new ValidationErrorBody.FieldError("gender", "Gender is required."));
+        } else if (!gender.equals("F") && !gender.equals("M") && !gender.equals("O") && !gender.equals("U")) {
+            errors.add(new ValidationErrorBody.FieldError("gender",
+                    "'" + body.gender() + "' is not a valid gender code."));
+        }
+
+        // ---- yearOfBirth: optional; if present 1900..currentYear ----
+        if (body.yearOfBirth() != null) {
+            int yob = body.yearOfBirth();
+            int thisYear = LocalDate.now().getYear();
+            if (yob < 1900 || yob > thisYear) {
+                errors.add(new ValidationErrorBody.FieldError("yearOfBirth",
+                        "Year of birth must be between 1900 and " + thisYear + "."));
+            }
+        }
+
+        // ---- enrolledOn: required, ISO date, not in the future ----
+        String enrolledOnStr = body.enrolledOn();
+        if (enrolledOnStr == null || enrolledOnStr.trim().isEmpty()) {
+            errors.add(new ValidationErrorBody.FieldError("enrolledOn",
+                    "Enrolment date is required."));
+        } else {
+            LocalDate parsed = null;
+            try {
+                parsed = LocalDate.parse(enrolledOnStr.trim());
+            } catch (java.time.format.DateTimeParseException e) {
+                errors.add(new ValidationErrorBody.FieldError("enrolledOn",
+                        "Enrolment date must be a valid ISO date (YYYY-MM-DD)."));
+            }
+            if (parsed != null && parsed.isAfter(LocalDate.now())) {
+                errors.add(new ValidationErrorBody.FieldError("enrolledOn",
+                        "Enrolment date must not be in the future."));
+            }
+        }
+
+        // ---- groupLabel: ignored (out of scope for M4) ----
+
+        return errors;
+    }
+
+    /**
+     * Insert a {@code subject} row via direct SQL.
+     *
+     * <p>{@link SubjectDAO#create} is unsuitable here because its
+     * gender-handling {@code switch} only writes {@code 'm'} or
+     * {@code 'f'}; any other code (including the SPA's {@code O} for
+     * Other and {@code U} for Unknown) is silently coerced to NULL,
+     * losing data we need to round-trip. Inline SQL keeps the encoding
+     * direct.
+     *
+     * <p>{@code Statement.RETURN_GENERATED_KEYS} returns the
+     * auto-incremented PK, matching the {@code SubjectDAO.create}
+     * convention of {@code getLatestPK} after the insert.
+     */
+    private int insertSubjectRow(char gender, java.sql.Date dob, boolean dobCollected, int ownerId)
+            throws SQLException {
+        String sql = "INSERT INTO subject (status_id, date_of_birth, gender, unique_identifier, "
+                + "owner_id, date_created, dob_collected) "
+                + "VALUES (?, ?, ?, ?, ?, NOW(), ?)";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setInt(1, Status.AVAILABLE.getId());
+            if (dob == null) {
+                ps.setNull(2, Types.DATE);
+            } else {
+                ps.setDate(2, dob);
+            }
+            ps.setString(3, String.valueOf(gender));
+            ps.setNull(4, Types.VARCHAR); // unique_identifier nullable, not used by M4
+            ps.setInt(5, ownerId);
+            ps.setBoolean(6, dobCollected);
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (keys.next()) {
+                    return keys.getInt(1);
+                }
+                throw new SQLException("subject insert returned no generated key");
+            }
+        }
+    }
+
+    /**
+     * Request body for {@link #create(AddSubjectRequest, HttpSession)}.
+     *
+     * <p>Fields mirror the SPA's {@code AddSubjectInput} TS interface
+     * minus {@code siteOid} / {@code siteLabel} which are derived
+     * server-side from the active study. {@code groupLabel} is
+     * accepted but ignored in M4 — its plumbing arrives in a later
+     * compliance slice.
+     */
+    public record AddSubjectRequest(
+            String id,
+            String secondaryId,
+            String gender,
+            Integer yearOfBirth,
+            String enrolledOn,
+            String groupLabel
+    ) {}
+
+    /**
+     * 400-response body shape for validation failures. Matches the
+     * SPA's existing {@code AddSubjectError} TS shape byte-for-byte:
+     * an {@code errors} array of {field, message} pairs plus a
+     * top-level {@code message} summary.
+     */
+    public record ValidationErrorBody(String message, List<FieldError> errors) {
+        public record FieldError(String field, String message) {}
     }
 
     private SubjectDetailDto toDetailDto(StudySubjectBean ss, SubjectBean subj, StudyBean study,

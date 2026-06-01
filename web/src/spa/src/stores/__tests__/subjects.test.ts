@@ -9,19 +9,22 @@ import {
 import type { Subject } from '@/types/subject'
 
 // Mock the http client so the store tests run without a live backend.
-// We mock `apiGet` to return a fixture that mirrors the seed-data subjects
-// (M-001..M-007) — same shape the real adapter emits, same per-event
-// status taxonomy, same open-query counts. Keeping it as a top-level
-// fixture lets every test get a predictable, ordered baseline.
+// We mock both `apiGet` (subject matrix hydration) and `apiPost` (Add
+// Subject in M4) and let each test wire whichever responses it needs.
+// The fixture below mirrors the seed-data subjects (M-001..M-007) byte
+// for byte — same shape the real adapter emits, same per-event status
+// taxonomy, same open-query counts.
 vi.mock('@/api/client', async () => {
   const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
   return {
     ...actual,
     apiGet: vi.fn(),
+    apiPost: vi.fn(),
   }
 })
 
-import { apiGet } from '@/api/client'
+import { apiGet, apiPost } from '@/api/client'
+import type { SubjectDetail } from '@/types/subject'
 
 const FIXTURE_SUBJECTS: Subject[] = [
   {
@@ -270,40 +273,88 @@ describe('validateAddSubject', () => {
 })
 
 describe('useSubjectsStore — add()', () => {
+  // Build a SubjectDetail mirroring what the backend's
+  // POST /pages/api/v1/subjects returns for `baseInput`.
+  function detailFor(input: typeof baseInput): SubjectDetail {
+    return {
+      id: input.id.trim(),
+      secondaryId: input.secondaryId ?? null,
+      siteOid: input.siteOid,
+      siteLabel: input.siteLabel,
+      studyOid: input.siteOid,
+      studyName: input.siteLabel,
+      gender: input.gender,
+      yearOfBirth: input.yearOfBirth ?? null,
+      groupLabel: input.groupLabel ?? null,
+      enrolledOn: input.enrolledOn,
+      signed: false,
+      openQueries: 0,
+      events: [],
+    }
+  }
+
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(apiGet).mockReset()
+    vi.mocked(apiPost).mockReset()
     vi.mocked(apiGet).mockResolvedValue(FIXTURE_SUBJECTS)
   })
 
-  it('appends the subject when validation passes', async () => {
+  it('prepends the new subject when the backend returns 201', async () => {
     const store = useSubjectsStore()
     await store.load()
     const before = store.totalCount
+    vi.mocked(apiPost).mockResolvedValueOnce(detailFor(baseInput))
     const subject = await store.add(baseInput)
+    expect(apiPost).toHaveBeenCalledWith(
+      '/pages/api/v1/subjects',
+      expect.objectContaining({ id: 'M-101', gender: 'F', enrolledOn: '2026-05-30' }),
+    )
     expect(subject.id).toBe('M-101')
     expect(store.totalCount).toBe(before + 1)
-    expect(store.rows.at(-1)?.id).toBe('M-101')
+    // Prepend, not append — the brand-new row is what the user just
+    // entered, so it goes to the top of the matrix.
+    expect(store.rows[0]?.id).toBe('M-101')
   })
 
   it('seeds the new subject with no scheduled events (matrix shows empty row)', async () => {
-    // After M2, Add Subject only creates the study_subject row — visits
-    // are scheduled separately. The new row's events column is empty
-    // until the user schedules a visit (legacy /AddNewSubject parity).
+    // After M4, Add Subject only creates the subject + study_subject rows
+    // — visits are scheduled separately (M11). The new row's events
+    // column is empty until the user schedules a visit, matching legacy
+    // /AddNewSubject parity.
     const store = useSubjectsStore()
     await store.load()
+    vi.mocked(apiPost).mockResolvedValueOnce(detailFor(baseInput))
     const subject = await store.add(baseInput)
     expect(subject.events).toEqual([])
     expect(subject.signed).toBe(false)
     expect(subject.openQueries).toBe(0)
   })
 
-  it('throws AddSubjectValidationError on a duplicate id and does NOT append', async () => {
+  it('throws AddSubjectValidationError on a 400 with structured field errors', async () => {
+    const { ApiError } = await import('@/api/client')
     const store = useSubjectsStore()
     await store.load()
-    const existingId = store.rows[0]!.id
     const before = store.totalCount
-    await expect(store.add({ ...baseInput, id: existingId })).rejects.toBeInstanceOf(AddSubjectValidationError)
+    vi.mocked(apiPost).mockRejectedValueOnce(new ApiError(400, 'Validation failed', {
+      message: 'Validation failed',
+      errors: [
+        { field: 'id', message: "Subject ID 'M-001' already exists at this site." },
+      ],
+    }))
+    await expect(store.add({ ...baseInput, id: 'M-001' })).rejects.toBeInstanceOf(AddSubjectValidationError)
+    // No row was added — validation failure leaves the matrix untouched.
     expect(store.totalCount).toBe(before)
+  })
+
+  it('throws a generic Error and clears rows on ApiNetworkError', async () => {
+    const { ApiNetworkError } = await import('@/api/client')
+    const store = useSubjectsStore()
+    await store.load()
+    vi.mocked(apiPost).mockRejectedValueOnce(new ApiNetworkError('refused', undefined))
+    await expect(store.add(baseInput)).rejects.toThrow(/Backend nicht erreichbar/)
+    // Network failures don't surface as AddSubjectValidationError — the
+    // view shows the generic serverError banner instead of inline field
+    // errors.
   })
 })

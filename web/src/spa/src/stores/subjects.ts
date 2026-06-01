@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
+import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import type { Gender, Subject, SubjectDetail } from '@/types/subject'
 
 /**
@@ -152,49 +152,86 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
-   * Phase E.5.2 — enrol a new subject (optimistic local append).
+   * Phase E.4 M4 — enrol a new subject via the real backend.
    *
-   * TODO(E.4 M4): replace with `apiPost<Subject>('/pages/api/v1/subjects', input)`
-   * and remove the local id-generation / optimistic-append branch — the
-   * backend will own id allocation, secondary-id uniqueness, and the
-   * authoritative validation.
+   * Calls `POST /pages/api/v1/subjects`. On 201 the backend returns the
+   * new subject as a `SubjectDetail` (matrix fields + richer detail);
+   * we project it down to a `Subject` shape and prepend it to `rows`
+   * so the matrix updates without a refetch. On 400 with a structured
+   * `errors` array we throw `AddSubjectValidationError` so the view
+   * can surface per-field messages; on network / 5xx we throw a
+   * generic Error.
    *
-   * Until then the form's validation is the SPA's local
-   * {@link validateAddSubject}; we append a Subject with empty events
-   * so the matrix immediately reflects the new row.
+   * The backend owns identity / uniqueness / business validation
+   * (DR-008); {@link validateAddSubject} is kept as instant client-side
+   * UX feedback (used by AddSubjectView's `liveErrors`).
    */
   async function add(input: AddSubjectInput): Promise<Subject> {
-    const errors = validateAddSubject(input, rows.value)
-    if (errors.length > 0) {
-      const message = errors.map((e) => e.message).join('; ')
-      throw new AddSubjectValidationError(message, errors)
-    }
-
     isLoading.value = true
     error.value = null
     try {
-      // TODO(E.4 M4): apiPost<Subject>('/pages/api/v1/subjects', input).
-      await new Promise((resolve) => setTimeout(resolve, 30))
-
-      const subject: Subject = {
-        id: input.id.trim(),
+      // The backend infers site/study from the bound session — only the
+      // user-supplied fields go over the wire. groupLabel is accepted
+      // but ignored server-side in M4.
+      const payload = {
+        id: input.id?.trim() ?? '',
         secondaryId: input.secondaryId?.trim() || null,
-        siteOid: input.siteOid,
-        siteLabel: input.siteLabel,
         gender: input.gender,
         yearOfBirth: input.yearOfBirth ?? null,
-        groupLabel: input.groupLabel ?? null,
         enrolledOn: input.enrolledOn,
-        signed: false,
-        openQueries: 0,
-        // No events yet — the legacy /AddNewSubject flow only creates the
-        // study_subject row; visits are scheduled separately. The matrix
-        // shows the new row immediately with an empty event grid.
+        groupLabel: input.groupLabel ?? null,
+      }
+      const detail = await apiPost<SubjectDetail>('/pages/api/v1/subjects', payload)
+
+      // Project the detail DTO down to the leaner matrix `Subject`
+      // shape. The matrix doesn't render studyOid/studyName or the
+      // richer per-event metadata; trimming here keeps `rows` uniform
+      // with what `load()` returns.
+      const subject: Subject = {
+        id: detail.id,
+        secondaryId: detail.secondaryId,
+        // The detail DTO carries the active study as siteOid/siteLabel
+        // (M3 convention). Until per-site enrolment lands, keep the
+        // SPA's matrix using the same value for both `site*` fields.
+        siteOid: detail.siteOid,
+        siteLabel: detail.siteLabel,
+        gender: detail.gender as Gender,
+        yearOfBirth: detail.yearOfBirth,
+        groupLabel: detail.groupLabel,
+        enrolledOn: detail.enrolledOn,
+        signed: detail.signed,
+        openQueries: detail.openQueries,
+        // No events scheduled yet — M11 will schedule them.
         events: [],
       }
-      rows.value = [...rows.value, subject]
+      // Prepend so the just-created row is the first thing the user
+      // sees when navigated back to the matrix.
+      rows.value = [subject, ...rows.value]
       return subject
     } catch (e) {
+      // 400 validation: backend returns { message, errors: [{field, message}] }
+      if (e instanceof ApiError && e.status === 400 && hasFieldErrors(e.body)) {
+        const fieldErrors = (e.body.errors as AddSubjectError[]).filter(isAddSubjectError)
+        const message = e instanceof Error ? e.message : 'Validation failed'
+        // Don't surface field-level validation as a generic toast — the
+        // view consumes the structured error list and displays per-field
+        // messages itself. Leave `error` null.
+        throw new AddSubjectValidationError(message, fieldErrors)
+      }
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        // Let the router-level auth guard handle these.
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        const msg = 'Backend nicht erreichbar — bitte später erneut versuchen.'
+        error.value = msg
+        throw new Error(msg)
+      }
+      if (e instanceof ApiError) {
+        // 5xx, or 400 without structured errors body.
+        error.value = e.message
+        throw new Error(e.message)
+      }
       const msg = e instanceof Error ? e.message : 'Unknown error adding subject'
       error.value = msg
       throw e
@@ -274,6 +311,38 @@ export class AddSubjectValidationError extends Error {
     super(message)
     this.name = 'AddSubjectValidationError'
   }
+}
+
+/** Server-side AddSubject error envelope. */
+interface AddSubjectErrorsBody {
+  message?: string
+  errors: AddSubjectError[]
+}
+
+function hasFieldErrors(body: unknown): body is AddSubjectErrorsBody {
+  return (
+    body != null &&
+    typeof body === 'object' &&
+    Array.isArray((body as { errors?: unknown }).errors)
+  )
+}
+
+const allowedErrorFields: ReadonlyArray<AddSubjectErrorField> = [
+  'id',
+  'secondaryId',
+  'enrolledOn',
+  'gender',
+  'yearOfBirth',
+]
+
+function isAddSubjectError(value: unknown): value is AddSubjectError {
+  if (value == null || typeof value !== 'object') return false
+  const v = value as { field?: unknown; message?: unknown }
+  return (
+    typeof v.field === 'string' &&
+    (allowedErrorFields as ReadonlyArray<string>).includes(v.field) &&
+    typeof v.message === 'string'
+  )
 }
 
 /**
