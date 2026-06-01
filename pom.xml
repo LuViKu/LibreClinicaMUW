@@ -1049,11 +1049,9 @@
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-surefire-plugin</artifactId>
-					<!-- 2.10 (2011) → 2.22.2 (2018): the late-property syntax @{argLine}
-					     used to attach the JaCoCo agent was introduced in 2.17. Sticking
-					     to the 2.x line keeps JDK 8 compatibility and the existing
-					     JUnit 3/4 mixed test discovery semantics. -->
-					<version>2.22.2</version>
+					<!-- Surefire 3.x natively integrates JUnit Platform; JDK 21 baseline
+					     (Phase B.1) makes the 2.x lock-in obsolete. -->
+					<version>3.5.3</version>
 					<configuration>
 						<skipTests>${skipTests}</skipTests>
 						<!-- @{argLine} is resolved late so the JaCoCo prepare-agent goal

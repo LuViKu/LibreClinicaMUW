@@ -16,7 +16,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -103,14 +103,21 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
         // Multi-field validation: gender 'Z' is invalid; enrollment in
         // the future is invalid. Both errors should arrive in one 400
         // body so the SPA can light up every offending field at once.
+        //
+        // Note: omit `id` so the validator's per-id uniqueness DAO call
+        // (findByLabelAndStudy) is skipped — the "Subject ID is required"
+        // error short-circuits the duplicate-check branch. The DAO is
+        // a Mockito mock without behaviour stubs, so reaching it would
+        // NPE inside DAODigester.
         mockMvcWith().perform(post("/api/v1/subjects")
                 .contentType("application/json")
-                .content("{\"id\":\"M-200\",\"gender\":\"Z\",\"enrolledOn\":\"2099-01-01\"}")
+                .content("{\"gender\":\"Z\",\"enrolledOn\":\"2099-01-01\"}")
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[?(@.field == 'gender')]").exists())
-                .andExpect(jsonPath("$.errors[?(@.field == 'enrolledOn')]").exists());
+                .andExpect(jsonPath("$.errors[?(@.field == 'enrolledOn')]").exists())
+                .andExpect(jsonPath("$.errors[?(@.field == 'id')]").exists());
     }
 
     @Test
