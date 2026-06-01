@@ -1,0 +1,65 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.5 #3 follow-up (2026-06-02): dedupe dn_item_data_map.
+
+        Context. PR #51 (Phase E.4) shipped the demo seed at
+        lc-muw-2026-06-01-seed-demo-data.xml + an explicit fixup at
+        lc-muw-2026-06-01-seed-demo-data-fixup.xml. The original M2
+        seed inlined 8 dn_item_data_map rows AND the M2 fixup
+        registered the same 8 inserts (intent: "if the seed somehow
+        skips them, the fixup catches it"). The fixup XML had a XSD
+        ordering bug (preConditions after comment) that prevented it
+        from parsing on fresh deploys — Phase E.5 A3 (commit
+        `1aa4ae7fa`) fixed the order. Net effect on a clean DB after
+        A3 lands: 16 rows in dn_item_data_map (8 + 8 duplicates).
+
+        This changeset deletes the duplicates, keeping the row with
+        the lowest id per (item_data_id, discrepancy_note_id, study_subject_id)
+        tuple. Idempotent: runs once via Liquibase's databasechangelog
+        guard; further runs are no-ops via the preCondition below.
+
+        Why a GROUP BY MIN(id) rather than a fancier "keep the row
+        that matches the seed convention": the duplicate pairs are
+        byte-identical except for the autoincrement id. The seed's
+        inline rows arrive first (smaller ids), the fixup re-inserts
+        with larger ids. Keeping MIN(id) keeps the seed's row,
+        consistent with "the seed is the source of truth".
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-02-prune-dn-item-data-map-duplicates" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <!-- Only run if duplicates exist; safe no-op when the DB has
+                 already converged or when the seed never ran (test DBs). -->
+            <sqlCheck expectedResult="0">
+                SELECT CASE WHEN COUNT(*) = COUNT(DISTINCT (item_data_id, discrepancy_note_id, study_subject_id))
+                            THEN 0 ELSE 1 END
+                FROM dn_item_data_map
+                WHERE discrepancy_note_id BETWEEN 1 AND 8
+            </sqlCheck>
+        </preConditions>
+        <comment>Drop duplicate dn_item_data_map rows for the 8 seeded discrepancy notes; keep MIN(id) per tuple</comment>
+
+        <sql splitStatements="false"><![CDATA[
+            DELETE FROM dn_item_data_map
+            WHERE id IN (
+                SELECT id
+                FROM (
+                    SELECT id,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY item_data_id, discrepancy_note_id, study_subject_id
+                               ORDER BY id
+                           ) AS rn
+                    FROM dn_item_data_map
+                ) ranked
+                WHERE ranked.rn > 1
+            )
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>
