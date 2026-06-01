@@ -155,8 +155,10 @@ public class SubjectsApiController {
     /** Extract YoB if the study collects DoB and the subject has one. */
     private static Integer extractYear(SubjectBean subj) {
         if (subj == null || !subj.isDobCollected() || subj.getDateOfBirth() == null) return null;
-        return subj.getDateOfBirth()
-                .toInstant()
+        // SubjectDAO returns java.sql.Date for the date_of_birth column, and
+        // java.sql.Date#toInstant() throws UnsupportedOperationException by
+        // design (the sql Date has no time component). Convert via epoch ms.
+        return java.time.Instant.ofEpochMilli(subj.getDateOfBirth().getTime())
                 .atZone(ZoneId.systemDefault())
                 .getYear();
     }
@@ -164,6 +166,6 @@ public class SubjectsApiController {
     /** Format `Date` → ISO YYYY-MM-DD. */
     private static String formatIsoDate(Date d) {
         if (d == null) return null;
-        return LocalDate.ofInstant(d.toInstant(), ZoneId.systemDefault()).toString();
+        return LocalDate.ofInstant(java.time.Instant.ofEpochMilli(d.getTime()), ZoneId.systemDefault()).toString();
     }
 }
