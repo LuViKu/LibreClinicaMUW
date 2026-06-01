@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Phase E.5 A5 — audit-log parser improvement: human display names
+    per audit_log_event_type_id.
+
+    Why:
+    Several upstream audit_log_event_type rows have machine-style names
+    like "event_crf_started" or non-grammatical "Item data value
+    updated" — readable to a backend developer but poor UX in the SPA's
+    Audit Log timeline. A5 surfaces a `display_name` column the
+    AuditApiController prefers when populating the DTO `title` field;
+    rows without a display_name fall through to the legacy `name`
+    column unchanged.
+
+    Approach:
+    - addColumn for display_name VARCHAR(120) NULL — additive, no
+      breakage to the original `name` column, no foreign-key churn.
+    - Bulk INSERT-or-update via per-row UPDATE so this is safe to
+      re-apply on fresh DBs where the type rows were already
+      backfilled. Liquibase changeset id 2026-06-02-audit-event-type-
+      display-names so the order after the 2026-06-01-seed-* pair is
+      explicit.
+    - Do NOT touch the existing `name` column — that's a stable foreign
+      identifier some legacy code (and the trigger functions) compare
+      strings against. The brief explicitly says "do NOT edit the
+      existing rows that have a non-null name — only ADD the new
+      column + populate it".
+
+    The display labels mirror the natural-language phrasings used in
+    the SPA's mockup at
+    docs/development/modernization/phase-e/ux-mockups/investigator-audit-log.html
+    plus the 30-vocabulary survey from the original M10 plan.
+  -->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="muw-ophthalmology" id="2026-06-02-add-audit-event-type-display-name-column">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="audit_log_event_type" columnName="display_name"/></not>
+        </preConditions>
+        <comment>Add audit_log_event_type.display_name column for the Audit Log SPA's title field</comment>
+        <addColumn tableName="audit_log_event_type">
+            <column name="display_name" type="VARCHAR(120)"/>
+        </addColumn>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-06-02-populate-audit-event-type-display-names">
+        <comment>Populate display_name for the legacy audit_log_event_type vocabulary (idempotent per-id UPDATE)</comment>
+
+        <!-- 1: item_data update. Type 1 fires whenever an item_data
+             row's value column changes — by far the noisiest type in
+             a busy study, hence the gentler phrasing. -->
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Item value updated"/>
+            <where>audit_log_event_type_id = 1</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study subject enrolled"/>
+            <where>audit_log_event_type_id = 2</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Subject status changed"/>
+            <where>audit_log_event_type_id = 3</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Subject attribute changed"/>
+            <where>audit_log_event_type_id = 4</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Subject created"/>
+            <where>audit_log_event_type_id = 5</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Subject status changed (system)"/>
+            <where>audit_log_event_type_id = 6</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Subject demographics changed"/>
+            <where>audit_log_event_type_id = 7</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF marked complete"/>
+            <where>audit_log_event_type_id = 8</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Date of interview updated"/>
+            <where>audit_log_event_type_id = 9</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF locked"/>
+            <where>audit_log_event_type_id = 10</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF unlocked"/>
+            <where>audit_log_event_type_id = 11</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Item status changed"/>
+            <where>audit_log_event_type_id = 12</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Item value deleted"/>
+            <where>audit_log_event_type_id = 13</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Subject signed"/>
+            <where>audit_log_event_type_id = 14</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF data entry started"/>
+            <where>audit_log_event_type_id = 15</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF revalidated"/>
+            <where>audit_log_event_type_id = 16</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event scheduled"/>
+            <where>audit_log_event_type_id = 17</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event date changed"/>
+            <where>audit_log_event_type_id = 18</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event location updated"/>
+            <where>audit_log_event_type_id = 19</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event status changed"/>
+            <where>audit_log_event_type_id = 20</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event started"/>
+            <where>audit_log_event_type_id = 21</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event ended"/>
+            <where>audit_log_event_type_id = 22</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event removed"/>
+            <where>audit_log_event_type_id = 23</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event reset"/>
+            <where>audit_log_event_type_id = 24</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event archived"/>
+            <where>audit_log_event_type_id = 25</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event unarchived"/>
+            <where>audit_log_event_type_id = 26</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Discrepancy note added"/>
+            <where>audit_log_event_type_id = 27</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Subject group assigned"/>
+            <where>audit_log_event_type_id = 28</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Subject group changed"/>
+            <where>audit_log_event_type_id = 29</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Item data revalidated"/>
+            <where>audit_log_event_type_id = 30</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Subject signed (e-signature)"/>
+            <where>audit_log_event_type_id = 31</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="SDV verified"/>
+            <where>audit_log_event_type_id = 32</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF version changed"/>
+            <where>audit_log_event_type_id = 33</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Randomization performed"/>
+            <where>audit_log_event_type_id = 34</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="Study event restored"/>
+            <where>audit_log_event_type_id = 35</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF deleted"/>
+            <where>audit_log_event_type_id = 40</where>
+        </update>
+        <update tableName="audit_log_event_type">
+            <column name="display_name" value="CRF started"/>
+            <where>audit_log_event_type_id = 41</where>
+        </update>
+    </changeSet>
+
+</databaseChangeLog>

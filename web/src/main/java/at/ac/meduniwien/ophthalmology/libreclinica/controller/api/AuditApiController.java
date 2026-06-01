@@ -20,10 +20,12 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
@@ -34,6 +36,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectD
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,16 +94,22 @@ public class AuditApiController {
     private static final Logger LOG = LoggerFactory.getLogger(AuditApiController.class);
 
     /**
-     * Single-pass SQL that returns every audit row scoped to the
-     * active study. Repeats {@code ?} for the studyId parameter five
-     * times to bind once per branch.
+     * Template for the single-pass SQL that returns every audit row
+     * scoped to a set of study_ids. The literal {@code __IN__} token
+     * is replaced at call time with a placeholder list of the right
+     * arity ({@code (?, ?, …)} repeated five times — one IN per
+     * audit-table branch). Until A4, the SQL had a literal {@code = ?}
+     * per branch; A4 generalises to per-site visibility — Monitor with
+     * a single site grant under a multi-site study now sees only that
+     * site's rows.
      */
-    private static final String STUDY_SCOPED_AUDIT_SQL = """
+    private static final String STUDY_SCOPED_AUDIT_SQL_TEMPLATE = """
             SELECT
               a.audit_id, a.audit_date, a.audit_table, a.entity_id,
               a.reason_for_change, a.audit_log_event_type_id,
               a.old_value, a.new_value, a.event_crf_id, a.study_event_id,
-              a.user_id, ua.user_name, alet.name AS type_name
+              a.user_id, ua.user_name, alet.name AS type_name,
+              alet.display_name AS type_display_name
             FROM audit_log_event a
             LEFT JOIN user_account ua ON ua.user_id = a.user_id
             LEFT JOIN audit_log_event_type alet
@@ -111,29 +120,32 @@ public class AuditApiController {
                     JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id
                     JOIN study_event se ON se.study_event_id = ec.study_event_id
                     JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id
-                  WHERE ss.study_id = ?))
+                  WHERE ss.study_id IN __IN__))
               OR ( a.audit_table = 'event_crf' AND a.entity_id IN (
                   SELECT ec.event_crf_id FROM event_crf ec
                     JOIN study_event se ON se.study_event_id = ec.study_event_id
                     JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id
-                  WHERE ss.study_id = ?))
+                  WHERE ss.study_id IN __IN__))
               OR ( a.audit_table = 'study_subject' AND a.entity_id IN (
-                  SELECT study_subject_id FROM study_subject WHERE study_id = ?))
+                  SELECT study_subject_id FROM study_subject WHERE study_id IN __IN__))
               OR ( a.audit_table = 'subject' AND a.entity_id IN (
-                  SELECT subject_id FROM study_subject WHERE study_id = ?))
+                  SELECT subject_id FROM study_subject WHERE study_id IN __IN__))
               OR ( a.audit_table = 'study_event' AND a.entity_id IN (
                   SELECT se.study_event_id FROM study_event se
                     JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id
-                  WHERE ss.study_id = ?))
+                  WHERE ss.study_id IN __IN__))
             ORDER BY a.audit_date DESC, a.audit_id DESC
             LIMIT 500
             """;
 
     private final DataSource dataSource;
+    private final SiteVisibilityFilter siteVisibilityFilter;
 
     @Autowired
-    public AuditApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public AuditApiController(@Qualifier("dataSource") DataSource dataSource,
+                              SiteVisibilityFilter siteVisibilityFilter) {
         this.dataSource = dataSource;
+        this.siteVisibilityFilter = siteVisibilityFilter;
     }
 
     @GetMapping
@@ -152,7 +164,20 @@ public class AuditApiController {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         int studyId = currentStudy.getId();
+
+        // A4 — per-site visibility. The audit SQL embeds the visible
+        // ids as a parameterised IN clause (one of {n placeholders}
+        // per audit_table branch, five branches → 5n binds total). An
+        // empty visible set would build an invalid `IN ()` clause; we
+        // fall back to the bare currentStudy.id in that defensive
+        // case so the endpoint still produces a result.
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        if (visibleStudyIds.isEmpty()) visibleStudyIds = Set.of(studyId);
+        String inClause = buildInClause(visibleStudyIds.size());
+        String sql = STUDY_SCOPED_AUDIT_SQL_TEMPLATE.replace("__IN__", inClause);
 
         // Caches for the per-row subject/item resolution.
         StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
@@ -167,8 +192,14 @@ public class AuditApiController {
 
         List<AuditEventDto> out = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
-             PreparedStatement ps = c.prepareStatement(STUDY_SCOPED_AUDIT_SQL)) {
-            for (int i = 1; i <= 5; i++) ps.setInt(i, studyId);
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            // 5 IN clauses × n ids each.
+            int bindIdx = 1;
+            for (int branch = 0; branch < 5; branch++) {
+                for (Integer sid : visibleStudyIds) {
+                    ps.setInt(bindIdx++, sid);
+                }
+            }
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     Integer auditId = rs.getInt("audit_id");
@@ -182,11 +213,21 @@ public class AuditApiController {
                     String reason = rs.getString("reason_for_change");
                     String userName = rs.getString("user_name");
                     String typeName = rs.getString("type_name");
+                    String typeDisplay = rs.getString("type_display_name");
 
                     String variant = variantForType(typeId, reason);
                     String actor = (userName == null || userName.isBlank()) ? "system" : userName;
-                    String title = typeName == null || typeName.isBlank()
-                            ? "Audit event #" + auditId : typeName;
+                    // A5 — prefer the curated display name when available;
+                    // fall back to the legacy `name` column (lowercase
+                    // snake-case keys) for any type without a display row.
+                    String title;
+                    if (typeDisplay != null && !typeDisplay.isBlank()) {
+                        title = typeDisplay;
+                    } else if (typeName != null && !typeName.isBlank()) {
+                        title = typeName;
+                    } else {
+                        title = "Audit event #" + auditId;
+                    }
 
                     String subjectLabel = resolveSubjectLabel(
                             auditTable, entityId, eventCrfId,
@@ -207,6 +248,15 @@ public class AuditApiController {
                     String occurredAt = ts == null ? null
                             : ts.toInstant().atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
 
+                    // A5 — prettify the raw before/after columns.
+                    // Status-code mapping is keyed on (audit_table,
+                    // type_name) because entity_name (the audit row's
+                    // column-name marker) isn't a separate DB column —
+                    // the trigger packs it into `name` for legacy rows
+                    // and into the type_name we already fetched.
+                    String prettyOld = prettifyValue(auditTable, typeName, oldVal);
+                    String prettyNew = prettifyValue(auditTable, typeName, newVal);
+
                     out.add(new AuditEventDto(
                             String.valueOf(auditId),
                             occurredAt,
@@ -217,8 +267,8 @@ public class AuditApiController {
                             subjectLabel,
                             scope,
                             /* details */ null,
-                            blankToNull(oldVal),
-                            blankToNull(newVal),
+                            blankToNull(prettyOld),
+                            blankToNull(prettyNew),
                             blankToNull(reason)));
                 }
             }
@@ -312,5 +362,115 @@ public class AuditApiController {
 
     private static String blankToNull(String s) {
         return (s == null || s.isBlank()) ? null : s;
+    }
+
+    /**
+     * Build a SQL {@code IN (?, ?, …)} clause with {@code n}
+     * placeholders. Caller is responsible for binding {@code n}
+     * values in order.
+     */
+    static String buildInClause(int n) {
+        if (n <= 0) return "(NULL)"; // defensive — caller pre-clamps
+        StringBuilder sb = new StringBuilder("(?");
+        for (int i = 1; i < n; i++) sb.append(",?");
+        sb.append(")");
+        return sb.toString();
+    }
+
+    /**
+     * A5 — prettify a raw {@code audit_log_event.{old,new}_value}
+     * value for the SPA's diff card.
+     *
+     * <p>Two passes:
+     * <ol>
+     *   <li>Status-code mapping. Keyed on {@code (audit_table,
+     *       type_name)} where {@code type_name} is the legacy
+     *       lowercase snake-case key set by the trigger. Numeric
+     *       status ids ({@code "1"}, {@code "8"}, etc.) become human
+     *       labels ({@code "Available"}, {@code "Signed"}, etc.).</li>
+     *   <li>Boolean prettification. Raw {@code "TRUE"}/{@code "FALSE"}
+     *       (postgres-trigger output) become {@code "yes"}/{@code "no"}.</li>
+     * </ol>
+     *
+     * <p>Anything outside both mapping tables falls through unchanged
+     * (e.g. ISO dates, free-text fields).
+     */
+    static String prettifyValue(String auditTable, String typeName, String raw) {
+        if (raw == null) return null;
+        String mapped = mapStatusCode(auditTable, typeName, raw);
+        if (mapped != null) return mapped;
+        // Boolean prettification — strip whitespace before comparing
+        // because some triggers emit padded strings.
+        String trimmed = raw.trim();
+        if (trimmed.equalsIgnoreCase("TRUE")) return "yes";
+        if (trimmed.equalsIgnoreCase("FALSE")) return "no";
+        return raw;
+    }
+
+    /**
+     * Map a raw status-id string to its human label per the
+     * (audit_table, type_name) pair. Returns {@code null} when no
+     * mapping applies — caller falls back to the raw value.
+     *
+     * <p>Status id sets:
+     * <ul>
+     *   <li>{@link at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status}
+     *       — for {@code study_subject.Status} + {@code event_crf.Status}:
+     *       1→Available, 2→Unavailable, 5→Removed, 8→Signed.</li>
+     *   <li>{@link at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus}
+     *       — for {@code study_event.Status}: 1→Scheduled,
+     *       4→Completed, 8→Signed.</li>
+     *   <li>EventCRF SDV Status — {@code "TRUE"} / {@code "FALSE"}
+     *       → "SDV complete" / "SDV pending".</li>
+     * </ul>
+     */
+    static String mapStatusCode(String auditTable, String typeName, String raw) {
+        if (auditTable == null || typeName == null || raw == null) return null;
+        String t = typeName.trim();
+        // EventCRF SDV Status — true/false mapping rather than numeric.
+        if ("event_crf".equalsIgnoreCase(auditTable) && "EventCRF SDV Status".equalsIgnoreCase(t)) {
+            String r = raw.trim();
+            if (r.equalsIgnoreCase("TRUE")) return "SDV complete";
+            if (r.equalsIgnoreCase("FALSE")) return "SDV pending";
+        }
+        if (("study_subject".equalsIgnoreCase(auditTable)
+                || "event_crf".equalsIgnoreCase(auditTable))
+                && "Status".equalsIgnoreCase(t)) {
+            return mapEntityStatus(raw);
+        }
+        if ("study_event".equalsIgnoreCase(auditTable) && "Status".equalsIgnoreCase(t)) {
+            return mapSubjectEventStatus(raw);
+        }
+        return null;
+    }
+
+    private static String mapEntityStatus(String raw) {
+        String trimmed = raw.trim();
+        return switch (trimmed) {
+            case "1" -> "Available";
+            case "2" -> "Unavailable";
+            case "3" -> "Private";
+            case "4" -> "Pending";
+            case "5" -> "Removed";
+            case "6" -> "Locked";
+            case "7" -> "Auto-removed";
+            case "8" -> "Signed";
+            default -> null;
+        };
+    }
+
+    private static String mapSubjectEventStatus(String raw) {
+        String trimmed = raw.trim();
+        return switch (trimmed) {
+            case "1" -> "Scheduled";
+            case "2" -> "Not Scheduled";
+            case "3" -> "Data Entry Started";
+            case "4" -> "Completed";
+            case "5" -> "Stopped";
+            case "6" -> "Skipped";
+            case "7" -> "Locked";
+            case "8" -> "Signed";
+            default -> null;
+        };
     }
 }
