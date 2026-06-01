@@ -402,6 +402,23 @@
 			<groupId>org.mockito</groupId>
 			<artifactId>mockito-core</artifactId>
 		</dependency>
+		<!-- Phase E.5 #1: Testcontainers Postgres ITs. Version managed by
+		     parent pom's dependencyManagement at 1.21.4 (overrides Spring
+		     Boot 3.5.0's BOM-pinned 1.21.0 — Docker 29.x compat, see parent
+		     pom comment). The postgresql module starts a real PG container
+		     per test class; junit-jupiter provides the @Testcontainers /
+		     @Container hooks. Both deps are test scope — production WAR is
+		     not affected. -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
 		<!-- Selenium 4.x for the smoke-tests profile (browser-driven
 		     verification of jmesa cohort migrations). Only fetched +
 		     used when the profile is active; production WAR is not

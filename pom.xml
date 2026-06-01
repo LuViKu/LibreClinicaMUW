@@ -243,6 +243,56 @@
 				<type>pom</type>
 				<scope>import</scope>
 			</dependency>
+			<!-- Phase E.5 #1: Testcontainers 1.21.4 (latest 1.x — the 2.x
+			     line is BOM-only at time of writing). Spring Boot 3.5.0's
+			     BOM pins 1.21.0 which uses a shaded docker-java release
+			     whose `Api-Version` handshake is rejected by Docker 29.x
+			     (Docker Desktop 4.75 / Docker 29.5) with "client version
+			     1.32 is too old". 1.21.4 fixes the handshake. Explicit
+			     <version> per artifact because Maven BOM imports honour
+			     first-wins and Boot's BOM was imported above. Test scope
+			     only — production WAR is not affected.
+
+			     Local dev on Docker Desktop 29.x additionally needs:
+			       export DOCKER_HOST=unix://~/Library/Containers/com.docker.docker/Data/docker.raw.sock
+			       export TESTCONTAINERS_RYUK_DISABLED=true
+			     The default Docker Desktop socket on the host
+			     (~/.docker/run/docker.sock) is the CLI proxy, not dockerd
+			     — Testcontainers can't speak to it. Ryuk fails on Mac
+			     because its container would try to bind-mount the host
+			     socket path which the Linux VM cannot resolve. Both env
+			     vars are no-ops on Linux CI runners (Docker 24-26 + the
+			     default /var/run/docker.sock work directly). -->
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>testcontainers</artifactId>
+				<version>1.21.4</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>postgresql</artifactId>
+				<version>1.21.4</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>junit-jupiter</artifactId>
+				<version>1.21.4</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>database-commons</artifactId>
+				<version>1.21.4</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>jdbc</artifactId>
+				<version>1.21.4</version>
+				<scope>test</scope>
+			</dependency>
 			<dependency>
 				<groupId>${project.groupId}.odm</groupId>
 				<artifactId>LibreClinica-odm</artifactId>
@@ -1063,6 +1113,22 @@
 					<version>3.5.3</version>
 					<configuration>
 						<skipTests>${skipTests}</skipTests>
+						<!-- Default surefire includes (**/Test*.java, **/*Test.java,
+						     **/*Tests.java) do NOT pick up *IT.java. Phase E.5 #1's
+						     Testcontainers-backed happy-path ITs use the
+						     *DatabaseIT.java naming so they self-document as
+						     DB-dependent without colliding with the *IT.java naming
+						     reserved for the integration-tests-profile-only suite
+						     in core/src/test/java/.../it/. These ITs ARE wanted in
+						     the default `mvn test` (they boot their own
+						     Testcontainers PG; no external DB needed) — explicit
+						     include keeps them in. -->
+						<includes>
+							<include>**/Test*.java</include>
+							<include>**/*Test.java</include>
+							<include>**/*Tests.java</include>
+							<include>**/*DatabaseIT.java</include>
+						</includes>
 						<!-- @{argLine} is resolved late so the JaCoCo prepare-agent goal
 						     (bound to initialize) has already populated it.
 						     Phase B.1 JDK 21 baseline: legacy Mockito + Spring/Hibernate
