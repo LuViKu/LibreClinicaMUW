@@ -22,6 +22,7 @@ import java.util.Map;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -41,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
@@ -56,6 +58,8 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -259,6 +263,251 @@ public class EventCrfsApiController {
 
         return ResponseEntity.ok(dto);
     }
+
+    /**
+     * Phase E.4 M6 — incremental save. Accepts a partial values map
+     * (item OID → value) and upserts each one into {@code item_data}.
+     * Idempotent: same payload twice yields the same DB state. Returns
+     * the updated {@code lastSavedAt} ISO instant so the SPA can
+     * refresh its header.
+     *
+     * <p>Reject if the CRF is locked (status SIGNED or LOCKED) — once
+     * signed, edits go through a different unlock flow.
+     *
+     * <p>Audit-log: one {@link AuditEventBean} row per changed item,
+     * recording (auditTable="item_data", entityId, columnName="value",
+     * oldValue, newValue). Creation-from-empty also writes one row with
+     * an empty oldValue so the audit trail shows the initial entry.
+     */
+    @PostMapping("/{id:[0-9]+}/items")
+    public ResponseEntity<?> saveItems(@PathVariable("id") int eventCrfId,
+                                       @RequestBody SaveItemsRequest body,
+                                       HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session — POST /pages/api/v1/me/activeStudy first."
+            ));
+        }
+        if (body == null || body.values() == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Missing 'values' in request body"));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        if (ss == null || ss.getStudyId() != currentStudy.getId()) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is locked — cannot save"));
+        }
+
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+
+        int saved = 0;
+        int rejected = 0;
+        for (Map.Entry<String, Object> entry : body.values().entrySet()) {
+            String itemOid = entry.getKey();
+            String newValue = entry.getValue() == null ? "" : String.valueOf(entry.getValue());
+
+            ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+            if (candidates == null || candidates.isEmpty()) {
+                LOG.warn("saveItems: unknown item OID '{}' on event_crf {} (skipped)", itemOid, eventCrfId);
+                rejected++;
+                continue;
+            }
+            ItemBean item = candidates.get(0);
+
+            ItemDataBean existing = idDAO.findByItemIdAndEventCRFId(item.getId(), ecb.getId());
+            String oldValue = "";
+            boolean isCreate;
+            if (existing != null && existing.getId() > 0) {
+                oldValue = existing.getValue() == null ? "" : existing.getValue();
+                if (oldValue.equals(newValue)) {
+                    // Same value — skip the write but still count as saved.
+                    saved++;
+                    continue;
+                }
+                existing.setValue(newValue);
+                existing.setUpdater(currentUser);
+                existing.setUpdaterId(currentUser.getId());
+                existing.setStatus(Status.AVAILABLE);
+                existing.setOldStatus(Status.AVAILABLE);
+                idDAO.update(existing);
+                isCreate = false;
+            } else {
+                ItemDataBean idb = new ItemDataBean();
+                idb.setEventCRFId(ecb.getId());
+                idb.setItemId(item.getId());
+                idb.setValue(newValue);
+                idb.setOrdinal(1);
+                idb.setOwnerId(currentUser.getId());
+                idb.setOwner(currentUser);
+                idb.setStatus(Status.AVAILABLE);
+                idb.setOldStatus(Status.AVAILABLE);
+                idb.setDeleted(false);
+                idDAO.create(idb);
+                isCreate = true;
+            }
+
+            writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                    isCreate ? "item_data_create" : "item_data_update",
+                    "item_data", existing != null ? existing.getId() : 0,
+                    itemOid, oldValue, newValue);
+            saved++;
+        }
+
+        // Touch the EventCRF so {date_updated} reflects the save —
+        // drives the SPA's lastSavedAt header.
+        ecb.setUpdater(currentUser);
+        ecb.setUpdatedDate(new Date());
+        eventCrfDAO.update(ecb);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("eventCrfOid", String.valueOf(ecb.getId()));
+        out.put("savedItemCount", saved);
+        out.put("rejectedItemCount", rejected);
+        out.put("lastSavedAt", formatIsoInstant(latestUpdate(eventCrfDAO.findByPK(ecb.getId()))));
+        out.put("status", computeStatus(ecb, /* re-check after touch */ saved > 0));
+
+        LOG.info("CRF save: event_crf {} got {} items (rejected {}); user {} study {}",
+                ecb.getId(), saved, rejected, currentUser.getName(), currentStudy.getOid());
+
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Phase E.4 M6 — mark CRF complete. Delegates to
+     * {@link EventCRFDAO#markComplete} (the IDE — initial data entry —
+     * path). The SPA calls this when the user clicks "Mark complete"
+     * after a clean validation pass; the SPA-side validation in
+     * {@code stores/crfEntry.ts:computeItemErrors} prevents the click
+     * when required items are missing, so this endpoint trusts the
+     * client to have run that gate and only enforces the locked-CRF
+     * gate server-side.
+     *
+     * <p>Reject if the CRF is locked (idempotent on already-complete
+     * CRFs: returns 200 with the existing state).
+     */
+    @PostMapping("/{id:[0-9]+}/markComplete")
+    public ResponseEntity<?> markComplete(@PathVariable("id") int eventCrfId,
+                                          HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."
+            ));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        if (ss == null || ss.getStudyId() != currentStudy.getId()) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is already locked"));
+        }
+
+        // Already complete (date_completed set) → return idempotently.
+        if (ecb.getDateCompleted() == null) {
+            eventCrfDAO.markComplete(ecb, /* ide */ true);
+
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                    "event_crf_mark_complete", "event_crf", ecb.getId(),
+                    /* columnName */ "date_completed", /* old */ "",
+                    /* new */ Instant.now().toString());
+        }
+
+        EventCRFBean refreshed = eventCrfDAO.findByPK(ecb.getId());
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("eventCrfOid", String.valueOf(refreshed.getId()));
+        out.put("status", computeStatus(refreshed, true));
+        out.put("lastSavedAt", formatIsoInstant(latestUpdate(refreshed)));
+
+        LOG.info("CRF markComplete: event_crf {} status now {}; user {} study {}",
+                refreshed.getId(), out.get("status"), currentUser.getName(), currentStudy.getOid());
+
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Single audit-event row capturing the change. The legacy
+     * {@link AuditEventDAO#create} only persists the {@code audit_table /
+     * user_id / entity_id / reason_for_change / action_message} columns
+     * — the richer {@code old_value / new_value / column_name} fields
+     * exist on {@link AuditEventBean} but the DAO never writes them
+     * (per the comment block in AuditEventDAO line 200ff: "new query
+     * needs to be …" — never landed). We pack the before/after pair
+     * into {@code actionMessage} so the Audit Log view (M10) can still
+     * surface the diff once the DAO is extended.
+     *
+     * <p>Wrapped in try/catch because audit-write failures must not
+     * roll back the user-facing save — losing an audit row is annoying
+     * but losing the data is worse.
+     */
+    private static void writeAuditEvent(AuditEventDAO dao, UserAccountBean user,
+                                        StudyBean study, StudySubjectBean ss,
+                                        String actionMessage, String auditTable,
+                                        int entityId, String columnName,
+                                        String oldValue, String newValue) {
+        try {
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(user.getId());
+            ae.setStudyId(study.getId());
+            ae.setSubjectId(ss == null ? 0 : ss.getId());
+            ae.setStudyName(study.getName() != null ? study.getName() : "");
+            ae.setSubjectName(ss != null && ss.getLabel() != null ? ss.getLabel() : "");
+            ae.setAuditTable(auditTable);
+            ae.setEntityId(entityId);
+            ae.setColumnName(columnName);
+            ae.setOldValue(oldValue == null ? "" : oldValue);
+            ae.setNewValue(newValue == null ? "" : newValue);
+            // Pack the before/after into actionMessage so the diff is
+            // discoverable even though the legacy DAO drops the
+            // old_value / new_value / column_name columns. Format:
+            //   "<actionMessage>: <columnName> '<old>' → '<new>'"
+            String packed = actionMessage + ": " + columnName
+                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
+                    + (newValue == null ? "" : newValue) + "'";
+            ae.setActionMessage(packed);
+            ae.setAuditDate(new Date());
+            dao.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit-write failed for {}.{} entity {} — continuing without audit row: {}",
+                    auditTable, columnName, entityId, e.getMessage());
+        }
+    }
+
+    /** Body of POST /pages/api/v1/eventCrfs/{id}/items. */
+    public record SaveItemsRequest(Map<String, Object> values) {}
 
     /**
      * Build a single item DTO. The {@code dataType} mapping prefers the

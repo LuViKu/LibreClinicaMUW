@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
+import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import type {
   CrfEntry,
   CrfEntryStatus,
@@ -93,13 +93,32 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
 
   async function save(): Promise<void> {
     if (!entry.value || !pendingChanges.value) return
+    const target = entry.value
     isSaving.value = true
+    error.value = null
     try {
-      // TODO(E.4 M6): apiPost(`/pages/api/v1/eventCrfs/${entry.value.eventCrfOid}/items`, values).
-      // M5 wired the read path; M6 covers incremental save + markComplete.
-      await new Promise((resolve) => setTimeout(resolve, 50))
-      entry.value.lastSavedAt = new Date().toISOString()
+      const response = await apiPost<SaveItemsResponse>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}/items`,
+        { values: target.values },
+      )
+      target.lastSavedAt = response.lastSavedAt ?? new Date().toISOString()
+      if (response.status === 'in-progress' && target.status === 'not-started') {
+        target.status = 'in-progress'
+      }
       pendingChanges.value = false
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Speichern fehlgeschlagen. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Speichern fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Speichern.'
+      }
     } finally {
       isSaving.value = false
     }
@@ -108,11 +127,41 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
   async function markComplete(): Promise<void> {
     if (!entry.value) return
     if (!isComplete.value) {
-      error.value = 'Required items are missing or invalid — fix them before marking the CRF complete.'
+      error.value =
+        'Required items are missing or invalid — fix them before marking the CRF complete.'
       return
     }
-    await save()
-    entry.value.status = 'complete'
+    const target = entry.value
+    // Flush pending edits first; if save fails, abort the markComplete.
+    if (pendingChanges.value) {
+      await save()
+      if (error.value) return
+    }
+    isSaving.value = true
+    error.value = null
+    try {
+      const response = await apiPost<MarkCompleteResponse>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}/markComplete`,
+        {},
+      )
+      target.status = (response.status as typeof target.status) ?? 'complete'
+      target.lastSavedAt = response.lastSavedAt ?? target.lastSavedAt
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — markComplete fehlgeschlagen. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `markComplete fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler.'
+      }
+    } finally {
+      isSaving.value = false
+    }
   }
 
   return {
@@ -205,8 +254,25 @@ function validateItem(item: CrfItem, raw: unknown): string | null {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Phase E.4 M5 (2026-06-01): the hardcoded Demographics mock loader +         */
+/* Phase E.4 M5 + M6 (2026-06-01): the hardcoded Demographics mock loader +    */
 /* OID-decoding helpers (decodeContext, humaniseTokens, KNOWN_EVENTS) were     */
 /* removed. The store now hydrates exclusively from                            */
-/* `GET /pages/api/v1/eventCrfs/{id}` via apiGet above.                        */
+/* `GET /pages/api/v1/eventCrfs/{id}` via apiGet above, and persists via       */
+/* POST /pages/api/v1/eventCrfs/{id}/items  + POST .../markComplete (M6).      */
 /* -------------------------------------------------------------------------- */
+
+/** Wire shape of the POST /items endpoint response (M6). */
+interface SaveItemsResponse {
+  eventCrfOid: string
+  savedItemCount: number
+  rejectedItemCount: number
+  lastSavedAt: string | null
+  status: CrfEntryStatus
+}
+
+/** Wire shape of the POST /markComplete endpoint response (M6). */
+interface MarkCompleteResponse {
+  eventCrfOid: string
+  status: CrfEntryStatus
+  lastSavedAt: string | null
+}
