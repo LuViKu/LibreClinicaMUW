@@ -129,25 +129,19 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
     void listAcceptsFilterQueryParameters() throws Exception {
         // Filters bind correctly: routing reaches the SQL try-block,
         // which errors with the mock DataSource (no real getConnection()
-        // → NPE on prepareStatement). The controller does not currently
-        // wrap that NPE — MVC's default 500 path propagates. The mere
-        // arrival at the SQL layer is enough as a "guards-passed" marker.
+        // → NPE on prepareStatement). With the Phase E.5 #6
+        // ApiExceptionHandler registered on the MockMvc builder, that
+        // NPE wraps to a 500 JSON body with {"message": ...} — the
+        // contract surface the SPA's ApiError model consumes.
         // Once Testcontainers Postgres lands this test asserts 200 +
         // filter semantics instead.
-        try {
-            mockMvcWith().perform(get("/api/v1/audit")
-                    .param("actor", "root")
-                    .param("variant", "data")
-                    .param("subjectId", "M-001")
-                    .session((org.springframework.mock.web.MockHttpSession)
-                            authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
-                    .andExpect(status().isInternalServerError());
-        } catch (jakarta.servlet.ServletException e) {
-            // standaloneSetup re-throws the NPE wrapped in
-            // ServletException rather than returning 500 — the contract
-            // we're pinning ("guards pass, parameter binding works") is
-            // satisfied either way. The deeper symptom is a hardened
-            // error-handler follow-up.
-        }
+        mockMvcWith().perform(get("/api/v1/audit")
+                .param("actor", "root")
+                .param("variant", "data")
+                .param("subjectId", "M-001")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").exists());
     }
 }
