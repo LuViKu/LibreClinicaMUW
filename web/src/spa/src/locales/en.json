@@ -251,7 +251,8 @@
       "sdv": "SDV",
       "admin": "Admin",
       "data": "Data entry",
-      "query": "Query"
+      "query": "Query",
+      "subject-group-change": "Group change"
     }
   },
   "crfEntry": {

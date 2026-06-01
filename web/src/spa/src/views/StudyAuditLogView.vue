@@ -48,6 +48,7 @@ const variantOptions: { v: 'all' | AuditEventVariant; l: () => string }[] = [
   { v: 'admin', l: () => t('auditLog.variant.admin') },
   { v: 'data', l: () => t('auditLog.variant.data') },
   { v: 'query', l: () => t('auditLog.variant.query') },
+  { v: 'subject-group-change', l: () => t('auditLog.variant.subject-group-change') },
 ]
 
 const today = computed(() => new Date().toISOString().slice(0, 10))
@@ -162,7 +163,7 @@ function dateHeading(iso: string): string {
               <span class="text-slate-500 font-mono">{{ formatTime(ev.occurredAt) }}</span>
             </div>
 
-            <div v-if="ev.variant === 'reason-for-change' && ev.before != null && ev.after != null" class="mt-2">
+            <div v-if="(ev.variant === 'reason-for-change' || ev.variant === 'subject-group-change') && ev.before != null && ev.after != null" class="mt-2">
               <DiffCard>
                 <template #before>{{ ev.before }}</template>
                 <template #after>{{ ev.after }}</template>
