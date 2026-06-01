@@ -474,6 +474,15 @@
       "finishCta": "Akzeptieren und LibreClinica öffnen"
     }
   },
+  "studyPicker": {
+    "title": "Studie auswählen",
+    "subtitle": "Willkommen, {name}. Wählen Sie die Studie, an der Sie arbeiten möchten. Sie können später in der oberen Leiste wechseln.",
+    "empty": "Sie haben noch keine Rolle in einer Studie. Bitten Sie den Data Manager um Zugang.",
+    "activeBadge": "Aktiv",
+    "siteBadge": "Standort",
+    "binding": "Wird gebunden…",
+    "signOut": "Abmelden"
+  },
   "subjectDetail": {
     "subTrail": "Probandendetail",
     "notSigned": "Nicht signiert",

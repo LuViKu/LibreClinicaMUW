@@ -474,6 +474,15 @@
       "finishCta": "Accept and enter LibreClinica"
     }
   },
+  "studyPicker": {
+    "title": "Choose a study",
+    "subtitle": "Welcome, {name}. Pick the study you want to work on. You can switch later from the top bar.",
+    "empty": "You do not have a role on any study yet. Ask the Data Manager to grant you access.",
+    "activeBadge": "Active",
+    "siteBadge": "Site",
+    "binding": "Binding…",
+    "signOut": "Sign out"
+  },
   "subjectDetail": {
     "subTrail": "subject detail",
     "notSigned": "Not signed",

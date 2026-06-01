@@ -18,8 +18,16 @@ const password = ref('')
 
 async function onLocalLogin() {
   await auth.localLogin(username.value, password.value)
-  if (auth.isAuthenticated) router.push({ name: 'home' })
-  else if (auth.needsProfile) router.push({ name: 'first-login' })
+  if (!auth.isAuthenticated && !auth.needsProfile) return // error already in auth.error
+  if (auth.needsProfile) {
+    router.push({ name: 'first-login' })
+    return
+  }
+  // Phase E.4 M1: after backend auth lands the user may not have an
+  // active study bound yet. Send them through the picker before the
+  // main app — every protected route needs a study scope.
+  if (!auth.user?.activeStudy) router.push({ name: 'pick-study' })
+  else router.push({ name: 'home' })
 }
 
 function onSsoBounce() {

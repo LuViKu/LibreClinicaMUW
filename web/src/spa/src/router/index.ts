@@ -111,6 +111,13 @@ const router = createRouter({
       component: () => import('@/views/FirstLoginView.vue'),
       meta: { title: 'First-login profile', public: true },
     },
+    /* Phase E.4 M1 — Study picker (post-login, when no study bound). */
+    {
+      path: '/pick-study',
+      name: 'pick-study',
+      component: () => import('@/views/StudyPickerView.vue'),
+      meta: { title: 'Pick a study' },
+    },
   ],
 })
 
@@ -143,10 +150,20 @@ export function guard(
     return auth.isAnonymous ? true : { name: auth.needsProfile ? 'first-login' : 'home' }
   }
 
+  // Study picker requires an authenticated identity without an active study.
+  if (to.name === 'pick-study') {
+    if (auth.isAnonymous) return { name: 'login' }
+    if (auth.needsProfile) return { name: 'first-login' }
+    return auth.needsStudyPick ? true : { name: 'home' }
+  }
+
   if (isPublic) return true
 
   if (auth.isAnonymous) return { name: 'login' }
   if (auth.needsProfile) return { name: 'first-login' }
+  // Phase E.4 M1: a bound study is required for every protected route.
+  // If the user lacks one, send them through the picker first.
+  if (auth.needsStudyPick) return { name: 'pick-study' }
 
   const requiredRole = to.meta.role as
     | 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'

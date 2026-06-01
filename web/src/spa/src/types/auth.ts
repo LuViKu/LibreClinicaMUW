@@ -33,6 +33,35 @@ export interface AuthenticatedUser {
   mfaSatisfied: boolean
   /** First-login profile completion flag — drives the FirstLogin wizard. */
   profileComplete: boolean
+  /**
+   * The study currently bound to the server-side session. `null` when
+   * the user has authenticated but not yet picked a study (the SPA
+   * routes them to the study-picker). Drives the role chip + scope
+   * tells in the top bar.
+   */
+  activeStudy: ActiveStudySummary | null
+}
+
+/** Minimal study summary embedded in AuthenticatedUser. */
+export interface ActiveStudySummary {
+  oid: string
+  name: string
+  isSite: boolean
+}
+
+/**
+ * Phase E.4 M1 — one row in the user's available-studies list,
+ * returned by `GET /pages/api/v1/studies` and consumed by the
+ * StudyPicker view.
+ */
+export interface StudyOption {
+  oid: string
+  name: string
+  parentOid: string | null
+  parentName: string | null
+  role: UserRole
+  isSite: boolean
+  isActive: boolean
 }
 
 /**
