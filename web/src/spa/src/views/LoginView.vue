@@ -7,7 +7,6 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
 
 import { useAuthStore } from '@/stores/auth'
-import type { UserRole } from '@/types/auth'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -23,22 +22,14 @@ async function onLocalLogin() {
     router.push({ name: 'first-login' })
     return
   }
-  // Phase E.4 M1: after backend auth lands the user may not have an
-  // active study bound yet. Send them through the picker before the
-  // main app — every protected route needs a study scope.
   if (!auth.user?.activeStudy) router.push({ name: 'pick-study' })
   else router.push({ name: 'home' })
 }
 
 function onSsoBounce() {
+  // Triggers the actual browser navigation to the IdP entry URL —
+  // no router push needed; the page leaves.
   auth.ssoBounce()
-  router.push({ name: auth.needsProfile ? 'first-login' : 'home' })
-}
-
-const roleShortcuts: UserRole[] = ['Investigator', 'Monitor', 'Data Manager']
-function quickSwitch(role: UserRole) {
-  auth.switchTo(role)
-  router.push({ name: 'home' })
 }
 </script>
 
@@ -124,22 +115,6 @@ function quickSwitch(role: UserRole) {
           <p class="text-[11px] text-slate-500 leading-relaxed">{{ t('login.localPurpose') }}</p>
         </form>
       </details>
-
-      <!-- Dev role-switcher (gone in production) -->
-      <div class="mt-6 rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-[11px] text-amber-900">
-        <div class="font-semibold uppercase tracking-wider text-[10px] mb-2">{{ t('login.devShortcuts') }}</div>
-        <div class="flex flex-wrap gap-1.5">
-          <button
-            v-for="role in roleShortcuts"
-            :key="role"
-            type="button"
-            class="px-2 py-1 rounded border border-amber-200 bg-white hover:bg-amber-100"
-            @click="quickSwitch(role)"
-          >
-            {{ t(`manageUsers.role.${role}`) }}
-          </button>
-        </div>
-      </div>
 
       <div class="mt-8 flex items-center justify-center gap-2 text-[11px] text-slate-400">
         <span>v1.4.0rc1-muw</span>

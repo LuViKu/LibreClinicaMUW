@@ -1,7 +1,22 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { computeItemErrors, useCrfEntryStore } from '../crfEntry'
-import type { CrfSchema, CrfValues } from '@/types/crf'
+import type { CrfEntry, CrfSchema, CrfValues } from '@/types/crf'
+
+// Phase E.4 M13 — backend wiring is real (no `loadMock` to fall back to).
+// Stub `apiGet` / `apiPost` from the shared HTTP client so unit tests
+// can exercise the store without a live backend.
+vi.mock('@/api/client', async () => {
+  const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
+  return {
+    ...actual,
+    apiGet: vi.fn(),
+    apiPost: vi.fn(),
+  }
+})
+
+// eslint-disable-next-line import/first
+import { apiGet, apiPost } from '@/api/client'
 
 const SIMPLE_SCHEMA: CrfSchema = {
   oid: 'F_T',
@@ -56,8 +71,70 @@ describe('computeItemErrors', () => {
   })
 })
 
+// Fixture that mirrors what GET /pages/api/v1/eventCrfs/{oid} returns
+// for the seeded Demographics CRF (per the M5 wire shape). The 4
+// required items map to the IDs the markComplete tests fill in.
+const DEMOGRAPHICS_ENTRY: CrfEntry = {
+  eventCrfOid: 'EC_M001_V1_DEMO',
+  subjectId: 'M-001',
+  eventLabel: 'V1 Inclusion',
+  schema: {
+    oid: 'F_DEMOGRAPHICS_V1',
+    name: 'Demographics',
+    version: 'v1.0',
+    sections: [
+      {
+        oid: 'S_IDENT',
+        title: 'Identification',
+        items: [
+          { oid: 'I_CONSENT_DATE',   label: 'Date of informed consent', dataType: 'date',       required: true },
+          { oid: 'I_CONSENT_SIGNED', label: 'Consent signed?',          dataType: 'select-one', required: true,
+            options: [{ code: 'Y', label: 'Yes' }, { code: 'N', label: 'No' }] },
+        ],
+      },
+      {
+        oid: 'S_VITALS',
+        title: 'Vitals',
+        items: [
+          { oid: 'I_HEIGHT_CM',           label: 'Height (cm)',       dataType: 'integer', required: true, min: 50, max: 250 },
+          { oid: 'I_WEIGHT_KG',           label: 'Weight (kg)',       dataType: 'real',    required: true, min: 1,  max: 300 },
+          { oid: 'I_BLOOD_PRESSURE_SYS',  label: 'Systolic BP (mmHg)',dataType: 'integer', required: false, min: 50, max: 250 },
+        ],
+      },
+    ],
+  },
+  values: {},
+  status: 'not-started',
+  lastSavedAt: null,
+}
+
 describe('useCrfEntryStore', () => {
-  beforeEach(() => setActivePinia(createPinia()))
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(apiGet).mockReset()
+    vi.mocked(apiPost).mockReset()
+    // Each load() call gets a fresh deep clone — Pinia stores reuse the
+    // reactive proxy and we don't want one test's setValue() to leak into
+    // the next test's mocked response.
+    vi.mocked(apiGet).mockImplementation(async () => structuredClone(DEMOGRAPHICS_ENTRY))
+    // crfEntry calls apiPost twice: once for `save` (items) and once for
+    // `markComplete`. The save endpoint returns no body; markComplete
+    // returns `{ status, lastSavedAt }`. The store treats undefined as
+    // "no shape change", so a generic stubbed response is fine for save —
+    // but markComplete needs the `status` field to flip the local state.
+    // Both POST endpoints return `{ lastSavedAt, status }` shapes the
+    // store reads back into the entry. Mock both with sensible defaults
+    // so save() flips pendingChanges → false and markComplete() flips
+    // status → complete.
+    vi.mocked(apiPost).mockImplementation(async (path) => {
+      const ts = '2026-06-01T12:00:00.000Z'
+      if (path.endsWith('/markComplete')) {
+        return { status: 'complete', lastSavedAt: ts } as never
+      }
+      // /items save response — return an in-progress hint.
+      return { status: 'in-progress', lastSavedAt: ts } as never
+    })
+  })
 
   it('starts empty + not loading', () => {
     const store = useCrfEntryStore()
@@ -67,9 +144,10 @@ describe('useCrfEntryStore', () => {
     expect(store.isComplete).toBe(false)
   })
 
-  it('hydrates from the mock loader + advances to in-progress on first edit', async () => {
+  it('hydrates from the backend + advances to in-progress on first edit', async () => {
     const store = useCrfEntryStore()
     await store.load('EC_M001_V1_DEMO')
+    expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/eventCrfs/EC_M001_V1_DEMO')
     expect(store.entry).not.toBeNull()
     expect(store.schema?.sections.length).toBeGreaterThan(0)
     expect(store.status).toBe('not-started')
@@ -85,6 +163,7 @@ describe('useCrfEntryStore', () => {
     store.setValue('I_HEIGHT_CM', 172)
     expect(store.pendingChanges).toBe(true)
     await store.save()
+    expect(apiPost).toHaveBeenCalled()
     expect(store.pendingChanges).toBe(false)
     expect(store.entry?.lastSavedAt).not.toBeNull()
   })
@@ -100,7 +179,7 @@ describe('useCrfEntryStore', () => {
   it('marks complete when every required item is valid', async () => {
     const store = useCrfEntryStore()
     await store.load('EC_M001_V1_DEMO')
-    // Fill every required item per the mock schema.
+    // Fill every required item per the Demographics schema.
     store.setValue('I_CONSENT_DATE', '2026-05-01')
     store.setValue('I_CONSENT_SIGNED', 'Y')
     store.setValue('I_HEIGHT_CM', 172)

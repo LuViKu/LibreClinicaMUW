@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import type {
-  AuthState, AuthenticatedUser, SsoConfig, UserRole, StudyOption,
+  AuthState, AuthenticatedUser, SsoConfig, StudyOption,
 } from '@/types/auth'
 
 /**
@@ -15,7 +15,7 @@ import type {
  *     role-mismatched routes → home)
  *   - LoginView, FirstLoginView, StudyPickerView
  *
- * Wired to the real backend as of M1 (2026-06-01):
+ * Fully backend-driven as of Phase E.4 M13 (2026-06-01):
  *   - `bootstrap()` calls `GET /pages/api/v1/me` on app load.
  *   - `localLogin()` POSTs `j_spring_security_check` (Spring Security
  *     form-login filter) then re-hydrates from /me.
@@ -24,12 +24,12 @@ import type {
  *   - `pickStudy(oid)` POSTs `/me/activeStudy` to bind the session-
  *     scoped study and refresh the user.
  *
- * Set `VITE_USE_MOCK_API=true` to bypass the network entirely; the
- * dev-mode `switchTo()` role shortcut + mock SSO bounce still work
- * for offline UX iteration. The flag is removed in milestone 13.
+ * Mock-mode (the previous `VITE_USE_MOCK_API` escape hatch, sessionStorage
+ * persona persistence, and the TopBar `switchTo()` dev shortcut) was
+ * removed in milestone 13 per the plan. The backend is now the single
+ * source of truth; if it's unreachable the UI hard-fails with an error
+ * toast rather than silently rendering demo data.
  */
-const USE_MOCK_API = import.meta.env.VITE_USE_MOCK_API === 'true'
-
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<AuthenticatedUser | null>(null)
   const state = ref<AuthState>('anonymous')
@@ -52,74 +52,43 @@ export const useAuthStore = defineStore('auth', () => {
   )
 
   /**
-   * Boot the store on app load. Tries /me first; on 401 we know the
-   * user is anonymous. Mock-mode reads sessionStorage for the dev
-   * persona instead.
+   * Boot the store on app load. Calls /me; on 401 we know the user is
+   * anonymous and the router will redirect to /login.
    */
   async function bootstrap(): Promise<void> {
     isLoading.value = true
     error.value = null
     try {
-      if (USE_MOCK_API) {
-        const persisted = typeof window !== 'undefined'
-          ? window.sessionStorage.getItem('libreclinica.mock_user')
-          : null
-        if (persisted) {
-          user.value = JSON.parse(persisted) as AuthenticatedUser
-          state.value = user.value!.profileComplete ? 'authenticated' : 'profile-incomplete'
-        } else {
-          user.value = null
-          state.value = 'anonymous'
-        }
-        return
-      }
-
-      try {
-        const me = await apiGet<AuthenticatedUser>('/pages/api/v1/me')
-        user.value = me
-        state.value = me.profileComplete ? 'authenticated' : 'profile-incomplete'
-      } catch (e) {
-        if (e instanceof ApiError && e.isUnauthorized) {
-          user.value = null
-          state.value = 'anonymous'
-        } else {
-          throw e
-        }
-      }
+      const me = await apiGet<AuthenticatedUser>('/pages/api/v1/me')
+      user.value = me
+      state.value = me.profileComplete ? 'authenticated' : 'profile-incomplete'
     } catch (e) {
-      error.value = e instanceof ApiError ? e.message
-        : e instanceof ApiNetworkError ? 'Backend unreachable.'
-        : 'Failed to load current user.'
-      user.value = null
-      state.value = 'anonymous'
+      if (e instanceof ApiError && e.isUnauthorized) {
+        user.value = null
+        state.value = 'anonymous'
+      } else {
+        error.value = e instanceof ApiError ? e.message
+          : e instanceof ApiNetworkError ? 'Backend unreachable.'
+          : 'Failed to load current user.'
+        user.value = null
+        state.value = 'anonymous'
+      }
     } finally {
       isLoading.value = false
     }
   }
 
   /**
-   * Local-account form submission. Real backend: POSTs to Spring
-   * Security's `j_spring_security_check`, follows the redirect to
-   * /MainMenu, then calls /me to re-hydrate.
+   * Local-account form submission. POSTs to Spring Security's
+   * `j_spring_security_check`, then re-hydrates from /me.
+   * SecureController auto-binds the user's stored active_study_id
+   * on the next /pages/* request, so /me's activeStudy reflects
+   * the binding without a separate call.
    */
   async function localLogin(username: string, password: string): Promise<void> {
     error.value = null
     if (!username || !password) {
       error.value = 'Username and password are required.'
-      return
-    }
-
-    if (USE_MOCK_API) {
-      await new Promise((resolve) => setTimeout(resolve, 40))
-      if (password === 'wrong') {
-        error.value = 'Invalid username or password.'
-        return
-      }
-      setMockUser({
-        username, displayName: username, email: `${username}@example.org`,
-        role: 'Investigator', siteLabel: 'München', source: 'local',
-        mfaSatisfied: false, profileComplete: true, activeStudy: null,
-      })
       return
     }
 
@@ -145,11 +114,6 @@ export const useAuthStore = defineStore('auth', () => {
         return
       }
 
-      // Auth succeeded — JSESSIONID is set on this origin. Re-hydrate
-      // from /me to get the canonical user representation. SecureController
-      // also auto-binds the user's stored active_study_id as soon as
-      // an authenticated request reaches a /pages controller, so /me's
-      // activeStudy field reflects that auto-bind.
       await bootstrap()
     } catch (e) {
       error.value = e instanceof Error ? `Login failed: ${e.message}` : 'Login failed.'
@@ -158,17 +122,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /**
-   * Load the user's available studies for the picker.
-   */
+  /** Load the user's available studies for the picker. */
   async function loadStudies(): Promise<void> {
-    if (USE_MOCK_API) {
-      availableStudies.value = [
-        { oid: 'S_DEFAULTS1', name: 'Default Study', parentOid: null, parentName: null,
-          role: 'Investigator', isSite: false, isActive: true },
-      ]
-      return
-    }
     try {
       availableStudies.value = await apiGet<StudyOption[]>('/pages/api/v1/studies')
     } catch (e) {
@@ -179,24 +134,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /**
-   * Bind the active study on the server, then refresh the user.
-   */
+  /** Bind the active study on the server, then refresh the user. */
   async function pickStudy(oid: string): Promise<void> {
-    if (USE_MOCK_API) {
-      // Mock: just stash the chosen study on the user object.
-      const opt = availableStudies.value.find((s) => s.oid === oid)
-      if (user.value && opt) {
-        user.value = {
-          ...user.value,
-          activeStudy: { oid: opt.oid, name: opt.name, isSite: opt.isSite },
-          role: opt.role,
-          siteLabel: opt.isSite ? opt.name : null,
-        }
-        persist(user.value)
-      }
-      return
-    }
     try {
       const refreshed = await apiPost<AuthenticatedUser>('/pages/api/v1/me/activeStudy', { oid })
       user.value = refreshed
@@ -210,95 +149,39 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * SSO bounce — in production redirects to `ssoConfig.entryUrl`.
-   * In dev (mock mode) we mock the post-bounce identity directly.
+   * SSO bounce — redirects to the configured IdP entry URL when
+   * `ssoConfig.enabled`. The post-bounce identity arrives in the
+   * normal /me round-trip after the reverse-proxy proxies the
+   * pre-authenticated request back.
    */
   function ssoBounce(): void {
-    if (!USE_MOCK_API && ssoConfig.value.entryUrl) {
-      window.location.assign(ssoConfig.value.entryUrl)
+    if (!ssoConfig.value.entryUrl) {
+      error.value = 'SSO is not configured at this deployment.'
       return
     }
-    setMockUser({
-      username: 'm.mueller',
-      displayName: 'Dr. Maria Müller',
-      email: 'm.mueller@meduniwien.ac.at',
-      role: 'Investigator',
-      siteLabel: 'München',
-      source: 'sso',
-      mfaSatisfied: true,
-      profileComplete: false,
-      activeStudy: null,
-    })
+    window.location.assign(ssoConfig.value.entryUrl)
   }
 
   /**
-   * Dev-mode role-switcher invoked from the TopBar's "View as" chip.
-   * Only usable in mock mode (the real backend's user role comes
-   * from the bound study).
+   * First-login profile completion. Local-only update for now — the
+   * backend persistence path (a new `PUT /pages/api/v1/me/profile`
+   * endpoint per DR-014) is a follow-up. Until then a page reload
+   * after completion will re-render the FirstLoginView; future
+   * sessions persist their profile state via the IdP.
    */
-  function switchTo(role: UserRole): void {
-    if (!USE_MOCK_API) return
-    const presets: Record<UserRole, AuthenticatedUser> = {
-      Investigator: {
-        username: 'user_demo', displayName: 'Dr. user_demo', email: 'user_demo@meduniwien.ac.at',
-        role: 'Investigator', siteLabel: 'München', source: 'sso', mfaSatisfied: true, profileComplete: true,
-        activeStudy: { oid: 'S_DEFAULTS1', name: 'Default Study', isSite: false },
-      },
-      Monitor: {
-        username: 'monitor_demo', displayName: 'Mona Demo', email: 'monitor_demo@example.org',
-        role: 'Monitor', siteLabel: null, source: 'local', mfaSatisfied: false, profileComplete: true,
-        activeStudy: { oid: 'S_DEFAULTS1', name: 'Default Study', isSite: false },
-      },
-      'Data Manager': {
-        username: 'dm_demo', displayName: 'Dora Manager', email: 'dm_demo@meduniwien.ac.at',
-        role: 'Data Manager', siteLabel: null, source: 'sso', mfaSatisfied: true, profileComplete: true,
-        activeStudy: { oid: 'S_DEFAULTS1', name: 'Default Study', isSite: false },
-      },
-      Administrator: {
-        username: 'admin', displayName: 'System Administrator', email: null,
-        role: 'Administrator', siteLabel: null, source: 'local', mfaSatisfied: false, profileComplete: true,
-        activeStudy: { oid: 'S_DEFAULTS1', name: 'Default Study', isSite: false },
-      },
-      CRC: {
-        username: 'crc_demo', displayName: 'Lisa Koordinator', email: 'crc_demo@example.org',
-        role: 'CRC', siteLabel: 'München', source: 'local', mfaSatisfied: false, profileComplete: true,
-        activeStudy: { oid: 'S_DEFAULTS1', name: 'Default Study', isSite: false },
-      },
-    }
-    setMockUser(presets[role])
-  }
-
   function completeProfile(patch: { displayName: string; locale: string; timezone: string }): void {
     if (!user.value) return
     user.value = { ...user.value, displayName: patch.displayName, profileComplete: true }
     state.value = 'authenticated'
-    persist(user.value)
   }
 
   async function logout(): Promise<void> {
-    if (!USE_MOCK_API) {
-      try {
-        await fetch('/LibreClinica/Logout', { method: 'GET', credentials: 'include' })
-      } catch { /* best-effort — clear local state regardless */ }
-    }
+    try {
+      await fetch('/LibreClinica/Logout', { method: 'GET', credentials: 'include' })
+    } catch { /* best-effort — clear local state regardless */ }
     user.value = null
     state.value = 'anonymous'
     availableStudies.value = []
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.removeItem('libreclinica.mock_user')
-    }
-  }
-
-  function setMockUser(u: AuthenticatedUser) {
-    user.value = u
-    state.value = u.profileComplete ? 'authenticated' : 'profile-incomplete'
-    persist(u)
-  }
-
-  function persist(u: AuthenticatedUser) {
-    if (typeof window !== 'undefined' && USE_MOCK_API) {
-      window.sessionStorage.setItem('libreclinica.mock_user', JSON.stringify(u))
-    }
   }
 
   return {
@@ -317,7 +200,6 @@ export const useAuthStore = defineStore('auth', () => {
     loadStudies,
     pickStudy,
     ssoBounce,
-    switchTo,
     completeProfile,
     logout,
   }
