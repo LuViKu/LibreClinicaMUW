@@ -17,6 +17,13 @@ type Variant =
   | 'admin'
   | 'data'
   | 'query'
+  /**
+   * Phase E.5 #2 — subject-group-change (treatment-arm reassignment).
+   * Shares the coral palette with reason-for-change because both
+   * variants render before/after diff cards with similar visual
+   * weight.
+   */
+  | 'subject-group-change'
 
 interface Props {
   variant?: Variant
@@ -28,6 +35,7 @@ const bulletClasses = computed(() => {
   switch (props.variant) {
     case 'signed': return 'bg-muw-teal-100 text-muw-teal-700'
     case 'reason-for-change': return 'bg-muw-coral-100 text-muw-coral-700'
+    case 'subject-group-change': return 'bg-muw-coral-100 text-muw-coral-700'
     case 'sdv': return 'bg-muw-sky-100 text-muw-sky-700'
     case 'admin': return 'bg-amber-100 text-amber-700'
     case 'query': return 'bg-rose-100 text-rose-700'

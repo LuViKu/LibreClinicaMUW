@@ -18,6 +18,14 @@ export type AuditEventVariant =
   | 'admin'
   | 'data'
   | 'query'
+  /**
+   * Phase E.5 #2 — subject moved between treatment-arm groups or
+   * added to a group for the first time (audit_log_event_type_id
+   * 28 + 29). The audit row carries the before/after group labels
+   * in `before`/`after`, so the SPA renders a `DiffCard` similar to
+   * `reason-for-change` but without the inline reason text.
+   */
+  | 'subject-group-change'
 
 export interface AuditEvent {
   id: string
