@@ -11,13 +11,17 @@ import SelectInput from '@/components/SelectInput.vue'
 import HelperText from '@/components/HelperText.vue'
 import StatusPill from '@/components/StatusPill.vue'
 
-import { useAuthStore } from '@/stores/auth'
+import { useAuthStore, ProfileValidationError } from '@/stores/auth'
+import type { ProfileFieldError } from '@/types/auth'
 
 const { t } = useI18n()
 const router = useRouter()
 const auth = useAuthStore()
 
 const step = ref(0)
+const isSubmitting = ref(false)
+const fieldErrors = ref<Partial<Record<ProfileFieldError['field'], string>>>({})
+const submitError = ref<string | null>(null)
 
 const steps = computed<WizardStep[]>(() => [
   { id: 'profile', title: t('firstLogin.step.confirmProfile'), clickable: true },
@@ -37,10 +41,30 @@ const acceptedTerms = ref(false)
 const acceptedAuditing = ref(false)
 const canFinish = computed(() => acceptedTerms.value && acceptedAuditing.value)
 
-function finish() {
-  if (!auth.user || !canFinish.value) return
-  auth.completeProfile({ displayName: displayName.value.trim(), locale: locale.value, timezone: timezone.value })
-  router.push({ name: 'home' })
+async function finish() {
+  if (!auth.user || !canFinish.value || isSubmitting.value) return
+  isSubmitting.value = true
+  fieldErrors.value = {}
+  submitError.value = null
+  try {
+    await auth.completeProfile({
+      displayName: displayName.value.trim(),
+      locale: locale.value,
+      timezone: timezone.value,
+    })
+    router.push({ name: 'home' })
+  } catch (e) {
+    if (e instanceof ProfileValidationError) {
+      const next: Partial<Record<ProfileFieldError['field'], string>> = {}
+      for (const err of e.errors) next[err.field] = err.message
+      fieldErrors.value = next
+      step.value = 0
+    } else {
+      submitError.value = auth.error ?? t('firstLogin.errors.saveFailed')
+    }
+  } finally {
+    isSubmitting.value = false
+  }
 }
 </script>
 
@@ -80,7 +104,8 @@ function finish() {
             <div>
               <FieldLabel for="fl-display" required>{{ t('firstLogin.field.displayName') }}</FieldLabel>
               <TextInput id="fl-display" v-model="displayName" />
-              <HelperText>{{ t('firstLogin.helper.displayName') }}</HelperText>
+              <HelperText v-if="!fieldErrors.displayName">{{ t('firstLogin.helper.displayName') }}</HelperText>
+              <p v-else class="mt-1 text-xs text-red-700">{{ fieldErrors.displayName }}</p>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
@@ -90,6 +115,7 @@ function finish() {
                   <option value="de-AT">Deutsch (Österreich)</option>
                   <option value="en">English</option>
                 </SelectInput>
+                <p v-if="fieldErrors.locale" class="mt-1 text-xs text-red-700">{{ fieldErrors.locale }}</p>
               </div>
               <div>
                 <FieldLabel for="fl-tz">{{ t('firstLogin.field.timezone') }}</FieldLabel>
@@ -97,6 +123,7 @@ function finish() {
                   <option value="Europe/Vienna">Europe/Vienna (CEST)</option>
                   <option value="UTC">UTC</option>
                 </SelectInput>
+                <p v-if="fieldErrors.timezone" class="mt-1 text-xs text-red-700">{{ fieldErrors.timezone }}</p>
               </div>
             </div>
 
@@ -136,13 +163,15 @@ function finish() {
               <span>{{ t('firstLogin.terms.ackAuditing') }}</span>
             </label>
 
+            <p v-if="submitError" class="text-xs text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">{{ submitError }}</p>
+
             <div class="flex items-center justify-between">
               <button class="text-xs text-slate-500 hover:text-slate-700" @click="step = 0">← {{ t('common.back') }}</button>
               <button
                 class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
-                :disabled="!canFinish"
+                :disabled="!canFinish || isSubmitting"
                 @click="finish"
-              >{{ t('firstLogin.terms.finishCta') }}</button>
+              >{{ isSubmitting ? t('common.saving') : t('firstLogin.terms.finishCta') }}</button>
             </div>
           </section>
         </template>

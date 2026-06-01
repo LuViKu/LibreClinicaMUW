@@ -21,6 +21,7 @@
   },
   "common": {
     "loading": "Wird geladen…",
+    "saving": "Wird gespeichert…",
     "save": "Speichern",
     "cancel": "Abbrechen",
     "back": "Zurück",
@@ -479,6 +480,9 @@
       "ackTerms": "Ich habe die obigen Bedingungen gelesen und akzeptiert.",
       "ackAuditing": "Ich verstehe, dass jede meiner Aktionen dokumentiert und auditierbar ist.",
       "finishCta": "Akzeptieren und LibreClinica öffnen"
+    },
+    "errors": {
+      "saveFailed": "Profil konnte nicht gespeichert werden. Bitte erneut versuchen."
     }
   },
   "studyPicker": {

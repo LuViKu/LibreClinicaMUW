@@ -23,6 +23,7 @@
   <include  file="migration/lc-muw-2026-05-30-add-external-identity.xml"/>
   <include  file="migration/lc-muw-2026-06-01-seed-demo-data.xml"/>
   <include  file="migration/lc-muw-2026-06-01-seed-demo-data-fixup.xml"/>
+  <include  file="migration/lc-muw-2026-06-02-add-profile-columns.xml"/>
   <include  file="migration/lc-muw-2026-06-02-audit-event-type-display-names.xml"/>
 </databaseChangeLog>
 

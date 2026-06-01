@@ -24,6 +24,14 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
  * `UserAccountBean.getRunWebservices()` -- legacy convention -- but
  * always returns true for users authenticated via SSO (the IdP is
  * authoritative per DR-014). For first-cut this just returns true.
+ *
+ * <p>Phase E.5 B1 — {@code locale} + {@code timezone} added so the
+ * SPA's first-login wizard can both read the user's persisted
+ * preferences and PUT updates back via
+ * {@code PUT /pages/api/v1/me/profile}. Both fields are nullable;
+ * the SPA's {@code AuthenticatedUser} type carries them as
+ * {@code string | null} so a freshly-provisioned user with no
+ * persisted locale still serialises cleanly.
  */
 public record MeDto(
         String username,
@@ -34,6 +42,8 @@ public record MeDto(
         String source,
         boolean mfaSatisfied,
         boolean profileComplete,
+        String locale,
+        String timezone,
         ActiveStudyDto activeStudy
 ) {
 

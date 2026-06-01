@@ -69,7 +69,11 @@
                  against the changeset content (the actions), not the
                  XML element ordering, so deploys that previously
                  errored OR mark-ran this changeset will still see it
-                 as already-applied — no checksum mismatch warning. -->
+                 as already-applied — no checksum mismatch warning.
+
+                 (Arm B's B1 commit independently spotted the same XSD
+                 bug; this comment is kept since it documents the
+                 checksum behaviour reviewers will ask about.) -->
             <sqlCheck expectedResult="8">SELECT COUNT(*) FROM discrepancy_note WHERE discrepancy_note_id BETWEEN 1 AND 8</sqlCheck>
         </preConditions>
         <comment>Backfill dn_item_data_map for the 8 seed discrepancy notes so Subject-Matrix open-query counts resolve</comment>

@@ -1,9 +1,21 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
-  AuthState, AuthenticatedUser, SsoConfig, StudyOption,
+  AuthState, AuthenticatedUser, ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption,
 } from '@/types/auth'
+
+/**
+ * Thrown by {@link useAuthStore.completeProfile} on a 400 from
+ * {@code PUT /pages/api/v1/me/profile}. Carries the per-field error
+ * list so the FirstLoginView can render inline messages.
+ */
+export class ProfileValidationError extends Error {
+  constructor(public readonly errors: ProfileFieldError[]) {
+    super(`Profile validation failed (${errors.length} error${errors.length === 1 ? '' : 's'})`)
+    this.name = 'ProfileValidationError'
+  }
+}
 
 /**
  * Phase E.8 + E.4 M1 — Auth store.
@@ -163,16 +175,33 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
-   * First-login profile completion. Local-only update for now — the
-   * backend persistence path (a new `PUT /pages/api/v1/me/profile`
-   * endpoint per DR-014) is a follow-up. Until then a page reload
-   * after completion will re-render the FirstLoginView; future
-   * sessions persist their profile state via the IdP.
+   * Phase E.5 B1 — first-login profile completion now hits
+   * {@code PUT /pages/api/v1/me/profile}. The server returns the
+   * refreshed MeDto on success; on 400 the per-field errors are
+   * thrown as a {@link ProfileValidationError} so the FirstLoginView
+   * can render inline messages without re-validating client-side.
    */
-  function completeProfile(patch: { displayName: string; locale: string; timezone: string }): void {
+  async function completeProfile(patch: ProfileUpdateRequest): Promise<void> {
     if (!user.value) return
-    user.value = { ...user.value, displayName: patch.displayName, profileComplete: true }
-    state.value = 'authenticated'
+    isLoading.value = true
+    error.value = null
+    try {
+      const refreshed = await apiPut<AuthenticatedUser>('/pages/api/v1/me/profile', patch)
+      user.value = refreshed
+      state.value = refreshed.profileComplete ? 'authenticated' : 'profile-incomplete'
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 400) {
+        const body = e.body as { errors?: ProfileFieldError[] } | null
+        const fieldErrors = body?.errors ?? []
+        throw new ProfileValidationError(fieldErrors)
+      }
+      error.value = e instanceof ApiError ? e.message
+        : e instanceof ApiNetworkError ? 'Backend unreachable.'
+        : 'Failed to save profile.'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
   }
 
   async function logout(): Promise<void> {

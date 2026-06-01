@@ -21,6 +21,7 @@
   },
   "common": {
     "loading": "Loading…",
+    "saving": "Saving…",
     "save": "Save",
     "cancel": "Cancel",
     "back": "Back",
@@ -479,6 +480,9 @@
       "ackTerms": "I have read and accept the terms above.",
       "ackAuditing": "I understand that every action I take is recorded and auditable.",
       "finishCta": "Accept and enter LibreClinica"
+    },
+    "errors": {
+      "saveFailed": "Could not save your profile. Please try again."
     }
   },
   "studyPicker": {

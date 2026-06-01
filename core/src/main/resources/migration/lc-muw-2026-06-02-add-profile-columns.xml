@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.5 B1 — add user_account.locale (BCP-47 language tag) so the
+        SPA's first-login profile flow can persist the picked UI locale.
+
+        time_zone already exists in DDL (2.5/changeLogCreateTables.xml) and
+        UserAccountBean / UserAccountDAO.update() already write it; no DDL
+        change needed for that field.
+
+        locale is a fresh column. NULL is allowed — first-login users may
+        skip the locale picker and inherit the SPA's browser-detected
+        default; nothing in the legacy code path reads this column today,
+        so an absent value is safe.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-06-02-add-user-account-locale">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="user_account" columnName="locale"/></not>
+        </preConditions>
+        <addColumn tableName="user_account">
+            <column name="locale" type="VARCHAR(10)" defaultValueComputed="NULL">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

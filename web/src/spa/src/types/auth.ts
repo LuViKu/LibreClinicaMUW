@@ -34,12 +34,42 @@ export interface AuthenticatedUser {
   /** First-login profile completion flag — drives the FirstLogin wizard. */
   profileComplete: boolean
   /**
+   * BCP-47 language tag the user picked at first login. `null` for
+   * never-set users; the SPA falls back to the browser-detected default.
+   * Persisted via {@code PUT /pages/api/v1/me/profile} (Phase E.5 B1).
+   */
+  locale: string | null
+  /**
+   * IANA timezone id (e.g. {@code "Europe/Vienna"}). `null` for never-set;
+   * SPA falls back to the browser-detected zone. Persisted via the same
+   * profile PUT.
+   */
+  timezone: string | null
+  /**
    * The study currently bound to the server-side session. `null` when
    * the user has authenticated but not yet picked a study (the SPA
    * routes them to the study-picker). Drives the role chip + scope
    * tells in the top bar.
    */
   activeStudy: ActiveStudySummary | null
+}
+
+/**
+ * Phase E.5 B1 — body of {@code PUT /pages/api/v1/me/profile}.
+ *
+ * <p>Field names match the SPA's first-login wizard inputs; the
+ * backend maps {@code displayName} to {@code user_account.first_name}.
+ */
+export interface ProfileUpdateRequest {
+  displayName: string
+  locale: string
+  timezone: string
+}
+
+/** Per-field validation error returned by 400 responses on profile-edit endpoints. */
+export interface ProfileFieldError {
+  field: 'displayName' | 'locale' | 'timezone'
+  message: string
 }
 
 /** Minimal study summary embedded in AuthenticatedUser. */

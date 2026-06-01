@@ -45,6 +45,17 @@
 			<scope>test</scope>
 		</dependency>
 		<dependency>
+			<!-- Phase E.5 B1: declared explicitly because the M1-followup
+			     MockMvc IT scaffold surfaces hamcrest matchers at the call
+			     site (org.hamcrest.MatcherAssert.assertThat,
+			     org.hamcrest.Matchers.*). spring-boot-starter-test brings
+			     hamcrest transitively, but dependency:analyze flags it as
+			     "used undeclared" and fails the build until we declare it. -->
+			<groupId>org.hamcrest</groupId>
+			<artifactId>hamcrest</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
 			<!-- Phase C.15 (2026-05-30): Spring Boot Actuator. HTTP endpoints
 			     at /LibreClinica/actuator/* served by Boot's auto-configured
 			     `dispatcherServlet` at `/` (un-excluded in C.16 once the 215
