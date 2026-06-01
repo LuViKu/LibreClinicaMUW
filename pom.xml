@@ -813,12 +813,12 @@
 	            <artifactId>jersey-server</artifactId>
 	            <version>1.19.3</version>
 	        </dependency>
-	        <dependency>
-	            <groupId>org.mockito</groupId>
-	            <artifactId>mockito-core</artifactId>
-	            <version>1.9.5</version>
-	            <scope>test</scope>
-	        </dependency>
+	        <!-- Phase E.5 #5: Mockito version managed by spring-boot-dependencies
+	             BOM (5.17.0 at Boot 3.5.0). Explicit 1.9.5 dependencyManagement
+	             pin removed; the legacy MockitoJUnitRunner package moved
+	             org.mockito.runners -> org.mockito.junit in Mockito 2+, see
+	             the 4 migrated tests under core/src/test for the import-path
+	             change. -->
 			<!-- Needed by commons-validator -->
 	        <dependency>
 	        	<groupId>oro</groupId>
