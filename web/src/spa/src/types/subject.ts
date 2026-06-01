@@ -52,3 +52,51 @@ export interface Subject {
   /** Total open queries across the subject's CRFs. */
   openQueries: number
 }
+
+/**
+ * Per-CRF data-entry stage taxonomy surfaced on the detail view.
+ *
+ * Maps from the legacy `event_crf.completion_status_id` via the M3
+ * SubjectsApiController; see `SubjectDetailDto.EventCellDetailDto`
+ * JavaDoc for the full mapping table.
+ *
+ * `null` means the event hasn't started yet (no `event_crf` row).
+ */
+export type DataEntryStage =
+  | 'not-started'
+  | 'data-being-entered'
+  | 'initial-data-entry-completed'
+  | 'validation-completed'
+  | 'locked'
+
+/**
+ * Detail-view extension of {@link EventCellSnapshot} — adds the
+ * scheduling + completion metadata the matrix doesn't carry.
+ *
+ * Populated by `GET /pages/api/v1/subjects/{oid}` (M3 adapter).
+ */
+export interface EventCellDetail extends EventCellSnapshot {
+  /** Event start date as ISO `YYYY-MM-DD`, or null if unscheduled. */
+  dateStart: string | null
+  /** Event end date as ISO `YYYY-MM-DD`, often null for in-flight events. */
+  dateEnd: string | null
+  /** Free-text location captured at scheduling time, when present. */
+  location: string | null
+  /** Data-entry stage of the primary CRF, or null if not started. */
+  dataEntryStage: DataEntryStage | null
+}
+
+/**
+ * Subject Detail — superset of {@link Subject} for the dedicated
+ * single-subject view. Populated by `GET /pages/api/v1/subjects/{oid}`
+ * (M3 adapter). The matrix list endpoint does not return these
+ * fields; the detail view fetches them separately.
+ */
+export interface SubjectDetail extends Omit<Subject, 'events'> {
+  /** Active study OID — rendered in the breadcrumb in place of siteOid. */
+  studyOid: string
+  /** Human-readable study name — rendered in the breadcrumb. */
+  studyName: string
+  /** Richer per-event metadata (dateStart, location, dataEntryStage). */
+  events: EventCellDetail[]
+}

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
-import type { Gender, Subject } from '@/types/subject'
+import type { Gender, Subject, SubjectDetail } from '@/types/subject'
 
 /**
  * Phase E.4 M2 — Subjects store (real-backend wired).
@@ -32,6 +32,14 @@ export const useSubjectsStore = defineStore('subjects', () => {
   const rows = ref<Subject[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
+
+  // Detail-view state — separate from `rows` because the matrix list
+  // returns a leaner shape than the detail endpoint. M3 fetches the
+  // detail on-demand into `selected`; the view watches the route
+  // param and re-fetches when it changes.
+  const selected = ref<SubjectDetail | null>(null)
+  const isLoadingSelected = ref(false)
+  const selectedError = ref<string | null>(null)
 
   // Filter state — persisted across navigation.
   const query = ref('')
@@ -100,6 +108,50 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
+   * Phase E.4 M3 — fetch a single subject's detail by study_subject OID.
+   *
+   * Lookup is by the legacy `study_subject.oc_oid` (e.g. `SS_M001`),
+   * NOT the label-style `M-001` identifier shown to the user. The
+   * view passes the label and the store performs the `M-001 → SS_M001`
+   * normalisation here — the legacy OID convention is to strip the
+   * hyphen and prepend `SS_`, matching the seed data exactly.
+   *
+   * Hard-fails per the plan's mock-removal policy: on error,
+   * `selected` is set to null and `selectedError` carries the
+   * server message. The detail view renders the empty-state notice
+   * rather than falling back to mock data.
+   */
+  async function fetchOne(subjectIdOrOid: string): Promise<SubjectDetail | null> {
+    const oid = toStudySubjectOid(subjectIdOrOid)
+    isLoadingSelected.value = true
+    selectedError.value = null
+    try {
+      const detail = await apiGet<SubjectDetail>(`/pages/api/v1/subjects/${encodeURIComponent(oid)}`)
+      selected.value = detail
+      return detail
+    } catch (e) {
+      selected.value = null
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        // Propagate so the router-level guard can redirect to /login
+        // (401) or render a 403 error toast.
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        selectedError.value = 'Backend nicht erreichbar — bitte später erneut versuchen.'
+        return null
+      }
+      if (e instanceof ApiError) {
+        selectedError.value = e.message
+        return null
+      }
+      selectedError.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Laden des Subjects.'
+      return null
+    } finally {
+      isLoadingSelected.value = false
+    }
+  }
+
+  /**
    * Phase E.5.2 — enrol a new subject (optimistic local append).
    *
    * TODO(E.4 M4): replace with `apiPost<Subject>('/pages/api/v1/subjects', input)`
@@ -159,6 +211,9 @@ export const useSubjectsStore = defineStore('subjects', () => {
     query,
     statusFilter,
     onlyWithQueries,
+    selected,
+    isLoadingSelected,
+    selectedError,
     // derived
     filtered,
     totalCount,
@@ -167,8 +222,27 @@ export const useSubjectsStore = defineStore('subjects', () => {
     load,
     clearFilters,
     add,
+    fetchOne,
   }
 })
+
+/**
+ * Convert a SPA subject identifier (the human-readable `M-001`-style
+ * label OR a raw `SS_M001`-style OID) to the legacy
+ * `study_subject.oc_oid` value the backend's M3 lookup keys on.
+ *
+ * Convention from the demo seed: label `M-001` → oid `SS_M001`,
+ * label `M-007` → oid `SS_M007`. The legacy `AddNewSubjectServlet`
+ * auto-generates OIDs from labels via `SS_` + sanitized-label, so
+ * this stripping rule mirrors what the backend would have written.
+ *
+ * If the caller already passes an OID (starts with `SS_`), it's
+ * returned unchanged. This lets the SPA accept either form.
+ */
+function toStudySubjectOid(idOrOid: string): string {
+  if (idOrOid.startsWith('SS_')) return idOrOid
+  return 'SS_' + idOrOid.replace(/[^A-Za-z0-9]/g, '')
+}
 
 /** Form payload from the Add Subject view. */
 export interface AddSubjectInput {

@@ -495,8 +495,17 @@
     "openEvent": "CRFs öffnen →",
     "column": {
       "event": "Visite",
+      "dateStart": "Startdatum",
       "status": "Status",
+      "dataEntryStage": "Erfassungsstand",
       "openQueries": "Offene Rückfragen"
+    },
+    "dataEntryStage": {
+      "not-started": "Nicht begonnen",
+      "data-being-entered": "In Erfassung",
+      "initial-data-entry-completed": "Erfassung abgeschlossen",
+      "validation-completed": "Validiert",
+      "locked": "Gesperrt"
     },
     "actions": {
       "downloadCasebook": "Patient-Casebook herunterladen",

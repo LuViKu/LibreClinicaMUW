@@ -25,16 +25,20 @@ import java.util.Map;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
 
 import org.slf4j.Logger;
@@ -43,16 +47,19 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Phase E.4 — Subject Matrix adapter.
+ * Phase E.4 — Subject Matrix + Subject Detail adapter.
  *
  * <p>Exposes the Investigator's Subject Matrix at
- * {@code GET /pages/api/v1/subjects} as JSON for the Vue SPA. The
- * legacy JSP path at {@code /ListStudySubjects} keeps working in
- * parallel during the bake-in window per DR-018.
+ * {@code GET /pages/api/v1/subjects} and the Subject Detail view at
+ * {@code GET /pages/api/v1/subjects/{oid}} +
+ * {@code GET /pages/api/v1/subjects/{oid}/preflightForSign} as JSON
+ * for the Vue SPA. The legacy JSP path at {@code /ListStudySubjects}
+ * keeps working in parallel during the bake-in window per DR-018.
  *
  * <p><strong>Milestone 2 (subject-matrix completion).</strong> The
  * slice #1 adapter shipped identity columns only ({@code id},
@@ -157,6 +164,433 @@ public class SubjectsApiController {
                 out.size(), currentStudy.getOid(), currentUser.getName());
 
         return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Phase E.4 M3 — Subject Detail endpoint.
+     *
+     * <p>Returns the same identity + matrix-overlap fields the list
+     * endpoint returns, plus per-event date_start / date_end /
+     * location / dataEntryStage and subject-level studyOid / studyName.
+     *
+     * <p>Lookup is by {@code study_subject.oc_oid} (human-readable OID
+     * like {@code "SS_M001"}) via {@link StudySubjectDAO#findByOid}.
+     * The DAO returns a bean with all numeric IDs but {@code studyId=0}
+     * — we cross-check the returned bean's {@code studyId} against the
+     * currently-bound study and 404 if there's no match (single status
+     * code for "not in your study" + "doesn't exist" — same as the
+     * legacy {@code /ViewStudySubject} servlet).
+     *
+     * <p>If the OID does exist but belongs to a different study, we
+     * return {@code 403 Forbidden} rather than 404 — exposing the
+     * existence of subjects in other studies is a separate compliance
+     * decision, and the legacy JSP renders a 403 page in the same
+     * situation.
+     */
+    @GetMapping("/{studySubjectOid}")
+    public ResponseEntity<?> getOne(@PathVariable("studySubjectOid") String studySubjectOid,
+                                    HttpSession session) {
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session — visit /MainMenu after login."
+            ));
+        }
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
+        if (ss == null || ss.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Subject with OID '" + studySubjectOid + "' not found."
+            ));
+        }
+        if (ss.getStudyId() != currentStudy.getId()) {
+            // The subject exists but is in a different study. 403 not 404 —
+            // matches the legacy /ViewStudySubject behaviour and gives the
+            // SPA a clear "you don't have access" signal without leaking
+            // whether the OID exists elsewhere.
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Subject is not in the currently active study."
+            ));
+        }
+
+        SubjectDAO subjectDAO = new SubjectDAO(dataSource);
+        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
+        StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(dataSource);
+        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
+
+        SubjectBean subj = subjectDAO.findByPK(ss.getSubjectId());
+        Map<Integer, StudyEventDefinitionBean> definitionCache = new HashMap<>();
+        // Reuse the matrix's single-shot aggregation — for a one-subject
+        // call this is overkill (a smaller per-subject query would do)
+        // but the cost is negligible against the convenience of reusing
+        // the same code path + the same correctness guarantees.
+        Map<Integer, Integer> openQueriesByEvent = loadOpenQueryCountsForStudy(currentStudy.getId());
+
+        SubjectDetailDto dto = toDetailDto(ss, subj, currentStudy, studyEventDAO,
+                studyEventDefinitionDAO, eventCRFDAO, definitionCache, openQueriesByEvent);
+
+        LOG.debug("Subject Detail adapter served {} (study {}, user {})",
+                ss.getOid(), currentStudy.getOid(), currentUser.getName());
+
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * Phase E.4 M3 — Sign Subject preflight checks endpoint.
+     *
+     * <p>Returns five checks the SPA's Sign Subject view consumes (M8
+     * lands the UI; M3 ships the endpoint so M8 doesn't need backend
+     * changes). Status semantics per the mockup at
+     * {@code docs/development/modernization/phase-e/ux-mockups/investigator-sign-subject.html}.
+     *
+     * <p>Convenience booleans {@code subjectAlreadySigned} +
+     * {@code userRoleCanSign} are surfaced top-level so the SPA can
+     * render the primary-action button without re-walking the check
+     * list.
+     */
+    @GetMapping("/{studySubjectOid}/preflightForSign")
+    public ResponseEntity<?> preflightForSign(@PathVariable("studySubjectOid") String studySubjectOid,
+                                              HttpSession session) {
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session — visit /MainMenu after login."
+            ));
+        }
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
+        if (ss == null || ss.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Subject with OID '" + studySubjectOid + "' not found."
+            ));
+        }
+        if (ss.getStudyId() != currentStudy.getId()) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Subject is not in the currently active study."
+            ));
+        }
+
+        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
+        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
+
+        List<StudyEventBean> events = studyEventDAO.findAllByStudySubject(ss);
+        if (events == null) events = Collections.emptyList();
+
+        // ------ Check 1: events-complete ------
+        // Pass if every scheduled (id != 2) event has status ∈ {4, 8};
+        // warn if any in-progress (3) or scheduled (1) but not started;
+        // fail if any "scheduled but never started" — which by the brief
+        // means subject_event_status_id=1 (scheduled, no data yet).
+        //
+        // Implementation: scheduled (1) with no event_crf rows = fail;
+        // in-progress (3) = warn; all completed/signed = pass.
+        int completedCount = 0;
+        int scheduledNotStarted = 0;
+        int inProgressEvents = 0;
+        int totalSchedulable = 0;
+        for (StudyEventBean ev : events) {
+            int st = ev.getSubjectEventStatus() == null ? 0 : ev.getSubjectEventStatus().getId();
+            if (st == 2) continue; // not-scheduled — not part of the casebook
+            totalSchedulable++;
+            if (st == 4 || st == 8) {
+                completedCount++;
+            } else if (st == 3) {
+                inProgressEvents++;
+            } else if (st == 1) {
+                scheduledNotStarted++;
+            }
+        }
+        SignPreflightDto.CheckRow eventsCheck;
+        if (scheduledNotStarted > 0) {
+            eventsCheck = new SignPreflightDto.CheckRow(
+                    "events-complete", "fail",
+                    "Not all scheduled events have data entry",
+                    scheduledNotStarted + " of " + totalSchedulable + " events still scheduled with no data."
+            );
+        } else if (inProgressEvents > 0) {
+            eventsCheck = new SignPreflightDto.CheckRow(
+                    "events-complete", "warn",
+                    "Some scheduled events are still in progress",
+                    inProgressEvents + " of " + totalSchedulable + " events have data entry in progress."
+            );
+        } else {
+            eventsCheck = new SignPreflightDto.CheckRow(
+                    "events-complete", "pass",
+                    "All scheduled events have at least one CRF completed",
+                    completedCount + " of " + totalSchedulable + " events complete or signed."
+            );
+        }
+
+        // ------ Check 2: crfs-complete ------
+        // Pass if every event_crf has date_completed set; warn if some
+        // are still in initial-data-entry (date_completed null but
+        // completion_status_id=1 — the seed convention). The
+        // DataEntryStage taxonomy formally has UNCOMPLETED at id=1 and
+        // INITIAL_DATA_ENTRY_COMPLETE at id=3, but the seed treats
+        // {completion_status_id=1 AND date_completed IS NOT NULL} as
+        // complete — we honour that.
+        int totalCrfs = 0;
+        int completedCrfs = 0;
+        int inProgressCrfs = 0;
+        for (StudyEventBean ev : events) {
+            List<EventCRFBean> ecs = eventCRFDAO.findAllByStudyEvent(ev);
+            if (ecs == null) continue;
+            for (EventCRFBean ec : ecs) {
+                totalCrfs++;
+                if (ec.getDateCompleted() != null) {
+                    completedCrfs++;
+                } else {
+                    inProgressCrfs++;
+                }
+            }
+        }
+        SignPreflightDto.CheckRow crfsCheck;
+        if (totalCrfs == 0) {
+            crfsCheck = new SignPreflightDto.CheckRow(
+                    "crfs-complete", "fail",
+                    "No CRFs have been started yet",
+                    "Sign Subject requires at least one CRF with data entry complete."
+            );
+        } else if (inProgressCrfs > 0) {
+            crfsCheck = new SignPreflightDto.CheckRow(
+                    "crfs-complete", "warn",
+                    "Some CRFs still in initial data entry",
+                    completedCrfs + " of " + totalCrfs + " required CRFs marked complete."
+            );
+        } else {
+            crfsCheck = new SignPreflightDto.CheckRow(
+                    "crfs-complete", "pass",
+                    "All required CRFs are marked complete",
+                    completedCrfs + " of " + totalCrfs + " required CRFs in status Data entry complete."
+            );
+        }
+
+        // ------ Check 3: open-queries (warn-only — never blocks) ------
+        Map<Integer, Integer> openQueriesByEvent = loadOpenQueryCountsForStudy(currentStudy.getId());
+        int subjectOpenQueries = 0;
+        for (StudyEventBean ev : events) {
+            subjectOpenQueries += openQueriesByEvent.getOrDefault(ev.getId(), 0);
+        }
+        SignPreflightDto.CheckRow openQueriesCheck;
+        if (subjectOpenQueries == 0) {
+            openQueriesCheck = new SignPreflightDto.CheckRow(
+                    "open-queries", "pass",
+                    "No open discrepancies attached to this subject",
+                    "All queries resolved."
+            );
+        } else {
+            openQueriesCheck = new SignPreflightDto.CheckRow(
+                    "open-queries", "warn",
+                    subjectOpenQueries + " open discrepancies attached to this subject",
+                    "Open queries do not block signing, but you should reconcile them first when possible."
+            );
+        }
+
+        // ------ Check 4: subject-not-signed ------
+        boolean alreadySigned = ss.getStatus() != null && ss.getStatus().equals(Status.SIGNED);
+        SignPreflightDto.CheckRow signedCheck;
+        if (alreadySigned) {
+            signedCheck = new SignPreflightDto.CheckRow(
+                    "subject-not-signed", "fail",
+                    "Subject is already signed",
+                    "Signing is a one-way action. To re-sign, an administrator must reset the subject first."
+            );
+        } else {
+            signedCheck = new SignPreflightDto.CheckRow(
+                    "subject-not-signed", "pass",
+                    "No previous signature on this subject",
+                    "This is a first signature, not a re-sign after administrator reset."
+            );
+        }
+
+        // ------ Check 5: user-role-can-sign ------
+        boolean canSign = false;
+        String legacyRoleName = null;
+        if (currentRole != null && currentRole.getRole() != null) {
+            Role r = currentRole.getRole();
+            legacyRoleName = r.getName();
+            // Investigator (id=4) or Study Director (id=3) can sign;
+            // ra / ra2 / coordinator / monitor cannot.
+            canSign = (r.getId() == Role.INVESTIGATOR.getId()
+                    || r.getId() == Role.STUDYDIRECTOR.getId());
+        }
+        SignPreflightDto.CheckRow roleCheck;
+        if (canSign) {
+            roleCheck = new SignPreflightDto.CheckRow(
+                    "user-role-can-sign", "pass",
+                    "Your role allows signing this subject",
+                    "Signed in as " + currentUser.getName() + " (" + legacyRoleName + ")."
+            );
+        } else {
+            String detail = (legacyRoleName == null)
+                    ? "No study-scoped role bound — pick a study first."
+                    : "Your role (" + legacyRoleName + ") cannot sign subjects. Only Investigator and Study Director may sign.";
+            roleCheck = new SignPreflightDto.CheckRow(
+                    "user-role-can-sign", "fail",
+                    "Your role does not allow signing",
+                    detail
+            );
+        }
+
+        List<SignPreflightDto.CheckRow> checks = List.of(
+                eventsCheck, crfsCheck, openQueriesCheck, signedCheck, roleCheck);
+        int blocking = 0;
+        int warnings = 0;
+        for (SignPreflightDto.CheckRow c : checks) {
+            if ("fail".equals(c.status())) blocking++;
+            else if ("warn".equals(c.status())) warnings++;
+        }
+
+        SignPreflightDto out = new SignPreflightDto(
+                checks,
+                blocking,
+                warnings,
+                alreadySigned,
+                canSign
+        );
+
+        LOG.debug("Sign-preflight for {} (study {}, user {}): {} blocking, {} warnings",
+                ss.getOid(), currentStudy.getOid(), currentUser.getName(), blocking, warnings);
+
+        return ResponseEntity.ok(out);
+    }
+
+    private SubjectDetailDto toDetailDto(StudySubjectBean ss, SubjectBean subj, StudyBean study,
+                                         StudyEventDAO studyEventDAO,
+                                         StudyEventDefinitionDAO studyEventDefinitionDAO,
+                                         EventCRFDAO eventCRFDAO,
+                                         Map<Integer, StudyEventDefinitionBean> definitionCache,
+                                         Map<Integer, Integer> openQueriesByEvent) {
+        String secondaryId = (ss.getSecondaryLabel() == null || ss.getSecondaryLabel().isBlank())
+                ? null : ss.getSecondaryLabel();
+        String gender = mapGender(subj == null ? '\0' : subj.getGender());
+        Integer yearOfBirth = extractYear(subj);
+        String enrolledOn = formatIsoDate(ss.getEnrollmentDate());
+
+        List<StudyEventBean> events = studyEventDAO.findAllByStudySubject(ss);
+        if (events == null) events = Collections.emptyList();
+
+        List<SubjectDetailDto.EventCellDetailDto> eventCells = new ArrayList<>(events.size());
+        int subjectOpenQueries = 0;
+        for (StudyEventBean ev : events) {
+            StudyEventDefinitionBean def = definitionCache.computeIfAbsent(
+                    ev.getStudyEventDefinitionId(), studyEventDefinitionDAO::findByPK);
+            int statusId = ev.getSubjectEventStatus() == null
+                    ? 0
+                    : ev.getSubjectEventStatus().getId();
+            String status = mapSubjectEventStatus(statusId);
+            int eventOpenQueries = openQueriesByEvent.getOrDefault(ev.getId(), 0);
+            subjectOpenQueries += eventOpenQueries;
+
+            // Pick the primary CRF for the dataEntryStage column. Most
+            // events have a single CRF in the demo; if multiple are
+            // attached we use the first one for the stage indicator —
+            // the SPA's detail view shows aggregate state, not per-CRF
+            // breakdown (that's the M5 read endpoint's job).
+            String stage = null;
+            List<EventCRFBean> ecs = eventCRFDAO.findAllByStudyEvent(ev);
+            if (ecs != null && !ecs.isEmpty()) {
+                EventCRFBean primary = ecs.get(0);
+                stage = mapDataEntryStage(primary);
+            }
+
+            eventCells.add(new SubjectDetailDto.EventCellDetailDto(
+                    def == null ? null : def.getOid(),
+                    def == null ? null : def.getName(),
+                    status,
+                    eventOpenQueries,
+                    formatIsoDate(ev.getDateStarted()),
+                    formatIsoDate(ev.getDateEnded()),
+                    blankToNull(ev.getLocation()),
+                    stage
+            ));
+        }
+        eventCells.sort(Comparator.comparingInt((SubjectDetailDto.EventCellDetailDto cell) -> {
+            if (cell.eventDefinitionOid() == null) return Integer.MAX_VALUE;
+            StudyEventDefinitionBean d = findDefinitionByOid(definitionCache, cell.eventDefinitionOid());
+            return d == null ? Integer.MAX_VALUE : d.getOrdinal();
+        }));
+
+        boolean signed = ss.getStatus() != null && ss.getStatus().equals(Status.SIGNED);
+
+        return new SubjectDetailDto(
+                ss.getLabel(),
+                secondaryId,
+                study.getOid(),
+                study.getName(),
+                study.getOid(),
+                study.getName(),
+                gender,
+                yearOfBirth,
+                /* groupLabel */ null,
+                enrolledOn,
+                eventCells,
+                signed,
+                subjectOpenQueries
+        );
+    }
+
+    /**
+     * Map an {@link EventCRFBean} to the SPA's {@code dataEntryStage}
+     * union value. Returns {@code null} if the CRF isn't started.
+     *
+     * <p>The legacy convention in the demo seed treats {@code
+     * completion_status_id=1 AND date_completed IS NOT NULL} as
+     * "complete" — that's the same rule the legacy
+     * {@code ViewSectionDataEntryServlet} uses. We honour that:
+     * <pre>
+     *   date_completed != null && status_id == 2 → "validation-completed"  (locked/e-signed)
+     *   date_completed != null                    → "initial-data-entry-completed"
+     *   completion_status_id == 0                 → null                    (not started)
+     *   completion_status_id == 1                 → "not-started"
+     *   completion_status_id == 2                 → "data-being-entered"
+     *   completion_status_id == 3                 → "initial-data-entry-completed"
+     *   completion_status_id == 4 or 5            → "validation-completed"
+     *   completion_status_id == 7                 → "locked"
+     *   otherwise                                  → "data-being-entered"
+     * </pre>
+     */
+    private static String mapDataEntryStage(EventCRFBean ec) {
+        if (ec == null) return null;
+        // E-signed / SDV'd CRFs report a higher Status (2 unavailable)
+        // — they're complete from the SPA's perspective regardless of
+        // the formal completion stage id.
+        boolean hasCompletion = ec.getDateCompleted() != null;
+        int csi = ec.getCompletionStatusId();
+        if (hasCompletion) {
+            // Locked event_crf status (2) means signed/closed in legacy
+            // OpenClinica vocabulary — surface as validation-completed.
+            if (ec.getStatus() != null && ec.getStatus().equals(Status.UNAVAILABLE)) {
+                return "validation-completed";
+            }
+            return "initial-data-entry-completed";
+        }
+        return switch (csi) {
+            case 0 -> null;
+            case 1 -> "not-started";
+            case 2 -> "data-being-entered";
+            case 3 -> "initial-data-entry-completed";
+            case 4, 5 -> "validation-completed";
+            case 7 -> "locked";
+            default -> "data-being-entered";
+        };
+    }
+
+    private static String blankToNull(String s) {
+        if (s == null) return null;
+        String trimmed = s.trim();
+        return trimmed.isEmpty() ? null : trimmed;
     }
 
     private SubjectListItemDto toDto(StudySubjectBean ss, SubjectBean subj, StudyBean study,

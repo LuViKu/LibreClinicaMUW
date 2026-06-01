@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
@@ -16,11 +16,24 @@ const subjects = useSubjectsStore()
 
 const subjectId = computed(() => String(route.params.subjectId))
 
-onMounted(async () => {
-  if (subjects.rows.length === 0) await subjects.load('TDS0004')
+/**
+ * Phase E.4 M3 — load the subject from its dedicated detail endpoint.
+ * Drops the previous `subjects.rows.find(...)` derivation so the
+ * detail view no longer depends on the matrix list being preloaded.
+ */
+onMounted(() => {
+  subjects.fetchOne(subjectId.value)
 })
 
-const subject = computed(() => subjects.rows.find((s) => s.id === subjectId.value) ?? null)
+watch(subjectId, (next, prev) => {
+  if (next !== prev) {
+    subjects.fetchOne(next)
+  }
+})
+
+const subject = computed(() => subjects.selected)
+const isLoading = computed(() => subjects.isLoadingSelected)
+const loadError = computed(() => subjects.selectedError)
 
 function statusVariant(status: EventStatus): 'success' | 'info' | 'warning' | 'neutral' {
   switch (status) {
@@ -38,13 +51,19 @@ function statusVariant(status: EventStatus): 'success' | 'info' | 'warning' | 'n
 }
 
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-function formatDate(iso: string): string {
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
   const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10))
   return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[(m ?? 1) - 1] ?? '???'}-${y}`
 }
 
 function genderLabel(g: string): string {
   return t(`addSubject.gender.${g === 'F' ? 'female' : g === 'M' ? 'male' : g === 'O' ? 'other' : 'unknown'}`)
+}
+
+function dataEntryStageLabel(stage: string | null): string {
+  if (!stage) return '—'
+  return t(`subjectDetail.dataEntryStage.${stage}`)
 }
 </script>
 
@@ -76,11 +95,11 @@ function genderLabel(g: string): string {
     </SideRail>
 
     <main class="flex-1 max-w-4xl px-8 py-6">
-      <p v-if="subjects.isLoading && !subject" class="text-slate-500 italic">{{ t('common.loading') }}</p>
+      <p v-if="isLoading && !subject" class="text-slate-500 italic">{{ t('common.loading') }}</p>
 
       <template v-else-if="!subject">
         <div class="rounded-muw border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800">
-          {{ t('subjectDetail.notFound', { id: subjectId }) }}
+          {{ loadError ?? t('subjectDetail.notFound', { id: subjectId }) }}
           <RouterLink to="/subjects" class="ml-2 underline">{{ t('subjectDetail.backToMatrix') }}</RouterLink>
         </div>
       </template>
@@ -88,7 +107,7 @@ function genderLabel(g: string): string {
       <template v-else>
         <!-- Header -->
         <div class="mb-5">
-          <div class="text-xs text-slate-500 mb-1">{{ subject.siteLabel }} · {{ t('subjectDetail.subTrail') }}</div>
+          <div class="text-xs text-slate-500 mb-1">{{ subject.studyName }} · {{ t('subjectDetail.subTrail') }}</div>
           <h1 class="text-xl font-semibold tracking-tight flex items-center gap-3 flex-wrap">
             {{ subject.id }}
             <span v-if="subject.secondaryId" class="text-slate-400 font-normal text-sm">· {{ subject.secondaryId }}</span>
@@ -138,16 +157,23 @@ function genderLabel(g: string): string {
             <template #header>
               <tr class="border-b border-slate-200">
                 <th scope="col" class="px-5 py-2 font-medium">{{ t('subjectDetail.column.event') }}</th>
+                <th scope="col" class="px-5 py-2 font-medium w-28">{{ t('subjectDetail.column.dateStart') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-40">{{ t('subjectDetail.column.status') }}</th>
-                <th scope="col" class="px-5 py-2 font-medium w-32 text-right">{{ t('subjectDetail.column.openQueries') }}</th>
-                <th scope="col" class="px-5 py-2 font-medium w-32 text-right"></th>
+                <th scope="col" class="px-5 py-2 font-medium w-44">{{ t('subjectDetail.column.dataEntryStage') }}</th>
+                <th scope="col" class="px-5 py-2 font-medium w-24 text-right">{{ t('subjectDetail.column.openQueries') }}</th>
+                <th scope="col" class="px-5 py-2 font-medium w-28 text-right"></th>
               </tr>
             </template>
             <tr v-for="ev in subject.events" :key="ev.eventDefinitionOid">
-              <td class="px-5 py-2.5 font-medium">{{ ev.label }}</td>
+              <td class="px-5 py-2.5 font-medium">
+                <div>{{ ev.label }}</div>
+                <div v-if="ev.location" class="text-xs text-slate-500 mt-0.5">{{ ev.location }}</div>
+              </td>
+              <td class="px-5 py-2.5 text-xs font-mono text-slate-600">{{ formatDate(ev.dateStart) }}</td>
               <td class="px-5 py-2.5">
                 <StatusPill :variant="statusVariant(ev.status)">{{ t(`subjectMatrix.status.${ev.status}`) }}</StatusPill>
               </td>
+              <td class="px-5 py-2.5 text-xs text-slate-600">{{ dataEntryStageLabel(ev.dataEntryStage) }}</td>
               <td class="px-5 py-2.5 text-right">
                 <StatusPill v-if="ev.openQueries > 0" compact variant="danger">{{ ev.openQueries }}</StatusPill>
                 <span v-else class="text-slate-400">—</span>

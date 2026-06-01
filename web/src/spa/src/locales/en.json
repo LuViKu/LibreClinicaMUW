@@ -495,8 +495,17 @@
     "openEvent": "Open CRFs →",
     "column": {
       "event": "Event",
+      "dateStart": "Start date",
       "status": "Status",
+      "dataEntryStage": "Data entry stage",
       "openQueries": "Open queries"
+    },
+    "dataEntryStage": {
+      "not-started": "Not started",
+      "data-being-entered": "Being entered",
+      "initial-data-entry-completed": "Entry complete",
+      "validation-completed": "Validated",
+      "locked": "Locked"
     },
     "actions": {
       "downloadCasebook": "Download casebook",
