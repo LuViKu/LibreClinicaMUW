@@ -67,6 +67,15 @@
 			<artifactId>spring-boot-starter-actuator</artifactId>
 		</dependency>
 		<dependency>
+			<!-- Phase E.5 B3: springdoc-openapi serves the OpenAPI 3.x spec
+			     for every @RestController under /api/v1/* at
+			     /LibreClinica/v3/api-docs (JSON) and /LibreClinica/swagger-ui.html
+			     (interactive UI). The SPA's codegen:openapi step consumes the
+			     JSON to refresh src/types/api.ts. -->
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+		</dependency>
+		<dependency>
 			<groupId>${project.groupId}</groupId>
 			<artifactId>LibreClinica-core</artifactId>
 			<version>${project.version}</version>
@@ -473,6 +482,11 @@
 						<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-web</ignoredUnusedDeclaredDependency>
 						<!-- Phase C.15: Actuator starter has no compile-time refs; loaded by autoconfig. -->
 						<ignoredUnusedDeclaredDependency>org.springframework.boot:spring-boot-starter-actuator</ignoredUnusedDeclaredDependency>
+						<!-- Phase E.5 B3: springdoc-openapi only surfaces in compile
+						     under @Operation/@Tag/@OpenAPIDefinition annotations; the
+						     analyze-only plugin doesn't credit those because they're
+						     referenced via fully-qualified imports in just two files. -->
+						<ignoredUnusedDeclaredDependency>org.springdoc:springdoc-openapi-starter-webmvc-ui</ignoredUnusedDeclaredDependency>
 						<!-- Phase C.1: Boot's BOM upgrades jakarta.mail-api to a version
 						     where the impl ships in org.eclipse.angus:jakarta.mail.
 						     Existing email code references jakarta.mail types via the
@@ -506,6 +520,15 @@
                              Boot's version pinning. -->
                         <ignoredUsedUndeclaredDependency>org.junit.jupiter:junit-jupiter-api</ignoredUsedUndeclaredDependency>
                         <ignoredUsedUndeclaredDependency>org.hamcrest:hamcrest</ignoredUsedUndeclaredDependency>
+                        <!-- Phase E.5 B3: OpenApiConfig imports GroupedOpenApi
+                             from springdoc-openapi-starter-common and the
+                             10 controllers import @Tag from
+                             swagger-annotations-jakarta. Both come via the
+                             springdoc-openapi-starter-webmvc-ui umbrella
+                             declared in the parent pom. Listing each
+                             transitive individually would be drift-prone. -->
+                        <ignoredUsedUndeclaredDependency>org.springdoc:springdoc-openapi-starter-common</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>io.swagger.core.v3:swagger-annotations-jakarta</ignoredUsedUndeclaredDependency>
                     </ignoredUsedUndeclaredDependencies>
 		        </configuration>
 		      </plugin>

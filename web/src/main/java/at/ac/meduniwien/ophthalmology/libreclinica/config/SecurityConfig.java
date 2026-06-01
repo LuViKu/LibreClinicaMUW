@@ -144,7 +144,18 @@ public class SecurityConfig {
                         // Resolved on the pages dispatcher because
                         // Boot's root @ComponentScan does not include
                         // the controller package.
-                        "/pages/sso/reauth"
+                        "/pages/sso/reauth",
+                        // Phase E.5 B3: springdoc-openapi spec + Swagger
+                        // UI. Contains the API surface description
+                        // (paths + DTO schemas), no clinical data.
+                        // Public access lets the SPA's
+                        // `codegen:openapi` step + ops sanity checks
+                        // run without an auth session.
+                        "/v3/api-docs",
+                        "/v3/api-docs/**",
+                        "/v3/api-docs.yaml",
+                        "/swagger-ui.html",
+                        "/swagger-ui/**"
                 )).permitAll()
                 .anyRequest().hasRole("USER")
             )

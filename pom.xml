@@ -870,6 +870,15 @@
 				<artifactId>snakeyaml</artifactId>
 				<version>2.0</version>
 			</dependency>
+			<!-- Phase E.5 B3: springdoc-openapi exposes /v3/api-docs at
+			     runtime. The SPA's `pnpm run codegen:openapi` step fetches
+			     that endpoint to generate src/types/api.ts so TS types
+			     stop drifting from backend DTO records. -->
+			<dependency>
+				<groupId>org.springdoc</groupId>
+				<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+				<version>2.6.0</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
