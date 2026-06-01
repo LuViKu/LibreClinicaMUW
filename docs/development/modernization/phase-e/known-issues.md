@@ -41,6 +41,36 @@ Suggested CI improvement (not blocked by this investigation): tighten the compos
 
 ---
 
+## 2. Long-running studies — Subject Matrix + per-subject event view at 20+ visits
+
+**Surfaced:** 2026-05-31, by the GA-cohort feasibility probe (H2 of the hardening plan; see [plan: polished-jumping-swan](https://example/n/a)).
+**Context:** MUW Ophthalmology's geographic-atrophy cohort: each patient has 10–20 visits over multiple years (6-month follow-up). The probe seeded one StudySubject with 20 events at ordinals 1–20, dates spanning 2019–2028, then exercised the two listing surfaces a clinician hits day-to-day. **No regression found.**
+
+### What we measured
+
+| Surface | URL | Status | TTFB | Total | Notes |
+|---|---|---|---|---|---|
+| Subject Matrix | `/ListStudySubjects` (page shell) | 200 | 320 ms | 486 ms | The page is a shell — events load via XHR to `/FindSubjectsData`. |
+| Subject Matrix data | `/FindSubjectsData?draw=1&start=0&length=500` | 200 | 105 ms | 106 ms | **JSON aggregates events per (subject, SED) into `{statusName, count}`** — the table renders one cell per (subject, SED), not 20. Scalable to N events/subject by design. |
+| Per-subject drill | `/ViewStudySubject?id=1` (page 1) | 200 | 290 ms | 472 ms | Shows 10 most recent events (ordinals 11–20, descending). Paginates via `ebl_page=N` URL params. |
+| Per-subject drill | `/ViewStudySubject?...&ebl_page=2&...` | 200 | 110 ms | 151 ms | Page 2 → ordinals 10–1. Pagination handles long visit lists cleanly. |
+
+### What we know
+
+- The Subject Matrix render path is from the Phase B.4 jmesa eviction (PR #41); event data comes from a JSON endpoint that aggregates per (subject, study-event-definition) into status + count. Cell render cost is O(N_SEDs) per subject, not O(N_visits). 100+ visits per subject would still render as one cell per SED.
+- `ViewStudySubject` is the legacy OpenClinica per-subject view. It paginates the event list at 10/page via `ebl_page`/`ebl_paginated` URL params (the "event browser list" prefix). Default page is the most-recent 10. Older visits live on subsequent pages.
+- Per-subject HTML for one page is ~60 KB; this should not degrade further with more visits because pagination caps the per-page event count.
+
+### Phase E framing
+
+The SPA rewrite will replace `ViewStudySubject` with the modernised per-subject drill-down. The current pagination cap of 10 events/page is small for a 20-visit cohort — clinicians have to click "next" once to see all visits. **Phase E enhancement (P1):** the SPA per-subject view should default to showing all visits in a single scrollable timeline (or paginate at a higher cap like 25/page). The visit-timeline mockup is already an opportunity flagged in [post-phase-d-ui-validation.md](post-phase-d-ui-validation.md) §"Other observations".
+
+### Smoke-test follow-up
+
+The H1 integration test (`StudyEventScheduleIT.testRepeatingEventScalesTo15Visits`) pins the data-model side. A Phase E browser-level smoke could exercise the full path: seed → log in → navigate Subject Matrix → drill into subject → assert all 20 visits reachable across pages. Not blocking; tracked as Phase E nice-to-have.
+
+---
+
 ## How to add entries here
 
 Append new `## N. <one-line summary>` sections following the same shape: surfaced-date / symptom / what we know / investigation steps / Phase E framing. Keep the entries small enough that a developer can pick one up in a sitting.
