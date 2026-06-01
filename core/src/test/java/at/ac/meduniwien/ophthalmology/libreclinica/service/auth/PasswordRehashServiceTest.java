@@ -8,12 +8,12 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.auth;
 
-import static org.mockito.Matchers.anyInt;
-import static org.mockito.Matchers.anyString;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyZeroInteractions;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -22,7 +22,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 /**
@@ -112,8 +112,8 @@ public class PasswordRehashServiceTest {
     public void noOpForNullUser() {
         rehashService.rehashAfterSuccessfulLogin(null, RAW_PASSWORD);
 
-        verifyZeroInteractions(encoder);
-        verifyZeroInteractions(userAccountDao);
+        verifyNoInteractions(encoder);
+        verifyNoInteractions(userAccountDao);
     }
 
     /**
@@ -128,8 +128,8 @@ public class PasswordRehashServiceTest {
 
         rehashService.rehashAfterSuccessfulLogin(sentinel, RAW_PASSWORD);
 
-        verifyZeroInteractions(encoder);
-        verifyZeroInteractions(userAccountDao);
+        verifyNoInteractions(encoder);
+        verifyNoInteractions(userAccountDao);
     }
 
     /**
@@ -144,8 +144,8 @@ public class PasswordRehashServiceTest {
         rehashService.rehashAfterSuccessfulLogin(user, null);
         rehashService.rehashAfterSuccessfulLogin(user, "");
 
-        verifyZeroInteractions(encoder);
-        verifyZeroInteractions(userAccountDao);
+        verifyNoInteractions(encoder);
+        verifyNoInteractions(userAccountDao);
     }
 
     /**
@@ -158,8 +158,8 @@ public class PasswordRehashServiceTest {
 
         rehashService.rehashAfterSuccessfulLogin(user, RAW_PASSWORD);
 
-        verifyZeroInteractions(encoder);
-        verifyZeroInteractions(userAccountDao);
+        verifyNoInteractions(encoder);
+        verifyNoInteractions(userAccountDao);
     }
 
     /**
