@@ -49,14 +49,30 @@
                         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
 
     <changeSet author="muw-ophthalmology" id="2026-06-01-seed-dn-item-data-map">
-        <comment>Backfill dn_item_data_map for the 8 seed discrepancy notes so Subject-Matrix open-query counts resolve</comment>
         <preConditions onFail="MARK_RAN">
-            <!-- Only run if the discrepancy_note rows exist (i.e. the seed
-                 was applied). Avoids breakage on a fresh DB where the seed
-                 hasn't run yet — though in practice master.xml ordering
-                 guarantees the seed runs first. -->
+            <!-- Phase E.5 A3 fix (2026-06-02): the Liquibase 3.6
+                 changeset XSD requires <preConditions> to appear before
+                 <comment> per the changeSetType complex-type sequence.
+                 The original M2 fixup emitted them in the reverse
+                 order, which caused the XML parser to reject the file
+                 on EVERY fresh deploy (lc-develop never ran this
+                 changeset; the live demo seed only ever got the
+                 dn_item_data_map rows from the M2 seed itself, not
+                 this fixup). Swapping to the correct order makes the
+                 fixup parseable. The preCondition itself is unchanged:
+                 only run when the seed's 8 discrepancy_note rows are
+                 present — defensive guard, since master.xml
+                 ordering already guarantees the seed runs first.
+
+                 NOTE: this is a structural reorder of a previously-
+                 published changeset XML. Liquibase computes checksums
+                 against the changeset content (the actions), not the
+                 XML element ordering, so deploys that previously
+                 errored OR mark-ran this changeset will still see it
+                 as already-applied — no checksum mismatch warning. -->
             <sqlCheck expectedResult="8">SELECT COUNT(*) FROM discrepancy_note WHERE discrepancy_note_id BETWEEN 1 AND 8</sqlCheck>
         </preConditions>
+        <comment>Backfill dn_item_data_map for the 8 seed discrepancy notes so Subject-Matrix open-query counts resolve</comment>
 
         <insert tableName="dn_item_data_map"><column name="item_data_id" valueNumeric="3"/><column name="discrepancy_note_id" valueNumeric="1"/><column name="column_name" value="value"/><column name="study_subject_id" valueNumeric="1"/><column name="activated" valueBoolean="true"/></insert>
         <insert tableName="dn_item_data_map"><column name="item_data_id" valueNumeric="7"/><column name="discrepancy_note_id" valueNumeric="2"/><column name="column_name" value="value"/><column name="study_subject_id" valueNumeric="1"/><column name="activated" valueBoolean="true"/></insert>

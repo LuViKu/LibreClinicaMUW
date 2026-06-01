@@ -71,6 +71,23 @@ The H1 integration test (`StudyEventScheduleIT.testRepeatingEventScalesTo15Visit
 
 ---
 
+## 3. `lc-muw-2026-06-01-seed-demo-data-fixup` doubles `dn_item_data_map` on fresh deploys
+
+**Surfaced:** 2026-06-01 (Phase E.5 A3 verification cycle).
+
+**Symptom:** `SELECT COUNT(*) FROM dn_item_data_map` returns 16 on a clean `docker compose down -v && up --build`, where the M2 brief expected 8.
+
+**Why:** The original seed `lc-muw-2026-06-01-seed-demo-data.xml` already inserts the 8 `dn_item_data_map` rows the SPA needs for open-query aggregation — those got folded in when PR #51 landed. The follow-up `lc-muw-2026-06-01-seed-demo-data-fixup.xml` then runs (precondition: 8 `discrepancy_note` rows exist, which is true) and inserts the same 8 rows a second time, leaving the table at 16. Each note ends up with two map entries pointing at the same `item_data`, which inflates the per-event open-query counts the Subject Matrix renders.
+
+**What we know:** Liquibase fires the fixup correctly — `databasechangelog` rows for both the seed and the fixup land on every fresh deploy (validated in the A3 cycle). The duplication is purely a semantic accident: the brief that wrote the fixup believed the seed had no map inserts, but by the time of the merge they were already there.
+
+**Investigation steps:**
+1. Decide whether to keep the duplicates (and adjust the SPA's `loadOpenQueryCountsForStudy` aggregation to DISTINCT-count) or drop the fixup (and add a new `lc-muw-<later-date>-prune-dn-item-data-map.xml` changeset that deletes the duplicate rows on existing deploys).
+2. Lean: prune. The DN→item_data joining table doesn't carry a unique constraint, so the duplicates are real rows; the SPA's count query treats them as distinct edges. A `DELETE FROM dn_item_data_map WHERE id NOT IN (SELECT MIN(id) ... GROUP BY discrepancy_note_id, item_data_id, study_subject_id, column_name)` is the right shape.
+3. Out of scope for A3 — A3 only verified the changeset fires; the duplication-on-fresh-DB finding gets its own slice.
+
+---
+
 ## How to add entries here
 
 Append new `## N. <one-line summary>` sections following the same shape: surfaced-date / symptom / what we know / investigation steps / Phase E framing. Keep the entries small enough that a developer can pick one up in a sitting.
