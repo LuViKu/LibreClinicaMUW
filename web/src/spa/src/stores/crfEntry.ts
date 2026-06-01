@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
+import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
 import type {
   CrfEntry,
   CrfEntryStatus,
@@ -9,16 +10,25 @@ import type {
 } from '@/types/crf'
 
 /**
- * Phase E.5.3 — CRF Entry store.
+ * Phase E.5.3 + E.4 M5 — CRF Entry store.
  *
- * Backs the CrfEntryView. Same pattern as the subjects store: hydrates
- * from a mock loader shaped exactly like the planned
- * `GET /pages/api/v1/eventCrfs/{id}` response so the view code is
- * written against the production contract.
+ * Calls `GET /pages/api/v1/eventCrfs/{id}` (adapter shipped in
+ * E.4 M5). The endpoint accepts a numeric event_crf_id as a path
+ * param; the SPA carries it as a string (the `eventCrfOid` field
+ * in `CrfEntry`) since the legacy `event_crf` table doesn't have
+ * an OID column. Future Subject Matrix link generation will pass
+ * the numeric id as the same string.
  *
  * The `pendingChanges` flag drives the "unsaved · auto-saving…" tell
- * in the header. A real auto-save implementation lands in a follow-up;
- * for now the manual save action flushes `values` to the mock layer.
+ * in the header. Real save/markComplete land in M6 — for now those
+ * actions update local state only and remain `TODO(E.4 M6)`.
+ *
+ * Mock removal — per the polished-jumping-swan plan's "hard removal"
+ * policy: the previous `loadMock()` Demographics builder + the
+ * `decodeContext` / `KNOWN_EVENTS` / `humaniseTokens` helpers are
+ * deleted in this PR. If the backend is unreachable the store sets
+ * `error` so the view can render a clear message rather than
+ * silently falling back to mock data.
  */
 export const useCrfEntryStore = defineStore('crfEntry', () => {
   const entry = ref<CrfEntry | null>(null)
@@ -49,11 +59,26 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     isLoading.value = true
     error.value = null
     pendingChanges.value = false
+    entry.value = null
     try {
-      // TODO(E.4): apiGet<CrfEntry>(`/pages/api/v1/eventCrfs/${eventCrfOid}`).
-      entry.value = await loadMock(eventCrfOid)
+      entry.value = await apiGet<CrfEntry>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(eventCrfOid)}`,
+      )
     } catch (e) {
-      error.value = e instanceof Error ? e.message : 'Unknown error loading CRF'
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        // Let the router-level auth guard handle these — propagate so
+        // the calling view doesn't silently render a stale entry.
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — CRF kann nicht geladen werden. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Fehler beim Laden des CRF (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Laden des CRF.'
+      }
     } finally {
       isLoading.value = false
     }
@@ -70,7 +95,8 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     if (!entry.value || !pendingChanges.value) return
     isSaving.value = true
     try {
-      // TODO(E.4): apiPost(`/pages/api/v1/eventCrfs/${entry.value.eventCrfOid}/items`, values).
+      // TODO(E.4 M6): apiPost(`/pages/api/v1/eventCrfs/${entry.value.eventCrfOid}/items`, values).
+      // M5 wired the read path; M6 covers incremental save + markComplete.
       await new Promise((resolve) => setTimeout(resolve, 50))
       entry.value.lastSavedAt = new Date().toISOString()
       pendingChanges.value = false
@@ -179,128 +205,8 @@ function validateItem(item: CrfItem, raw: unknown): string | null {
 }
 
 /* -------------------------------------------------------------------------- */
-/* Mock loader — production-shape CrfEntry. Subject + event are decoded from   */
-/* the eventCrfOid so links from the Subject Matrix / Detail / Sign Subject    */
-/* views land on the correct contextual header. Replace with                   */
-/* `apiGet<CrfEntry>` when the E.4 adapter lands.                              */
-/*                                                                             */
-/* OID convention used by mock links:                                          */
-/*   EC_<subjectNoHyphen>_<event-tokens...>_<crfShort>                         */
-/* e.g. EC_M001_V1_INCLUSION_DEMO, EC_M042_V3_DAY90_DEMO                       */
+/* Phase E.4 M5 (2026-06-01): the hardcoded Demographics mock loader +         */
+/* OID-decoding helpers (decodeContext, humaniseTokens, KNOWN_EVENTS) were     */
+/* removed. The store now hydrates exclusively from                            */
+/* `GET /pages/api/v1/eventCrfs/{id}` via apiGet above.                        */
 /* -------------------------------------------------------------------------- */
-
-const KNOWN_EVENTS: Record<string, string> = {
-  'V1_INCLUSION': 'V1 Inclusion',
-  'V2_DAY30': 'V2 Day 30',
-  'V3_DAY90': 'V3 Day 90',
-  'V4_DAY180': 'V4 Day 180',
-}
-
-/** Humanise an OID token (`V2_DAY30` → "V2 Day 30") with title-case words. */
-function humaniseTokens(tokens: string[]): string {
-  return tokens
-    .map((t) => t.charAt(0) + t.slice(1).toLowerCase())
-    .join(' ')
-}
-
-function decodeContext(eventCrfOid: string): { subjectId: string; eventLabel: string } {
-  // Strip the leading EC_ prefix when present, then split.
-  const body = eventCrfOid.replace(/^EC_/, '')
-  const parts = body.split('_').filter(Boolean)
-  if (parts.length < 2) {
-    return { subjectId: 'M-001', eventLabel: 'V1 Inclusion' }
-  }
-
-  // Subject token: e.g. M001 → M-001. Accepts any letter-prefix + digits shape.
-  const subjectMatch = parts[0]!.match(/^([A-Z]+)(\d+)$/)
-  const subjectId = subjectMatch ? `${subjectMatch[1]}-${subjectMatch[2]}` : parts[0]!
-
-  // Everything between subject and the trailing CRF short token is the event.
-  const eventTokens = parts.slice(1, parts.length > 2 ? -1 : undefined)
-  const eventKey = eventTokens.join('_').toUpperCase()
-  const eventLabel = KNOWN_EVENTS[eventKey] ?? humaniseTokens(eventTokens)
-
-  return { subjectId, eventLabel }
-}
-
-async function loadMock(eventCrfOid: string): Promise<CrfEntry> {
-  await new Promise((resolve) => setTimeout(resolve, 30))
-
-  const { subjectId, eventLabel } = decodeContext(eventCrfOid)
-
-  const schema: CrfSchema = {
-    oid: 'F_DEMOGRAPHICS_V1',
-    name: 'Demographics',
-    version: 'v1.0',
-    sections: [
-      {
-        oid: 'S_IDENT',
-        title: 'Identification',
-        instructions: 'Source-document fields. Do not re-enter the Subject ID — it is pre-filled from the matrix.',
-        items: [
-          {
-            oid: 'I_CONSENT_DATE',
-            label: 'Date of informed consent',
-            dataType: 'date',
-            required: true,
-            helper: 'YYYY-MM-DD. Must be on or before the enrolment date.',
-          },
-          {
-            oid: 'I_CONSENT_SIGNED',
-            label: 'Consent signed?',
-            dataType: 'select-one',
-            required: true,
-            options: [
-              { code: 'Y', label: 'Yes' },
-              { code: 'N', label: 'No' },
-            ],
-          },
-        ],
-      },
-      {
-        oid: 'S_VITALS',
-        title: 'Vitals',
-        instructions: `Captured at the ${eventLabel.split(' ')[0]} visit, before any study intervention.`,
-        items: [
-          {
-            oid: 'I_HEIGHT_CM',
-            label: 'Height',
-            dataType: 'integer',
-            required: true,
-            min: 50,
-            max: 250,
-            helper: 'cm — whole number.',
-          },
-          {
-            oid: 'I_WEIGHT_KG',
-            label: 'Weight',
-            dataType: 'real',
-            required: true,
-            min: 1,
-            max: 300,
-            helper: 'kg — one decimal place.',
-          },
-          {
-            oid: 'I_BLOOD_PRESSURE_SYS',
-            label: 'Systolic BP',
-            dataType: 'integer',
-            required: false,
-            min: 50,
-            max: 250,
-            helper: 'mmHg — optional this visit.',
-          },
-        ],
-      },
-    ],
-  }
-
-  return {
-    eventCrfOid,
-    subjectId,
-    eventLabel,
-    schema,
-    values: {},
-    status: 'not-started',
-    lastSavedAt: null,
-  }
-}
