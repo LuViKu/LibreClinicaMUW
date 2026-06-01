@@ -366,6 +366,10 @@ Hybrid SPA approach planned: React or Vue 3 for high-traffic clinician screens (
 
 ## Cross-cutting workstreams
 
+### Long-running studies (GA-cohort + similar)
+
+For institutional teams running observational or longitudinal studies where each subject accumulates 10–20+ visits over multiple years (e.g. MUW Ophthalmology's geographic-atrophy cohort, 6-month follow-up): see [`docs/development/long-running-study-operations.md`](docs/development/long-running-study-operations.md). The platform supports the design without code changes (no upper bound on visit count per subject; Subject Matrix aggregates rather than enumerates events; `ViewStudySubject` paginates the per-subject event list at 10/page). The operator doc covers audit-trail growth modeling, PostgreSQL maintenance cadence, partitioning strategy past 10 M `audit_log_event` rows, and backup ergonomics for multi-year studies. Regression net: `StudyEventScheduleIT.testRepeatingEventScalesTo15Visits` (IT) + a Subject Matrix UI-level probe documented in [`docs/development/modernization/phase-e/known-issues.md §2`](docs/development/modernization/phase-e/known-issues.md).
+
 ### Branding (Phase 0)
 
 - Maven `groupId` `org.libreclinica` → **`at.ac.meduniwien.ophthalmology.libreclinica`**
