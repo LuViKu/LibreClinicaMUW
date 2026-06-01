@@ -23,6 +23,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
@@ -43,6 +44,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDef
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +59,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -115,24 +118,29 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/subjects")
+@Tag(name = "Subjects", description = "Subject Matrix + Add/Sign Subject.")
 public class SubjectsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(SubjectsApiController.class);
 
     private final DataSource dataSource;
     private final SecurityManager securityManager;
+    private final SiteVisibilityFilter siteVisibilityFilter;
 
     @Autowired
     public SubjectsApiController(@Qualifier("dataSource") DataSource dataSource,
-                                 @Qualifier("securityManager") SecurityManager securityManager) {
+                                 @Qualifier("securityManager") SecurityManager securityManager,
+                                 SiteVisibilityFilter siteVisibilityFilter) {
         this.dataSource = dataSource;
         this.securityManager = securityManager;
+        this.siteVisibilityFilter = siteVisibilityFilter;
     }
 
     @GetMapping
     public ResponseEntity<?> list(HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "No active study bound to the session — visit /MainMenu after login."
@@ -148,8 +156,18 @@ public class SubjectsApiController {
         StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
         StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(dataSource);
 
-        List<StudySubjectBean> rows = studySubjectDAO.findAllByStudyId(currentStudy.getId());
-        if (rows == null) rows = Collections.emptyList();
+        // A4 — per-site visibility. For a top-level study with role
+        // narrowing, this returns the user-grant-narrowed sub-tree;
+        // for a site, just the site itself. Loop strategy: one DAO
+        // hit per visible study id and merge. Acceptable for typical
+        // studies (≤ 10 sites); see SiteVisibilityFilter perf note.
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        List<StudySubjectBean> rows = new ArrayList<>();
+        for (Integer sid : visibleStudyIds) {
+            List<StudySubjectBean> chunk = studySubjectDAO.findAllByStudyId(sid);
+            if (chunk != null) rows.addAll(chunk);
+        }
 
         // Cache SubjectBean lookups so a study with multiple participations
         // for the same person doesn't re-hit subject table N times.
@@ -203,6 +221,7 @@ public class SubjectsApiController {
                                     HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         if (currentStudy == null || currentStudy.getId() == 0) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "No active study bound to the session — visit /MainMenu after login."
@@ -219,11 +238,14 @@ public class SubjectsApiController {
                     "message", "Subject with OID '" + studySubjectOid + "' not found."
             ));
         }
-        if (ss.getStudyId() != currentStudy.getId()) {
-            // The subject exists but is in a different study. 403 not 404 —
-            // matches the legacy /ViewStudySubject behaviour and gives the
-            // SPA a clear "you don't have access" signal without leaking
-            // whether the OID exists elsewhere.
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(ss.getStudyId())) {
+            // The subject exists but is outside the user's visible
+            // study sub-tree. 403 not 404 — matches the legacy
+            // /ViewStudySubject behaviour and gives the SPA a clear
+            // "you don't have access" signal without leaking whether
+            // the OID exists elsewhere.
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Subject is not in the currently active study."
             ));
@@ -286,7 +308,9 @@ public class SubjectsApiController {
                     "message", "Subject with OID '" + studySubjectOid + "' not found."
             ));
         }
-        if (ss.getStudyId() != currentStudy.getId()) {
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Subject is not in the currently active study."
             ));
@@ -783,9 +807,12 @@ public class SubjectsApiController {
                     "message", "Subject with OID '" + studySubjectOid + "' not found."
             ));
         }
-        if (ss.getStudyId() != currentStudy.getId()) {
-            // Same scope guard as M3 getOne: subject exists elsewhere →
-            // 403 (no OID leakage across studies).
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(ss.getStudyId())) {
+            // Same scope guard as M3 getOne: subject exists outside
+            // the user's visible study tree → 403 (no OID leakage
+            // across studies).
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Subject is not in the currently active study."
             ));

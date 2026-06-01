@@ -15,10 +15,12 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyGroupClassBean;
@@ -28,6 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDef
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -37,6 +40,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -60,6 +64,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/studies")
+@Tag(name = "Build Study", description = "Per-study build-status (7-task setup tracker).")
 public class BuildStudyApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(BuildStudyApiController.class);
@@ -83,10 +88,13 @@ public class BuildStudyApiController {
             """;
 
     private final DataSource dataSource;
+    private final SiteVisibilityFilter siteVisibilityFilter;
 
     @Autowired
-    public BuildStudyApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public BuildStudyApiController(@Qualifier("dataSource") DataSource dataSource,
+                                   SiteVisibilityFilter siteVisibilityFilter) {
         this.dataSource = dataSource;
+        this.siteVisibilityFilter = siteVisibilityFilter;
     }
 
     @GetMapping("/{oid}/build-status")
@@ -101,6 +109,24 @@ public class BuildStudyApiController {
         if (study == null || study.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + oid + "'"));
+        }
+
+        // A4 — visibility guard. Only return build-status for studies
+        // that fall inside the session user's visible tree (based on
+        // the SESSION-bound active study, not the requested one — the
+        // build-status endpoint is a metadata read on top of the
+        // user's role chain, not a free-form study lookup). For a
+        // user whose session has no active study bound we fall back
+        // to "is the requested study one of the user's role grants?"
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (currentStudy != null && currentStudy.getId() > 0) {
+            Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                    me, currentStudy, currentRole);
+            if (!visibleStudyIds.contains(study.getId())) {
+                return ResponseEntity.status(403).body(Map.of("message",
+                        "Study '" + oid + "' is not visible to your role."));
+            }
         }
 
         int studyId = study.getId();

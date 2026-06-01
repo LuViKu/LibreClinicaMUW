@@ -61,7 +61,7 @@ importers:
         specifier: ^25.0.0
         version: 25.0.1
       openapi-typescript:
-        specifier: ^7.4.0
+        specifier: ^7.13.0
         version: 7.13.0(typescript@5.5.4)
       prettier:
         specifier: ^3.3.3

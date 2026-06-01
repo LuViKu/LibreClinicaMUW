@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
@@ -25,6 +26,7 @@ import jakarta.servlet.http.HttpSession;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
@@ -50,6 +52,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SectionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +64,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -115,15 +119,19 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/eventCrfs")
+@Tag(name = "Event CRFs", description = "CRF read + bulk save + markComplete.")
 public class EventCrfsApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(EventCrfsApiController.class);
 
     private final DataSource dataSource;
+    private final SiteVisibilityFilter siteVisibilityFilter;
 
     @Autowired
-    public EventCrfsApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public EventCrfsApiController(@Qualifier("dataSource") DataSource dataSource,
+                                  SiteVisibilityFilter siteVisibilityFilter) {
         this.dataSource = dataSource;
+        this.siteVisibilityFilter = siteVisibilityFilter;
     }
 
     @GetMapping("/{id:[0-9]+}")
@@ -153,7 +161,10 @@ public class EventCrfsApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "event_crf " + eventCrfId + " has no resolvable study_subject"));
         }
-        if (ss.getStudyId() != currentStudy.getId()) {
+        StudyUserRoleBean currentRole2 = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds2 = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole2);
+        if (!visibleStudyIds2.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
@@ -305,7 +316,10 @@ public class EventCrfsApiController {
         }
         StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
         StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
-        if (ss == null || ss.getStudyId() != currentStudy.getId()) {
+        StudyUserRoleBean currentRoleSave = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleSave = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRoleSave);
+        if (ss == null || !visibleSave.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }
@@ -425,7 +439,10 @@ public class EventCrfsApiController {
         }
         StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
         StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
-        if (ss == null || ss.getStudyId() != currentStudy.getId()) {
+        StudyUserRoleBean currentRoleComplete = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleComplete = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRoleComplete);
+        if (ss == null || !visibleComplete.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "event_crf " + eventCrfId + " belongs to a different study"));
         }

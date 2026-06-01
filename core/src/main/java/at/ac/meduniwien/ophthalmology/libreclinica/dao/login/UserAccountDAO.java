@@ -109,6 +109,12 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         // Phase D.2 (DR-014): federated-identity columns.
         this.setTypeExpected(30, TypeNames.STRING);    // external_id
         this.setTypeExpected(31, TypeNames.STRING);    // external_id_provider
+        // Phase E.5 B1: user-profile locale column. Declaring its
+        // type here keeps SELECT * queries (findByUserName et al.)
+        // from blowing up on the 32-column user_account. The bean
+        // doesn't yet expose this field; MeApiController reads
+        // locale via a focused SELECT instead.
+        this.setTypeExpected(32, TypeNames.STRING);    // locale
     }
 
     public void setPrivilegeTypesExpected() {

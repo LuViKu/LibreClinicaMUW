@@ -15,11 +15,13 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
@@ -40,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectD
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.SourceDataVerification;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,6 +53,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -92,16 +96,20 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/v1/sdv")
+@Tag(name = "SDV", description = "Source Data Verification table + bulk verify.")
 public class SdvApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(SdvApiController.class);
     private static final SimpleDateFormat ISO_DATE = new SimpleDateFormat("yyyy-MM-dd");
 
     private final DataSource dataSource;
+    private final SiteVisibilityFilter siteVisibilityFilter;
 
     @Autowired
-    public SdvApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public SdvApiController(@Qualifier("dataSource") DataSource dataSource,
+                            SiteVisibilityFilter siteVisibilityFilter) {
         this.dataSource = dataSource;
+        this.siteVisibilityFilter = siteVisibilityFilter;
     }
 
     @GetMapping
@@ -134,10 +142,23 @@ public class SdvApiController {
         // (so the operator can see SDV requirement vs. completion
         // state side-by-side). Iterate by study-subject instead and
         // let the SPA filter client-side.
-        ArrayList<StudySubjectBean> subjects = studySubjectDao.findAllByStudyId(studyId);
+        //
+        // A4 — per-site visibility. Walk the visible study set
+        // rather than the bare currentStudy.id so a Monitor with a
+        // site-only grant under a multi-site parent only sees the
+        // site's CRFs.
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        ArrayList<StudySubjectBean> subjects = new ArrayList<>();
+        for (Integer sid : visibleStudyIds) {
+            ArrayList<StudySubjectBean> chunk = studySubjectDao.findAllByStudyId(sid);
+            if (chunk != null) subjects.addAll(chunk);
+        }
         ArrayList<EventCRFBean> beans = new ArrayList<>();
         for (StudySubjectBean ss : subjects) {
-            beans.addAll(eventCrfDao.getEventCRFsByStudySubject(ss.getId(), studyId, studyId));
+            int ssStudy = ss.getStudyId() > 0 ? ss.getStudyId() : studyId;
+            beans.addAll(eventCrfDao.getEventCRFsByStudySubject(ss.getId(), ssStudy, ssStudy));
         }
 
         // Caches — many event-CRFs share the same subject / event /
@@ -230,6 +251,14 @@ public class SdvApiController {
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
         StudySubjectDAO studySubjectDao = new StudySubjectDAO(dataSource);
 
+        // A4 — per-site visibility. The verify endpoint rejects any
+        // event_crf whose study_subject sits outside the user's
+        // visible study tree. For a Monitor with site-only grants
+        // that means cross-site verify attempts return as rejected.
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+
         List<String> verified = new ArrayList<>();
         List<String> rejected = new ArrayList<>();
 
@@ -242,10 +271,11 @@ public class SdvApiController {
             EventCRFBean ec = (EventCRFBean) eventCrfDao.findByPK(id);
             if (ec == null || ec.getId() == 0) { rejected.add(oid); continue; }
 
-            // Cross-study guard: refuse anything not on the active study
-            // (or one of its sites).
+            // Cross-study guard: refuse anything not in the user's
+            // visible study tree (the A4 per-site rule supersedes
+            // the legacy parent-or-bare-id check).
             StudySubjectBean ss = (StudySubjectBean) studySubjectDao.findByPK(ec.getStudySubjectId());
-            if (ss == null || !belongsToActiveStudy(ss, currentStudy)) {
+            if (ss == null || !visibleStudyIds.contains(ss.getStudyId())) {
                 rejected.add(oid);
                 continue;
             }
@@ -312,15 +342,6 @@ public class SdvApiController {
         if (crfName.isEmpty() && versionName.isEmpty()) return "";
         if (versionName.isEmpty()) return crfName;
         return (crfName + " / " + versionName).trim();
-    }
-
-    private static boolean belongsToActiveStudy(StudySubjectBean ss, StudyBean activeStudy) {
-        if (ss.getStudyId() == activeStudy.getId()) return true;
-        // Site-of-parent case: the active study could be a parent and
-        // the subject lives on one of its sites. We trust the legacy
-        // session binding to have resolved the right scope; if needed
-        // this can be tightened with a StudyDAO.findAllChildren walk.
-        return false;
     }
 
     private static String nullToEmpty(String s) {
