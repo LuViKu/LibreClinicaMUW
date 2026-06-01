@@ -36,6 +36,28 @@ jobs:
           java-version: ${{ matrix.java }}
           cache: maven
 
+      # Phase E.5 #14 — mock-removal regression guard. M13 deleted every
+      # SPA mock fixture + the VITE_USE_MOCK_API escape hatch; this step
+      # fails CI if any future commit reintroduces them. Doc-comment
+      # references in store javadoc blocks (lines starting with ` * ` or
+      # `// `) are intentionally allowed — they document the removal.
+      - name: Mock-removal regression guard
+        run: |
+          set +e
+          matches=$(grep -rnE \
+            'import\.meta\.env\.VITE_USE_MOCK_API|^[^*/]*\bloadMock\(|^[^*/]*\b(const|let|var)[[:space:]]+MOCK_[A-Z_]+[[:space:]]*[=:]' \
+            web/src/spa/src --include='*.ts' --include='*.vue')
+          set -e
+          if [ -n "$matches" ]; then
+            echo "::error::Mock-removal regression — active code reintroduces SPA mock surface:"
+            echo "$matches"
+            echo
+            echo "If this is intentional (e.g., a new mock fixture for an offline-dev tool),"
+            echo "update the regex in .github/workflows/build.yml and document the exception."
+            exit 1
+          fi
+          echo "OK — no active mock-code reintroductions."
+
       - name: Maven package (with unit tests)
         run: mvn -B -ntp -DskipTests=false package
 
