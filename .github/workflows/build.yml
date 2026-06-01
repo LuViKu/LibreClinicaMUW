@@ -250,6 +250,68 @@ jobs:
             exit 1
           fi
 
+      # Phase E.5 #9 — OpenAPI codegen drift guard.
+      #
+      # B3 shipped the springdoc dep + the `pnpm run codegen:openapi`
+      # script but deferred the CI automation. This step closes that
+      # gap: with the compose stack already up from the smoke build,
+      # fetch the live OpenAPI spec, regenerate
+      # web/src/spa/src/types/api.ts via openapi-typescript, and fail
+      # CI if the regenerated file differs from the committed one.
+      # That way SPA TS types can't silently drift away from the
+      # backend contract — any new/changed REST endpoint forces an
+      # accompanying api.ts refresh in the same PR.
+      #
+      # Node 20 (matches the frontend-maven-plugin nodeVersion in
+      # web/pom.xml). pnpm via corepack — same toolchain the
+      # Maven SPA build uses, so install behaviour is identical.
+      - name: Set up Node.js for OpenAPI codegen
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.17.0'
+
+      - name: Enable pnpm via corepack
+        run: |
+          corepack enable
+          corepack prepare pnpm@9.10.0 --activate
+
+      - name: Fetch live OpenAPI spec
+        run: |
+          set -e
+          curl --silent --fail \
+            http://127.0.0.1:8080/LibreClinica/v3/api-docs/spa-api \
+            -o /tmp/openapi-spa.json
+          # Sanity: spec must be a non-trivial JSON document. We do
+          # NOT yet assert on `paths` being populated — B3 documented
+          # a known limitation where springdoc auto-config introspects
+          # the root context only, leaving paths={} until a follow-up
+          # wires the OpenAPI resource into the pages dispatcher's
+          # child context. The drift guard still works because the
+          # committed api.ts and the regenerated api.ts agree on the
+          # empty-paths shape; once the follow-up lands, the same
+          # guard catches real drift automatically.
+          size=$(wc -c < /tmp/openapi-spa.json)
+          echo "Spec size: ${size} bytes"
+          if [ "$size" -lt 100 ]; then
+            echo "::error::OpenAPI spec is suspiciously small (< 100 bytes)."
+            cat /tmp/openapi-spa.json
+            exit 1
+          fi
+
+      - name: Regenerate SPA OpenAPI TS types
+        working-directory: web/src/spa
+        run: |
+          pnpm install --frozen-lockfile --prefer-offline
+          pnpm run codegen:openapi
+
+      - name: Fail on api.ts drift
+        run: |
+          if ! git diff --exit-code web/src/spa/src/types/api.ts; then
+            echo "::error::OpenAPI spec drift — the committed web/src/spa/src/types/api.ts is out of date with the live backend spec. Run 'pnpm run codegen:openapi' locally against a running stack and commit the regenerated file."
+            exit 1
+          fi
+          echo "OK — api.ts matches the live OpenAPI spec."
+
       - name: Compose down
         if: always()
         run: docker compose down --volumes --remove-orphans
