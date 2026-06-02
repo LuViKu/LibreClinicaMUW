@@ -142,6 +142,69 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
+  /**
+   * Phase E A1 — append a child note to an existing parent and
+   * transition the parent's status. The backend
+   * (`POST /api/v1/discrepancies/{parentId}/thread`) enforces the same
+   * role × transition matrix the SPA renders client-side via
+   * `canRespondToNote` / `canResolveNote` / `canCloseNote`.
+   *
+   * On success the returned `DiscrepancyNote` is the refreshed parent
+   * (carrying the new `status` + updated `lastActivityAt`). The store
+   * updates the in-memory row in place by id.
+   */
+  async function appendThread(
+    parentId: string,
+    input: {
+      newStatus: NoteStatus
+      description?: string
+      assignedTo?: string | null
+    },
+  ): Promise<DiscrepancyNote | null> {
+    isSubmitting.value = true
+    error.value = null
+    try {
+      const refreshed = await apiPost<DiscrepancyNote>(
+        `/pages/api/v1/discrepancies/${parentId}/thread`,
+        {
+          newStatus: input.newStatus,
+          description: input.description ?? null,
+          assignedTo: input.assignedTo ?? null,
+        },
+      )
+      const idx = rows.value.findIndex((n) => n.id === parentId)
+      if (idx >= 0) {
+        rows.value = [
+          ...rows.value.slice(0, idx),
+          refreshed,
+          ...rows.value.slice(idx + 1),
+        ]
+      } else {
+        rows.value = [refreshed, ...rows.value]
+      }
+      return refreshed
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Zustandsänderung nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Zustandsänderung konnte nicht gespeichert werden.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Zustandsänderung fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value =
+          e instanceof Error ? e.message : 'Unbekannter Fehler bei der Zustandsänderung.'
+      }
+      return null
+    } finally {
+      isSubmitting.value = false
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -160,5 +223,6 @@ export const useNotesStore = defineStore('notes', () => {
     clearFilters,
     load,
     add,
+    appendThread,
   }
 })

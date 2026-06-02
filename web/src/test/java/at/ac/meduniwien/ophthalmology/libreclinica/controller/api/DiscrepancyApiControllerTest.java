@@ -96,4 +96,152 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(jsonPath("$.message")
                         .value(containsString("'subjectId' and 'itemOid' are required")));
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* POST /api/v1/discrepancies/{parentId}/thread (Phase E A1)              */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void appendThreadReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/discrepancies/1/thread")
+                .contentType("application/json")
+                .content("{\"newStatus\":\"updated\",\"description\":\"reply\"}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void appendThreadReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/discrepancies/1/thread")
+                .contentType("application/json")
+                .content("{\"newStatus\":\"updated\",\"description\":\"reply\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void appendThreadReturns400WhenNewStatusMissing() throws Exception {
+        mockMvcWith().perform(post("/api/v1/discrepancies/1/thread")
+                .contentType("application/json")
+                .content("{\"description\":\"reply only\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("'newStatus' is required")));
+    }
+
+    @Test
+    void appendThreadReturns400OnUnknownStatus() throws Exception {
+        mockMvcWith().perform(post("/api/v1/discrepancies/1/thread")
+                .contentType("application/json")
+                .content("{\"newStatus\":\"banana\",\"description\":\"r\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Unknown newStatus")));
+    }
+
+    @Test
+    void appendThreadReturns400WhenNonClosingStatusOmitsDescription() throws Exception {
+        mockMvcWith().perform(post("/api/v1/discrepancies/1/thread")
+                .contentType("application/json")
+                .content("{\"newStatus\":\"updated\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("'description' is required")));
+    }
+
+    @Test
+    void appendThreadReturns500WhenParentLookupFailsAgainstMockDataSource() throws Exception {
+        // With the mock DataSource the DAO's findByPK throws an NPE
+        // on getConnection(); ApiExceptionHandler wraps it to 500.
+        // Real-DB happy path lives in DiscrepancyApiControllerDatabaseIT.
+        // What this pins: the request reached the post-validation
+        // DAO call (not blocked by an earlier guard).
+        mockMvcWith().perform(post("/api/v1/discrepancies/9999/thread")
+                .contentType("application/json")
+                .content("{\"newStatus\":\"closed\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* NoteTransitionMatrix — pure unit-level coverage                        */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void transitionMatrix_OpenToUpdatedAllowedForInvestigator() {
+        // current=OPEN(1) → new=UPDATED(2), Investigator role=4
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.OK,
+                NoteTransitionMatrix.check(1, 2, 4));
+    }
+
+    @Test
+    void transitionMatrix_OpenToResolvedIsIllegalForAnyRole() {
+        // current=OPEN(1) → new=RESOLVED(3) — not allowed: must go via UPDATED first.
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.ILLEGAL_TRANSITION,
+                NoteTransitionMatrix.check(1, 3, 4));
+    }
+
+    @Test
+    void transitionMatrix_ResolvedToClosedAllowedForMonitor() {
+        // current=RESOLVED(3) → new=CLOSED(4), Monitor role=6
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.OK,
+                NoteTransitionMatrix.check(3, 4, 6));
+    }
+
+    @Test
+    void transitionMatrix_ResolvedToClosedForbiddenForInvestigator() {
+        // current=RESOLVED(3) → new=CLOSED(4), Investigator role=4
+        // (must be Monitor or DM/Admin).
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.FORBIDDEN_FOR_ROLE,
+                NoteTransitionMatrix.check(3, 4, 4));
+    }
+
+    @Test
+    void transitionMatrix_ClosedIsTerminal() {
+        // Any transition out of CLOSED is illegal at this endpoint.
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.ILLEGAL_TRANSITION,
+                NoteTransitionMatrix.check(4, 2, 1));
+    }
+
+    @Test
+    void transitionMatrix_UpdatedSelfTransitionAllowedForReplies() {
+        // current=UPDATED(2) → new=UPDATED(2) — same status, any USER role permitted.
+        org.junit.jupiter.api.Assertions.assertEquals(
+                NoteTransitionMatrix.Decision.OK,
+                NoteTransitionMatrix.check(2, 2, 6));
+    }
+
+    @Test
+    void transitionMatrix_StatusIdForSpaName_RoundTrips() {
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                NoteTransitionMatrix.statusIdForSpaName("new"));
+        org.junit.jupiter.api.Assertions.assertEquals(2,
+                NoteTransitionMatrix.statusIdForSpaName("updated"));
+        org.junit.jupiter.api.Assertions.assertEquals(3,
+                NoteTransitionMatrix.statusIdForSpaName("resolution-proposed"));
+        org.junit.jupiter.api.Assertions.assertEquals(4,
+                NoteTransitionMatrix.statusIdForSpaName("closed"));
+        org.junit.jupiter.api.Assertions.assertEquals(5,
+                NoteTransitionMatrix.statusIdForSpaName("not-applicable"));
+        org.junit.jupiter.api.Assertions.assertEquals(0,
+                NoteTransitionMatrix.statusIdForSpaName("banana"));
+        org.junit.jupiter.api.Assertions.assertEquals(0,
+                NoteTransitionMatrix.statusIdForSpaName(null));
+    }
 }

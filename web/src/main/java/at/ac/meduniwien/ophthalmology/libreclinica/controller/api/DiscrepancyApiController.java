@@ -44,6 +44,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -329,9 +330,206 @@ public class DiscrepancyApiController {
         return ResponseEntity.status(201).body(dto);
     }
 
+    /**
+     * Phase E A1 — append a child note to an existing parent and
+     * transition the parent's status. Mirrors the legacy
+     * {@code ResolveDiscrepancyServlet} + {@code
+     * CreateOneDiscrepancyNoteServlet} pair.
+     *
+     * <p>Authorization layers:
+     * <ol>
+     *   <li>Session must carry an authenticated {@code userBean}
+     *       and a bound {@code study} attribute.</li>
+     *   <li>Parent note must exist; otherwise 404.</li>
+     *   <li>Parent's {@code studyId} must be in the caller's
+     *       site-visibility set; otherwise 403.</li>
+     *   <li>{@link NoteTransitionMatrix} validates the (current →
+     *       new) pair AND the caller's role; illegal pairs return
+     *       400, role mismatches return 403.</li>
+     * </ol>
+     *
+     * <p>Side effects: inserts a child {@code discrepancy_note} row
+     * with {@code parent_dn_id = parentId}; updates the parent's
+     * {@code resolution_status_id}; optionally updates the parent's
+     * {@code assigned_user_id} when {@code body.assignedTo} is
+     * present. Audit-event rows are written by the table trigger
+     * {@code discrepancy_note_trigger}; no controller-side audit
+     * emission is required.
+     */
+    @PostMapping("/{parentId}/thread")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = DiscrepancyNoteDto.class)))
+    public ResponseEntity<?> appendThread(@PathVariable("parentId") long parentId,
+                                          @RequestBody AddThreadEntryRequest body,
+                                          HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        if (body == null || body.newStatus() == null || body.newStatus().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "'newStatus' is required"));
+        }
+
+        int newStatusId = NoteTransitionMatrix.statusIdForSpaName(body.newStatus());
+        if (newStatusId == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Unknown newStatus '" + body.newStatus() + "' — expected one of: "
+                            + "updated | resolution-proposed | closed | not-applicable"));
+        }
+        // 'closed' may be wordless; every other transition requires a comment.
+        boolean closing = newStatusId == ResolutionStatus.CLOSED.getId();
+        if (!closing && (body.description() == null || body.description().isBlank())) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "'description' is required for status '" + body.newStatus() + "'"));
+        }
+
+        DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
+        dnDao.setFetchMapping(true);
+        DiscrepancyNoteBean parent = (DiscrepancyNoteBean) dnDao.findByPK((int) parentId);
+        if (parent == null || parent.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No discrepancy_note with id " + parentId));
+        }
+
+        // Site-visibility: the parent's study must be visible to the
+        // caller. SiteVisibilityFilter returns the set of study ids
+        // the caller's role can see; a Monitor with site-only grants
+        // gets only those sites.
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(parent.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Parent note " + parentId + " is not in your visible study set"));
+        }
+
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        NoteTransitionMatrix.Decision decision = NoteTransitionMatrix.check(
+                parent.getResolutionStatusId(), newStatusId, roleId);
+        switch (decision) {
+            case ILLEGAL_TRANSITION:
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Illegal status transition: "
+                                + statusToSpa(parent.getResolutionStatusId())
+                                + " → " + body.newStatus()));
+            case FORBIDDEN_FOR_ROLE:
+                return ResponseEntity.status(403).body(Map.of("message",
+                        "Your role does not permit this transition"));
+            case OK:
+                /* fall through */
+                break;
+        }
+
+        // Resolve optional reassignment before mutating the parent.
+        Integer assignedUserId = resolveAssignee(body.assignedTo());
+
+        // Insert the child note. parent_dn_id is set via the bean's
+        // setParentDnId(). entity_type / entity_id / column are
+        // copied from the parent (the child shares the same data
+        // point); study_id is inherited from the parent (not the
+        // session's currentStudy — a Monitor with a site-only grant
+        // may be acting on a parent in a sibling site).
+        DiscrepancyNoteBean child = new DiscrepancyNoteBean();
+        child.setParentDnId(parent.getId());
+        child.setDiscrepancyNoteTypeId(parent.getDiscrepancyNoteTypeId());
+        child.setResolutionStatusId(newStatusId);
+        child.setDescription(closing && (body.description() == null || body.description().isBlank())
+                ? "" : body.description().trim());
+        child.setStudyId(parent.getStudyId());
+        child.setEntityType(parent.getEntityType());
+        child.setEntityId(parent.getEntityId());
+        child.setColumn(parent.getColumn());
+        child.setOwner(ub);
+        if (assignedUserId != null && assignedUserId > 0) {
+            child.setAssignedUserId(assignedUserId);
+        }
+        dnDao.create(child);
+
+        // Update the parent's resolution_status_id in place. DAO.update
+        // writes description / type / status / detailed_notes —
+        // preserve the parent's existing description + detailedNotes
+        // so we only change the status column.
+        parent.setResolutionStatusId(newStatusId);
+        dnDao.update(parent);
+
+        // Optional reassignment on the parent.
+        if (assignedUserId != null && assignedUserId > 0) {
+            parent.setAssignedUserId(assignedUserId);
+            dnDao.updateAssignedUser(parent);
+        }
+
+        LOG.info("Appended thread entry to discrepancy_note id={} status={} by user={} role={}",
+                parent.getId(), body.newStatus(), ub.getName(), roleId);
+
+        // Refresh + project the updated parent. Use the same DAO with
+        // fetchMapping=true (already set) to repopulate entity-walk
+        // fields, then project to the SPA wire shape.
+        DiscrepancyNoteBean refreshed = (DiscrepancyNoteBean) dnDao.findByPK(parent.getId());
+        return ResponseEntity.ok(projectParentDto(refreshed));
+    }
+
     /* ----------------------------------------------------------------- */
     /* Helpers                                                           */
     /* ----------------------------------------------------------------- */
+
+    /**
+     * Project a single parent {@link DiscrepancyNoteBean} to the
+     * SPA wire shape. Mirrors the projection loop in {@link
+     * #list(String, String, String, jakarta.servlet.http.HttpSession)}
+     * but for one note — used by {@link #appendThread}.
+     */
+    private DiscrepancyNoteDto projectParentDto(DiscrepancyNoteBean n) {
+        String subjectLabel = "";
+        String itemOid = "";
+
+        if ("itemData".equalsIgnoreCase(n.getEntityType()) && n.getEntityId() > 0) {
+            ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
+            ItemDataBean idb = (ItemDataBean) itemDataDao.findByPK(n.getEntityId());
+            if (idb != null && idb.getId() > 0) {
+                ItemDAO itemDao = new ItemDAO(dataSource);
+                ItemBean item = (ItemBean) itemDao.findByPK(idb.getItemId());
+                if (item != null && item.getId() > 0) {
+                    itemOid = nullToEmpty(item.getOid());
+                }
+                EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
+                EventCRFBean ec = (EventCRFBean) eventCrfDao.findByPK(idb.getEventCRFId());
+                if (ec != null && ec.getId() > 0) {
+                    StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+                    StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ec.getStudySubjectId());
+                    if (ss != null && ss.getId() > 0) {
+                        subjectLabel = nullToEmpty(ss.getLabel());
+                    }
+                }
+            }
+        }
+
+        String assignedTo = (n.getAssignedUser() != null && n.getAssignedUser().getId() > 0)
+                ? n.getAssignedUser().getName() : null;
+
+        int daysOpen = Math.max(n.getDays(), 0);
+        String lastActivityAt = Instant.now()
+                .minus(daysOpen, ChronoUnit.DAYS)
+                .truncatedTo(ChronoUnit.SECONDS)
+                .toString();
+
+        return new DiscrepancyNoteDto(
+                String.valueOf(n.getId()),
+                typeToSpa(n.getDiscrepancyNoteTypeId()),
+                statusToSpa(n.getResolutionStatusId()),
+                subjectLabel,
+                itemOid,
+                nullToEmpty(n.getDescription()),
+                assignedTo,
+                daysOpen,
+                lastActivityAt);
+    }
+
 
     /**
      * Walks the subject's event_crfs and asks {@code item_data} for a
