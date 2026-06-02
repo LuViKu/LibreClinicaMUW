@@ -553,7 +553,10 @@
       "downloadCasebook": "Patient-Casebook herunterladen",
       "signSubject": "Probanden signieren",
       "remove": "Teilnehmer entfernen",
-      "removeConfirm": "Teilnehmer/in {id} wirklich entfernen? Visiten, CRFs und Items werden als gelöscht markiert (Soft-Delete). Wiederherstellbar durch Data Manager. Die Aktion wird im Audit Trail dokumentiert."
+      "removeConfirm": "Teilnehmer/in {id} wirklich entfernen? Visiten, CRFs und Items werden als gelöscht markiert (Soft-Delete). Wiederherstellbar durch Data Manager. Die Aktion wird im Audit Trail dokumentiert.",
+      "lock": "Sperren",
+      "lockConfirm": "Teilnehmer/in {id} sperren? Bearbeitungen und Dateneingabe werden eingefroren, bis der Data Manager die Sperre wieder aufhebt. Die Aktion wird im Audit Trail dokumentiert.",
+      "unlock": "Entsperren"
     },
     "edit": {
       "start": "Bearbeiten",
@@ -571,6 +574,7 @@
         "stopped": "Abgebrochen",
         "skipped": "Übersprungen"
       }
-    }
+    },
+    "locked": "Gesperrt"
   }
 }

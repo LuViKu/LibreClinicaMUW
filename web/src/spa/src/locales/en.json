@@ -553,7 +553,10 @@
       "downloadCasebook": "Download casebook",
       "signSubject": "Sign subject",
       "remove": "Remove subject",
-      "removeConfirm": "Remove subject {id}? Events, CRFs and items will be marked deleted (soft-delete). A Data Manager can restore. The action is recorded in the audit trail."
+      "removeConfirm": "Remove subject {id}? Events, CRFs and items will be marked deleted (soft-delete). A Data Manager can restore. The action is recorded in the audit trail.",
+      "lock": "Lock",
+      "lockConfirm": "Lock subject {id}? Edits and data entry will be frozen until the Data Manager unlocks. The action is recorded in the audit trail.",
+      "unlock": "Unlock"
     },
     "edit": {
       "start": "Edit",
@@ -571,6 +574,7 @@
         "stopped": "Stopped",
         "skipped": "Skipped"
       }
-    }
+    },
+    "locked": "Locked"
   }
 }

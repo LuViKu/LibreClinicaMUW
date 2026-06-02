@@ -218,6 +218,22 @@ function canCancelEv(status: EventStatus): boolean {
   return !!role && canCancelEvent(role, status as StudyEventStatus)
 }
 
+/* Phase E A3-lock — DM/Admin only; visibility also gated by current
+   state (lock only available when not locked, vice versa). */
+const canLock = computed(() => canRemove.value && !subject.value?.locked)
+const canUnlock = computed(() => canRemove.value && subject.value?.locked)
+
+async function onLock() {
+  if (!subject.value) return
+  if (!confirm(t('subjectDetail.actions.lockConfirm', { id: subject.value.id }))) return
+  await subjects.lockSubject(subject.value.id)
+}
+
+async function onUnlock() {
+  if (!subject.value) return
+  await subjects.unlockSubject(subject.value.id)
+}
+
 const subjectId = computed(() => String(route.params.subjectId))
 
 /**
@@ -317,6 +333,7 @@ function dataEntryStageLabel(stage: string | null): string {
             <span v-if="subject.secondaryId" class="text-slate-400 font-normal text-sm">· {{ subject.secondaryId }}</span>
             <StatusPill v-if="subject.signed" variant="success">{{ t('subjectMatrix.signed') }}</StatusPill>
             <StatusPill v-else variant="warning">{{ t('subjectDetail.notSigned') }}</StatusPill>
+            <StatusPill v-if="subject.locked" variant="warning">{{ t('subjectDetail.locked') }}</StatusPill>
           </h1>
         </div>
 
@@ -561,6 +578,32 @@ function dataEntryStageLabel(stage: string | null): string {
               </svg>
               {{ t('subjectDetail.actions.signSubject') }}
             </RouterLink>
+            <!-- Phase E A3-lock: lock / unlock subject. DM/Admin only;
+                 mutually exclusive based on current locked state. -->
+            <button
+              v-if="canLock"
+              type="button"
+              class="px-3 py-2 text-xs border border-amber-300 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800 inline-flex items-center gap-1.5"
+              @click="onLock"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <rect width="18" height="11" x="3" y="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+              </svg>
+              {{ t('subjectDetail.actions.lock') }}
+            </button>
+            <button
+              v-if="canUnlock"
+              type="button"
+              class="px-3 py-2 text-xs border border-emerald-300 rounded-md bg-emerald-50 hover:bg-emerald-100 text-emerald-800 inline-flex items-center gap-1.5"
+              @click="onUnlock"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <rect width="18" height="11" x="3" y="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+              </svg>
+              {{ t('subjectDetail.actions.unlock') }}
+            </button>
             <!-- Phase E A3: soft-delete the subject. DM/Admin only;
                  hidden for everyone else. Backend cascades to nested
                  events + CRFs + item_data via AUTO_DELETED. -->
