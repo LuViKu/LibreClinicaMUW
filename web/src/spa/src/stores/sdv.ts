@@ -166,6 +166,60 @@ export const useSdvStore = defineStore('sdv', () => {
     }
   }
 
+  /**
+   * Phase E A6 — un-verify a single previously-verified CRF.
+   * Inverse of `verifySelected`. The backend
+   * (`POST /api/v1/sdv/unverify`) requires a `reason` and gates the
+   * action on Monitor / DM / Admin role. The SPA collects the
+   * reason via a small modal; passing it through unchanged.
+   *
+   * <p>Single-row by design — un-verify is GCP-significant; rolling
+   * back N stamps at once is more dangerous than helpful. If bulk
+   * un-verify becomes a real need it can be added later.
+   *
+   * <p>On success the in-memory row flips from `verified` back to
+   * `pending` so the SDV inbox shows it again.
+   */
+  async function unverifyRow(eventCrfOid: string, reason: string): Promise<boolean> {
+    if (reason.trim() === '') {
+      error.value = 'Begründung erforderlich.'
+      return false
+    }
+    isVerifying.value = true
+    error.value = null
+    try {
+      await apiPost<UnverifyResponse>('/pages/api/v1/sdv/unverify', {
+        eventCrfOids: [eventCrfOid],
+        reason: reason.trim(),
+      })
+      const row = rows.value.find((r) => r.eventCrfOid === eventCrfOid)
+      if (row) {
+        row.status = 'pending'
+        row.lastUpdatedAt = new Date().toISOString()
+      }
+      return true
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Un-Verifizierung nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Un-Verifizierung fehlgeschlagen. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Un-Verifizierung fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value =
+          e instanceof Error ? e.message : 'Unbekannter Fehler bei der Un-Verifizierung.'
+      }
+      return false
+    } finally {
+      isVerifying.value = false
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -189,6 +243,7 @@ export const useSdvStore = defineStore('sdv', () => {
     clearSelection,
     clearFilters,
     verifySelected,
+    unverifyRow,
   }
 })
 
@@ -199,4 +254,13 @@ interface VerifyResponse {
   verifiedCount: number
   verifiedAt: string | null
   verifiedBy: string | null
+}
+
+/** Phase E A6 — wire shape of POST /pages/api/v1/sdv/unverify. */
+interface UnverifyResponse {
+  unverified: string[]
+  rejected: string[]
+  unverifiedCount: number
+  unverifiedAt: string | null
+  unverifiedBy: string | null
 }

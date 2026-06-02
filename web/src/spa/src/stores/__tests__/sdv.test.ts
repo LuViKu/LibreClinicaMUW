@@ -127,4 +127,67 @@ describe('useSdvStore', () => {
       vi.unstubAllGlobals()
     }
   })
+
+  /* ---------------------------------------------------------------- */
+  /* Phase E A6 — unverifyRow                                         */
+  /* ---------------------------------------------------------------- */
+
+  it('unverifyRow POSTs to /unverify with eventCrfOids[] + reason', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({
+        unverified: ['6'],
+        rejected: [],
+        unverifiedCount: 1,
+        unverifiedAt: '2026-06-02T12:00:00Z',
+        unverifiedBy: 'monitor',
+      }),
+      text: async () => '',
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const store = hydrate()
+      const ok = await store.unverifyRow('6', 'Source data corrected')
+      expect(ok).toBe(true)
+      const call = fetchMock.mock.calls[0]
+      const init = call[1] as RequestInit
+      expect(call[0]).toContain('/pages/api/v1/sdv/unverify')
+      expect(JSON.parse(init.body as string)).toEqual({
+        eventCrfOids: ['6'],
+        reason: 'Source data corrected',
+      })
+      expect(store.rows.find((r) => r.eventCrfOid === '6')!.status).toBe('pending')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('unverifyRow refuses early when reason is blank', async () => {
+    const store = hydrate()
+    const ok = await store.unverifyRow('6', '   ')
+    expect(ok).toBe(false)
+    expect(store.error).toMatch(/erforderlich/)
+    expect(store.rows.find((r) => r.eventCrfOid === '6')!.status).toBe('verified')
+  })
+
+  it('unverifyRow surfaces 403 forbidden via error + re-throws', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      headers: new Headers({ 'content-type': 'application/json' }),
+      json: async () => ({ message: 'Your role does not permit un-verifying CRFs' }),
+      text: async () => '',
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    try {
+      const store = hydrate()
+      await expect(store.unverifyRow('6', 'Trying anyway')).rejects.toBeDefined()
+      expect(store.error).toBe('Your role does not permit un-verifying CRFs')
+      expect(store.rows.find((r) => r.eventCrfOid === '6')!.status).toBe('verified')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
 })

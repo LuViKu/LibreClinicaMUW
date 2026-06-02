@@ -11,14 +11,48 @@ import Modal from '@/components/Modal.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 
 import { useSdvStore } from '@/stores/sdv'
+import { useAuthStore } from '@/stores/auth'
 import type { SdvRow, SdvRequirement, SdvStatus } from '@/types/sdv'
+import { canUnverifySdv } from '@/types/sdv'
 
 const { t } = useI18n()
 const sdv = useSdvStore()
+const auth = useAuthStore()
 
 onMounted(() => {
   if (sdv.rows.length === 0) sdv.load()
 })
+
+/* Phase E A6 — un-verify dialog state. */
+const unverifyTarget = ref<SdvRow | null>(null)
+const unverifyReason = ref('')
+const unverifyError = ref<string | null>(null)
+function openUnverify(row: SdvRow) {
+  unverifyTarget.value = row
+  unverifyReason.value = ''
+  unverifyError.value = null
+}
+function cancelUnverify() {
+  unverifyTarget.value = null
+}
+async function submitUnverify() {
+  if (!unverifyTarget.value) return
+  if (unverifyReason.value.trim() === '') {
+    unverifyError.value = t('sdv.unverify.reasonRequired')
+    return
+  }
+  unverifyError.value = null
+  const ok = await sdv.unverifyRow(unverifyTarget.value.eventCrfOid, unverifyReason.value)
+  if (ok) {
+    unverifyTarget.value = null
+  } else {
+    unverifyError.value = sdv.error ?? t('sdv.unverify.unknownError')
+  }
+}
+function rowCanUnverify(row: SdvRow): boolean {
+  const role = auth.user?.role ?? null
+  return !!role && canUnverifySdv(role, row.status)
+}
 
 const statusVariant = (s: SdvStatus): 'success' | 'info' | 'warning' | 'danger' | 'neutral' => {
   switch (s) {
@@ -300,6 +334,13 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
             >
               {{ t('sdv.action.addQuery') }}
             </button>
+            <button
+              v-if="rowCanUnverify(row)"
+              class="text-amber-700 hover:text-amber-900 underline text-xs mr-3"
+              @click="openUnverify(row)"
+            >
+              {{ t('sdv.action.unverify') }}
+            </button>
             <RouterLink :to="`/event-crfs/${row.eventCrfOid}`" class="text-muw-blue hover:underline text-xs">
               {{ t('sdv.action.openCrf') }}
             </RouterLink>
@@ -396,6 +437,46 @@ const requirementOptions: { v: 'all' | SdvRequirement; l: () => string }[] = [
             @click="submitQuery"
           >
             {{ t('sdv.query.submit') }}
+          </button>
+        </div>
+      </template>
+    </Modal>
+
+    <!-- Phase E A6: Un-verify confirmation modal. Required reason
+         captured here (matches the legacy handleSDVRemove pattern). -->
+    <Modal
+      :open="unverifyTarget !== null"
+      labelled-by="sdv-unverify-title"
+      panel-class="max-w-md"
+      @update:open="(v: boolean) => { if (!v) cancelUnverify() }"
+    >
+      <template #panel>
+        <h2 id="sdv-unverify-title" class="text-base font-semibold">{{ t('sdv.unverify.title') }}</h2>
+        <p class="text-xs text-slate-600 mt-1 mb-3" v-if="unverifyTarget">
+          {{ unverifyTarget.subjectId }} · {{ unverifyTarget.eventLabel }} · {{ unverifyTarget.crfName }}
+        </p>
+        <p class="text-xs text-slate-700 mb-3">{{ t('sdv.unverify.intro') }}</p>
+        <FieldLabel for="sdv-unverify-reason">{{ t('sdv.unverify.reasonLabel') }}</FieldLabel>
+        <textarea
+          id="sdv-unverify-reason"
+          v-model="unverifyReason"
+          class="w-full text-sm border border-slate-300 rounded-md p-2"
+          :placeholder="t('sdv.unverify.reasonPlaceholder')"
+          rows="3"
+        />
+        <p v-if="unverifyError" class="text-xs text-red-600 mt-1">{{ unverifyError }}</p>
+        <div class="flex justify-end gap-2 mt-4">
+          <button
+            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+            :disabled="sdv.isVerifying"
+            @click="cancelUnverify"
+          >{{ t('common.cancel') }}</button>
+          <button
+            class="px-3 py-1.5 text-xs bg-amber-600 hover:bg-amber-700 text-white rounded-md disabled:opacity-50"
+            :disabled="sdv.isVerifying"
+            @click="submitUnverify"
+          >
+            {{ sdv.isVerifying ? t('common.saving') : t('sdv.unverify.submit') }}
           </button>
         </div>
       </template>

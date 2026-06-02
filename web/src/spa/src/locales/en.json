@@ -159,7 +159,17 @@
       "markAsVerified": "Mark {count} as verified (SDV)",
       "cancelSelection": "Cancel",
       "addQuery": "Add query",
-      "openCrf": "Open CRF"
+      "openCrf": "Open CRF",
+      "unverify": "Roll back verification"
+    },
+    "unverify": {
+      "title": "Roll back verification?",
+      "intro": "The SDV stamp is cleared and the CRF returns to the verification queue. The action is recorded in the audit trail with the reason you provide.",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "e.g. \"Source data corrected after verification\"",
+      "submit": "Roll back verification",
+      "reasonRequired": "A reason is required.",
+      "unknownError": "Unknown error while rolling back verification."
     },
     "toast": {
       "verifiedCount": "{count} CRF/CRFs marked verified."
