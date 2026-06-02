@@ -182,4 +182,58 @@ class RuleExpressionApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result").value("true"));
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* POST /api/v1/rules           (Phase E RX.5 — inline rule create)       */
+    /* POST /api/v1/rules/validate-target  (Phase E RX.5 — target validation) */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void createRuleReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/rules")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"oid\":\"RUL_TEST\",\"name\":\"x\",\"expression\":\"1 gt 0\"}")
+                .session((MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void createRuleReturns400OnMissingBody() throws Exception {
+        mockMvcWith().perform(post("/api/v1/rules")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("")
+                .session((MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 7, "S_DEMO", "Demo")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void createRuleReturns400OnBadOidFormat() throws Exception {
+        // OID must match ^[A-Z][A-Z0-9_]*$ — lowercase letters reject.
+        mockMvcWith().perform(post("/api/v1/rules")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"oid\":\"rul-bad\",\"name\":\"x\",\"expression\":\"1 gt 0\"}")
+                .session((MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 7, "S_DEMO", "Demo")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void validateTargetReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/rules/validate-target")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"target\":\"ITEM.GROUP.CRF.SED\"}")
+                .session((MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void validateTargetReturns400OnEmptyTarget() throws Exception {
+        mockMvcWith().perform(post("/api/v1/rules/validate-target")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"target\":\"\"}")
+                .session((MockHttpSession)
+                        authenticatedSession(1, "root", 7, "S_DEMO", "Demo")))
+                .andExpect(status().isBadRequest());
+    }
 }

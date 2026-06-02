@@ -10,24 +10,40 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.text.MessageFormat;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.MissingResourceException;
 import java.util.ResourceBundle;
+import java.util.regex.Pattern;
 
+import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.Context;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.ExpressionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.ExpressionObjectWrapper;
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.logic.expressionTree.OpenClinicaExpressionParser;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.ExpressionService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -116,10 +132,44 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  */
 @RestController
 @RequestMapping("/api/v1/rules")
-@Tag(name = "Rules — test", description = "Parse + test-evaluate rule expressions without persisting anything.")
+@Tag(name = "Rules — test", description = "Parse + test-evaluate rule expressions, validate target expressions, and create rule bodies.")
 public class RuleExpressionApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(RuleExpressionApiController.class);
+
+    /**
+     * Phase E RX.5 — operator-supplied OID grammar for new rules.
+     *
+     * <p>Tightened from the underlying {@code OidGenerator} validator
+     * ({@code ^[A-Z_0-9]+$}, max 40) — must start with a letter, then
+     * letters / digits / underscores. Mirrors the canonical legacy
+     * convention (e.g. {@code RUL_BP_HIGH}) so operator-authored OIDs
+     * are visually consistent with the OIDs the import path produces.
+     */
+    private static final Pattern RULE_OID_PATTERN =
+            Pattern.compile("^[A-Z][A-Z0-9_]*$");
+
+    /** Max length per legacy {@code rule.oc_oid} column width. */
+    private static final int OID_MAX_LENGTH = 40;
+    private static final int NAME_MAX_LENGTH = 255;
+    private static final int DESCRIPTION_MAX_LENGTH = 2000;
+
+    /**
+     * RX.5 collaborators — only used by {@link #createRule} and
+     * {@link #validateTarget}. The {@code test-expression} endpoint
+     * touches neither field; both are nullable for the no-arg
+     * constructor used by MockMvc tests that exercise the test-
+     * expression surface in isolation.
+     */
+    private final DataSource dataSource;
+    private final RuleDao ruleDao;
+
+    @Autowired
+    public RuleExpressionApiController(@Qualifier("dataSource") DataSource dataSource,
+                                       RuleDao ruleDao) {
+        this.dataSource = dataSource;
+        this.ruleDao = ruleDao;
+    }
 
     /* ----------------------------------------------------------------- */
     /* POST /api/v1/rules/test-expression                                 */
@@ -297,13 +347,274 @@ public class RuleExpressionApiController {
      */
 
     /**
-     * Public no-arg constructor. The controller carries no
-     * collaborators — the parser is per-request, locale binding is a
-     * thread-local on {@link ResourceBundleProvider}, and no DAO or
-     * DataSource is touched. Spring's component scan + MockMvc
-     * standaloneSetup both use this directly.
+     * Public no-arg constructor — kept for the original
+     * {@code test-expression} MockMvc tests that pre-date RX.5. Passes
+     * {@code null} into the RX.5 collaborators; calling
+     * {@link #createRule} or {@link #validateTarget} on an instance
+     * constructed this way will NPE — those tests must use the
+     * two-arg constructor with the collaborators they need.
      */
     public RuleExpressionApiController() {
-        // no-op
+        this(null, null);
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/rules            — Phase E RX.5 inline rule body      */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Create a new {@code rule} (a named expression body) in the
+     * active study. The matching {@code POST /api/v1/rule-sets} on
+     * {@link RulesApiController} attaches one or more rules to a
+     * target.
+     *
+     * <p>Mirrors the per-record chunk of
+     * {@code RulesPostImportContainerService.validateRuleDefs} —
+     * tightened OID grammar, length checks, body expression
+     * syntax/scope validation against the active study, OID
+     * uniqueness within the study.
+     *
+     * <h2>Validation</h2>
+     * <ul>
+     *   <li>{@code oid} — required. Must match
+     *       {@link #RULE_OID_PATTERN}, ≤{@value #OID_MAX_LENGTH} chars,
+     *       and must not collide with an existing rule in the same
+     *       study.</li>
+     *   <li>{@code name} — required. ≤{@value #NAME_MAX_LENGTH}
+     *       chars.</li>
+     *   <li>{@code description} — optional. ≤{@value #DESCRIPTION_MAX_LENGTH}
+     *       chars.</li>
+     *   <li>{@code expression} — required. Validated via
+     *       {@code ExpressionService.ruleExpressionChecker} bound to
+     *       the active study scope.</li>
+     * </ul>
+     *
+     * <p>Persistence: builds a {@link RuleBean} with its
+     * {@link ExpressionBean}, sets {@code studyId}, {@code owner},
+     * {@code status = AVAILABLE}, and saves via
+     * {@code ruleDao.saveOrUpdate}. Audit row written via
+     * {@link AuditEventDAO}.
+     */
+    @PostMapping
+    @Transactional
+    @ApiResponse(responseCode = "201",
+                 content = @Content(schema = @Schema(implementation = CreateRuleResponse.class)))
+    public ResponseEntity<?> createRule(@RequestBody(required = false) CreateRuleRequest body,
+                                        HttpSession session) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit rule create"));
+        }
+
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Request body is required: { oid, name, description?, expression }"));
+        }
+
+        List<Map<String, String>> errors = new ArrayList<>();
+        String oid = body.oid() == null ? "" : body.oid().trim();
+        if (oid.isEmpty()) {
+            errors.add(Map.of("field", "oid", "message", "oid is required"));
+        } else if (oid.length() > OID_MAX_LENGTH) {
+            errors.add(Map.of("field", "oid", "message",
+                    "oid must be at most " + OID_MAX_LENGTH + " characters"));
+        } else if (!RULE_OID_PATTERN.matcher(oid).matches()) {
+            errors.add(Map.of("field", "oid", "message",
+                    "oid must match " + RULE_OID_PATTERN.pattern()
+                            + " (start with a letter, then letters / digits / underscores)"));
+        }
+        String name = body.name() == null ? "" : body.name().trim();
+        if (name.isEmpty()) {
+            errors.add(Map.of("field", "name", "message", "name is required"));
+        } else if (name.length() > NAME_MAX_LENGTH) {
+            errors.add(Map.of("field", "name", "message",
+                    "name must be at most " + NAME_MAX_LENGTH + " characters"));
+        }
+        String description = body.description() == null ? "" : body.description().trim();
+        if (description.length() > DESCRIPTION_MAX_LENGTH) {
+            errors.add(Map.of("field", "description", "message",
+                    "description must be at most " + DESCRIPTION_MAX_LENGTH + " characters"));
+        }
+        String expression = body.expression() == null ? "" : body.expression().trim();
+        if (expression.isEmpty()) {
+            errors.add(Map.of("field", "expression", "message", "expression is required"));
+        }
+
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", errors));
+        }
+
+        // OID uniqueness — within this study only. The legacy import
+        // path treats a same-OID rule as a "duplicate" the operator
+        // can overwrite; the inline RX.5 path keeps it simple and
+        // refuses the second create. Operators wanting to replace a
+        // rule body use the future per-rule PUT (RX.6).
+        RuleBean existing = ruleDao.findByOid(oid, study.getId());
+        if (existing != null) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Rule oid '" + oid + "' already exists in study '"
+                            + study.getOid() + "'"));
+        }
+
+        // Body expression syntax + scope validation. Build a
+        // per-request ExpressionService bound to the active study.
+        ExpressionBean exprBean = new ExpressionBean(Context.OC_RULES_V1, expression);
+        ExpressionObjectWrapper eow = new ExpressionObjectWrapper(
+                dataSource, study, exprBean, ExpressionObjectWrapper.CONTEXT_EXPRESSION);
+        ResourceBundleProvider.updateLocale(Locale.ENGLISH);
+        ExpressionService perRequestExprSvc = new ExpressionService(eow);
+        try {
+            if (!perRequestExprSvc.ruleExpressionChecker(expression)) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "expression",
+                                "message", "Expression failed validation"))));
+            }
+        } catch (OpenClinicaSystemException ose) {
+            String code = ose.getErrorCode() == null ? "OCRERR_unknown" : ose.getErrorCode();
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "expression",
+                            "message", code + " : "
+                                    + (ose.getMessage() == null ? "expression invalid" : ose.getMessage())))));
+        } catch (RuntimeException rte) {
+            LOG.debug("createRule: expression checker threw {}", rte.toString());
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "expression",
+                            "message", rte.getMessage() == null ? "Expression invalid" : rte.getMessage()))));
+        }
+
+        RuleBean rule = new RuleBean();
+        rule.setOid(oid);
+        rule.setName(name);
+        rule.setDescription(description);
+        rule.setExpression(exprBean);
+        rule.setStudy(study);
+        rule.setStudyId(study.getId());
+        rule.setStatus(Status.AVAILABLE);
+        rule.setOwner(me);
+        rule.setCreatedDate(new java.util.Date());
+        rule.setEnabled(true);
+
+        RuleBean persisted = ruleDao.saveOrUpdate(rule);
+        if (persisted == null || persisted.getId() == null || persisted.getId() == 0) {
+            LOG.warn("createRule: ruleDao.saveOrUpdate returned no id for oid='{}'", oid);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to persist rule"));
+        }
+
+        writeRuleCreateAudit(me, study, persisted);
+        LOG.info("Create rule: id={} oid='{}' study={} by={}",
+                persisted.getId(), oid, study.getOid(), me.getName());
+
+        return ResponseEntity.status(201).body(new CreateRuleResponse(
+                persisted.getId(),
+                persisted.getOid(),
+                persisted.getName(),
+                persisted.getDescription(),
+                persisted.getExpression() == null ? "" : persisted.getExpression().getValue()));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/rules/validate-target  — Phase E RX.5 target probe    */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Validate a {@code rule_set} target expression against the
+     * active study scope. Read-only — nothing is persisted.
+     *
+     * <p>Wraps {@code ExpressionService.ruleSetExpressionChecker} so
+     * the SPA can live-validate the target as the operator types
+     * (debounced). Always returns HTTP 200; the validation outcome
+     * lives in the {@code valid} flag + {@code errors} list of the
+     * {@link ValidateTargetResponse} body, not in the status code —
+     * lets the SPA distinguish "expression syntax is fine but the
+     * OID doesn't resolve in this study" from "the network call
+     * failed".
+     *
+     * <p>A missing or blank {@code target} still surfaces as HTTP 400
+     * (the request body shape is wrong), separate from the validation
+     * outcome shape.
+     */
+    @PostMapping("/validate-target")
+    @Transactional(readOnly = true)
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = ValidateTargetResponse.class)))
+    public ResponseEntity<?> validateTarget(@RequestBody(required = false) ValidateTargetRequest body,
+                                            HttpSession session) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        StudyBean study = (StudyBean) session.getAttribute("study");
+
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Request body is required: { target }"));
+        }
+        String target = body.target() == null ? "" : body.target().trim();
+        if (target.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "target",
+                            "message", "target must not be blank"))));
+        }
+
+        ExpressionBean targetExpr = new ExpressionBean(Context.OC_RULES_V1, target);
+        ExpressionObjectWrapper eow = new ExpressionObjectWrapper(
+                dataSource, study, targetExpr, ExpressionObjectWrapper.CONTEXT_TARGET);
+        ResourceBundleProvider.updateLocale(Locale.ENGLISH);
+        ExpressionService perRequestExprSvc = new ExpressionService(eow);
+        try {
+            boolean ok = perRequestExprSvc.ruleSetExpressionChecker(target);
+            if (ok) {
+                return ResponseEntity.ok(new ValidateTargetResponse(true, List.of()));
+            }
+            return ResponseEntity.ok(new ValidateTargetResponse(false, List.of(
+                    new ValidateTargetResponse.ValidationIssue("Target expression failed validation"))));
+        } catch (OpenClinicaSystemException ose) {
+            String code = ose.getErrorCode() == null ? "OCRERR_unknown" : ose.getErrorCode();
+            String msg = code + " : "
+                    + (ose.getMessage() == null ? "target invalid" : ose.getMessage());
+            return ResponseEntity.ok(new ValidateTargetResponse(false, List.of(
+                    new ValidateTargetResponse.ValidationIssue(msg))));
+        } catch (RuntimeException rte) {
+            LOG.debug("validateTarget: checker threw {}", rte.toString());
+            return ResponseEntity.ok(new ValidateTargetResponse(false, List.of(
+                    new ValidateTargetResponse.ValidationIssue(
+                            rte.getMessage() == null ? "Target invalid" : rte.getMessage()))));
+        }
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Audit helper                                                      */
+    /* ----------------------------------------------------------------- */
+
+    private void writeRuleCreateAudit(UserAccountBean me, StudyBean study, RuleBean rule) {
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setStudyId(study.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setAuditTable("rule");
+            ae.setEntityId(rule.getId());
+            ae.setColumnName("create");
+            ae.setOldValue("");
+            ae.setNewValue(rule.getOid() == null ? "" : rule.getOid());
+            ae.setActionMessage("rule_create: oid=" + rule.getOid()
+                    + " name='" + (rule.getName() == null ? "" : rule.getName())
+                    + "' by " + me.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for rule_create id={} (continuing): {}",
+                    rule.getId(), e.getMessage());
+        }
     }
 }

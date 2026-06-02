@@ -18,18 +18,26 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleActionRunLogDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetRuleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.ActionType;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.DiscrepancyNoteActionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.EmailActionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.EventActionBean;
@@ -43,6 +51,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleAction
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionRunLogBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.ShowActionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.StratificationFactorBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.Context;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.ExpressionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.ExpressionObjectWrapper;
+import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.ExpressionService;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,16 +136,19 @@ public class RulesApiController {
     private final RuleSetDao ruleSetDao;
     private final RuleSetRuleDao ruleSetRuleDao;
     private final RuleActionRunLogDao ruleActionRunLogDao;
+    private final RuleDao ruleDao;
 
     @Autowired
     public RulesApiController(@Qualifier("dataSource") DataSource dataSource,
                               RuleSetDao ruleSetDao,
                               RuleSetRuleDao ruleSetRuleDao,
-                              RuleActionRunLogDao ruleActionRunLogDao) {
+                              RuleActionRunLogDao ruleActionRunLogDao,
+                              RuleDao ruleDao) {
         this.dataSource = dataSource;
         this.ruleSetDao = ruleSetDao;
         this.ruleSetRuleDao = ruleSetRuleDao;
         this.ruleActionRunLogDao = ruleActionRunLogDao;
+        this.ruleDao = ruleDao;
     }
 
     /* ----------------------------------------------------------------- */
@@ -365,6 +382,27 @@ public class RulesApiController {
             Pattern.compile("^([01]?[0-9]|2[0-3]):[0-5][0-9]$");
 
     /**
+     * Phase E RX.5 — operator-supplied OID grammar for new rules.
+     *
+     * <p>Tightened from the underlying {@code OidGenerator} validator
+     * ({@code ^[A-Z_0-9]+$}, max 40) — must start with a letter, then
+     * letters / digits / underscores. Mirrors the canonical legacy
+     * convention (e.g. {@code RUL_BP_HIGH}) so operator-authored OIDs
+     * are visually consistent with the OIDs the import path produces.
+     */
+    private static final Pattern RULE_OID_PATTERN =
+            Pattern.compile("^[A-Z][A-Z0-9_]*$");
+
+    /** Max length per legacy {@code rule.oc_oid} column width. */
+    private static final int OID_MAX_LENGTH = 40;
+    private static final int NAME_MAX_LENGTH = 255;
+    private static final int DESCRIPTION_MAX_LENGTH = 2000;
+    private static final int MESSAGE_MAX_LENGTH = 2000;
+    /** Lightweight RFC-5322ish email shape — non-blank + one @ + one ".". */
+    private static final Pattern EMAIL_PATTERN =
+            Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+
+    /**
      * Surface the existing {@code rule_set.run_schedule} +
      * {@code rule_set.run_time} columns to the SPA so operators can
      * enrol / un-enrol a rule_set in the Quartz nightly batch without
@@ -484,6 +522,655 @@ public class RulesApiController {
                 newRunTime == null ? "" : newRunTime,
                 me.getName());
         return ResponseEntity.ok(toDto(rs));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/rule-sets       — Phase E RX.5 inline rule_set create */
+    /*                                                                    */
+    /* The matching POST /api/v1/rules (rule-body create) lives on        */
+    /* RuleExpressionApiController, which holds the /api/v1/rules path   */
+    /* mapping. The two endpoints share the per-request ExpressionService */
+    /* shape; co-locating them on one controller would force one to       */
+    /* live under a fake path or drop the class-level @RequestMapping.   */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Create a new {@code rule_set} (target expression + scope) in
+     * the active study and bind one or more existing rules to it via
+     * {@code rule_set_rule} rows.
+     *
+     * <p>Mirrors the per-record chunk of
+     * {@code RulesPostImportContainerService.validateRuleSetDefs} —
+     * target expression syntax/scope check, scope-OID resolution
+     * (SED / CRF / CRF version), rule-OID existence checks.
+     *
+     * <h2>Validation</h2>
+     * <ul>
+     *   <li>{@code target} — required. Validated via
+     *       {@code ExpressionService.ruleSetExpressionChecker} bound
+     *       to the active study scope.</li>
+     *   <li>{@code studyEventDefinitionOid} — optional. If present,
+     *       must resolve via {@link StudyEventDefinitionDAO#findByOid}.</li>
+     *   <li>{@code crfOid} — optional. If present, must resolve via
+     *       {@link CRFDAO#findByOid}.</li>
+     *   <li>{@code crfVersionOid} — optional. If present, must
+     *       resolve via {@link CRFVersionDAO#findByOid}, and if
+     *       {@code crfOid} is also present the version's CRF id must
+     *       match.</li>
+     *   <li>{@code ruleOids[]} — required, non-empty. Each must
+     *       resolve to an existing {@code rule} in the active study
+     *       (via {@link RuleDao#findByOid(String, Integer)}).</li>
+     * </ul>
+     *
+     * <p>Persistence: builds a {@link RuleSetBean} with its
+     * {@link ExpressionBean} target + {@link RuleSetRuleBean} list,
+     * sets {@code studyId} + the resolved scope ids + {@code status =
+     * AVAILABLE}, and saves via {@code ruleSetDao.saveOrUpdate}.
+     * Cascade on {@link RuleSetBean#getRuleSetRules()} persists the
+     * {@code rule_set_rule} rows.
+     *
+     * <p>Audit: one {@code audit_log_event} row for the new rule_set
+     * with {@code auditTable=rule_set}, {@code columnName=create},
+     * {@code newValue=target}.
+     */
+    @PostMapping
+    @Transactional
+    @ApiResponse(responseCode = "201",
+                 content = @Content(schema = @Schema(implementation = RuleSetDto.class)))
+    public ResponseEntity<?> createRuleSet(@RequestBody(required = false) CreateRuleSetRequest body,
+                                           HttpSession session) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit rule_set create"));
+        }
+
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Request body is required: { target, studyEventDefinitionOid?, crfOid?, crfVersionOid?, ruleOids: [...] }"));
+        }
+
+        List<Map<String, String>> errors = new ArrayList<>();
+        String target = body.target() == null ? "" : body.target().trim();
+        if (target.isEmpty()) {
+            errors.add(Map.of("field", "target", "message", "target is required"));
+        }
+        List<String> ruleOids = body.ruleOids() == null ? List.of() : body.ruleOids();
+        if (ruleOids.isEmpty()) {
+            errors.add(Map.of("field", "ruleOids", "message", "ruleOids must contain at least one rule OID"));
+        }
+
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", errors));
+        }
+
+        // Resolve scope OIDs (optional fields). Each unresolvable OID
+        // emits a 400 with the offending field name.
+        StudyEventDefinitionBean sedBean = null;
+        if (body.studyEventDefinitionOid() != null && !body.studyEventDefinitionOid().isBlank()) {
+            StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+            sedBean = sedDao.findByOid(body.studyEventDefinitionOid().trim());
+            if (sedBean == null || sedBean.getId() <= 0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "studyEventDefinitionOid",
+                                "message", "No StudyEventDefinition with oid '"
+                                        + body.studyEventDefinitionOid() + "'"))));
+            }
+        }
+
+        CRFBean crfBean = null;
+        if (body.crfOid() != null && !body.crfOid().isBlank()) {
+            CRFDAO crfDao = new CRFDAO(dataSource);
+            crfBean = crfDao.findByOid(body.crfOid().trim());
+            if (crfBean == null || crfBean.getId() <= 0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "crfOid",
+                                "message", "No CRF with oid '" + body.crfOid() + "'"))));
+            }
+        }
+
+        CRFVersionBean crfVersionBean = null;
+        if (body.crfVersionOid() != null && !body.crfVersionOid().isBlank()) {
+            CRFVersionDAO crfvDao = new CRFVersionDAO(dataSource);
+            crfVersionBean = crfvDao.findByOid(body.crfVersionOid().trim());
+            if (crfVersionBean == null || crfVersionBean.getId() <= 0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "crfVersionOid",
+                                "message", "No CRF version with oid '" + body.crfVersionOid() + "'"))));
+            }
+            if (crfBean != null && crfVersionBean.getCrfId() != crfBean.getId()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "crfVersionOid",
+                                "message", "CRF version '" + body.crfVersionOid()
+                                        + "' does not belong to CRF '" + body.crfOid() + "'"))));
+            }
+        }
+
+        // Rule OID existence checks. Collect all unknown OIDs in one
+        // pass so the operator sees them all rather than fixing one
+        // typo at a time.
+        List<String> missingRuleOids = new ArrayList<>();
+        List<RuleBean> resolvedRules = new ArrayList<>(ruleOids.size());
+        for (String ro : ruleOids) {
+            if (ro == null || ro.isBlank()) continue;
+            RuleBean rb = ruleDao.findByOid(ro.trim(), study.getId());
+            if (rb == null) {
+                missingRuleOids.add(ro);
+            } else {
+                resolvedRules.add(rb);
+            }
+        }
+        if (!missingRuleOids.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "ruleOids",
+                            "message", "Unknown rule OID(s) in this study: "
+                                    + String.join(", ", missingRuleOids)))));
+        }
+        if (resolvedRules.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "ruleOids",
+                            "message", "ruleOids must contain at least one rule OID"))));
+        }
+
+        // Target syntax + scope validation. As per createRule, build a
+        // per-request ExpressionObjectWrapper.
+        ExpressionBean targetExpr = new ExpressionBean(Context.OC_RULES_V1, target);
+        ExpressionObjectWrapper eow = new ExpressionObjectWrapper(
+                dataSource, study, targetExpr, ExpressionObjectWrapper.CONTEXT_TARGET);
+        ResourceBundleProvider.updateLocale(java.util.Locale.ENGLISH);
+        ExpressionService perRequestExprSvc = new ExpressionService(eow);
+        try {
+            if (!perRequestExprSvc.ruleSetExpressionChecker(target)) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "target",
+                                "message", "Target expression failed validation"))));
+            }
+        } catch (OpenClinicaSystemException ose) {
+            String code = ose.getErrorCode() == null ? "OCRERR_unknown" : ose.getErrorCode();
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "target",
+                            "message", code + " : "
+                                    + (ose.getMessage() == null ? "target invalid" : ose.getMessage())))));
+        } catch (RuntimeException rte) {
+            LOG.debug("createRuleSet: target checker threw {}", rte.toString());
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "target",
+                            "message", rte.getMessage() == null ? "Target invalid" : rte.getMessage()))));
+        }
+
+        RuleSetBean rs = new RuleSetBean();
+        rs.setOriginalTarget(targetExpr);
+        rs.setStudy(study);
+        rs.setStudyId(study.getId());
+        if (sedBean != null) {
+            rs.setStudyEventDefinition(sedBean);
+        }
+        if (crfBean != null) {
+            rs.setCrf(crfBean);
+        }
+        if (crfVersionBean != null) {
+            rs.setCrfVersion(crfVersionBean);
+        }
+        rs.setStatus(Status.AVAILABLE);
+        rs.setOwner(me);
+        rs.setCreatedDate(new java.util.Date());
+
+        // Attach the rules. addRuleSetRule sets the back-reference
+        // and the cascade on RuleSetBean.getRuleSetRules (ALL +
+        // EAGER) persists each row when ruleSetDao.saveOrUpdate runs.
+        for (RuleBean ruleBean : resolvedRules) {
+            RuleSetRuleBean rsr = new RuleSetRuleBean();
+            rsr.setRuleBean(ruleBean);
+            rsr.setStatus(Status.AVAILABLE);
+            rsr.setOwner(me);
+            rsr.setCreatedDate(new java.util.Date());
+            rs.addRuleSetRule(rsr);
+        }
+
+        RuleSetBean persisted = ruleSetDao.saveOrUpdate(rs);
+        if (persisted == null || persisted.getId() == null || persisted.getId() == 0) {
+            LOG.warn("createRuleSet: ruleSetDao.saveOrUpdate returned no id for target='{}'", target);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to persist rule set"));
+        }
+
+        writeRuleSetCreateAudit(me, study, persisted);
+        LOG.info("Create rule set: id={} target='{}' study={} rules={} by={}",
+                persisted.getId(), target, study.getOid(),
+                resolvedRules.size(), me.getName());
+
+        // Re-load to get the cascade-persisted rule_set_rule ids.
+        RuleSetBean refreshed = ruleSetDao.findById(persisted.getId(), study);
+        return ResponseEntity.status(201)
+                .body(toDto(refreshed == null ? persisted : refreshed));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/rule-sets/{id}/actions  — Phase E RX.5 action create  */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Attach one action to a {@code rule_set_rule} within the
+     * rule_set on the path.
+     *
+     * <p>Scope cut: only {@code FILE_DISCREPANCY_NOTE},
+     * {@code EMAIL}, {@code SHOW}, {@code HIDE} are creatable inline.
+     * Other types ({@code INSERT}, {@code EVENT}, {@code NOTIFICATION},
+     * {@code RANDOMIZE}) still require the XML import path —
+     * surfacing them inline needs validators + UI affordances out of
+     * scope for RX.5 (see scope analysis at
+     * {@code docs/development/modernization/phase-e/rx-rules-scope.md}).
+     *
+     * <h2>Validation</h2>
+     * <ul>
+     *   <li>{@code ruleSetRuleId} — required. Must be one of the
+     *       {@code rule_set_rule} rows under the rule_set in the path
+     *       (cross-scope checked).</li>
+     *   <li>{@code actionType} — required. Must be one of the four
+     *       supported strings.</li>
+     *   <li>{@code expressionEvaluatesTo} — optional, defaults to
+     *       {@code false}.</li>
+     *   <li>{@code message} — required for all four supported types
+     *       (DiscrepancyNote / Email / Show / Hide); ≤2000 chars.</li>
+     *   <li>{@code to} — required for EMAIL; basic
+     *       {@link #EMAIL_PATTERN} shape check (the legacy validator
+     *       is similarly loose).</li>
+     *   <li>{@code properties[]} — optional for SHOW / HIDE. Each
+     *       entry needs {@code oid} (OID-format) and exactly one of
+     *       {@code value} or {@code valueExpression} (the latter is
+     *       validated as a rule expression).</li>
+     *   <li>{@code phaseGates} — required. At least one phase boolean
+     *       must be true (mirrors {@code OCRERR_0050}).</li>
+     * </ul>
+     */
+    @PostMapping("/{ruleSetId}/actions")
+    @Transactional
+    @ApiResponse(responseCode = "201",
+                 content = @Content(schema = @Schema(implementation = RuleSetDto.class)))
+    public ResponseEntity<?> createAction(@PathVariable("ruleSetId") int ruleSetId,
+                                          @RequestBody(required = false) CreateRuleActionRequest body,
+                                          HttpSession session) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit rule_action create"));
+        }
+
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Request body is required: { ruleSetRuleId, actionType, message?, to?, properties?, phaseGates }"));
+        }
+
+        List<Map<String, String>> errors = new ArrayList<>();
+        Integer ruleSetRuleId = body.ruleSetRuleId();
+        if (ruleSetRuleId == null || ruleSetRuleId <= 0) {
+            errors.add(Map.of("field", "ruleSetRuleId", "message",
+                    "ruleSetRuleId is required"));
+        }
+        String actionTypeRaw = body.actionType() == null ? "" : body.actionType().trim();
+        ActionType actionType = null;
+        if (actionTypeRaw.isEmpty()) {
+            errors.add(Map.of("field", "actionType", "message", "actionType is required"));
+        } else {
+            try {
+                actionType = ActionType.valueOf(actionTypeRaw);
+            } catch (IllegalArgumentException iae) {
+                errors.add(Map.of("field", "actionType", "message",
+                        "Unknown actionType '" + actionTypeRaw + "'"));
+            }
+        }
+        if (actionType != null && !isSupportedInlineActionType(actionType)) {
+            errors.add(Map.of("field", "actionType", "message",
+                    "Inline create supports FILE_DISCREPANCY_NOTE / EMAIL / SHOW / HIDE only — "
+                            + actionTypeRaw + " requires the XML import path"));
+        }
+        if (body.phaseGates() == null) {
+            errors.add(Map.of("field", "phaseGates", "message", "phaseGates is required"));
+        }
+
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", errors));
+        }
+        // Past the error-list guard above actionType + gates are
+        // guaranteed non-null. Local assertion silences the static
+        // analyzer (and documents the invariant for future readers).
+        final ActionType resolvedActionType = java.util.Objects.requireNonNull(actionType);
+
+        // At least one phase must be enabled (mirrors OCRERR_0050).
+        CreateRuleActionRequest.PhaseGatesInput gates = body.phaseGates();
+        boolean adminGate = Boolean.TRUE.equals(gates.administrativeDataEntry());
+        boolean initialGate = Boolean.TRUE.equals(gates.initialDataEntry());
+        boolean doubleGate = Boolean.TRUE.equals(gates.doubleDataEntry());
+        boolean importGate = Boolean.TRUE.equals(gates.importDataEntry());
+        boolean batchGate = Boolean.TRUE.equals(gates.batch());
+        if (!(adminGate || initialGate || doubleGate || importGate || batchGate)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "phaseGates",
+                            "message", "At least one phase gate must be enabled"))));
+        }
+
+        // Type-specific field validation. message is required for
+        // all four supported types; to is required for EMAIL.
+        String message = body.message() == null ? "" : body.message().trim();
+        if (message.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "message",
+                            "message", "message is required for "
+                                    + resolvedActionType.name()))));
+        }
+        if (message.length() > MESSAGE_MAX_LENGTH) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "message",
+                            "message", "message must be at most "
+                                    + MESSAGE_MAX_LENGTH + " characters"))));
+        }
+
+        String to = body.to() == null ? "" : body.to().trim();
+        if (resolvedActionType == ActionType.EMAIL) {
+            if (to.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "to",
+                                "message", "to is required for EMAIL actions"))));
+            }
+            if (!EMAIL_PATTERN.matcher(to).matches()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "to",
+                                "message", "to must be a valid email address"))));
+            }
+        }
+
+        // Properties: optional for SHOW / HIDE; each entry needs an
+        // OID-format string and exactly one of value / valueExpression.
+        List<CreateRuleActionRequest.PropertyInput> propInputs =
+                body.properties() == null ? List.of() : body.properties();
+        if (!propInputs.isEmpty() && resolvedActionType != ActionType.SHOW
+                && resolvedActionType != ActionType.HIDE) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", List.of(Map.of("field", "properties",
+                            "message", "properties only apply to SHOW / HIDE actions"))));
+        }
+        for (CreateRuleActionRequest.PropertyInput pi : propInputs) {
+            String propOid = pi.oid() == null ? "" : pi.oid().trim();
+            if (propOid.isEmpty() || !RULE_OID_PATTERN.matcher(propOid).matches()) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "properties.oid",
+                                "message", "Each property needs an OID-format oid"))));
+            }
+            boolean hasValue = pi.value() != null && !pi.value().isEmpty();
+            boolean hasValueExpr = pi.valueExpression() != null && !pi.valueExpression().isBlank();
+            if (hasValue == hasValueExpr) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "properties",
+                                "message", "Each property needs exactly one of value or valueExpression (oid="
+                                        + propOid + ")"))));
+            }
+        }
+
+        // Resolve scope. The rule_set must be in the active study;
+        // the rule_set_rule must live under that rule_set.
+        RuleSetBean rs = ruleSetDao.findById(ruleSetId, study);
+        if (rs == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No rule set with id " + ruleSetId + " in study '" + study.getOid() + "'"));
+        }
+        RuleSetRuleBean targetRsr = null;
+        if (rs.getRuleSetRules() != null) {
+            for (RuleSetRuleBean rsr : rs.getRuleSetRules()) {
+                if (rsr.getId() != null && rsr.getId().equals(ruleSetRuleId)) {
+                    targetRsr = rsr;
+                    break;
+                }
+            }
+        }
+        if (targetRsr == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No attached rule with id " + ruleSetRuleId
+                            + " under rule set " + ruleSetId));
+        }
+
+        // Validate property value-expressions against the study scope
+        // — same checker as the rule body. Bailing here keeps the
+        // user-visible "your expression doesn't resolve" message
+        // alongside the rest of the validation.
+        for (CreateRuleActionRequest.PropertyInput pi : propInputs) {
+            if (pi.valueExpression() == null || pi.valueExpression().isBlank()) continue;
+            ExpressionBean ve = new ExpressionBean(Context.OC_RULES_V1, pi.valueExpression().trim());
+            ExpressionObjectWrapper eow = new ExpressionObjectWrapper(
+                    dataSource, study, ve, rs, ExpressionObjectWrapper.CONTEXT_EXPRESSION);
+            ResourceBundleProvider.updateLocale(java.util.Locale.ENGLISH);
+            ExpressionService perRequestExprSvc = new ExpressionService(eow);
+            try {
+                if (!perRequestExprSvc.ruleExpressionChecker(pi.valueExpression().trim())) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "message", "Validation failed",
+                            "errors", List.of(Map.of("field", "properties.valueExpression",
+                                    "message", "valueExpression failed validation (oid="
+                                            + pi.oid() + ")"))));
+                }
+            } catch (OpenClinicaSystemException ose) {
+                String code = ose.getErrorCode() == null ? "OCRERR_unknown" : ose.getErrorCode();
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "properties.valueExpression",
+                                "message", code + " : "
+                                        + (ose.getMessage() == null ? "valueExpression invalid" : ose.getMessage())))));
+            } catch (RuntimeException rte) {
+                LOG.debug("createAction: valueExpression checker threw {}", rte.toString());
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "properties.valueExpression",
+                                "message", rte.getMessage() == null ? "valueExpression invalid"
+                                        : rte.getMessage()))));
+            }
+        }
+
+        // Build the right action subtype.
+        RuleActionBean action;
+        switch (resolvedActionType) {
+            case FILE_DISCREPANCY_NOTE -> {
+                DiscrepancyNoteActionBean a = new DiscrepancyNoteActionBean();
+                a.setMessage(message);
+                action = a;
+            }
+            case EMAIL -> {
+                EmailActionBean a = new EmailActionBean();
+                a.setMessage(message);
+                a.setTo(to);
+                action = a;
+            }
+            case SHOW -> {
+                ShowActionBean a = new ShowActionBean();
+                a.setMessage(message);
+                a.setProperties(buildPropertyBeans(propInputs));
+                action = a;
+            }
+            case HIDE -> {
+                HideActionBean a = new HideActionBean();
+                a.setMessage(message);
+                a.setProperties(buildPropertyBeans(propInputs));
+                action = a;
+            }
+            default ->
+                    // Already gated above; unreachable but keeps the
+                    // compiler happy on the exhaustive-switch shape.
+                    throw new IllegalStateException("Unsupported actionType "
+                            + resolvedActionType);
+        }
+        action.setExpressionEvaluatesTo(Boolean.TRUE.equals(body.expressionEvaluatesTo()));
+
+        // Overwrite the subtype-constructor's default RuleActionRunBean
+        // with the operator's submitted phase gates. The legacy
+        // subtype constructors prefill a sensible default but the
+        // controller's contract is "operator picks gates explicitly"
+        // — so a freshly-built run bean is what we persist.
+        action.setRuleActionRun(new RuleActionRunBean(
+                adminGate, initialGate, doubleGate, importGate, batchGate));
+
+        // Attach to the rule_set_rule's actions list and save via the
+        // parent's cascade. The action's owner / created-date come
+        // from the controller (AbstractAuditableMutableDomainObject
+        // tracks these).
+        action.setOwner(me);
+        action.setCreatedDate(new java.util.Date());
+
+        if (targetRsr.getActions() == null) {
+            targetRsr.setActions(new ArrayList<>());
+        }
+        targetRsr.getActions().add(action);
+
+        ruleSetRuleDao.saveOrUpdate(targetRsr);
+
+        // Re-read the parent rule_set so the DTO carries the newly
+        // attached action with its persisted id.
+        RuleSetBean refreshed = ruleSetDao.findById(ruleSetId, study);
+        Integer newActionId = null;
+        if (refreshed != null && refreshed.getRuleSetRules() != null) {
+            for (RuleSetRuleBean rsr : refreshed.getRuleSetRules()) {
+                if (rsr.getId() != null && rsr.getId().equals(ruleSetRuleId)) {
+                    if (rsr.getActions() != null && !rsr.getActions().isEmpty()) {
+                        // The newest action sits at the end of the
+                        // cascade-persisted list (Hibernate preserves
+                        // insertion order for the SUBSELECT fetch).
+                        RuleActionBean last = rsr.getActions().get(rsr.getActions().size() - 1);
+                        newActionId = last.getId();
+                    }
+                }
+            }
+        }
+        writeRuleActionCreateAudit(me, study,
+                newActionId == null ? 0 : newActionId, resolvedActionType);
+        LOG.info("Create rule action: type={} rsr={} rs={} study={} by={}",
+                resolvedActionType, ruleSetRuleId, ruleSetId, study.getOid(), me.getName());
+
+        return ResponseEntity.status(201)
+                .body(toDto(refreshed == null ? rs : refreshed));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Helpers — Phase E RX.5 create endpoints                            */
+    /* ----------------------------------------------------------------- */
+
+    private static boolean isSupportedInlineActionType(ActionType t) {
+        return t == ActionType.FILE_DISCREPANCY_NOTE
+                || t == ActionType.EMAIL
+                || t == ActionType.SHOW
+                || t == ActionType.HIDE;
+    }
+
+    private static List<PropertyBean> buildPropertyBeans(
+            List<CreateRuleActionRequest.PropertyInput> inputs) {
+        if (inputs == null || inputs.isEmpty()) return new ArrayList<>();
+        List<PropertyBean> out = new ArrayList<>(inputs.size());
+        for (CreateRuleActionRequest.PropertyInput pi : inputs) {
+            PropertyBean pb = new PropertyBean();
+            pb.setOid(pi.oid().trim());
+            if (pi.value() != null && !pi.value().isEmpty()) {
+                pb.setValue(pi.value());
+            }
+            if (pi.valueExpression() != null && !pi.valueExpression().isBlank()) {
+                pb.setValueExpression(new ExpressionBean(
+                        Context.OC_RULES_V1, pi.valueExpression().trim()));
+            }
+            out.add(pb);
+        }
+        return out;
+    }
+
+    private void writeRuleCreateAudit(UserAccountBean me, StudyBean study, RuleBean rule) {
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setStudyId(study.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setAuditTable("rule");
+            ae.setEntityId(rule.getId());
+            ae.setColumnName("create");
+            ae.setOldValue("");
+            ae.setNewValue(rule.getOid() == null ? "" : rule.getOid());
+            ae.setActionMessage("rule_create: oid=" + rule.getOid()
+                    + " name='" + (rule.getName() == null ? "" : rule.getName())
+                    + "' by " + me.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for rule_create id={} (continuing): {}",
+                    rule.getId(), e.getMessage());
+        }
+    }
+
+    private void writeRuleSetCreateAudit(UserAccountBean me, StudyBean study, RuleSetBean rs) {
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setStudyId(study.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setAuditTable("rule_set");
+            ae.setEntityId(rs.getId());
+            ae.setColumnName("create");
+            ae.setOldValue("");
+            String targetValue = rs.getTarget() == null ? "" : rs.getTarget().getValue();
+            ae.setNewValue(targetValue == null ? "" : targetValue);
+            ae.setActionMessage("rule_set_create: id=" + rs.getId()
+                    + " target='" + (targetValue == null ? "" : targetValue)
+                    + "' by " + me.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for rule_set_create id={} (continuing): {}",
+                    rs.getId(), e.getMessage());
+        }
+    }
+
+    private void writeRuleActionCreateAudit(UserAccountBean me, StudyBean study,
+                                            int newActionId, ActionType actionType) {
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setStudyId(study.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setAuditTable("rule_action");
+            ae.setEntityId(newActionId);
+            ae.setColumnName("create");
+            ae.setOldValue("");
+            ae.setNewValue(actionType == null ? "" : actionType.name());
+            ae.setActionMessage("rule_action_create: id=" + newActionId
+                    + " type=" + (actionType == null ? "?" : actionType.name())
+                    + " by " + me.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for rule_action_create id={} (continuing): {}",
+                    newActionId, e.getMessage());
+        }
     }
 
     /* ----------------------------------------------------------------- */
