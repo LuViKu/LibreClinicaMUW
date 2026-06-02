@@ -543,8 +543,16 @@
                              swagger-annotations-jakarta. Both come via the
                              springdoc-openapi-starter-webmvc-ui umbrella
                              declared in the parent pom. Listing each
-                             transitive individually would be drift-prone. -->
+                             transitive individually would be drift-prone.
+                             Phase E.5 follow-up (2026-06-01): WebMvcConfig
+                             @Import-s SpringDocWebMvcConfiguration and
+                             MultipleOpenApiSupportConfiguration from
+                             springdoc-openapi-starter-webmvc-api (the
+                             springdoc WebMVC layer between starter-common
+                             and starter-webmvc-ui). Same umbrella; same
+                             rationale. -->
                         <ignoredUsedUndeclaredDependency>org.springdoc:springdoc-openapi-starter-common</ignoredUsedUndeclaredDependency>
+                        <ignoredUsedUndeclaredDependency>org.springdoc:springdoc-openapi-starter-webmvc-api</ignoredUsedUndeclaredDependency>
                         <ignoredUsedUndeclaredDependency>io.swagger.core.v3:swagger-annotations-jakarta</ignoredUsedUndeclaredDependency>
                     </ignoredUsedUndeclaredDependencies>
 		        </configuration>

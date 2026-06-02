@@ -151,11 +151,29 @@ public class SecurityConfig {
                         // Public access lets the SPA's
                         // `codegen:openapi` step + ops sanity checks
                         // run without an auth session.
+                        //
+                        // Phase E.5 follow-up (2026-06-01): springdoc beans
+                        // were relocated into the `pages` DispatcherServlet
+                        // child context (the only place its
+                        // RequestMappingHandlerMapping sees the
+                        // /api/v1/** @RestController family). With
+                        // springdoc.api-docs.path = /pages/v3/api-docs the
+                        // OpenApiResource registers at that prefix so its
+                        // URLs flow through the same dispatcher as the
+                        // controllers it documents. Both prefixes are
+                        // permitted — the /v3/api-docs/* paths return 404
+                        // now but the permit costs nothing and avoids a
+                        // future-Self surprise.
                         "/v3/api-docs",
                         "/v3/api-docs/**",
                         "/v3/api-docs.yaml",
                         "/swagger-ui.html",
-                        "/swagger-ui/**"
+                        "/swagger-ui/**",
+                        "/pages/v3/api-docs",
+                        "/pages/v3/api-docs/**",
+                        "/pages/v3/api-docs.yaml",
+                        "/pages/swagger-ui.html",
+                        "/pages/swagger-ui/**"
                 )).permitAll()
                 .anyRequest().hasRole("USER")
             )

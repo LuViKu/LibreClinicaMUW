@@ -8,6 +8,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica;
 
+import org.springdoc.core.configuration.SpringDocConfiguration;
+import org.springdoc.webmvc.core.configuration.MultipleOpenApiSupportConfiguration;
+import org.springdoc.webmvc.core.configuration.SpringDocWebMvcConfiguration;
+import org.springdoc.webmvc.ui.SwaggerConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration;
@@ -83,6 +87,35 @@ import org.springframework.context.annotation.ImportResource;
                 // our pinned spring-ldap version. LDAP usage is via
                 // contextSource + ldapAuthenticationProvider XML beans.
                 LdapAutoConfiguration.class,
+                // Phase E.5 follow-up (2026-06-01): springdoc bean-creation
+                // configs excluded from the ROOT context so the same beans
+                // can be re-imported by WebMvcConfig into the `pages`
+                // DispatcherServlet's CHILD context. Reason: springdoc's
+                // SpringWebMvcProvider iterates `getBeansOfType(
+                // RequestMappingHandlerMapping.class)` against its own
+                // ApplicationContext, and the 10 `/api/v1/**` REST
+                // controllers register only in the child context. With
+                // springdoc beans in root, the spec endpoint emitted
+                // `paths: {}` (the root context's RMHM only knows about
+                // /actuator/* and /error). With the beans re-imported in
+                // WebMvcConfig, OpenApiResource lives in the child context
+                // and sees the right handler mapping. The property classes
+                // (SpringDocConfigProperties, SwaggerUiConfigProperties,
+                // SwaggerUiOAuthProperties) are bound in the child context
+                // via @EnableConfigurationProperties on WebMvcConfig — they
+                // are @ConfigurationProperties hybrids; plain @Import does
+                // not engage Boot's binder so downstream autowiring of
+                // SpringDocConfigProperties fails with
+                // NoSuchBeanDefinitionException. The spec/UI URL prefix is
+                // /pages/v3/api-docs and /pages/swagger-ui.html
+                // (springdoc.* properties in application.yml) so the URLs
+                // route through the same dispatcher that hosts the
+                // controllers; no extra web.xml mapping needed. See
+                // docs/development/modernization/phase-e/springdoc-pages-dispatcher.md.
+                SpringDocConfiguration.class,
+                SpringDocWebMvcConfiguration.class,
+                MultipleOpenApiSupportConfiguration.class,
+                SwaggerConfig.class,
                 // Phase C.14 kept DispatcherServletAutoConfiguration +
                 // WebMvcAutoConfiguration + ErrorMvcAutoConfiguration
                 // excluded so the legacy `pages` DispatcherServlet was
