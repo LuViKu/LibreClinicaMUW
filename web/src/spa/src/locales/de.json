@@ -404,7 +404,16 @@
       "firesWhenTrue": "feuert, wenn Ausdruck TRUE",
       "firesWhenFalse": "feuert, wenn Ausdruck FALSE",
       "activeIn": "Aktiv in",
-      "showRaw": "Rohwerte anzeigen"
+      "showRaw": "Rohwerte anzeigen",
+      "runLogHeading": "Letzte Auslösungen ({count})",
+      "runLogEmpty": "Noch keine Auslösungen für diesen Regel-Satz.",
+      "runLogLoadMore": "Mehr laden",
+      "runLogColumn": {
+        "action": "Aktion",
+        "rule": "Regel-OID",
+        "value": "Wert beim Auslösen",
+        "when": "Zeitpunkt"
+      }
     },
     "phase": {
       "admin": "Admin-Bearbeitung",

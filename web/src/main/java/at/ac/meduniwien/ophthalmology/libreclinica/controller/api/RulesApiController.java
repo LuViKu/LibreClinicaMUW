@@ -18,6 +18,7 @@ import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleActionRunLogDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean;
@@ -33,6 +34,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.PropertyBe
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RandomizeActionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionRunBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionRunLogBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.ShowActionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.StratificationFactorBean;
 
@@ -45,6 +47,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -66,12 +69,9 @@ import org.springframework.web.bind.annotation.RestController;
  *       graphs inlined</li>
  *   <li>{@code GET /api/v1/rule-sets/{id}} — full detail for one
  *       rule_set</li>
+ *   <li>{@code GET /api/v1/rule-sets/{id}/run-log} — paged fire
+ *       history (RX.1b)</li>
  * </ul>
- *
- * <p><b>Run-log endpoint deferred</b>: the legacy code has no
- * list-by-rule-set query path on {@link RuleActionRunLogDao}, only
- * a count + delete. Adding a greenfield query is its own slice —
- * {@code GET /api/v1/rule-sets/{id}/run-log} is queued as RX.1b.
  *
  * <p>Authorization: any authenticated user on the active study can
  * read. Rules visibility is a study-membership concern, not a
@@ -94,12 +94,15 @@ public class RulesApiController {
 
     private final DataSource dataSource;
     private final RuleSetDao ruleSetDao;
+    private final RuleActionRunLogDao ruleActionRunLogDao;
 
     @Autowired
     public RulesApiController(@Qualifier("dataSource") DataSource dataSource,
-                              RuleSetDao ruleSetDao) {
+                              RuleSetDao ruleSetDao,
+                              RuleActionRunLogDao ruleActionRunLogDao) {
         this.dataSource = dataSource;
         this.ruleSetDao = ruleSetDao;
+        this.ruleActionRunLogDao = ruleActionRunLogDao;
     }
 
     /* ----------------------------------------------------------------- */
@@ -143,6 +146,83 @@ public class RulesApiController {
                     "No rule set with id " + ruleSetId + " in study '" + study.getOid() + "'"));
         }
         return ResponseEntity.ok(toDto(rs));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* GET /api/v1/rule-sets/{id}/run-log                                 */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E RX.1b — paged fire history for one rule_set.
+     *
+     * <p>Walks the rule_set's attached {@code rule_set_rule} rows to
+     * gather every {@code rule.oc_oid} the set fires, then asks the
+     * DAO for matching {@code rule_action_run_log} rows. The
+     * underlying table stores {@code rule_oc_oid} (the rule's OID),
+     * not a {@code rule_set_id}, so the join goes via the attached
+     * rules rather than directly by rule_set primary key.
+     *
+     * <p>Ordering is by run-log {@code id} DESC — the table has no
+     * timestamp column, but the auto-increment id matches insertion
+     * order in practice. See {@link RuleActionRunLogDao#findByRuleOids}
+     * for the schema-limitation note.
+     *
+     * <p>Pagination: {@code ?limit=N&offset=M} (defaults 100 / 0).
+     * Negative or zero limit / negative offset returns 400 — the SPA
+     * is the only caller and we'd rather reject malformed paging than
+     * silently coerce.
+     */
+    @GetMapping("/{ruleSetId}/run-log")
+    @Transactional(readOnly = true)
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array", implementation = RuleActionRunLogDto.class)))
+    public ResponseEntity<?> getRunLog(@PathVariable("ruleSetId") int ruleSetId,
+                                       @RequestParam(value = "limit", defaultValue = "100") int limit,
+                                       @RequestParam(value = "offset", defaultValue = "0") int offset,
+                                       HttpSession session) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        if (limit <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "limit must be a positive integer (got " + limit + ")"));
+        }
+        if (offset < 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "offset must be zero or positive (got " + offset + ")"));
+        }
+        StudyBean study = (StudyBean) session.getAttribute("study");
+
+        RuleSetBean rs = ruleSetDao.findById(ruleSetId, study);
+        if (rs == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No rule set with id " + ruleSetId + " in study '" + study.getOid() + "'"));
+        }
+
+        // Gather rule OIDs from attached rules (the run-log stores
+        // rule_oc_oid, not rule_set_id).
+        List<String> ruleOids = new ArrayList<>();
+        if (rs.getRuleSetRules() != null) {
+            for (RuleSetRuleBean rsr : rs.getRuleSetRules()) {
+                RuleBean rule = rsr.getRuleBean();
+                if (rule != null && rule.getOid() != null && !rule.getOid().isEmpty()) {
+                    ruleOids.add(rule.getOid());
+                }
+            }
+        }
+
+        List<RuleActionRunLogBean> beans = ruleActionRunLogDao.findByRuleOids(ruleOids, limit, offset);
+        List<RuleActionRunLogDto> out = new ArrayList<>(beans.size());
+        for (RuleActionRunLogBean b : beans) {
+            String actionTypeName = b.getActionType() == null ? "" : b.getActionType().name();
+            out.add(new RuleActionRunLogDto(
+                    b.getId() == null ? 0 : b.getId(),
+                    actionTypeName,
+                    b.getRuleOid(),
+                    b.getItemDataId(),
+                    b.getValue(),
+                    null /* no timestamp column — see DAO javadoc */));
+        }
+        return ResponseEntity.ok(out);
     }
 
     /* ----------------------------------------------------------------- */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SideRail from '@/components/SideRail.vue'
@@ -7,6 +7,8 @@ import StatusPill from '@/components/StatusPill.vue'
 
 import { useRulesStore } from '@/stores/rules'
 import type { ActionType, RuleSet } from '@/types/rule'
+
+const RUN_LOG_PAGE_SIZE = 25
 
 /**
  * Phase E RX.1 — read-only rules viewer.
@@ -51,6 +53,35 @@ const selectedRuleSet = computed(() =>
 
 function select(rs: RuleSet) {
   selectedId.value = rs.id
+}
+
+/**
+ * Phase E RX.1b — hydrate the run-log when a rule_set is picked. The
+ * server returns at most `RUN_LOG_PAGE_SIZE` entries per call; the
+ * "Load more" button below fetches subsequent pages.
+ *
+ * The `runLogPageHasMore` heuristic ("last page came back full →
+ * probably more") is the cheapest approach absent a server-side
+ * total-count surface. False positives (exactly N entries) cause one
+ * extra empty page; acceptable for an audit panel.
+ */
+const lastPageSize = ref(0)
+const runLogPageHasMore = computed(() => lastPageSize.value >= RUN_LOG_PAGE_SIZE)
+
+watch(selectedId, async (id) => {
+  if (id == null) return
+  const page = await rules.fetchRunLog(id, RUN_LOG_PAGE_SIZE, 0)
+  lastPageSize.value = page.length
+})
+
+async function loadMoreRunLog() {
+  if (selectedId.value == null) return
+  const page = await rules.fetchRunLog(
+    selectedId.value,
+    RUN_LOG_PAGE_SIZE,
+    rules.runLog.length,
+  )
+  lastPageSize.value = page.length
 }
 
 function actionTypeBadgeVariant(type: ActionType): 'info' | 'warning' | 'success' | 'neutral' {
@@ -196,6 +227,47 @@ function activePhases(gates: { administrativeDataEntry: boolean; initialDataEntr
                   </ul>
                 </li>
               </ul>
+            </div>
+
+            <!-- RX.1b — fire history (rule_action_run_log) -->
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                {{ t('rules.detail.runLogHeading', { count: rules.runLog.length }) }}
+              </div>
+              <p v-if="rules.isLoadingRunLog && rules.runLog.length === 0" class="mt-2 text-xs text-slate-500 italic">{{ t('common.loading') }}</p>
+              <p v-else-if="rules.runLogError" class="mt-2 text-xs text-rose-700">{{ rules.runLogError }}</p>
+              <p v-else-if="rules.runLog.length === 0" class="mt-2 text-xs text-slate-500 italic">{{ t('rules.detail.runLogEmpty') }}</p>
+              <div v-else class="mt-2 overflow-x-auto">
+                <table class="w-full text-xs">
+                  <thead>
+                    <tr class="text-left text-[10px] uppercase tracking-wider text-slate-500">
+                      <th class="px-2 py-1 font-semibold">{{ t('rules.detail.runLogColumn.action') }}</th>
+                      <th class="px-2 py-1 font-semibold">{{ t('rules.detail.runLogColumn.rule') }}</th>
+                      <th class="px-2 py-1 font-semibold">{{ t('rules.detail.runLogColumn.value') }}</th>
+                      <th class="px-2 py-1 font-semibold">{{ t('rules.detail.runLogColumn.when') }}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="entry in rules.runLog" :key="entry.id" class="border-t border-slate-100">
+                      <td class="px-2 py-1.5">
+                        <StatusPill :variant="actionTypeBadgeVariant(entry.actionType)">{{ t(`rules.actionType.${entry.actionType}`) }}</StatusPill>
+                      </td>
+                      <td class="px-2 py-1.5 font-mono text-[10px] text-slate-500 break-all">{{ entry.ruleOid ?? '—' }}</td>
+                      <td class="px-2 py-1.5 text-slate-700 break-all">{{ entry.value ?? '—' }}</td>
+                      <td class="px-2 py-1.5 text-slate-500">{{ entry.firedAt ?? '—' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <button
+                v-if="runLogPageHasMore"
+                type="button"
+                class="mt-2 px-3 py-1 text-xs border border-slate-200 rounded-md hover:bg-slate-50 disabled:opacity-50"
+                :disabled="rules.isLoadingRunLog"
+                @click="loadMoreRunLog"
+              >
+                {{ t('rules.detail.runLogLoadMore') }}
+              </button>
             </div>
           </div>
         </section>

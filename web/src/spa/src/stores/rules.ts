@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
-import type { RuleSet } from '@/types/rule'
+import type { RuleActionRunLogEntry, RuleSet } from '@/types/rule'
 
 /**
  * Phase E RX.1 — rules store (read-only).
@@ -19,6 +19,16 @@ export const useRulesStore = defineStore('rules', () => {
   const selected = ref<RuleSet | null>(null)
   const isLoadingSelected = ref(false)
   const selectedError = ref<string | null>(null)
+
+  /**
+   * Phase E RX.1b — fire-history rows for the currently inspected
+   * rule_set. Keyed by rule_set id so switching between rule_sets in
+   * the detail pane doesn't leak entries from the previous selection.
+   */
+  const runLog = ref<RuleActionRunLogEntry[]>([])
+  const runLogRuleSetId = ref<number | null>(null)
+  const isLoadingRunLog = ref(false)
+  const runLogError = ref<string | null>(null)
 
   async function load(): Promise<void> {
     isLoading.value = true
@@ -51,6 +61,42 @@ export const useRulesStore = defineStore('rules', () => {
     }
   }
 
+  /**
+   * Fetch a page of run-log entries for `ruleSetId`. Newest first
+   * (server orders by run-log id DESC). When `offset === 0` the
+   * existing array is replaced; otherwise the new page is appended
+   * (drives the "Load more" pattern in RulesView).
+   */
+  async function fetchRunLog(
+    ruleSetId: number,
+    limit = 25,
+    offset = 0,
+  ): Promise<RuleActionRunLogEntry[]> {
+    isLoadingRunLog.value = true
+    runLogError.value = null
+    if (offset === 0) {
+      runLog.value = []
+      runLogRuleSetId.value = ruleSetId
+    }
+    try {
+      const page = await apiGet<RuleActionRunLogEntry[]>(
+        `/pages/api/v1/rule-sets/${ruleSetId}/run-log?limit=${limit}&offset=${offset}`,
+      )
+      // Guard against race: if the user switched rule_sets while the
+      // page was in flight, drop the late response.
+      if (runLogRuleSetId.value !== ruleSetId) return page
+      runLog.value = offset === 0 ? page : runLog.value.concat(page)
+      return page
+    } catch (e) {
+      if (offset === 0) runLog.value = []
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) throw e
+      runLogError.value = humanError(e, 'load')
+      return []
+    } finally {
+      isLoadingRunLog.value = false
+    }
+  }
+
   function humanError(e: unknown, op: string): string {
     if (e instanceof ApiNetworkError) return `Backend nicht erreichbar — ${op} fehlgeschlagen.`
     if (e instanceof ApiError) {
@@ -67,7 +113,12 @@ export const useRulesStore = defineStore('rules', () => {
     selected,
     isLoadingSelected,
     selectedError,
+    runLog,
+    runLogRuleSetId,
+    isLoadingRunLog,
+    runLogError,
     load,
     fetchOne,
+    fetchRunLog,
   }
 })

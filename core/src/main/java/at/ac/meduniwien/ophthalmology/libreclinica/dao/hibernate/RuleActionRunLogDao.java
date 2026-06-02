@@ -11,6 +11,9 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate;
 
+import java.util.Collections;
+import java.util.List;
+
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.RuleActionRunLogBean;
 import org.hibernate.query.Query;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,5 +58,39 @@ public class RuleActionRunLogDao extends AbstractDomainDao<RuleActionRunLogBean>
         Query<?> q = getCurrentSession().createQuery(hql);
         q.setParameter("itemDataId", itemDataId);
         q.executeUpdate();
+    }
+
+    /**
+     * Phase E RX.1b — list run-log entries whose {@code rule_oc_oid}
+     * matches any of the supplied rule OIDs, newest first.
+     *
+     * <p>The {@code rule_action_run_log} table has no timestamp column
+     * (see {@code core/src/main/resources/migration/amethyst/2010-01-13-4575.xml}
+     * changeset {@code -8}), so the "newest first" ordering uses the
+     * auto-increment {@code id} as a serviceable proxy — fires are
+     * append-only, so id ordering matches insertion ordering.
+     *
+     * <p>Empty / null {@code ruleOids} returns an empty list without
+     * issuing a query (an empty {@code in} clause is invalid HQL on
+     * most dialects).
+     *
+     * @param ruleOids the {@code rule.oc_oid} values to filter by;
+     *                 typically gathered by walking a {@code rule_set}'s
+     *                 {@code rule_set_rule} rows.
+     * @param limit    maximum number of rows to return.
+     * @param offset   zero-based offset into the ordered result set.
+     */
+    @Transactional
+    public List<RuleActionRunLogBean> findByRuleOids(List<String> ruleOids, int limit, int offset) {
+        if (ruleOids == null || ruleOids.isEmpty()) {
+            return Collections.emptyList();
+        }
+        String hql = "from " + getDomainClassName()
+                + " r where r.ruleOid in (:ruleOids) order by r.id desc";
+        Query<RuleActionRunLogBean> q = getCurrentSession().createQuery(hql, RuleActionRunLogBean.class);
+        q.setParameterList("ruleOids", ruleOids);
+        q.setMaxResults(limit);
+        q.setFirstResult(offset);
+        return q.list();
     }
 }

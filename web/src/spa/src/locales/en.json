@@ -404,7 +404,16 @@
       "firesWhenTrue": "fires when expression is TRUE",
       "firesWhenFalse": "fires when expression is FALSE",
       "activeIn": "Active in",
-      "showRaw": "Show raw fields"
+      "showRaw": "Show raw fields",
+      "runLogHeading": "Recent fires ({count})",
+      "runLogEmpty": "No fire history for this rule set yet.",
+      "runLogLoadMore": "Load more",
+      "runLogColumn": {
+        "action": "Action",
+        "rule": "Rule OID",
+        "value": "Value at fire",
+        "when": "When"
+      }
     },
     "phase": {
       "admin": "Admin editing",

@@ -58,3 +58,24 @@ export interface RuleSet {
   status: string
   attachedRules: AttachedRule[]
 }
+
+/**
+ * Phase E RX.1b — one row of `rule_action_run_log`.
+ *
+ * The table has no timestamp column (see Liquibase changeset
+ * `migration/amethyst/2010-01-13-4575.xml` -8), so `firedAt` is
+ * always `null` today. The field stays in the wire contract so a
+ * future schema migration can populate it without bumping the
+ * contract.
+ *
+ * `itemDataId` is nullable because not every action type writes a
+ * per-item-data row (e.g. NOTIFICATION).
+ */
+export interface RuleActionRunLogEntry {
+  id: number
+  actionType: ActionType
+  ruleOid: string | null
+  itemDataId: number | null
+  value: string | null
+  firedAt: string | null
+}
