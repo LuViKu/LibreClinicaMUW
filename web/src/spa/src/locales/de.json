@@ -382,6 +382,49 @@
       "OPTIONAL": "Optional"
     }
   },
+  "rules": {
+    "title": "Regeln",
+    "subTrail": "Studienaufbau · Validierungs- + Aktionsregeln (nur Anzeige)",
+    "intro": "Zeigt, welche Validierungs-, Rückfrage-, Show/Hide- und Benachrichtigungs-Regeln dieser Studie zugeordnet sind. Wählen Sie links ein Ziel, um die zugewiesenen Regeln + Aktionen zu sehen. Das Bearbeiten erfolgt weiterhin über den XML-Import; die SPA-Erfassung kommt in einer Folge-Sub-Phase.",
+    "empty": "Noch keine Regeln in dieser Studie definiert.",
+    "searchPlaceholder": "Nach Ziel-OID, CRF, Regelname, Ausdruck filtern…",
+    "showingCount": "{visible} von {total} sichtbar",
+    "attachedCount": "{count} zugewiesene Regel(n)",
+    "pickPrompt": "Wählen Sie links einen Regel-Satz aus, um die Regeln und Aktionen zu sehen.",
+    "statusRemoved": "Entfernt",
+    "detail": {
+      "targetHeading": "Zielausdruck",
+      "sed": "Visiten-Definition",
+      "crf": "CRF",
+      "crfVersion": "CRF-Version",
+      "runSchedule": "Zeitplan",
+      "notScheduled": "Nur inline (kein Zeitplan)",
+      "scheduledNoTime": "Geplant (keine Uhrzeit gesetzt)",
+      "attachedRulesHeading": "Zugewiesene Regeln ({count})",
+      "firesWhenTrue": "feuert, wenn Ausdruck TRUE",
+      "firesWhenFalse": "feuert, wenn Ausdruck FALSE",
+      "activeIn": "Aktiv in",
+      "showRaw": "Rohwerte anzeigen"
+    },
+    "phase": {
+      "admin": "Admin-Bearbeitung",
+      "initial": "Erst-Eingabe",
+      "double": "Doppel-Eingabe",
+      "import": "Import",
+      "batch": "Batch"
+    },
+    "actionType": {
+      "FILE_DISCREPANCY_NOTE": "Rückfrage",
+      "EMAIL": "E-Mail",
+      "SHOW": "Anzeigen",
+      "INSERT": "Einfügen",
+      "HIDE": "Ausblenden",
+      "EVENT": "Visite planen",
+      "NOTIFICATION": "Benachrichtigung",
+      "RANDOMIZE": "Randomisieren",
+      "": "Unbekannt"
+    }
+  },
   "sites": {
     "title": "Standorte",
     "subTrail": "Studienaufbau · Multi-Center-Konfiguration",

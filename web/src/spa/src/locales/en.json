@@ -382,6 +382,49 @@
       "OPTIONAL": "Optional"
     }
   },
+  "rules": {
+    "title": "Rules",
+    "subTrail": "Build study · validation + action rules (read-only)",
+    "intro": "View what validation, discrepancy-note, show/hide, and notification rules attach to this study. Pick a target on the left to see the attached rules + actions. Editing rules still requires the legacy XML import workflow — inline authoring is queued in a follow-up slice.",
+    "empty": "No rules defined on this study yet.",
+    "searchPlaceholder": "Filter by target OID, CRF, rule name, expression…",
+    "showingCount": "{visible} of {total} shown",
+    "attachedCount": "{count} attached rule(s)",
+    "pickPrompt": "Pick a rule_set on the left to see its attached rules + actions.",
+    "statusRemoved": "Removed",
+    "detail": {
+      "targetHeading": "Target expression",
+      "sed": "Event definition",
+      "crf": "CRF",
+      "crfVersion": "CRF version",
+      "runSchedule": "Schedule",
+      "notScheduled": "Inline only (no schedule)",
+      "scheduledNoTime": "Scheduled (time unset)",
+      "attachedRulesHeading": "Attached rules ({count})",
+      "firesWhenTrue": "fires when expression is TRUE",
+      "firesWhenFalse": "fires when expression is FALSE",
+      "activeIn": "Active in",
+      "showRaw": "Show raw fields"
+    },
+    "phase": {
+      "admin": "Admin editing",
+      "initial": "Initial entry",
+      "double": "Double entry",
+      "import": "Import",
+      "batch": "Batch"
+    },
+    "actionType": {
+      "FILE_DISCREPANCY_NOTE": "Discrepancy note",
+      "EMAIL": "Email",
+      "SHOW": "Show",
+      "INSERT": "Insert",
+      "HIDE": "Hide",
+      "EVENT": "Schedule event",
+      "NOTIFICATION": "Notification",
+      "RANDOMIZE": "Randomize",
+      "": "Unknown"
+    }
+  },
   "sites": {
     "title": "Sites",
     "subTrail": "Build study · multi-center setup",
