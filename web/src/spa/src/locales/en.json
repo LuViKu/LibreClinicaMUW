@@ -316,6 +316,8 @@
     "sites": "Sites",
     "enrolledSubjects": "Enrolled subjects",
     "noDeepLinkYet": "View pending",
+    "createAction": "New study",
+    "editAction": "Edit identity",
     "status": {
       "not-started": "Not started",
       "in-progress": "In progress",
@@ -329,6 +331,33 @@
       "rules":        { "title": "Validation rules", "summary": "{count} rules", "description": "Field-level and cross-form predicates with action types." },
       "sites":        { "title": "Sites", "summary": "{count} sites", "description": "Per-site PI, address, recruitment cap." },
       "users":        { "title": "Users", "summary": "{count} users", "description": "Per-site Investigators, Monitors, Data Managers, CRCs." }
+    }
+  },
+  "studyForm": {
+    "name": "Study name",
+    "uniqueProtocolId": "Unique protocol ID",
+    "uniqueProtocolIdHint": "Short identifier used in every URL. Letters, digits, underscores, dashes. Cannot be changed after creation.",
+    "secondaryProtocolId": "Secondary protocol ID",
+    "briefSummary": "Brief summary",
+    "principalInvestigator": "Principal investigator",
+    "sponsor": "Sponsor",
+    "officialTitle": "Official title",
+    "protocolType": "Protocol type",
+    "protocolType_Interventional": "Interventional",
+    "protocolType_Observational": "Observational",
+    "phase": "Phase",
+    "create": {
+      "title": "Create a new study",
+      "subTrail": "Build study",
+      "intro": "Defines the protocol identity. You'll be enrolled as Coordinator on the new study and can configure events, CRFs, and sites from its dashboard. Sysadmin only.",
+      "submit": "Create study"
+    },
+    "edit": {
+      "title": "Edit study identity",
+      "subTrail": "Build study",
+      "intro": "Leave a field blank to keep its current value. Each change emits an audit-trail entry recording old + new values.",
+      "submit": "Save changes",
+      "leaveUnchanged": "— Leave unchanged —"
     }
   },
   "manageUsers": {

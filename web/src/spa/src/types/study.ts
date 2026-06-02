@@ -45,3 +45,68 @@ export type StudyBuildStatus =
     /** Per-task ordered list. */
     tasks: StudyBuildTask[]
   }
+
+/**
+ * Phase E A8.1 — study identity / protocol / metadata wire shape.
+ *
+ * Returned by `POST /api/v1/studies`, `PUT /api/v1/studies/{oid}`,
+ * and the disable / restore lifecycle endpoints. Distinct from
+ * {@link StudyBuildStatus} (which carries task counts) so the
+ * create/edit paths and the dashboard can evolve independently.
+ */
+export interface StudyIdentity {
+  oid: string
+  name: string
+  uniqueProtocolId: string
+  briefSummary: string
+  principalInvestigator: string
+  sponsor: string
+  officialTitle: string
+  secondaryProtocolId: string
+  collaborators: string
+  protocolDescription: string
+  contactEmail: string
+  protocolType: string
+  phase: string
+  status: string
+  parentStudyOid: string | null
+  parentStudyName: string | null
+}
+
+/**
+ * Phase E A8.1 — `POST /api/v1/studies` request body. Mirrors the
+ * legacy CreateStudyServlet fields collapsed into a single flat
+ * request.
+ */
+export interface CreateStudyInput {
+  name: string
+  uniqueProtocolId: string
+  briefSummary: string
+  principalInvestigator: string
+  sponsor: string
+  officialTitle?: string
+  secondaryProtocolId?: string
+  collaborators?: string
+  protocolDescription?: string
+  contactEmail?: string
+  protocolType?: string
+  phase?: string
+}
+
+/**
+ * Phase E A8.1 — `PUT /api/v1/studies/{oid}` request body. Every
+ * field optional; `undefined`/omitted means "leave unchanged".
+ */
+export interface UpdateStudyInput {
+  name?: string
+  briefSummary?: string
+  principalInvestigator?: string
+  sponsor?: string
+  officialTitle?: string
+  secondaryProtocolId?: string
+  collaborators?: string
+  protocolDescription?: string
+  contactEmail?: string
+  protocolType?: string
+  phase?: string
+}

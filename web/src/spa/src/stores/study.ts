@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
-import type { StudyBuildStatus } from '@/types/study'
+import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
+import type {
+  CreateStudyInput,
+  StudyBuildStatus,
+  StudyIdentity,
+  UpdateStudyInput,
+} from '@/types/study'
 
 /**
  * Phase E.7 + E.4 M12 — Study-build store.
@@ -58,6 +63,101 @@ export const useStudyStore = defineStore('study', () => {
     }
   }
 
+  /* ----------------------------------------------------------------- */
+  /* Phase E A8.1 — study identity CRUD                                */
+  /* ----------------------------------------------------------------- */
+
+  type CreateResult =
+    | { ok: true; study: StudyIdentity }
+    | { ok: false; fieldErrors: Record<string, string>; message?: string }
+
+  async function create(input: CreateStudyInput): Promise<CreateResult> {
+    return submitStudyMutation(
+      () => apiPost<StudyIdentity>('/pages/api/v1/studies', input),
+      'create',
+    )
+  }
+
+  async function update(oid: string, patch: UpdateStudyInput): Promise<CreateResult> {
+    return submitStudyMutation(
+      () => apiPut<StudyIdentity>(`/pages/api/v1/studies/${encodeURIComponent(oid)}`, patch),
+      'update',
+    )
+  }
+
+  async function disable(oid: string): Promise<boolean> {
+    return lifecycle(oid, 'disable')
+  }
+
+  async function restore(oid: string): Promise<boolean> {
+    return lifecycle(oid, 'restore')
+  }
+
+  async function submitStudyMutation(
+    op: () => Promise<StudyIdentity>,
+    label: 'create' | 'update',
+  ): Promise<CreateResult> {
+    try {
+      const study = await op()
+      return { ok: true, study }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Studie ${label} nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiError) {
+        const errBody = e.body as
+          | { message?: string; errors?: Array<{ field: string; message: string }> }
+          | null
+        const fieldErrors: Record<string, string> = {}
+        if (errBody?.errors) for (const fe of errBody.errors) fieldErrors[fe.field] = fe.message
+        return {
+          ok: false,
+          fieldErrors,
+          message: errBody?.message ?? `Studie ${label} fehlgeschlagen (HTTP ${e.status}).`,
+        }
+      }
+      if (e instanceof ApiNetworkError) {
+        return {
+          ok: false,
+          fieldErrors: {},
+          message: `Backend nicht erreichbar — Studie ${label} fehlgeschlagen. Bitte später erneut versuchen.`,
+        }
+      }
+      return {
+        ok: false,
+        fieldErrors: {},
+        message: e instanceof Error ? e.message : `Unbekannter Fehler beim Studie-${label}.`,
+      }
+    }
+  }
+
+  async function lifecycle(oid: string, op: 'disable' | 'restore'): Promise<boolean> {
+    try {
+      await apiPost<StudyIdentity>(
+        `/pages/api/v1/studies/${encodeURIComponent(oid)}/${op}`,
+        {},
+      )
+      return true
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Studie ${op} nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value = `Backend nicht erreichbar — Studie ${op} fehlgeschlagen.`
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Studie ${op} fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : `Unbekannter Fehler beim Studie-${op}.`
+      }
+      return false
+    }
+  }
+
   return {
     status,
     isLoading,
@@ -66,5 +166,9 @@ export const useStudyStore = defineStore('study', () => {
     totalTasks,
     percentComplete,
     load,
+    create,
+    update,
+    disable,
+    restore,
   }
 })
