@@ -290,7 +290,9 @@
     },
     "action": {
       "saveDraft": "Save draft",
-      "markComplete": "Mark CRF complete"
+      "markComplete": "Mark CRF complete",
+      "reopen": "Reopen CRF",
+      "reopenConfirm": "Reopen this CRF for editing? Previously signed-off data will be editable again. The action is recorded in the audit trail."
     }
   },
   "buildStudy": {

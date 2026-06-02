@@ -164,6 +164,55 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     }
   }
 
+  /**
+   * Phase E A5 — reopen a previously-completed CRF for editing.
+   * The backend (`POST /api/v1/eventCrfs/{id}/markIncomplete`)
+   * enforces role gates (Investigator / CRC / DM / Admin permitted;
+   * Monitor / RA forbidden) plus state guards (locked / signed / not
+   * currently complete return 409).
+   *
+   * <p>On success the entry's status flips back to whatever
+   * `computeStatus` reports (typically `in-progress`); the SPA's
+   * form fields become editable again. The lastSavedAt timestamp
+   * stays at the previous save (reopen doesn't write item data).
+   */
+  async function reopen(): Promise<void> {
+    if (!entry.value) return
+    if (entry.value.status !== 'complete') {
+      error.value =
+        'CRF ist nicht abgeschlossen — kein Wiedereröffnen erforderlich.'
+      return
+    }
+    const target = entry.value
+    isSaving.value = true
+    error.value = null
+    try {
+      const response = await apiPost<MarkCompleteResponse>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}/markIncomplete`,
+        {},
+      )
+      target.status = (response.status as typeof target.status) ?? 'in-progress'
+      target.lastSavedAt = response.lastSavedAt ?? target.lastSavedAt
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Wiedereröffnen nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Wiedereröffnen fehlgeschlagen. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Wiedereröffnen fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Wiedereröffnen.'
+      }
+    } finally {
+      isSaving.value = false
+    }
+  }
+
   return {
     entry,
     isLoading,
@@ -179,6 +228,7 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     setValue,
     save,
     markComplete,
+    reopen,
   }
 })
 

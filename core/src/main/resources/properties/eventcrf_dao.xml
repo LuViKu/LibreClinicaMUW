@@ -457,6 +457,19 @@
             WHERE EVENT_CRF_ID=?
         </sql>
     </query>
+    <!-- Phase E A5 — inverse of markCompleteIDE: clears DATE_COMPLETED
+         so the CRF transitions from the legacy DataEntryStage
+         INITIAL_DATA_ENTRY_COMPLETE (3) back to INITIAL_DATA_ENTRY (2),
+         re-enabling the SPA's CRF-entry form. The status_id stays
+         AVAILABLE — locked/signed CRFs are blocked at the controller. -->
+    <query>
+        <name>markIncompleteIDE</name>
+        <sql>
+            UPDATE EVENT_CRF
+            SET DATE_COMPLETED=NULL
+            WHERE EVENT_CRF_ID=?
+        </sql>
+    </query>
     <query>
         <name>findByPKAndStudy</name>
         <sql>

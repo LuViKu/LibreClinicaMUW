@@ -290,7 +290,9 @@
     },
     "action": {
       "saveDraft": "Entwurf speichern",
-      "markComplete": "CRF als abgeschlossen markieren"
+      "markComplete": "CRF als abgeschlossen markieren",
+      "reopen": "CRF erneut öffnen",
+      "reopenConfirm": "Dieses CRF wieder zur Bearbeitung freigeben? Bereits abgezeichnete Daten werden wieder editierbar. Die Aktion wird im Audit-Trail vermerkt."
     }
   },
   "buildStudy": {

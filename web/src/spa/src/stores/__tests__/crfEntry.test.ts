@@ -188,4 +188,69 @@ describe('useCrfEntryStore', () => {
     expect(store.status).toBe('complete')
     expect(store.error).toBeNull()
   })
+
+  /* ---------------------------------------------------------------- */
+  /* Phase E A5 — reopen()                                            */
+  /* ---------------------------------------------------------------- */
+
+  it('reopen POSTs to /markIncomplete with the right URL', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    // Force the entry into a completed state without running the
+    // markComplete flow (that would consume the apiPost mock too).
+    if (store.entry) store.entry.status = 'complete'
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      eventCrfOid: 'EC_M001_V1_DEMO',
+      status: 'in-progress',
+      lastSavedAt: '2026-06-02T10:00:00Z',
+    })
+
+    await store.reopen()
+
+    expect(apiPost).toHaveBeenCalledWith(
+      '/pages/api/v1/eventCrfs/EC_M001_V1_DEMO/markIncomplete',
+      {},
+    )
+    expect(store.entry?.status).toBe('in-progress')
+    expect(store.error).toBeNull()
+  })
+
+  it('reopen refuses early when status is not complete', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    // The seeded demo loader leaves the entry at 'in-progress'.
+    expect(store.entry?.status).not.toBe('complete')
+    await store.reopen()
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(store.error).toMatch(/nicht abgeschlossen/)
+  })
+
+  it('reopen surfaces a 403 forbidden message via error', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.status = 'complete'
+    const { ApiError } = await import('@/api/client')
+    const forbidden = new ApiError(403, 'Forbidden',
+      { message: 'Your role does not permit reopening completed CRFs' })
+    ;(apiPost as ReturnType<typeof vi.fn>).mockRejectedValueOnce(forbidden)
+
+    await expect(store.reopen()).rejects.toBe(forbidden)
+    expect(store.error).toBe('Your role does not permit reopening completed CRFs')
+    expect(store.entry?.status).toBe('complete')
+  })
+
+  it('reopen surfaces a 409 lock conflict via error', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.status = 'complete'
+    const { ApiError } = await import('@/api/client')
+    ;(apiPost as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new ApiError(409, 'Conflict',
+        { message: 'event_crf 1 is locked or signed' }),
+    )
+
+    await store.reopen()
+    expect(store.error).toBe('event_crf 1 is locked or signed')
+    expect(store.entry?.status).toBe('complete')
+  })
 })

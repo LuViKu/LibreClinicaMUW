@@ -481,6 +481,111 @@ public class EventCrfsApiController {
     }
 
     /**
+     * Phase E A5 — reopen a completed CRF for editing. Inverse of
+     * {@link #markComplete} — clears {@code date_completed} so the
+     * legacy {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage}
+     * transitions from {@code INITIAL_DATA_ENTRY_COMPLETE} (3) back
+     * to {@code INITIAL_DATA_ENTRY} (2), re-enabling the SPA's CRF
+     * entry form.
+     *
+     * <p>Guards (order matters — failing earlier guards return earlier
+     * status codes):
+     * <ol>
+     *   <li>{@code 401} — no authenticated user.</li>
+     *   <li>{@code 400} — no active study bound.</li>
+     *   <li>{@code 404} — no event_crf with that id.</li>
+     *   <li>{@code 403} — event_crf belongs to a study the caller's
+     *       site-visibility set excludes.</li>
+     *   <li>{@code 409} — event_crf is {@code LOCKED} or {@code SIGNED}
+     *       (terminal states; reopen requires un-sign first via legacy
+     *       admin path).</li>
+     *   <li>{@code 409} — event_crf is not currently complete
+     *       ({@code date_completed} already null). Idempotent return
+     *       would be wrong here — the caller likely sees stale UI
+     *       state and should refetch.</li>
+     *   <li>{@code 403} — caller's role does not permit reopen (per
+     *       {@link CrfReopenAuthorization}).</li>
+     * </ol>
+     *
+     * <p>Mirrors the legacy {@code ResetEventCrfServlet} but with one
+     * REST endpoint instead of the multi-step JSP confirmation flow.
+     * The SPA renders the "Confirm reopen" dialog client-side; this
+     * endpoint trusts the click.
+     *
+     * <p>Writes one audit_event row with action_message
+     * {@code event_crf_reopen} so the M10 Audit Log view surfaces it.
+     */
+    @PostMapping("/{id:[0-9]+}/markIncomplete")
+    public ResponseEntity<?> markIncomplete(@PathVariable("id") int eventCrfId,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."
+            ));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+
+        if (ecb.getStatus() == Status.LOCKED || ecb.getStatus() == Status.SIGNED) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is locked or signed — "
+                            + "un-sign / unlock via the legacy admin path before reopening"));
+        }
+        if (ecb.getDateCompleted() == null) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is not currently complete"));
+        }
+
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!CrfReopenAuthorization.roleMayReopen(roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit reopening completed CRFs"));
+        }
+
+        String previousCompletedAt = ecb.getDateCompleted().toInstant().toString();
+        eventCrfDAO.markIncomplete(ecb);
+
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                "event_crf_reopen", "event_crf", ecb.getId(),
+                /* columnName */ "date_completed",
+                /* old */ previousCompletedAt,
+                /* new */ "");
+
+        EventCRFBean refreshed = eventCrfDAO.findByPK(ecb.getId());
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("eventCrfOid", String.valueOf(refreshed.getId()));
+        out.put("status", computeStatus(refreshed, true));
+        out.put("lastSavedAt", formatIsoInstant(latestUpdate(refreshed)));
+
+        LOG.info("CRF markIncomplete: event_crf {} reopened by user {} (role {}); study {}",
+                refreshed.getId(), currentUser.getName(), roleId, currentStudy.getOid());
+
+        return ResponseEntity.ok(out);
+    }
+
+    /**
      * Single audit-event row capturing the change. The legacy
      * {@link AuditEventDAO#create} only persists the {@code audit_table /
      * user_id / entity_id / reason_for_change / action_message} columns
