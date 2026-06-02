@@ -159,7 +159,17 @@
       "markAsVerified": "{count} als verifiziert markieren (SDV)",
       "cancelSelection": "Abbrechen",
       "addQuery": "Rückfrage stellen",
-      "openCrf": "CRF öffnen"
+      "openCrf": "CRF öffnen",
+      "unverify": "Verifizierung zurücknehmen"
+    },
+    "unverify": {
+      "title": "Verifizierung zurücknehmen?",
+      "intro": "Die SDV-Markierung wird zurückgesetzt; das CRF erscheint wieder in der Prüfqueue. Der Vorgang wird mit Begründung im Audit Trail dokumentiert.",
+      "reasonLabel": "Begründung",
+      "reasonPlaceholder": "z. B. »Quelldatum nach Verifizierung korrigiert«",
+      "submit": "Verifizierung zurücknehmen",
+      "reasonRequired": "Begründung erforderlich.",
+      "unknownError": "Unbekannter Fehler bei der Un-Verifizierung."
     },
     "toast": {
       "verifiedCount": "{count} CRF(s) als verifiziert markiert."

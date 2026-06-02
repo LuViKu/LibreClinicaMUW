@@ -31,3 +31,25 @@ export type SdvRow =
     status: SdvStatus
     requirement: SdvRequirement
   }
+
+/* ------------------------------------------------------------------ */
+/* Phase E A6 — un-verify role helper.                                */
+/*                                                                    */
+/* Mirrors SdvUnverifyAuthorization.java backend-side:                */
+/*   permitted: Monitor, Data Manager, Administrator                  */
+/*   forbidden: Investigator, CRC, RA, RA2                            */
+/*                                                                    */
+/* Status guard: row must be currently 'verified' (no point           */
+/* un-verifying pending / query / locked).                            */
+/* ------------------------------------------------------------------ */
+
+import type { UserRole } from './auth'
+
+export function canUnverifySdv(role: UserRole, status: SdvStatus): boolean {
+  if (status !== 'verified') return false
+  return (
+    role === 'Monitor' ||
+    role === 'Data Manager' ||
+    role === 'Administrator'
+  )
+}

@@ -68,6 +68,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sdv/unverify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unverify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/activeStudy": {
         parameters: {
             query?: never;
@@ -396,6 +412,10 @@ export interface components {
             eventCrfOids?: string[];
             verified?: boolean;
         };
+        UnverifyRequest: {
+            eventCrfOids?: string[];
+            reason?: string;
+        };
         ActiveStudyRequest: {
             oid?: string;
         };
@@ -700,6 +720,30 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    unverify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnverifyRequest"];
             };
         };
         responses: {

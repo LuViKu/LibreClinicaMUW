@@ -31,7 +31,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDe
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
@@ -302,6 +304,136 @@ public class SdvApiController {
         response.put("verifiedBy", ub.getName());
         LOG.info("Bulk SDV verify=({}) by user={}: {} verified, {} rejected",
                 targetState, ub.getName(), verified.size(), rejected.size());
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Phase E A6 — un-verify a batch of {@code event_crf} rows.
+     * Inverse of {@link #verify}: flips {@code sdv_status} back to
+     * {@code FALSE} so a Monitor can re-verify or a DM can return
+     * the row to the queue.
+     *
+     * <p>Guards (order matters):
+     * <ol>
+     *   <li>{@code 401} — no authenticated user.</li>
+     *   <li>{@code 400} — no active study bound.</li>
+     *   <li>{@code 400} — body missing {@code eventCrfOids} or
+     *       {@code reason}.</li>
+     *   <li>{@code 403} — caller's role is not Monitor / DM / Admin
+     *       (per {@link SdvUnverifyAuthorization}).</li>
+     *   <li>Per-row: {@code event_crf} outside the caller's
+     *       site-visibility set → row rejected; otherwise the row's
+     *       {@code sdv_status} is flipped to false.</li>
+     * </ol>
+     *
+     * <p>Writes one {@code audit_log_event} row per successfully
+     * un-verified CRF — captures the caller's id, the
+     * {@code event_crf_id}, and the {@code reason} the body
+     * supplied. Audit emission is wrapped in a try/catch (per the
+     * {@code EventCrfsApiController.writeAuditEvent} convention)
+     * so an audit-write failure does not roll back the SDV change.
+     *
+     * <p>Mirrors the legacy {@code handleSDVRemove} servlet but with
+     * one REST endpoint per click instead of the multi-step JSP form.
+     */
+    @PostMapping("/unverify")
+    public ResponseEntity<?> unverify(@RequestBody UnverifyRequest body, HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        if (body == null || body.eventCrfOids() == null || body.eventCrfOids().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "'eventCrfOids' is required"));
+        }
+        if (body.reason() == null || body.reason().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "'reason' is required — un-verify must capture a justification "
+                            + "for the audit trail"));
+        }
+
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!SdvUnverifyAuthorization.roleMayUnverify(roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit un-verifying CRFs"));
+        }
+
+        EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
+        StudySubjectDAO studySubjectDao = new StudySubjectDAO(dataSource);
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        List<String> unverified = new ArrayList<>();
+        List<String> rejected = new ArrayList<>();
+
+        for (String oid : body.eventCrfOids()) {
+            int id;
+            try { id = Integer.parseInt(oid); }
+            catch (NumberFormatException nfe) { rejected.add(oid); continue; }
+            if (id <= 0) { rejected.add(oid); continue; }
+
+            EventCRFBean ec = (EventCRFBean) eventCrfDao.findByPK(id);
+            if (ec == null || ec.getId() == 0) { rejected.add(oid); continue; }
+
+            StudySubjectBean ss = (StudySubjectBean) studySubjectDao.findByPK(ec.getStudySubjectId());
+            if (ss == null || !visibleStudyIds.contains(ss.getStudyId())) {
+                rejected.add(oid);
+                continue;
+            }
+
+            // Skip rows that are already unverified — the SPA may have
+            // sent a stale view, no need to rewrite the row.
+            if (!ec.isSdvStatus()) {
+                rejected.add(oid);
+                continue;
+            }
+
+            try {
+                eventCrfDao.setSDVStatus(false, ub.getId(), id);
+                unverified.add(oid);
+
+                // Audit row capturing the un-verify + reason. Wrapped
+                // in try/catch so audit-write failures don't roll
+                // back the user-facing state change.
+                try {
+                    AuditEventBean ae = new AuditEventBean();
+                    ae.setUserId(ub.getId());
+                    ae.setStudyId(ss.getStudyId());
+                    ae.setSubjectId(ss.getId());
+                    ae.setStudyName(currentStudy.getName() == null ? "" : currentStudy.getName());
+                    ae.setSubjectName(ss.getLabel() == null ? "" : ss.getLabel());
+                    ae.setAuditTable("event_crf");
+                    ae.setEntityId(id);
+                    ae.setColumnName("sdv_status");
+                    ae.setOldValue("true");
+                    ae.setNewValue("false");
+                    ae.setActionMessage("event_crf_sdv_unverify: " + body.reason().trim());
+                    auditDAO.create(ae);
+                } catch (Exception auditEx) {
+                    LOG.warn("Audit write failed for unverify event_crf={} (continuing): {}",
+                            id, auditEx.getMessage());
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to flip sdv_status to false on event_crf id={}", id, e);
+                rejected.add(oid);
+            }
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("unverified", unverified);
+        response.put("rejected", rejected);
+        response.put("unverifiedCount", unverified.size());
+        response.put("unverifiedAt", Instant.now().truncatedTo(ChronoUnit.SECONDS).toString());
+        response.put("unverifiedBy", ub.getName());
+        LOG.info("Bulk SDV unverify by user={} role={}: {} unverified, {} rejected; reason='{}'",
+                ub.getName(), roleId, unverified.size(), rejected.size(), body.reason());
         return ResponseEntity.ok(response);
     }
 
