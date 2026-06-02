@@ -1014,6 +1014,11 @@ public class SubjectsApiController {
                     "No study subject '" + studySubjectOid + "' in your visible study set"));
         }
 
+        ResponseEntity<?> lockRefusal = SubjectLockGuard.refuseIfLocked(ss, "editing subject demographics");
+        if (lockRefusal != null) {
+            return lockRefusal;
+        }
+
         if (ss.getStatus() != null
                 && (ss.getStatus().equals(Status.DELETED)
                     || ss.getStatus().equals(Status.SIGNED))) {

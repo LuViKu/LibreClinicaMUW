@@ -21,6 +21,7 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DataEntryStage;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
@@ -287,6 +288,14 @@ public class SdvApiController {
                 continue;
             }
 
+            // Phase E A3-lock follow-up — refuse SDV flips on locked
+            // subjects' CRFs. SDV is a data attestation; freezing it
+            // alongside the data preserves the audit semantics.
+            if (ss.getStatus() != null && ss.getStatus().equals(Status.LOCKED)) {
+                rejected.add(oid);
+                continue;
+            }
+
             try {
                 eventCrfDao.setSDVStatus(targetState, ub.getId(), id);
                 verified.add(oid);
@@ -384,6 +393,13 @@ public class SdvApiController {
 
             StudySubjectBean ss = (StudySubjectBean) studySubjectDao.findByPK(ec.getStudySubjectId());
             if (ss == null || !visibleStudyIds.contains(ss.getStudyId())) {
+                rejected.add(oid);
+                continue;
+            }
+
+            // Phase E A3-lock follow-up — locked subjects' SDV state
+            // is frozen alongside their data. Skip without writing.
+            if (ss.getStatus() != null && ss.getStatus().equals(Status.LOCKED)) {
                 rejected.add(oid);
                 continue;
             }
