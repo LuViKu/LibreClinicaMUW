@@ -316,6 +316,8 @@
     "sites": "Standorte",
     "enrolledSubjects": "Aufgenommene Teilnehmer",
     "noDeepLinkYet": "Ansicht ausstehend",
+    "createAction": "Neue Studie",
+    "editAction": "Identität bearbeiten",
     "status": {
       "not-started": "Nicht begonnen",
       "in-progress": "In Bearbeitung",
@@ -329,6 +331,33 @@
       "rules":        { "title": "Validierungsregeln", "summary": "{count} Regeln", "description": "Feld- und formularübergreifende Prädikate mit Aktionstypen." },
       "sites":        { "title": "Standorte", "summary": "{count} Standorte", "description": "Pro Standort PI, Anschrift, Rekrutierungs-Obergrenze." },
       "users":        { "title": "Nutzer/-innen", "summary": "{count} Personen", "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs." }
+    }
+  },
+  "studyForm": {
+    "name": "Studienname",
+    "uniqueProtocolId": "Eindeutige Protokoll-ID",
+    "uniqueProtocolIdHint": "Kurzkennung für alle URLs. Buchstaben, Ziffern, Unterstriche, Bindestriche. Nach Anlage nicht änderbar.",
+    "secondaryProtocolId": "Sekundäre Protokoll-ID",
+    "briefSummary": "Kurzbeschreibung",
+    "principalInvestigator": "Studienleitung",
+    "sponsor": "Sponsor",
+    "officialTitle": "Offizieller Titel",
+    "protocolType": "Protokolltyp",
+    "protocolType_Interventional": "Interventionell",
+    "protocolType_Observational": "Beobachtend",
+    "phase": "Phase",
+    "create": {
+      "title": "Neue Studie anlegen",
+      "subTrail": "Studienaufbau",
+      "intro": "Definiert die Protokoll-Identität. Sie werden als Koordinator/in der neuen Studie zugewiesen und können von dort Visiten, CRFs und Standorte konfigurieren. Sysadmin only.",
+      "submit": "Studie anlegen"
+    },
+    "edit": {
+      "title": "Studien-Identität bearbeiten",
+      "subTrail": "Studienaufbau",
+      "intro": "Lassen Sie ein Feld leer, um den aktuellen Wert beizubehalten. Jede Änderung erzeugt einen Audit-Trail-Eintrag mit alt + neu.",
+      "submit": "Änderungen speichern",
+      "leaveUnchanged": "— Unverändert lassen —"
     }
   },
   "manageUsers": {

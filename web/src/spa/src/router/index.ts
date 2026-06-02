@@ -74,6 +74,19 @@ const router = createRouter({
       component: () => import('@/views/BuildStudyView.vue'),
       meta: { title: 'Build Study', role: 'Data Manager' as const },
     },
+    /* Phase E A8.1 — Study identity create/edit (sysadmin only). */
+    {
+      path: '/studies/new',
+      name: 'study-create',
+      component: () => import('@/views/CreateStudyView.vue'),
+      meta: { title: 'Create Study', role: 'Administrator' as const },
+    },
+    {
+      path: '/studies/:oid/edit',
+      name: 'study-edit',
+      component: () => import('@/views/StudyIdentityEditView.vue'),
+      meta: { title: 'Edit Study', role: 'Administrator' as const },
+    },
     {
       path: '/manage-users',
       name: 'manage-users',

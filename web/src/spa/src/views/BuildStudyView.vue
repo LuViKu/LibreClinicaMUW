@@ -1,17 +1,24 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 
 import { useStudyStore } from '@/stores/study'
+import { useAuthStore } from '@/stores/auth'
 import type { StudyBuildTaskId, StudyBuildTaskStatus } from '@/types/study'
 
 const { t } = useI18n()
 const study = useStudyStore()
+const auth = useAuthStore()
 
-onMounted(() => { if (!study.status) study.load() })
+onMounted(() => { if (!study.status) study.load(auth.user?.activeStudy?.oid) })
+
+// Phase E A8.1 — Administrator-only create/edit affordances. The
+// backend re-checks sysadmin authoritatively.
+const canManageStudy = computed(() => auth.user?.role === 'Administrator')
+const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 
 function variantFor(s: StudyBuildTaskStatus): 'success' | 'warning' | 'neutral' {
   switch (s) {
@@ -57,10 +64,27 @@ function iconFor(id: StudyBuildTaskId): string {
       <p v-else-if="study.error" class="text-rose-700">{{ study.error }}</p>
 
       <template v-else-if="study.status">
-        <div class="mb-6">
-          <div class="text-xs text-slate-500 mb-1">{{ t('buildStudy.subTrail', { study: study.status.studyName, version: study.status.studyVersion }) }}</div>
-          <h1 class="text-xl font-semibold tracking-tight">{{ t('buildStudy.title') }}</h1>
-          <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">{{ t('buildStudy.intro') }}</p>
+        <div class="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <div class="text-xs text-slate-500 mb-1">{{ t('buildStudy.subTrail', { study: study.status.studyName, version: study.status.studyVersion }) }}</div>
+            <h1 class="text-xl font-semibold tracking-tight">{{ t('buildStudy.title') }}</h1>
+            <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">{{ t('buildStudy.intro') }}</p>
+          </div>
+          <div v-if="canManageStudy" class="flex items-center gap-2">
+            <RouterLink
+              v-if="activeStudyOid"
+              :to="`/studies/${activeStudyOid}/edit`"
+              class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+            >
+              {{ t('buildStudy.editAction') }}
+            </RouterLink>
+            <RouterLink
+              to="/studies/new"
+              class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium"
+            >
+              {{ t('buildStudy.createAction') }}
+            </RouterLink>
+          </div>
         </div>
 
         <!-- Progress card -->
