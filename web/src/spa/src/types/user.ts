@@ -72,3 +72,25 @@ export interface CreateUserResult {
   user: StudyUser
   generatedPassword: string | null
 }
+
+/**
+ * Phase E A7.2 — `PUT /api/v1/users/{username}` request body.
+ *
+ * Every field is optional: omit a field (or pass `undefined`) to
+ * leave it unchanged. Pass an empty string only for fields that
+ * legitimately may be cleared (currently `phone` and `authtype`).
+ *
+ * `username` is NOT editable — identity rename is unsupported. Use
+ * the A7.4 reset-password endpoint for credential changes and the
+ * A7.3 disable/restore endpoints for lifecycle.
+ */
+export interface UpdateUserInput {
+  firstName?: string
+  lastName?: string
+  email?: string
+  phone?: string
+  institutionalAffiliation?: string
+  userType?: 'USER' | 'SYSADMIN' | 'TECHADMIN'
+  authtype?: string
+  runWebservices?: boolean
+}

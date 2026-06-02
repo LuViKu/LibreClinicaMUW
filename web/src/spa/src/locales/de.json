@@ -338,6 +338,7 @@
     "showingCount": "{visible} von {total} sichtbar",
     "empty": "Keine Nutzer/-innen für den aktuellen Filter.",
     "inviteAction": "Nutzer/-in einladen",
+    "editRow": "Bearbeiten",
     "onlyActive": "Nur aktive",
     "studyWide": "Studienweit",
     "activeYes": "Aktiv",
@@ -380,6 +381,20 @@
       "successIntro": "Nutzer/in angelegt. Übergeben Sie dieses Einmal-Passwort der/dem neuen Nutzer/in; bei der ersten Anmeldung muss es geändert werden.",
       "copyPassword": "Kopieren",
       "firstLoginNote": "Das Passwort wird einmal angezeigt und nicht gespeichert. Bitte vor dem Schließen sichern."
+    },
+    "edit": {
+      "title": "Profil bearbeiten",
+      "username": "Benutzername",
+      "usernameNote": "Der Benutzername kann nicht geändert werden.",
+      "role": "Rolle",
+      "roleNote": "Rollenzuweisungen über den Rollen-Dialog verwalten.",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "affiliation": "Institutszugehörigkeit",
+      "submit": "Änderungen speichern",
+      "successFlash": "Profil aktualisiert."
     }
   },
   "importCrf": {

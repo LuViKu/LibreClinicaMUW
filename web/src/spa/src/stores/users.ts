@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
-import type { CreateUserInput, CreateUserResult, StudyUser, UserAuth, UserRole } from '@/types/user'
+import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
+import type { CreateUserInput, CreateUserResult, StudyUser, UpdateUserInput, UserAuth, UserRole } from '@/types/user'
 
 /**
  * Phase E.7 + E.4 M12 — Study-users store.
@@ -131,6 +131,67 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  /**
+   * Phase E A7.2 — edit a user's profile via
+   * `PUT /api/v1/users/{username}`.
+   *
+   * Optional-fields semantics: only the fields the caller passes are
+   * forwarded; the backend treats a field absent from the body as
+   * "leave unchanged". On success replaces the matching matrix row;
+   * on 400 returns a discriminated-union failure for per-field
+   * messaging.
+   */
+  async function updateUser(
+    username: string,
+    patch: UpdateUserInput,
+  ): Promise<
+    | { ok: true; user: StudyUser }
+    | { ok: false; fieldErrors: Record<string, string>; message?: string }
+  > {
+    try {
+      const updated = await apiPut<StudyUser>(
+        `/pages/api/v1/users/${encodeURIComponent(username)}`,
+        patch,
+      )
+      const idx = rows.value.findIndex((u) => u.username === username)
+      if (idx >= 0) rows.value[idx] = updated
+      return { ok: true, user: updated }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Bearbeiten nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiError) {
+        const errBody = e.body as
+          | { message?: string; errors?: Array<{ field: string; message: string }> }
+          | null
+        const fieldErrors: Record<string, string> = {}
+        if (errBody?.errors) {
+          for (const fe of errBody.errors) fieldErrors[fe.field] = fe.message
+        }
+        return {
+          ok: false,
+          fieldErrors,
+          message: errBody?.message ?? `Bearbeiten fehlgeschlagen (HTTP ${e.status}).`,
+        }
+      }
+      if (e instanceof ApiNetworkError) {
+        return {
+          ok: false,
+          fieldErrors: {},
+          message:
+            'Backend nicht erreichbar — Bearbeiten fehlgeschlagen. Bitte später erneut versuchen.',
+        }
+      }
+      return {
+        ok: false,
+        fieldErrors: {},
+        message: e instanceof Error ? e.message : 'Unbekannter Fehler beim Bearbeiten.',
+      }
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -146,5 +207,6 @@ export const useUsersStore = defineStore('users', () => {
     clearFilters,
     load,
     createUser,
+    updateUser,
   }
 })

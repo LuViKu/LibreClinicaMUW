@@ -8,10 +8,11 @@ import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import InviteUserDialog from '@/components/InviteUserDialog.vue'
+import EditUserDialog from '@/components/EditUserDialog.vue'
 
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
-import type { UserAuth, UserRole } from '@/types/user'
+import type { StudyUser, UserAuth, UserRole } from '@/types/user'
 
 const { t } = useI18n()
 const users = useUsersStore()
@@ -23,6 +24,15 @@ onMounted(() => { if (users.rows.length === 0) users.load() })
    The backend ALSO re-checks; this hides the affordance for non-admins. */
 const canInvite = computed(() => auth.user?.role === 'Administrator')
 const inviteOpen = ref(false)
+
+/* Phase E A7.2 — Edit dialog state. The per-row "Edit" button opens
+   the modal with the row pre-filled. Same sysadmin gate as Invite. */
+const editOpen = ref(false)
+const editTarget = ref<StudyUser | null>(null)
+function openEdit(u: StudyUser) {
+  editTarget.value = u
+  editOpen.value = true
+}
 
 function roleVariant(r: UserRole): 'investigator' | 'monitor' | 'data-manager' | 'neutral' {
   switch (r) {
@@ -200,12 +210,19 @@ function formatDate(iso: string | null): string {
             <StatusPill v-else variant="neutral">{{ t('manageUsers.activeNo') }}</StatusPill>
           </td>
           <td class="px-3 py-2 text-right">
-            <button class="text-muw-blue hover:underline text-xs">{{ t('common.next') }}</button>
+            <button
+              v-if="canInvite"
+              class="text-muw-blue hover:underline text-xs"
+              @click="openEdit(u)"
+            >
+              {{ t('manageUsers.editRow') }}
+            </button>
           </td>
         </tr>
       </DenseTable>
     </main>
 
     <InviteUserDialog v-model:open="inviteOpen" @close="users.load()" />
+    <EditUserDialog v-model:open="editOpen" :user="editTarget" />
   </div>
 </template>
