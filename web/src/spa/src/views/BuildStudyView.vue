@@ -30,6 +30,7 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 function deepLinkFor(taskId: StudyBuildTaskId, backendTo: string | null): string | null {
   switch (taskId) {
     case 'events': return '/event-definitions'
+    case 'crf':    return '/crf-library'
     case 'users':  return '/manage-users'
     default:       return backendTo
   }

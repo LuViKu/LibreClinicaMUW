@@ -333,6 +333,32 @@
       "users":        { "title": "Users", "summary": "{count} users", "description": "Per-site Investigators, Monitors, Data Managers, CRCs." }
     }
   },
+  "crfLibrary": {
+    "title": "CRF Library",
+    "subTrail": "Build study · form library + versions",
+    "intro": "Manage the form library shared across all studies in this deployment. Upload .xls / .xlsx spreadsheets to create new versions; attach versions to event definitions on the Events surface.",
+    "parserDeferredNote": "Uploaded files are stored and registered, but the spreadsheet item parser is wired in a follow-up slice. Until then the CRF row is created but the items list stays empty.",
+    "createAction": "New CRF",
+    "createHeading": "Create CRF shell",
+    "submitCreate": "Create CRF",
+    "uploadVersion": "Upload version",
+    "uploadHeading": "Upload new version of \"{name}\"",
+    "uploadIntro": "Choose a .xls / .xlsx file. Give the version a short name (e.g. v1.0, v1.1). The revision notes field captures what changed since the previous version.",
+    "submitUpload": "Upload",
+    "fileLabel": "Spreadsheet",
+    "versionName": "Version name",
+    "versionDescription": "Version description",
+    "revisionNotes": "Revision notes",
+    "crfName": "CRF name",
+    "crfDescription": "Description",
+    "versions": "Versions",
+    "includeRemoved": "Include removed",
+    "statusRemoved": "Removed",
+    "disable": "Remove",
+    "disableConfirm": "Remove CRF \"{name}\"? Active assignments stay intact for audit but new data entry is blocked. The action is recorded in the audit trail.",
+    "disableVersionConfirm": "Remove version \"{version}\" of \"{name}\"? Subjects currently entering data against this version are unaffected; new data entry will use the remaining versions.",
+    "empty": "No CRFs in the library yet."
+  },
   "eventDefinitions": {
     "title": "Event definitions",
     "subTrail": "Build study · visits + repeating cycles",

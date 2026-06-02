@@ -18,20 +18,28 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.SourceDataVerification;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -402,6 +410,317 @@ public class EventDefinitionsApiController {
                 sedOid, studyOid, me.getName());
 
         return ResponseEntity.ok(toDto(target));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* GET /{sedOid}/crfs — list CRF assignments                          */
+    /* POST /{sedOid}/crfs — attach CRF to event definition               */
+    /* PUT /{sedOid}/crfs/{crfOid} — update assignment options            */
+    /* DELETE /{sedOid}/crfs/{crfOid} — remove assignment (status DELETED)*/
+    /*   (Phase E A8.3 — event-CRF assignment surface)                    */
+    /* ----------------------------------------------------------------- */
+
+    @GetMapping("/{sedOid}/crfs")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array",
+                         implementation = EventCrfAssignmentDto.class)))
+    public ResponseEntity<?> listAssignments(@PathVariable("studyOid") String studyOid,
+                                             @PathVariable("sedOid") String sedOid,
+                                             HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ false);
+        if (guard != null) return guard;
+
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean sed = sedDao.findByOidAndStudy(sedOid, study.getId(), 0);
+        if (sed == null || sed.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event definition with oid '" + sedOid + "' in study '" + studyOid + "'"));
+        }
+
+        EventDefinitionCRFDAO assignmentDao = new EventDefinitionCRFDAO(dataSource);
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        ArrayList<EventDefinitionCRFBean> beans = assignmentDao.findAllByDefinition(sed.getId());
+        List<EventCrfAssignmentDto> out = new ArrayList<>(beans.size());
+        for (EventDefinitionCRFBean a : beans) {
+            out.add(toAssignmentDto(a, crfDao, versionDao));
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    @PostMapping("/{sedOid}/crfs")
+    @ApiResponse(responseCode = "201",
+                 content = @Content(schema = @Schema(implementation = EventCrfAssignmentDto.class)))
+    public ResponseEntity<?> attachCrf(@PathVariable("studyOid") String studyOid,
+                                       @PathVariable("sedOid") String sedOid,
+                                       @RequestBody(required = false) EventCrfAssignmentRequest body,
+                                       HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+        if (body == null) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Request body is required",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "body", "missing"))));
+        }
+
+        // Shape validation: crfOid + defaultVersionOid both required;
+        // SDV (if present) must be a known enum value.
+        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = new ArrayList<>();
+        if (body.crfOid() == null || body.crfOid().isBlank())
+            errors.add(fieldError("crfOid", "crfOid is required"));
+        if (body.defaultVersionOid() == null || body.defaultVersionOid().isBlank())
+            errors.add(fieldError("defaultVersionOid", "defaultVersionOid is required"));
+        SourceDataVerification sdv = resolveSdv(body.sourceDataVerification(), errors);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean sed = sedDao.findByOidAndStudy(sedOid, study.getId(), 0);
+        if (sed == null || sed.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event definition with oid '" + sedOid + "' in study '" + studyOid + "'"));
+        }
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = crfDao.findByOid(body.crfOid());
+        if (crf == null || crf.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + body.crfOid() + "'"));
+        }
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean defaultVersion = versionDao.findByOid(body.defaultVersionOid());
+        if (defaultVersion == null || defaultVersion.getId() == 0
+                || defaultVersion.getCrfId() != crf.getId()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF version '" + body.defaultVersionOid()
+                            + "' belonging to CRF '" + body.crfOid() + "'"));
+        }
+
+        EventDefinitionCRFDAO assignmentDao = new EventDefinitionCRFDAO(dataSource);
+        EventDefinitionCRFBean dup = assignmentDao
+                .findByStudyEventDefinitionIdAndCRFId(sed.getId(), crf.getId());
+        if (dup != null && dup.getId() != 0
+                && dup.getStatus() != null && !dup.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "CRF '" + body.crfOid() + "' is already attached to event '" + sedOid + "'"));
+        }
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        EventDefinitionCRFBean toCreate = new EventDefinitionCRFBean();
+        toCreate.setStudyEventDefinitionId(sed.getId());
+        toCreate.setStudyId(study.getId());
+        toCreate.setCrfId(crf.getId());
+        toCreate.setDefaultVersionId(defaultVersion.getId());
+        applyAssignmentFlags(toCreate, body, sdv);
+        toCreate.setStatus(Status.AVAILABLE);
+        toCreate.setOwner(me);
+        toCreate.setCreatedDate(new java.util.Date());
+
+        EventDefinitionCRFBean persisted = assignmentDao.create(toCreate);
+        if (persisted == null || persisted.getId() == 0) {
+            LOG.warn("EventDefinitionCRFDAO.create returned no row for sed={} crf={}",
+                    sedOid, body.crfOid());
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to persist event-CRF assignment"));
+        }
+
+        LOG.info("Attach CRF: study={} event={} crf={} defaultVersion={} by user={}",
+                studyOid, sedOid, body.crfOid(), body.defaultVersionOid(), me.getName());
+
+        return ResponseEntity.status(201).body(toAssignmentDto(persisted, crfDao, versionDao));
+    }
+
+    @PutMapping("/{sedOid}/crfs/{crfOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventCrfAssignmentDto.class)))
+    public ResponseEntity<?> updateAssignment(@PathVariable("studyOid") String studyOid,
+                                              @PathVariable("sedOid") String sedOid,
+                                              @PathVariable("crfOid") String crfOid,
+                                              @RequestBody(required = false) EventCrfAssignmentRequest body,
+                                              HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+        if (body == null) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Request body is required",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "body", "missing"))));
+        }
+
+        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = new ArrayList<>();
+        SourceDataVerification sdv = resolveSdv(body.sourceDataVerification(), errors);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean sed = sedDao.findByOidAndStudy(sedOid, study.getId(), 0);
+        if (sed == null || sed.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event definition with oid '" + sedOid + "' in study '" + studyOid + "'"));
+        }
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = crfDao.findByOid(crfOid);
+        if (crf == null || crf.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + crfOid + "'"));
+        }
+        EventDefinitionCRFDAO assignmentDao = new EventDefinitionCRFDAO(dataSource);
+        EventDefinitionCRFBean target = assignmentDao
+                .findByStudyEventDefinitionIdAndCRFId(sed.getId(), crf.getId());
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "CRF '" + crfOid + "' is not attached to event '" + sedOid + "'"));
+        }
+        if (target.getStatus() != null && target.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Assignment is removed — re-attach the CRF instead of editing"));
+        }
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        if (body.defaultVersionOid() != null && !body.defaultVersionOid().isBlank()) {
+            CRFVersionBean dv = versionDao.findByOid(body.defaultVersionOid());
+            if (dv == null || dv.getId() == 0 || dv.getCrfId() != crf.getId()) {
+                return ResponseEntity.status(404).body(Map.of("message",
+                        "No CRF version '" + body.defaultVersionOid()
+                                + "' belonging to CRF '" + crfOid + "'"));
+            }
+            target.setDefaultVersionId(dv.getId());
+        }
+        applyAssignmentFlags(target, body, sdv);
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        target.setUpdater(me);
+        target.setUpdatedDate(new java.util.Date());
+        assignmentDao.update(target);
+
+        LOG.info("Update CRF assignment: study={} event={} crf={} by user={}",
+                studyOid, sedOid, crfOid, me.getName());
+
+        return ResponseEntity.ok(toAssignmentDto(target, crfDao, versionDao));
+    }
+
+    @DeleteMapping("/{sedOid}/crfs/{crfOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventCrfAssignmentDto.class)))
+    public ResponseEntity<?> removeAssignment(@PathVariable("studyOid") String studyOid,
+                                              @PathVariable("sedOid") String sedOid,
+                                              @PathVariable("crfOid") String crfOid,
+                                              HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean sed = sedDao.findByOidAndStudy(sedOid, study.getId(), 0);
+        if (sed == null || sed.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event definition with oid '" + sedOid + "' in study '" + studyOid + "'"));
+        }
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = crfDao.findByOid(crfOid);
+        if (crf == null || crf.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + crfOid + "'"));
+        }
+        EventDefinitionCRFDAO assignmentDao = new EventDefinitionCRFDAO(dataSource);
+        EventDefinitionCRFBean target = assignmentDao
+                .findByStudyEventDefinitionIdAndCRFId(sed.getId(), crf.getId());
+        if (target == null || target.getId() == 0 || target.getStatus() == null
+                || target.getStatus().isDeleted()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No active assignment of CRF '" + crfOid + "' on event '" + sedOid + "'"));
+        }
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        target.setStatus(Status.DELETED);
+        target.setUpdater(me);
+        target.setUpdatedDate(new java.util.Date());
+        assignmentDao.update(target);
+
+        LOG.info("Remove CRF assignment: study={} event={} crf={} by user={}",
+                studyOid, sedOid, crfOid, me.getName());
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        return ResponseEntity.ok(toAssignmentDto(target, crfDao, versionDao));
+    }
+
+    /**
+     * Mutate the assignment bean's flag/string fields from the request.
+     * Used by both POST (attach) and PUT (update) — the PUT path only
+     * forwards fields the caller passes, but the bean's setters require
+     * primitive booleans, so we read the boxed value or fall back to
+     * the current bean state.
+     */
+    private static void applyAssignmentFlags(EventDefinitionCRFBean target,
+                                             EventCrfAssignmentRequest body,
+                                             SourceDataVerification sdv) {
+        if (body.required() != null) target.setRequiredCRF(body.required());
+        if (body.doubleEntry() != null) target.setDoubleEntry(body.doubleEntry());
+        if (body.decisionCondition() != null) target.setDecisionCondition(body.decisionCondition());
+        if (body.electronicSignature() != null) target.setElectronicSignature(body.electronicSignature());
+        if (body.hideCrf() != null) target.setHideCrf(body.hideCrf());
+        if (sdv != null) target.setSourceDataVerification(sdv);
+        if (body.participantForm() != null) target.setParticipantForm(body.participantForm());
+        if (body.allowAnonymousSubmission() != null)
+            target.setAllowAnonymousSubmission(body.allowAnonymousSubmission());
+        if (body.submissionUrl() != null) target.setSubmissionUrl(body.submissionUrl().trim());
+        // Note: offline flag is owned by a separate tag service in the
+        // legacy code (EventDefinitionCrfTagService) — A8.3 follow-up
+        // wires that path; for now we accept the boolean but only
+        // forward it if there's a direct setter on the bean.
+    }
+
+    /**
+     * Resolve the SPA's string SDV value to the legacy enum constant.
+     * Adds a validation error to {@code errors} on unknown values.
+     * Returns {@code null} when the body didn't include the field —
+     * the caller treats that as "leave unchanged" on PUT.
+     */
+    private static SourceDataVerification resolveSdv(String raw,
+            List<SubjectsApiController.ValidationErrorBody.FieldError> errors) {
+        if (raw == null || raw.isBlank()) return null;
+        try {
+            return SourceDataVerification.valueOf(raw);
+        } catch (IllegalArgumentException iae) {
+            errors.add(fieldError("sourceDataVerification",
+                    "sourceDataVerification must be one of AllREQUIRED / PARTIALREQUIRED / NOTREQUIRED / NOTAPPLICABLE"));
+            return null;
+        }
+    }
+
+    private static EventCrfAssignmentDto toAssignmentDto(EventDefinitionCRFBean a,
+                                                         CRFDAO crfDao,
+                                                         CRFVersionDAO versionDao) {
+        CRFBean crf = crfDao.findByPK(a.getCrfId());
+        CRFVersionBean dv = versionDao.findByPK(a.getDefaultVersionId());
+        return new EventCrfAssignmentDto(
+                crf == null ? null : crf.getOid(),
+                crf == null ? null : nullToEmpty(crf.getName()),
+                dv == null ? null : dv.getOid(),
+                dv == null ? null : nullToEmpty(dv.getName()),
+                a.isRequiredCRF(),
+                a.isDoubleEntry(),
+                a.isDecisionCondition(),
+                a.isElectronicSignature(),
+                a.isHideCrf(),
+                a.getSourceDataVerification() == null
+                        ? "NOTAPPLICABLE" : a.getSourceDataVerification().name(),
+                a.isParticipantForm(),
+                a.isAllowAnonymousSubmission(),
+                nullToEmpty(a.getSubmissionUrl()),
+                /* offline */ false,
+                a.getStatus() == null ? "" : a.getStatus().getName());
     }
 
     /* ----------------------------------------------------------------- */

@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -192,5 +193,42 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
         } catch (Exception e) {
             throw new AssertionError(e);
         }
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* GET/POST/PUT/DELETE /event-definitions/{sedOid}/crfs                   */
+    /*   (Phase E A8.3 — assignment surface)                                 */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void listAssignmentsReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/studies/S_DEFAULTS1/event-definitions/SE_V1/crfs")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void attachCrfReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/studies/S_DEFAULTS1/event-definitions/SE_V1/crfs")
+                .contentType("application/json")
+                .content("{\"crfOid\":\"F_DEMOS\",\"defaultVersionOid\":\"F_DEMOS_V1\"}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateAssignmentReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(put("/api/v1/studies/S_DEFAULTS1/event-definitions/SE_V1/crfs/F_DEMOS")
+                .contentType("application/json")
+                .content("{\"required\":true}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void removeAssignmentReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(delete("/api/v1/studies/S_DEFAULTS1/event-definitions/SE_V1/crfs/F_DEMOS")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
     }
 }

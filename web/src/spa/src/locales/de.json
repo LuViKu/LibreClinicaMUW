@@ -333,6 +333,32 @@
       "users":        { "title": "Nutzer/-innen", "summary": "{count} Personen", "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs." }
     }
   },
+  "crfLibrary": {
+    "title": "CRF-Bibliothek",
+    "subTrail": "Studienaufbau · Formularbibliothek + Versionen",
+    "intro": "Verwaltung der studienübergreifenden Formularbibliothek. .xls/.xlsx-Tabellen hochladen, um neue Versionen anzulegen; Versionen werden in der Visiten-Ansicht den Visiten-Definitionen zugeordnet.",
+    "parserDeferredNote": "Hochgeladene Dateien werden gespeichert und registriert, aber der Spreadsheet-Item-Parser wird in einer Folge-Sub-Phase verdrahtet. Bis dahin wird die CRF-Zeile erzeugt, die Item-Liste bleibt jedoch leer.",
+    "createAction": "Neues CRF",
+    "createHeading": "CRF-Hülle anlegen",
+    "submitCreate": "CRF anlegen",
+    "uploadVersion": "Version hochladen",
+    "uploadHeading": "Neue Version von »{name}« hochladen",
+    "uploadIntro": "Wählen Sie eine .xls/.xlsx-Datei. Vergeben Sie einen kurzen Versionsnamen (z. B. v1.0, v1.1). Die Revisionshinweise erfassen die Änderungen gegenüber der Vorgängerversion.",
+    "submitUpload": "Hochladen",
+    "fileLabel": "Tabelle",
+    "versionName": "Versionsname",
+    "versionDescription": "Versionsbeschreibung",
+    "revisionNotes": "Revisionshinweise",
+    "crfName": "CRF-Name",
+    "crfDescription": "Beschreibung",
+    "versions": "Versionen",
+    "includeRemoved": "Entfernte anzeigen",
+    "statusRemoved": "Entfernt",
+    "disable": "Entfernen",
+    "disableConfirm": "CRF »{name}« entfernen? Bestehende Zuweisungen bleiben für den Audit Trail erhalten, neue Dateneingabe wird gesperrt. Die Aktion wird im Audit Trail dokumentiert.",
+    "disableVersionConfirm": "Version »{version}« von »{name}« entfernen? Laufende Dateneingaben in dieser Version bleiben unverändert; neue Dateneingaben verwenden die verbleibenden Versionen.",
+    "empty": "Noch keine CRFs in der Bibliothek."
+  },
   "eventDefinitions": {
     "title": "Visiten-Definitionen",
     "subTrail": "Studienaufbau · Visiten + wiederholbare Termine",

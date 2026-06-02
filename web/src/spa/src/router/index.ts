@@ -94,6 +94,13 @@ const router = createRouter({
       component: () => import('@/views/EventDefinitionsView.vue'),
       meta: { title: 'Event definitions', role: 'Data Manager' as const },
     },
+    /* Phase E A8.3 — CRF library + version upload. */
+    {
+      path: '/crf-library',
+      name: 'crf-library',
+      component: () => import('@/views/CrfLibraryView.vue'),
+      meta: { title: 'CRF Library', role: 'Data Manager' as const },
+    },
     {
       path: '/manage-users',
       name: 'manage-users',
