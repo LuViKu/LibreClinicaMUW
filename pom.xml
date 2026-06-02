@@ -1371,6 +1371,20 @@
 							     and flags it as used-undeclared. -->
 							<ignoredUsedUndeclaredDependency>org.eclipse.angus:jakarta.mail</ignoredUsedUndeclaredDependency>
 						</ignoredUsedUndeclaredDependencies>
+						<ignoredNonTestScopedDependencies>
+							<!-- Phase E.5 CI fix (2026-06-02): liquibase-core is declared
+							     at compile scope in web/pom.xml so it lands in the WAR's
+							     WEB-INF/lib (SpringLiquibase runs migrations at app
+							     startup from applicationContext-core-db.xml, which is
+							     in core/ but executes in the WAR's classloader). The
+							     analyzer otherwise sees that web/'s production code
+							     doesn't reference liquibase types directly (only the
+							     IT base AbstractApiControllerDatabaseIT does) and
+							     reports "non-test scoped test only" — which is wrong
+							     for our packaging because core/'s code does the runtime
+							     calls but lives behind the inter-module dep. -->
+							<ignoredNonTestScopedDependency>org.liquibase:liquibase-core</ignoredNonTestScopedDependency>
+						</ignoredNonTestScopedDependencies>
 						<ignoredUnusedDeclaredDependencies>
 							<!-- Needed by commons-validator -->
 							<ignoredUnusedDeclaredDependency>oro:oro</ignoredUnusedDeclaredDependency>
