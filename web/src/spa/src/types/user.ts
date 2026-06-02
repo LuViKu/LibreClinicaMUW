@@ -74,6 +74,22 @@ export interface CreateUserResult {
 }
 
 /**
+ * Phase E A7.5 — one (user, study) role binding.
+ *
+ * Returned by `GET/POST/PUT/DELETE /api/v1/users/{username}/roles`.
+ * `active` reflects status_id == AVAILABLE on the legacy
+ * study_user_role row.
+ */
+export interface RoleBinding {
+  studyId: number
+  studyOid: string | null
+  studyName: string | null
+  siteLabel: string | null
+  role: UserRole
+  active: boolean
+}
+
+/**
  * Phase E A7.2 — `PUT /api/v1/users/{username}` request body.
  *
  * Every field is optional: omit a field (or pass `undefined`) to

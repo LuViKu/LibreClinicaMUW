@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
-import type { CreateUserInput, CreateUserResult, StudyUser, UpdateUserInput, UserAuth, UserRole } from '@/types/user'
+import { apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
+import type { CreateUserInput, CreateUserResult, RoleBinding, StudyUser, UpdateUserInput, UserAuth, UserRole } from '@/types/user'
 
 /**
  * Phase E.7 + E.4 M12 — Study-users store.
@@ -309,6 +309,94 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  /* ----------------------------------------------------------------- */
+  /* Phase E A7.5 — study-user-role assignments                        */
+  /* ----------------------------------------------------------------- */
+
+  async function listUserRoles(username: string): Promise<RoleBinding[]> {
+    return apiGet<RoleBinding[]>(`/pages/api/v1/users/${encodeURIComponent(username)}/roles`)
+  }
+
+  async function grantRole(
+    username: string,
+    studyId: number,
+    role: UserRole,
+  ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
+    return roleAssignment(
+      () => apiPost<RoleBinding>(
+        `/pages/api/v1/users/${encodeURIComponent(username)}/roles`,
+        { studyId, role },
+      ),
+      'grant',
+    )
+  }
+
+  async function updateRole(
+    username: string,
+    studyId: number,
+    role: UserRole,
+  ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
+    return roleAssignment(
+      () => apiPut<RoleBinding>(
+        `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${studyId}`,
+        { role },
+      ),
+      'update',
+    )
+  }
+
+  async function revokeRole(
+    username: string,
+    studyId: number,
+  ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
+    return roleAssignment(
+      () => apiDelete<RoleBinding>(
+        `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${studyId}`,
+      ),
+      'revoke',
+    )
+  }
+
+  async function roleAssignment(
+    op: () => Promise<RoleBinding>,
+    label: 'grant' | 'update' | 'revoke',
+  ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
+    try {
+      const binding = await op()
+      return { ok: true, binding }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Rolle ${label} nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiError) {
+        const errBody = e.body as
+          | { message?: string; errors?: Array<{ field: string; message: string }> }
+          | null
+        const fieldErrors: Record<string, string> = {}
+        if (errBody?.errors) for (const fe of errBody.errors) fieldErrors[fe.field] = fe.message
+        return {
+          ok: false,
+          fieldErrors,
+          message: errBody?.message ?? `Rolle ${label} fehlgeschlagen (HTTP ${e.status}).`,
+        }
+      }
+      if (e instanceof ApiNetworkError) {
+        return {
+          ok: false,
+          fieldErrors: {},
+          message: `Backend nicht erreichbar — Rolle ${label} fehlgeschlagen. Bitte später erneut versuchen.`,
+        }
+      }
+      return {
+        ok: false,
+        fieldErrors: {},
+        message: e instanceof Error ? e.message : `Unbekannter Fehler beim Rolle-${label}.`,
+      }
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -328,5 +416,9 @@ export const useUsersStore = defineStore('users', () => {
     disableUser,
     restoreUser,
     resetPassword,
+    listUserRoles,
+    grantRole,
+    updateRole,
+    revokeRole,
   }
 })

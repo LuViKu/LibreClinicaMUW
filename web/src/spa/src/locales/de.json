@@ -407,6 +407,21 @@
     "resetPassword": {
       "action": "Passwort zurücksetzen",
       "confirm": "Passwort für {username} zurücksetzen? Ein neues Einmal-Passwort wird erzeugt; beim ersten Login muss es geändert werden. Das aktuelle Passwort wird sofort ungültig. Die Aktion wird im Audit Trail dokumentiert."
+    },
+    "roles": {
+      "openAction": "Rollen",
+      "title": "Rollenzuweisungen verwalten",
+      "currentHeading": "Aktuelle Zuweisungen",
+      "grantHeading": "Neue Rolle vergeben",
+      "empty": "Keine aktiven Rollenzuweisungen auf sichtbaren Studien.",
+      "study": "Studie",
+      "studyPlaceholder": "Studie auswählen…",
+      "role": "Rolle",
+      "grant": "Vergeben",
+      "revoke": "Entziehen",
+      "revoked": "Entzogen",
+      "revokeConfirm": "Rolle von {username} in Studie {study} entziehen? Der Studienzugriff wird entfernt; bestehende Daten bleiben unverändert. Die Aktion wird im Audit Trail dokumentiert.",
+      "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert."
     }
   },
   "importCrf": {
