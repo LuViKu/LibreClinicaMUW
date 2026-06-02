@@ -65,6 +65,7 @@ const ALLOWED_IDENTICAL_VALUES = new Set([
   'Commit',
   'Sponsor',  // GCP loan word, identical in DE+EN per BfArM glossary
   'Phase',    // ditto
+  'Name',     // identical noun in DE+EN
   '{count} CRFs',
 ])
 
