@@ -395,6 +395,14 @@
       "affiliation": "Institutszugehörigkeit",
       "submit": "Änderungen speichern",
       "successFlash": "Profil aktualisiert."
+    },
+    "lifecycle": {
+      "disable": "Deaktivieren",
+      "restore": "Reaktivieren",
+      "disableConfirm": "Nutzer/in {username} deaktivieren? Die Anmeldung wird gesperrt; Rollenzuweisungen werden mit-deaktiviert (Soft-Delete). Reaktivieren stellt sie wieder her. Die Aktion wird im Audit Trail dokumentiert.",
+      "restoreConfirm": "Nutzer/in {username} reaktivieren? Ein neues Einmal-Passwort wird erzeugt; beim ersten Login muss es geändert werden. Die Aktion wird im Audit Trail dokumentiert.",
+      "restoredIntro": "Nutzer/in {username} wurde reaktiviert. Übergeben Sie das Einmal-Passwort über einen sicheren Kanal.",
+      "restoredNoPassword": "Die Anmeldedaten verwaltet das Verzeichnis bzw. der Identity Provider — kein lokales Passwort wurde erzeugt. Bitte informieren Sie die Person, dass sie mit den bestehenden Anmeldedaten arbeiten kann."
     }
   },
   "importCrf": {

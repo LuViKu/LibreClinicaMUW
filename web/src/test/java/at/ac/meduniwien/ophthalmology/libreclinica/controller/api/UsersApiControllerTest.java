@@ -335,4 +335,67 @@ class UsersApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[?(@.field == 'userType')]").exists());
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* POST /api/v1/users/{username}/{disable,restore}                        */
+    /*   (Phase E A7.3 — lifecycle)                                           */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void disableReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/disable")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void disableReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/disable")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void disableReturns403WhenNonSysadminAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/disable")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin only")));
+    }
+
+    @Test
+    void restoreReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/restore")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void restoreReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/restore")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void restoreReturns403WhenNonSysadminAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/restore")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin only")));
+    }
 }

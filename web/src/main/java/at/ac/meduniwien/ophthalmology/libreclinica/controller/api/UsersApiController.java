@@ -446,6 +446,169 @@ public class UsersApiController {
     }
 
     /* ----------------------------------------------------------------- */
+    /* POST /api/v1/users/{username}/{disable,restore}                   */
+    /*   (Phase E A7.3 — user lifecycle)                                 */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Soft-delete a user account.
+     *
+     * <p>Mirrors {@code DeleteUserServlet.delete} (legacy action=delete
+     * branch): flips {@code user_account.status_id → DELETED}. The DAO
+     * cascade ({@link UserAccountDAO#delete}) also marks every
+     * {@code study_user_role} row owned by this user as DELETED via
+     * {@code deleteStudyUserRolesIncludeAutoRemove}.
+     *
+     * <p>Sysadmin-only. Cannot disable yourself (409 — mirrors the
+     * legacy "you can't suicide" guard pattern).
+     */
+    @PostMapping("/{username}/disable")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = StudyUserDto.class)))
+    public ResponseEntity<?> disable(@PathVariable("username") String username,
+                                     HttpSession session) {
+        ResponseEntity<?> guard = preflightLifecycle(session, username);
+        if (guard != null) return guard;
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        UserAccountDAO userDao = new UserAccountDAO(dataSource);
+        UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No user with username '" + username + "'"));
+        }
+        if (target.getId() == me.getId()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "You cannot disable your own account"));
+        }
+        if (target.getStatus() != null && target.getStatus().getId() == Status.DELETED.getId()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "User '" + username + "' is already disabled"));
+        }
+
+        target.setUpdater(me);
+        userDao.delete(target);
+
+        LOG.info("Disable user: username={} by admin={}", username, me.getName());
+        // Re-load so the bean reflects the post-cascade state.
+        UserAccountBean refreshed = (UserAccountBean) userDao.findByUserName(username);
+        return ResponseEntity.ok(projectToStudyUserDto(refreshed, currentStudy));
+    }
+
+    /**
+     * Lifecycle request body for the restore endpoint.
+     *
+     * <p>{@code sendEmail} mirrors the legacy {@code displayPwd} switch:
+     * when {@code false} (or the body is absent) the response carries
+     * the one-time password so the admin can hand it off manually. The
+     * email path is queued behind the MailService extraction follow-up
+     * (same gap as A7.1's create).
+     */
+    @Schema(name = "RestoreUserRequest")
+    public record RestoreUserRequest(Boolean sendEmail) {}
+
+    /**
+     * Restore a previously-disabled user.
+     *
+     * <p>Mirrors {@code DeleteUserServlet.restore}: flips
+     * {@code status_id → AVAILABLE}, generates a fresh one-time
+     * password, sets {@code passwd_timestamp = null} (force change on
+     * first login), and restores cascaded {@code study_user_role}
+     * rows via the DAO's {@code restoreStudyUserRolesByUserID}.
+     *
+     * <p>LDAP / SSO users bypass the password generation step — the
+     * directory / IdP owns the credential — but their status_id is
+     * still restored. The response carries
+     * {@code generatedPassword: null} in that case.
+     */
+    @PostMapping("/{username}/restore")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = StudyUserDto.class)))
+    public ResponseEntity<?> restore(@PathVariable("username") String username,
+                                     @RequestBody(required = false) RestoreUserRequest body,
+                                     HttpSession session) {
+        ResponseEntity<?> guard = preflightLifecycle(session, username);
+        if (guard != null) return guard;
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        UserAccountDAO userDao = new UserAccountDAO(dataSource);
+        UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No user with username '" + username + "'"));
+        }
+        if (target.getStatus() == null || target.getStatus().getId() != Status.DELETED.getId()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "User '" + username + "' is not disabled"));
+        }
+
+        boolean isDirectoryOwned = isDirectoryOwnedCredential(target);
+        String generatedPassword = null;
+        if (!isDirectoryOwned) {
+            generatedPassword = securityManager.genPassword();
+            String hash = securityManager.encryptPassword(generatedPassword,
+                    target.getRunWebservices());
+            target.setPasswd(hash);
+            target.setPasswdTimestamp(null);
+        }
+
+        target.setUpdater(me);
+        userDao.restore(target);
+
+        LOG.info("Restore user: username={} by admin={} directoryOwned={}",
+                username, me.getName(), isDirectoryOwned);
+
+        UserAccountBean refreshed = (UserAccountBean) userDao.findByUserName(username);
+        StudyUserDto dto = projectToStudyUserDto(refreshed, currentStudy);
+        Map<String, Object> response = new HashMap<>();
+        response.put("user", dto);
+        response.put("generatedPassword",
+                (body != null && Boolean.TRUE.equals(body.sendEmail())) ? null : generatedPassword);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Shared 401/400/403 preflight for lifecycle endpoints. Returns
+     * {@code null} when the request may proceed.
+     */
+    private ResponseEntity<?> preflightLifecycle(HttpSession session, String username) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        if (!UserAdminAuthorization.roleMayAdministerUsers(me)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit user administration — sysadmin only"));
+        }
+        if (username == null || username.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "username path variable is required"));
+        }
+        return null;
+    }
+
+    /**
+     * @return {@code true} when the bean's credential is owned by an
+     *         external directory / IdP — LDAP-typed users + SSO-bound
+     *         users. The restore endpoint skips local password
+     *         generation for these so the IdP / directory remains
+     *         authoritative.
+     */
+    private static boolean isDirectoryOwnedCredential(UserAccountBean ua) {
+        String provider = ua.getExternalIdProvider();
+        if (provider != null && !provider.isBlank()) return true;
+        String authtype = ua.getAuthtype();
+        return authtype != null && authtype.toLowerCase().contains("ldap");
+    }
+
+    /* ----------------------------------------------------------------- */
     /* PUT /api/v1/users/{username}  (Phase E A7.2 — edit profile)       */
     /* ----------------------------------------------------------------- */
 
