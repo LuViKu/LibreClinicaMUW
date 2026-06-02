@@ -71,7 +71,39 @@ The H1 integration test (`StudyEventScheduleIT.testRepeatingEventScalesTo15Visit
 
 ---
 
-## 3. `lc-muw-2026-06-01-seed-demo-data-fixup` doubles `dn_item_data_map` on fresh deploys
+## 3. `lc-muw-2026-06-01-seed-demo-data-fixup` doubles `dn_item_data_map` on fresh deploys → **RESOLVED 2026-06-02**
+
+**Status as of 2026-06-02:** **RESOLVED** via Phase E.5 A3 closure changeset
+`lc-muw-2026-06-02-prune-dn-item-data-map-duplicates-v2.xml`. The original
+prune changeset (`-duplicates.xml`) had two independent bugs:
+
+1. **Inverted precondition** — `<sqlCheck expectedResult="0">` expected
+   "no duplicates" for the changeset to fire, so on every fresh
+   `docker compose down -v && up --build` the precondition failed and
+   `onFail="MARK_RAN"` silently marked the changeset as executed without
+   running the DELETE.
+2. **Missing column** — the `WHERE id IN (...)` referenced a column that
+   doesn't exist on `dn_item_data_map`. The table is a pure association
+   table without a surrogate key. Even if the precondition had been
+   correct, the DELETE would have raised `column "id" does not exist`
+   at runtime. v1 silently MARK_RAN'd in the field so this surface was
+   never hit; both bugs were live.
+
+The v2 changeset flips the precondition (`expectedResult="1"`, "run when
+duplicates exist") and uses Postgres `ctid` (physical row identifier)
+to disambiguate the duplicate rows. Verified by transactional dry-run
+on the live dev DB: 16 rows → 8 after the DELETE. Fresh deploys will
+converge on first Liquibase run. Existing deployments converge on the
+next app update. Subject-Matrix open-query counts return to the
+intended per-event totals (M-001 → 2, M-002 → 2, M-004 → 3, M-007 → 1).
+
+The narrative below is retained for historical context.
+
+---
+
+**Original report below:**
+
+
 
 **Surfaced:** 2026-06-01 (Phase E.5 A3 verification cycle).
 

@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Phase E.5 A3 (closure, 2026-06-02) — corrected prune of duplicate
+    dn_item_data_map rows. v1 of this prune
+    (lc-muw-2026-06-02-prune-dn-item-data-map-duplicates.xml) had TWO
+    independent bugs that each individually broke it:
+
+      1. The preCondition was inverted: it expected the sqlCheck to
+         return 0 (no duplicates) for the changeset to fire. On every
+         fresh `docker compose down -v && up --build` the precondition
+         failed and onFail="MARK_RAN" marked the changeset as executed
+         without running the DELETE.
+
+      2. The DELETE referenced an `id` column on dn_item_data_map.
+         That column doesn't exist — the schema is a pure
+         association table with (item_data_id, discrepancy_note_id,
+         column_name, study_subject_id, activated) and no surrogate
+         key. Had the precondition been correct, the DELETE would
+         have raised `column "id" does not exist` at runtime. v1
+         silently MARK_RAN'd in the field so this surface was never
+         hit; both bugs were live.
+
+    Net effect from v1: 16 rows persisted in dn_item_data_map and
+    Subject-Matrix open-query counts stayed at 2× the intended value.
+
+    Liquibase changeset-immutability convention (CLAUDE.md "Don't edit
+    existing changesets") forbids correcting v1 in place. This v2:
+
+      1. Precondition flipped — sqlCheck returns 1 when duplicates
+         exist, expectedResult="1", so the precondition passes
+         exactly when there's work to do.
+      2. DELETE uses Postgres `ctid` (physical row identifier) to
+         disambiguate the duplicate rows. ctid is well-defined for
+         any heap row even without a declared key. dbms="postgresql"
+         already gates the changeset to Postgres so `ctid` portability
+         isn't a concern.
+
+    Result: keep MIN(ctid) per (item_data_id, discrepancy_note_id,
+    study_subject_id) tuple. The seed's inline rows arrive first
+    (smaller ctid), the fixup re-inserts with larger ctid; keeping
+    MIN(ctid) keeps the seed's row, consistent with "the seed is
+    the source of truth".
+  -->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="muw-ophthalmology" id="2026-06-02-prune-dn-item-data-map-duplicates-v2" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <!-- Run when duplicates exist for any of the 8 seeded discrepancy notes.
+                 sqlCheck returns 1 (= "duplicates present") → matches expectedResult="1"
+                 → precondition passes → DELETE runs. When the table is clean the
+                 check returns 0 → mismatch → MARK_RAN, no-op. -->
+            <sqlCheck expectedResult="1">
+                SELECT CASE WHEN COUNT(*) > COUNT(DISTINCT (item_data_id, discrepancy_note_id, study_subject_id))
+                            THEN 1 ELSE 0 END
+                FROM dn_item_data_map
+                WHERE discrepancy_note_id BETWEEN 1 AND 8
+            </sqlCheck>
+        </preConditions>
+        <comment>Drop duplicate dn_item_data_map rows for the 8 seeded discrepancy notes; keep MIN(ctid) per tuple (corrects v1 precondition + missing-column bugs)</comment>
+
+        <sql splitStatements="false"><![CDATA[
+            DELETE FROM dn_item_data_map
+            WHERE ctid IN (
+                SELECT ctid
+                FROM (
+                    SELECT ctid,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY item_data_id, discrepancy_note_id, study_subject_id
+                               ORDER BY ctid
+                           ) AS rn
+                    FROM dn_item_data_map
+                ) ranked
+                WHERE ranked.rn > 1
+            )
+        ]]></sql>
+    </changeSet>
+
+</databaseChangeLog>
