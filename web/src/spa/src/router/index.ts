@@ -115,6 +115,13 @@ const router = createRouter({
       component: () => import('@/views/GroupClassesView.vue'),
       meta: { title: 'Group classes', role: 'Data Manager' as const },
     },
+    /* Phase E RX.1 — read-only rules viewer. */
+    {
+      path: '/rules',
+      name: 'rules',
+      component: () => import('@/views/RulesView.vue'),
+      meta: { title: 'Rules', role: 'Data Manager' as const },
+    },
     {
       path: '/manage-users',
       name: 'manage-users',
