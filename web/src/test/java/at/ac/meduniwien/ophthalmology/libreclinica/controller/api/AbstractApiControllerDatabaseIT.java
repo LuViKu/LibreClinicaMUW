@@ -80,8 +80,27 @@ public abstract class AbstractApiControllerDatabaseIT {
     /** DataSource wired against the container; built once Liquibase has applied. */
     protected static DataSource DATA_SOURCE;
 
+    /** Snapshot of {@code catalina.home} before the IT mutates it; restored in {@link #stopContainer()}. */
+    private static String SAVED_CATALINA_HOME;
+
+    private static boolean CATALINA_HOME_WAS_SET;
+
     @BeforeAll
     static void startContainer() throws Exception {
+        // SQLFactory.run() branches on `catalina.home` to decide whether to load
+        // the DAO query-XMLs (e.g. study_subject_dao.xml) from the filesystem or
+        // the classpath. Unset → filesystem branch via getPropertiesDir(), which
+        // resolves placeholder.properties through the classloader; inside a jar
+        // that path becomes `file:/…core.jar!/properties/`, which FileInputStream
+        // cannot open. The IOException is swallowed (SQLFactory.java:233–235), so
+        // the `digesters` map stays empty and the first DAO call NPEs on
+        // `this.digester.getQuery(...)`. Setting any non-null value flips to the
+        // classpath branch which resolves `classpath:properties/<name>.xml`
+        // against the core jar correctly. Tomcat sets this in production.
+        SAVED_CATALINA_HOME = System.getProperty("catalina.home");
+        CATALINA_HOME_WAS_SET = SAVED_CATALINA_HOME != null;
+        System.setProperty("catalina.home", "testcontainers-it");
+
         POSTGRES = new PostgreSQLContainer<>(DockerImageName.parse("postgres:14-alpine"))
                 .withDatabaseName("openclinica")
                 .withUsername("clinica")
@@ -119,6 +138,11 @@ public abstract class AbstractApiControllerDatabaseIT {
     static void stopContainer() {
         if (POSTGRES != null) {
             POSTGRES.stop();
+        }
+        if (CATALINA_HOME_WAS_SET) {
+            System.setProperty("catalina.home", SAVED_CATALINA_HOME);
+        } else {
+            System.clearProperty("catalina.home");
         }
     }
 
