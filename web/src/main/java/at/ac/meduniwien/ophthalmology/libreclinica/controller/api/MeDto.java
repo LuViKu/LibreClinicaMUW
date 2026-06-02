@@ -50,7 +50,14 @@ public record MeDto(
         ActiveStudyDto activeStudy
 ) {
 
-    /** Minimal study summary embedded into MeDto. */
+    /**
+     * Minimal study summary embedded into MeDto.
+     *
+     * <p>{@code id} is exposed because the legacy session-bound APIs (e.g.
+     * {@code POST /api/v1/users} body) accept {@code studyId} integers, and
+     * the SPA needs to dispatch those calls against the active study without
+     * a separate {@code /studies?oid=} lookup.
+     */
     @Schema(name = "ActiveStudyDto")
-    public record ActiveStudyDto(String oid, String name, boolean isSite) {}
+    public record ActiveStudyDto(int id, String oid, String name, boolean isSite) {}
 }

@@ -40,7 +40,7 @@ const FIXTURE_USER: AuthenticatedUser = {
   profileComplete: true,
   locale: 'en',
   timezone: 'Europe/Vienna',
-  activeStudy: { oid: 'S_DEFAULTS1', name: 'Default Study', isSite: false },
+  activeStudy: { id: 1, oid: 'S_DEFAULTS1', name: 'Default Study', isSite: false },
 }
 
 const FIXTURE_USER_NEEDS_PROFILE: AuthenticatedUser = {

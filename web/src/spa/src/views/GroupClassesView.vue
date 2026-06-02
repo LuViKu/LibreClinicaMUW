@@ -250,8 +250,8 @@ const visibleRows = computed(() => gc.rows)
               :key="idx"
               class="grid grid-cols-[1fr_2fr_auto] gap-2"
             >
-              <TextInput v-model="g.name" :placeholder="t('groupClasses.field.groupName')" />
-              <TextInput v-model="g.description" :placeholder="t('groupClasses.field.groupDescription')" />
+              <TextInput :id="`gc-group-name-${idx}`" v-model="g.name" :placeholder="t('groupClasses.field.groupName')" />
+              <TextInput :id="`gc-group-desc-${idx}`" v-model="g.description" :placeholder="t('groupClasses.field.groupDescription')" />
               <button
                 class="text-xs text-rose-600 hover:underline disabled:opacity-30"
                 :disabled="createForm.groups.length <= 1"

@@ -136,6 +136,7 @@ public class MeApiController {
         MeDto.ActiveStudyDto activeStudy = null;
         if (currentStudy != null && currentStudy.getId() > 0) {
             activeStudy = new MeDto.ActiveStudyDto(
+                    currentStudy.getId(),
                     currentStudy.getOid(),
                     currentStudy.getName(),
                     currentStudy.getParentStudyId() > 0

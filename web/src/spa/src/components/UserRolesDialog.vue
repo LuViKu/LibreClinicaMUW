@@ -179,6 +179,7 @@ function close() {
             </div>
             <SelectInput
               v-if="b.active"
+              :id="`role-${b.studyOid ?? 'unknown'}`"
               :model-value="b.role"
               class="w-40"
               :disabled="isSubmitting"

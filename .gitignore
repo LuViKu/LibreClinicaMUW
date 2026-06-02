@@ -33,6 +33,12 @@ release.properties
 .settings/
 .idea/
 LibreClinica.iml
+
+# Phase E.5 #1 — Testcontainers IT sets `catalina.home=testcontainers-it`
+# so SQLFactory takes its classpath branch. Logback then materialises a
+# `testcontainers-it/logs/` directory next to the surefire CWD (web/).
+# Local-only build artefact — never tracked.
+web/testcontainers-it/
 OpenClinica.iml
 web/src/main/resources/datainfo.properties
 core/*.iml

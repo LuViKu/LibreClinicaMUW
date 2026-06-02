@@ -319,13 +319,13 @@ export const useUsersStore = defineStore('users', () => {
 
   async function grantRole(
     username: string,
-    studyId: number,
+    studyOid: string,
     role: UserRole,
   ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
     return roleAssignment(
       () => apiPost<RoleBinding>(
         `/pages/api/v1/users/${encodeURIComponent(username)}/roles`,
-        { studyId, role },
+        { studyOid, role },
       ),
       'grant',
     )
@@ -333,12 +333,12 @@ export const useUsersStore = defineStore('users', () => {
 
   async function updateRole(
     username: string,
-    studyId: number,
+    studyOid: string,
     role: UserRole,
   ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
     return roleAssignment(
       () => apiPut<RoleBinding>(
-        `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${studyId}`,
+        `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${encodeURIComponent(studyOid)}`,
         { role },
       ),
       'update',
@@ -347,11 +347,11 @@ export const useUsersStore = defineStore('users', () => {
 
   async function revokeRole(
     username: string,
-    studyId: number,
+    studyOid: string,
   ): Promise<{ ok: true; binding: RoleBinding } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
     return roleAssignment(
       () => apiDelete<RoleBinding>(
-        `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${studyId}`,
+        `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${encodeURIComponent(studyOid)}`,
       ),
       'revoke',
     )
