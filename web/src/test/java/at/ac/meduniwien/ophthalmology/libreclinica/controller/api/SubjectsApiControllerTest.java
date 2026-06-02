@@ -11,6 +11,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -278,5 +279,132 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
                 SubjectLifecycleAuthorization.roleMayManageLifecycle(7));
         org.junit.jupiter.api.Assertions.assertFalse(
                 SubjectLifecycleAuthorization.roleMayManageLifecycle(0));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* PUT /api/v1/subjects/{oid} (Phase E A2 — demographics edit)            */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void updateReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(put("/api/v1/subjects/M-001")
+                .contentType("application/json")
+                .content("{\"gender\":\"F\"}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(put("/api/v1/subjects/M-001")
+                .contentType("application/json")
+                .content("{\"gender\":\"F\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateReturns403WhenMonitorAttempts() throws Exception {
+        // Monitor (role id 6) cannot edit subject demographics —
+        // only writes verifications, not data.
+        mockMvcWith().perform(put("/api/v1/subjects/M-001")
+                .contentType("application/json")
+                .content("{\"gender\":\"F\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(3, "monitor", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.MONITOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit editing")));
+    }
+
+    @Test
+    void updateReturns400WhenGenderMissing() throws Exception {
+        // gender is the only required field. Validation fires AFTER
+        // the role check (the role check needs the session userRole;
+        // the validation needs the body — both happen pre-DAO).
+        // The role-permitted Investigator session lets the request
+        // fall through to validation.
+        mockMvcWith().perform(put("/api/v1/subjects/M-001")
+                .contentType("application/json")
+                .content("{}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'gender')]").exists());
+    }
+
+    @Test
+    void updateReturns400OnInvalidGender() throws Exception {
+        mockMvcWith().perform(put("/api/v1/subjects/M-001")
+                .contentType("application/json")
+                .content("{\"gender\":\"Z\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'gender')]").exists());
+    }
+
+    @Test
+    void updateReturns400OnSecondaryIdTooLong() throws Exception {
+        String tooLong = "a".repeat(31);
+        mockMvcWith().perform(put("/api/v1/subjects/M-001")
+                .contentType("application/json")
+                .content("{\"gender\":\"F\",\"secondaryId\":\"" + tooLong + "\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'secondaryId')]").exists());
+    }
+
+    @Test
+    void updateReturns400OnFutureYearOfBirth() throws Exception {
+        mockMvcWith().perform(put("/api/v1/subjects/M-001")
+                .contentType("application/json")
+                .content("{\"gender\":\"F\",\"yearOfBirth\":2999}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'yearOfBirth')]").exists());
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* SubjectEditAuthorization — pure unit-level role coverage               */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void subjectEditAuth_PermittedRoles() {
+        // INVESTIGATOR(4), COORDINATOR(2) = CRC, STUDYDIRECTOR(3) = DM, ADMIN(1)
+        org.junit.jupiter.api.Assertions.assertTrue(
+                SubjectEditAuthorization.roleMayEdit(4));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                SubjectEditAuthorization.roleMayEdit(2));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                SubjectEditAuthorization.roleMayEdit(3));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                SubjectEditAuthorization.roleMayEdit(1));
+    }
+
+    @Test
+    void subjectEditAuth_ForbiddenRoles() {
+        // MONITOR(6), RA(5), RA2(7), INVALID(0)
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SubjectEditAuthorization.roleMayEdit(6));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SubjectEditAuthorization.roleMayEdit(5));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SubjectEditAuthorization.roleMayEdit(7));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SubjectEditAuthorization.roleMayEdit(0));
     }
 }

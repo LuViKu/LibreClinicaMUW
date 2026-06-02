@@ -554,6 +554,11 @@
       "signSubject": "Probanden signieren",
       "remove": "Teilnehmer entfernen",
       "removeConfirm": "Teilnehmer/in {id} wirklich entfernen? Visiten, CRFs und Items werden als gelöscht markiert (Soft-Delete). Wiederherstellbar durch Data Manager. Die Aktion wird im Audit Trail dokumentiert."
+    },
+    "edit": {
+      "start": "Bearbeiten",
+      "save": "Änderungen speichern",
+      "yearOfBirthInvalid": "Geburtsjahr muss eine Zahl sein."
     }
   }
 }

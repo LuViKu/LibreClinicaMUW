@@ -36,10 +36,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
@@ -60,6 +62,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -920,6 +923,234 @@ public class SubjectsApiController {
                 studyEventDefinitionDAO, eventCRFDAO, definitionCache, openQueriesByEvent);
 
         return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * Phase E A2 — edit a study subject's demographics.
+     *
+     * <p>Editable fields: {@code secondaryId}, {@code gender},
+     * {@code yearOfBirth}. The subject's identifier ({@code id} /
+     * {@code label}) and {@code enrolledOn} are intentionally NOT
+     * editable here — both are foreign-key anchors for event_crfs +
+     * audit_log_event rows and changing them would invalidate study
+     * scheduling invariants. {@code groupLabel} is also out of scope
+     * (see the create endpoint's M4 scope note about subject_group_map).
+     *
+     * <p>Guards (order matters):
+     * <ol>
+     *   <li>{@code 401} — no authenticated user.</li>
+     *   <li>{@code 400} — no active study bound.</li>
+     *   <li>{@code 400 / errors[]} — validation failure on any
+     *       editable field (mirrors {@code POST /subjects} error
+     *       shape so the SPA's per-field error handler works
+     *       unchanged).</li>
+     *   <li>{@code 403} — caller's role is not Investigator / CRC /
+     *       Data Manager / Admin (per {@link SubjectEditAuthorization}).</li>
+     *   <li>{@code 404} — no study_subject with that OID in the
+     *       caller's visible-studies set.</li>
+     *   <li>{@code 409} — subject is in {@link Status#DELETED} or
+     *       {@link Status#SIGNED}: removed subjects must be restored
+     *       first; signed subjects need to be un-signed via an
+     *       admin path before re-editing.</li>
+     * </ol>
+     *
+     * <p>Audit emission: one {@code audit_log_event} row per
+     * changed field with old/new values, mirroring the M8 profile-
+     * update pattern (audit_event_type_id 33 — column changes).
+     * Wrapped in try/catch so an audit-write failure does not roll
+     * back the user-facing update.
+     */
+    @PutMapping("/{studySubjectOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = SubjectDetailDto.class)))
+    public ResponseEntity<?> update(@PathVariable("studySubjectOid") String studySubjectOid,
+                                    @RequestBody(required = false) UpdateSubjectRequest body,
+                                    HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!SubjectEditAuthorization.roleMayEdit(roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit editing study-subject demographics"));
+        }
+
+        // Validate input before touching the DB.
+        List<ValidationErrorBody.FieldError> errors = validateUpdateSubject(body);
+        if (!errors.isEmpty()) {
+            ValidationErrorBody errResponse = new ValidationErrorBody(
+                    "Validation failed", errors);
+            return ResponseEntity.badRequest().body(errResponse);
+        }
+
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+
+        StudySubjectBean ss = null;
+        for (Integer sid : visible) {
+            StudyBean scope = (sid == currentStudy.getId())
+                    ? currentStudy
+                    : (StudyBean) new StudyDAO(dataSource).findByPK(sid);
+            if (scope == null || scope.getId() == 0) continue;
+            StudySubjectBean candidate = studySubjectDAO.findByLabelAndStudy(studySubjectOid, scope);
+            if (candidate != null && candidate.getId() > 0) {
+                ss = candidate;
+                break;
+            }
+        }
+        if (ss == null || ss.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study subject '" + studySubjectOid + "' in your visible study set"));
+        }
+
+        if (ss.getStatus() != null
+                && (ss.getStatus().equals(Status.DELETED)
+                    || ss.getStatus().equals(Status.SIGNED))) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Subject is " + ss.getStatus().getName().toLowerCase()
+                            + " — restore or un-sign first"));
+        }
+
+        SubjectDAO subjectDAO = new SubjectDAO(dataSource);
+        SubjectBean subj = (SubjectBean) subjectDAO.findByPK(ss.getSubjectId());
+        if (subj == null || subj.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "Subject record missing for " + studySubjectOid));
+        }
+
+        // Capture old values for audit. Field-by-field diff so we
+        // only write an audit row per changed column.
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        java.util.Date now = new java.util.Date();
+
+        // ---- secondaryId — null leaves unchanged; empty clears ----
+        if (body.secondaryId() != null) {
+            String oldSec = subj.getUniqueIdentifier() == null ? "" : subj.getUniqueIdentifier();
+            String newSec = body.secondaryId().trim();
+            if (!oldSec.equals(newSec)) {
+                subj.setUniqueIdentifier(newSec);
+                writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
+                        "secondary_id", oldSec, newSec);
+            }
+        }
+
+        // ---- gender ----
+        char newGenderChar = Character.toLowerCase(body.gender().charAt(0));
+        char oldGenderChar = subj.getGender();
+        if (oldGenderChar != newGenderChar) {
+            subj.setGender(newGenderChar);
+            writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
+                    "gender", String.valueOf(oldGenderChar), String.valueOf(newGenderChar));
+        }
+
+        // ---- yearOfBirth: stored on subject.date_of_birth as Jan-1 ----
+        if (body.yearOfBirth() != null) {
+            int newYob = body.yearOfBirth();
+            int oldYob = subj.getDateOfBirth() != null
+                    ? new java.util.Date(subj.getDateOfBirth().getTime()).toInstant()
+                            .atZone(java.time.ZoneId.systemDefault()).getYear()
+                    : 0;
+            if (oldYob != newYob) {
+                subj.setDateOfBirth(java.sql.Date.valueOf(java.time.LocalDate.of(newYob, 1, 1)));
+                subj.setDobCollected(true);
+                writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
+                        "year_of_birth", String.valueOf(oldYob), String.valueOf(newYob));
+            }
+        }
+
+        // Persist the subject row (single update covering all three
+        // editable columns; idempotent if no field changed).
+        subj.setUpdater(currentUser);
+        subj.setUpdatedDate(now);
+        subjectDAO.update(subj);
+
+        LOG.info("Subject demographics update: study_subject {} (label={}) by user={} role={}",
+                ss.getId(), ss.getLabel(), currentUser.getName(), roleId);
+
+        // Refresh + project.
+        SubjectBean refreshedSubj = (SubjectBean) subjectDAO.findByPK(subj.getId());
+        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
+        StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(dataSource);
+        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
+        Map<Integer, StudyEventDefinitionBean> definitionCache = new HashMap<>();
+        Map<Integer, Integer> openQueriesByEvent = loadOpenQueryCountsForStudy(currentStudy.getId());
+        SubjectDetailDto dto = toDetailDto(ss, refreshedSubj, currentStudy, studyEventDAO,
+                studyEventDefinitionDAO, eventCRFDAO, definitionCache, openQueriesByEvent);
+        return ResponseEntity.ok(dto);
+    }
+
+    private static List<ValidationErrorBody.FieldError> validateUpdateSubject(
+            UpdateSubjectRequest body) {
+        List<ValidationErrorBody.FieldError> errors = new ArrayList<>();
+        if (body == null) {
+            errors.add(new ValidationErrorBody.FieldError("body", "Request body is required."));
+            return errors;
+        }
+
+        // ---- secondaryId: optional, ≤30 chars when present ----
+        if (body.secondaryId() != null && body.secondaryId().trim().length() > 30) {
+            errors.add(new ValidationErrorBody.FieldError("secondaryId",
+                    "Secondary ID is too long (max 30 characters)."));
+        }
+
+        // ---- gender: required, in {F, M, O, U} (case-insensitive) ----
+        String gender = body.gender() == null ? "" : body.gender().trim().toUpperCase();
+        if (gender.isEmpty()) {
+            errors.add(new ValidationErrorBody.FieldError("gender", "Gender is required."));
+        } else if (!gender.equals("F") && !gender.equals("M") && !gender.equals("O") && !gender.equals("U")) {
+            errors.add(new ValidationErrorBody.FieldError("gender",
+                    "'" + body.gender() + "' is not a valid gender code."));
+        }
+
+        // ---- yearOfBirth: optional; 1900..currentYear when present ----
+        if (body.yearOfBirth() != null) {
+            int yob = body.yearOfBirth();
+            int thisYear = java.time.LocalDate.now().getYear();
+            if (yob < 1900 || yob > thisYear) {
+                errors.add(new ValidationErrorBody.FieldError("yearOfBirth",
+                        "Year of birth must be between 1900 and " + thisYear + "."));
+            }
+        }
+        return errors;
+    }
+
+    private static void writeSubjectFieldAudit(AuditEventDAO auditDAO,
+                                               UserAccountBean ub,
+                                               StudyBean study,
+                                               StudySubjectBean ss,
+                                               String columnName,
+                                               String oldValue,
+                                               String newValue) {
+        try {
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(ub.getId());
+            ae.setStudyId(study.getId());
+            ae.setSubjectId(ss.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setSubjectName(ss.getLabel() == null ? "" : ss.getLabel());
+            ae.setAuditTable("subject");
+            ae.setEntityId(ss.getSubjectId());
+            ae.setColumnName(columnName);
+            ae.setOldValue(oldValue == null ? "" : oldValue);
+            ae.setNewValue(newValue == null ? "" : newValue);
+            ae.setActionMessage("subject_demographics_update: " + columnName
+                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
+                    + (newValue == null ? "" : newValue) + "'");
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for subject field {}={} (continuing): {}",
+                    columnName, newValue, e.getMessage());
+        }
     }
 
     /**

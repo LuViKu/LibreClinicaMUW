@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
   EventCellSnapshot,
   EventStatus,
@@ -403,6 +403,81 @@ export const useSubjectsStore = defineStore('subjects', () => {
     }
   }
 
+  /**
+   * Phase E A2 — edit subject demographics. The backend
+   * (`PUT /api/v1/subjects/{oid}`) accepts a partial body where
+   * `gender` is required but `secondaryId` / `yearOfBirth` may be
+   * omitted (omitted = unchanged). Role-gated to Investigator / CRC /
+   * Data Manager / Administrator; the SPA hides the edit button for
+   * Monitor + RA roles.
+   *
+   * <p>On success the in-memory `selected` (SubjectDetail) is
+   * replaced with the refreshed copy, and the matching matrix row
+   * is updated in place.
+   *
+   * <p>Per-field validation errors come back as 400 with
+   * `errors: [{ field, message }]` — the caller (form view)
+   * extracts them. 401/403 re-thrown so the auth store can route.
+   */
+  async function updateSubject(
+    subjectId: string,
+    body: { secondaryId: string | null; gender: 'F' | 'M' | 'O' | 'U'; yearOfBirth: number | null },
+  ): Promise<{ ok: true; detail: SubjectDetail }
+              | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
+    try {
+      const detail = await apiPut<SubjectDetail>(
+        `/pages/api/v1/subjects/${encodeURIComponent(subjectId)}`,
+        body,
+      )
+      selected.value = detail
+      const idx = rows.value.findIndex((r) => r.id === subjectId)
+      if (idx >= 0) {
+        rows.value[idx] = {
+          ...rows.value[idx],
+          gender: detail.gender,
+          secondaryId: detail.secondaryId,
+          yearOfBirth: detail.yearOfBirth,
+        }
+      }
+      return { ok: true, detail }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Bearbeiten nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiError) {
+        const errBody = e.body as
+          | { message?: string; errors?: Array<{ field: string; message: string }> }
+          | null
+        const fieldErrors: Record<string, string> = {}
+        if (errBody?.errors) {
+          for (const fe of errBody.errors) {
+            fieldErrors[fe.field] = fe.message
+          }
+        }
+        return {
+          ok: false,
+          fieldErrors,
+          message: errBody?.message ?? `Bearbeiten fehlgeschlagen (HTTP ${e.status}).`,
+        }
+      }
+      if (e instanceof ApiNetworkError) {
+        return {
+          ok: false,
+          fieldErrors: {},
+          message:
+            'Backend nicht erreichbar — Bearbeiten fehlgeschlagen. Bitte später erneut versuchen.',
+        }
+      }
+      return {
+        ok: false,
+        fieldErrors: {},
+        message: e instanceof Error ? e.message : 'Unbekannter Fehler beim Bearbeiten.',
+      }
+    }
+  }
+
   return {
     // state
     rows,
@@ -429,6 +504,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
     loadPreflight,
     signSubject,
     removeSubject,
+    updateSubject,
   }
 })
 

@@ -64,6 +64,23 @@ export function canManageSubjectLifecycle(role: UserRole): boolean {
   return role === 'Data Manager' || role === 'Administrator'
 }
 
+/* ------------------------------------------------------------------ */
+/* Phase E A2 — subject demographics edit role helper.                */
+/*                                                                    */
+/* Mirrors SubjectEditAuthorization.java backend-side:                */
+/*   permitted: Investigator, CRC, Data Manager, Administrator        */
+/*   forbidden: Monitor, RA, RA2                                      */
+/* ------------------------------------------------------------------ */
+
+export function canEditSubject(role: UserRole): boolean {
+  return (
+    role === 'Investigator' ||
+    role === 'CRC' ||
+    role === 'Data Manager' ||
+    role === 'Administrator'
+  )
+}
+
 /**
  * Per-CRF data-entry stage taxonomy surfaced on the detail view.
  *
