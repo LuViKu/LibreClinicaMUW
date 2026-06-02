@@ -462,6 +462,48 @@
     "confirm": {
       "disableRuleSet": "Regelsatz auf {target} deaktivieren? Bisherige Ausführungs-Historie bleibt im Audit-Trail; die Regeln werden nicht mehr ausgewertet, bis sie wiederhergestellt werden.",
       "disableRule": "Regel {ruleOid} auf diesem Regelsatz deaktivieren? Andere Regeln am selben Ziel bleiben aktiv."
+    },
+    "import": {
+      "button": "Regeln importieren",
+      "downloadTemplate": "Vorlage mit Erläuterungen herunterladen",
+      "templateError": "Vorlage konnte nicht heruntergeladen werden (Status {status}).",
+      "fileLabel": "Regel-XML-Datei",
+      "uploadButton": "Hochladen",
+      "commitButton": "Übernehmen",
+      "cancelButton": "Abbrechen",
+      "closeButton": "Schließen",
+      "ignoreDuplicates": "Duplikate ignorieren (überspringen statt überschreiben)",
+      "parserActiveNote": "Die bestehende XML-Importpipeline läuft serverseitig: XSD-Prüfung, Ausdrucksvalidierung gegen die aktive Studie und Zyklenerkennung. Abgelehnte Einträge werden nicht gespeichert.",
+      "heading": {
+        "upload": "XML hochladen",
+        "preview": "Änderungen prüfen",
+        "result": "Fertig"
+      },
+      "preview": {
+        "summary": "{validRules} neue + {duplicateRules} doppelte + {invalidRules} ungültige Regeln · {validRuleSets} neue + {duplicateRuleSets} doppelte + {invalidRuleSets} ungültige Regelsätze",
+        "issuesHeading": "{count} Hinweis(e)",
+        "severity": {
+          "ERROR": "Fehler",
+          "WARNING": "Warnung"
+        },
+        "label": {
+          "validRules": "Neue Regeln",
+          "duplicateRules": "Doppelte Regeln",
+          "invalidRules": "Ungültige Regeln",
+          "validRuleSets": "Neue Regelsätze",
+          "duplicateRuleSets": "Doppelte Regelsätze",
+          "invalidRuleSets": "Ungültige Regelsätze"
+        }
+      },
+      "result": {
+        "summary": "Import übernommen. Die Detailzahlen:",
+        "rulesCreated": "{count} Regeln angelegt",
+        "rulesReplaced": "{count} Regeln ersetzt",
+        "ruleSetsCreated": "{count} Regelsätze angelegt",
+        "ruleSetsReplaced": "{count} Regelsätze ersetzt",
+        "actionsCreated": "{count} Aktionen verknüpft",
+        "committedAt": "Übernommen am {ts}"
+      }
     }
   },
   "sites": {

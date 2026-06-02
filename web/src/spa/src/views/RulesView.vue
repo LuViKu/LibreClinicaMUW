@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import RulesImportDialog from '@/components/RulesImportDialog.vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useRulesStore, type TestExpressionResult } from '@/stores/rules'
@@ -272,6 +273,17 @@ async function onRestoreAttachedRule(rs: RuleSet, ar: AttachedRule) {
     if (busyKey.value === key) busyKey.value = null
   }
 }
+
+/* -------------------------------------------------------------- */
+/* RX.2 — Import rules dialog                                       */
+/* -------------------------------------------------------------- */
+
+const importDialogOpen = ref(false)
+function openImportDialog() { importDialogOpen.value = true }
+function onImportCommitted() {
+  // Reload the list so the freshly committed rule_sets appear.
+  rules.load()
+}
 </script>
 
 <template>
@@ -283,10 +295,26 @@ async function onRestoreAttachedRule(rs: RuleSet, ar: AttachedRule) {
     </SideRail>
 
     <main class="flex-1 px-8 py-6">
-      <div class="mb-4">
-        <div class="text-xs text-slate-500 mb-1">{{ t('rules.subTrail') }}</div>
-        <h1 class="text-xl font-semibold tracking-tight">{{ t('rules.title') }}</h1>
-        <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">{{ t('rules.intro') }}</p>
+      <div class="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <div class="text-xs text-slate-500 mb-1">{{ t('rules.subTrail') }}</div>
+          <h1 class="text-xl font-semibold tracking-tight">{{ t('rules.title') }}</h1>
+          <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">{{ t('rules.intro') }}</p>
+        </div>
+        <!--
+          RX.2 — "Import rules" button. Gated to Administrator + Data
+          Manager via the same canManage gate as the disable/restore
+          actions. Backend re-checks via StudyAdminAuthorization, so
+          the SPA gate is a UI hint.
+        -->
+        <button
+          v-if="canManage"
+          type="button"
+          class="shrink-0 px-3 py-1.5 text-xs font-medium border border-muw-blue text-muw-blue bg-white rounded-md hover:bg-muw-blue-50"
+          @click="openImportDialog"
+        >
+          {{ t('rules.import.button') }}
+        </button>
       </div>
 
       <p v-if="rules.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
@@ -568,5 +596,10 @@ async function onRestoreAttachedRule(rs: RuleSet, ar: AttachedRule) {
         </section>
       </div>
     </main>
+
+    <RulesImportDialog
+      v-model:open="importDialogOpen"
+      @committed="onImportCommitted"
+    />
   </div>
 </template>

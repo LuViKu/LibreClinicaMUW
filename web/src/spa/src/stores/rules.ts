@@ -15,6 +15,49 @@ export type TestExpressionResult =
   | { ok: false; message: string }
 
 /**
+ * Phase E RX.2 — wire shape for {@code POST /api/v1/rules/import}.
+ *
+ * The preview response mirrors the backend
+ * {@code RulesImportPreviewDto}. The `errors` field on the failure
+ * branch holds the validator's per-record findings so the dialog
+ * can render them inline; the canonical `message` is a short
+ * summary suitable for a toast.
+ */
+export interface RulesImportPreview {
+  previewToken: string
+  validRuleCount: number
+  duplicateRuleCount: number
+  invalidRuleCount: number
+  validRuleSetCount: number
+  duplicateRuleSetCount: number
+  invalidRuleSetCount: number
+  issues: Array<{
+    scope: 'rule' | 'ruleSet'
+    identifier: string
+    severity: 'ERROR' | 'WARNING'
+    message: string
+  }>
+}
+
+export type RulesImportUploadResult =
+  | { ok: true; preview: RulesImportPreview }
+  | { ok: false; message: string; errors: string[] }
+
+/** Phase E RX.2 — wire shape for {@code POST /api/v1/rules/import/commit}. */
+export interface RulesImportCommit {
+  rulesCreated: number
+  rulesReplaced: number
+  ruleSetsCreated: number
+  ruleSetsReplaced: number
+  actionsCreated: number
+  committedAt: string
+}
+
+export type RulesImportCommitResult =
+  | { ok: true; result: RulesImportCommit }
+  | { ok: false; message: string }
+
+/**
  * Phase E RX.1 — rules store (read-only).
  *
  * Hydrates from `GET /api/v1/rule-sets`. The store keeps the full
@@ -269,6 +312,83 @@ export const useRulesStore = defineStore('rules', () => {
     return e instanceof Error ? e.message : `Unbekannter Fehler beim ${op}.`
   }
 
+  /* ---------------------------------------------------------------- */
+  /* Phase E RX.2 — XML import (preview + commit)                       */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Upload an XML rules file and get a preview back. Wraps
+   * {@code POST /api/v1/rules/import} (multipart). Returns a
+   * discriminated union so the dialog can branch on {@code ok}
+   * uniformly; 4xx / 5xx surface as {@code ok: false}, while 401 /
+   * 403 throw so the router guard can route to login or surface a
+   * permission toast.
+   */
+  async function uploadRulesXml(file: File): Promise<RulesImportUploadResult> {
+    const form = new FormData()
+    form.append('file', file)
+    try {
+      const res = await fetch('/LibreClinica/pages/api/v1/rules/import', {
+        method: 'POST',
+        body: form,
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        let body: { message?: string; errors?: Array<{ field: string; message: string }> } = {}
+        try { body = await res.json() } catch { /* not JSON */ }
+        if (res.status === 401 || res.status === 403) {
+          throw new ApiError(res.status, body.message ?? res.statusText, body)
+        }
+        const errors = (body.errors ?? []).map((e) => e.message)
+        return {
+          ok: false,
+          message: body.message ?? `Upload fehlgeschlagen (HTTP ${res.status}).`,
+          errors,
+        }
+      }
+      const preview: RulesImportPreview = await res.json()
+      return { ok: true, preview }
+    } catch (e) {
+      if (e instanceof ApiError) throw e
+      if (e instanceof ApiNetworkError) {
+        return { ok: false, message: 'Backend nicht erreichbar — Upload fehlgeschlagen.', errors: [] }
+      }
+      return {
+        ok: false,
+        message: e instanceof Error ? e.message : 'Unbekannter Upload-Fehler.',
+        errors: [],
+      }
+    }
+  }
+
+  /**
+   * Commit a previously previewed import. Wraps
+   * {@code POST /api/v1/rules/import/commit}. After success the
+   * caller refreshes the list via {@code load()}.
+   */
+  async function commitImport(
+    previewToken: string,
+    ignoreDuplicates: boolean,
+  ): Promise<RulesImportCommitResult> {
+    try {
+      const body = await apiPost<RulesImportCommit>(
+        '/pages/api/v1/rules/import/commit',
+        { previewToken, ignoreDuplicates },
+      )
+      return { ok: true, result: body }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) throw e
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        return { ok: false, message: body?.message ?? `Commit fehlgeschlagen (HTTP ${e.status}).` }
+      }
+      if (e instanceof ApiNetworkError) {
+        return { ok: false, message: 'Backend nicht erreichbar — Commit fehlgeschlagen.' }
+      }
+      return { ok: false, message: e instanceof Error ? e.message : 'Unbekannter Commit-Fehler.' }
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -289,5 +409,7 @@ export const useRulesStore = defineStore('rules', () => {
     disableAttachedRule,
     restoreAttachedRule,
     deleteRuleSet,
+    uploadRulesXml,
+    commitImport,
   }
 })
