@@ -466,6 +466,7 @@ export interface components {
             timezone?: string;
         };
         ActiveStudyDto: {
+            id?: number;
             oid?: string;
             name?: string;
             isSite?: boolean;

@@ -81,7 +81,7 @@ const studyId = computed(() => {
   // store mirrors backend session state — if for some reason the
   // admin hasn't picked a study, we surface a guard message.
   const active = auth.user?.activeStudy
-  return active && (active as { id?: number }).id ? (active as { id: number }).id : null
+  return active?.id && active.id > 0 ? active.id : null
 })
 
 const canSubmit = computed(() => {
