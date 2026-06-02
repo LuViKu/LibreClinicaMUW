@@ -349,6 +349,39 @@
       "users":        { "title": "Nutzer/-innen", "summary": "{count} Personen", "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs." }
     }
   },
+  "groupClasses": {
+    "title": "Teilnehmer-Gruppen",
+    "subTrail": "Studienaufbau · Stratifizierung + Behandlungsarme",
+    "intro": "Definieren Sie, wie Teilnehmer/innen klassifiziert werden — Randomisierungsarme, Familienzugehörigkeiten, demografische Schichten oder freie Gruppen. Jede Klasse besitzt eine Menge von Gruppen, in die Teilnehmer/innen einsortiert werden können.",
+    "createAction": "Neue Gruppenklasse",
+    "createHeading": "Gruppenklasse anlegen",
+    "submitCreate": "Klasse anlegen",
+    "empty": "Noch keine Gruppenklassen definiert.",
+    "groupsHeading": "Gruppen ({count})",
+    "childGroupsHeading": "Gruppen in dieser Klasse",
+    "addGroup": "Gruppe hinzufügen",
+    "disable": "Entfernen",
+    "restore": "Wiederherstellen",
+    "statusRemoved": "Entfernt",
+    "disableConfirm": "Gruppenklasse »{name}« entfernen? Bereits zugeordnete Teilnehmer/innen bleiben im Audit Trail; neue Zuordnungen verwenden die verbleibenden Klassen. Die Aktion wird im Audit Trail dokumentiert.",
+    "field": {
+      "name": "Name der Gruppenklasse",
+      "type": "Typ",
+      "assignment": "Zuweisung",
+      "groupName": "Gruppenname",
+      "groupDescription": "Beschreibung"
+    },
+    "type": {
+      "Arm": "Arm",
+      "Family": "Familie / Stammbaum",
+      "Demographic": "Demografische Schicht",
+      "Other": "Sonstige"
+    },
+    "assignment": {
+      "REQUIRED": "Pflicht",
+      "OPTIONAL": "Optional"
+    }
+  },
   "sites": {
     "title": "Standorte",
     "subTrail": "Studienaufbau · Multi-Center-Konfiguration",
