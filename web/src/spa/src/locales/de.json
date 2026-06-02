@@ -475,6 +475,62 @@
         "timeRequired": "Bei aktivem Zeitplan ist eine Uhrzeit erforderlich."
       }
     },
+    "create": {
+      "heading": "Neue Regel erstellen",
+      "actionTypeNote": "Inline-Erstellung unterstützt nur Rückfrage / E-Mail / Anzeigen / Ausblenden. Für andere Aktionstypen den XML-Import verwenden.",
+      "step": {
+        "1": "Schritt 1 · Regel-Definition",
+        "2": "Schritt 2 · Ziel + Geltungsbereich",
+        "3": "Schritt 3 · Aktion",
+        "done": "Abgeschlossen"
+      },
+      "field": {
+        "oid": "Regel-OID",
+        "oidHint": "Großbuchstaben, Ziffern, Unterstriche. Muss mit einem Buchstaben beginnen. z. B. RUL_BP_HIGH",
+        "name": "Anzeigename",
+        "description": "Beschreibung",
+        "expression": "Ausdrucks-Body",
+        "expressionHint": "z. B. ITEM_BP gt 140",
+        "target": "Ziel-OID-Pfad",
+        "targetHint": "OID-Pfad, an den die Regel andockt, z. B. ITEM_BP.GROUP1.CRF1.SED1",
+        "sedOid": "Visiten-Definitions-OID (optional)",
+        "crfOid": "CRF-OID (optional)",
+        "crfVersionOid": "CRF-Versions-OID (optional)",
+        "rulesToAttach": "Anzuhängende Regeln",
+        "actionType": "Aktionstyp",
+        "message": "Nachricht",
+        "to": "An (E-Mail)",
+        "phaseGates": "Aktiv in Phasen",
+        "expressionEvaluatesTo": "Auslösen wenn Ausdruck TRUE"
+      },
+      "button": {
+        "new": "Neue Regel",
+        "next": "Weiter",
+        "back": "Zurück",
+        "cancel": "Abbrechen",
+        "testExpression": "Syntax testen",
+        "saveRule": "Regel speichern",
+        "saveRuleSet": "Regel-Satz speichern",
+        "saveAction": "Aktion speichern",
+        "done": "Fertig"
+      },
+      "validation": {
+        "checking": "Wird geprüft…",
+        "valid": "Gültig",
+        "invalid": "Ungültig"
+      },
+      "result": {
+        "heading": "Regel erstellt",
+        "summary": "1 Regel, 1 Regel-Satz und 1 Aktion erstellt."
+      },
+      "phase": {
+        "admin": "Admin-Bearbeitung",
+        "initial": "Erst-Eingabe",
+        "double": "Doppel-Eingabe",
+        "import": "Import",
+        "batch": "Batch"
+      }
+    },
     "import": {
       "button": "Regeln importieren",
       "downloadTemplate": "Vorlage mit Erläuterungen herunterladen",
