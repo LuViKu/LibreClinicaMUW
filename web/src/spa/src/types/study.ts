@@ -94,6 +94,30 @@ export interface CreateStudyInput {
 }
 
 /**
+ * Phase E A8.4 — `POST /api/v1/studies/{parentOid}/sites` request body.
+ *
+ * Mirrors the backend `CreateSiteRequest` record. Sponsor + protocol
+ * type + phase are inherited from the parent — the SPA doesn't
+ * surface them on the site-create form.
+ */
+export interface CreateSiteInput {
+  name: string
+  uniqueProtocolId: string
+  briefSummary?: string
+  principalInvestigator: string
+  facilityName?: string
+  facilityCity?: string
+  facilityState?: string
+  facilityZip?: string
+  facilityCountry?: string
+  facilityContactName?: string
+  facilityContactDegree?: string
+  facilityContactPhone?: string
+  facilityContactEmail?: string
+  initialPrincipalInvestigatorUserId?: number
+}
+
+/**
  * Phase E A8.1 — `PUT /api/v1/studies/{oid}` request body. Every
  * field optional; `undefined`/omitted means "leave unchanged".
  */

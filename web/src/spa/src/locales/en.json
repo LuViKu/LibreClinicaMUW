@@ -333,6 +333,30 @@
       "users":        { "title": "Users", "summary": "{count} users", "description": "Per-site Investigators, Monitors, Data Managers, CRCs." }
     }
   },
+  "sites": {
+    "title": "Sites",
+    "subTrail": "Build study · multi-center setup",
+    "intro": "Create child sites under this study. Each site is a study row with its own facility metadata + role bindings; subjects + events are scoped per site. The active study must be the top-level parent — switch via the picker if you're currently on a site.",
+    "createAction": "New site",
+    "createHeading": "Create a site under this study",
+    "submitCreate": "Create site",
+    "empty": "No sites configured under this study yet.",
+    "pi": "Principal investigator",
+    "statusRemoved": "Removed",
+    "statusPending": "Pending",
+    "disable": "Remove",
+    "restore": "Restore",
+    "disableConfirm": "Remove site \"{name}\"? Existing subjects + events at this site stay in the audit trail but become inaccessible until restored. The action is recorded in the audit trail.",
+    "field": {
+      "name": "Site name",
+      "uniqueProtocolId": "Unique protocol ID",
+      "principalInvestigator": "Principal investigator",
+      "briefSummary": "Brief summary",
+      "facilityName": "Facility name",
+      "facilityCity": "City",
+      "facilityContactEmail": "Contact email"
+    }
+  },
   "crfLibrary": {
     "title": "CRF Library",
     "subTrail": "Build study · form library + versions",
