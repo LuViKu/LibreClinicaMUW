@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Phase E.4 M1 — entry in the user's available-studies list.
  *
@@ -16,6 +18,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
  * The SPA renders these as a picker; submitting one POSTs to
  * {@code /me/activeStudy} which binds the session-scoped study.
  */
+@Schema(name = "StudyOptionDto")
 public record StudyOptionDto(
         String oid,
         String name,

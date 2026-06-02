@@ -7,7 +7,13 @@
  * (E.4 catagory A) — the SPA can target the same endpoint with no
  * adapter once E.0 is unblocked. Until then the store hydrates from
  * mock data with the production shape.
+ *
+ * Phase E.5 follow-up (2026-06-02, TODO #7): {@link SdvRow} derived
+ * from {@code components['schemas']['SdvRowDto']}; narrow literal
+ * unions ({@link SdvStatus}, {@link SdvRequirement}) stay hand-typed.
  */
+
+import type { components } from './api'
 
 /** Verification + completion state of one CRF row in the SDV table. */
 export type SdvStatus =
@@ -19,22 +25,9 @@ export type SdvStatus =
 /** "Required vs not-required for SDV" per the legacy `sdv_status` column. */
 export type SdvRequirement = 'required-100' | 'required-partial' | 'not-required'
 
-export interface SdvRow {
-  /** OID of the EventCRF row in the DB — used as the v-model key. */
-  eventCrfOid: string
-  subjectId: string
-  siteLabel: string
-  /** Event label, e.g. "V1 Inclusion". */
-  eventLabel: string
-  /** Event start date (ISO YYYY-MM-DD). */
-  eventStartDate: string
-  /** CRF display name + version, e.g. "Demographics v1.0". */
-  crfName: string
-  crfLanguage: string
-  status: SdvStatus
-  requirement: SdvRequirement
-  /** Number of open queries blocking verification. */
-  openQueries: number
-  /** ISO instant of the last data-entry edit. */
-  lastUpdatedAt: string
-}
+export type SdvRow =
+  Omit<Required<components['schemas']['SdvRowDto']>, 'status' | 'requirement'>
+  & {
+    status: SdvStatus
+    requirement: SdvRequirement
+  }

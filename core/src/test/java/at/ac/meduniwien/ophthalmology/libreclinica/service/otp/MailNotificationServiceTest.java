@@ -19,7 +19,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnitRunner;
 
 /**
  * JUnit test verifying some {@link MailNotificationService} class
@@ -27,7 +27,6 @@ import org.mockito.runners.MockitoJUnitRunner;
  * 
  * @author thillger
  */
-@SuppressWarnings("deprecation")
 @RunWith(MockitoJUnitRunner.class)
 public class MailNotificationServiceTest {
     private MailNotificationService service;

@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 /**
@@ -46,6 +47,7 @@ import java.util.List;
  * Entry Complete (5) into a single SPA value because the SPA's M3 view
  * has no "validating" sub-state — both render the same indicator.
  */
+@Schema(name = "SubjectDetailDto")
 public record SubjectDetailDto(
         String id,
         String secondaryId,
@@ -69,6 +71,7 @@ public record SubjectDetailDto(
      * (date only — the study_event table stores timestamp but the SPA
      * doesn't render time-of-day in the detail view).
      */
+    @Schema(name = "EventCellDetailDto")
     public record EventCellDetailDto(
             String eventDefinitionOid,
             String label,

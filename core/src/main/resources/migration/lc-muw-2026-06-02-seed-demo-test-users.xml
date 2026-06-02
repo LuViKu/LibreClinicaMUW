@@ -1,0 +1,128 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.5 follow-up (2026-06-02): demo test users for role-based
+        UI exploration.
+
+        Adds two test accounts on Default Study (S_DEFAULTS1) alongside
+        the existing `root` admin:
+
+          | Username  | Password   | Legacy role     | SPA UserRole label |
+          |-----------|------------|-----------------|--------------------|
+          | physician | 12345678   | Investigator    | Investigator       |
+          | monitor   | 12345678   | monitor         | Monitor            |
+
+        Reuses root's bcrypt hash (same plaintext "12345678") so demo
+        sessions only need one memorised password. Hash format is
+        Spring Security's DelegatingPasswordEncoder `{bcrypt}` prefix
+        as configured in PasswordEncoderConfig (Phase D.5).
+
+        Authorization mapping is exact:
+          - physician → study_user_role.role_name = 'Investigator' (id 4)
+            on study_id=1, status_id=1 (AVAILABLE).
+          - monitor   → study_user_role.role_name = 'monitor' (id 6)
+            on study_id=1, status_id=1.
+
+        These role-name strings come from Role.java's per-instance
+        `name` field (lowercase except 'Investigator' — legacy
+        capitalisation preserved). RoleMapper.toSpaRole() projects
+        them into the SPA's 5-value UserRole union when the SPA's
+        /me adapter responds.
+
+        owner_id=1 on every row — both rows are "created by root" per
+        the existing seed convention.
+    -->
+
+    <changeSet id="2026-06-02-seed-test-user-physician"
+               author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM user_account WHERE user_name = 'physician';
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Insert the `physician` demo user with the Investigator
+            legacy role. Reuses root's bcrypt hash for "12345678" so
+            the demo password is uniform across all seeded accounts.
+        </comment>
+        <insert tableName="user_account">
+            <column name="user_id" valueNumeric="2"/>
+            <column name="user_name" value="physician"/>
+            <column name="passwd"
+                    value="{bcrypt}$2a$10$9QHaEdYWWSRQKYOaOECfbuQf8L1I1zWUPevUyMderR4S/ZmIc5/dG"/>
+            <column name="first_name" value="Demo"/>
+            <column name="last_name" value="Physician"/>
+            <column name="email" value="physician@example.invalid"/>
+            <column name="active_study" valueNumeric="1"/>
+            <column name="institutional_affiliation" value="MUW Ophthalmology (demo)"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-02"/>
+            <column name="passwd_timestamp" valueDate="2026-06-02"/>
+            <column name="user_type_id" valueNumeric="2"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="account_non_locked" valueBoolean="true"/>
+            <column name="lock_counter" valueNumeric="0"/>
+            <column name="run_webservices" valueBoolean="false"/>
+            <column name="authtype" value="STANDARD"/>
+            <column name="enable_api_key" valueBoolean="false"/>
+        </insert>
+        <insert tableName="study_user_role">
+            <column name="role_name" value="Investigator"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-02"/>
+            <column name="user_name" value="physician"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="2026-06-02-seed-test-user-monitor"
+               author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM user_account WHERE user_name = 'monitor';
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Insert the `monitor` demo user with the Monitor legacy role.
+            Same password hash as root / physician.
+        </comment>
+        <insert tableName="user_account">
+            <column name="user_id" valueNumeric="3"/>
+            <column name="user_name" value="monitor"/>
+            <column name="passwd"
+                    value="{bcrypt}$2a$10$9QHaEdYWWSRQKYOaOECfbuQf8L1I1zWUPevUyMderR4S/ZmIc5/dG"/>
+            <column name="first_name" value="Demo"/>
+            <column name="last_name" value="Monitor"/>
+            <column name="email" value="monitor@example.invalid"/>
+            <column name="active_study" valueNumeric="1"/>
+            <column name="institutional_affiliation" value="MUW Ophthalmology (demo)"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-02"/>
+            <column name="passwd_timestamp" valueDate="2026-06-02"/>
+            <column name="user_type_id" valueNumeric="2"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="account_non_locked" valueBoolean="true"/>
+            <column name="lock_counter" valueNumeric="0"/>
+            <column name="run_webservices" valueBoolean="false"/>
+            <column name="authtype" value="STANDARD"/>
+            <column name="enable_api_key" valueBoolean="false"/>
+        </insert>
+        <insert tableName="study_user_role">
+            <column name="role_name" value="monitor"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-02"/>
+            <column name="user_name" value="monitor"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

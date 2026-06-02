@@ -30,7 +30,7 @@ public class DataTableRequestTest {
 
     private static HttpServletRequest request(final Map<String, String> params) {
         HttpServletRequest req = org.mockito.Mockito.mock(HttpServletRequest.class);
-        org.mockito.Mockito.when(req.getParameter(org.mockito.Matchers.anyString()))
+        org.mockito.Mockito.when(req.getParameter(org.mockito.ArgumentMatchers.anyString()))
                 .thenAnswer(new Answer<String>() {
                     @Override
                     public String answer(InvocationOnMock invocation) {

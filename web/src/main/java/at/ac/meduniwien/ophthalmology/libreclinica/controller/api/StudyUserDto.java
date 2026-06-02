@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * Phase E.4 M12 — wire-shape for {@code GET /pages/api/v1/users}.
@@ -32,6 +33,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * @param active       Status == AVAILABLE
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Schema(name = "StudyUserDto")
 public record StudyUserDto(
         String id,
         String username,

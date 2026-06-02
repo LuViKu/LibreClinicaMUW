@@ -7,7 +7,15 @@
  * are gated server-side; the SPA enforces the same matrix client-side
  * via `canCloseNote(role, status)` etc. so the buttons match the
  * legacy thread-panel UI.
+ *
+ * Phase E.5 follow-up (2026-06-02, TODO #7): {@link DiscrepancyNote}
+ * is derived from the openapi-typescript-generated
+ * {@code components['schemas']['DiscrepancyNoteDto']} so SPA call
+ * sites track the backend record shape. Narrow {@link NoteType} /
+ * {@link NoteStatus} literal unions stay hand-typed.
  */
+
+import type { components } from './api'
 
 export type NoteType =
   | 'query'
@@ -22,16 +30,11 @@ export type NoteStatus =
   | 'closed'
   | 'not-applicable'
 
-export interface DiscrepancyNote {
-  id: string
-  type: NoteType
-  status: NoteStatus
-  subjectId: string
-  itemOid: string
-  description: string
-  /** Assigned user id, or null when nobody is assigned. */
-  assignedTo: string | null
-  daysOpen: number
-  /** ISO instant of the most recent thread entry. */
-  lastActivityAt: string
-}
+export type DiscrepancyNote =
+  Omit<Required<components['schemas']['DiscrepancyNoteDto']>, 'type' | 'status' | 'assignedTo'>
+  & {
+    type: NoteType
+    status: NoteStatus
+    /** Assigned user id, or null when nobody is assigned. */
+    assignedTo: string | null
+  }

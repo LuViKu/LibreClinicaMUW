@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Phase E.4 M9 — wire-shape for {@code GET /pages/api/v1/sdv}.
  *
@@ -33,6 +35,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
  * @param lastUpdatedAt  ISO instant of the last data-entry edit; empty
  *                       when never edited
  */
+@Schema(name = "SdvRowDto")
 public record SdvRowDto(
         String eventCrfOid,
         String subjectId,

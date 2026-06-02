@@ -3,10 +3,554 @@
  * Do not make direct changes to the file.
  */
 
-export type paths = Record<string, never>;
+export interface paths {
+    "/api/v1/me/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateProfile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subjects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list"];
+        put?: never;
+        post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subjects/{studySubjectOid}/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["sign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sdv/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/activeStudy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["setActiveStudy"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_1"];
+        put?: never;
+        post: operations["schedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/markComplete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["markComplete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["saveItems"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discrepancies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_2"];
+        put?: never;
+        post: operations["add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_3"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subjects/{studySubjectOid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subjects/{studySubjectOid}/preflightForSign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["preflightForSign"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_4"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{oid}/build-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["buildStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sdv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_5"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getEventCrf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+}
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: never;
+    schemas: {
+        ProfileUpdateRequest: {
+            displayName?: string;
+            locale?: string;
+            timezone?: string;
+        };
+        ActiveStudyDto: {
+            oid?: string;
+            name?: string;
+            isSite?: boolean;
+        };
+        MeDto: {
+            username?: string;
+            displayName?: string;
+            email?: string;
+            role?: string;
+            siteLabel?: string;
+            source?: string;
+            mfaSatisfied?: boolean;
+            profileComplete?: boolean;
+            locale?: string;
+            timezone?: string;
+            activeStudy?: components["schemas"]["ActiveStudyDto"];
+        };
+        AddSubjectRequest: {
+            id?: string;
+            secondaryId?: string;
+            gender?: string;
+            /** Format: int32 */
+            yearOfBirth?: number;
+            enrolledOn?: string;
+            groupLabel?: string;
+        };
+        EventCellDetailDto: {
+            eventDefinitionOid?: string;
+            label?: string;
+            status?: string;
+            /** Format: int32 */
+            openQueries?: number;
+            dateStart?: string;
+            dateEnd?: string;
+            location?: string;
+            dataEntryStage?: string;
+        };
+        SubjectDetailDto: {
+            id?: string;
+            secondaryId?: string;
+            siteOid?: string;
+            siteLabel?: string;
+            studyOid?: string;
+            studyName?: string;
+            gender?: string;
+            /** Format: int32 */
+            yearOfBirth?: number;
+            groupLabel?: string;
+            enrolledOn?: string;
+            events?: components["schemas"]["EventCellDetailDto"][];
+            signed?: boolean;
+            /** Format: int32 */
+            openQueries?: number;
+        };
+        SignSubjectRequest: {
+            password?: string;
+            attestation?: boolean;
+        };
+        VerifyRequest: {
+            eventCrfOids?: string[];
+            verified?: boolean;
+        };
+        ActiveStudyRequest: {
+            oid?: string;
+        };
+        ScheduleEventRequest: {
+            subjectId?: string;
+            eventDefinitionOid?: string;
+            dateStarted?: string;
+            location?: string;
+        };
+        StudyEventDto: {
+            id?: string;
+            subjectId?: string;
+            eventDefinitionOid?: string;
+            eventLabel?: string;
+            /** Format: int32 */
+            ordinal?: number;
+            dateStarted?: string;
+            dateEnded?: string;
+            location?: string;
+            status?: string;
+            repeating?: boolean;
+        };
+        SaveItemsRequest: {
+            values?: {
+                [key: string]: unknown;
+            };
+        };
+        AddQueryRequest: {
+            subjectId?: string;
+            itemOid?: string;
+            description?: string;
+            assignedTo?: string;
+        };
+        DiscrepancyNoteDto: {
+            id?: string;
+            type?: string;
+            status?: string;
+            subjectId?: string;
+            itemOid?: string;
+            description?: string;
+            assignedTo?: string;
+            /** Format: int32 */
+            daysOpen?: number;
+            lastActivityAt?: string;
+        };
+        StudyUserDto: {
+            id?: string;
+            username?: string;
+            displayName?: string;
+            email?: string;
+            role?: string;
+            siteLabel?: string;
+            auth?: string;
+            lastLoginAt?: string;
+            active?: boolean;
+        };
+        EventCellDto: {
+            eventDefinitionOid?: string;
+            label?: string;
+            status?: string;
+            /** Format: int32 */
+            openQueries?: number;
+        };
+        SubjectListItemDto: {
+            id?: string;
+            secondaryId?: string;
+            siteOid?: string;
+            siteLabel?: string;
+            gender?: string;
+            /** Format: int32 */
+            yearOfBirth?: number;
+            groupLabel?: string;
+            enrolledOn?: string;
+            events?: components["schemas"]["EventCellDto"][];
+            signed?: boolean;
+            /** Format: int32 */
+            openQueries?: number;
+        };
+        CheckRow: {
+            id?: string;
+            status?: string;
+            title?: string;
+            detail?: string;
+        };
+        SignPreflightDto: {
+            checks?: components["schemas"]["CheckRow"][];
+            /** Format: int32 */
+            blockingFailures?: number;
+            /** Format: int32 */
+            warnings?: number;
+            subjectAlreadySigned?: boolean;
+            userRoleCanSign?: boolean;
+        };
+        StudyOptionDto: {
+            oid?: string;
+            name?: string;
+            parentOid?: string;
+            parentName?: string;
+            role?: string;
+            isSite?: boolean;
+            isActive?: boolean;
+        };
+        StudyBuildDto: {
+            studyOid?: string;
+            studyName?: string;
+            studyVersion?: string;
+            /** Format: int32 */
+            sites?: number;
+            /** Format: int32 */
+            enrolledSubjects?: number;
+            tasks?: components["schemas"]["StudyBuildTaskDto"][];
+        };
+        StudyBuildTaskDto: {
+            id?: string;
+            /** Format: int32 */
+            count?: number;
+            status?: string;
+            to?: string;
+        };
+        SdvRowDto: {
+            eventCrfOid?: string;
+            subjectId?: string;
+            siteLabel?: string;
+            eventLabel?: string;
+            eventStartDate?: string;
+            crfName?: string;
+            crfLanguage?: string;
+            status?: string;
+            requirement?: string;
+            /** Format: int32 */
+            openQueries?: number;
+            lastUpdatedAt?: string;
+        };
+        CrfEntryDto: {
+            eventCrfOid?: string;
+            subjectId?: string;
+            eventLabel?: string;
+            schema?: components["schemas"]["CrfSchemaDto"];
+            values?: {
+                [key: string]: unknown;
+            };
+            status?: string;
+            lastSavedAt?: string;
+        };
+        CrfItemDto: {
+            oid?: string;
+            label?: string;
+            dataType?: string;
+            required?: boolean;
+            options?: components["schemas"]["ResponseOptionDto"][];
+            helper?: string;
+            /** Format: double */
+            min?: number;
+            /** Format: double */
+            max?: number;
+        };
+        CrfSchemaDto: {
+            oid?: string;
+            name?: string;
+            version?: string;
+            sections?: components["schemas"]["CrfSectionDto"][];
+        };
+        CrfSectionDto: {
+            oid?: string;
+            title?: string;
+            instructions?: string;
+            items?: components["schemas"]["CrfItemDto"][];
+        };
+        ResponseOptionDto: {
+            code?: string;
+            label?: string;
+        };
+        AuditEventDto: {
+            id?: string;
+            occurredAt?: string;
+            variant?: string;
+            actor?: string;
+            actorRole?: string;
+            title?: string;
+            subjectId?: string;
+            scope?: string;
+            details?: string;
+            before?: string;
+            after?: string;
+            reason?: string;
+        };
+    };
     responses: never;
     parameters: never;
     requestBodies: never;
@@ -14,4 +558,487 @@ export interface components {
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    updateProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdateRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MeDto"];
+                };
+            };
+        };
+    };
+    list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubjectListItemDto"];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AddSubjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubjectDetailDto"];
+                };
+            };
+        };
+    };
+    sign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studySubjectOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SignSubjectRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubjectDetailDto"];
+                };
+            };
+        };
+    };
+    verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    setActiveStudy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActiveStudyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MeDto"];
+                };
+            };
+        };
+    };
+    list_1: {
+        parameters: {
+            query?: {
+                subjectId?: string;
+                status?: string;
+                eventDefinitionOid?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyEventDto"];
+                };
+            };
+        };
+    };
+    schedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleEventRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyEventDto"];
+                };
+            };
+        };
+    };
+    markComplete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    saveItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveItemsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    list_2: {
+        parameters: {
+            query?: {
+                status?: string;
+                subjectId?: string;
+                assignedTo?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DiscrepancyNoteDto"];
+                };
+            };
+        };
+    };
+    add: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DiscrepancyNoteDto"];
+                };
+            };
+        };
+    };
+    list_3: {
+        parameters: {
+            query?: {
+                role?: string;
+                siteOid?: string;
+                active?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyUserDto"];
+                };
+            };
+        };
+    };
+    getOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studySubjectOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubjectDetailDto"];
+                };
+            };
+        };
+    };
+    preflightForSign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studySubjectOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SignPreflightDto"];
+                };
+            };
+        };
+    };
+    list_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyOptionDto"];
+                };
+            };
+        };
+    };
+    buildStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                oid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyBuildDto"];
+                };
+            };
+        };
+    };
+    list_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SdvRowDto"];
+                };
+            };
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MeDto"];
+                };
+            };
+        };
+    };
+    getEventCrf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfEntryDto"];
+                };
+            };
+        };
+    };
+    list_6: {
+        parameters: {
+            query?: {
+                actor?: string;
+                variant?: string;
+                subjectId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuditEventDto"];
+                };
+            };
+        };
+    };
+}

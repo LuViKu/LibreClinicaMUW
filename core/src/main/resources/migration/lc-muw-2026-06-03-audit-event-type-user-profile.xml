@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Phase E.5 #8 — seed a dedicated audit_log_event_type for self-service
+    profile edits via PUT /pages/api/v1/me/profile.
+
+    Why a fresh type vs. reusing one of the existing 36 rows:
+    The existing vocabulary (item/CRF/study_event/study_subject scoped)
+    has no slot that fits a user-account self-edit — the closest neighbour,
+    type 33 "CRF version changed", is semantically wrong. The Track-α
+    brief allowed type_id 33 as a last-resort fallback ("safest if none
+    exist"), but a one-row seed costs nothing and makes the regulatory
+    audit trail self-describing without overloading an unrelated label.
+
+    Why id 50 (not next-after-41):
+    Leaves a small gap (42–49) for any upstream LibreClinica releases
+    we may need to cherry-pick later, since they often add 1-2 audit
+    types per minor version. We bump to a round multiple to make the
+    institutional-extension origin obvious.
+
+    No trigger is added against user_account: the PUT endpoint emits the
+    row directly. Most user_account columns are still mutated by the
+    legacy UpdateProfileServlet (the SPA only owns 3 of the 26 columns),
+    and a row-level trigger would also fire for password / 2FA / api-key
+    bytes — a much bigger audit-write expansion than this ticket is
+    scoped to.
+
+    audit_log_event.audit_table = 'user_account' is the convention to
+    namespace the row to this table — same shape as the study_subject
+    trigger (audit_table = 'study_subject').
+  -->
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet author="muw-ophthalmology" id="2026-06-03-seed-audit-event-type-user-profile-updated">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type WHERE audit_log_event_type_id = 50
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed audit_log_event_type id 50 — "user_account_profile_updated" for SPA self-edit</comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="50"/>
+            <column name="name" value="user_account_profile_updated"/>
+            <column name="display_name" value="Profile updated"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

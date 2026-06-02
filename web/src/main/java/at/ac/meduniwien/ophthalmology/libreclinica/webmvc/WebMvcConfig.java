@@ -4,11 +4,21 @@ import java.util.List;
 
 import javax.sql.DataSource;
 
+import org.springdoc.core.configuration.SpringDocConfiguration;
+import org.springdoc.core.properties.SpringDocConfigProperties;
+import org.springdoc.core.properties.SwaggerUiConfigProperties;
+import org.springdoc.core.properties.SwaggerUiOAuthProperties;
+import org.springdoc.webmvc.core.configuration.MultipleOpenApiSupportConfiguration;
+import org.springdoc.webmvc.core.configuration.SpringDocWebMvcConfiguration;
+import org.springdoc.webmvc.ui.SwaggerConfig;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.http.converter.ByteArrayHttpMessageConverter;
 import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.http.converter.xml.MarshallingHttpMessageConverter;
@@ -62,6 +72,47 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.otp.TwoFactorService;
  */
 @Configuration
 @ComponentScan("at.ac.meduniwien.ophthalmology.libreclinica.controller")
+// Phase E.5 follow-up (2026-06-01): springdoc bean-creation configs are
+// re-imported here so OpenApiResource + SpringWebMvcProvider land in the
+// `pages` DispatcherServlet's CHILD context, the only context where the
+// 10 `/api/v1/**` @RestController classes register their request mappings.
+// Companion change: LibreClinicaApplication.java excludes these same
+// classes from the ROOT context (otherwise we'd get duplicate beans in
+// the two contexts AND springdoc's `getBeansOfType` lookup in root would
+// keep returning the empty handler mapping).
+//
+// SpringDocConfigProperties + Swagger-UI properties are loaded here too,
+// in the child context, via @EnableConfigurationProperties (NOT @Import).
+// They are @ConfigurationProperties classes; @Import registers the bean
+// definition but does NOT trigger Spring Boot's property binding —
+// downstream @Bean methods autowiring them then fail with
+// NoSuchBeanDefinitionException because the binder never created the
+// concrete instance. @EnableConfigurationProperties is the right
+// machinery for this. See
+// docs/development/modernization/phase-e/springdoc-pages-dispatcher.md.
+// Phase E.5 follow-up (2026-06-01): OpenApiConfig (with the
+// `spaApi` GroupedOpenApi bean and the @OpenAPIDefinition class-level
+// metadata) is imported explicitly here so it lands in the CHILD
+// context alongside the springdoc machinery. Putting it in the root
+// .config scan would land the GroupedOpenApi bean in root, while
+// MultipleOpenApiSupportCondition (gating MultipleOpenApiWebMvcResource)
+// evaluates context-locally in the child — so the multi-group spec
+// endpoint would never activate and `/v3/api-docs/{group}` would 404.
+// Moving the class to the .webmvc package keeps it out of root's
+// component-scan; @Import wires it into the child where the rest of
+// springdoc lives.
+@Import({
+        OpenApiConfig.class,
+        SpringDocConfiguration.class,
+        SpringDocWebMvcConfiguration.class,
+        MultipleOpenApiSupportConfiguration.class,
+        SwaggerConfig.class
+})
+@EnableConfigurationProperties({
+        SpringDocConfigProperties.class,
+        SwaggerUiConfigProperties.class,
+        SwaggerUiOAuthProperties.class
+})
 public class WebMvcConfig {
 
     /**
@@ -180,7 +231,17 @@ public class WebMvcConfig {
             @org.springframework.beans.factory.annotation.Qualifier("jacksonMessageConverter")
                     MappingJackson2HttpMessageConverter jacksonMessageConverter) {
         RequestMappingHandlerAdapter a = new RequestMappingHandlerAdapter();
-        a.setMessageConverters(List.of(marshallingHttpMessageConverter, jacksonMessageConverter));
+        // Phase E.5 follow-up (2026-06-01): ByteArrayHttpMessageConverter
+        // ordered FIRST so springdoc's OpenApiResource.openapiJson()
+        // (which returns a byte[] holding the already-serialised JSON
+        // spec) lands on the wire as raw application/json, not as a
+        // Jackson-base64-stringified payload. Without this converter
+        // the SPA's openapi-typescript codegen fetches `"eyJ..."` and
+        // fails to parse.
+        a.setMessageConverters(List.of(
+                new ByteArrayHttpMessageConverter(),
+                marshallingHttpMessageConverter,
+                jacksonMessageConverter));
         return a;
     }
 

@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 /**
@@ -47,6 +48,7 @@ import java.util.List;
  * is non-null, regardless of the formal stage id. This keeps M-003's
  * preflight clean.
  */
+@Schema(name = "SignPreflightDto")
 public record SignPreflightDto(
         List<CheckRow> checks,
         int blockingFailures,
@@ -64,6 +66,7 @@ public record SignPreflightDto(
      * {@code open-queries}, {@code subject-not-signed},
      * {@code user-role-can-sign}).
      */
+    @Schema(name = "CheckRow")
     public record CheckRow(
             String id,
             String status,

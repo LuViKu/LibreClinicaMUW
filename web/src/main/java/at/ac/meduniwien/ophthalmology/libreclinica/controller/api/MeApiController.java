@@ -27,6 +27,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,6 +94,19 @@ public class MeApiController {
     /** Locales the SPA's first-login picker offers; mirrors the i18n bundle list. */
     private static final List<String> ALLOWED_LOCALES = List.of("de-AT", "de", "en");
 
+    /**
+     * audit_log_event_type_id for user-account profile edits via the SPA.
+     * Seeded by {@code lc-muw-2026-06-03-audit-event-type-user-profile.xml}.
+     * Postgres has no audit trigger on {@code user_account} updates (only
+     * the Oracle-only sequence-id trigger {@code user_account_bef_trg}
+     * exists, and that's for ID generation, not auditing). The PUT
+     * endpoint therefore emits one row per modified field directly,
+     * matching the shape the {@code study_subject_trigger} writes for
+     * study_subject column changes (audit_table / entity_id / entity_name
+     * / old_value / new_value).
+     */
+    private static final int AUDIT_TYPE_USER_PROFILE_UPDATED = 50;
+
     private final DataSource dataSource;
 
     @Autowired
@@ -99,6 +115,8 @@ public class MeApiController {
     }
 
     @GetMapping
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = MeDto.class)))
     public ResponseEntity<?> getMe(HttpSession session) {
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
         if (ub == null || ub.getId() == 0) {
@@ -145,6 +163,8 @@ public class MeApiController {
     }
 
     @PostMapping("/activeStudy")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = MeDto.class)))
     public ResponseEntity<?> setActiveStudy(@RequestBody ActiveStudyRequest body, HttpSession session) {
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
         if (ub == null || ub.getId() == 0) {
@@ -191,6 +211,8 @@ public class MeApiController {
     }
 
     @PutMapping("/profile")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = MeDto.class)))
     public ResponseEntity<?> updateProfile(@RequestBody ProfileUpdateRequest body, HttpSession session) {
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
         if (ub == null || ub.getId() == 0) {
@@ -232,6 +254,16 @@ public class MeApiController {
             return ResponseEntity.badRequest().body(resp);
         }
 
+        // Capture the BEFORE state so the audit row records the actual
+        // diff. first_name + time_zone come straight off the session bean
+        // (those columns are session-mirrored on login); locale isn't on
+        // the bean — fetch it from the DB the same way GET /me does.
+        // Capture before the UPDATE runs so a partial failure can't show
+        // post-update values as "old".
+        String oldFirstName = nullToEmpty(ub.getFirstName());
+        String oldLocale = nullToEmpty(readLocale(ub.getId()));
+        String oldTimezone = nullToEmpty(ub.getTime_zone());
+
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "UPDATE user_account SET first_name = ?, locale = ?, time_zone = ?, "
@@ -253,6 +285,21 @@ public class MeApiController {
                     "Failed to persist profile: " + e.getMessage()));
         }
 
+        // Emit one audit_log_event row per field that actually changed.
+        // Postgres has no trigger on user_account updates (only the
+        // Oracle-only sequence trigger user_account_bef_trg exists), so
+        // the regulatory trail is the controller's responsibility. The
+        // row shape mirrors study_subject_trigger: audit_table /
+        // entity_id / entity_name / old_value / new_value, with
+        // audit_log_event_type_id = 50 ("user_account_profile_updated").
+        // The actor is the same as the target since /me is self-edit.
+        // Failures here are logged but do NOT roll back the UPDATE —
+        // losing an audit row is annoying; losing the user's profile
+        // edit on top of an audit-write hiccup is worse.
+        emitProfileAudit(ub.getId(), "first_name", oldFirstName, displayName);
+        emitProfileAudit(ub.getId(), "locale",     oldLocale,    locale);
+        emitProfileAudit(ub.getId(), "time_zone",  oldTimezone,  timezone);
+
         // Refresh the session-bound bean so subsequent /me requests
         // see the new state without round-tripping the auth flow.
         ub.setFirstName(displayName);
@@ -263,6 +310,50 @@ public class MeApiController {
                 ub.getName(), locale, timezone);
 
         return getMe(session);
+    }
+
+    /**
+     * Insert one {@code audit_log_event} row when the given column's
+     * old/new pair differs. Skips no-op writes (no row when the user
+     * submitted the same value they already had).
+     *
+     * <p>Direct JDBC because {@link at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO#create}
+     * only persists {@code audit_table / user_id / entity_id /
+     * reason_for_change / action_message} — it drops the {@code
+     * audit_log_event_type_id / old_value / new_value / entity_name}
+     * fields that an audit row needs to be parseable by the SPA's
+     * Audit Log view (see the comment block at AuditEventDAO line 200ff:
+     * "new query needs to be ..." — never landed). Using raw SQL here
+     * matches what the existing {@code study_subject_trigger} writes.
+     */
+    private void emitProfileAudit(int userId, String columnName,
+                                  String oldValue, String newValue) {
+        if (oldValue.equals(newValue)) {
+            return;
+        }
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, ?, ?)")) {
+            ps.setInt(1, AUDIT_TYPE_USER_PROFILE_UPDATED);
+            ps.setInt(2, userId);
+            ps.setInt(3, userId);
+            ps.setString(4, columnName);
+            ps.setString(5, oldValue);
+            ps.setString(6, newValue);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            // Don't propagate — the profile update has already
+            // succeeded; a missed audit row shouldn't make the user
+            // think the save failed.
+            LOG.warn("Failed to write audit row for user_id={} column={}: {}",
+                    userId, columnName, e.getMessage());
+        }
+    }
+
+    private static String nullToEmpty(String s) {
+        return s == null ? "" : s;
     }
 
     /* ----------------------------------------------------------------- */

@@ -46,6 +46,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -79,7 +82,11 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>17–26, 35 → {@code data} (study-event lifecycle)</li>
  *   <li>31 → {@code signed}</li>
  *   <li>32 → {@code sdv}</li>
- *   <li>2–7, 9, 27, 28, 29, 33 → {@code admin}</li>
+ *   <li>2–7, 9, 27, 33 → {@code admin}</li>
+ *   <li>28, 29 → {@code subject-group-change} (subject added to or
+ *       moved between treatment-arm groups; lets the SPA render the
+ *       before/after group labels separately from generic admin
+ *       events). Phase E.5 #2 promoted these out of the admin bucket.</li>
  *   <li>any row with non-blank {@code reason_for_change} → {@code
  *       reason-for-change} (overrides the type mapping)</li>
  * </ul>
@@ -151,6 +158,8 @@ public class AuditApiController {
     }
 
     @GetMapping
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array", implementation = AuditEventDto.class)))
     public ResponseEntity<?> list(
             @RequestParam(value = "actor", required = false) String actorFilter,
             @RequestParam(value = "variant", required = false) String variantFilter,
@@ -294,8 +303,15 @@ public class AuditApiController {
         return switch (typeId) {
             case 31 -> "signed";
             case 32 -> "sdv";
+            // Subject-group-map lifecycle (types 28 + 29 — "added to
+            // group" + "moved between groups"). Phase E.5 #2 follow-up:
+            // promoted out of the generic "admin" bucket so the SPA can
+            // render the before/after group labels (already populated
+            // in audit_log_event.{old_value,new_value} by the
+            // subject_group_map trigger).
+            case 28, 29 -> "subject-group-change";
             // Subject / study-subject / EDC lifecycle.
-            case 2, 3, 4, 5, 6, 7, 9, 27, 28, 29, 33 -> "admin";
+            case 2, 3, 4, 5, 6, 7, 9, 27, 33 -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,

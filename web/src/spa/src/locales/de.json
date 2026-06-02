@@ -251,7 +251,8 @@
       "sdv": "SDV",
       "admin": "Administration",
       "data": "Datenerfassung",
-      "query": "Rückfrage"
+      "query": "Rückfrage",
+      "subject-group-change": "Gruppenwechsel"
     }
   },
   "crfEntry": {

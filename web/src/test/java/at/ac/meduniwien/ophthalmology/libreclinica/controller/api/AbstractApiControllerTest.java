@@ -114,9 +114,17 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  */
 abstract class AbstractApiControllerTest {
 
-    /** Build a MockMvc that routes only the supplied controller(s). */
+    /**
+     * Build a MockMvc that routes only the supplied controller(s),
+     * with the production {@link ApiExceptionHandler} registered so
+     * uncaught exceptions wrap to 5xx JSON the way they do in
+     * production (rather than the bare ServletException re-throw that
+     * standaloneSetup would otherwise emit).
+     */
     protected final MockMvc mockMvcFor(Object... controllers) {
-        return MockMvcBuilders.standaloneSetup(controllers).build();
+        return MockMvcBuilders.standaloneSetup(controllers)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
     }
 
     /** Empty (unauthenticated, no study) HttpSession. */

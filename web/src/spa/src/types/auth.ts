@@ -8,6 +8,8 @@
  * `GET /pages/api/v1/me` lands, the SPA mocks the same shape.
  */
 
+import type { components } from './api'
+
 export type UserRole =
   | 'Investigator'
   | 'Monitor'
@@ -22,49 +24,47 @@ export type AuthState =
   | 'profile-incomplete'
   | 'authenticated'
 
-export interface AuthenticatedUser {
-  username: string
-  displayName: string
-  email: string | null
-  role: UserRole
-  siteLabel: string | null
-  source: AuthSource
-  /** True when the auth method enforces MFA at the IdP (SSO via reverse-proxy). */
-  mfaSatisfied: boolean
-  /** First-login profile completion flag — drives the FirstLogin wizard. */
-  profileComplete: boolean
-  /**
-   * BCP-47 language tag the user picked at first login. `null` for
-   * never-set users; the SPA falls back to the browser-detected default.
-   * Persisted via {@code PUT /pages/api/v1/me/profile} (Phase E.5 B1).
-   */
-  locale: string | null
-  /**
-   * IANA timezone id (e.g. {@code "Europe/Vienna"}). `null` for never-set;
-   * SPA falls back to the browser-detected zone. Persisted via the same
-   * profile PUT.
-   */
-  timezone: string | null
-  /**
-   * The study currently bound to the server-side session. `null` when
-   * the user has authenticated but not yet picked a study (the SPA
-   * routes them to the study-picker). Drives the role chip + scope
-   * tells in the top bar.
-   */
-  activeStudy: ActiveStudySummary | null
-}
+/**
+ * Phase E.5 follow-up (2026-06-02, TODO #7): hydrated from the
+ * openapi-typescript-generated {@link components['schemas']['MeDto']}.
+ * The generated type marks every field optional (records don't carry
+ * required-vs-optional metadata); we lift the always-present fields
+ * with {@link Required} and override the loosely-typed string fields
+ * with the SPA's narrow unions ({@link UserRole}, {@link AuthSource}).
+ * Nullable fields ({@code email}, {@code siteLabel}, {@code locale},
+ * {@code timezone}) keep the SPA's {@code string | null} call-site
+ * convention so the existing optional-chaining code keeps compiling.
+ */
+export type AuthenticatedUser =
+  Omit<Required<components['schemas']['MeDto']>, 'role' | 'source' | 'email' | 'siteLabel' | 'locale' | 'timezone' | 'activeStudy'>
+  & {
+    role: UserRole
+    source: AuthSource
+    email: string | null
+    siteLabel: string | null
+    locale: string | null
+    timezone: string | null
+    activeStudy: ActiveStudySummary | null
+  }
 
 /**
  * Phase E.5 B1 — body of {@code PUT /pages/api/v1/me/profile}.
  *
+ * <p>Phase E.5 follow-up (2026-06-02, TODO #7): derived from the
+ * openapi-typescript-generated {@link components} schema so the SPA's
+ * call sites stay aligned with the backend record shape. The previous
+ * hand-typed declaration had {@code displayName / locale / timezone}
+ * as required {@code string}s; the generated schema marks them
+ * optional matching the Java record (every field defaults to {@code
+ * null} if missing). Wrapped with {@link Required} to keep the
+ * SPA's existing call-site invariant (first-login wizard rejects
+ * blanks before submitting) without diverging from the spec.
+ *
  * <p>Field names match the SPA's first-login wizard inputs; the
  * backend maps {@code displayName} to {@code user_account.first_name}.
  */
-export interface ProfileUpdateRequest {
-  displayName: string
-  locale: string
-  timezone: string
-}
+export type ProfileUpdateRequest =
+  Required<components['schemas']['ProfileUpdateRequest']>
 
 /** Per-field validation error returned by 400 responses on profile-edit endpoints. */
 export interface ProfileFieldError {
@@ -72,27 +72,33 @@ export interface ProfileFieldError {
   message: string
 }
 
-/** Minimal study summary embedded in AuthenticatedUser. */
-export interface ActiveStudySummary {
-  oid: string
-  name: string
-  isSite: boolean
-}
+/**
+ * Minimal study summary embedded in AuthenticatedUser.
+ *
+ * Phase E.5 follow-up (TODO #7) — derived from
+ * {@code components['schemas']['ActiveStudyDto']}.
+ */
+export type ActiveStudySummary = Required<components['schemas']['ActiveStudyDto']>
 
 /**
  * Phase E.4 M1 — one row in the user's available-studies list,
  * returned by `GET /pages/api/v1/studies` and consumed by the
  * StudyPicker view.
+ *
+ * Phase E.5 follow-up (TODO #7) — derived from
+ * {@code components['schemas']['StudyOptionDto']}. Overrides the
+ * loosely-typed {@code role} field with the SPA's {@link UserRole}
+ * union, and keeps the {@code parentOid} / {@code parentName} pair
+ * as {@code string | null} so the picker's "site or study" branching
+ * keeps its null-narrowing semantics.
  */
-export interface StudyOption {
-  oid: string
-  name: string
-  parentOid: string | null
-  parentName: string | null
-  role: UserRole
-  isSite: boolean
-  isActive: boolean
-}
+export type StudyOption =
+  Omit<Required<components['schemas']['StudyOptionDto']>, 'role' | 'parentOid' | 'parentName'>
+  & {
+    role: UserRole
+    parentOid: string | null
+    parentName: string | null
+  }
 
 /**
  * Institution-local SSO config returned by the planned adapter

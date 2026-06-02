@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * Phase E.4 M11 — wire-shape for {@code GET /pages/api/v1/events}
@@ -31,6 +32,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * @param repeating         whether the def has repeating=true
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Schema(name = "StudyEventDto")
 public record StudyEventDto(
         String id,
         String subjectId,

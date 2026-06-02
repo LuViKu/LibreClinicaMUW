@@ -148,3 +148,20 @@ libreclinica:
     reauth:
       enabled: ${LIBRECLINICA_SSO_REAUTH:false}
       url-template: ${LIBRECLINICA_SSO_REAUTH_URL_TEMPLATE:/Shibboleth.sso/Login?forceAuthn=true&target={target}}
+
+# Phase E.5 follow-up (2026-06-01): springdoc properties intentionally
+# left at default (api-docs.path = /v3/api-docs). The OpenApiResource
+# @RestController is registered in the `pages` DispatcherServlet's
+# CHILD context (via @Import in WebMvcConfig — see that file). When a
+# request hits `/LibreClinica/pages/v3/api-docs/spa-api`, Tomcat routes
+# /pages/* to the dispatcher; the dispatcher consumes /pages as its
+# servletPath and hands the handler-mapping the pathInfo
+# `/v3/api-docs/spa-api`, which matches OpenApiResource's default
+# @RequestMapping("${springdoc.api-docs.path:/v3/api-docs}/{group}").
+# Trying to override the property to /pages/v3/api-docs is wrong — it
+# would register OpenApiResource at /pages/v3/api-docs/{group}, but the
+# dispatcher's lookup path is post-strip and could never match. The SPA
+# codegen + CI drift guard fetch /LibreClinica/pages/v3/api-docs/spa-api;
+# OpenApiConfig's `servers.url = /LibreClinica/pages` makes the generated
+# spec's relative paths resolve under that prefix.
+# See docs/development/modernization/phase-e/springdoc-pages-dispatcher.md.

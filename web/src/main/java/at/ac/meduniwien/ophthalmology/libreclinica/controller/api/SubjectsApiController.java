@@ -59,6 +59,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -137,6 +140,8 @@ public class SubjectsApiController {
     }
 
     @GetMapping
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array", implementation = SubjectListItemDto.class)))
     public ResponseEntity<?> list(HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
@@ -217,6 +222,8 @@ public class SubjectsApiController {
      * situation.
      */
     @GetMapping("/{studySubjectOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = SubjectDetailDto.class)))
     public ResponseEntity<?> getOne(@PathVariable("studySubjectOid") String studySubjectOid,
                                     HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
@@ -287,6 +294,8 @@ public class SubjectsApiController {
      * list.
      */
     @GetMapping("/{studySubjectOid}/preflightForSign")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = SignPreflightDto.class)))
     public ResponseEntity<?> preflightForSign(@PathVariable("studySubjectOid") String studySubjectOid,
                                               HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
@@ -587,6 +596,8 @@ public class SubjectsApiController {
      *         500 if persistence fails after validation passes.
      */
     @PostMapping
+    @ApiResponse(responseCode = "201",
+                 content = @Content(schema = @Schema(implementation = SubjectDetailDto.class)))
     public ResponseEntity<?> create(@RequestBody(required = false) AddSubjectRequest body,
                                     HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
@@ -767,6 +778,8 @@ public class SubjectsApiController {
      *         {@code fail}.
      */
     @PostMapping("/{studySubjectOid}/sign")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = SubjectDetailDto.class)))
     public ResponseEntity<?> sign(@PathVariable("studySubjectOid") String studySubjectOid,
                                   @RequestBody(required = false) SignSubjectRequest body,
                                   HttpSession session) {

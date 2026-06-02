@@ -9,6 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
  * Phase E.4 M10 — wire-shape for {@code GET /pages/api/v1/audit}.
@@ -37,6 +38,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
  * @param reason        legacy {@code reason_for_change} — null when blank
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Schema(name = "AuditEventDto")
 public record AuditEventDto(
         String id,
         String occurredAt,
