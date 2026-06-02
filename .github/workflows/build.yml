@@ -278,23 +278,28 @@ jobs:
       - name: Fetch live OpenAPI spec
         run: |
           set -e
+          # Phase E.5 follow-up (2026-06-01): springdoc beans live in the
+          # `pages` DispatcherServlet child context; the API-docs path is
+          # configured as /pages/v3/api-docs in application.yml so the URL
+          # flows through the same dispatcher that hosts the controllers.
           curl --silent --fail \
-            http://127.0.0.1:8080/LibreClinica/v3/api-docs/spa-api \
+            http://127.0.0.1:8080/LibreClinica/pages/v3/api-docs/spa-api \
             -o /tmp/openapi-spa.json
-          # Sanity: spec must be a non-trivial JSON document. We do
-          # NOT yet assert on `paths` being populated — B3 documented
-          # a known limitation where springdoc auto-config introspects
-          # the root context only, leaving paths={} until a follow-up
-          # wires the OpenAPI resource into the pages dispatcher's
-          # child context. The drift guard still works because the
-          # committed api.ts and the regenerated api.ts agree on the
-          # empty-paths shape; once the follow-up lands, the same
-          # guard catches real drift automatically.
+          # Sanity: spec must be a non-trivial JSON document AND must
+          # describe at least one path. The earlier B3 comment about a
+          # tolerated empty-paths shape was a known-limitation workaround;
+          # with the springdoc-pages-dispatcher fix in place, paths={} is
+          # now a regression — assert non-empty.
           size=$(wc -c < /tmp/openapi-spa.json)
           echo "Spec size: ${size} bytes"
           if [ "$size" -lt 100 ]; then
             echo "::error::OpenAPI spec is suspiciously small (< 100 bytes)."
             cat /tmp/openapi-spa.json
+            exit 1
+          fi
+          if ! python3 -c "import json,sys; d=json.load(open('/tmp/openapi-spa.json')); sys.exit(0 if d.get('paths') else 1)"; then
+            echo "::error::OpenAPI spec has empty 'paths' — springdoc is not introspecting the /api/v1/** controllers."
+            head -c 600 /tmp/openapi-spa.json
             exit 1
           fi
 

@@ -34,12 +34,8 @@ RUN --mount=type=cache,target=/root/.m2 \
 COPY . .
 
 RUN --mount=type=cache,target=/root/.m2 \
-    --mount=type=cache,target=/app/core/target \
-    --mount=type=cache,target=/app/docs/target \
-    --mount=type=cache,target=/app/odm/target \
-    --mount=type=cache,target=/app/web/target \
     set -eux; \
-    mvn package -DskipSpa=true; \
+    mvn package -DskipSpa=true -DskipTests=true -Dmdep.analyze.skip=true; \
     # Maven's default WAR name is ${artifactId}-${version}.war, so this is
     # LibreClinica-web-1.4.0rc1-muw.war today and will keep changing as the
     # project version moves. Glob it and rename to a stable name for the

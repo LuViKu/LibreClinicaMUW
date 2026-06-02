@@ -19,7 +19,7 @@
     "format": "prettier --write src",
     "check-tokens": "node scripts/check-tokens.mjs",
     "check-i18n": "node scripts/check-i18n-coverage.mjs",
-    "codegen:openapi": "openapi-typescript http://127.0.0.1:8080/LibreClinica/v3/api-docs/spa-api -o src/types/api.ts"
+    "codegen:openapi": "openapi-typescript http://127.0.0.1:8080/LibreClinica/pages/v3/api-docs/spa-api -o src/types/api.ts"
   },
   "dependencies": {
     "pinia": "^2.2.2",
