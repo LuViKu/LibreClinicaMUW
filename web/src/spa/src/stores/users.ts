@@ -192,6 +192,80 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  /**
+   * Phase E A7.3 — soft-delete a user via
+   * `POST /api/v1/users/{username}/disable`.
+   *
+   * Sysadmin-only; the backend also rejects self-disable with 409.
+   * On success replaces the matching matrix row (it will render with
+   * `active: false`).
+   */
+  async function disableUser(username: string): Promise<boolean> {
+    try {
+      const updated = await apiPost<StudyUser>(
+        `/pages/api/v1/users/${encodeURIComponent(username)}/disable`,
+        {},
+      )
+      const idx = rows.value.findIndex((u) => u.username === username)
+      if (idx >= 0) rows.value[idx] = updated
+      return true
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Deaktivieren nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Deaktivieren fehlgeschlagen. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Deaktivieren fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Deaktivieren.'
+      }
+      return false
+    }
+  }
+
+  /**
+   * Phase E A7.3 — restore a previously-disabled user via
+   * `POST /api/v1/users/{username}/restore`. Returns
+   * `{user, generatedPassword}` so the caller can surface the
+   * one-time password to the operator. For LDAP / SSO users the
+   * directory / IdP owns the credential, so `generatedPassword` is
+   * `null` in that case.
+   */
+  async function restoreUser(
+    username: string,
+  ): Promise<{ ok: true; user: StudyUser; generatedPassword: string | null } | { ok: false }> {
+    try {
+      const res = await apiPost<{ user: StudyUser; generatedPassword: string | null }>(
+        `/pages/api/v1/users/${encodeURIComponent(username)}/restore`,
+        { sendEmail: false },
+      )
+      const idx = rows.value.findIndex((u) => u.username === username)
+      if (idx >= 0) rows.value[idx] = res.user
+      return { ok: true, user: res.user, generatedPassword: res.generatedPassword }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Reaktivieren nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Reaktivieren fehlgeschlagen. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Reaktivieren fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Reaktivieren.'
+      }
+      return { ok: false }
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -208,5 +282,7 @@ export const useUsersStore = defineStore('users', () => {
     load,
     createUser,
     updateUser,
+    disableUser,
+    restoreUser,
   }
 })

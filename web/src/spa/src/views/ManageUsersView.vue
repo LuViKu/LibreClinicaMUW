@@ -34,6 +34,33 @@ function openEdit(u: StudyUser) {
   editOpen.value = true
 }
 
+/* Phase E A7.3 — lifecycle (disable/restore). Disable is confirmed
+   via a native dialog; restore returns a one-time password we surface
+   in a small inline panel until the operator dismisses it. */
+const isLifecycleBusy = ref<string | null>(null)
+const restoredPanel = ref<{ username: string; password: string | null } | null>(null)
+
+async function onDisable(u: StudyUser) {
+  if (!confirm(t('manageUsers.lifecycle.disableConfirm', { username: u.username }))) return
+  isLifecycleBusy.value = u.username
+  try { await users.disableUser(u.username) }
+  finally { isLifecycleBusy.value = null }
+}
+
+async function onRestore(u: StudyUser) {
+  if (!confirm(t('manageUsers.lifecycle.restoreConfirm', { username: u.username }))) return
+  isLifecycleBusy.value = u.username
+  try {
+    const result = await users.restoreUser(u.username)
+    if (result.ok) restoredPanel.value = { username: result.user.username, password: result.generatedPassword }
+  } finally { isLifecycleBusy.value = null }
+}
+
+async function copyRestoredPassword() {
+  if (!restoredPanel.value?.password) return
+  try { await navigator.clipboard.writeText(restoredPanel.value.password) } catch { /* older browsers */ }
+}
+
 function roleVariant(r: UserRole): 'investigator' | 'monitor' | 'data-manager' | 'neutral' {
   switch (r) {
     case 'Investigator':  return 'investigator'
@@ -210,16 +237,72 @@ function formatDate(iso: string | null): string {
             <StatusPill v-else variant="neutral">{{ t('manageUsers.activeNo') }}</StatusPill>
           </td>
           <td class="px-3 py-2 text-right">
-            <button
-              v-if="canInvite"
-              class="text-muw-blue hover:underline text-xs"
-              @click="openEdit(u)"
-            >
-              {{ t('manageUsers.editRow') }}
-            </button>
+            <div v-if="canInvite" class="inline-flex items-center gap-2 text-xs">
+              <button
+                class="text-muw-blue hover:underline disabled:opacity-50"
+                :disabled="isLifecycleBusy === u.username"
+                @click="openEdit(u)"
+              >
+                {{ t('manageUsers.editRow') }}
+              </button>
+              <span class="text-slate-300">·</span>
+              <button
+                v-if="u.active"
+                class="text-rose-600 hover:underline disabled:opacity-50"
+                :disabled="isLifecycleBusy === u.username"
+                @click="onDisable(u)"
+              >
+                {{ t('manageUsers.lifecycle.disable') }}
+              </button>
+              <button
+                v-else
+                class="text-emerald-700 hover:underline disabled:opacity-50"
+                :disabled="isLifecycleBusy === u.username"
+                @click="onRestore(u)"
+              >
+                {{ t('manageUsers.lifecycle.restore') }}
+              </button>
+            </div>
           </td>
         </tr>
       </DenseTable>
+
+      <!-- A7.3 restore-success panel: surfaces the generated one-time
+           password the same way A7.1's InviteUserDialog does. -->
+      <div
+        v-if="restoredPanel"
+        class="mt-4 max-w-2xl rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs"
+      >
+        <p class="text-emerald-900 mb-2">
+          {{ t('manageUsers.lifecycle.restoredIntro', { username: restoredPanel.username }) }}
+        </p>
+        <div v-if="restoredPanel.password" class="flex items-center justify-between gap-3 bg-white border border-emerald-200 rounded-md p-2">
+          <code class="font-mono text-sm">{{ restoredPanel.password }}</code>
+          <div class="flex gap-2">
+            <button
+              class="px-2 py-1 text-xs border border-emerald-300 rounded-md bg-white text-emerald-800 hover:bg-emerald-100"
+              @click="copyRestoredPassword"
+            >
+              {{ t('manageUsers.invite.copyPassword') }}
+            </button>
+            <button
+              class="px-2 py-1 text-xs border border-slate-300 rounded-md bg-white text-slate-700 hover:bg-slate-100"
+              @click="restoredPanel = null"
+            >
+              {{ t('common.cancel') }}
+            </button>
+          </div>
+        </div>
+        <div v-else class="text-emerald-900">
+          <p class="mb-1">{{ t('manageUsers.lifecycle.restoredNoPassword') }}</p>
+          <button
+            class="px-2 py-1 text-xs border border-slate-300 rounded-md bg-white text-slate-700 hover:bg-slate-100"
+            @click="restoredPanel = null"
+          >
+            {{ t('common.cancel') }}
+          </button>
+        </div>
+      </div>
     </main>
 
     <InviteUserDialog v-model:open="inviteOpen" @close="users.load()" />
