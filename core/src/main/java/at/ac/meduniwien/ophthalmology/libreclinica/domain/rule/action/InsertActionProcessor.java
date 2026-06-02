@@ -47,7 +47,13 @@ public class InsertActionProcessor implements ActionProcessor {
             if (ruleRunnerMode == RuleRunnerMode.DATA_ENTRY) {
                 return null;
             } else {
-                dryRun(ruleAction, itemDataBean, itemData, currentStudy, ub);
+                // Phase E.5 RX.3b (2026-06-02): return the dryRun() result rather than
+                // discarding it and falling through. See ShowActionProcessor for the full
+                // rationale — same bug shape, same fix; dryRun() here previously fell
+                // through to case SAVE: which called itemMetadataService.insert(...)
+                // even on operator preview runs. This is the most consequential of the
+                // three — Insert actually writes new item_data values.
+                return dryRun(ruleAction, itemDataBean, itemData, currentStudy, ub);
             }
         }
         case SAVE: {

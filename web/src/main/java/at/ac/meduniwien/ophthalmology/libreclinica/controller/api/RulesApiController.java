@@ -56,6 +56,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.Expres
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.expression.ExpressionObjectWrapper;
 import at.ac.meduniwien.ophthalmology.libreclinica.exception.OpenClinicaSystemException;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBasedViewContainer;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.ExpressionService;
 
 import org.slf4j.Logger;
@@ -137,18 +139,21 @@ public class RulesApiController {
     private final RuleSetRuleDao ruleSetRuleDao;
     private final RuleActionRunLogDao ruleActionRunLogDao;
     private final RuleDao ruleDao;
+    private final RuleSetService ruleSetService;
 
     @Autowired
     public RulesApiController(@Qualifier("dataSource") DataSource dataSource,
                               RuleSetDao ruleSetDao,
                               RuleSetRuleDao ruleSetRuleDao,
                               RuleActionRunLogDao ruleActionRunLogDao,
-                              RuleDao ruleDao) {
+                              RuleDao ruleDao,
+                              @Qualifier("ruleSetService") RuleSetService ruleSetService) {
         this.dataSource = dataSource;
         this.ruleSetDao = ruleSetDao;
         this.ruleSetRuleDao = ruleSetRuleDao;
         this.ruleActionRunLogDao = ruleActionRunLogDao;
         this.ruleDao = ruleDao;
+        this.ruleSetService = ruleSetService;
     }
 
     /* ----------------------------------------------------------------- */
@@ -522,6 +527,79 @@ public class RulesApiController {
                 newRunTime == null ? "" : newRunTime,
                 me.getName());
         return ResponseEntity.ok(toDto(rs));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/rule-sets/{id}/dry-run                                */
+    /*   (Phase E.5 RX.3b — preview what a rule_set would do)             */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Preview the rule_set's actions against currently available item
+     * data without persisting any side effects. Mirrors the legacy
+     * {@code RunRuleSetServlet?dryRun=yes} surface (the "Test Rule"
+     * button on the legacy rules grid) — same delegate, same legacy
+     * service method.
+     *
+     * <p>RX.3b unblocks this surface by closing the upstream
+     * {@code Show/Hide/Insert ActionProcessor} fall-through bug in
+     * the same PR. Before that fix, {@code DRY_RUN} silently fell
+     * through to {@code SAVE} and persisted dynamics_item_form_metadata
+     * rows + item_data inserts. With it fixed, every action processor
+     * returns {@code dryRun(...)} early and {@code SAVE} is unreachable
+     * under {@code ExecutionMode.DRY_RUN}.
+     *
+     * <p>Authorization: same as schedule edit — sysadmin OR study
+     * director/coordinator bound to the active study. The legacy
+     * {@code RunRuleSetServlet} guards with the same gate.
+     */
+    @PostMapping("/{ruleSetId}/dry-run")
+    @Transactional
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RuleSetDryRunResponse.class)))
+    public ResponseEntity<?> dryRun(@PathVariable("ruleSetId") int ruleSetId,
+                                    HttpSession session) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit rule_set dry-run"));
+        }
+
+        RuleSetBean rs = ruleSetService.getRuleSetById(study, String.valueOf(ruleSetId));
+        if (rs == null || rs.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No rule set with id " + ruleSetId + " in study '" + study.getOid() + "'"));
+        }
+
+        List<RuleSetBean> ruleSets = new ArrayList<>();
+        ruleSets.add(rs);
+        List<RuleSetBasedViewContainer> raw =
+                ruleSetService.runRulesInBulk(ruleSets, true /* dryRun */, study, me, false);
+
+        List<RuleSetDryRunResponse.Result> results = new ArrayList<>(raw.size());
+        for (RuleSetBasedViewContainer v : raw) {
+            results.add(new RuleSetDryRunResponse.Result(
+                    v.getRuleName(),
+                    v.getRuleOid(),
+                    v.getExpression(),
+                    v.getExecuteOn(),
+                    v.getActionType(),
+                    v.getActionSummary(),
+                    v.getSubjects() == null ? List.of() : new ArrayList<>(v.getSubjects())
+            ));
+        }
+
+        LOG.info("Rule-set dry-run: id={} study={} ran by {} → {} action(s) previewed",
+                rs.getId(), study.getOid(), me.getName(), results.size());
+
+        return ResponseEntity.ok(new RuleSetDryRunResponse(
+                rs.getId(),
+                rs.getOriginalTarget() == null ? null : rs.getOriginalTarget().getValue(),
+                results));
     }
 
     /* ----------------------------------------------------------------- */

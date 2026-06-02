@@ -39,7 +39,12 @@ public class HideActionProcessor implements ActionProcessor {
             if (ruleRunnerMode == RuleRunnerMode.DATA_ENTRY || ruleRunnerMode == RuleRunnerMode.RUN_ON_SCHEDULE) {
                 return null;
             } else {
-                dryRun(ruleAction, itemDataBean, itemData, currentStudy, ub);
+                // Phase E.5 RX.3b (2026-06-02): return the dryRun() result rather than
+                // discarding it and falling through. See ShowActionProcessor for the full
+                // rationale — same bug shape, same fix; dryRun() here previously fell
+                // through to case SAVE: which called dynamicsMetadataService.hideNew(...)
+                // even when the operator was previewing the rule.
+                return dryRun(ruleAction, itemDataBean, itemData, currentStudy, ub);
             }
         }
         case SAVE: {

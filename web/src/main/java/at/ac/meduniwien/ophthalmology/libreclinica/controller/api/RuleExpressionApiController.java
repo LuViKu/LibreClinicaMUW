@@ -329,23 +329,21 @@ public class RuleExpressionApiController {
     }
 
     /* ----------------------------------------------------------------- */
-    /* Phase E RX.3 dry-run deferral                                      */
+    /* Phase E.5 RX.3b — dry-run UNDEFERRED                               */
     /* ----------------------------------------------------------------- */
 
     /*
-     * The matching POST /api/v1/rule-sets/{id}/dry-run endpoint was
-     * planned alongside this controller but DEFERRED — see the
-     * Phase E RX.3 PR body for the safety analysis. Short form:
-     * three ActionProcessor subclasses (Show, Hide, Insert) have a
-     * missing `return`/`break` inside their `case DRY_RUN:` switch
-     * arm and silently fall through to `case SAVE:`. That makes the
-     * legacy {@code RuleSetService.runRulesInBulk(.., dryRun=true)}
-     * NOT side-effect-free for studies carrying those action types.
-     * Until the core/ fix lands, exposing a dry-run REST endpoint
-     * would risk silent writes (e.g. an {@code Insert} action firing
-     * for real during what the operator believes is a dry run).
-     * Ship the test-expression endpoint only; revisit the dry-run
-     * surface once the processor bug is closed.
+     * The dry-run preview is now exposed at
+     * POST /api/v1/rule-sets/{id}/dry-run on RulesApiController.
+     * The original RX.3 deferral was gated on the Show/Hide/Insert
+     * ActionProcessor fall-through bug (case DRY_RUN: missing return,
+     * falling through to case SAVE:). RX.3b closed that bug in the
+     * same PR (commit lands fixes to ShowActionProcessor +
+     * HideActionProcessor + InsertActionProcessor: each `dryRun(...)`
+     * call now returns directly instead of falling through). With
+     * the upstream fix in, runRulesInBulk(.., dryRun=true) is
+     * genuinely side-effect-free and the REST surface is safe to
+     * expose. See RulesApiController.dryRun(...).
      */
 
     /**
