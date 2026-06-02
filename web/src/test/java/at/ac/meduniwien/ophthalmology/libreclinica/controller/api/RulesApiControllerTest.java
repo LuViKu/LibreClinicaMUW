@@ -12,8 +12,11 @@ import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import org.springframework.http.MediaType;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleActionRunLogDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetDao;
@@ -241,5 +244,87 @@ class RulesApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("does not permit")));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* RX.7 — schedule edit                                                */
+    /* ----------------------------------------------------------------- */
+
+    @Test
+    void setScheduleReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(put("/api/v1/rule-sets/42/schedule")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"runSchedule\":true,\"runTime\":\"08:00\"}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void setScheduleReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(put("/api/v1/rule-sets/42/schedule")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"runSchedule\":true,\"runTime\":\"08:00\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void setScheduleReturns403WhenInvestigator() throws Exception {
+        mockMvcWith().perform(put("/api/v1/rule-sets/42/schedule")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"runSchedule\":true,\"runTime\":\"08:00\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEMO", "Demo",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit")));
+    }
+
+    @Test
+    void setScheduleReturns400OnMissingBody() throws Exception {
+        // Sysadmin session so the auth gate clears and we land on the
+        // missing-body validation branch. Without a Content-Type +
+        // body Spring binds the @RequestBody to null, exactly the
+        // path the controller's "body required" check guards.
+        mockMvcWith().perform(put("/api/v1/rule-sets/42/schedule")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 7, "S_DEMO", "Demo")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("body is required")));
+    }
+
+    @Test
+    void setScheduleReturns400WhenRunScheduleTrueAndRunTimeMissing() throws Exception {
+        mockMvcWith().perform(put("/api/v1/rule-sets/42/schedule")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"runSchedule\":true}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 7, "S_DEMO", "Demo")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("runTime is required")));
+    }
+
+    @Test
+    void setScheduleReturns400OnInvalidRunTimeFormat() throws Exception {
+        // 25:00 is past the 23:59 ceiling — the regex's 2[0-3] guard
+        // rejects it. A "abc" value exercises the same branch (general
+        // shape mismatch). Covering one bad value is enough to pin
+        // the contract — the regex is dense enough that adding more
+        // cases per malformed shape would be testing the regex engine,
+        // not the controller.
+        mockMvcWith().perform(put("/api/v1/rule-sets/42/schedule")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"runSchedule\":true,\"runTime\":\"25:00\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 7, "S_DEMO", "Demo")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("HH:mm")));
     }
 }

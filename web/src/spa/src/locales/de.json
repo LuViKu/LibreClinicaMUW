@@ -463,6 +463,18 @@
       "disableRuleSet": "Regelsatz auf {target} deaktivieren? Bisherige Ausführungs-Historie bleibt im Audit-Trail; die Regeln werden nicht mehr ausgewertet, bis sie wiederhergestellt werden.",
       "disableRule": "Regel {ruleOid} auf diesem Regelsatz deaktivieren? Andere Regeln am selben Ziel bleiben aktiv."
     },
+    "schedule": {
+      "editButton": "Zeitplan bearbeiten",
+      "heading": "Zeitplan",
+      "runScheduleLabel": "Nach Zeitplan ausführen (Quartz-Batch)",
+      "runTimeLabel": "Uhrzeit (HH:mm)",
+      "saveButton": "Speichern",
+      "cancelButton": "Abbrechen",
+      "timeFormatHint": "24-Stunden-Format, z. B. 08:00 oder 22:30",
+      "saveError": {
+        "timeRequired": "Bei aktivem Zeitplan ist eine Uhrzeit erforderlich."
+      }
+    },
     "import": {
       "button": "Regeln importieren",
       "downloadTemplate": "Vorlage mit Erläuterungen herunterladen",

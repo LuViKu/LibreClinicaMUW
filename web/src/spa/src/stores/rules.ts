@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { apiGet, apiPost, apiDelete, ApiError, ApiNetworkError } from '@/api/client'
+import { apiGet, apiPost, apiPut, apiDelete, ApiError, ApiNetworkError } from '@/api/client'
 import type { RuleActionRunLogEntry, RuleSet } from '@/types/rule'
 
 /**
@@ -55,6 +55,19 @@ export interface RulesImportCommit {
 
 export type RulesImportCommitResult =
   | { ok: true; result: RulesImportCommit }
+  | { ok: false; message: string }
+
+/**
+ * Phase E RX.7 — wire-shape result for the schedule-edit endpoint.
+ *
+ * On success the backend returns the refreshed `RuleSetDto` so the
+ * caller can swap it into `rows` + `selected` without a second GET.
+ * On failure the message is the human-readable backend message
+ * (validation, 403, network error all collapse here so the inline
+ * form has a single render branch).
+ */
+export type SetScheduleResult =
+  | { ok: true; ruleSet: RuleSet }
   | { ok: false; message: string }
 
 /**
@@ -303,6 +316,46 @@ export const useRulesStore = defineStore('rules', () => {
     }
   }
 
+  /**
+   * Phase E RX.7 — flip the rule_set's run_schedule / run_time pair.
+   *
+   * Wraps `PUT /api/v1/rule-sets/{id}/schedule`. The backend returns
+   * the full refreshed RuleSetDto; we apply it to {@code rows} +
+   * {@code selected} via {@link applyRefreshed} so the view updates
+   * without a second GET.
+   *
+   * <p>Returns a discriminated union so the inline form has a single
+   * render branch for 200 / 400 / 403 / network. Auth errors (401 /
+   * 403) collapse into the failure branch here rather than throwing —
+   * the form already needs to render an inline error message, and
+   * the role-gated UI hint makes a 403 unexpected enough that
+   * popping the user out to the router guard would be more
+   * surprising than helpful.
+   */
+  async function setSchedule(
+    ruleSetId: number,
+    runSchedule: boolean,
+    runTime: string | null,
+  ): Promise<SetScheduleResult> {
+    try {
+      const updated = await apiPut<RuleSet>(
+        `/pages/api/v1/rule-sets/${ruleSetId}/schedule`,
+        { runSchedule, runTime },
+      )
+      applyRefreshed(updated)
+      return { ok: true, ruleSet: updated }
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        return { ok: false, message: body?.message ?? `HTTP ${e.status}` }
+      }
+      if (e instanceof ApiNetworkError) {
+        return { ok: false, message: 'Backend nicht erreichbar — Speichern fehlgeschlagen.' }
+      }
+      return { ok: false, message: e instanceof Error ? e.message : 'Unbekannter Fehler.' }
+    }
+  }
+
   function humanError(e: unknown, op: string): string {
     if (e instanceof ApiNetworkError) return `Backend nicht erreichbar — ${op} fehlgeschlagen.`
     if (e instanceof ApiError) {
@@ -409,6 +462,7 @@ export const useRulesStore = defineStore('rules', () => {
     disableAttachedRule,
     restoreAttachedRule,
     deleteRuleSet,
+    setSchedule,
     uploadRulesXml,
     commitImport,
   }

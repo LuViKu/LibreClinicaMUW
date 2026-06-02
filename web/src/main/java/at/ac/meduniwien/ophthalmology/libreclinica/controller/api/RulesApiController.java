@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
@@ -53,6 +54,8 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -348,6 +351,142 @@ public class RulesApiController {
     }
 
     /* ----------------------------------------------------------------- */
+    /* PUT /api/v1/rule-sets/{id}/schedule                                */
+    /*   (Phase E RX.7 — surface run_schedule + run_time)                 */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * 24-hour {@code HH:mm} pattern, 00:00 through 23:59. Anchored on
+     * both ends so {@code matcher.matches()} guards against trailing
+     * whitespace / garbage. Hours allow an optional leading zero (so
+     * both {@code 8:30} and {@code 08:30} parse).
+     */
+    private static final Pattern RUN_TIME_PATTERN =
+            Pattern.compile("^([01]?[0-9]|2[0-3]):[0-5][0-9]$");
+
+    /**
+     * Surface the existing {@code rule_set.run_schedule} +
+     * {@code rule_set.run_time} columns to the SPA so operators can
+     * enrol / un-enrol a rule_set in the Quartz nightly batch without
+     * dropping to raw SQL or re-importing the XML.
+     *
+     * <p>Authorization: sysadmin OR study director/coordinator bound
+     * to the active study, via {@link StudyAdminAuthorization#roleMayEditStudy}.
+     * Same gate as the RX.4 lifecycle endpoints — schedule changes are
+     * an audit-of-record event so the legacy operator gate carries
+     * over.
+     *
+     * <p>Validation:
+     * <ul>
+     *   <li>400 if body is missing or {@code runSchedule} is null.</li>
+     *   <li>400 if {@code runSchedule == true} and {@code runTime} is
+     *       null / blank / not matching {@link #RUN_TIME_PATTERN}.</li>
+     *   <li>{@code runTime} is accepted as-is when
+     *       {@code runSchedule == false} — the runner ignores it under
+     *       that branch, so we don't reject malformed values that the
+     *       operator might be keeping around for "I'll turn it back on
+     *       later".</li>
+     * </ul>
+     *
+     * <p>Audit: one {@code audit_log_event} row per actually-changed
+     * field. So a single PUT can emit 0, 1, or 2 rows
+     * ({@code run_schedule} alone, {@code run_time} alone, both, or
+     * neither when the operator submits the current values).
+     */
+    @PutMapping("/{ruleSetId}/schedule")
+    @Transactional
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RuleSetDto.class)))
+    public ResponseEntity<?> setSchedule(@PathVariable("ruleSetId") int ruleSetId,
+                                         @RequestBody(required = false) SetRuleSetScheduleRequest body,
+                                         HttpSession session) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit rule_set schedule edit"));
+        }
+
+        if (body == null || body.runSchedule() == null) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Request body is required: { runSchedule: boolean, runTime: 'HH:mm' }"));
+        }
+
+        boolean newRunSchedule = body.runSchedule();
+        String submittedRunTime = body.runTime();
+        if (newRunSchedule) {
+            if (submittedRunTime == null || submittedRunTime.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "runTime is required when runSchedule is true (format HH:mm)"));
+            }
+            if (!RUN_TIME_PATTERN.matcher(submittedRunTime.trim()).matches()) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "runTime must match 24-hour HH:mm (e.g. 08:00 or 22:30); got '"
+                                + submittedRunTime + "'"));
+            }
+        }
+
+        RuleSetBean rs = ruleSetDao.findById(ruleSetId, study);
+        if (rs == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No rule set with id " + ruleSetId + " in study '" + study.getOid() + "'"));
+        }
+
+        boolean oldRunSchedule = rs.isRunSchedule();
+        String oldRunTime = rs.getRunTime();
+        // When scheduling is on, normalise the trimmed value into the
+        // bean so the runner reads a canonical form; when scheduling
+        // is off, take whatever the operator submitted (or null) at
+        // face value — the runner won't read it.
+        String newRunTime = newRunSchedule
+                ? submittedRunTime.trim()
+                : submittedRunTime;
+
+        boolean runScheduleChanged = oldRunSchedule != newRunSchedule;
+        boolean runTimeChanged = newRunSchedule
+                && !java.util.Objects.equals(oldRunTime, newRunTime);
+
+        if (!runScheduleChanged && !runTimeChanged) {
+            // Nothing to do — the SPA submitted the current state.
+            // Return the DTO so the caller can refresh its view without
+            // a second GET round-trip.
+            return ResponseEntity.ok(toDto(rs));
+        }
+
+        if (runScheduleChanged) {
+            rs.setRunSchedule(newRunSchedule);
+        }
+        if (runTimeChanged) {
+            rs.setRunTime(newRunTime);
+        }
+        rs.setUpdater(me);
+        rs.setUpdatedDate(new java.util.Date());
+        ruleSetDao.saveOrUpdate(rs);
+
+        if (runScheduleChanged) {
+            writeRuleSetFieldAudit(me, study, rs, "run_schedule",
+                    Boolean.toString(oldRunSchedule),
+                    Boolean.toString(newRunSchedule));
+        }
+        if (runTimeChanged) {
+            writeRuleSetFieldAudit(me, study, rs, "run_time",
+                    oldRunTime == null ? "" : oldRunTime,
+                    newRunTime == null ? "" : newRunTime);
+        }
+
+        LOG.info("Rule set schedule update: id={} study={} runSchedule={}->{} runTime='{}'->'{}' by={}",
+                ruleSetId, study.getOid(),
+                oldRunSchedule, newRunSchedule,
+                oldRunTime == null ? "" : oldRunTime,
+                newRunTime == null ? "" : newRunTime,
+                me.getName());
+        return ResponseEntity.ok(toDto(rs));
+    }
+
+    /* ----------------------------------------------------------------- */
     /* Lifecycle helpers                                                  */
     /* ----------------------------------------------------------------- */
 
@@ -480,6 +619,39 @@ public class RulesApiController {
         } catch (Exception e) {
             LOG.warn("Audit write failed for rule_set_{} id={} (continuing): {}",
                     operation, rs.getId(), e.getMessage());
+        }
+    }
+
+    /**
+     * Phase E RX.7 — one audit row per changed scalar field on a
+     * rule_set. Used by {@link #setSchedule} which can emit 0, 1, or
+     * 2 rows depending on which fields actually changed.
+     */
+    private void writeRuleSetFieldAudit(UserAccountBean me,
+                                        StudyBean study,
+                                        RuleSetBean rs,
+                                        String columnName,
+                                        String oldValue,
+                                        String newValue) {
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setStudyId(study.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setAuditTable("rule_set");
+            ae.setEntityId(rs.getId());
+            ae.setColumnName(columnName);
+            ae.setOldValue(oldValue == null ? "" : oldValue);
+            ae.setNewValue(newValue == null ? "" : newValue);
+            ae.setActionMessage("rule_set_schedule_update: id=" + rs.getId()
+                    + "." + columnName
+                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
+                    + (newValue == null ? "" : newValue) + "' by " + me.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for rule_set field {}={} (continuing): {}",
+                    columnName, newValue, e.getMessage());
         }
     }
 

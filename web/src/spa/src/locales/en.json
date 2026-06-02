@@ -463,6 +463,18 @@
       "disableRuleSet": "Disable rule set on {target}? Existing fire history stays in the audit trail; the rules stop evaluating until restored.",
       "disableRule": "Disable rule {ruleOid} on this rule set? The other rules attached to the same target stay active."
     },
+    "schedule": {
+      "editButton": "Edit schedule",
+      "heading": "Run schedule",
+      "runScheduleLabel": "Run on schedule (Quartz batch)",
+      "runTimeLabel": "Time of day (HH:mm)",
+      "saveButton": "Save",
+      "cancelButton": "Cancel",
+      "timeFormatHint": "24-hour format, e.g. 08:00 or 22:30",
+      "saveError": {
+        "timeRequired": "Time is required when scheduling is on."
+      }
+    },
     "import": {
       "button": "Import rules",
       "downloadTemplate": "Download annotated template",
