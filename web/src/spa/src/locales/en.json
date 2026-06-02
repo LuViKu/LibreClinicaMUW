@@ -333,6 +333,35 @@
       "users":        { "title": "Users", "summary": "{count} users", "description": "Per-site Investigators, Monitors, Data Managers, CRCs." }
     }
   },
+  "eventDefinitions": {
+    "title": "Event definitions",
+    "subTrail": "Build study · visits + repeating cycles",
+    "intro": "Define the visit schedule for this study. Each event represents a scheduled visit, an unscheduled add-hoc visit, or a common event applied to every subject. CRF assignments live alongside in the CRF library.",
+    "createAction": "New event",
+    "createHeading": "Create event definition",
+    "editHeading": "Edit event definition",
+    "submitCreate": "Create event",
+    "submitEdit": "Save changes",
+    "empty": "No event definitions yet.",
+    "category": "Category",
+    "description": "Description",
+    "repeatingLabel": "Repeating event (can occur multiple times per subject)",
+    "disable": "Remove",
+    "disableConfirm": "Remove event \"{name}\"? Existing CRFs scheduled against it remain in the audit trail but become inaccessible. The action is recorded in the audit trail.",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "column": {
+      "name": "Name",
+      "type": "Type",
+      "repeating": "Repeating",
+      "actions": "Actions"
+    },
+    "type": {
+      "scheduled": "Scheduled",
+      "unscheduled": "Unscheduled",
+      "common": "Common"
+    }
+  },
   "studyForm": {
     "name": "Study name",
     "uniqueProtocolId": "Unique protocol ID",

@@ -87,6 +87,13 @@ const router = createRouter({
       component: () => import('@/views/StudyIdentityEditView.vue'),
       meta: { title: 'Edit Study', role: 'Administrator' as const },
     },
+    /* Phase E A8.2 — Event-definition CRUD for the active study. */
+    {
+      path: '/event-definitions',
+      name: 'event-definitions',
+      component: () => import('@/views/EventDefinitionsView.vue'),
+      meta: { title: 'Event definitions', role: 'Data Manager' as const },
+    },
     {
       path: '/manage-users',
       name: 'manage-users',

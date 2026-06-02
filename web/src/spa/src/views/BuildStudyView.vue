@@ -20,6 +20,21 @@ onMounted(() => { if (!study.status) study.load(auth.user?.activeStudy?.oid) })
 const canManageStudy = computed(() => auth.user?.role === 'Administrator')
 const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 
+/**
+ * Phase E A8.2 — client-side deep-link resolution for task tiles.
+ *
+ * The backend's `task.to` is the canonical source, but until each
+ * sub-slice ships its view the backend value is null. This map
+ * overrides for tasks whose view we've already shipped.
+ */
+function deepLinkFor(taskId: StudyBuildTaskId, backendTo: string | null): string | null {
+  switch (taskId) {
+    case 'events': return '/event-definitions'
+    case 'users':  return '/manage-users'
+    default:       return backendTo
+  }
+}
+
 function variantFor(s: StudyBuildTaskStatus): 'success' | 'warning' | 'neutral' {
   switch (s) {
     case 'complete':    return 'success'
@@ -153,8 +168,8 @@ function iconFor(id: StudyBuildTaskId): string {
             </div>
 
             <RouterLink
-              v-if="task.to"
-              :to="task.to"
+              v-if="deepLinkFor(task.id, task.to)"
+              :to="deepLinkFor(task.id, task.to)!"
               class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700"
             >
               {{ t('common.next') }} →

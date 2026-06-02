@@ -333,6 +333,35 @@
       "users":        { "title": "Nutzer/-innen", "summary": "{count} Personen", "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs." }
     }
   },
+  "eventDefinitions": {
+    "title": "Visiten-Definitionen",
+    "subTrail": "Studienaufbau · Visiten + wiederholbare Termine",
+    "intro": "Definieren Sie den Visitenplan für diese Studie. Jede Visite ist entweder geplant, außerplanmäßig oder ein gemeinsamer Termin für alle Teilnehmer/innen. CRF-Zuweisungen werden in der CRF-Bibliothek verwaltet.",
+    "createAction": "Neue Visite",
+    "createHeading": "Visiten-Definition anlegen",
+    "editHeading": "Visiten-Definition bearbeiten",
+    "submitCreate": "Visite anlegen",
+    "submitEdit": "Änderungen speichern",
+    "empty": "Noch keine Visiten-Definitionen.",
+    "category": "Kategorie",
+    "description": "Beschreibung",
+    "repeatingLabel": "Wiederholbare Visite (mehrfach pro Teilnehmer/in möglich)",
+    "disable": "Entfernen",
+    "disableConfirm": "Visite »{name}« entfernen? Bereits erfasste CRFs bleiben im Audit Trail dokumentiert, sind aber nicht mehr erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
+    "moveUp": "Nach oben",
+    "moveDown": "Nach unten",
+    "column": {
+      "name": "Name",
+      "type": "Typ",
+      "repeating": "Wiederholbar",
+      "actions": "Aktionen"
+    },
+    "type": {
+      "scheduled": "Geplant",
+      "unscheduled": "Außerplanmäßig",
+      "common": "Gemeinsam"
+    }
+  },
   "studyForm": {
     "name": "Studienname",
     "uniqueProtocolId": "Eindeutige Protokoll-ID",
