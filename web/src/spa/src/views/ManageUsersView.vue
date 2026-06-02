@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SideRail from '@/components/SideRail.vue'
@@ -7,14 +7,22 @@ import DenseTable from '@/components/DenseTable.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
+import InviteUserDialog from '@/components/InviteUserDialog.vue'
 
 import { useUsersStore } from '@/stores/users'
+import { useAuthStore } from '@/stores/auth'
 import type { UserAuth, UserRole } from '@/types/user'
 
 const { t } = useI18n()
 const users = useUsersStore()
+const auth = useAuthStore()
 
 onMounted(() => { if (users.rows.length === 0) users.load() })
+
+/* Phase E A7.1 — gate the Invite button on sysadmin-only access.
+   The backend ALSO re-checks; this hides the affordance for non-admins. */
+const canInvite = computed(() => auth.user?.role === 'Administrator')
+const inviteOpen = ref(false)
 
 function roleVariant(r: UserRole): 'investigator' | 'monitor' | 'data-manager' | 'neutral' {
   switch (r) {
@@ -91,7 +99,11 @@ function formatDate(iso: string | null): string {
           <div class="text-xs text-slate-500 mb-1">{{ t('manageUsers.subTrail') }}</div>
           <h1 class="text-xl font-semibold tracking-tight">{{ t('manageUsers.title') }}</h1>
         </div>
-        <button class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 inline-flex items-center gap-1.5">
+        <button
+          v-if="canInvite"
+          class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 inline-flex items-center gap-1.5"
+          @click="inviteOpen = true"
+        >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
             <line x1="12" x2="12" y1="5" y2="19" />
             <line x1="5" x2="19" y1="12" y2="12" />
@@ -193,5 +205,7 @@ function formatDate(iso: string | null): string {
         </tr>
       </DenseTable>
     </main>
+
+    <InviteUserDialog v-model:open="inviteOpen" @close="users.load()" />
   </div>
 </template>

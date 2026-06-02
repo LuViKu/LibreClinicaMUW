@@ -154,6 +154,23 @@ abstract class AbstractApiControllerTest {
         return session;
     }
 
+    /**
+     * Phase E A7 — session whose {@code userBean} carries
+     * {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType#SYSADMIN},
+     * making {@code ub.isSysAdmin()} return true. Use for tests of
+     * sysadmin-gated endpoints (users CRUD, study config) where the
+     * permission check would otherwise return 403 before the
+     * validation path under test runs.
+     */
+    protected final HttpSession authenticatedSysadminSession(int userId, String userName,
+                                                             int studyId, String studyOid, String studyName) {
+        MockHttpSession session = (MockHttpSession)
+                authenticatedSession(userId, userName, studyId, studyOid, studyName);
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        ub.addUserType(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType.SYSADMIN);
+        return session;
+    }
+
     /** Convenience — a Mockito mock DataSource that DAO constructors will accept. */
     protected final DataSource mockDataSource() {
         return Mockito.mock(DataSource.class);

@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
-import type { StudyUser, UserAuth, UserRole } from '@/types/user'
+import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import type { CreateUserInput, CreateUserResult, StudyUser, UserAuth, UserRole } from '@/types/user'
 
 /**
  * Phase E.7 + E.4 M12 — Study-users store.
@@ -76,6 +76,61 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  /**
+   * Phase E A7.1 — create a new user via `POST /api/v1/users`.
+   *
+   * On success prepends the new row to the matrix without a refetch
+   * and returns the wire shape (including the one-time
+   * `generatedPassword` when `sendEmail: false`). On 400 returns a
+   * discriminated-union failure so the caller can render per-field
+   * errors; on 401/403 propagates so the router-level auth guard
+   * runs.
+   */
+  async function createUser(input: CreateUserInput): Promise<
+    | { ok: true; result: CreateUserResult }
+    | { ok: false; fieldErrors: Record<string, string>; message?: string }
+  > {
+    try {
+      const result = await apiPost<CreateUserResult>('/pages/api/v1/users', input)
+      rows.value = [result.user, ...rows.value]
+      return { ok: true, result }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Anlegen nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiError) {
+        const errBody = e.body as
+          | { message?: string; errors?: Array<{ field: string; message: string }> }
+          | null
+        const fieldErrors: Record<string, string> = {}
+        if (errBody?.errors) {
+          for (const fe of errBody.errors) {
+            fieldErrors[fe.field] = fe.message
+          }
+        }
+        return {
+          ok: false,
+          fieldErrors,
+          message: errBody?.message ?? `Anlegen fehlgeschlagen (HTTP ${e.status}).`,
+        }
+      }
+      if (e instanceof ApiNetworkError) {
+        return {
+          ok: false,
+          fieldErrors: {},
+          message: 'Backend nicht erreichbar — Anlegen fehlgeschlagen. Bitte später erneut versuchen.',
+        }
+      }
+      return {
+        ok: false,
+        fieldErrors: {},
+        message: e instanceof Error ? e.message : 'Unbekannter Fehler beim Anlegen.',
+      }
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -90,5 +145,6 @@ export const useUsersStore = defineStore('users', () => {
     pendingInviteCount,
     clearFilters,
     load,
+    createUser,
   }
 })
