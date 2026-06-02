@@ -16,11 +16,16 @@ import java.util.Map;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleActionRunLogDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetRuleBean;
@@ -44,8 +49,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -55,7 +62,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Phase E RX.1 — read-only rules viewer.
+ * Phase E RX.1 — read-only rules viewer + RX.4 lifecycle mutations.
  *
  * <p>Surfaces the legacy {@code rule_set} / {@code rule_set_rule} /
  * {@code rule_action} graph as a clean JSON shape so operators can
@@ -71,13 +78,29 @@ import org.springframework.web.bind.annotation.RestController;
  *       rule_set</li>
  *   <li>{@code GET /api/v1/rule-sets/{id}/run-log} — paged fire
  *       history (RX.1b)</li>
+ *   <li>{@code POST /api/v1/rule-sets/{id}/disable} +
+ *       {@code /restore} — soft-delete / undelete a rule_set via
+ *       {@code status_id} flip (RX.4)</li>
+ *   <li>{@code DELETE /api/v1/rule-sets/{id}} — alias for
+ *       {@code /disable}, mirrors legacy
+ *       {@code RemoveRuleSetServlet} semantics (RX.4)</li>
+ *   <li>{@code POST /api/v1/rule-sets/{id}/rules/{ruleSetRuleId}/disable}
+ *       + {@code /restore} — same flip on a single
+ *       {@code rule_set_rule} binding (RX.4)</li>
  * </ul>
  *
- * <p>Authorization: any authenticated user on the active study can
- * read. Rules visibility is a study-membership concern, not a
- * sysadmin gate — mirrors the legacy {@code ViewRuleAssignmentServlet}
- * which has no role check beyond "authenticated user with active
- * study".
+ * <p>Authorization:
+ * <ul>
+ *   <li>Reads (RX.1/RX.1b): any authenticated user on the active
+ *       study. Mirrors the legacy
+ *       {@code ViewRuleAssignmentServlet} which has no role check
+ *       beyond "authenticated user with active study".</li>
+ *   <li>Writes (RX.4): sysadmin OR study director/coordinator bound
+ *       to the active study, via
+ *       {@link StudyAdminAuthorization#roleMayEditStudy}. Mirrors
+ *       legacy {@code RemoveRuleSetServlet} +
+ *       {@code UpdateRuleSetRuleServlet}.</li>
+ * </ul>
  *
  * <p>Pagination + filtering: the first cut returns the full
  * rule_set list for the active study (typically dozens; not 1000s).
@@ -94,14 +117,17 @@ public class RulesApiController {
 
     private final DataSource dataSource;
     private final RuleSetDao ruleSetDao;
+    private final RuleSetRuleDao ruleSetRuleDao;
     private final RuleActionRunLogDao ruleActionRunLogDao;
 
     @Autowired
     public RulesApiController(@Qualifier("dataSource") DataSource dataSource,
                               RuleSetDao ruleSetDao,
+                              RuleSetRuleDao ruleSetRuleDao,
                               RuleActionRunLogDao ruleActionRunLogDao) {
         this.dataSource = dataSource;
         this.ruleSetDao = ruleSetDao;
+        this.ruleSetRuleDao = ruleSetRuleDao;
         this.ruleActionRunLogDao = ruleActionRunLogDao;
     }
 
@@ -223,6 +249,265 @@ public class RulesApiController {
                     null /* no timestamp column — see DAO javadoc */));
         }
         return ResponseEntity.ok(out);
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/rule-sets/{id}/disable                                */
+    /* POST /api/v1/rule-sets/{id}/restore                                */
+    /* DELETE /api/v1/rule-sets/{id}  (alias for /disable, mirrors        */
+    /*   legacy RemoveRuleSetServlet semantics)                           */
+    /*   (Phase E RX.4 — rule_set lifecycle)                              */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Soft-delete a {@code rule_set} by flipping its
+     * {@code status_id} to {@link Status#DELETED}.
+     *
+     * <p>Authorization: sysadmin OR study director/coordinator bound
+     * to the active study, mirroring
+     * {@link StudyAdminAuthorization#roleMayEditStudy}. The legacy
+     * {@code RemoveRuleSetServlet}/{@code UpdateRuleSetRuleServlet}
+     * gates are identical (sysadmin OR director/coordinator).
+     *
+     * <p><b>No cascade to child {@code rule_set_rule} rows.</b> The
+     * legacy {@code RemoveRuleSetServlet} cascades the DELETED status
+     * to every attached {@code rule_set_rule}; this slice keeps the
+     * cascade off — disabling at the rule_set level alone is enough
+     * to stop the runner from evaluating any rules attached to it
+     * (the bulk runner short-circuits on the parent's status before
+     * looking at children). Leaving the child rows AVAILABLE keeps a
+     * crisp audit trail per binding so a future "restore plus enable
+     * these specific rules" UX has the data it needs. The separate
+     * {@code /rules/{ruleSetRuleId}/disable} endpoint is the binding-
+     * scoped flip operators reach for when they want to silence one
+     * rule without dropping the whole set.
+     */
+    @PostMapping("/{ruleSetId}/disable")
+    @Transactional
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RuleSetDto.class)))
+    public ResponseEntity<?> disableRuleSet(@PathVariable("ruleSetId") int ruleSetId,
+                                            HttpSession session) {
+        return ruleSetLifecycle(ruleSetId, session, Status.DELETED, "disable");
+    }
+
+    @PostMapping("/{ruleSetId}/restore")
+    @Transactional
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RuleSetDto.class)))
+    public ResponseEntity<?> restoreRuleSet(@PathVariable("ruleSetId") int ruleSetId,
+                                            HttpSession session) {
+        return ruleSetLifecycle(ruleSetId, session, Status.AVAILABLE, "restore");
+    }
+
+    /**
+     * DELETE alias for {@link #disableRuleSet}. The legacy
+     * {@code RemoveRuleSetServlet} is a soft-delete (status flip,
+     * not a row delete), so the REST semantic that matches is
+     * "DELETE = disable". Behaves exactly as POST /disable.
+     */
+    @DeleteMapping("/{ruleSetId}")
+    @Transactional
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RuleSetDto.class)))
+    public ResponseEntity<?> deleteRuleSet(@PathVariable("ruleSetId") int ruleSetId,
+                                           HttpSession session) {
+        return ruleSetLifecycle(ruleSetId, session, Status.DELETED, "disable");
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/rule-sets/{id}/rules/{ruleSetRuleId}/disable          */
+    /* POST /api/v1/rule-sets/{id}/rules/{ruleSetRuleId}/restore          */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Soft-delete one attached rule (a {@code rule_set_rule} binding)
+     * by flipping its {@code status_id} to {@link Status#DELETED}.
+     *
+     * <p>Mirrors legacy {@code UpdateRuleSetRuleServlet?action=remove}
+     * — silences one rule without dropping the whole rule_set.
+     */
+    @PostMapping("/{ruleSetId}/rules/{ruleSetRuleId}/disable")
+    @Transactional
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RuleSetDto.class)))
+    public ResponseEntity<?> disableAttachedRule(@PathVariable("ruleSetId") int ruleSetId,
+                                                 @PathVariable("ruleSetRuleId") int ruleSetRuleId,
+                                                 HttpSession session) {
+        return attachedRuleLifecycle(ruleSetId, ruleSetRuleId, session, Status.DELETED, "disable");
+    }
+
+    @PostMapping("/{ruleSetId}/rules/{ruleSetRuleId}/restore")
+    @Transactional
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RuleSetDto.class)))
+    public ResponseEntity<?> restoreAttachedRule(@PathVariable("ruleSetId") int ruleSetId,
+                                                 @PathVariable("ruleSetRuleId") int ruleSetRuleId,
+                                                 HttpSession session) {
+        return attachedRuleLifecycle(ruleSetId, ruleSetRuleId, session, Status.AVAILABLE, "restore");
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Lifecycle helpers                                                  */
+    /* ----------------------------------------------------------------- */
+
+    private ResponseEntity<?> ruleSetLifecycle(int ruleSetId,
+                                               HttpSession session,
+                                               Status targetStatus,
+                                               String operation) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit rule_set " + operation));
+        }
+
+        RuleSetBean rs = ruleSetDao.findById(ruleSetId, study);
+        if (rs == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No rule set with id " + ruleSetId + " in study '" + study.getOid() + "'"));
+        }
+
+        Status oldStatus = rs.getStatus();
+        if (oldStatus != null && oldStatus.equals(targetStatus)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Rule set " + ruleSetId + " is already "
+                            + targetStatus.getName().toLowerCase()));
+        }
+
+        rs.setStatus(targetStatus);
+        rs.setUpdater(me);
+        rs.setUpdatedDate(new java.util.Date());
+        ruleSetDao.saveOrUpdate(rs);
+
+        writeRuleSetAudit(me, study, rs, oldStatus, targetStatus, operation);
+
+        LOG.info("Rule set {}: id={} study={} by={}",
+                operation, ruleSetId, study.getOid(), me.getName());
+        return ResponseEntity.ok(toDto(rs));
+    }
+
+    private ResponseEntity<?> attachedRuleLifecycle(int ruleSetId,
+                                                    int ruleSetRuleId,
+                                                    HttpSession session,
+                                                    Status targetStatus,
+                                                    String operation) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit rule " + operation));
+        }
+
+        RuleSetBean rs = ruleSetDao.findById(ruleSetId, study);
+        if (rs == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No rule set with id " + ruleSetId + " in study '" + study.getOid() + "'"));
+        }
+
+        // Walk the parent's rule_set_rule list and match by id so we
+        // simultaneously confirm scope (the binding belongs to this
+        // rule_set, not a sibling). Cheaper than a separate DAO call
+        // + scope check given the list is already loaded by
+        // findById's HQL.
+        RuleSetRuleBean target = null;
+        if (rs.getRuleSetRules() != null) {
+            for (RuleSetRuleBean rsr : rs.getRuleSetRules()) {
+                if (rsr.getId() != null && rsr.getId() == ruleSetRuleId) {
+                    target = rsr;
+                    break;
+                }
+            }
+        }
+        if (target == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No attached rule with id " + ruleSetRuleId
+                            + " under rule set " + ruleSetId));
+        }
+
+        Status oldStatus = target.getStatus();
+        if (oldStatus != null && oldStatus.equals(targetStatus)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Attached rule " + ruleSetRuleId + " is already "
+                            + targetStatus.getName().toLowerCase()));
+        }
+
+        target.setStatus(targetStatus);
+        target.setUpdater(me);
+        target.setUpdatedDate(new java.util.Date());
+        ruleSetRuleDao.saveOrUpdate(target);
+
+        writeRuleSetRuleAudit(me, study, target, oldStatus, targetStatus, operation);
+
+        LOG.info("Attached rule {}: id={} rule_set={} study={} by={}",
+                operation, ruleSetRuleId, ruleSetId, study.getOid(), me.getName());
+
+        // Re-read the parent so the returned DTO reflects the flipped
+        // child status (Hibernate's identity map keeps the in-session
+        // bean in sync, but a fresh findById also flushes the change
+        // back through the projection helpers without surprises).
+        RuleSetBean refreshed = ruleSetDao.findById(ruleSetId, study);
+        return ResponseEntity.ok(toDto(refreshed == null ? rs : refreshed));
+    }
+
+    private void writeRuleSetAudit(UserAccountBean me,
+                                   StudyBean study,
+                                   RuleSetBean rs,
+                                   Status oldStatus,
+                                   Status newStatus,
+                                   String operation) {
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setStudyId(study.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setAuditTable("rule_set");
+            ae.setEntityId(rs.getId());
+            ae.setColumnName("status_id");
+            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getCode()));
+            ae.setNewValue(String.valueOf(newStatus.getCode()));
+            ae.setActionMessage("rule_set_" + operation + ": id=" + rs.getId()
+                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
+                    + " → " + newStatus.getName() + ") by " + me.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for rule_set_{} id={} (continuing): {}",
+                    operation, rs.getId(), e.getMessage());
+        }
+    }
+
+    private void writeRuleSetRuleAudit(UserAccountBean me,
+                                       StudyBean study,
+                                       RuleSetRuleBean rsr,
+                                       Status oldStatus,
+                                       Status newStatus,
+                                       String operation) {
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setStudyId(study.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setAuditTable("rule_set_rule");
+            ae.setEntityId(rsr.getId());
+            ae.setColumnName("status_id");
+            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getCode()));
+            ae.setNewValue(String.valueOf(newStatus.getCode()));
+            ae.setActionMessage("rule_set_rule_" + operation + ": id=" + rsr.getId()
+                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
+                    + " → " + newStatus.getName() + ") by " + me.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for rule_set_rule_{} id={} (continuing): {}",
+                    operation, rsr.getId(), e.getMessage());
+        }
     }
 
     /* ----------------------------------------------------------------- */
