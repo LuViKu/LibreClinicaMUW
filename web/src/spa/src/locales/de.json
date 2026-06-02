@@ -452,6 +452,16 @@
       "resultFalse": "FALSCH",
       "resultOther": "Ergebnis: {value}",
       "errorHeading": "Test fehlgeschlagen"
+    },
+    "action": {
+      "disableRuleSet": "Deaktivieren",
+      "restoreRuleSet": "Wiederherstellen",
+      "disableRule": "Regel deaktivieren",
+      "restoreRule": "Regel wiederherstellen"
+    },
+    "confirm": {
+      "disableRuleSet": "Regelsatz auf {target} deaktivieren? Bisherige Ausführungs-Historie bleibt im Audit-Trail; die Regeln werden nicht mehr ausgewertet, bis sie wiederhergestellt werden.",
+      "disableRule": "Regel {ruleOid} auf diesem Regelsatz deaktivieren? Andere Regeln am selben Ziel bleiben aktiv."
     }
   },
   "sites": {

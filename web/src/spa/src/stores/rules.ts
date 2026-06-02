@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { apiGet, apiPost, apiDelete, ApiError, ApiNetworkError } from '@/api/client'
 import type { RuleActionRunLogEntry, RuleSet } from '@/types/rule'
 
 /**
@@ -149,6 +149,117 @@ export const useRulesStore = defineStore('rules', () => {
     }
   }
 
+  /**
+   * Phase E RX.4 — lifecycle mutations.
+   *
+   * Each helper applies the refreshed RuleSetDto to {@code rows} +
+   * {@code selected} so the view re-renders without a refetch. On
+   * failure, returns false and sets {@code error}; on auth failures
+   * (401/403) re-throws so the router guard can react.
+   *
+   * The backend returns the full {@code RuleSetDto} from each
+   * mutation, mirroring A8.5's "return-the-projected-row" pattern.
+   * That lets the SPA swap in-place without a second GET round-trip.
+   *
+   * Wrapping shared swap logic in {@code applyRefreshed} keeps the
+   * four call sites short and identical to each other.
+   */
+  function applyRefreshed(updated: RuleSet): void {
+    const idx = rows.value.findIndex((r) => r.id === updated.id)
+    if (idx >= 0) rows.value[idx] = updated
+    if (selected.value && selected.value.id === updated.id) selected.value = updated
+  }
+
+  function handleMutationError(e: unknown, op: string): void {
+    if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+      const body = e.body as { message?: string } | null
+      error.value = body?.message ?? `${op} nicht erlaubt (HTTP ${e.status}).`
+      throw e
+    }
+    if (e instanceof ApiNetworkError) {
+      error.value = `Backend nicht erreichbar — ${op} fehlgeschlagen. Bitte später erneut versuchen.`
+    } else if (e instanceof ApiError) {
+      const body = e.body as { message?: string } | null
+      error.value = body?.message ?? `${op} fehlgeschlagen (HTTP ${e.status}).`
+    } else {
+      error.value = e instanceof Error ? e.message : `Unbekannter Fehler beim ${op}.`
+    }
+  }
+
+  async function disableRuleSet(id: number): Promise<boolean> {
+    try {
+      const updated = await apiPost<RuleSet>(`/pages/api/v1/rule-sets/${id}/disable`, {})
+      applyRefreshed(updated)
+      return true
+    } catch (e) {
+      handleMutationError(e, 'Deaktivieren')
+      return false
+    }
+  }
+
+  async function restoreRuleSet(id: number): Promise<boolean> {
+    try {
+      const updated = await apiPost<RuleSet>(`/pages/api/v1/rule-sets/${id}/restore`, {})
+      applyRefreshed(updated)
+      return true
+    } catch (e) {
+      handleMutationError(e, 'Wiederherstellen')
+      return false
+    }
+  }
+
+  async function disableAttachedRule(
+    ruleSetId: number,
+    ruleSetRuleId: number,
+  ): Promise<boolean> {
+    try {
+      const updated = await apiPost<RuleSet>(
+        `/pages/api/v1/rule-sets/${ruleSetId}/rules/${ruleSetRuleId}/disable`,
+        {},
+      )
+      applyRefreshed(updated)
+      return true
+    } catch (e) {
+      handleMutationError(e, 'Deaktivieren')
+      return false
+    }
+  }
+
+  async function restoreAttachedRule(
+    ruleSetId: number,
+    ruleSetRuleId: number,
+  ): Promise<boolean> {
+    try {
+      const updated = await apiPost<RuleSet>(
+        `/pages/api/v1/rule-sets/${ruleSetId}/rules/${ruleSetRuleId}/restore`,
+        {},
+      )
+      applyRefreshed(updated)
+      return true
+    } catch (e) {
+      handleMutationError(e, 'Wiederherstellen')
+      return false
+    }
+  }
+
+  /**
+   * DELETE alias for {@link disableRuleSet}. Kept for callers (e.g.
+   * a future RX.5 "permanent delete" UX) that want the verb-specific
+   * call site; today's UI uses {@link disableRuleSet} directly.
+   * Retained here to keep apiDelete from disappearing under unused-
+   * import lint.
+   */
+  async function deleteRuleSet(id: number): Promise<boolean> {
+    try {
+      const updated = await apiDelete<RuleSet>(`/pages/api/v1/rule-sets/${id}`)
+      applyRefreshed(updated)
+      return true
+    } catch (e) {
+      handleMutationError(e, 'Löschen')
+      return false
+    }
+  }
+
   function humanError(e: unknown, op: string): string {
     if (e instanceof ApiNetworkError) return `Backend nicht erreichbar — ${op} fehlgeschlagen.`
     if (e instanceof ApiError) {
@@ -173,5 +284,10 @@ export const useRulesStore = defineStore('rules', () => {
     fetchOne,
     fetchRunLog,
     testExpression,
+    disableRuleSet,
+    restoreRuleSet,
+    disableAttachedRule,
+    restoreAttachedRule,
+    deleteRuleSet,
   }
 })

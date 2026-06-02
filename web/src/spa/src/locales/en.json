@@ -452,6 +452,16 @@
       "resultFalse": "FALSE",
       "resultOther": "{value}",
       "errorHeading": "Test failed"
+    },
+    "action": {
+      "disableRuleSet": "Disable",
+      "restoreRuleSet": "Restore",
+      "disableRule": "Disable rule",
+      "restoreRule": "Restore rule"
+    },
+    "confirm": {
+      "disableRuleSet": "Disable rule set on {target}? Existing fire history stays in the audit trail; the rules stop evaluating until restored.",
+      "disableRule": "Disable rule {ruleOid} on this rule set? The other rules attached to the same target stay active."
     }
   },
   "sites": {
