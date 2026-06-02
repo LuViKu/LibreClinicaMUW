@@ -407,6 +407,21 @@
     "resetPassword": {
       "action": "Reset password",
       "confirm": "Reset {username}'s password? A new one-time password is generated; they must change it on first login. The current password is invalidated immediately. The action is recorded in the audit trail."
+    },
+    "roles": {
+      "openAction": "Roles",
+      "title": "Manage role bindings",
+      "currentHeading": "Current bindings",
+      "grantHeading": "Grant a new role",
+      "empty": "No active role bindings on visible studies.",
+      "study": "Study",
+      "studyPlaceholder": "Select a study…",
+      "role": "Role",
+      "grant": "Grant",
+      "revoke": "Revoke",
+      "revoked": "Revoked",
+      "revokeConfirm": "Revoke {username}'s role on study {study}? Their access to that study is removed; their data on the study is unaffected. The action is recorded in the audit trail.",
+      "auditNote": "All grants, role changes, and revocations are recorded in the audit trail."
     }
   },
   "importCrf": {

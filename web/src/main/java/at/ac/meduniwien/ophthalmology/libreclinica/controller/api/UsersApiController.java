@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -606,6 +607,265 @@ public class UsersApiController {
         if (provider != null && !provider.isBlank()) return true;
         String authtype = ua.getAuthtype();
         return authtype != null && authtype.toLowerCase().contains("ldap");
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* GET    /api/v1/users/{username}/roles                              */
+    /* POST   /api/v1/users/{username}/roles                              */
+    /* PUT    /api/v1/users/{username}/roles/{studyId}                    */
+    /* DELETE /api/v1/users/{username}/roles/{studyId}                    */
+    /*    (Phase E A7.5 — study-user-role assignments)                    */
+    /* ----------------------------------------------------------------- */
+
+    @Schema(name = "RoleAssignmentRequest")
+    public record RoleAssignmentRequest(String studyOid, String role) {}
+
+    /**
+     * List every study/role binding owned by {@code username},
+     * filtered to the caller's visible study set.
+     *
+     * <p>Mirrors the legacy "view user's role bindings" surface that
+     * the JSP admin renders on the user-detail page. Sysadmin-only.
+     */
+    @GetMapping("/{username}/roles")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array", implementation = RoleBindingDto.class)))
+    public ResponseEntity<?> listRoles(@PathVariable("username") String username,
+                                       HttpSession session) {
+        ResponseEntity<?> guard = preflightLifecycle(session, username);
+        if (guard != null) return guard;
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                me, currentStudy, currentRole);
+
+        UserAccountDAO userDao = new UserAccountDAO(dataSource);
+        UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No user with username '" + username + "'"));
+        }
+
+        ArrayList<StudyUserRoleBean> bindings = userDao.findAllRolesByUserName(username);
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        List<RoleBindingDto> out = new ArrayList<>();
+        for (StudyUserRoleBean sur : bindings) {
+            if (!visibleStudyIds.contains(sur.getStudyId())) continue;
+            out.add(toRoleBindingDto(sur, studyDao));
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Grant a fresh study/role binding to {@code username}. Mirrors
+     * {@code SetUserRoleServlet:206} — the legacy gate (sysadmin
+     * only) and the site-level role legality check (Coordinator /
+     * StudyDirector cannot be granted at site level) are preserved.
+     *
+     * <p>Refuses 409 when a non-DELETED binding already exists for
+     * the {@code (user, study)} pair: the SPA should call the PUT
+     * endpoint to update an existing binding instead.
+     */
+    @PostMapping("/{username}/roles")
+    @ApiResponse(responseCode = "201",
+                 content = @Content(schema = @Schema(implementation = RoleBindingDto.class)))
+    public ResponseEntity<?> grantRole(@PathVariable("username") String username,
+                                       @RequestBody(required = false) RoleAssignmentRequest body,
+                                       HttpSession session) {
+        ResponseEntity<?> guard = preflightLifecycle(session, username);
+        if (guard != null) return guard;
+        if (body == null) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Request body is required",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "body", "missing"))));
+        }
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        UserAccountDAO userDao = new UserAccountDAO(dataSource);
+        StudyDAO studyDao = new StudyDAO(dataSource);
+
+        List<SubjectsApiController.ValidationErrorBody.FieldError> shapeErrors =
+                validateRoleAssignmentShape(body);
+        if (!shapeErrors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed", shapeErrors));
+        }
+
+        UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No user with username '" + username + "'"));
+        }
+        StudyBean study = (StudyBean) studyDao.findByOid(body.studyOid());
+        if (study == null || study.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study with oid '" + body.studyOid() + "'"));
+        }
+        Role legacyRole = RoleMapper.fromSpaRole(body.role());
+        if (!UserAdminAuthorization.roleAssignmentIsLegal(legacyRole, study)) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "role", "Role '" + body.role()
+                                    + "' cannot be granted at site level — assign at the parent study"))));
+        }
+
+        StudyUserRoleBean existing = userDao.findRoleByUserNameAndStudyId(username, study.getId());
+        if (existing != null && existing.getId() != 0 && existing.isActive()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "User '" + username + "' already has a role on study " + body.studyOid()
+                            + " — use PUT to change it"));
+        }
+
+        StudyUserRoleBean sur = new StudyUserRoleBean();
+        sur.setStudyId(study.getId());
+        sur.setRoleName(legacyRole.getName());
+        sur.setStatus(Status.AVAILABLE);
+        sur.setOwner(me);
+        sur.setUserName(username);
+        sur.setUserAccountId(target.getId());
+        userDao.createStudyUserRole(target, sur);
+
+        LOG.info("Grant role: username={} studyOid={} role={} by admin={}",
+                username, body.studyOid(), legacyRole.getName(), me.getName());
+
+        StudyUserRoleBean refreshed = userDao.findRoleByUserNameAndStudyId(username, study.getId());
+        return ResponseEntity.status(201).body(toRoleBindingDto(refreshed, studyDao));
+    }
+
+    /**
+     * Change the role on an existing binding (without revoking).
+     * Mirrors {@code EditStudyUserRoleServlet}. Sysadmin-only, same
+     * site-level legality check.
+     */
+    @PutMapping("/{username}/roles/{studyOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RoleBindingDto.class)))
+    public ResponseEntity<?> updateRole(@PathVariable("username") String username,
+                                        @PathVariable("studyOid") String studyOid,
+                                        @RequestBody(required = false) RoleAssignmentRequest body,
+                                        HttpSession session) {
+        ResponseEntity<?> guard = preflightLifecycle(session, username);
+        if (guard != null) return guard;
+        if (body == null || body.role() == null || body.role().isBlank()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "role", "Role is required"))));
+        }
+        Role legacyRole = RoleMapper.fromSpaRole(body.role());
+        if (legacyRole == null) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "role", "Unknown role — expected Administrator / Data Manager / CRC / Monitor / Investigator"))));
+        }
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        UserAccountDAO userDao = new UserAccountDAO(dataSource);
+        StudyDAO studyDao = new StudyDAO(dataSource);
+
+        StudyBean study = (StudyBean) studyDao.findByOid(studyOid);
+        if (study == null || study.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study with oid '" + studyOid + "'"));
+        }
+        if (!UserAdminAuthorization.roleAssignmentIsLegal(legacyRole, study)) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "role", "Role '" + body.role()
+                                    + "' cannot be granted at site level — assign at the parent study"))));
+        }
+
+        StudyUserRoleBean existing = userDao.findRoleByUserNameAndStudyId(username, study.getId());
+        if (existing == null || existing.getId() == 0 || !existing.isActive()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No active role binding for user '" + username + "' on study '" + studyOid + "'"));
+        }
+
+        existing.setRoleName(legacyRole.getName());
+        existing.setStatus(Status.AVAILABLE);
+        existing.setUpdater(me);
+        userDao.updateStudyUserRole(existing, username);
+
+        LOG.info("Update role: username={} studyOid={} role={} by admin={}",
+                username, studyOid, legacyRole.getName(), me.getName());
+
+        StudyUserRoleBean refreshed = userDao.findRoleByUserNameAndStudyId(username, study.getId());
+        return ResponseEntity.ok(toRoleBindingDto(refreshed, studyDao));
+    }
+
+    /**
+     * Revoke an existing binding (status_id → DELETED). Mirrors
+     * {@code DeleteStudyUserRoleServlet:73-81}. Sysadmin-only. The
+     * legacy code is a status flip + {@code updateStudyUserRole}, so
+     * the same pattern works here.
+     */
+    @DeleteMapping("/{username}/roles/{studyOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RoleBindingDto.class)))
+    public ResponseEntity<?> revokeRole(@PathVariable("username") String username,
+                                        @PathVariable("studyOid") String studyOid,
+                                        HttpSession session) {
+        ResponseEntity<?> guard = preflightLifecycle(session, username);
+        if (guard != null) return guard;
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        UserAccountDAO userDao = new UserAccountDAO(dataSource);
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = (StudyBean) studyDao.findByOid(studyOid);
+        if (study == null || study.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study with oid '" + studyOid + "'"));
+        }
+
+        StudyUserRoleBean existing = userDao.findRoleByUserNameAndStudyId(username, study.getId());
+        if (existing == null || existing.getId() == 0 || !existing.isActive()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No active role binding for user '" + username + "' on study '" + studyOid + "'"));
+        }
+
+        existing.setStatus(Status.DELETED);
+        existing.setUpdater(me);
+        userDao.updateStudyUserRole(existing, username);
+
+        LOG.info("Revoke role: username={} studyOid={} by admin={}",
+                username, studyOid, me.getName());
+
+        return ResponseEntity.ok(toRoleBindingDto(existing, studyDao));
+    }
+
+    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateRoleAssignmentShape(
+            RoleAssignmentRequest body) {
+        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        if (body.studyOid() == null || body.studyOid().isBlank()) {
+            out.add(fieldError("studyOid", "studyOid is required"));
+        }
+        if (RoleMapper.fromSpaRole(body.role()) == null) {
+            out.add(fieldError("role", "Unknown role — expected Administrator / Data Manager / CRC / Monitor / Investigator"));
+        }
+        return out;
+    }
+
+    private static RoleBindingDto toRoleBindingDto(StudyUserRoleBean sur, StudyDAO studyDao) {
+        StudyBean study = sur.getStudyId() > 0
+                ? (StudyBean) studyDao.findByPK(sur.getStudyId()) : null;
+        boolean isSite = study != null && study.getParentStudyId() > 0;
+        String spaRole = sur.getRole() != null
+                ? RoleMapper.toSpaRole(sur.getRole().getName()) : "Investigator";
+        boolean active = sur.getStatus() != null
+                && sur.getStatus().getId() == Status.AVAILABLE.getId();
+        return new RoleBindingDto(
+                sur.getStudyId(),
+                study == null ? null : study.getOid(),
+                study == null ? null : study.getName(),
+                isSite && study != null ? study.getName() : null,
+                spaRole,
+                active);
     }
 
     /* ----------------------------------------------------------------- */

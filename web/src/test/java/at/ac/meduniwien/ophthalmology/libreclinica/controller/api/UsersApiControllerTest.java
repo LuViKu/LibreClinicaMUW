@@ -10,6 +10,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -424,6 +425,139 @@ class UsersApiControllerTest extends AbstractApiControllerTest {
     @Test
     void resetPasswordReturns403WhenNonSysadminAttempts() throws Exception {
         mockMvcWith().perform(post("/api/v1/users/somebody/resetPassword")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin only")));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* GET/POST/PUT/DELETE /api/v1/users/{username}/roles[/{studyId}]         */
+    /*   (Phase E A7.5 — role assignments)                                   */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void listRolesReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/users/somebody/roles")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void listRolesReturns403WhenNonSysadminAttempts() throws Exception {
+        mockMvcWith().perform(get("/api/v1/users/somebody/roles")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin only")));
+    }
+
+    @Test
+    void grantRoleReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/roles")
+                .contentType("application/json")
+                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Investigator\"}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void grantRoleReturns403WhenNonSysadminAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/roles")
+                .contentType("application/json")
+                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Investigator\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin only")));
+    }
+
+    @Test
+    void grantRoleReturns400OnMissingBody() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/roles")
+                .contentType("application/json")
+                .content("")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void grantRoleReturns400OnMissingFields() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/roles")
+                .contentType("application/json")
+                .content("{}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'studyOid')]").exists())
+                .andExpect(jsonPath("$.errors[?(@.field == 'role')]").exists());
+    }
+
+    @Test
+    void grantRoleReturns400OnUnknownRole() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/roles")
+                .contentType("application/json")
+                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Wizard\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'role')]").exists());
+    }
+
+    @Test
+    void updateRoleReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(put("/api/v1/users/somebody/roles/S_DEFAULTS1")
+                .contentType("application/json")
+                .content("{\"role\":\"Investigator\"}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateRoleReturns403WhenNonSysadminAttempts() throws Exception {
+        mockMvcWith().perform(put("/api/v1/users/somebody/roles/S_DEFAULTS1")
+                .contentType("application/json")
+                .content("{\"role\":\"Investigator\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin only")));
+    }
+
+    @Test
+    void updateRoleReturns400OnMissingRole() throws Exception {
+        mockMvcWith().perform(put("/api/v1/users/somebody/roles/S_DEFAULTS1")
+                .contentType("application/json")
+                .content("{}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'role')]").exists());
+    }
+
+    @Test
+    void revokeRoleReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(delete("/api/v1/users/somebody/roles/S_DEFAULTS1")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void revokeRoleReturns403WhenNonSysadminAttempts() throws Exception {
+        mockMvcWith().perform(delete("/api/v1/users/somebody/roles/S_DEFAULTS1")
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
                                 "Default Study",

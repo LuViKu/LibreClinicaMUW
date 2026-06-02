@@ -9,6 +9,7 @@ import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import InviteUserDialog from '@/components/InviteUserDialog.vue'
 import EditUserDialog from '@/components/EditUserDialog.vue'
+import UserRolesDialog from '@/components/UserRolesDialog.vue'
 
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
@@ -76,6 +77,14 @@ async function onResetPassword(u: StudyUser) {
     const result = await users.resetPassword(u.username)
     if (result.ok) restoredPanel.value = { username: u.username, password: result.generatedPassword }
   } finally { isLifecycleBusy.value = null }
+}
+
+/* Phase E A7.5 — role-assignments dialog state. */
+const rolesOpen = ref(false)
+const rolesTarget = ref<StudyUser | null>(null)
+function openRoles(u: StudyUser) {
+  rolesTarget.value = u
+  rolesOpen.value = true
 }
 
 function roleVariant(r: UserRole): 'investigator' | 'monitor' | 'data-manager' | 'neutral' {
@@ -289,6 +298,14 @@ function formatDate(iso: string | null): string {
                   {{ t('manageUsers.resetPassword.action') }}
                 </button>
               </template>
+              <span class="text-slate-300">·</span>
+              <button
+                class="text-muw-blue hover:underline disabled:opacity-50"
+                :disabled="isLifecycleBusy === u.username"
+                @click="openRoles(u)"
+              >
+                {{ t('manageUsers.roles.openAction') }}
+              </button>
             </div>
           </td>
         </tr>
@@ -334,5 +351,6 @@ function formatDate(iso: string | null): string {
 
     <InviteUserDialog v-model:open="inviteOpen" @close="users.load()" />
     <EditUserDialog v-model:open="editOpen" :user="editTarget" />
+    <UserRolesDialog v-model:open="rolesOpen" :user="rolesTarget" @close="users.load()" />
   </div>
 </template>
