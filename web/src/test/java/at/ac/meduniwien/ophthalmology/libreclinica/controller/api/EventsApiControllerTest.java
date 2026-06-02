@@ -9,8 +9,10 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -122,5 +124,173 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("must be YYYY-MM-DD")));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* PUT /api/v1/events/{id} (Phase E A4 — edit)                            */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void updateReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(put("/api/v1/events/1")
+                .contentType("application/json")
+                .content("{\"location\":\"OR-3\"}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(put("/api/v1/events/1")
+                .contentType("application/json")
+                .content("{\"location\":\"OR-3\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateReturns403WhenMonitorAttempts() throws Exception {
+        mockMvcWith().perform(put("/api/v1/events/1")
+                .contentType("application/json")
+                .content("{\"location\":\"OR-3\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(3, "monitor", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.MONITOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit editing")));
+    }
+
+    @Test
+    void updateReturns400OnEmptyBody() throws Exception {
+        mockMvcWith().perform(put("/api/v1/events/1")
+                .contentType("application/json")
+                .content("")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateReturns400OnInvalidStatus() throws Exception {
+        // 'completed' is derived from CRF state; not user-editable.
+        mockMvcWith().perform(put("/api/v1/events/1")
+                .contentType("application/json")
+                .content("{\"status\":\"completed\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("'status' must be one of")));
+    }
+
+    @Test
+    void updateReturns400OnMalformedDate() throws Exception {
+        mockMvcWith().perform(put("/api/v1/events/1")
+                .contentType("application/json")
+                .content("{\"dateStarted\":\"not-a-date\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("must be YYYY-MM-DD")));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* DELETE /api/v1/events/{id} (Phase E A4 — cancel)                       */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void cancelReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(delete("/api/v1/events/1")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void cancelReturns403WhenInvestigatorAttempts() throws Exception {
+        // Investigator can edit but not cancel — escalation to DM.
+        mockMvcWith().perform(delete("/api/v1/events/1")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit cancelling")));
+    }
+
+    @Test
+    void cancelReturns403WhenMonitorAttempts() throws Exception {
+        mockMvcWith().perform(delete("/api/v1/events/1")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(3, "monitor", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.MONITOR, 1)))
+                .andExpect(status().isForbidden());
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* EventEditAuthorization — pure unit-level role coverage                 */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void eventEditAuth_PermittedRoles() {
+        // INVESTIGATOR(4), COORDINATOR(2), STUDYDIRECTOR(3), ADMIN(1)
+        org.junit.jupiter.api.Assertions.assertTrue(
+                EventEditAuthorization.roleMayEdit(4));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                EventEditAuthorization.roleMayEdit(2));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                EventEditAuthorization.roleMayEdit(3));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                EventEditAuthorization.roleMayEdit(1));
+    }
+
+    @Test
+    void eventEditAuth_ForbiddenRoles() {
+        // MONITOR(6), RA(5), RA2(7), INVALID(0)
+        org.junit.jupiter.api.Assertions.assertFalse(
+                EventEditAuthorization.roleMayEdit(6));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                EventEditAuthorization.roleMayEdit(5));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                EventEditAuthorization.roleMayEdit(7));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                EventEditAuthorization.roleMayEdit(0));
+    }
+
+    @Test
+    void eventCancelAuth_PermittedRoles() {
+        // STUDYDIRECTOR(3), ADMIN(1)
+        org.junit.jupiter.api.Assertions.assertTrue(
+                EventEditAuthorization.roleMayCancel(3));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                EventEditAuthorization.roleMayCancel(1));
+    }
+
+    @Test
+    void eventCancelAuth_ForbiddenRoles() {
+        // Investigator + CRC can edit but NOT cancel; Monitor/RA neither.
+        org.junit.jupiter.api.Assertions.assertFalse(
+                EventEditAuthorization.roleMayCancel(4));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                EventEditAuthorization.roleMayCancel(2));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                EventEditAuthorization.roleMayCancel(6));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                EventEditAuthorization.roleMayCancel(5));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                EventEditAuthorization.roleMayCancel(7));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                EventEditAuthorization.roleMayCancel(0));
     }
 }

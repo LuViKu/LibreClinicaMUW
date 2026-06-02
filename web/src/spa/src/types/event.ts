@@ -45,3 +45,35 @@ type GeneratedScheduleEventRequest =
 export type ScheduleEventRequest =
   Required<Pick<GeneratedScheduleEventRequest, 'subjectId' | 'eventDefinitionOid' | 'dateStarted'>> &
   Pick<GeneratedScheduleEventRequest, 'location'>
+
+/* ------------------------------------------------------------------ */
+/* Phase E A4 — event edit / cancel role helpers.                     */
+/*                                                                    */
+/* Mirrors EventEditAuthorization.java backend-side:                  */
+/*   edit:   Investigator, CRC, Data Manager, Administrator           */
+/*   cancel: Data Manager, Administrator                              */
+/*                                                                    */
+/* Plus state guards: editing is refused when status is               */
+/* terminal (signed / locked); cancelling is refused for the same     */
+/* terminal statuses + 'completed' (signed-off data still exists).    */
+/* ------------------------------------------------------------------ */
+
+import type { UserRole } from './auth'
+
+export function canEditEvent(role: UserRole, status: StudyEventStatus): boolean {
+  if (status === 'signed' || status === 'locked') return false
+  return (
+    role === 'Investigator' ||
+    role === 'CRC' ||
+    role === 'Data Manager' ||
+    role === 'Administrator'
+  )
+}
+
+export function canCancelEvent(role: UserRole, status: StudyEventStatus): boolean {
+  if (status === 'signed' || status === 'locked') return false
+  return role === 'Data Manager' || role === 'Administrator'
+}
+
+/** Phase E A4 — body of PUT /api/v1/events/{id}. */
+export type UpdateEventRequest = components['schemas']['UpdateEventRequest']

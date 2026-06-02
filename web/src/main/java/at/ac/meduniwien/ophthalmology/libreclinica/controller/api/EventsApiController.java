@@ -20,6 +20,7 @@ import java.util.Set;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -28,10 +29,15 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import org.slf4j.Logger;
@@ -39,8 +45,11 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -310,6 +319,320 @@ public class EventsApiController {
                 def.isRepeating());
 
         return ResponseEntity.status(201).body(dto);
+    }
+
+    /**
+     * Phase E A4 — edit an existing study event.
+     *
+     * <p>Editable fields: {@code dateStarted}, {@code dateEnded},
+     * {@code location}, {@code status}. The event's
+     * {@code study_subject_id} and {@code study_event_definition_id}
+     * are immutable (FK anchors for event_crf joins).
+     *
+     * <p>Status is restricted to user-controlled transitions:
+     * {@code scheduled | stopped | skipped}. Derived statuses
+     * ({@code data-entry-started}, {@code completed},
+     * {@code signed}, {@code locked}) cannot be set via this
+     * endpoint — they come from CRF completion / signing flows.
+     *
+     * <p>Guards: 401 / 400 (no study) / 403 (role) /
+     * 400 (validation) / 404 (visibility) / 409 (event is
+     * {@link Status#DELETED} or in a terminal SubjectEventStatus
+     * — {@code signed} or {@code locked}).
+     *
+     * <p>Audit: one {@code audit_log_event} row per changed
+     * column with old/new values. Wrapped in try/catch so audit
+     * failures don't roll back the data update.
+     */
+    @PutMapping("/{id:[0-9]+}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = StudyEventDto.class)))
+    public ResponseEntity<?> update(@PathVariable("id") int eventId,
+                                    @RequestBody(required = false) UpdateEventRequest body,
+                                    HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound to the session."));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!EventEditAuthorization.roleMayEdit(roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit editing study events"));
+        }
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Empty request body"));
+        }
+        // Status validation (limited set).
+        Integer newStatusId = null;
+        if (body.status() != null) {
+            switch (body.status()) {
+                case "scheduled": newStatusId = SubjectEventStatus.SCHEDULED.getId(); break;
+                case "stopped":   newStatusId = SubjectEventStatus.STOPPED.getId();   break;
+                case "skipped":   newStatusId = SubjectEventStatus.SKIPPED.getId();   break;
+                default:
+                    return ResponseEntity.badRequest().body(Map.of("message",
+                            "'status' must be one of: scheduled | stopped | skipped "
+                                    + "(derived statuses are not user-editable)"));
+            }
+        }
+        // Date validation — pre-parse so we can write back with the
+        // same SimpleDateFormat the rest of the controller uses.
+        Date newStart = null;
+        boolean clearStart = false;
+        if (body.dateStarted() != null) {
+            if (body.dateStarted().isBlank()) {
+                clearStart = true;
+            } else {
+                try { newStart = ISO_DATE.parse(body.dateStarted()); }
+                catch (Exception e) {
+                    return ResponseEntity.badRequest().body(Map.of("message",
+                            "'dateStarted' must be YYYY-MM-DD; got '" + body.dateStarted() + "'"));
+                }
+            }
+        }
+        Date newEnd = null;
+        boolean clearEnd = false;
+        if (body.dateEnded() != null) {
+            if (body.dateEnded().isBlank()) {
+                clearEnd = true;
+            } else {
+                try { newEnd = ISO_DATE.parse(body.dateEnded()); }
+                catch (Exception e) {
+                    return ResponseEntity.badRequest().body(Map.of("message",
+                            "'dateEnded' must be YYYY-MM-DD; got '" + body.dateEnded() + "'"));
+                }
+            }
+        }
+
+        StudyEventDAO seDao = new StudyEventDAO(dataSource);
+        StudyEventBean ev = (StudyEventBean) seDao.findByPK(eventId);
+        if (ev == null || ev.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study_event with id " + eventId));
+        }
+
+        // Site visibility — resolve the subject behind the event
+        // and confirm it sits in the caller's visible study set.
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ev.getStudySubjectId());
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "study_event " + eventId + " belongs to a different study"));
+        }
+
+        // State guards — refuse terminal SubjectEventStatus values,
+        // refuse already-deleted events.
+        if (ev.getStatus() != null && ev.getStatus().equals(Status.DELETED)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "study_event " + eventId + " is removed"));
+        }
+        SubjectEventStatus current = ev.getSubjectEventStatus();
+        if (current != null && (current.equals(SubjectEventStatus.SIGNED)
+                || current.equals(SubjectEventStatus.LOCKED))) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "study_event " + eventId + " is " + current.getName()
+                            + " — edit blocked until un-signed / unlocked"));
+        }
+
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        java.util.Date now = new java.util.Date();
+
+        if (body.dateStarted() != null) {
+            Date oldStart = ev.getDateStarted();
+            Date target = clearStart ? null : newStart;
+            if (!java.util.Objects.equals(oldStart, target)) {
+                ev.setDateStarted(target);
+                writeEventFieldAudit(auditDAO, ub, currentStudy, ss, ev,
+                        "date_start",
+                        oldStart == null ? "" : ISO_DATE.format(oldStart),
+                        target == null ? "" : ISO_DATE.format(target));
+            }
+        }
+        if (body.dateEnded() != null) {
+            Date oldEnd = ev.getDateEnded();
+            Date target = clearEnd ? null : newEnd;
+            if (!java.util.Objects.equals(oldEnd, target)) {
+                ev.setDateEnded(target);
+                writeEventFieldAudit(auditDAO, ub, currentStudy, ss, ev,
+                        "date_end",
+                        oldEnd == null ? "" : ISO_DATE.format(oldEnd),
+                        target == null ? "" : ISO_DATE.format(target));
+            }
+        }
+        if (body.location() != null) {
+            String oldLoc = ev.getLocation() == null ? "" : ev.getLocation();
+            String newLoc = body.location().trim();
+            if (!oldLoc.equals(newLoc)) {
+                ev.setLocation(newLoc);
+                writeEventFieldAudit(auditDAO, ub, currentStudy, ss, ev,
+                        "location", oldLoc, newLoc);
+            }
+        }
+        if (newStatusId != null) {
+            int oldStatusId = ev.getSubjectEventStatus() == null
+                    ? 0 : ev.getSubjectEventStatus().getId();
+            if (oldStatusId != newStatusId) {
+                ev.setSubjectEventStatus(SubjectEventStatus.get(newStatusId));
+                writeEventFieldAudit(auditDAO, ub, currentStudy, ss, ev,
+                        "subject_event_status_id",
+                        String.valueOf(oldStatusId), String.valueOf(newStatusId));
+            }
+        }
+
+        ev.setUpdater(ub);
+        ev.setUpdatedDate(now);
+        seDao.update(ev);
+
+        LOG.info("Study event update: id={} subject={} by user={} role={}",
+                ev.getId(), ss.getLabel(), ub.getName(), roleId);
+
+        StudyEventBean refreshed = (StudyEventBean) seDao.findByPK(ev.getId());
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean def =
+                (StudyEventDefinitionBean) sedDao.findByPK(refreshed.getStudyEventDefinitionId());
+        StudyEventDto dto = new StudyEventDto(
+                String.valueOf(refreshed.getId()),
+                ss.getLabel(),
+                def == null ? "" : def.getOid(),
+                def == null ? "" : def.getName(),
+                refreshed.getSampleOrdinal(),
+                refreshed.getDateStarted() == null ? null : ISO_DATE.format(refreshed.getDateStarted()),
+                refreshed.getDateEnded() == null ? null : ISO_DATE.format(refreshed.getDateEnded()),
+                blankToNull(refreshed.getLocation()),
+                statusForSubjectEventStatus(refreshed.getSubjectEventStatus()),
+                def != null && def.isRepeating());
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * Phase E A4 — soft-cancel a study event. Mirrors the legacy
+     * {@code RemoveStudyEventServlet} cascade: the event flips to
+     * {@link Status#DELETED}; nested {@code event_crf} → {@code item_data}
+     * rows cascade to {@link Status#AUTO_DELETED}.
+     *
+     * <p>Guards: 401 / 400 (no study) / 403 (DM/Admin only) / 404
+     * (visibility) / 409 (event already DELETED, or SubjectEventStatus
+     * is SIGNED/LOCKED — terminal).
+     *
+     * <p>Audit: handled by the existing {@code study_event_trigger};
+     * no controller-side emission needed.
+     */
+    @DeleteMapping("/{id:[0-9]+}")
+    public ResponseEntity<?> cancel(@PathVariable("id") int eventId,
+                                    HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound to the session."));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!EventEditAuthorization.roleMayCancel(roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit cancelling study events"));
+        }
+
+        StudyEventDAO seDao = new StudyEventDAO(dataSource);
+        StudyEventBean ev = (StudyEventBean) seDao.findByPK(eventId);
+        if (ev == null || ev.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study_event with id " + eventId));
+        }
+
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ev.getStudySubjectId());
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "study_event " + eventId + " belongs to a different study"));
+        }
+        if (ev.getStatus() != null && ev.getStatus().equals(Status.DELETED)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "study_event " + eventId + " is already cancelled"));
+        }
+        SubjectEventStatus seStatus = ev.getSubjectEventStatus();
+        if (seStatus != null && (seStatus.equals(SubjectEventStatus.SIGNED)
+                || seStatus.equals(SubjectEventStatus.LOCKED))) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "study_event " + eventId + " is " + seStatus.getName()
+                            + " — un-sign / unlock before cancelling"));
+        }
+
+        // Parent: study_event → DELETED. Children: event_crf +
+        // item_data → AUTO_DELETED. Mirrors RemoveStudyEventServlet.
+        ev.setStatus(Status.DELETED);
+        ev.setUpdater(ub);
+        ev.setUpdatedDate(new java.util.Date());
+        seDao.update(ev);
+
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        ItemDataDAO idDao = new ItemDataDAO(dataSource);
+        java.util.ArrayList<EventCRFBean> ecs = ecDao.findAllByStudyEvent(ev);
+        for (EventCRFBean ec : ecs) {
+            if (ec.getStatus() != null && ec.getStatus().equals(Status.DELETED)) continue;
+            ec.setStatus(Status.AUTO_DELETED);
+            ec.setUpdater(ub);
+            ec.setUpdatedDate(new java.util.Date());
+            ecDao.update(ec);
+
+            java.util.ArrayList<ItemDataBean> items = idDao.findAllByEventCRFId(ec.getId());
+            for (ItemDataBean it : items) {
+                if (it.getStatus() != null && it.getStatus().equals(Status.DELETED)) continue;
+                it.setStatus(Status.AUTO_DELETED);
+                it.setUpdater(ub);
+                it.setUpdatedDate(new java.util.Date());
+                idDao.update(it);
+            }
+        }
+
+        LOG.info("Study event cancel: id={} subject={} by user={} role={}",
+                ev.getId(), ss.getLabel(), ub.getName(), roleId);
+        return ResponseEntity.noContent().build();
+    }
+
+    private static void writeEventFieldAudit(AuditEventDAO dao,
+                                             UserAccountBean ub,
+                                             StudyBean study,
+                                             StudySubjectBean ss,
+                                             StudyEventBean ev,
+                                             String columnName,
+                                             String oldValue,
+                                             String newValue) {
+        try {
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(ub.getId());
+            ae.setStudyId(study.getId());
+            ae.setSubjectId(ss == null ? 0 : ss.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setSubjectName(ss != null && ss.getLabel() != null ? ss.getLabel() : "");
+            ae.setAuditTable("study_event");
+            ae.setEntityId(ev.getId());
+            ae.setColumnName(columnName);
+            ae.setOldValue(oldValue == null ? "" : oldValue);
+            ae.setNewValue(newValue == null ? "" : newValue);
+            ae.setActionMessage("study_event_update: " + columnName
+                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
+                    + (newValue == null ? "" : newValue) + "'");
+            dao.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for study_event {} field {} (continuing): {}",
+                    ev.getId(), columnName, e.getMessage());
+        }
     }
 
     /* ----------------------------------------------------------------- */
