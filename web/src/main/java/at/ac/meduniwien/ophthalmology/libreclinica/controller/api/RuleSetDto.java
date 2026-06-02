@@ -48,10 +48,16 @@ public record RuleSetDto(
     /**
      * One row per {@code rule_set_rule} entry. Inlines the
      * {@code rule} the row points at + the per-action list.
+     *
+     * <p>{@code ruleId} is the {@code rule.id} surrogate key — the
+     * SPA needs it to call {@code PUT /api/v1/rules/{id}} for inline
+     * edit (Phase E.5 RX.6b). Zero when the row's rule_bean is
+     * detached (only happens in malformed legacy data).
      */
     @Schema(name = "AttachedRuleDto")
     public record AttachedRuleDto(
             int ruleSetRuleId,
+            int ruleId,
             String ruleOid,
             String ruleName,
             String ruleDescription,

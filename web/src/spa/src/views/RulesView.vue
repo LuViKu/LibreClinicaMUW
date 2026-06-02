@@ -6,10 +6,12 @@ import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import RulesImportDialog from '@/components/RulesImportDialog.vue'
 import RuleAuthoringWizard from '@/components/RuleAuthoringWizard.vue'
+import RuleEditDialog from '@/components/RuleEditDialog.vue'
+import RuleActionEditDialog from '@/components/RuleActionEditDialog.vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useRulesStore, type TestExpressionResult } from '@/stores/rules'
-import type { ActionType, AttachedRule, RuleSet } from '@/types/rule'
+import type { ActionType, AttachedRule, RuleAction, RuleSet } from '@/types/rule'
 
 const RUN_LOG_PAGE_SIZE = 25
 
@@ -111,6 +113,16 @@ function actionTypeBadgeVariant(type: ActionType): 'info' | 'warning' | 'success
     case 'RANDOMIZE': return 'success'
     default: return 'neutral'
   }
+}
+
+/** Phase E.5 RX.6b — gate on the backend's inline-edit envelope. */
+function actionIsEditable(type: ActionType): boolean {
+  return (
+    type === 'FILE_DISCREPANCY_NOTE' ||
+    type === 'EMAIL' ||
+    type === 'SHOW' ||
+    type === 'HIDE'
+  )
 }
 
 function activePhases(gates: { administrativeDataEntry: boolean; initialDataEntry: boolean; doubleDataEntry: boolean; importDataEntry: boolean; batch: boolean }): string[] {
@@ -299,6 +311,31 @@ function onImportCommitted() {
  */
 const createWizardOpen = ref(false)
 function openCreateWizard() { createWizardOpen.value = true }
+
+/* -------------------------------------------------------------- */
+/* RX.6b — Inline edit dialogs (rule + action)                      */
+/* -------------------------------------------------------------- */
+
+const ruleEditOpen = ref(false)
+const ruleEditTarget = ref<AttachedRule | null>(null)
+function openRuleEdit(ar: AttachedRule) {
+  ruleEditTarget.value = ar
+  ruleEditOpen.value = true
+}
+function onRuleEditSaved() {
+  // Store call already triggers fetchOne(selected.id) on success;
+  // no extra refresh needed here.
+}
+
+const actionEditOpen = ref(false)
+const actionEditTarget = ref<RuleAction | null>(null)
+function openActionEdit(action: RuleAction) {
+  actionEditTarget.value = action
+  actionEditOpen.value = true
+}
+function onActionEditSaved() {
+  // Store call already triggers fetchOne(selected.id) on success.
+}
 function onCreateWizardDone() {
   rules.load()
 }
@@ -585,6 +622,14 @@ watch(selectedId, () => {
                     <StatusPill v-if="ar.status === 'removed'" variant="neutral">{{ t('rules.statusRemoved') }}</StatusPill>
                     <span class="flex-1"></span>
                     <button
+                      v-if="canManage && ar.status === 'available'"
+                      type="button"
+                      class="text-[10px] px-2 py-0.5 border border-slate-300 rounded text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      @click="openRuleEdit(ar)"
+                    >
+                      {{ t('rules.action.editRule') }}
+                    </button>
+                    <button
                       v-if="canManage && ar.status === 'removed'"
                       type="button"
                       class="text-[10px] px-2 py-0.5 border border-slate-300 rounded text-slate-700 hover:bg-slate-50 disabled:opacity-50"
@@ -614,6 +659,15 @@ watch(selectedId, () => {
                       <div class="flex items-center gap-2 flex-wrap">
                         <StatusPill :variant="actionTypeBadgeVariant(action.actionType)">{{ t(`rules.actionType.${action.actionType}`) }}</StatusPill>
                         <span class="text-slate-500">{{ t(action.expressionEvaluatesTo ? 'rules.detail.firesWhenTrue' : 'rules.detail.firesWhenFalse') }}</span>
+                        <span class="flex-1"></span>
+                        <button
+                          v-if="canManage && actionIsEditable(action.actionType)"
+                          type="button"
+                          class="text-[10px] px-2 py-0.5 border border-slate-300 rounded text-slate-700 hover:bg-slate-50"
+                          @click="openActionEdit(action)"
+                        >
+                          {{ t('rules.action.editAction') }}
+                        </button>
                       </div>
                       <p v-if="action.message" class="mt-1 text-slate-700">{{ action.message }}</p>
                       <div v-if="activePhases(action.phaseGates).length > 0" class="mt-1 text-[10px] text-slate-500">
@@ -773,6 +827,19 @@ watch(selectedId, () => {
     <RuleAuthoringWizard
       v-model:open="createWizardOpen"
       @done="onCreateWizardDone"
+    />
+
+    <RuleEditDialog
+      v-model:open="ruleEditOpen"
+      :rule="ruleEditTarget"
+      @saved="onRuleEditSaved"
+    />
+
+    <RuleActionEditDialog
+      v-model:open="actionEditOpen"
+      :rule-set="selectedRuleSet"
+      :action="actionEditTarget"
+      @saved="onActionEditSaved"
     />
   </div>
 </template>
