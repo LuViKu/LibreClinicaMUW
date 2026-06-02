@@ -403,6 +403,10 @@
       "restoreConfirm": "Re-enable user {username}? A new one-time password is generated; they must change it on first login. The action is recorded in the audit trail.",
       "restoredIntro": "User {username} is re-enabled. Share the one-time password via a secure channel.",
       "restoredNoPassword": "The credential is owned by the directory or identity provider — no local password was generated. Tell the user they may log in with their existing credentials."
+    },
+    "resetPassword": {
+      "action": "Reset password",
+      "confirm": "Reset {username}'s password? A new one-time password is generated; they must change it on first login. The current password is invalidated immediately. The action is recorded in the audit trail."
     }
   },
   "importCrf": {

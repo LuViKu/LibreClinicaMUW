@@ -61,6 +61,23 @@ async function copyRestoredPassword() {
   try { await navigator.clipboard.writeText(restoredPanel.value.password) } catch { /* older browsers */ }
 }
 
+/* Phase E A7.4 — admin password reset. Only meaningful for local
+   users; the per-row button hides itself when auth ∈ {sso, ldap}.
+   Re-uses the A7.3 inline-panel pattern to surface the one-time
+   password. */
+function canResetPassword(u: StudyUser): boolean {
+  return u.active && u.auth === 'local'
+}
+
+async function onResetPassword(u: StudyUser) {
+  if (!confirm(t('manageUsers.resetPassword.confirm', { username: u.username }))) return
+  isLifecycleBusy.value = u.username
+  try {
+    const result = await users.resetPassword(u.username)
+    if (result.ok) restoredPanel.value = { username: u.username, password: result.generatedPassword }
+  } finally { isLifecycleBusy.value = null }
+}
+
 function roleVariant(r: UserRole): 'investigator' | 'monitor' | 'data-manager' | 'neutral' {
   switch (r) {
     case 'Investigator':  return 'investigator'
@@ -262,6 +279,16 @@ function formatDate(iso: string | null): string {
               >
                 {{ t('manageUsers.lifecycle.restore') }}
               </button>
+              <template v-if="canResetPassword(u)">
+                <span class="text-slate-300">·</span>
+                <button
+                  class="text-amber-700 hover:underline disabled:opacity-50"
+                  :disabled="isLifecycleBusy === u.username"
+                  @click="onResetPassword(u)"
+                >
+                  {{ t('manageUsers.resetPassword.action') }}
+                </button>
+              </template>
             </div>
           </td>
         </tr>

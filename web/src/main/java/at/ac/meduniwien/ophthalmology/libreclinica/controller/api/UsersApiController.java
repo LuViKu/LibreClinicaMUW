@@ -609,6 +609,107 @@ public class UsersApiController {
     }
 
     /* ----------------------------------------------------------------- */
+    /* POST /api/v1/users/{username}/resetPassword                       */
+    /*   (Phase E A7.4 — admin password reset)                           */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Request body for the resetPassword endpoint.
+     *
+     * <p>{@code sendEmail} mirrors the legacy {@code displayPwd}
+     * switch (see A7.1 + A7.3). When the email path is not wired
+     * (current state), the response always carries the cleartext
+     * one-time password so the admin can distribute manually.
+     */
+    @Schema(name = "ResetPasswordRequest")
+    public record ResetPasswordRequest(Boolean sendEmail) {}
+
+    /**
+     * Generate a fresh one-time password for an existing user and
+     * force them to change it on first login.
+     *
+     * <p>Mirrors the {@code resetPassword=true} branch of
+     * {@code EditUserAccountServlet:193–211} + the password-gen path
+     * of {@code DeleteUserServlet:96–108}.
+     *
+     * <p>Sysadmin-only. Refuses 400 for directory-owned users (SSO +
+     * LDAP) — the directory / IdP owns the credential; resetting it
+     * here would create a phantom local password that fails to
+     * authenticate against the IdP anyway.
+     */
+    @PostMapping("/{username}/resetPassword")
+    @ApiResponse(responseCode = "200")
+    public ResponseEntity<?> resetPassword(@PathVariable("username") String username,
+                                           @RequestBody(required = false) ResetPasswordRequest body,
+                                           HttpSession session) {
+        ResponseEntity<?> guard = preflightLifecycle(session, username);
+        if (guard != null) return guard;
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        UserAccountDAO userDao = new UserAccountDAO(dataSource);
+        UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No user with username '" + username + "'"));
+        }
+        if (isDirectoryOwnedCredential(target)) {
+            // Distinguish SSO from LDAP in the message — the admin sees
+            // which external system owns the credential and can route
+            // the user to the right reset workflow.
+            String provider = target.getExternalIdProvider();
+            String which = (provider != null && !provider.isBlank())
+                    ? "the identity provider"
+                    : "the directory";
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "User '" + username + "' is authenticated via " + which
+                            + " — password resets must go through that workflow"));
+        }
+        if (target.getStatus() != null
+                && target.getStatus().getId() == Status.DELETED.getId()) {
+            // Resetting a disabled user's password is meaningless —
+            // they can't log in until they're restored.
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "User '" + username + "' is disabled — restore them before resetting their password"));
+        }
+
+        String generatedPassword = securityManager.genPassword();
+        String hash = securityManager.encryptPassword(generatedPassword,
+                target.getRunWebservices());
+        target.setPasswd(hash);
+        target.setPasswdTimestamp(null);
+        target.setUpdater(me);
+        target.setUpdatedDate(new java.util.Date());
+        userDao.update(target);
+
+        // Audit row: log the event WITHOUT either side of the password.
+        // Mirrors SubjectsApiController's sign-endpoint redaction
+        // pattern — passwords never enter the audit_log_event columns.
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setAuditTable("user_account");
+            ae.setEntityId(target.getId());
+            ae.setColumnName("passwd");
+            ae.setOldValue("");
+            ae.setNewValue("");
+            ae.setActionMessage("password_reset by admin " + me.getName()
+                    + " for user " + target.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for password_reset username={} (continuing): {}",
+                    username, e.getMessage());
+        }
+
+        LOG.info("Reset password: username={} by admin={}", username, me.getName());
+
+        boolean returnPassword = body == null || !Boolean.TRUE.equals(body.sendEmail());
+        Map<String, Object> response = new HashMap<>();
+        response.put("generatedPassword", returnPassword ? generatedPassword : null);
+        return ResponseEntity.ok(response);
+    }
+
+    /* ----------------------------------------------------------------- */
     /* PUT /api/v1/users/{username}  (Phase E A7.2 — edit profile)       */
     /* ----------------------------------------------------------------- */
 
