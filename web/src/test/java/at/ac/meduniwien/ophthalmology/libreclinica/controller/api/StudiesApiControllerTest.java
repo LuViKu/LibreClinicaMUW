@@ -344,4 +344,53 @@ class StudiesApiControllerTest extends AbstractApiControllerTest {
         org.junit.jupiter.api.Assertions.assertFalse(
                 StudyAdminAuthorization.studyAcceptsWrites(s));
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* POST /api/v1/studies/{studyOid}/status  (Phase E A8.5 — lifecycle)     */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void setStatusReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/studies/S_DEFAULTS1/status")
+                .contentType("application/json")
+                .content("{\"targetStatus\":\"LOCKED\",\"reason\":\"GCP review\"}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void setStatusReturns403WhenNonSysadminAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/studies/S_DEFAULTS1/status")
+                .contentType("application/json")
+                .content("{\"targetStatus\":\"LOCKED\",\"reason\":\"GCP review\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin only")));
+    }
+
+    @Test
+    void setStatusReturns400OnMissingTargetStatus() throws Exception {
+        mockMvcWith().perform(post("/api/v1/studies/S_DEFAULTS1/status")
+                .contentType("application/json")
+                .content("{}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'targetStatus')]").exists());
+    }
+
+    @Test
+    void setStatusReturns400OnUnsupportedTargetStatus() throws Exception {
+        mockMvcWith().perform(post("/api/v1/studies/S_DEFAULTS1/status")
+                .contentType("application/json")
+                .content("{\"targetStatus\":\"SIGNED\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'targetStatus')]").exists());
+    }
 }

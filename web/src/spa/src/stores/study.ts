@@ -158,6 +158,26 @@ export const useStudyStore = defineStore('study', () => {
     }
   }
 
+  /**
+   * Phase E A8.5 — operational status transition.
+   * Sysadmin-only on the backend; the SPA hides the select for other
+   * roles. {@code reason} is required for AVAILABLE→LOCKED /
+   * AVAILABLE→FROZEN (the backend 400s otherwise).
+   */
+  async function setStatus(
+    oid: string,
+    targetStatus: 'AVAILABLE' | 'PENDING' | 'LOCKED' | 'FROZEN',
+    reason: string,
+  ): Promise<CreateResult> {
+    return submitStudyMutation(
+      () => apiPost<StudyIdentity>(
+        `/pages/api/v1/studies/${encodeURIComponent(oid)}/status`,
+        { targetStatus, reason },
+      ),
+      'update',
+    )
+  }
+
   return {
     status,
     isLoading,
@@ -170,5 +190,6 @@ export const useStudyStore = defineStore('study', () => {
     update,
     disable,
     restore,
+    setStatus,
   }
 })

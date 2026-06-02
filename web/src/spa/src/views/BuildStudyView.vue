@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SideRail from '@/components/SideRail.vue'
@@ -19,6 +19,43 @@ onMounted(() => { if (!study.status) study.load(auth.user?.activeStudy?.oid) })
 // backend re-checks sysadmin authoritatively.
 const canManageStudy = computed(() => auth.user?.role === 'Administrator')
 const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
+
+// Phase E A8.5 — status transition affordance.
+type TargetStatus = 'AVAILABLE' | 'PENDING' | 'LOCKED' | 'FROZEN'
+const statusDialog = ref<{ target: TargetStatus; reason: string; error: string | null; busy: boolean } | null>(null)
+
+function openStatusDialog(target: TargetStatus) {
+  statusDialog.value = { target, reason: '', error: null, busy: false }
+}
+
+async function submitStatusChange() {
+  if (!statusDialog.value || !activeStudyOid.value) return
+  // Reason required for AVAILABLE→LOCKED/FROZEN — backend re-checks.
+  if (
+    (statusDialog.value.target === 'LOCKED' || statusDialog.value.target === 'FROZEN')
+    && statusDialog.value.reason.trim() === ''
+  ) {
+    statusDialog.value.error = t('buildStudy.statusDialog.reasonRequired')
+    return
+  }
+  statusDialog.value.busy = true
+  try {
+    const result = await study.setStatus(
+      activeStudyOid.value,
+      statusDialog.value.target,
+      statusDialog.value.reason.trim(),
+    )
+    if (result.ok) {
+      statusDialog.value = null
+      // Reload the tracker so the new status reflects in the header.
+      await study.load(activeStudyOid.value)
+    } else {
+      statusDialog.value.error = result.message ?? t('buildStudy.statusDialog.genericError')
+    }
+  } finally {
+    if (statusDialog.value) statusDialog.value.busy = false
+  }
+}
 
 /**
  * Phase E A8.2 — client-side deep-link resolution for task tiles.
@@ -88,6 +125,20 @@ function iconFor(id: StudyBuildTaskId): string {
             <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">{{ t('buildStudy.intro') }}</p>
           </div>
           <div v-if="canManageStudy" class="flex items-center gap-2">
+            <!-- Phase E A8.5 — status dropdown. The legal options
+                 are computed against the current status; the modal
+                 captures the reason for GCP-sensitive transitions. -->
+            <select
+              class="px-2 py-1.5 text-xs border border-slate-200 rounded-md bg-white text-slate-700"
+              :value="''"
+              @change="(e) => openStatusDialog((e.target as HTMLSelectElement).value as TargetStatus)"
+            >
+              <option value="" disabled>{{ t('buildStudy.statusAction') }}</option>
+              <option value="AVAILABLE">{{ t('buildStudy.statusTarget.AVAILABLE') }}</option>
+              <option value="PENDING">{{ t('buildStudy.statusTarget.PENDING') }}</option>
+              <option value="LOCKED">{{ t('buildStudy.statusTarget.LOCKED') }}</option>
+              <option value="FROZEN">{{ t('buildStudy.statusTarget.FROZEN') }}</option>
+            </select>
             <RouterLink
               v-if="activeStudyOid"
               :to="`/studies/${activeStudyOid}/edit`"
@@ -180,6 +231,43 @@ function iconFor(id: StudyBuildTaskId): string {
           </li>
         </ol>
       </template>
+
+      <!-- Phase E A8.5 — status-change confirmation modal -->
+      <div
+        v-if="statusDialog"
+        class="fixed inset-0 z-30 flex items-center justify-center bg-slate-900/30"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div class="bg-white rounded-muw shadow-xl border border-slate-200 max-w-md w-full p-5">
+          <h2 class="text-sm font-semibold mb-2">
+            {{ t('buildStudy.statusDialog.title', { target: t(`buildStudy.statusTarget.${statusDialog.target}`) }) }}
+          </h2>
+          <p class="text-xs text-slate-500 mb-3">
+            {{ t('buildStudy.statusDialog.intro') }}
+          </p>
+          <label class="block text-xs font-medium text-slate-700 mb-1">{{ t('buildStudy.statusDialog.reasonLabel') }}</label>
+          <textarea
+            v-model="statusDialog.reason"
+            rows="3"
+            class="w-full text-xs px-2 py-1.5 border border-slate-200 rounded-md"
+            :placeholder="t('buildStudy.statusDialog.reasonPlaceholder')"
+          />
+          <p v-if="statusDialog.error" class="text-xs text-rose-600 mt-2">{{ statusDialog.error }}</p>
+          <div class="mt-3 flex items-center justify-end gap-2">
+            <button
+              class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+              @click="statusDialog = null"
+              :disabled="statusDialog.busy"
+            >{{ t('common.cancel') }}</button>
+            <button
+              class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
+              :disabled="statusDialog.busy"
+              @click="submitStatusChange"
+            >{{ statusDialog.busy ? t('common.saving') : t('buildStudy.statusDialog.submit') }}</button>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 </template>

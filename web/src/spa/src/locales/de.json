@@ -318,6 +318,22 @@
     "noDeepLinkYet": "Ansicht ausstehend",
     "createAction": "Neue Studie",
     "editAction": "Identität bearbeiten",
+    "statusAction": "Status ändern…",
+    "statusTarget": {
+      "AVAILABLE": "Verfügbar",
+      "PENDING": "Vorbereitung",
+      "LOCKED": "Gesperrt",
+      "FROZEN": "Eingefroren"
+    },
+    "statusDialog": {
+      "title": "Studie auf {target} setzen?",
+      "intro": "Der Übergang wird im Audit Trail dokumentiert und auf alle untergeordneten Standorte angewendet. Übergänge in Gesperrt / Eingefroren erfordern eine Begründung für den Audit-Eintrag.",
+      "reasonLabel": "Begründung",
+      "reasonPlaceholder": "z. B. GCP-bedingte Sperre nach Database-Lock-Review",
+      "reasonRequired": "Eine Begründung ist für Gesperrt- / Eingefroren-Übergänge erforderlich.",
+      "submit": "Übergang ausführen",
+      "genericError": "Statusübergang abgelehnt."
+    },
     "status": {
       "not-started": "Nicht begonnen",
       "in-progress": "In Bearbeitung",

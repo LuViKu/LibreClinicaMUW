@@ -318,6 +318,22 @@
     "noDeepLinkYet": "View pending",
     "createAction": "New study",
     "editAction": "Edit identity",
+    "statusAction": "Change status…",
+    "statusTarget": {
+      "AVAILABLE": "Available",
+      "PENDING": "Pending",
+      "LOCKED": "Locked",
+      "FROZEN": "Frozen"
+    },
+    "statusDialog": {
+      "title": "Move study to {target}?",
+      "intro": "The transition is recorded in the audit trail and cascades to all child sites. Locked / Frozen transitions require a reason for the audit log.",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "e.g. GCP-mandated lock after database lock review",
+      "reasonRequired": "Reason is required for Locked / Frozen transitions.",
+      "submit": "Apply transition",
+      "genericError": "Status transition refused."
+    },
     "status": {
       "not-started": "Not started",
       "in-progress": "In progress",
