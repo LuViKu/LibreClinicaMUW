@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 
-import { useRulesStore } from '@/stores/rules'
+import { useRulesStore, type TestExpressionResult } from '@/stores/rules'
 import type { ActionType, RuleSet } from '@/types/rule'
 
 const RUN_LOG_PAGE_SIZE = 25
@@ -107,6 +107,95 @@ function activePhases(gates: { administrativeDataEntry: boolean; initialDataEntr
   if (gates.batch) out.push(t('rules.phase.batch'))
   return out
 }
+
+/* -------------------------------------------------------------- */
+/* RX.3 — Test rule pane                                            */
+/* -------------------------------------------------------------- */
+
+/**
+ * Per-row state for the test-values key/value editor. Local IDs
+ * (rather than relying on array index as the v-for key) make
+ * "Remove row" non-destructive: removing row 1 of a 3-row form
+ * doesn't re-render rows 2/3 with stale focus/blur state.
+ */
+interface TestValueRow { id: number; key: string; value: string }
+let nextRowId = 0
+function makeRow(key = '', value = ''): TestValueRow {
+  return { id: nextRowId++, key, value }
+}
+
+const testExpression = ref('')
+const testValueRows = ref<TestValueRow[]>([makeRow(), makeRow()])
+const testRunning = ref(false)
+const testResult = ref<TestExpressionResult | null>(null)
+
+function addTestValueRow() {
+  testValueRows.value.push(makeRow())
+}
+
+function removeTestValueRow(id: number) {
+  if (testValueRows.value.length <= 1) return
+  testValueRows.value = testValueRows.value.filter((r) => r.id !== id)
+}
+
+async function runTest() {
+  if (testRunning.value) return
+  const trimmedExpression = testExpression.value.trim()
+  if (trimmedExpression.length === 0) {
+    // Surface the same error shape the server would, so the UI
+    // doesn't need a second branch — empty-input feedback rides
+    // on the same render path as a 400 from the backend. The
+    // backend would respond with the same "must not be blank"
+    // string, so we copy it here rather than introducing a one-off
+    // i18n key for client-side preflight.
+    testResult.value = { ok: false, message: 'Expression must not be blank' }
+    return
+  }
+
+  const values: Record<string, string> = {}
+  for (const row of testValueRows.value) {
+    const key = row.key.trim()
+    if (key.length === 0) continue
+    values[key] = row.value
+  }
+
+  testRunning.value = true
+  try {
+    testResult.value = await rules.testExpression(trimmedExpression, values)
+  } finally {
+    testRunning.value = false
+  }
+}
+
+/**
+ * Result-pill variant — TRUE is a "success" highlight, FALSE is
+ * neutral (not an error — false is a legitimate evaluation,
+ * different from a parse failure).
+ */
+const resultPillVariant = computed<'success' | 'neutral' | 'warning'>(() => {
+  const r = testResult.value
+  if (!r || !r.ok) return 'warning'
+  if (r.result === 'true') return 'success'
+  return 'neutral'
+})
+
+const resultLabel = computed(() => {
+  const r = testResult.value
+  if (!r || !r.ok) return ''
+  if (r.result === 'true') return t('rules.test.resultTrue')
+  if (r.result === 'false') return t('rules.test.resultFalse')
+  return t('rules.test.resultOther', { value: r.result })
+})
+
+// Reset the test pane when the user switches rule_sets — the
+// expression and mock values were specific to the previous
+// selection, so carrying them over is more surprising than
+// helpful.
+watch(selectedId, () => {
+  testExpression.value = ''
+  testValueRows.value = [makeRow(), makeRow()]
+  testResult.value = null
+})
 </script>
 
 <template>
@@ -268,6 +357,97 @@ function activePhases(gates: { administrativeDataEntry: boolean; initialDataEntr
               >
                 {{ t('rules.detail.runLogLoadMore') }}
               </button>
+            </div>
+
+            <!-- RX.3 — Test rule pane -->
+            <div>
+              <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                {{ t('rules.test.heading') }}
+              </div>
+              <p class="mt-1 text-[11px] text-slate-500 leading-relaxed">
+                {{ t('rules.test.intro') }}
+              </p>
+
+              <div class="mt-3 space-y-3">
+                <div>
+                  <label class="block text-[11px] text-slate-600 mb-1" :for="`test-expr-${selectedRuleSet.id}`">
+                    {{ t('rules.test.expressionLabel') }}
+                  </label>
+                  <textarea
+                    :id="`test-expr-${selectedRuleSet.id}`"
+                    v-model="testExpression"
+                    rows="3"
+                    class="w-full px-2 py-1.5 text-xs font-mono border border-slate-200 rounded-md"
+                    :placeholder="t('rules.test.expressionPlaceholder')"
+                  />
+                </div>
+
+                <div>
+                  <div class="text-[11px] text-slate-600 mb-1">{{ t('rules.test.testValuesLabel') }}</div>
+                  <div class="space-y-1.5">
+                    <div
+                      v-for="row in testValueRows"
+                      :key="row.id"
+                      class="flex items-center gap-1.5"
+                    >
+                      <input
+                        v-model="row.key"
+                        type="text"
+                        class="flex-1 px-2 py-1 text-xs font-mono border border-slate-200 rounded-md"
+                        :placeholder="t('rules.test.varNamePlaceholder')"
+                        :aria-label="t('rules.test.varName')"
+                      />
+                      <input
+                        v-model="row.value"
+                        type="text"
+                        class="flex-1 px-2 py-1 text-xs border border-slate-200 rounded-md"
+                        :placeholder="t('rules.test.valuePlaceholder')"
+                        :aria-label="t('rules.test.value')"
+                      />
+                      <button
+                        v-if="testValueRows.length > 1"
+                        type="button"
+                        class="px-2 py-1 text-[10px] text-slate-500 hover:text-rose-700"
+                        @click="removeTestValueRow(row.id)"
+                      >
+                        {{ t('rules.test.removeRow') }}
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    class="mt-1.5 px-2 py-1 text-[11px] border border-slate-200 rounded-md hover:bg-slate-50"
+                    @click="addTestValueRow"
+                  >
+                    {{ t('rules.test.addRow') }}
+                  </button>
+                </div>
+
+                <div>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 text-xs font-medium border border-muw-blue text-muw-blue bg-white rounded-md hover:bg-muw-blue-50 disabled:opacity-50"
+                    :disabled="testRunning"
+                    @click="runTest"
+                  >
+                    {{ testRunning ? t('rules.test.running') : t('rules.test.runButton') }}
+                  </button>
+                </div>
+
+                <div v-if="testResult" class="rounded-md border p-2.5"
+                     :class="testResult.ok ? 'border-slate-200 bg-slate-50' : 'border-rose-200 bg-rose-50'">
+                  <div v-if="testResult.ok" class="flex items-center gap-2">
+                    <span class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{{ t('rules.test.resultHeading') }}</span>
+                    <StatusPill :variant="resultPillVariant">{{ resultLabel }}</StatusPill>
+                  </div>
+                  <div v-else>
+                    <div class="text-[10px] uppercase tracking-wider text-rose-700 font-semibold">
+                      {{ t('rules.test.errorHeading') }}
+                    </div>
+                    <p class="mt-1 text-xs font-mono text-rose-800 whitespace-pre-wrap">{{ testResult.message }}</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>
