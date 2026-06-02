@@ -36,6 +36,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/events/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateEvent"];
+        post?: never;
+        delete: operations["cancel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subjects": {
         parameters: {
             query?: never;
@@ -383,6 +399,7 @@ export interface components {
             yearOfBirth?: number;
         };
         EventCellDetailDto: {
+            eventId?: string;
             eventDefinitionOid?: string;
             label?: string;
             status?: string;
@@ -433,6 +450,25 @@ export interface components {
             timezone?: string;
             activeStudy?: components["schemas"]["ActiveStudyDto"];
         };
+        UpdateEventRequest: {
+            dateStarted?: string;
+            dateEnded?: string;
+            location?: string;
+            status?: string;
+        };
+        StudyEventDto: {
+            id?: string;
+            subjectId?: string;
+            eventDefinitionOid?: string;
+            eventLabel?: string;
+            /** Format: int32 */
+            ordinal?: number;
+            dateStarted?: string;
+            dateEnded?: string;
+            location?: string;
+            status?: string;
+            repeating?: boolean;
+        };
         AddSubjectRequest: {
             id?: string;
             secondaryId?: string;
@@ -462,19 +498,6 @@ export interface components {
             eventDefinitionOid?: string;
             dateStarted?: string;
             location?: string;
-        };
-        StudyEventDto: {
-            id?: string;
-            subjectId?: string;
-            eventDefinitionOid?: string;
-            eventLabel?: string;
-            /** Format: int32 */
-            ordinal?: number;
-            dateStarted?: string;
-            dateEnded?: string;
-            location?: string;
-            status?: string;
-            repeating?: boolean;
         };
         SaveItemsRequest: {
             values?: {
@@ -722,6 +745,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MeDto"];
+                };
+            };
+        };
+    };
+    updateEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateEventRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyEventDto"];
+                };
+            };
+        };
+    };
+    cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
                 };
             };
         };

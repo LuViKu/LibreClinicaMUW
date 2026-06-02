@@ -559,6 +559,18 @@
       "start": "Bearbeiten",
       "save": "Änderungen speichern",
       "yearOfBirthInvalid": "Geburtsjahr muss eine Zahl sein."
+    },
+    "event": {
+      "edit": "Bearbeiten",
+      "cancel": "Stornieren",
+      "save": "Speichern",
+      "location": "Ort",
+      "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
+      "cancelConfirm": "Visite »{label}« stornieren? Verbundene CRFs und Items werden als gelöscht markiert. Die Aktion wird im Audit Trail dokumentiert.",
+      "status": {
+        "stopped": "Abgebrochen",
+        "skipped": "Übersprungen"
+      }
     }
   }
 }

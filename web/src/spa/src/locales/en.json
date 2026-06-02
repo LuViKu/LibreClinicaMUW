@@ -559,6 +559,18 @@
       "start": "Edit",
       "save": "Save changes",
       "yearOfBirthInvalid": "Year of birth must be a number."
+    },
+    "event": {
+      "edit": "Edit",
+      "cancel": "Cancel",
+      "save": "Save",
+      "location": "Location",
+      "dateInvalid": "Date must be in YYYY-MM-DD format.",
+      "cancelConfirm": "Cancel event \"{label}\"? Associated CRFs and items will be marked deleted. The action is recorded in the audit trail.",
+      "status": {
+        "stopped": "Stopped",
+        "skipped": "Skipped"
+      }
     }
   }
 }

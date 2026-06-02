@@ -1673,6 +1673,7 @@ public class SubjectsApiController {
             }
 
             eventCells.add(new SubjectDetailDto.EventCellDetailDto(
+                    String.valueOf(ev.getId()),
                     def == null ? null : def.getOid(),
                     def == null ? null : def.getName(),
                     status,

@@ -73,6 +73,13 @@ public record SubjectDetailDto(
      */
     @Schema(name = "EventCellDetailDto")
     public record EventCellDetailDto(
+            /**
+             * Phase E A4 — numeric study_event.id as a string. Empty
+             * when no row exists yet (the event-definition slot is
+             * unscheduled). Required by the PUT/DELETE
+             * {@code /api/v1/events/{id}} endpoints.
+             */
+            String eventId,
             String eventDefinitionOid,
             String label,
             String status,

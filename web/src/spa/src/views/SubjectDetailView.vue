@@ -12,14 +12,18 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
+import { useEventsStore } from '@/stores/events'
 import { useAuthStore } from '@/stores/auth'
 import type { EventStatus, Gender } from '@/types/subject'
 import { canManageSubjectLifecycle, canEditSubject } from '@/types/subject'
+import type { StudyEventStatus } from '@/types/event'
+import { canEditEvent, canCancelEvent } from '@/types/event'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const subjects = useSubjectsStore()
+const events = useEventsStore()
 const auth = useAuthStore()
 
 /**
@@ -111,6 +115,107 @@ async function submitEdit() {
   } finally {
     isSaving.value = false
   }
+}
+
+/* ------------------------------------------------------------- */
+/* Phase E A4 — per-event edit + cancel.                          */
+/*                                                                */
+/* Edit opens an inline composer (slides into the row below) with */
+/* dateStarted / location / status. Cancel shows a native confirm */
+/* with the GCP-impact text and triggers DELETE on confirm.       */
+/* Both refresh the subject detail after success so the events    */
+/* table re-renders from the now-current backend state.           */
+/* ------------------------------------------------------------- */
+
+interface EditEventState {
+  eventId: string
+  eventDefinitionOid: string
+  dateStart: string
+  location: string
+  status: StudyEventStatus
+  fieldError: string | null
+}
+
+const editEvent = ref<EditEventState | null>(null)
+const isSavingEvent = ref(false)
+
+function openEditEvent(ev: {
+  eventId: string
+  eventDefinitionOid: string
+  dateStart: string | null
+  location: string | null
+  status: EventStatus
+}) {
+  if (!ev.eventId) return
+  // SPA's EventStatus is a superset of editable StudyEventStatus —
+  // map back. If status isn't directly editable, default to
+  // 'scheduled' (user can still change the date / location).
+  const editable: StudyEventStatus =
+    ev.status === 'scheduled' ? 'scheduled'
+    : (ev.status as StudyEventStatus) === 'stopped' ? 'stopped'
+    : (ev.status as StudyEventStatus) === 'skipped' ? 'skipped'
+    : 'scheduled'
+  editEvent.value = {
+    eventId: ev.eventId,
+    eventDefinitionOid: ev.eventDefinitionOid,
+    dateStart: ev.dateStart ?? '',
+    location: ev.location ?? '',
+    status: editable,
+    fieldError: null,
+  }
+}
+
+function cancelEditEvent() {
+  editEvent.value = null
+}
+
+async function submitEditEvent() {
+  if (!editEvent.value || !subject.value) return
+  // ISO date sanity check at the form layer; the backend does the
+  // authoritative parse + 400.
+  const date = editEvent.value.dateStart.trim()
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    editEvent.value.fieldError = t('subjectDetail.event.dateInvalid')
+    return
+  }
+  isSavingEvent.value = true
+  try {
+    const result = await events.updateEvent(editEvent.value.eventId, {
+      dateStarted: date,
+      location: editEvent.value.location.trim(),
+      status: editEvent.value.status,
+    })
+    if (result.ok) {
+      editEvent.value = null
+      // Refresh subject detail so the events table flips to the
+      // new state — the events store is separate from
+      // subjects.selected.events, so we re-fetch.
+      await subjects.fetchOne(subject.value.id)
+    } else {
+      editEvent.value.fieldError = result.message
+    }
+  } finally {
+    isSavingEvent.value = false
+  }
+}
+
+async function onCancelEvent(ev: { eventId: string; label: string }) {
+  if (!ev.eventId || !subject.value) return
+  if (!confirm(t('subjectDetail.event.cancelConfirm', { label: ev.label }))) return
+  const ok = await events.cancelEvent(ev.eventId)
+  if (ok) {
+    await subjects.fetchOne(subject.value.id)
+  }
+}
+
+function canEditEv(status: EventStatus): boolean {
+  const role = auth.user?.role ?? null
+  return !!role && canEditEvent(role, status as StudyEventStatus)
+}
+
+function canCancelEv(status: EventStatus): boolean {
+  const role = auth.user?.role ?? null
+  return !!role && canCancelEvent(role, status as StudyEventStatus)
 }
 
 const subjectId = computed(() => String(route.params.subjectId))
@@ -334,29 +439,97 @@ function dataEntryStageLabel(stage: string | null): string {
                 <th scope="col" class="px-5 py-2 font-medium w-28 text-right"></th>
               </tr>
             </template>
-            <tr v-for="ev in subject.events" :key="ev.eventDefinitionOid">
-              <td class="px-5 py-2.5 font-medium">
-                <div>{{ ev.label }}</div>
-                <div v-if="ev.location" class="text-xs text-slate-500 mt-0.5">{{ ev.location }}</div>
-              </td>
-              <td class="px-5 py-2.5 text-xs font-mono text-slate-600">{{ formatDate(ev.dateStart) }}</td>
-              <td class="px-5 py-2.5">
-                <StatusPill :variant="statusVariant(ev.status)">{{ t(`subjectMatrix.status.${ev.status}`) }}</StatusPill>
-              </td>
-              <td class="px-5 py-2.5 text-xs text-slate-600">{{ dataEntryStageLabel(ev.dataEntryStage) }}</td>
-              <td class="px-5 py-2.5 text-right">
-                <StatusPill v-if="ev.openQueries > 0" compact variant="danger">{{ ev.openQueries }}</StatusPill>
-                <span v-else class="text-slate-400">—</span>
-              </td>
-              <td class="px-5 py-2.5 text-right">
-                <RouterLink
-                  :to="`/event-crfs/EC_${subject.id.replace('-', '')}_${ev.eventDefinitionOid.replace('SE_', '')}_DEMO`"
-                  class="text-muw-blue text-xs hover:underline"
-                >
-                  {{ t('subjectDetail.openEvent') }}
-                </RouterLink>
-              </td>
-            </tr>
+            <template v-for="ev in subject.events" :key="ev.eventDefinitionOid">
+              <tr>
+                <td class="px-5 py-2.5 font-medium">
+                  <div>{{ ev.label }}</div>
+                  <div v-if="ev.location" class="text-xs text-slate-500 mt-0.5">{{ ev.location }}</div>
+                </td>
+                <td class="px-5 py-2.5 text-xs font-mono text-slate-600">{{ formatDate(ev.dateStart) }}</td>
+                <td class="px-5 py-2.5">
+                  <StatusPill :variant="statusVariant(ev.status)">{{ t(`subjectMatrix.status.${ev.status}`) }}</StatusPill>
+                </td>
+                <td class="px-5 py-2.5 text-xs text-slate-600">{{ dataEntryStageLabel(ev.dataEntryStage) }}</td>
+                <td class="px-5 py-2.5 text-right">
+                  <StatusPill v-if="ev.openQueries > 0" compact variant="danger">{{ ev.openQueries }}</StatusPill>
+                  <span v-else class="text-slate-400">—</span>
+                </td>
+                <td class="px-5 py-2.5 text-right text-xs space-x-2">
+                  <!-- Phase E A4: edit + cancel buttons. eventId is empty
+                       when no study_event row exists yet (event-definition
+                       slot is unscheduled) — hide both actions in that
+                       case; the user would use the Schedule button instead. -->
+                  <button
+                    v-if="ev.eventId && canEditEv(ev.status)"
+                    type="button"
+                    class="text-muw-blue hover:underline"
+                    @click="openEditEvent(ev)"
+                  >{{ t('subjectDetail.event.edit') }}</button>
+                  <button
+                    v-if="ev.eventId && canCancelEv(ev.status)"
+                    type="button"
+                    class="text-rose-700 hover:underline"
+                    @click="onCancelEvent(ev)"
+                  >{{ t('subjectDetail.event.cancel') }}</button>
+                  <RouterLink
+                    :to="`/event-crfs/EC_${subject.id.replace('-', '')}_${ev.eventDefinitionOid.replace('SE_', '')}_DEMO`"
+                    class="text-muw-blue hover:underline"
+                  >
+                    {{ t('subjectDetail.openEvent') }}
+                  </RouterLink>
+                </td>
+              </tr>
+
+              <!-- Phase E A4: inline edit composer (only the row matching
+                   the open editEvent state shows this). -->
+              <tr v-if="editEvent && editEvent.eventId === ev.eventId" class="bg-slate-50">
+                <td :colspan="6" class="px-5 py-3">
+                  <div class="grid grid-cols-3 gap-3">
+                    <div>
+                      <FieldLabel for="edit-event-date">{{ t('subjectDetail.column.dateStart') }}</FieldLabel>
+                      <TextInput
+                        id="edit-event-date"
+                        v-model="editEvent.dateStart"
+                        placeholder="YYYY-MM-DD"
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel for="edit-event-location">{{ t('subjectDetail.event.location') }}</FieldLabel>
+                      <TextInput
+                        id="edit-event-location"
+                        v-model="editEvent.location"
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel for="edit-event-status">{{ t('subjectDetail.column.status') }}</FieldLabel>
+                      <SelectInput
+                        id="edit-event-status"
+                        v-model="editEvent.status"
+                      >
+                        <option value="scheduled">{{ t('subjectMatrix.status.scheduled') }}</option>
+                        <option value="stopped">{{ t('subjectDetail.event.status.stopped') }}</option>
+                        <option value="skipped">{{ t('subjectDetail.event.status.skipped') }}</option>
+                      </SelectInput>
+                    </div>
+                  </div>
+                  <ErrorText v-if="editEvent.fieldError" class="mt-2">{{ editEvent.fieldError }}</ErrorText>
+                  <div class="flex justify-end gap-2 mt-3">
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 text-xs border border-slate-300 rounded-md hover:bg-slate-100"
+                      :disabled="isSavingEvent"
+                      @click="cancelEditEvent"
+                    >{{ t('common.cancel') }}</button>
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 disabled:opacity-50"
+                      :disabled="isSavingEvent"
+                      @click="submitEditEvent"
+                    >{{ isSavingEvent ? t('common.saving') : t('subjectDetail.event.save') }}</button>
+                  </div>
+                </td>
+              </tr>
+            </template>
           </DenseTable>
         </section>
 

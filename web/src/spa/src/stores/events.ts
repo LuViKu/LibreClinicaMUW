@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
-import type { ScheduleEventRequest, StudyEvent, StudyEventStatus } from '@/types/event'
+import { apiDelete, apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
+import type {
+  ScheduleEventRequest,
+  StudyEvent,
+  StudyEventStatus,
+  UpdateEventRequest,
+} from '@/types/event'
 
 /**
  * Phase E.4 M11 — Study-event scheduling store.
@@ -124,6 +129,90 @@ export const useEventsStore = defineStore('events', () => {
     }
   }
 
+  /**
+   * Phase E A4 — edit an existing study event. The backend
+   * (`PUT /api/v1/events/{id}`) accepts a partial body where each
+   * field is optional (omitted = unchanged). Returns a discriminated
+   * union mirroring A2's `updateSubject` shape so the form view can
+   * light up per-field errors.
+   *
+   * <p>Role-gated to Investigator / CRC / DM / Admin; Monitor + RA
+   * are forbidden. State guard: signed / locked events refuse the
+   * edit with 409.
+   *
+   * <p>On success the in-memory event row is replaced by id.
+   */
+  async function updateEvent(
+    eventId: string,
+    body: UpdateEventRequest,
+  ): Promise<{ ok: true; event: StudyEvent }
+              | { ok: false; message: string }> {
+    try {
+      const refreshed = await apiPut<StudyEvent>(
+        `/pages/api/v1/events/${encodeURIComponent(eventId)}`,
+        body,
+      )
+      const idx = events.value.findIndex((e) => e.id === eventId)
+      if (idx >= 0) {
+        events.value = [
+          ...events.value.slice(0, idx),
+          refreshed,
+          ...events.value.slice(idx + 1),
+        ]
+      }
+      return { ok: true, event: refreshed }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const errBody = e.body as { message?: string } | null
+        error.value = errBody?.message ?? `Bearbeiten nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiError) {
+        const errBody = e.body as { message?: string } | null
+        return { ok: false, message: errBody?.message ?? `Bearbeiten fehlgeschlagen (HTTP ${e.status}).` }
+      }
+      if (e instanceof ApiNetworkError) {
+        return { ok: false,
+                 message: 'Backend nicht erreichbar — Bearbeiten fehlgeschlagen. Bitte später erneut versuchen.' }
+      }
+      return { ok: false,
+               message: e instanceof Error ? e.message : 'Unbekannter Fehler beim Bearbeiten.' }
+    }
+  }
+
+  /**
+   * Phase E A4 — cancel (soft-delete) a study event. The backend
+   * (`DELETE /api/v1/events/{id}`) cascades to nested event_crfs +
+   * item_data as AUTO_DELETED. Role-gated to DM / Admin only;
+   * Investigators must escalate.
+   *
+   * <p>Returns 204 from the backend on success; the in-memory event
+   * row is removed locally.
+   */
+  async function cancelEvent(eventId: string): Promise<boolean> {
+    try {
+      await apiDelete<void>(`/pages/api/v1/events/${encodeURIComponent(eventId)}`)
+      events.value = events.value.filter((e) => e.id !== eventId)
+      return true
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Stornieren nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Stornieren fehlgeschlagen. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Stornieren fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Stornieren.'
+      }
+      return false
+    }
+  }
+
   return {
     events,
     isLoading,
@@ -140,5 +229,7 @@ export const useEventsStore = defineStore('events', () => {
     clearFilters,
     load,
     schedule,
+    updateEvent,
+    cancelEvent,
   }
 })
