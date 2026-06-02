@@ -1,18 +1,41 @@
 <script setup lang="ts">
 import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
+import { useAuthStore } from '@/stores/auth'
 import type { EventStatus } from '@/types/subject'
+import { canManageSubjectLifecycle } from '@/types/subject'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const subjects = useSubjectsStore()
+const auth = useAuthStore()
+
+/**
+ * Phase E A3 — role-gated "Remove subject" action. The button only
+ * renders for Data Manager + Administrator; the backend re-checks
+ * the same predicate and 403s any other role. A native confirm()
+ * makes the GCP impact explicit (the soft-delete cascades to every
+ * event_crf + item_data row).
+ */
+const canRemove = computed(() => {
+  const role = auth.user?.role ?? null
+  return !!role && canManageSubjectLifecycle(role)
+})
+
+async function onRemove() {
+  if (!subject.value) return
+  if (!confirm(t('subjectDetail.actions.removeConfirm', { id: subject.value.id }))) return
+  const ok = await subjects.removeSubject(subject.value.id)
+  if (ok) router.push('/subjects')
+}
 
 const subjectId = computed(() => String(route.params.subjectId))
 
@@ -218,6 +241,23 @@ function dataEntryStageLabel(stage: string | null): string {
               </svg>
               {{ t('subjectDetail.actions.signSubject') }}
             </RouterLink>
+            <!-- Phase E A3: soft-delete the subject. DM/Admin only;
+                 hidden for everyone else. Backend cascades to nested
+                 events + CRFs + item_data via AUTO_DELETED. -->
+            <button
+              v-if="canRemove"
+              type="button"
+              class="px-3 py-2 text-xs border border-rose-200 rounded-md bg-rose-50 hover:bg-rose-100 text-rose-700 inline-flex items-center gap-1.5"
+              @click="onRemove"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-2 14a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+              {{ t('subjectDetail.actions.remove') }}
+            </button>
           </div>
         </div>
       </template>

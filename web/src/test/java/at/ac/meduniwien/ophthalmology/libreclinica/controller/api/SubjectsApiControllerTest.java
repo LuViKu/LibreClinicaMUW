@@ -187,4 +187,96 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors").isArray());
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* POST /api/v1/subjects/{oid}/remove and /restore (Phase E A3)           */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void removeReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/remove")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void removeReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/remove")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void removeReturns403WhenInvestigatorAttempts() throws Exception {
+        // Investigator (role id 4) cannot soft-delete subjects per
+        // the legacy RemoveSubjectServlet#mayProceed rule (DM/Admin only).
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/remove")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit remove")));
+    }
+
+    @Test
+    void removeReturns403WhenMonitorAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/remove")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(3, "monitor", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.MONITOR, 1)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void restoreReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/restore")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void restoreReturns403WhenInvestigatorAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/restore")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit restore")));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* SubjectLifecycleAuthorization — pure unit-level role coverage          */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void subjectLifecycleAuth_PermittedRoles() {
+        // STUDYDIRECTOR (3) = Data Manager, ADMIN (1)
+        org.junit.jupiter.api.Assertions.assertTrue(
+                SubjectLifecycleAuthorization.roleMayManageLifecycle(3));
+        org.junit.jupiter.api.Assertions.assertTrue(
+                SubjectLifecycleAuthorization.roleMayManageLifecycle(1));
+    }
+
+    @Test
+    void subjectLifecycleAuth_ForbiddenRoles() {
+        // INVESTIGATOR(4), COORDINATOR(2), MONITOR(6), RA(5), RA2(7), INVALID(0)
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SubjectLifecycleAuthorization.roleMayManageLifecycle(4));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SubjectLifecycleAuthorization.roleMayManageLifecycle(2));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SubjectLifecycleAuthorization.roleMayManageLifecycle(6));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SubjectLifecycleAuthorization.roleMayManageLifecycle(5));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SubjectLifecycleAuthorization.roleMayManageLifecycle(7));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SubjectLifecycleAuthorization.roleMayManageLifecycle(0));
+    }
 }
