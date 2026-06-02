@@ -8,6 +8,7 @@ import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import EventCrfAssignmentsDialog from '@/components/EventCrfAssignmentsDialog.vue'
 
 import { useEventDefinitionsStore } from '@/stores/eventDefinitions'
 import { useAuthStore } from '@/stores/auth'
@@ -168,6 +169,14 @@ const typeOptions: { v: EventType; l: () => string }[] = [
   { v: 'unscheduled', l: () => t('eventDefinitions.type.unscheduled') },
   { v: 'common',      l: () => t('eventDefinitions.type.common') },
 ]
+
+/* Phase E A8.3-asgnUI — CRF assignments dialog state. */
+const assignDialogOpen = ref(false)
+const assignTarget = ref<EventDefinition | null>(null)
+function openAssignments(row: EventDefinition) {
+  assignTarget.value = row
+  assignDialogOpen.value = true
+}
 </script>
 
 <template>
@@ -244,6 +253,10 @@ const typeOptions: { v: EventType; l: () => string }[] = [
                 <span class="text-slate-300">·</span>
                 <button class="text-muw-blue hover:underline" @click="openEdit(row)">
                   {{ t('common.next') === 'Next' ? 'Edit' : 'Bearbeiten' }}
+                </button>
+                <span class="text-slate-300">·</span>
+                <button class="text-muw-blue hover:underline" @click="openAssignments(row)">
+                  {{ t('eventDefinitions.manageCrfs') }}
                 </button>
                 <span class="text-slate-300">·</span>
                 <button class="text-rose-600 hover:underline" @click="onDisable(row)">
@@ -343,5 +356,11 @@ const typeOptions: { v: EventType; l: () => string }[] = [
         </div>
       </div>
     </main>
+
+    <EventCrfAssignmentsDialog
+      v-model:open="assignDialogOpen"
+      :study-oid="studyOid"
+      :event-def="assignTarget"
+    />
   </div>
 </template>
