@@ -6,7 +6,19 @@
  * lands (gated on the E.0 dispatcher fix), the SPA consumes mock data
  * with this exact shape from the Pinia store so the view code is
  * already written against the production contract.
+ *
+ * Phase E.5 follow-up (2026-06-02, TODO #7): the wire-level types
+ * ({@link Subject}, {@link SubjectDetail}, {@link EventCellSnapshot},
+ * {@link EventCellDetail}) are now derived from the
+ * openapi-typescript-generated {@code components.schemas} so they
+ * stay aligned with the backend record shape. Narrow literal-union
+ * enums ({@link Gender}, {@link EventStatus}, {@link DataEntryStage})
+ * stay hand-typed and are intersected in to keep the SPA's
+ * pattern-matching call sites happy (the generated record loses the
+ * union narrowing — it sees these as plain {@code string}).
  */
+
+import type { components } from './api'
 
 export type Gender = 'F' | 'M' | 'O' | 'U'
 
@@ -19,39 +31,19 @@ export type EventStatus =
   | 'signed'
   | 'locked'
 
-export interface EventCellSnapshot {
-  /** OID of the EventDefinition. */
-  eventDefinitionOid: string
-  /** Short display label, e.g. "V1 Inclusion". */
-  label: string
-  status: EventStatus
-  /** Number of open queries attached to CRFs in this event. */
-  openQueries: number
-}
+export type EventCellSnapshot =
+  Omit<Required<components['schemas']['EventCellDto']>, 'status'>
+  & { status: EventStatus }
 
-export interface Subject {
-  /** Study Subject ID — the human-readable identifier (e.g. M-001). */
-  id: string
-  /** Optional secondary ID (no PHI per Add Subject contract). */
-  secondaryId: string | null
-  /** Site OID the subject was enrolled at. */
-  siteOid: string
-  /** Human site name (e.g. München). */
-  siteLabel: string
-  gender: Gender
-  /** Year of birth (optional per study config). */
-  yearOfBirth: number | null
-  /** Treatment / randomisation group, when present. */
-  groupLabel: string | null
-  /** Enrolment date as ISO `YYYY-MM-DD`. */
-  enrolledOn: string
-  /** Per-scheduled-event row of status cells, in the study's planned order. */
-  events: EventCellSnapshot[]
-  /** Whether the subject has been signed off (one-way regulatory action). */
-  signed: boolean
-  /** Total open queries across the subject's CRFs. */
-  openQueries: number
-}
+export type Subject =
+  Omit<Required<components['schemas']['SubjectListItemDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events'>
+  & {
+    gender: Gender
+    secondaryId: string | null
+    yearOfBirth: number | null
+    groupLabel: string | null
+    events: EventCellSnapshot[]
+  }
 
 /**
  * Per-CRF data-entry stage taxonomy surfaced on the detail view.
@@ -75,16 +67,15 @@ export type DataEntryStage =
  *
  * Populated by `GET /pages/api/v1/subjects/{oid}` (M3 adapter).
  */
-export interface EventCellDetail extends EventCellSnapshot {
-  /** Event start date as ISO `YYYY-MM-DD`, or null if unscheduled. */
-  dateStart: string | null
-  /** Event end date as ISO `YYYY-MM-DD`, often null for in-flight events. */
-  dateEnd: string | null
-  /** Free-text location captured at scheduling time, when present. */
-  location: string | null
-  /** Data-entry stage of the primary CRF, or null if not started. */
-  dataEntryStage: DataEntryStage | null
-}
+export type EventCellDetail =
+  Omit<Required<components['schemas']['EventCellDetailDto']>, 'status' | 'dateStart' | 'dateEnd' | 'location' | 'dataEntryStage'>
+  & {
+    status: EventStatus
+    dateStart: string | null
+    dateEnd: string | null
+    location: string | null
+    dataEntryStage: DataEntryStage | null
+  }
 
 /**
  * Subject Detail — superset of {@link Subject} for the dedicated
@@ -92,14 +83,15 @@ export interface EventCellDetail extends EventCellSnapshot {
  * (M3 adapter). The matrix list endpoint does not return these
  * fields; the detail view fetches them separately.
  */
-export interface SubjectDetail extends Omit<Subject, 'events'> {
-  /** Active study OID — rendered in the breadcrumb in place of siteOid. */
-  studyOid: string
-  /** Human-readable study name — rendered in the breadcrumb. */
-  studyName: string
-  /** Richer per-event metadata (dateStart, location, dataEntryStage). */
-  events: EventCellDetail[]
-}
+export type SubjectDetail =
+  Omit<Required<components['schemas']['SubjectDetailDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events'>
+  & {
+    gender: Gender
+    secondaryId: string | null
+    yearOfBirth: number | null
+    groupLabel: string | null
+    events: EventCellDetail[]
+  }
 
 /**
  * Phase E.4 M3 + M8 — sign-preflight wire types.
@@ -120,27 +112,18 @@ export interface SubjectDetail extends Omit<Subject, 'events'> {
  * {@link ConfirmationWithPreflight} primitive — see
  * `SignSubjectView.vue` for the mapping.
  */
-export interface PreflightCheck {
-  /** Stable id; SPA keys off this. */
-  id:
-    | 'events-complete'
-    | 'crfs-complete'
-    | 'open-queries'
-    | 'subject-not-signed'
-    | 'user-role-can-sign'
-  status: 'pass' | 'warn' | 'fail'
-  title: string
-  detail: string
-}
+export type PreflightCheck =
+  Omit<Required<components['schemas']['CheckRow']>, 'id' | 'status'>
+  & {
+    id:
+      | 'events-complete'
+      | 'crfs-complete'
+      | 'open-queries'
+      | 'subject-not-signed'
+      | 'user-role-can-sign'
+    status: 'pass' | 'warn' | 'fail'
+  }
 
-export interface SignPreflight {
-  checks: PreflightCheck[]
-  /** Number of `status === 'fail'` rows (including subject-not-signed). */
-  blockingFailures: number
-  /** Number of `status === 'warn'` rows. */
-  warnings: number
-  /** Convenience flag — true if the subject's status is already SIGNED. */
-  subjectAlreadySigned: boolean
-  /** Convenience flag — true if the user's role is Investigator or Study Director. */
-  userRoleCanSign: boolean
-}
+export type SignPreflight =
+  Omit<Required<components['schemas']['SignPreflightDto']>, 'checks'>
+  & { checks: PreflightCheck[] }

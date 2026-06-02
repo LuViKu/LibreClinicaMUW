@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Phase E.4 M7 — wire-shape for {@code GET /pages/api/v1/discrepancies}
  * and the response body of {@code POST /pages/api/v1/discrepancies}.
@@ -34,6 +36,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
  *                        parent-level notes without a thread this is
  *                        the {@code date_created} timestamp
  */
+@Schema(name = "DiscrepancyNoteDto")
 public record DiscrepancyNoteDto(
         String id,
         String type,

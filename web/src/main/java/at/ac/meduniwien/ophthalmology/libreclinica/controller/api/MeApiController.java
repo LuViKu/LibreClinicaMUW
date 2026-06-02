@@ -27,6 +27,9 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -112,6 +115,8 @@ public class MeApiController {
     }
 
     @GetMapping
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = MeDto.class)))
     public ResponseEntity<?> getMe(HttpSession session) {
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
         if (ub == null || ub.getId() == 0) {
@@ -158,6 +163,8 @@ public class MeApiController {
     }
 
     @PostMapping("/activeStudy")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = MeDto.class)))
     public ResponseEntity<?> setActiveStudy(@RequestBody ActiveStudyRequest body, HttpSession session) {
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
         if (ub == null || ub.getId() == 0) {
@@ -204,6 +211,8 @@ public class MeApiController {
     }
 
     @PutMapping("/profile")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = MeDto.class)))
     public ResponseEntity<?> updateProfile(@RequestBody ProfileUpdateRequest body, HttpSession session) {
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
         if (ub == null || ub.getId() == 0) {

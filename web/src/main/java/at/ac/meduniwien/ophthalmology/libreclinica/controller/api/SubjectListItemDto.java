@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 /**
@@ -40,6 +41,7 @@ import java.util.List;
  * {@code study_group_class} / {@code subject_group_map} workflow is
  * wired (deferred to a later milestone).
  */
+@Schema(name = "SubjectListItemDto")
 public record SubjectListItemDto(
         String id,
         String secondaryId,
@@ -62,6 +64,7 @@ public record SubjectListItemDto(
      * "signed". {@code openQueries} counts open discrepancy notes on
      * {@code item_data} rows under this study event.
      */
+    @Schema(name = "EventCellDto")
     public record EventCellDto(
             String eventDefinitionOid,
             String label,

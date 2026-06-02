@@ -44,6 +44,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -102,6 +105,8 @@ public class EventsApiController {
     }
 
     @GetMapping
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array", implementation = StudyEventDto.class)))
     public ResponseEntity<?> list(
             @RequestParam(value = "subjectId", required = false) String subjectIdFilter,
             @RequestParam(value = "status", required = false) String statusFilter,
@@ -190,6 +195,8 @@ public class EventsApiController {
     }
 
     @PostMapping
+    @ApiResponse(responseCode = "201",
+                 content = @Content(schema = @Schema(implementation = StudyEventDto.class)))
     public ResponseEntity<?> schedule(@RequestBody ScheduleEventRequest body, HttpSession session) {
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
         if (ub == null || ub.getId() == 0) {

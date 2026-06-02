@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 /**
@@ -19,6 +20,7 @@ import java.util.List;
  * 7-task ordered list drives the build-study setup tracker:
  * Create Study → CRF → Events → Groups → Rules → Sites → Users.
  */
+@Schema(name = "StudyBuildDto")
 public record StudyBuildDto(
         String studyOid,
         String studyName,
@@ -40,6 +42,7 @@ public record StudyBuildDto(
      * @param to      deep-link route, or null when the supporting
      *                view doesn't exist yet
      */
+    @Schema(name = "StudyBuildTaskDto")
     public record StudyBuildTaskDto(
             String id,
             Integer count,

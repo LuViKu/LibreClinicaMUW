@@ -301,6 +301,24 @@ export interface components {
             locale?: string;
             timezone?: string;
         };
+        ActiveStudyDto: {
+            oid?: string;
+            name?: string;
+            isSite?: boolean;
+        };
+        MeDto: {
+            username?: string;
+            displayName?: string;
+            email?: string;
+            role?: string;
+            siteLabel?: string;
+            source?: string;
+            mfaSatisfied?: boolean;
+            profileComplete?: boolean;
+            locale?: string;
+            timezone?: string;
+            activeStudy?: components["schemas"]["ActiveStudyDto"];
+        };
         AddSubjectRequest: {
             id?: string;
             secondaryId?: string;
@@ -309,6 +327,34 @@ export interface components {
             yearOfBirth?: number;
             enrolledOn?: string;
             groupLabel?: string;
+        };
+        EventCellDetailDto: {
+            eventDefinitionOid?: string;
+            label?: string;
+            status?: string;
+            /** Format: int32 */
+            openQueries?: number;
+            dateStart?: string;
+            dateEnd?: string;
+            location?: string;
+            dataEntryStage?: string;
+        };
+        SubjectDetailDto: {
+            id?: string;
+            secondaryId?: string;
+            siteOid?: string;
+            siteLabel?: string;
+            studyOid?: string;
+            studyName?: string;
+            gender?: string;
+            /** Format: int32 */
+            yearOfBirth?: number;
+            groupLabel?: string;
+            enrolledOn?: string;
+            events?: components["schemas"]["EventCellDetailDto"][];
+            signed?: boolean;
+            /** Format: int32 */
+            openQueries?: number;
         };
         SignSubjectRequest: {
             password?: string;
@@ -327,6 +373,19 @@ export interface components {
             dateStarted?: string;
             location?: string;
         };
+        StudyEventDto: {
+            id?: string;
+            subjectId?: string;
+            eventDefinitionOid?: string;
+            eventLabel?: string;
+            /** Format: int32 */
+            ordinal?: number;
+            dateStarted?: string;
+            dateEnded?: string;
+            location?: string;
+            status?: string;
+            repeating?: boolean;
+        };
         SaveItemsRequest: {
             values?: {
                 [key: string]: unknown;
@@ -337,6 +396,159 @@ export interface components {
             itemOid?: string;
             description?: string;
             assignedTo?: string;
+        };
+        DiscrepancyNoteDto: {
+            id?: string;
+            type?: string;
+            status?: string;
+            subjectId?: string;
+            itemOid?: string;
+            description?: string;
+            assignedTo?: string;
+            /** Format: int32 */
+            daysOpen?: number;
+            lastActivityAt?: string;
+        };
+        StudyUserDto: {
+            id?: string;
+            username?: string;
+            displayName?: string;
+            email?: string;
+            role?: string;
+            siteLabel?: string;
+            auth?: string;
+            lastLoginAt?: string;
+            active?: boolean;
+        };
+        EventCellDto: {
+            eventDefinitionOid?: string;
+            label?: string;
+            status?: string;
+            /** Format: int32 */
+            openQueries?: number;
+        };
+        SubjectListItemDto: {
+            id?: string;
+            secondaryId?: string;
+            siteOid?: string;
+            siteLabel?: string;
+            gender?: string;
+            /** Format: int32 */
+            yearOfBirth?: number;
+            groupLabel?: string;
+            enrolledOn?: string;
+            events?: components["schemas"]["EventCellDto"][];
+            signed?: boolean;
+            /** Format: int32 */
+            openQueries?: number;
+        };
+        CheckRow: {
+            id?: string;
+            status?: string;
+            title?: string;
+            detail?: string;
+        };
+        SignPreflightDto: {
+            checks?: components["schemas"]["CheckRow"][];
+            /** Format: int32 */
+            blockingFailures?: number;
+            /** Format: int32 */
+            warnings?: number;
+            subjectAlreadySigned?: boolean;
+            userRoleCanSign?: boolean;
+        };
+        StudyOptionDto: {
+            oid?: string;
+            name?: string;
+            parentOid?: string;
+            parentName?: string;
+            role?: string;
+            isSite?: boolean;
+            isActive?: boolean;
+        };
+        StudyBuildDto: {
+            studyOid?: string;
+            studyName?: string;
+            studyVersion?: string;
+            /** Format: int32 */
+            sites?: number;
+            /** Format: int32 */
+            enrolledSubjects?: number;
+            tasks?: components["schemas"]["StudyBuildTaskDto"][];
+        };
+        StudyBuildTaskDto: {
+            id?: string;
+            /** Format: int32 */
+            count?: number;
+            status?: string;
+            to?: string;
+        };
+        SdvRowDto: {
+            eventCrfOid?: string;
+            subjectId?: string;
+            siteLabel?: string;
+            eventLabel?: string;
+            eventStartDate?: string;
+            crfName?: string;
+            crfLanguage?: string;
+            status?: string;
+            requirement?: string;
+            /** Format: int32 */
+            openQueries?: number;
+            lastUpdatedAt?: string;
+        };
+        CrfEntryDto: {
+            eventCrfOid?: string;
+            subjectId?: string;
+            eventLabel?: string;
+            schema?: components["schemas"]["CrfSchemaDto"];
+            values?: {
+                [key: string]: unknown;
+            };
+            status?: string;
+            lastSavedAt?: string;
+        };
+        CrfItemDto: {
+            oid?: string;
+            label?: string;
+            dataType?: string;
+            required?: boolean;
+            options?: components["schemas"]["ResponseOptionDto"][];
+            helper?: string;
+            /** Format: double */
+            min?: number;
+            /** Format: double */
+            max?: number;
+        };
+        CrfSchemaDto: {
+            oid?: string;
+            name?: string;
+            version?: string;
+            sections?: components["schemas"]["CrfSectionDto"][];
+        };
+        CrfSectionDto: {
+            oid?: string;
+            title?: string;
+            instructions?: string;
+            items?: components["schemas"]["CrfItemDto"][];
+        };
+        ResponseOptionDto: {
+            code?: string;
+            label?: string;
+        };
+        AuditEventDto: {
+            id?: string;
+            occurredAt?: string;
+            variant?: string;
+            actor?: string;
+            actorRole?: string;
+            title?: string;
+            subjectId?: string;
+            scope?: string;
+            details?: string;
+            before?: string;
+            after?: string;
+            reason?: string;
         };
     };
     responses: never;
@@ -366,7 +578,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["MeDto"];
                 };
             };
         };
@@ -386,7 +598,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["SubjectListItemDto"];
                 };
             };
         };
@@ -404,13 +616,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["SubjectDetailDto"];
                 };
             };
         };
@@ -436,7 +648,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["SubjectDetailDto"];
                 };
             };
         };
@@ -484,7 +696,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["MeDto"];
                 };
             };
         };
@@ -508,7 +720,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["StudyEventDto"];
                 };
             };
         };
@@ -526,13 +738,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Created */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["StudyEventDto"];
                 };
             };
         };
@@ -604,7 +816,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["DiscrepancyNoteDto"];
                 };
             };
         };
@@ -628,7 +840,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["DiscrepancyNoteDto"];
                 };
             };
         };
@@ -652,7 +864,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["StudyUserDto"];
                 };
             };
         };
@@ -674,7 +886,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["SubjectDetailDto"];
                 };
             };
         };
@@ -696,7 +908,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["SignPreflightDto"];
                 };
             };
         };
@@ -716,7 +928,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["StudyOptionDto"];
                 };
             };
         };
@@ -738,7 +950,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["StudyBuildDto"];
                 };
             };
         };
@@ -758,7 +970,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["SdvRowDto"];
                 };
             };
         };
@@ -778,7 +990,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["MeDto"];
                 };
             };
         };
@@ -800,7 +1012,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["CrfEntryDto"];
                 };
             };
         };
@@ -824,7 +1036,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["AuditEventDto"];
                 };
             };
         };

@@ -21,26 +21,13 @@ export type StudyEventStatus =
   | 'locked'
   | 'signed'
 
-export interface StudyEvent {
-  id: string
-  /** StudySubject.label. */
-  subjectId: string
-  /** OID of the StudyEventDefinition this row instantiates. */
-  eventDefinitionOid: string
-  /** Friendly event name from the definition row. */
-  eventLabel: string
-  /** sample_ordinal — 1 for first instance, ≥2 for repeating events. */
-  ordinal: number
-  /** ISO YYYY-MM-DD; empty when unscheduled. */
-  dateStarted: string
-  /** ISO YYYY-MM-DD; null when open. */
-  dateEnded: string | null
-  /** Free-text location, null when blank. */
-  location: string | null
-  status: StudyEventStatus
-  /** Whether the definition allows repeating instances. */
-  repeating: boolean
-}
+export type StudyEvent =
+  Omit<Required<components['schemas']['StudyEventDto']>, 'status' | 'dateEnded' | 'location'>
+  & {
+    status: StudyEventStatus
+    dateEnded: string | null
+    location: string | null
+  }
 
 /**
  * Body for POST /pages/api/v1/events.
