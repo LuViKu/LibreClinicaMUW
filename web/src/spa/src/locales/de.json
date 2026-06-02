@@ -333,6 +333,30 @@
       "users":        { "title": "Nutzer/-innen", "summary": "{count} Personen", "description": "Pro Standort Prüfärzte, Monitore, Datenmanager, CRCs." }
     }
   },
+  "sites": {
+    "title": "Standorte",
+    "subTrail": "Studienaufbau · Multi-Center-Konfiguration",
+    "intro": "Untergeordnete Standorte unter dieser Studie anlegen. Jeder Standort ist eine eigenständige Studienzeile mit eigenen Standort-Metadaten + Rollenzuweisungen; Teilnehmer/innen und Visiten sind je Standort getrennt. Die aktive Studie muss die übergeordnete Studie sein — bei Bedarf über die Auswahl wechseln.",
+    "createAction": "Neuer Standort",
+    "createHeading": "Standort unter dieser Studie anlegen",
+    "submitCreate": "Standort anlegen",
+    "empty": "Noch keine Standorte unter dieser Studie.",
+    "pi": "Studienleitung",
+    "statusRemoved": "Entfernt",
+    "statusPending": "In Vorbereitung",
+    "disable": "Entfernen",
+    "restore": "Wiederherstellen",
+    "disableConfirm": "Standort »{name}« entfernen? Bereits erfasste Teilnehmer/innen und Visiten bleiben im Audit Trail dokumentiert, sind aber bis zur Wiederherstellung nicht erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
+    "field": {
+      "name": "Standort-Name",
+      "uniqueProtocolId": "Eindeutige Protokoll-ID",
+      "principalInvestigator": "Studienleitung",
+      "briefSummary": "Kurzbeschreibung",
+      "facilityName": "Einrichtungsname",
+      "facilityCity": "Stadt",
+      "facilityContactEmail": "Kontakt-E-Mail"
+    }
+  },
   "crfLibrary": {
     "title": "CRF-Bibliothek",
     "subTrail": "Studienaufbau · Formularbibliothek + Versionen",

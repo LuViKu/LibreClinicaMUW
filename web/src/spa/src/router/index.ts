@@ -101,6 +101,13 @@ const router = createRouter({
       component: () => import('@/views/CrfLibraryView.vue'),
       meta: { title: 'CRF Library', role: 'Data Manager' as const },
     },
+    /* Phase E A8.4 — sites / multi-center setup. */
+    {
+      path: '/sites',
+      name: 'sites',
+      component: () => import('@/views/SitesView.vue'),
+      meta: { title: 'Sites', role: 'Data Manager' as const },
+    },
     {
       path: '/manage-users',
       name: 'manage-users',

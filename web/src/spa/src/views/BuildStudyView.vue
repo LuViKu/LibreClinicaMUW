@@ -31,6 +31,7 @@ function deepLinkFor(taskId: StudyBuildTaskId, backendTo: string | null): string
   switch (taskId) {
     case 'events': return '/event-definitions'
     case 'crf':    return '/crf-library'
+    case 'sites':  return '/sites'
     case 'users':  return '/manage-users'
     default:       return backendTo
   }
