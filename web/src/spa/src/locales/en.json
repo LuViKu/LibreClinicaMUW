@@ -338,6 +338,7 @@
     "showingCount": "{visible} of {total} shown",
     "empty": "No users match the current filter.",
     "inviteAction": "Invite user",
+    "editRow": "Edit",
     "onlyActive": "Active only",
     "studyWide": "Study-wide",
     "activeYes": "Active",
@@ -380,6 +381,20 @@
       "successIntro": "User created. Share this one-time password with the new user; they will be required to change it on first login.",
       "copyPassword": "Copy",
       "firstLoginNote": "The password is shown once and is not stored. Make sure it is captured before closing this dialog."
+    },
+    "edit": {
+      "title": "Edit user profile",
+      "username": "Username",
+      "usernameNote": "Username cannot be changed.",
+      "role": "Role",
+      "roleNote": "Manage role bindings from the Roles dialog.",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "Email",
+      "phone": "Phone",
+      "affiliation": "Institutional affiliation",
+      "submit": "Save changes",
+      "successFlash": "Profile updated."
     }
   },
   "importCrf": {

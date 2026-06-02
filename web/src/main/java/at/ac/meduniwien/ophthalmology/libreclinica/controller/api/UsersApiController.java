@@ -20,6 +20,7 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
@@ -28,6 +29,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuthoritiesDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -39,7 +41,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -439,6 +443,286 @@ public class UsersApiController {
             }
         }
         throw new IllegalStateException("Failed to generate a unique API key after 16 attempts");
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* PUT /api/v1/users/{username}  (Phase E A7.2 — edit profile)       */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Edit profile fields on an existing user account.
+     *
+     * <p>Mirrors {@code EditUserAccountServlet:114–191}: sysadmin-only,
+     * editable fields are firstName / lastName / email / phone /
+     * institutionalAffiliation / userType / authtype / runWebservices.
+     * Username, password, and lifecycle (disable/restore) are covered
+     * by separate endpoints (A7.4 / A7.3).
+     *
+     * <p>Per-field diff + audit emission: one
+     * {@code audit_log_event} row per changed column, mirroring the
+     * Phase E A2 {@code SubjectsApiController.writeSubjectFieldAudit}
+     * pattern. Legacy {@code EditUserAccountServlet} doesn't emit
+     * per-field audit rows — this is additive for GCP fidelity
+     * (DR-009 audit-on-write).
+     *
+     * <p>{@code userType=TECHADMIN} requests are forbidden unless the
+     * caller themselves is a TechAdmin (parity with create-side gate
+     * in {@code CreateUserAccountServlet:113}).
+     *
+     * <p>If {@code runWebservices} is flipped to true, a fresh API key
+     * is generated (mirrors {@code EditUserAccountServlet:178–182}).
+     *
+     * <p>Status codes: {@code 200} on success (returns updated
+     * {@link StudyUserDto}), {@code 400} on validation, {@code 401}
+     * unauthenticated, {@code 403} non-sysadmin, {@code 404} unknown
+     * username.
+     */
+    @PutMapping("/{username}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = StudyUserDto.class)))
+    public ResponseEntity<?> update(@PathVariable("username") String username,
+                                    @RequestBody(required = false) UpdateUserRequest body,
+                                    HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        if (!UserAdminAuthorization.roleMayAdministerUsers(me)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit user administration — sysadmin only"));
+        }
+        if (body == null) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Request body is required",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "body", "missing"))));
+        }
+
+        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = validateUpdateUserShape(body);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+
+        UserAccountDAO userDao = new UserAccountDAO(dataSource);
+        UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No user with username '" + username + "'"));
+        }
+
+        UserType requestedType = null;
+        if (body.userType() != null) {
+            requestedType = switch (body.userType()) {
+                case "USER" -> UserType.USER;
+                case "SYSADMIN" -> UserType.SYSADMIN;
+                case "TECHADMIN" -> UserType.TECHADMIN;
+                default -> null;
+            };
+            if (requestedType == UserType.TECHADMIN && !me.isTechAdmin()) {
+                return ResponseEntity.status(403).body(Map.of("message",
+                        "Only a TechAdmin may grant the TECHADMIN user type"));
+            }
+        }
+
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+
+        if (body.firstName() != null) {
+            String oldVal = target.getFirstName();
+            String newVal = body.firstName().trim();
+            if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
+                target.setFirstName(newVal);
+                writeUserFieldAudit(auditDAO, me, target, "first_name", oldVal, newVal);
+            }
+        }
+        if (body.lastName() != null) {
+            String oldVal = target.getLastName();
+            String newVal = body.lastName().trim();
+            if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
+                target.setLastName(newVal);
+                writeUserFieldAudit(auditDAO, me, target, "last_name", oldVal, newVal);
+            }
+        }
+        if (body.email() != null) {
+            String oldVal = target.getEmail();
+            String newVal = body.email().trim();
+            if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
+                target.setEmail(newVal);
+                writeUserFieldAudit(auditDAO, me, target, "email", oldVal, newVal);
+            }
+        }
+        if (body.phone() != null) {
+            String oldVal = target.getPhone();
+            String newVal = body.phone().trim();
+            if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
+                target.setPhone(newVal);
+                writeUserFieldAudit(auditDAO, me, target, "phone", oldVal, newVal);
+            }
+        }
+        if (body.institutionalAffiliation() != null) {
+            String oldVal = target.getInstitutionalAffiliation();
+            String newVal = body.institutionalAffiliation().trim();
+            if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
+                target.setInstitutionalAffiliation(newVal);
+                writeUserFieldAudit(auditDAO, me, target, "institutional_affiliation", oldVal, newVal);
+            }
+        }
+        if (body.authtype() != null) {
+            String oldVal = target.getAuthtype();
+            String newVal = body.authtype().trim();
+            if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
+                target.setAuthtype(newVal);
+                writeUserFieldAudit(auditDAO, me, target, "authtype", oldVal, newVal);
+            }
+        }
+        if (requestedType != null) {
+            UserType oldType = currentUserType(target);
+            if (oldType != requestedType) {
+                // addUserType internally clears + sets — legacy parity
+                // (EditUserAccountServlet replaces the user_type via
+                // the same path).
+                target.addUserType(requestedType);
+                writeUserFieldAudit(auditDAO, me, target, "user_type",
+                        oldType.getName(), requestedType.getName());
+            }
+        }
+        if (body.runWebservices() != null) {
+            boolean oldVal = target.getRunWebservices();
+            boolean newVal = body.runWebservices();
+            if (oldVal != newVal) {
+                target.setRunWebservices(newVal);
+                writeUserFieldAudit(auditDAO, me, target, "run_webservices",
+                        Boolean.toString(oldVal), Boolean.toString(newVal));
+                if (newVal) {
+                    // Flipping run_webservices on regenerates the API key
+                    // (mirrors EditUserAccountServlet:178–182).
+                    target.setApiKey(generateUniqueApiKey(userDao));
+                }
+            }
+        }
+
+        target.setUpdater(me);
+        target.setUpdatedDate(new java.util.Date());
+        userDao.update(target);
+
+        LOG.info("Update user: username={} by admin={}",
+                target.getName(), me.getName());
+
+        return ResponseEntity.ok(projectToStudyUserDto(target, currentStudy));
+    }
+
+    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateUpdateUserShape(
+            UpdateUserRequest body) {
+        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+
+        // Each field is optional (null = unchanged); if present, run the
+        // same length/format rules as create.
+        if (body.firstName() != null) {
+            String s = body.firstName().trim();
+            if (s.isEmpty()) out.add(fieldError("firstName", "First name cannot be blank"));
+            else if (s.length() > 50) out.add(fieldError("firstName", "First name must be 50 characters or fewer"));
+        }
+        if (body.lastName() != null) {
+            String s = body.lastName().trim();
+            if (s.isEmpty()) out.add(fieldError("lastName", "Last name cannot be blank"));
+            else if (s.length() > 50) out.add(fieldError("lastName", "Last name must be 50 characters or fewer"));
+        }
+        if (body.email() != null) {
+            String s = body.email().trim();
+            if (s.isEmpty()) out.add(fieldError("email", "Email cannot be blank"));
+            else if (s.length() > 120) out.add(fieldError("email", "Email must be 120 characters or fewer"));
+            else if (!s.matches(".+@.+\\..*")) out.add(fieldError("email", "Email format is invalid"));
+        }
+        if (body.institutionalAffiliation() != null) {
+            String s = body.institutionalAffiliation().trim();
+            if (s.isEmpty()) out.add(fieldError("institutionalAffiliation", "Institutional affiliation cannot be blank"));
+            else if (s.length() > 255) out.add(fieldError("institutionalAffiliation", "Institutional affiliation must be 255 characters or fewer"));
+        }
+        if (body.userType() != null) {
+            String s = body.userType();
+            if (!"USER".equals(s) && !"SYSADMIN".equals(s) && !"TECHADMIN".equals(s)) {
+                out.add(fieldError("userType", "userType must be one of USER / SYSADMIN / TECHADMIN"));
+            }
+        }
+        return out;
+    }
+
+    private static SubjectsApiController.ValidationErrorBody.FieldError fieldError(String field, String msg) {
+        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    }
+
+    /**
+     * Derive the single legacy {@link UserType} a bean carries. The
+     * legacy bean stores types as a list (forward-compat) but in
+     * practice always carries exactly one — {@link UserAccountBean#addUserType}
+     * clears before adding. Use {@code isSysAdmin / isTechAdmin} flags
+     * to recover it instead of the (private) backing collection.
+     */
+    private static UserType currentUserType(UserAccountBean ua) {
+        if (ua.isTechAdmin()) return UserType.TECHADMIN;
+        if (ua.isSysAdmin()) return UserType.SYSADMIN;
+        return UserType.USER;
+    }
+
+    private void writeUserFieldAudit(AuditEventDAO auditDAO,
+                                     UserAccountBean editor,
+                                     UserAccountBean target,
+                                     String columnName,
+                                     String oldValue,
+                                     String newValue) {
+        try {
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(editor.getId());
+            ae.setAuditTable("user_account");
+            ae.setEntityId(target.getId());
+            ae.setColumnName(columnName);
+            ae.setOldValue(oldValue == null ? "" : oldValue);
+            ae.setNewValue(newValue == null ? "" : newValue);
+            ae.setActionMessage("user_profile_update: " + (target.getName() == null ? "" : target.getName())
+                    + "." + columnName
+                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
+                    + (newValue == null ? "" : newValue) + "'");
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for user field {}={} (continuing): {}",
+                    columnName, newValue, e.getMessage());
+        }
+    }
+
+    /**
+     * Project a persisted {@link UserAccountBean} (post-edit) back to
+     * the SPA wire shape. Uses the same role/site resolution rules as
+     * the list endpoint — the user's active role binding under the
+     * current study is the canonical row.
+     */
+    private StudyUserDto projectToStudyUserDto(UserAccountBean ua, StudyBean currentStudy) {
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyUserRoleBean activeRole = ua.getRoleByStudy(currentStudy.getId());
+        String spaRole = activeRole != null && activeRole.getRole() != null
+                ? RoleMapper.toSpaRole(activeRole.getRole().getName()) : "Investigator";
+        StudyBean roleStudy = activeRole != null && activeRole.getStudyId() > 0
+                ? (StudyBean) studyDao.findByPK(activeRole.getStudyId()) : null;
+        String siteLabel = roleStudy != null && roleStudy.getParentStudyId() > 0
+                ? roleStudy.getName() : null;
+        String lastLogin = ua.getLastVisitDate() == null ? null
+                : ua.getLastVisitDate().toInstant().atZone(ZoneOffset.UTC)
+                        .truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
+        boolean active = ua.getStatus() != null && ua.getStatus().getId() == Status.AVAILABLE.getId();
+        return new StudyUserDto(
+                String.valueOf(ua.getId()),
+                nullToEmpty(ua.getName()),
+                displayName(ua),
+                blankToNull(ua.getEmail()),
+                spaRole,
+                siteLabel,
+                authForUser(ua),
+                lastLogin,
+                active);
     }
 
     /* ----------------------------------------------------------------- */

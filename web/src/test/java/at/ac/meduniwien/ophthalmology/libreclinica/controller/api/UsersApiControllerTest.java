@@ -11,6 +11,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -237,5 +238,101 @@ class UsersApiControllerTest extends AbstractApiControllerTest {
                 at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, site));
         org.junit.jupiter.api.Assertions.assertTrue(UserAdminAuthorization.roleAssignmentIsLegal(
                 at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.MONITOR, site));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* PUT /api/v1/users/{username}  (Phase E A7.2 — edit profile)            */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void updateReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(put("/api/v1/users/somebody")
+                .contentType("application/json")
+                .content("{}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void updateReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(put("/api/v1/users/somebody")
+                .contentType("application/json")
+                .content("{}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void updateReturns403WhenNonSysadminAttempts() throws Exception {
+        mockMvcWith().perform(put("/api/v1/users/somebody")
+                .contentType("application/json")
+                .content("{}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin only")));
+    }
+
+    @Test
+    void updateReturns400OnMissingBody() throws Exception {
+        mockMvcWith().perform(put("/api/v1/users/somebody")
+                .contentType("application/json")
+                .content("")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void updateReturns400OnBadEmail() throws Exception {
+        mockMvcWith().perform(put("/api/v1/users/somebody")
+                .contentType("application/json")
+                .content("{\"email\":\"not-an-email\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'email')]").exists());
+    }
+
+    @Test
+    void updateReturns400OnLongFirstName() throws Exception {
+        // 51 chars — one over the legacy 50-char limit.
+        String tooLong = "a".repeat(51);
+        mockMvcWith().perform(put("/api/v1/users/somebody")
+                .contentType("application/json")
+                .content("{\"firstName\":\"" + tooLong + "\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'firstName')]").exists());
+    }
+
+    @Test
+    void updateReturns400OnBlankFirstName() throws Exception {
+        // Empty string — different from "field omitted" (null).
+        mockMvcWith().perform(put("/api/v1/users/somebody")
+                .contentType("application/json")
+                .content("{\"firstName\":\"   \"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'firstName')]").exists());
+    }
+
+    @Test
+    void updateReturns400OnUnknownUserType() throws Exception {
+        mockMvcWith().perform(put("/api/v1/users/somebody")
+                .contentType("application/json")
+                .content("{\"userType\":\"SUPERUSER\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'userType')]").exists());
     }
 }
