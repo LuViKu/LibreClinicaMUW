@@ -364,6 +364,22 @@
       "auth": "Auth",
       "lastLogin": "Letzte Anmeldung",
       "active": "Aktiv"
+    },
+    "invite": {
+      "title": "Neue/n Nutzer/in anlegen",
+      "username": "Benutzername",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "email": "E-Mail",
+      "phone": "Telefon",
+      "affiliation": "Institutszugehörigkeit",
+      "role": "Anfangsrolle in dieser Studie",
+      "submit": "Anlegen",
+      "studyMissing": "Wählen Sie zuerst eine aktive Studie, bevor Sie eine/n Nutzer/in einladen.",
+      "emailNotWiredNote": "E-Mail-Versand ist noch nicht verdrahtet — kopieren Sie das Einmal-Passwort und übermitteln Sie es über einen sicheren Kanal.",
+      "successIntro": "Nutzer/in angelegt. Übergeben Sie dieses Einmal-Passwort der/dem neuen Nutzer/in; bei der ersten Anmeldung muss es geändert werden.",
+      "copyPassword": "Kopieren",
+      "firstLoginNote": "Das Passwort wird einmal angezeigt und nicht gespeichert. Bitte vor dem Schließen sichern."
     }
   },
   "importCrf": {

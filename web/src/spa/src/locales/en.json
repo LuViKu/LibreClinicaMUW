@@ -364,6 +364,22 @@
       "auth": "Auth",
       "lastLogin": "Last login",
       "active": "Active"
+    },
+    "invite": {
+      "title": "Invite a new user",
+      "username": "Username",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "email": "Email",
+      "phone": "Phone",
+      "affiliation": "Institutional affiliation",
+      "role": "Initial role on this study",
+      "submit": "Create user",
+      "studyMissing": "Pick an active study before inviting a user.",
+      "emailNotWiredNote": "Welcome email delivery is not yet wired — copy the one-time password and share it with the new user via a secure channel.",
+      "successIntro": "User created. Share this one-time password with the new user; they will be required to change it on first login.",
+      "copyPassword": "Copy",
+      "firstLoginNote": "The password is shown once and is not stored. Make sure it is captured before closing this dialog."
     }
   },
   "importCrf": {

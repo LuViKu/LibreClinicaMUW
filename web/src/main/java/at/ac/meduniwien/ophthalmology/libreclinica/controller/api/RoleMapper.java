@@ -43,4 +43,32 @@ final class RoleMapper {
     static String toSpaRole(int legacyRoleId) {
         return toSpaRole(Role.get(legacyRoleId).getName());
     }
+
+    /**
+     * Inverse of {@link #toSpaRole(String)} — map a SPA UserRole string
+     * back to the legacy {@link Role} constant. Used by A7 user-admin
+     * writes when the SPA submits a role for a new binding.
+     *
+     * <p>The legacy RA / RA2 roles collapse into "Investigator" in the
+     * SPA, so the inverse is necessarily lossy: a SPA-submitted
+     * "Investigator" always resolves to {@link Role#INVESTIGATOR}. The
+     * RA / RA2 roles can only be granted via the legacy JSP admin
+     * surface — A7 documents this gap; widening the SPA's role union
+     * is a separate UX decision.
+     *
+     * @return the resolved {@link Role}, or {@code null} when the
+     *         input is null, blank, or doesn't match a known SPA role
+     *         (the caller surfaces a 400 with {@code field="role"}).
+     */
+    static Role fromSpaRole(String spaRole) {
+        if (spaRole == null || spaRole.isBlank()) return null;
+        return switch (spaRole) {
+            case "Administrator" -> Role.ADMIN;
+            case "Data Manager" -> Role.STUDYDIRECTOR;
+            case "CRC" -> Role.COORDINATOR;
+            case "Monitor" -> Role.MONITOR;
+            case "Investigator" -> Role.INVESTIGATOR;
+            default -> null;
+        };
+    }
 }
