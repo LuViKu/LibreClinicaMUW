@@ -363,6 +363,46 @@ export const useSubjectsStore = defineStore('subjects', () => {
     return detail
   }
 
+  /**
+   * Phase E A3 — soft-delete a subject. Backend
+   * (`POST /api/v1/subjects/{oid}/remove`) cascades to nested events
+   * + CRFs + item_data as AUTO_DELETED. Role-gated to Data Manager /
+   * Administrator; the SPA hides the button for other roles.
+   *
+   * <p>On success the in-memory row is removed from `rows` (so the
+   * matrix no longer shows it). The caller is responsible for
+   * navigating away from `SubjectDetailView`.
+   */
+  async function removeSubject(subjectId: string): Promise<boolean> {
+    try {
+      await apiPost<unknown>(
+        `/pages/api/v1/subjects/${encodeURIComponent(subjectId)}/remove`,
+        {},
+      )
+      rows.value = rows.value.filter((s) => s.id !== subjectId)
+      if (selected.value && selected.value.id === subjectId) {
+        selected.value = null
+      }
+      return true
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Löschen nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Löschen fehlgeschlagen. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Löschen fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Löschen.'
+      }
+      return false
+    }
+  }
+
   return {
     // state
     rows,
@@ -388,6 +428,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
     fetchOne,
     loadPreflight,
     signSubject,
+    removeSubject,
   }
 })
 

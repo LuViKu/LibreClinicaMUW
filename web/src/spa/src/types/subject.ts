@@ -45,6 +45,25 @@ export type Subject =
     events: EventCellSnapshot[]
   }
 
+/* ------------------------------------------------------------------ */
+/* Phase E A3 — subject lifecycle role helper.                        */
+/*                                                                    */
+/* Mirrors SubjectLifecycleAuthorization.java backend-side:           */
+/*   permitted: Data Manager, Administrator                           */
+/*   forbidden: Investigator, CRC, Monitor, RA, RA2                   */
+/*                                                                    */
+/* No state guard — the existing GET endpoints exclude DELETED rows   */
+/* from the matrix, so SubjectDetailView only ever sees AVAILABLE     */
+/* subjects. Restore lives backend-side for now (a "show removed"     */
+/* filter is a separate slice).                                       */
+/* ------------------------------------------------------------------ */
+
+import type { UserRole } from './auth'
+
+export function canManageSubjectLifecycle(role: UserRole): boolean {
+  return role === 'Data Manager' || role === 'Administrator'
+}
+
 /**
  * Per-CRF data-entry stage taxonomy surfaced on the detail view.
  *

@@ -551,7 +551,9 @@
     },
     "actions": {
       "downloadCasebook": "Patient-Casebook herunterladen",
-      "signSubject": "Probanden signieren"
+      "signSubject": "Probanden signieren",
+      "remove": "Teilnehmer entfernen",
+      "removeConfirm": "Teilnehmer/in {id} wirklich entfernen? Visiten, CRFs und Items werden als gelöscht markiert (Soft-Delete). Wiederherstellbar durch Data Manager. Die Aktion wird im Audit Trail dokumentiert."
     }
   }
 }

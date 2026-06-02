@@ -37,12 +37,15 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBe
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
@@ -917,6 +920,210 @@ public class SubjectsApiController {
                 studyEventDefinitionDAO, eventCRFDAO, definitionCache, openQueriesByEvent);
 
         return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * Phase E A3 — soft-delete a study subject (the row remains for
+     * audit but disappears from active queries). Mirrors the legacy
+     * {@code RemoveSubjectServlet} cascade: this study_subject's
+     * status flips to {@link Status#DELETED}; its child rows
+     * (study_events → event_crfs → item_data) cascade to
+     * {@link Status#AUTO_DELETED}.
+     *
+     * <p>Guards (order matters):
+     * <ol>
+     *   <li>{@code 401} — no authenticated user.</li>
+     *   <li>{@code 400} — no active study bound.</li>
+     *   <li>{@code 404} — no study_subject with that OID in the
+     *       caller's visible-studies set.</li>
+     *   <li>{@code 403} — caller's role is not Data Manager / Admin
+     *       (per {@link SubjectLifecycleAuthorization}).</li>
+     *   <li>{@code 409} — subject is already in {@link Status#DELETED}.
+     *       Restoring uses the sibling endpoint; this one is for
+     *       active → removed transitions.</li>
+     * </ol>
+     *
+     * <p>Unlike subject-create (which audits via
+     * {@code AuditEventDAO}) and sign (which uses a JDBC INSERT for
+     * the {@code subject_event_audit} compound primary key), this
+     * action relies on the existing {@code study_subject_trigger}
+     * table-trigger that captures status transitions automatically.
+     * No controller-side audit emission is required.
+     */
+    @PostMapping("/{studySubjectOid}/remove")
+    public ResponseEntity<?> remove(@PathVariable("studySubjectOid") String studySubjectOid,
+                                    HttpSession session) {
+        return transitionLifecycle(studySubjectOid, session,
+                /* expectedCurrentStatus */ Status.AVAILABLE,
+                /* newSubjectStatus */ Status.DELETED,
+                /* cascadeChildStatus */ Status.AUTO_DELETED,
+                /* opName */ "remove",
+                /* alreadyMessage */ "Subject is already removed");
+    }
+
+    /**
+     * Phase E A3 — inverse of {@link #remove}. Restores a previously
+     * soft-deleted subject and its cascade. Status flips back to
+     * {@link Status#AVAILABLE}; child rows in
+     * {@link Status#AUTO_DELETED} flip back to {@link Status#AVAILABLE}.
+     *
+     * <p>409 if subject is not currently in {@code DELETED} — restore
+     * is the inverse of remove and not a generic "reset to available".
+     */
+    @PostMapping("/{studySubjectOid}/restore")
+    public ResponseEntity<?> restore(@PathVariable("studySubjectOid") String studySubjectOid,
+                                     HttpSession session) {
+        return transitionLifecycle(studySubjectOid, session,
+                /* expectedCurrentStatus */ Status.DELETED,
+                /* newSubjectStatus */ Status.AVAILABLE,
+                /* cascadeChildStatus */ Status.AVAILABLE,
+                /* opName */ "restore",
+                /* alreadyMessage */ "Subject is not currently removed");
+    }
+
+    /**
+     * Shared body for remove + restore. The transitions are
+     * structurally identical — flip the parent status, cascade the
+     * child rows — only the status pair differs. Encapsulating both
+     * here keeps the per-endpoint methods one-liners and ensures the
+     * cascade rules stay in lock-step.
+     *
+     * @param expectedCurrentStatus parent's status must equal this
+     *        before the transition; otherwise 409.
+     * @param newSubjectStatus new {@link StudySubjectBean#getStatus()}.
+     * @param cascadeChildStatus new status for cascaded child rows.
+     *        {@link Status#AUTO_DELETED} for the remove cascade;
+     *        {@link Status#AVAILABLE} for restore.
+     */
+    private ResponseEntity<?> transitionLifecycle(String studySubjectOid,
+                                                  HttpSession session,
+                                                  Status expectedCurrentStatus,
+                                                  Status newSubjectStatus,
+                                                  Status cascadeChildStatus,
+                                                  String opName,
+                                                  String alreadyMessage) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!SubjectLifecycleAuthorization.roleMayManageLifecycle(roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit " + opName + " on study subjects"));
+        }
+
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+
+        StudySubjectBean ss = null;
+        for (Integer sid : visible) {
+            StudyBean scope;
+            if (sid == currentStudy.getId()) {
+                scope = currentStudy;
+            } else {
+                StudyDAO sdao = new StudyDAO(dataSource);
+                scope = (StudyBean) sdao.findByPK(sid);
+            }
+            if (scope == null || scope.getId() == 0) continue;
+            StudySubjectBean candidate = studySubjectDAO.findByLabelAndStudy(studySubjectOid, scope);
+            if (candidate != null && candidate.getId() > 0) {
+                ss = candidate;
+                break;
+            }
+        }
+        if (ss == null || ss.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study subject '" + studySubjectOid + "' in your visible study set"));
+        }
+
+        if (ss.getStatus() == null || !ss.getStatus().equals(expectedCurrentStatus)) {
+            return ResponseEntity.status(409).body(Map.of("message", alreadyMessage));
+        }
+
+        // Flip the parent, then cascade. The legacy
+        // RemoveSubjectServlet walks the chain inline; we do the
+        // same here. Each DAO.update() is its own auto-committed
+        // statement — there's no service-layer transaction wrapping
+        // them, mirroring legacy behaviour (failures partway through
+        // leave the system in a mixed state, which is consistent
+        // with what BUR-* error codes already produce).
+        ss.setStatus(newSubjectStatus);
+        ss.setUpdater(currentUser);
+        ss.setUpdatedDate(new java.util.Date());
+        studySubjectDAO.update(ss);
+
+        cascadeChildren(ss, currentUser, cascadeChildStatus);
+
+        LOG.info("Subject lifecycle {}: study_subject {} (label={}) by user={} role={}; "
+                        + "parent.status={} cascade.status={}",
+                opName, ss.getId(), ss.getLabel(), currentUser.getName(), roleId,
+                newSubjectStatus.getName(), cascadeChildStatus.getName());
+
+        // Refresh + project. The detail DTO drives the SPA's
+        // SubjectDetailView; even after a remove the view stays open
+        // (showing the removed banner) until the user navigates back
+        // to the matrix.
+        StudySubjectBean refreshed = (StudySubjectBean) studySubjectDAO.findByPK(ss.getId());
+        SubjectBean subj = (SubjectBean) new SubjectDAO(dataSource).findByPK(refreshed.getSubjectId());
+        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
+        StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(dataSource);
+        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
+        Map<Integer, StudyEventDefinitionBean> definitionCache = new HashMap<>();
+        Map<Integer, Integer> openQueriesByEvent = loadOpenQueryCountsForStudy(currentStudy.getId());
+        SubjectDetailDto dto = toDetailDto(refreshed, subj, currentStudy, studyEventDAO,
+                studyEventDefinitionDAO, eventCRFDAO, definitionCache, openQueriesByEvent);
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * Cascade the StudySubject's status change to its child rows
+     * (study_events → event_crfs → item_data). Mirrors the legacy
+     * {@code RemoveSubjectServlet.processRequest} loop verbatim:
+     * skip rows already in {@code DELETED} (those were removed
+     * outside this cascade and shouldn't be touched).
+     */
+    private void cascadeChildren(StudySubjectBean ss, UserAccountBean currentUser,
+                                 Status cascadeChildStatus) {
+        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
+        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
+        ItemDataDAO itemDataDAO = new ItemDataDAO(dataSource);
+        java.util.Date now = new java.util.Date();
+
+        java.util.ArrayList<StudyEventBean> events = studyEventDAO.findAllByStudySubject(ss);
+        for (StudyEventBean event : events) {
+            if (event.getStatus() != null && event.getStatus().equals(Status.DELETED)) continue;
+            event.setStatus(cascadeChildStatus);
+            event.setUpdater(currentUser);
+            event.setUpdatedDate(now);
+            studyEventDAO.update(event);
+
+            java.util.ArrayList<EventCRFBean> eventCrfs = eventCRFDAO.findAllByStudyEvent(event);
+            for (EventCRFBean ec : eventCrfs) {
+                if (ec.getStatus() != null && ec.getStatus().equals(Status.DELETED)) continue;
+                ec.setStatus(cascadeChildStatus);
+                ec.setUpdater(currentUser);
+                ec.setUpdatedDate(now);
+                eventCRFDAO.update(ec);
+
+                java.util.ArrayList<ItemDataBean> items = itemDataDAO.findAllByEventCRFId(ec.getId());
+                for (ItemDataBean it : items) {
+                    if (it.getStatus() != null && it.getStatus().equals(Status.DELETED)) continue;
+                    it.setStatus(cascadeChildStatus);
+                    it.setUpdater(currentUser);
+                    it.setUpdatedDate(now);
+                    itemDataDAO.update(it);
+                }
+            }
+        }
     }
 
     /**
