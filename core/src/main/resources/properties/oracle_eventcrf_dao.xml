@@ -415,6 +415,15 @@
             WHERE EVENT_CRF_ID=?
         </sql>
     </query>
+    <!-- Phase E A5 — inverse of markCompleteIDE; see eventcrf_dao.xml -->
+    <query>
+        <name>markIncompleteIDE</name>
+        <sql>
+            UPDATE EVENT_CRF
+            SET DATE_COMPLETED=NULL
+            WHERE EVENT_CRF_ID=?
+        </sql>
+    </query>
 
     <query>
         <name>findByEventCrfVersion</name>

@@ -20,12 +20,15 @@ import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
 import { useCrfEntryStore } from '@/stores/crfEntry'
+import { useAuthStore } from '@/stores/auth'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
+import { canReopenCrf } from '@/types/crf'
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useCrfEntryStore()
+const auth = useAuthStore()
 
 const eventCrfOid = computed(() => String(route.params.eventCrfOid))
 const isReadOnly = computed(() => route.meta?.readOnly === true)
@@ -76,6 +79,24 @@ async function onMarkComplete() {
     router.push({ name: 'subject-matrix' })
   }
 }
+
+/**
+ * Phase E A5 — reopen a completed CRF. Only rendered when the
+ * current user's role + the CRF's status both permit it
+ * (`canReopenCrf`). The store handles the apiPost; on success the
+ * form fields flip back to editable via the existing
+ * `isReadOnly` / `isSaving` chain.
+ */
+async function onReopen() {
+  if (!confirm(t('crfEntry.action.reopenConfirm'))) return
+  await store.reopen()
+}
+
+const canReopen = computed(() => {
+  const role = auth.user?.role ?? null
+  if (!role || !store.entry) return false
+  return canReopenCrf(role, store.entry.status)
+})
 </script>
 
 <template>
@@ -226,15 +247,30 @@ async function onMarkComplete() {
             <RouterLink to="/subjects" class="text-xs text-slate-500 hover:text-slate-700">
               {{ t('crfEntry.cancelLink') }}
             </RouterLink>
+            <!-- Phase E A5: Reopen button — only visible when the CRF
+                 is complete AND the current user's role permits it.
+                 Clicking confirms first (the action is GCP-significant
+                 because it re-enables editing on signed-off data). -->
             <button
+              v-if="canReopen"
+              type="button"
+              class="px-3 py-2 text-xs border border-amber-300 rounded-md bg-amber-50 hover:bg-amber-100 text-amber-800"
+              :disabled="store.isSaving"
+              @click="onReopen"
+            >
+              {{ t('crfEntry.action.reopen') }}
+            </button>
+            <button
+              v-if="!isReadOnly"
               type="button"
               class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700"
-              :disabled="store.isSaving || !store.pendingChanges"
+              :disabled="store.isSaving || !store.pendingChanges || store.status === 'complete'"
               @click="onSave"
             >
               {{ t('crfEntry.action.saveDraft') }}
             </button>
             <button
+              v-if="!isReadOnly && store.status !== 'complete'"
               type="submit"
               class="px-4 py-2 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 inline-flex items-center gap-1.5 font-medium"
               :disabled="store.isSaving"

@@ -184,6 +184,25 @@ public class EventCRFDAO extends AuditableEntityDAO<EventCRFBean> {
         }
     }
 
+    /**
+     * Phase E A5 — inverse of {@link #markComplete}. Clears the
+     * {@code date_completed} column so the event_crf transitions from
+     * {@link DataEntryStage#INITIAL_DATA_ENTRY_COMPLETE} back to
+     * {@link DataEntryStage#INITIAL_DATA_ENTRY}, re-enabling editing
+     * via the SPA's CRF entry form. The {@code status_id} column is
+     * NOT touched — callers must reject {@link Status#LOCKED} /
+     * {@link Status#SIGNED} CRFs at the controller layer before
+     * invoking this method.
+     *
+     * <p>IDE-only because the legacy DDE (double data entry) workflow
+     * is not exposed via the SPA. A future {@code markIncompleteDDE}
+     * pair would mirror the existing DDE pair.
+     */
+    public void markIncomplete(EventCRFBean ecb) {
+        HashMap<Integer, Object> variables = variables(ecb.getId());
+        executeUpdate(digester.getQuery("markIncompleteIDE"), variables);
+    }
+
     public EventCRFBean create(EventCRFBean ecb) {
         HashMap<Integer, Object> variables = new HashMap<>();
         HashMap<Integer, Integer> nullVars = new HashMap<>();

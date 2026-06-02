@@ -83,3 +83,26 @@ export type CrfEntry =
     /** ISO-8601 instant of the last successful save. */
     lastSavedAt: string | null
   }
+
+/* ------------------------------------------------------------------ */
+/* Phase E A5 — CRF reopen role-aware helper.                         */
+/*                                                                    */
+/* Mirrors CrfReopenAuthorization.java backend-side:                  */
+/*   permitted: Investigator, CRC, Data Manager, Administrator        */
+/*   forbidden: Monitor, RA, RA2 (data entry / read-only roles)       */
+/*                                                                    */
+/* Plus state guards: status must be 'complete' (you can't reopen     */
+/* what's already in-progress) and not 'locked' (admin-only).         */
+/* ------------------------------------------------------------------ */
+
+import type { UserRole } from './auth'
+
+export function canReopenCrf(role: UserRole, status: CrfEntryStatus): boolean {
+  if (status !== 'complete') return false
+  return (
+    role === 'Investigator' ||
+    role === 'CRC' ||
+    role === 'Data Manager' ||
+    role === 'Administrator'
+  )
+}
