@@ -148,6 +148,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/discrepancies/{parentId}/thread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["appendThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -408,6 +424,11 @@ export interface components {
             /** Format: int32 */
             daysOpen?: number;
             lastActivityAt?: string;
+        };
+        AddThreadEntryRequest: {
+            newStatus?: string;
+            description?: string;
+            assignedTo?: string;
         };
         StudyUserDto: {
             id?: string;
@@ -831,6 +852,32 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AddQueryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DiscrepancyNoteDto"];
+                };
+            };
+        };
+    };
+    appendThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parentId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddThreadEntryRequest"];
             };
         };
         responses: {

@@ -12,10 +12,10 @@
         Adds two test accounts on Default Study (S_DEFAULTS1) alongside
         the existing `root` admin:
 
-          | Username  | Password   | Legacy role     | SPA UserRole label |
-          |-----------|------------|-----------------|--------------------|
-          | physician | 12345678   | Investigator    | Investigator       |
-          | monitor   | 12345678   | monitor         | Monitor            |
+          Username   Password    Legacy role     SPA UserRole label
+          .........  ..........  ..............  ..................
+          physician  12345678    Investigator    Investigator
+          monitor    12345678    monitor         Monitor
 
         Reuses root's bcrypt hash (same plaintext "12345678") so demo
         sessions only need one memorised password. Hash format is

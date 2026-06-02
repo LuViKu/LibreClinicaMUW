@@ -223,7 +223,25 @@
       "item": "Item",
       "description": "Description",
       "assigned": "Assigned",
-      "daysOpen": "Days open"
+      "daysOpen": "Days open",
+      "actions": "Actions"
+    },
+    "actions": {
+      "respond": "Respond",
+      "resolve": "Mark resolved",
+      "close": "Close"
+    },
+    "composer": {
+      "label": {
+        "updated": "Reply to monitor",
+        "resolution-proposed": "Proposed resolution",
+        "closed": "Closing comment (optional)"
+      },
+      "placeholder": "Type your reply…",
+      "placeholderClose": "Optional: closing comment…",
+      "submit": "Send",
+      "descriptionRequired": "A reply is required.",
+      "unknownError": "Unknown error while changing status."
     }
   },
   "auditLog": {

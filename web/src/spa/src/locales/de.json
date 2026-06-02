@@ -223,7 +223,25 @@
       "item": "Item",
       "description": "Beschreibung",
       "assigned": "Zugewiesen",
-      "daysOpen": "Offene Tage"
+      "daysOpen": "Offene Tage",
+      "actions": "Aktionen"
+    },
+    "actions": {
+      "respond": "Antworten",
+      "resolve": "Als gelöst markieren",
+      "close": "Schließen"
+    },
+    "composer": {
+      "label": {
+        "updated": "Antwort an Monitor",
+        "resolution-proposed": "Lösungsvorschlag",
+        "closed": "Schließbemerkung (optional)"
+      },
+      "placeholder": "Antwort eingeben…",
+      "placeholderClose": "Optional: Schließbemerkung…",
+      "submit": "Senden",
+      "descriptionRequired": "Eine Antwort ist erforderlich.",
+      "unknownError": "Unbekannter Fehler bei der Zustandsänderung."
     }
   },
   "auditLog": {
