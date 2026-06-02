@@ -462,6 +462,48 @@
     "confirm": {
       "disableRuleSet": "Disable rule set on {target}? Existing fire history stays in the audit trail; the rules stop evaluating until restored.",
       "disableRule": "Disable rule {ruleOid} on this rule set? The other rules attached to the same target stay active."
+    },
+    "import": {
+      "button": "Import rules",
+      "downloadTemplate": "Download annotated template",
+      "templateError": "Could not download template (status {status}).",
+      "fileLabel": "Rules XML file",
+      "uploadButton": "Upload",
+      "commitButton": "Commit",
+      "cancelButton": "Cancel",
+      "closeButton": "Close",
+      "ignoreDuplicates": "Ignore duplicate rules (skip rather than overwrite)",
+      "parserActiveNote": "The legacy XML import pipeline runs server-side: schema validation, expression validation against your study, and cycle detection. Rejected entries don't persist.",
+      "heading": {
+        "upload": "Upload XML",
+        "preview": "Review changes",
+        "result": "Done"
+      },
+      "preview": {
+        "summary": "{validRules} new + {duplicateRules} duplicate + {invalidRules} invalid rules · {validRuleSets} new + {duplicateRuleSets} duplicate + {invalidRuleSets} invalid rule sets",
+        "issuesHeading": "{count} issue(s)",
+        "severity": {
+          "ERROR": "Error",
+          "WARNING": "Warning"
+        },
+        "label": {
+          "validRules": "New rules",
+          "duplicateRules": "Duplicate rules",
+          "invalidRules": "Invalid rules",
+          "validRuleSets": "New rule sets",
+          "duplicateRuleSets": "Duplicate rule sets",
+          "invalidRuleSets": "Invalid rule sets"
+        }
+      },
+      "result": {
+        "summary": "Import committed. Per-row counts follow:",
+        "rulesCreated": "{count} rules created",
+        "rulesReplaced": "{count} rules replaced",
+        "ruleSetsCreated": "{count} rule sets created",
+        "ruleSetsReplaced": "{count} rule sets replaced",
+        "actionsCreated": "{count} actions attached",
+        "committedAt": "Committed at {ts}"
+      }
     }
   },
   "sites": {
