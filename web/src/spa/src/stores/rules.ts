@@ -1,7 +1,18 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
+import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import type { RuleActionRunLogEntry, RuleSet } from '@/types/rule'
+
+/**
+ * Phase E RX.3 — wire shape for {@code POST /api/v1/rules/test-expression}.
+ *
+ * The store-level result type is a discriminated union so the
+ * detail-pane view can branch on {@code ok} without parsing the
+ * back-end's error envelope itself.
+ */
+export type TestExpressionResult =
+  | { ok: true; result: string; evaluatedAt: string }
+  | { ok: false; message: string }
 
 /**
  * Phase E RX.1 — rules store (read-only).
@@ -97,6 +108,47 @@ export const useRulesStore = defineStore('rules', () => {
     }
   }
 
+  /**
+   * Phase E RX.3 — POST a rule expression to the test endpoint.
+   *
+   * Returns a discriminated union so the caller can render the
+   * 200 / 400 branches uniformly. Network errors collapse into the
+   * 400 branch with a translated message; auth errors propagate
+   * (the router guard handles them).
+   *
+   * <p>Backend contract:
+   * <ul>
+   *   <li>200 → {@code {result, evaluatedAt}} — result is the
+   *       parser's stringified evaluation, typically
+   *       {@code "true"} / {@code "false"}</li>
+   *   <li>400 → {@code {message, errors: [{field, message}]}} —
+   *       parse failure or empty body</li>
+   * </ul>
+   */
+  async function testExpression(
+    expression: string,
+    testValues: Record<string, string>,
+  ): Promise<TestExpressionResult> {
+    try {
+      const body = await apiPost<{ result: string; evaluatedAt: string }>(
+        '/pages/api/v1/rules/test-expression',
+        { expression, testValues },
+      )
+      return { ok: true, result: body.result, evaluatedAt: body.evaluatedAt }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) throw e
+      if (e instanceof ApiError) {
+        const body = e.body as { errors?: Array<{ message: string }>; message?: string } | null
+        const fieldMessage = body?.errors?.[0]?.message
+        return { ok: false, message: fieldMessage ?? body?.message ?? `HTTP ${e.status}` }
+      }
+      if (e instanceof ApiNetworkError) {
+        return { ok: false, message: 'Backend nicht erreichbar — Test fehlgeschlagen.' }
+      }
+      return { ok: false, message: e instanceof Error ? e.message : 'Unbekannter Fehler.' }
+    }
+  }
+
   function humanError(e: unknown, op: string): string {
     if (e instanceof ApiNetworkError) return `Backend nicht erreichbar — ${op} fehlgeschlagen.`
     if (e instanceof ApiError) {
@@ -120,5 +172,6 @@ export const useRulesStore = defineStore('rules', () => {
     load,
     fetchOne,
     fetchRunLog,
+    testExpression,
   }
 })

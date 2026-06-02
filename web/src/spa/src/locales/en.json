@@ -432,6 +432,26 @@
       "NOTIFICATION": "Notification",
       "RANDOMIZE": "Randomize",
       "": "Unknown"
+    },
+    "test": {
+      "heading": "Test rule",
+      "intro": "Parse and evaluate an expression against optional mock values. Useful for sanity-checking range checks and boolean composition before they go into a rule. Variable references against the live study scope are not supported by this surface; use the legacy Test Rule screen for that.",
+      "expressionLabel": "Expression",
+      "expressionPlaceholder": "e.g. 2 + 2 gt 3",
+      "testValuesLabel": "Test values (optional)",
+      "varName": "Variable",
+      "varNamePlaceholder": "ITEM_BP_SYS",
+      "value": "Mock value",
+      "valuePlaceholder": "150",
+      "addRow": "Add row",
+      "removeRow": "Remove",
+      "runButton": "Run test",
+      "running": "Running…",
+      "resultHeading": "Result",
+      "resultTrue": "TRUE",
+      "resultFalse": "FALSE",
+      "resultOther": "{value}",
+      "errorHeading": "Test failed"
     }
   },
   "sites": {

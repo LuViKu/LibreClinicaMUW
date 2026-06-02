@@ -432,6 +432,26 @@
       "NOTIFICATION": "Benachrichtigung",
       "RANDOMIZE": "Randomisieren",
       "": "Unbekannt"
+    },
+    "test": {
+      "heading": "Regel testen",
+      "intro": "Ausdruck parsen und gegen optionale Test-Werte auswerten. Hilfreich, um Bereichsprüfungen und boolesche Verknüpfungen vor dem Übernehmen zu validieren. Variablen-Referenzen auf das aktive Studien-Schema werden hier nicht aufgelöst; dafür gibt es weiterhin den legacy Test-Rule-Screen.",
+      "expressionLabel": "Ausdruck",
+      "expressionPlaceholder": "z.B. 2 + 2 gt 3",
+      "testValuesLabel": "Test-Werte (optional)",
+      "varName": "Variablen-OID",
+      "varNamePlaceholder": "z.B. ITEM_BP_SYS",
+      "value": "Test-Wert",
+      "valuePlaceholder": "z.B. 150",
+      "addRow": "Zeile hinzufügen",
+      "removeRow": "Entfernen",
+      "runButton": "Test ausführen",
+      "running": "Läuft…",
+      "resultHeading": "Ergebnis",
+      "resultTrue": "WAHR",
+      "resultFalse": "FALSCH",
+      "resultOther": "Ergebnis: {value}",
+      "errorHeading": "Test fehlgeschlagen"
     }
   },
   "sites": {
