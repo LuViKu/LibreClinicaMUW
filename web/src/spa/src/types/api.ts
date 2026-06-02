@@ -44,7 +44,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update"];
+        put: operations["updateEvent"];
         post?: never;
         delete: operations["cancel"];
         options?: never;
@@ -749,7 +749,7 @@ export interface operations {
             };
         };
     };
-    update: {
+    updateEvent: {
         parameters: {
             query?: never;
             header?: never;

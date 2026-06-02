@@ -53,6 +53,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -345,6 +346,7 @@ public class EventsApiController {
      * failures don't roll back the data update.
      */
     @PutMapping("/{id:[0-9]+}")
+    @Operation(operationId = "updateEvent")
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(implementation = StudyEventDto.class)))
     public ResponseEntity<?> update(@PathVariable("id") int eventId,
