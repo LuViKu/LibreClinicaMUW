@@ -8,6 +8,8 @@
  * `GET /pages/api/v1/me` lands, the SPA mocks the same shape.
  */
 
+import type { components } from './api'
+
 export type UserRole =
   | 'Investigator'
   | 'Monitor'
@@ -57,14 +59,21 @@ export interface AuthenticatedUser {
 /**
  * Phase E.5 B1 — body of {@code PUT /pages/api/v1/me/profile}.
  *
+ * <p>Phase E.5 follow-up (2026-06-02, TODO #7): derived from the
+ * openapi-typescript-generated {@link components} schema so the SPA's
+ * call sites stay aligned with the backend record shape. The previous
+ * hand-typed declaration had {@code displayName / locale / timezone}
+ * as required {@code string}s; the generated schema marks them
+ * optional matching the Java record (every field defaults to {@code
+ * null} if missing). Wrapped with {@link Required} to keep the
+ * SPA's existing call-site invariant (first-login wizard rejects
+ * blanks before submitting) without diverging from the spec.
+ *
  * <p>Field names match the SPA's first-login wizard inputs; the
  * backend maps {@code displayName} to {@code user_account.first_name}.
  */
-export interface ProfileUpdateRequest {
-  displayName: string
-  locale: string
-  timezone: string
-}
+export type ProfileUpdateRequest =
+  Required<components['schemas']['ProfileUpdateRequest']>
 
 /** Per-field validation error returned by 400 responses on profile-edit endpoints. */
 export interface ProfileFieldError {
