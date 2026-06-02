@@ -431,6 +431,11 @@ public class EventsApiController {
                     "study_event " + eventId + " belongs to a different study"));
         }
 
+        ResponseEntity<?> lockRefusal = SubjectLockGuard.refuseIfLocked(ss, "editing event " + eventId);
+        if (lockRefusal != null) {
+            return lockRefusal;
+        }
+
         // State guards — refuse terminal SubjectEventStatus values,
         // refuse already-deleted events.
         if (ev.getStatus() != null && ev.getStatus().equals(Status.DELETED)) {
@@ -562,6 +567,10 @@ public class EventsApiController {
         if (ss == null || !visible.contains(ss.getStudyId())) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "study_event " + eventId + " belongs to a different study"));
+        }
+        ResponseEntity<?> lockRefusal = SubjectLockGuard.refuseIfLocked(ss, "cancelling event " + eventId);
+        if (lockRefusal != null) {
+            return lockRefusal;
         }
         if (ev.getStatus() != null && ev.getStatus().equals(Status.DELETED)) {
             return ResponseEntity.status(409).body(Map.of("message",

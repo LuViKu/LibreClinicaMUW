@@ -458,4 +458,40 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(jsonPath("$.message")
                         .value(containsString("does not permit unlock")));
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* SubjectLockGuard — refuse-if-locked helper (A3-lock follow-up)         */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void lockGuard_returnsNullWhenSubjectIsNull() {
+        org.junit.jupiter.api.Assertions.assertNull(
+                SubjectLockGuard.refuseIfLocked(null, "anything"));
+    }
+
+    @Test
+    void lockGuard_returnsNullWhenSubjectIsAvailable() {
+        at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean ss =
+                new at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean();
+        ss.setStatus(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE);
+        org.junit.jupiter.api.Assertions.assertNull(
+                SubjectLockGuard.refuseIfLocked(ss, "edit"));
+    }
+
+    @Test
+    void lockGuard_returns409WhenSubjectIsLocked() {
+        at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean ss =
+                new at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean();
+        ss.setStatus(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.LOCKED);
+        org.springframework.http.ResponseEntity<?> refusal =
+                SubjectLockGuard.refuseIfLocked(ss, "editing demographics");
+        org.junit.jupiter.api.Assertions.assertNotNull(refusal);
+        org.junit.jupiter.api.Assertions.assertEquals(409, refusal.getStatusCode().value());
+        Object body = refusal.getBody();
+        org.junit.jupiter.api.Assertions.assertInstanceOf(java.util.Map.class, body);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> map = (java.util.Map<String, Object>) body;
+        org.junit.jupiter.api.Assertions.assertTrue(
+                ((String) map.get("message")).contains("editing demographics"));
+    }
 }
