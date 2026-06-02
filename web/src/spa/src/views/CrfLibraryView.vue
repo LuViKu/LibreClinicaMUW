@@ -87,6 +87,7 @@ interface UploadState {
 }
 const uploading = ref<UploadState | null>(null)
 const uploadErrors = ref<Record<string, string>>({})
+const uploadParseErrors = ref<string[]>([])
 const uploadFormError = ref<string | null>(null)
 const isUploading = ref(false)
 
@@ -100,6 +101,7 @@ function openUpload(crf: Crf) {
     revisionNotes: '',
   }
   uploadErrors.value = {}
+  uploadParseErrors.value = []
   uploadFormError.value = null
 }
 
@@ -112,6 +114,7 @@ function onFileChange(ev: Event) {
 async function submitUpload() {
   if (!uploading.value || !uploading.value.file || uploading.value.versionName.trim() === '') return
   uploadErrors.value = {}
+  uploadParseErrors.value = []
   uploadFormError.value = null
   isUploading.value = true
   try {
@@ -125,6 +128,7 @@ async function submitUpload() {
       uploading.value = null
     } else {
       uploadErrors.value = result.fieldErrors
+      uploadParseErrors.value = result.parseErrors
       uploadFormError.value = result.message ?? null
     }
   } finally {
@@ -178,8 +182,8 @@ const visibleRows = computed(() =>
         </div>
       </div>
 
-      <div class="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 mb-4">
-        {{ t('crfLibrary.parserDeferredNote') }}
+      <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 mb-4">
+        {{ t('crfLibrary.parserActiveNote') }}
       </div>
 
       <p v-if="lib.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
@@ -284,6 +288,13 @@ const visibleRows = computed(() =>
               class="block w-full text-xs text-slate-700"
               @change="onFileChange"
             />
+            <ErrorText v-if="uploadErrors.file" class="whitespace-pre-line">{{ uploadErrors.file }}</ErrorText>
+            <div v-if="uploadParseErrors.length > 0" class="mt-2 rounded-md border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800">
+              <div class="font-medium mb-1">{{ t('crfLibrary.parseErrorsHeading', { count: uploadParseErrors.length }) }}</div>
+              <ul class="list-disc pl-4 space-y-0.5">
+                <li v-for="(msg, i) in uploadParseErrors" :key="i">{{ msg }}</li>
+              </ul>
+            </div>
           </div>
           <div>
             <FieldLabel for="crf-upload-vname" required>{{ t('crfLibrary.versionName') }}</FieldLabel>

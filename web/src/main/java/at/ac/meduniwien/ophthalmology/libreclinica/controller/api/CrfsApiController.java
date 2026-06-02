@@ -8,7 +8,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
-import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -39,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -104,10 +104,13 @@ public class CrfsApiController {
     private static final Logger LOG = LoggerFactory.getLogger(CrfsApiController.class);
 
     private final DataSource dataSource;
+    private final CrfSpreadsheetParserService parserService;
 
     @Autowired
-    public CrfsApiController(@Qualifier("dataSource") DataSource dataSource) {
+    public CrfsApiController(@Qualifier("dataSource") DataSource dataSource,
+                             CrfSpreadsheetParserService parserService) {
         this.dataSource = dataSource;
+        this.parserService = parserService;
     }
 
     /* ----------------------------------------------------------------- */
@@ -273,6 +276,24 @@ public class CrfsApiController {
     /* POST /api/v1/crfs/{crfOid}/versions  (multipart upload)            */
     /* ----------------------------------------------------------------- */
 
+    /**
+     * Multipart upload + parse. The legacy spreadsheet parsers
+     * ({@link at.ac.meduniwien.ophthalmology.libreclinica.control.admin.SpreadSheetTableRepeating}
+     * + {@code SpreadSheetTableClassic}) are invoked via
+     * {@link CrfSpreadsheetParserService} which runs them stateless.
+     *
+     * <p>Flow:
+     * <ol>
+     *   <li>Validate file type + presence + versionName + CRF existence</li>
+     *   <li>Save file to {@code <filePath>/crf/original/} for archival</li>
+     *   <li>Invoke the parser — it persists items + the
+     *       {@code crf_version} row directly via JDBC</li>
+     *   <li>On parser errors return 400 + the collected messages
+     *       (the partially-saved file stays on disk for forensics)</li>
+     *   <li>On success look up the newly-persisted version row and
+     *       return it as 201</li>
+     * </ol>
+     */
     @PostMapping(value = "/{crfOid}/versions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ApiResponse(responseCode = "201",
                  content = @Content(schema = @Schema(implementation = CrfDto.CrfVersionDto.class)))
@@ -282,6 +303,8 @@ public class CrfsApiController {
             @RequestPart(value = "versionName") String versionName,
             @RequestPart(value = "versionDescription", required = false) String versionDescription,
             @RequestPart(value = "revisionNotes", required = false) String revisionNotes,
+            @org.springframework.web.bind.annotation.RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+                    String acceptLanguage,
             HttpSession session) {
         ResponseEntity<?> guard = preflightWrite(session);
         if (guard != null) return guard;
@@ -327,13 +350,13 @@ public class CrfsApiController {
                             "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"))));
         }
 
-        // Persist file to disk under <crfStoragePath>/crf/original/ —
-        // mirrors CreateCRFVersionServlet:125. The "new" subdirectory
-        // is used by the legacy parser path; for now we only write the
-        // original so the file is preserved for the future parser.
+        // Step 1: save file to <filePath>/crf/original/ for archival.
+        // The parser opens it again from disk (legacy parity).
+        java.nio.file.Path storedPath;
         String storedFilename;
         try {
-            storedFilename = persistUploadedFile(file, originalFilename);
+            storedPath = persistUploadedFile(file, originalFilename);
+            storedFilename = storedPath.getFileName().toString();
         } catch (IOException ioe) {
             LOG.warn("Failed to persist CRF upload for crfOid={} (name={})",
                     crfOid, originalFilename, ioe);
@@ -342,30 +365,78 @@ public class CrfsApiController {
         }
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        int studyId = currentStudy != null ? currentStudy.getId() : 0;
+        Locale locale = resolveLocale(acceptLanguage);
 
-        CRFVersionBean toCreate = new CRFVersionBean();
-        toCreate.setCrfId(crf.getId());
-        toCreate.setName(versionNameTrim);
-        toCreate.setDescription(versionDescription == null ? "" : versionDescription.trim());
-        toCreate.setRevisionNotes(revisionNotes == null ? "" : revisionNotes.trim());
-        toCreate.setStatus(Status.AVAILABLE);
-        toCreate.setOwner(me);
-        toCreate.setXform("");        // see class javadoc — parser deferred
-        toCreate.setXformName(storedFilename);
-        toCreate.setCreatedDate(new java.util.Date());
+        // Step 2: run the parser. It persists items + the crf_version
+        // row directly via JDBC if there are no parse errors.
+        CrfSpreadsheetParserService.Result result =
+                parserService.parseAndPersist(storedPath, crf, versionNameTrim, me, studyId, locale);
 
-        CRFVersionBean persisted = versionDao.create(toCreate);
-        if (persisted == null || persisted.getId() == 0) {
-            LOG.warn("CRFVersionDAO.create returned no row for crfOid={} versionName={}",
-                    crfOid, versionNameTrim);
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to persist CRF version"));
+        if (!result.ok()) {
+            // The stored file stays on disk for forensics — operators
+            // can grab it from <filePath>/crf/original/<storedFilename>
+            // and feed it to the legacy parser via the JSP path if
+            // they need to compare error messages.
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Spreadsheet parse failed — see errors[].message for the rejected rows / cells",
+                    result.errors().stream()
+                            .map(e -> new SubjectsApiController.ValidationErrorBody.FieldError("file", e))
+                            .toList()));
         }
 
-        LOG.info("Upload CRF version: crfOid={} versionOid={} versionName={} file={} by user={}",
+        CRFVersionBean persisted = result.version();
+
+        // The parser doesn't populate description / revisionNotes /
+        // xformName from the request — set them now and update so the
+        // metadata operators typed into the upload form lands on the
+        // row alongside the parsed items.
+        boolean dirty = false;
+        if (versionDescription != null && !versionDescription.isBlank()
+                && (persisted.getDescription() == null || persisted.getDescription().isBlank())) {
+            persisted.setDescription(versionDescription.trim());
+            dirty = true;
+        }
+        if (revisionNotes != null && !revisionNotes.isBlank()
+                && (persisted.getRevisionNotes() == null || persisted.getRevisionNotes().isBlank())) {
+            persisted.setRevisionNotes(revisionNotes.trim());
+            dirty = true;
+        }
+        if (persisted.getXformName() == null || persisted.getXformName().isBlank()) {
+            persisted.setXformName(storedFilename);
+            dirty = true;
+        }
+        if (dirty) {
+            try {
+                versionDao.update(persisted);
+            } catch (Exception e) {
+                LOG.warn("Could not update post-parse metadata for crfOid={} versionOid={} (continuing): {}",
+                        crfOid, persisted.getOid(), e.getMessage());
+            }
+        }
+
+        LOG.info("Upload CRF version (parsed): crfOid={} versionOid={} versionName={} file={} by user={}",
                 crfOid, persisted.getOid(), versionNameTrim, storedFilename, me.getName());
 
         return ResponseEntity.status(201).body(toVersionDto(persisted));
+    }
+
+    /**
+     * Best-effort {@code Accept-Language} parse — pulls the first tag,
+     * defaults to English when the header is absent or malformed. The
+     * resolved locale only affects parser error-message i18n; it never
+     * influences validation outcomes.
+     */
+    private static Locale resolveLocale(String acceptLanguage) {
+        if (acceptLanguage == null || acceptLanguage.isBlank()) return Locale.ENGLISH;
+        try {
+            List<Locale.LanguageRange> ranges = Locale.LanguageRange.parse(acceptLanguage);
+            if (ranges.isEmpty()) return Locale.ENGLISH;
+            return Locale.forLanguageTag(ranges.get(0).getRange());
+        } catch (IllegalArgumentException iae) {
+            return Locale.ENGLISH;
+        }
     }
 
     /* ----------------------------------------------------------------- */
@@ -489,7 +560,7 @@ public class CrfsApiController {
      * from the {@code datainfo.properties} bundle; for now we read
      * the same key directly via {@code CoreResources}.
      */
-    private static String persistUploadedFile(MultipartFile file, String originalFilename) throws IOException {
+    private static Path persistUploadedFile(MultipartFile file, String originalFilename) throws IOException {
         String filePath = at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources
                 .getField("filePath");
         if (filePath == null || filePath.isBlank()) {
@@ -505,7 +576,7 @@ public class CrfsApiController {
         try (InputStream in = file.getInputStream()) {
             Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
         }
-        return stamped;
+        return target;
     }
 
     private static CrfDto toDto(CRFBean crf, CRFVersionDAO versionDao) {

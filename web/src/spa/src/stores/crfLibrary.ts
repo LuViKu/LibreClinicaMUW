@@ -69,11 +69,20 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
   /**
    * Multipart upload — uses FormData directly since the api client
    * doesn't have a typed multipart helper.
+   *
+   * On parser failure the backend returns a {@code ValidationErrorBody}
+   * with every parse-time message tagged as {@code field: "file"}.
+   * Because multiple errors share the same field, we expose them as a
+   * separate {@code parseErrors: string[]} alongside the standard
+   * {@code fieldErrors} map so the view can render the list.
    */
   async function uploadVersion(
     crfOid: string,
     payload: { file: File; versionName: string; versionDescription?: string; revisionNotes?: string },
-  ): Promise<{ ok: true; version: CrfVersion } | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
+  ): Promise<
+    | { ok: true; version: CrfVersion }
+    | { ok: false; fieldErrors: Record<string, string>; parseErrors: string[]; message?: string }
+  > {
     const form = new FormData()
     form.append('file', payload.file)
     form.append('versionName', payload.versionName)
@@ -94,10 +103,20 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
           throw new ApiError(res.status, body.message ?? res.statusText, body)
         }
         const fieldErrors: Record<string, string> = {}
-        if (body.errors) for (const fe of body.errors) fieldErrors[fe.field] = fe.message
+        const parseErrors: string[] = []
+        if (body.errors) {
+          for (const fe of body.errors) {
+            // Parser errors all share field="file"; collect them as a
+            // separate list so the view can render them all instead of
+            // showing only the last one.
+            if (fe.field === 'file') parseErrors.push(fe.message)
+            else fieldErrors[fe.field] = fe.message
+          }
+        }
         return {
           ok: false,
           fieldErrors,
+          parseErrors,
           message: body.message ?? `Upload fehlgeschlagen (HTTP ${res.status}).`,
         }
       }
@@ -110,7 +129,12 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
       return { ok: true, version }
     } catch (e) {
       if (e instanceof ApiError) throw e
-      return { ok: false, fieldErrors: {}, message: e instanceof Error ? e.message : 'Unknown error' }
+      return {
+        ok: false,
+        fieldErrors: {},
+        parseErrors: [],
+        message: e instanceof Error ? e.message : 'Unknown error',
+      }
     }
   }
 
