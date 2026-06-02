@@ -44,7 +44,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -589,6 +591,262 @@ public class RuleExpressionApiController {
             return ResponseEntity.ok(new ValidateTargetResponse(false, List.of(
                     new ValidateTargetResponse.ValidationIssue(
                             rte.getMessage() == null ? "Target invalid" : rte.getMessage()))));
+        }
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* PUT /api/v1/rules/{id}        — Phase E RX.6 per-rule edit         */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Update a {@code rule}'s {@code name}, {@code description},
+     * and/or {@code expression} body. Per-field optional: a
+     * {@code null} field on the request body leaves the persisted
+     * value alone, so the SPA submits only the fields the operator
+     * actually edited.
+     *
+     * <p>Authorization: same gate as the RX.5 create — sysadmin OR
+     * study director/coordinator bound to the active study, via
+     * {@link StudyAdminAuthorization#roleMayEditStudy}.
+     *
+     * <h2>Validation</h2>
+     * <ul>
+     *   <li>404 if the rule doesn't exist OR belongs to a different
+     *       study (the controller cross-checks
+     *       {@code rule.studyId == study.id}).</li>
+     *   <li>400 if {@code name} is present but blank or
+     *       &gt;{@value #NAME_MAX_LENGTH} chars.</li>
+     *   <li>400 if {@code description} is present and
+     *       &gt;{@value #DESCRIPTION_MAX_LENGTH} chars.</li>
+     *   <li>400 if {@code expression} is present and either blank or
+     *       fails {@code ExpressionService.ruleExpressionChecker}
+     *       against the active study scope.</li>
+     * </ul>
+     *
+     * <h2>Audit</h2>
+     *
+     * <p>One {@code audit_log_event} row per actually-changed field,
+     * matching the RX.7 per-field-diff pattern. So a single PUT can
+     * emit 0..3 rows depending on which fields the operator touched
+     * that differ from the persisted values. {@code auditTable =
+     * "rule"}, {@code entityId = rule.id}, {@code columnName ∈
+     * {name, description, expression}}.
+     *
+     * <p>Response shape: {@link CreateRuleResponse} (same shape as
+     * the create endpoint) so the SPA can swap the row in-place
+     * without a second GET round-trip.
+     */
+    @PutMapping("/{ruleId}")
+    @Transactional
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = CreateRuleResponse.class)))
+    public ResponseEntity<?> updateRule(@PathVariable("ruleId") int ruleId,
+                                        @RequestBody(required = false) UpdateRuleRequest body,
+                                        HttpSession session) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit rule edit"));
+        }
+
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Request body is required: { name?, description?, expression? }"));
+        }
+
+        // Per-field validation runs before the DAO lookup so the
+        // cheapest rejections happen first — fixed-shape input
+        // problems don't need to hit the database to surface as 400s.
+        List<Map<String, String>> errors = new ArrayList<>();
+        String newName = null;
+        if (body.name() != null) {
+            newName = body.name().trim();
+            if (newName.isEmpty()) {
+                errors.add(Map.of("field", "name", "message", "name must not be blank"));
+            } else if (newName.length() > NAME_MAX_LENGTH) {
+                errors.add(Map.of("field", "name", "message",
+                        "name must be at most " + NAME_MAX_LENGTH + " characters"));
+            }
+        }
+        String newDescription = null;
+        if (body.description() != null) {
+            // Description tolerates blank — the operator might want to
+            // wipe a previously-set description back to empty.
+            newDescription = body.description().trim();
+            if (newDescription.length() > DESCRIPTION_MAX_LENGTH) {
+                errors.add(Map.of("field", "description", "message",
+                        "description must be at most " + DESCRIPTION_MAX_LENGTH + " characters"));
+            }
+        }
+        String newExpression = null;
+        if (body.expression() != null) {
+            newExpression = body.expression().trim();
+            if (newExpression.isEmpty()) {
+                errors.add(Map.of("field", "expression", "message",
+                        "expression must not be blank"));
+            }
+        }
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", errors));
+        }
+
+        // Resolve the rule and confirm scope. findById is unscoped so
+        // we re-check studyId here — a rule from a different study
+        // surfaces as a 404, not a 403, to avoid leaking existence.
+        RuleBean rule = ruleDao.findById(ruleId);
+        if (rule == null
+                || rule.getStudyId() == null
+                || rule.getStudyId() != study.getId()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No rule with id " + ruleId + " in study '" + study.getOid() + "'"));
+        }
+
+        // Expression-body validation against the active study scope.
+        // Only fires when the operator actually submitted a new
+        // expression — leaves untouched persisted expressions alone
+        // (which might already be considered "stale" if the CRF
+        // versioning churn deprecated their referenced OIDs; that's
+        // the "rule health" follow-up the plan defers).
+        if (newExpression != null) {
+            ExpressionBean exprBeanProbe = new ExpressionBean(Context.OC_RULES_V1, newExpression);
+            ExpressionObjectWrapper eow = new ExpressionObjectWrapper(
+                    dataSource, study, exprBeanProbe, ExpressionObjectWrapper.CONTEXT_EXPRESSION);
+            ResourceBundleProvider.updateLocale(Locale.ENGLISH);
+            ExpressionService perRequestExprSvc = new ExpressionService(eow);
+            try {
+                if (!perRequestExprSvc.ruleExpressionChecker(newExpression)) {
+                    return ResponseEntity.badRequest().body(Map.of(
+                            "message", "Validation failed",
+                            "errors", List.of(Map.of("field", "expression",
+                                    "message", "Expression failed validation"))));
+                }
+            } catch (OpenClinicaSystemException ose) {
+                String code = ose.getErrorCode() == null ? "OCRERR_unknown" : ose.getErrorCode();
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "expression",
+                                "message", code + " : "
+                                        + (ose.getMessage() == null ? "expression invalid" : ose.getMessage())))));
+            } catch (RuntimeException rte) {
+                LOG.debug("updateRule: expression checker threw {}", rte.toString());
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "Validation failed",
+                        "errors", List.of(Map.of("field", "expression",
+                                "message", rte.getMessage() == null ? "Expression invalid" : rte.getMessage()))));
+            }
+        }
+
+        // Per-field diff. Each branch captures old → new for the
+        // audit pass below before mutating the bean.
+        String oldName = rule.getName() == null ? "" : rule.getName();
+        String oldDescription = rule.getDescription() == null ? "" : rule.getDescription();
+        ExpressionBean exprBean = rule.getExpression();
+        String oldExpression = exprBean == null || exprBean.getValue() == null
+                ? "" : exprBean.getValue();
+
+        boolean nameChanged = newName != null && !oldName.equals(newName);
+        boolean descriptionChanged = newDescription != null && !oldDescription.equals(newDescription);
+        boolean expressionChanged = newExpression != null && !oldExpression.equals(newExpression);
+
+        if (!nameChanged && !descriptionChanged && !expressionChanged) {
+            // SPA submitted current state (or nothing to change) —
+            // return the refreshed shape so the caller's view stays
+            // consistent without a second GET.
+            return ResponseEntity.ok(toCreateRuleResponse(rule));
+        }
+
+        if (nameChanged) {
+            rule.setName(newName);
+        }
+        if (descriptionChanged) {
+            rule.setDescription(newDescription);
+        }
+        if (expressionChanged) {
+            // The expression body is a cascaded @OneToOne; mutate the
+            // existing bean's value rather than swapping the reference
+            // so Hibernate's dirty-check picks it up. A swap would
+            // orphan the old rule_expression row and create a new one
+            // — the existing rule_expression row carries the foreign
+            // key from rule_set_rule binders, so reusing it is safer.
+            if (exprBean == null) {
+                exprBean = new ExpressionBean(Context.OC_RULES_V1, newExpression);
+                rule.setExpression(exprBean);
+            } else {
+                exprBean.setValue(newExpression);
+            }
+        }
+        rule.setUpdater(me);
+        rule.setUpdatedDate(new java.util.Date());
+
+        RuleBean persisted = ruleDao.saveOrUpdate(rule);
+        RuleBean fresh = persisted == null ? rule : persisted;
+
+        // Per-field audit pass. Each row is independent so a partial
+        // failure (e.g. row insert throws) doesn't roll back the
+        // others — matches the RX.7 try/catch-per-row pattern.
+        if (nameChanged) {
+            writeRuleFieldAudit(me, study, fresh, "name", oldName, newName);
+        }
+        if (descriptionChanged) {
+            writeRuleFieldAudit(me, study, fresh, "description", oldDescription, newDescription);
+        }
+        if (expressionChanged) {
+            writeRuleFieldAudit(me, study, fresh, "expression", oldExpression, newExpression);
+        }
+
+        LOG.info("Update rule: id={} oid='{}' study={} name={} description={} expression={} by={}",
+                fresh.getId(), fresh.getOid(), study.getOid(),
+                nameChanged, descriptionChanged, expressionChanged, me.getName());
+
+        return ResponseEntity.ok(toCreateRuleResponse(fresh));
+    }
+
+    private static CreateRuleResponse toCreateRuleResponse(RuleBean rule) {
+        return new CreateRuleResponse(
+                rule.getId() == null ? 0 : rule.getId(),
+                rule.getOid() == null ? "" : rule.getOid(),
+                rule.getName() == null ? "" : rule.getName(),
+                rule.getDescription() == null ? "" : rule.getDescription(),
+                rule.getExpression() == null || rule.getExpression().getValue() == null
+                        ? "" : rule.getExpression().getValue());
+    }
+
+    /**
+     * Phase E RX.6 — one audit row per changed scalar field on a
+     * rule. Mirrors the RX.7 rule_set field-audit helper shape so
+     * downstream audit-trail rendering treats both tables uniformly.
+     */
+    private void writeRuleFieldAudit(UserAccountBean me,
+                                     StudyBean study,
+                                     RuleBean rule,
+                                     String columnName,
+                                     String oldValue,
+                                     String newValue) {
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setStudyId(study.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setAuditTable("rule");
+            ae.setEntityId(rule.getId());
+            ae.setColumnName(columnName);
+            ae.setOldValue(oldValue == null ? "" : oldValue);
+            ae.setNewValue(newValue == null ? "" : newValue);
+            ae.setActionMessage("rule_update: id=" + rule.getId()
+                    + "." + columnName
+                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
+                    + (newValue == null ? "" : newValue) + "' by " + me.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for rule field {} id={} (continuing): {}",
+                    columnName, rule.getId(), e.getMessage());
         }
     }
 

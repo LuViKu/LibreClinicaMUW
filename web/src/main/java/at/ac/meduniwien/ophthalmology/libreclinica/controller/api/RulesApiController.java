@@ -525,6 +525,376 @@ public class RulesApiController {
     }
 
     /* ----------------------------------------------------------------- */
+    /* PUT /api/v1/rule-sets/{id}/actions/{actionId}                      */
+    /*   (Phase E RX.6 — per-action inline edit)                          */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Update one {@code rule_action} attached to a rule_set_rule under
+     * the {@code rule_set} on the path. All fields are optional; a
+     * {@code null} field leaves the persisted value alone, so the SPA
+     * can submit a minimal patch covering only what the operator
+     * actually edited.
+     *
+     * <p>Authorization: same gate as the RX.5 create — sysadmin OR
+     * study director/coordinator bound to the active study, via
+     * {@link StudyAdminAuthorization#roleMayEditStudy}.
+     *
+     * <h2>Scope cut</h2>
+     *
+     * <p>Only the four inline-supported action types
+     * ({@code FILE_DISCREPANCY_NOTE} / {@code EMAIL} / {@code SHOW} /
+     * {@code HIDE}) are editable here — the other four
+     * ({@code INSERT}, {@code EVENT}, {@code NOTIFICATION},
+     * {@code RANDOMIZE}) surface as 404 because their type-specific
+     * editor surfaces aren't shipped yet (RX.8 territory).
+     *
+     * <p>Show/Hide {@code destinationProperty} edits are also out of
+     * scope — the {@code rule_action_property} rows stay as set at
+     * creation. Operators wanting different destinations delete +
+     * recreate via the wizard.
+     *
+     * <h2>Validation</h2>
+     * <ul>
+     *   <li>404 if the rule_set isn't in the active study, the action
+     *       isn't under the rule_set, or the action's type isn't one
+     *       of the four inline-supported types.</li>
+     *   <li>400 if {@code message} is present and either blank or
+     *       &gt;{@value #MESSAGE_MAX_LENGTH} chars.</li>
+     *   <li>400 if {@code to} is present (and the action is EMAIL)
+     *       and either blank or fails the
+     *       {@link #EMAIL_PATTERN} shape check.</li>
+     *   <li>400 if {@code to} is present on a non-EMAIL action
+     *       (mirrors the create endpoint's "to is for EMAIL only"
+     *       contract).</li>
+     *   <li>400 if {@code phaseGates} is present and no phase is
+     *       enabled — mirrors {@code OCRERR_0050}.</li>
+     * </ul>
+     *
+     * <h2>Audit</h2>
+     *
+     * <p>One {@code audit_log_event} row per actually-changed field.
+     * {@code auditTable = "rule_action"}, {@code entityId = action.id},
+     * {@code columnName ∈ {message, expression_evaluates_to, to,
+     * run_administrative_data_entry, run_initial_data_entry,
+     * run_double_data_entry, run_import_data_entry, run_batch}}.
+     *
+     * <p>Response shape: refreshed {@link RuleSetDto} (the full
+     * parent rule_set, so the SPA can replace the row in
+     * {@code rows} + {@code selected} in one swap).
+     */
+    @PutMapping("/{ruleSetId}/actions/{actionId}")
+    @Transactional
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = RuleSetDto.class)))
+    public ResponseEntity<?> updateAction(@PathVariable("ruleSetId") int ruleSetId,
+                                          @PathVariable("actionId") int actionId,
+                                          @RequestBody(required = false) UpdateRuleActionRequest body,
+                                          HttpSession session) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit rule_action edit"));
+        }
+
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Request body is required: { message?, expressionEvaluatesTo?, to?, phaseGates? }"));
+        }
+
+        // Resolve scope: the rule_set must be in the active study;
+        // the action must live under one of the rule_set_rule rows
+        // attached to that rule_set; and the action type must be
+        // one of the four inline-supported types.
+        RuleSetBean rs = ruleSetDao.findById(ruleSetId, study);
+        if (rs == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No rule set with id " + ruleSetId + " in study '" + study.getOid() + "'"));
+        }
+        RuleActionBean targetAction = null;
+        if (rs.getRuleSetRules() != null) {
+            outer:
+            for (RuleSetRuleBean rsr : rs.getRuleSetRules()) {
+                if (rsr.getActions() == null) continue;
+                for (RuleActionBean a : rsr.getActions()) {
+                    if (a.getId() != null && a.getId() == actionId) {
+                        targetAction = a;
+                        break outer;
+                    }
+                }
+            }
+        }
+        if (targetAction == null) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No action with id " + actionId + " under rule set " + ruleSetId));
+        }
+        ActionType actionType = targetAction.getActionType();
+        if (actionType == null || !isSupportedInlineActionType(actionType)) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "Inline edit supports FILE_DISCREPANCY_NOTE / EMAIL / SHOW / HIDE only — "
+                            + "action " + actionId + " is "
+                            + (actionType == null ? "untyped" : actionType.name())));
+        }
+
+        List<Map<String, String>> errors = new ArrayList<>();
+
+        // Message validation — required-shape, never null on the four
+        // supported types so a blank submission is a real edit gesture
+        // ("clear the message"). The legacy import path tolerates an
+        // empty message; we mirror that and only reject overrun.
+        String newMessage = null;
+        if (body.message() != null) {
+            newMessage = body.message().trim();
+            if (newMessage.isEmpty()) {
+                errors.add(Map.of("field", "message", "message", "message must not be blank"));
+            } else if (newMessage.length() > MESSAGE_MAX_LENGTH) {
+                errors.add(Map.of("field", "message", "message",
+                        "message must be at most " + MESSAGE_MAX_LENGTH + " characters"));
+            }
+        }
+
+        // To validation — only meaningful on EMAIL actions. A non-null
+        // `to` on a SHOW/HIDE/DiscrepancyNote action is a client bug;
+        // reject it explicitly rather than silently dropping.
+        String newTo = null;
+        if (body.to() != null) {
+            if (actionType != ActionType.EMAIL) {
+                errors.add(Map.of("field", "to", "message",
+                        "to is only valid on EMAIL actions"));
+            } else {
+                newTo = body.to().trim();
+                if (newTo.isEmpty()) {
+                    errors.add(Map.of("field", "to", "message",
+                            "to must not be blank on EMAIL actions"));
+                } else if (!EMAIL_PATTERN.matcher(newTo).matches()) {
+                    errors.add(Map.of("field", "to", "message",
+                            "to must be a valid email address"));
+                }
+            }
+        }
+
+        // Phase gates — when submitted, at least one phase must be on.
+        CreateRuleActionRequest.PhaseGatesInput gates = body.phaseGates();
+        boolean newAdmin = false, newInitial = false, newDouble = false, newImport = false, newBatch = false;
+        if (gates != null) {
+            newAdmin = Boolean.TRUE.equals(gates.administrativeDataEntry());
+            newInitial = Boolean.TRUE.equals(gates.initialDataEntry());
+            newDouble = Boolean.TRUE.equals(gates.doubleDataEntry());
+            newImport = Boolean.TRUE.equals(gates.importDataEntry());
+            newBatch = Boolean.TRUE.equals(gates.batch());
+            if (!(newAdmin || newInitial || newDouble || newImport || newBatch)) {
+                errors.add(Map.of("field", "phaseGates", "message",
+                        "At least one phase gate must be enabled"));
+            }
+        }
+
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Validation failed",
+                    "errors", errors));
+        }
+
+        // Per-field diff. The four message-bearing subtypes carry the
+        // message on their own getter (single-table inheritance, but
+        // per-class accessor). Use instanceof patterns so the compiler
+        // tracks the subtype binding for the setter.
+        String oldMessage = currentMessage(targetAction);
+        String oldTo = actionType == ActionType.EMAIL && targetAction instanceof EmailActionBean ea
+                ? (ea.getTo() == null ? "" : ea.getTo())
+                : "";
+        boolean oldEvalTo = Boolean.TRUE.equals(targetAction.getExpressionEvaluatesTo());
+        boolean newEvalTo = body.expressionEvaluatesTo() == null
+                ? oldEvalTo
+                : Boolean.TRUE.equals(body.expressionEvaluatesTo());
+
+        RuleActionRunBean run = targetAction.getRuleActionRun();
+        boolean oldAdmin = run != null && Boolean.TRUE.equals(run.getAdministrativeDataEntry());
+        boolean oldInitial = run != null && Boolean.TRUE.equals(run.getInitialDataEntry());
+        boolean oldDouble = run != null && Boolean.TRUE.equals(run.getDoubleDataEntry());
+        boolean oldImport = run != null && Boolean.TRUE.equals(run.getImportDataEntry());
+        boolean oldBatch = run != null && Boolean.TRUE.equals(run.getBatch());
+
+        boolean messageChanged = newMessage != null && !oldMessage.equals(newMessage);
+        boolean toChanged = newTo != null && !oldTo.equals(newTo);
+        boolean evalToChanged = body.expressionEvaluatesTo() != null && oldEvalTo != newEvalTo;
+        boolean gatesChanged = gates != null && (
+                oldAdmin != newAdmin
+                        || oldInitial != newInitial
+                        || oldDouble != newDouble
+                        || oldImport != newImport
+                        || oldBatch != newBatch);
+
+        if (!messageChanged && !toChanged && !evalToChanged && !gatesChanged) {
+            // SPA submitted the current state — return the refreshed
+            // shape without writing.
+            return ResponseEntity.ok(toDto(rs));
+        }
+
+        if (messageChanged) {
+            applyMessage(targetAction, newMessage);
+        }
+        if (toChanged && targetAction instanceof EmailActionBean ea) {
+            ea.setTo(newTo);
+        }
+        if (evalToChanged) {
+            targetAction.setExpressionEvaluatesTo(newEvalTo);
+        }
+        if (gatesChanged) {
+            if (run == null) {
+                run = new RuleActionRunBean(newAdmin, newInitial, newDouble, newImport, newBatch);
+                targetAction.setRuleActionRun(run);
+            } else {
+                run.setAdministrativeDataEntry(newAdmin);
+                run.setInitialDataEntry(newInitial);
+                run.setDoubleDataEntry(newDouble);
+                run.setImportDataEntry(newImport);
+                run.setBatch(newBatch);
+            }
+        }
+        targetAction.setUpdater(me);
+        targetAction.setUpdatedDate(new java.util.Date());
+
+        // Save via the parent rule_set_rule's cascade — the action
+        // rides on the same Hibernate session so the dirty-check
+        // picks up our setters. We look up the parent rsr to call
+        // saveOrUpdate on it; same pattern as createAction.
+        RuleSetRuleBean parentRsr = null;
+        for (RuleSetRuleBean rsr : rs.getRuleSetRules()) {
+            if (rsr.getActions() != null && rsr.getActions().contains(targetAction)) {
+                parentRsr = rsr;
+                break;
+            }
+        }
+        if (parentRsr != null) {
+            ruleSetRuleDao.saveOrUpdate(parentRsr);
+        } else {
+            // Defensive — we found the action above so this branch
+            // shouldn't trigger, but save the rule_set as a fallback
+            // rather than silently losing the edit.
+            ruleSetDao.saveOrUpdate(rs);
+        }
+
+        if (messageChanged) {
+            writeRuleActionFieldAudit(me, study, targetAction, "message", oldMessage, newMessage);
+        }
+        if (toChanged) {
+            writeRuleActionFieldAudit(me, study, targetAction, "to", oldTo, newTo);
+        }
+        if (evalToChanged) {
+            writeRuleActionFieldAudit(me, study, targetAction, "expression_evaluates_to",
+                    Boolean.toString(oldEvalTo), Boolean.toString(newEvalTo));
+        }
+        if (gatesChanged) {
+            if (oldAdmin != newAdmin) {
+                writeRuleActionFieldAudit(me, study, targetAction, "run_administrative_data_entry",
+                        Boolean.toString(oldAdmin), Boolean.toString(newAdmin));
+            }
+            if (oldInitial != newInitial) {
+                writeRuleActionFieldAudit(me, study, targetAction, "run_initial_data_entry",
+                        Boolean.toString(oldInitial), Boolean.toString(newInitial));
+            }
+            if (oldDouble != newDouble) {
+                writeRuleActionFieldAudit(me, study, targetAction, "run_double_data_entry",
+                        Boolean.toString(oldDouble), Boolean.toString(newDouble));
+            }
+            if (oldImport != newImport) {
+                writeRuleActionFieldAudit(me, study, targetAction, "run_import_data_entry",
+                        Boolean.toString(oldImport), Boolean.toString(newImport));
+            }
+            if (oldBatch != newBatch) {
+                writeRuleActionFieldAudit(me, study, targetAction, "run_batch",
+                        Boolean.toString(oldBatch), Boolean.toString(newBatch));
+            }
+        }
+
+        LOG.info("Update rule_action: id={} type={} rs={} study={} message={} to={} evalTo={} gates={} by={}",
+                actionId, actionType, ruleSetId, study.getOid(),
+                messageChanged, toChanged, evalToChanged, gatesChanged, me.getName());
+
+        // Re-read the parent rule_set so the DTO reflects any cascade
+        // changes (same pattern as createAction).
+        RuleSetBean refreshed = ruleSetDao.findById(ruleSetId, study);
+        return ResponseEntity.ok(toDto(refreshed == null ? rs : refreshed));
+    }
+
+    /**
+     * Extract the {@code message} field for whichever of the four
+     * inline-supported action subtypes is supplied. Returns empty
+     * string for the base class — that's the historical no-message
+     * action types (INSERT / EVENT / RANDOMIZE) which the caller has
+     * already gated out via {@link #isSupportedInlineActionType}.
+     */
+    private static String currentMessage(RuleActionBean action) {
+        if (action instanceof DiscrepancyNoteActionBean a) {
+            return a.getMessage() == null ? "" : a.getMessage();
+        }
+        if (action instanceof EmailActionBean a) {
+            return a.getMessage() == null ? "" : a.getMessage();
+        }
+        if (action instanceof ShowActionBean a) {
+            return a.getMessage() == null ? "" : a.getMessage();
+        }
+        if (action instanceof HideActionBean a) {
+            return a.getMessage() == null ? "" : a.getMessage();
+        }
+        return "";
+    }
+
+    /**
+     * Apply a new message to whichever inline-supported subtype the
+     * action is. Pair to {@link #currentMessage(RuleActionBean)}.
+     */
+    private static void applyMessage(RuleActionBean action, String message) {
+        if (action instanceof DiscrepancyNoteActionBean a) {
+            a.setMessage(message);
+        } else if (action instanceof EmailActionBean a) {
+            a.setMessage(message);
+        } else if (action instanceof ShowActionBean a) {
+            a.setMessage(message);
+        } else if (action instanceof HideActionBean a) {
+            a.setMessage(message);
+        }
+    }
+
+    /**
+     * Phase E RX.6 — one audit row per actually-changed scalar field
+     * on a rule_action. Mirrors {@link #writeRuleSetFieldAudit} so
+     * downstream audit-trail rendering treats rule, rule_set, and
+     * rule_action diffs uniformly.
+     */
+    private void writeRuleActionFieldAudit(UserAccountBean me,
+                                           StudyBean study,
+                                           RuleActionBean action,
+                                           String columnName,
+                                           String oldValue,
+                                           String newValue) {
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setStudyId(study.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setAuditTable("rule_action");
+            ae.setEntityId(action.getId() == null ? 0 : action.getId());
+            ae.setColumnName(columnName);
+            ae.setOldValue(oldValue == null ? "" : oldValue);
+            ae.setNewValue(newValue == null ? "" : newValue);
+            ae.setActionMessage("rule_action_update: id=" + action.getId()
+                    + "." + columnName
+                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
+                    + (newValue == null ? "" : newValue) + "' by " + me.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for rule_action field {} id={} (continuing): {}",
+                    columnName, action.getId(), e.getMessage());
+        }
+    }
+
+    /* ----------------------------------------------------------------- */
     /* POST /api/v1/rule-sets       — Phase E RX.5 inline rule_set create */
     /*                                                                    */
     /* The matching POST /api/v1/rules (rule-body create) lives on        */

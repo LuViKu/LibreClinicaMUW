@@ -10,6 +10,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -235,5 +236,58 @@ class RuleExpressionApiControllerTest extends AbstractApiControllerTest {
                 .session((MockHttpSession)
                         authenticatedSession(1, "root", 7, "S_DEMO", "Demo")))
                 .andExpect(status().isBadRequest());
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* PUT /api/v1/rules/{id}        (Phase E RX.6 — per-rule edit)           */
+    /* ---------------------------------------------------------------------- */
+
+    /**
+     * Anonymous request must trip 401 before reaching the DAO. Same
+     * gate pattern as createRule; the PUT path piggybacks on the same
+     * {@code preflight} short-circuit.
+     */
+    @Test
+    void updateRuleReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(put("/api/v1/rules/42")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"x\"}")
+                .session((MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * Missing body triggers the 400 envelope before any DAO call.
+     * Without a Content-Type Spring binds the {@code @RequestBody} to
+     * null, exactly the path the controller's "body required" check
+     * guards.
+     */
+    @Test
+    void updateRuleReturns400OnMissingBody() throws Exception {
+        mockMvcWith().perform(put("/api/v1/rules/42")
+                .session((MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 7, "S_DEMO", "Demo")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("body is required")));
+    }
+
+    /**
+     * A bad expression length / blank surfaces as the validation
+     * envelope. The 400-on-expression-blank check fires before the
+     * DAO lookup so the path is reachable in the MockMvc shape; the
+     * downstream parser path (resolving against a real study scope)
+     * stays out of scope per the test-class javadoc.
+     */
+    @Test
+    void updateRuleReturns400OnBlankExpression() throws Exception {
+        mockMvcWith().perform(put("/api/v1/rules/42")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"expression\":\"   \"}")
+                .session((MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 7, "S_DEMO", "Demo")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.errors[0].field").value("expression"));
     }
 }

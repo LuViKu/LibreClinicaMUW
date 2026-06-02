@@ -415,4 +415,53 @@ class RulesApiControllerTest extends AbstractApiControllerTest {
                         authenticatedSysadminSession(1, "root", 7, "S_DEMO", "Demo")))
                 .andExpect(status().isBadRequest());
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* PUT /api/v1/rule-sets/{id}/actions/{actionId}                          */
+    /*   (Phase E RX.6 — per-action inline edit)                              */
+    /* ---------------------------------------------------------------------- */
+
+    /**
+     * Anonymous request short-circuits at the preflight 401 gate
+     * before any DAO call.
+     */
+    @Test
+    void updateActionReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(put("/api/v1/rule-sets/42/actions/7")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"message\":\"new\"}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    /**
+     * Investigator hits the {@code roleMayEditStudy} 403 gate before
+     * any DAO call — same gate the other mutating endpoints exercise.
+     */
+    @Test
+    void updateActionReturns403WhenInvestigator() throws Exception {
+        mockMvcWith().perform(put("/api/v1/rule-sets/42/actions/7")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"message\":\"new\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEMO", "Demo",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit")));
+    }
+
+    /**
+     * Missing body (no Content-Type) lands on the body-required 400
+     * check that runs before the DAO lookup.
+     */
+    @Test
+    void updateActionReturns400OnMissingBody() throws Exception {
+        mockMvcWith().perform(put("/api/v1/rule-sets/42/actions/7")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 7, "S_DEMO", "Demo")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("body is required")));
+    }
 }
