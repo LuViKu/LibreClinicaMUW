@@ -5,8 +5,9 @@ import { useI18n } from 'vue-i18n'
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 
+import { useAuthStore } from '@/stores/auth'
 import { useRulesStore, type TestExpressionResult } from '@/stores/rules'
-import type { ActionType, RuleSet } from '@/types/rule'
+import type { ActionType, AttachedRule, RuleSet } from '@/types/rule'
 
 const RUN_LOG_PAGE_SIZE = 25
 
@@ -22,6 +23,18 @@ const RUN_LOG_PAGE_SIZE = 25
  */
 const { t } = useI18n()
 const rules = useRulesStore()
+const auth = useAuthStore()
+
+/**
+ * Phase E RX.4 — lifecycle buttons gate to Administrator + Data
+ * Manager. Backend re-checks via {@code StudyAdminAuthorization.
+ * roleMayEditStudy} (sysadmin OR director/coordinator), so the SPA
+ * gate is a UI hint — anyone bypassing it lands on a 403.
+ */
+const canManage = computed(() => {
+  const role = auth.user?.role
+  return role === 'Administrator' || role === 'Data Manager'
+})
 
 onMounted(() => { if (rules.rows.length === 0) rules.load() })
 
@@ -196,6 +209,69 @@ watch(selectedId, () => {
   testValueRows.value = [makeRow(), makeRow()]
   testResult.value = null
 })
+
+/* -------------------------------------------------------------- */
+/* RX.4 — lifecycle actions                                         */
+/* -------------------------------------------------------------- */
+
+/**
+ * One-shot busy flag per row so the SPA can dim a single button
+ * without freezing the whole grid. Keyed by a stable composite of
+ * (rule_set_id, optional rule_set_rule_id).
+ */
+const busyKey = ref<string | null>(null)
+
+function makeBusyKey(ruleSetId: number, ruleSetRuleId?: number): string {
+  return ruleSetRuleId == null ? `rs:${ruleSetId}` : `rsr:${ruleSetId}:${ruleSetRuleId}`
+}
+
+async function onDisableRuleSet(rs: RuleSet) {
+  const target = rs.target || `#${rs.id}`
+  // Native confirm() — the existing CrfLibrary / Sites views use the
+  // same pattern; a heavier modal can come later. The message warns
+  // about audit-trail retention to match the legacy "are you sure"
+  // page (verifyOperationServlet).
+  if (!window.confirm(t('rules.confirm.disableRuleSet', { target }))) return
+  const key = makeBusyKey(rs.id)
+  busyKey.value = key
+  try {
+    await rules.disableRuleSet(rs.id)
+  } finally {
+    if (busyKey.value === key) busyKey.value = null
+  }
+}
+
+async function onRestoreRuleSet(rs: RuleSet) {
+  const key = makeBusyKey(rs.id)
+  busyKey.value = key
+  try {
+    await rules.restoreRuleSet(rs.id)
+  } finally {
+    if (busyKey.value === key) busyKey.value = null
+  }
+}
+
+async function onDisableAttachedRule(rs: RuleSet, ar: AttachedRule) {
+  const ruleOid = ar.ruleOid ?? ar.ruleName ?? `#${ar.ruleSetRuleId}`
+  if (!window.confirm(t('rules.confirm.disableRule', { ruleOid }))) return
+  const key = makeBusyKey(rs.id, ar.ruleSetRuleId)
+  busyKey.value = key
+  try {
+    await rules.disableAttachedRule(rs.id, ar.ruleSetRuleId)
+  } finally {
+    if (busyKey.value === key) busyKey.value = null
+  }
+}
+
+async function onRestoreAttachedRule(rs: RuleSet, ar: AttachedRule) {
+  const key = makeBusyKey(rs.id, ar.ruleSetRuleId)
+  busyKey.value = key
+  try {
+    await rules.restoreAttachedRule(rs.id, ar.ruleSetRuleId)
+  } finally {
+    if (busyKey.value === key) busyKey.value = null
+  }
+}
 </script>
 
 <template>
@@ -248,8 +324,28 @@ watch(selectedId, () => {
                 <span v-if="rs.crfName">· {{ rs.crfName }}</span>
                 <span v-if="rs.crfVersionName">· {{ rs.crfVersionName }}</span>
               </div>
-              <div class="mt-1 text-[10px] text-slate-500">
-                {{ t('rules.attachedCount', { count: rs.attachedRules.length }) }}
+              <div class="mt-1 flex items-center gap-2">
+                <span class="text-[10px] text-slate-500 flex-1">
+                  {{ t('rules.attachedCount', { count: rs.attachedRules.length }) }}
+                </span>
+                <button
+                  v-if="canManage && rs.status === 'removed'"
+                  type="button"
+                  class="text-[10px] px-2 py-0.5 border border-slate-300 rounded text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                  :disabled="busyKey === makeBusyKey(rs.id)"
+                  @click.stop="onRestoreRuleSet(rs)"
+                >
+                  {{ t('rules.action.restoreRuleSet') }}
+                </button>
+                <button
+                  v-else-if="canManage"
+                  type="button"
+                  class="text-[10px] px-2 py-0.5 border border-rose-200 rounded text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                  :disabled="busyKey === makeBusyKey(rs.id)"
+                  @click.stop="onDisableRuleSet(rs)"
+                >
+                  {{ t('rules.action.disableRuleSet') }}
+                </button>
               </div>
             </li>
           </ul>
@@ -291,6 +387,25 @@ watch(selectedId, () => {
                     <span class="font-medium text-slate-800">{{ ar.ruleName ?? '—' }}</span>
                     <span class="font-mono text-[10px] text-slate-400">{{ ar.ruleOid }}</span>
                     <StatusPill v-if="ar.status === 'removed'" variant="neutral">{{ t('rules.statusRemoved') }}</StatusPill>
+                    <span class="flex-1"></span>
+                    <button
+                      v-if="canManage && ar.status === 'removed'"
+                      type="button"
+                      class="text-[10px] px-2 py-0.5 border border-slate-300 rounded text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+                      :disabled="busyKey === makeBusyKey(selectedRuleSet.id, ar.ruleSetRuleId)"
+                      @click="onRestoreAttachedRule(selectedRuleSet, ar)"
+                    >
+                      {{ t('rules.action.restoreRule') }}
+                    </button>
+                    <button
+                      v-else-if="canManage"
+                      type="button"
+                      class="text-[10px] px-2 py-0.5 border border-rose-200 rounded text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                      :disabled="busyKey === makeBusyKey(selectedRuleSet.id, ar.ruleSetRuleId)"
+                      @click="onDisableAttachedRule(selectedRuleSet, ar)"
+                    >
+                      {{ t('rules.action.disableRule') }}
+                    </button>
                   </div>
                   <p v-if="ar.ruleDescription" class="text-xs text-slate-500 mt-1">{{ ar.ruleDescription }}</p>
                   <code class="block mt-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded p-2 text-slate-800 break-all">{{ ar.ruleExpression || '—' }}</code>
