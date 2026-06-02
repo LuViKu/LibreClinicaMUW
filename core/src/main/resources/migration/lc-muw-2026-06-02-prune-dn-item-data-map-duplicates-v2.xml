@@ -7,8 +7,8 @@
 
       1. The preCondition was inverted: it expected the sqlCheck to
          return 0 (no duplicates) for the changeset to fire. On every
-         fresh `docker compose down -v && up --build` the precondition
-         failed and onFail="MARK_RAN" marked the changeset as executed
+         fresh compose volume-wipe + rebuild the precondition failed
+         and onFail="MARK_RAN" marked the changeset as executed
          without running the DELETE.
 
       2. The DELETE referenced an `id` column on dn_item_data_map.
