@@ -108,6 +108,13 @@ const router = createRouter({
       component: () => import('@/views/SitesView.vue'),
       meta: { title: 'Sites', role: 'Data Manager' as const },
     },
+    /* Phase E A8.6 — subject group classes (Arms, families, etc.). */
+    {
+      path: '/group-classes',
+      name: 'group-classes',
+      component: () => import('@/views/GroupClassesView.vue'),
+      meta: { title: 'Group classes', role: 'Data Manager' as const },
+    },
     {
       path: '/manage-users',
       name: 'manage-users',

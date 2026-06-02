@@ -349,6 +349,39 @@
       "users":        { "title": "Users", "summary": "{count} users", "description": "Per-site Investigators, Monitors, Data Managers, CRCs." }
     }
   },
+  "groupClasses": {
+    "title": "Subject groups",
+    "subTrail": "Build study · stratification + treatment arms",
+    "intro": "Define how subjects are classified — randomisation arms, family relationships, demographic strata, or ad-hoc groupings. Each class owns a set of groups subjects can be assigned to.",
+    "createAction": "New group class",
+    "createHeading": "Create a group class",
+    "submitCreate": "Create class",
+    "empty": "No group classes defined yet.",
+    "groupsHeading": "Groups ({count})",
+    "childGroupsHeading": "Groups in this class",
+    "addGroup": "Add group",
+    "disable": "Remove",
+    "restore": "Restore",
+    "statusRemoved": "Removed",
+    "disableConfirm": "Remove group class \"{name}\"? Subjects already classified into its groups stay in the audit trail; new classifications use the remaining classes. The action is recorded in the audit trail.",
+    "field": {
+      "name": "Group class name",
+      "type": "Type",
+      "assignment": "Assignment",
+      "groupName": "Group name",
+      "groupDescription": "Description"
+    },
+    "type": {
+      "Arm": "Arm",
+      "Family": "Family / pedigree",
+      "Demographic": "Demographic stratum",
+      "Other": "Other"
+    },
+    "assignment": {
+      "REQUIRED": "Required",
+      "OPTIONAL": "Optional"
+    }
+  },
   "sites": {
     "title": "Sites",
     "subTrail": "Build study · multi-center setup",
