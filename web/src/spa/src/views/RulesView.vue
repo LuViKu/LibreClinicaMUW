@@ -284,6 +284,73 @@ function onImportCommitted() {
   // Reload the list so the freshly committed rule_sets appear.
   rules.load()
 }
+
+/* -------------------------------------------------------------- */
+/* RX.7 — Schedule edit                                             */
+/* -------------------------------------------------------------- */
+
+/**
+ * One-shot inline form per detail pane. Open / closed state lives
+ * here rather than in the store because nothing else needs to read
+ * it. When the user switches rule_sets the form closes (watch below)
+ * so a half-edited schedule doesn't leak onto a different target.
+ */
+const scheduleFormOpen = ref(false)
+const scheduleFormRunSchedule = ref(false)
+const scheduleFormRunTime = ref('')
+const scheduleSaveError = ref<string | null>(null)
+const scheduleSaving = ref(false)
+
+function openScheduleForm(rs: RuleSet) {
+  scheduleFormRunSchedule.value = rs.runSchedule
+  // Default to a sensible time when scheduling is freshly being
+  // turned on but the bean had nothing stored — "08:00" is the time
+  // the legacy operator runbook nudges towards, matching the morning
+  // batch window most studies pick.
+  scheduleFormRunTime.value = rs.runTime ?? '08:00'
+  scheduleSaveError.value = null
+  scheduleFormOpen.value = true
+}
+
+function cancelScheduleForm() {
+  scheduleFormOpen.value = false
+  scheduleSaveError.value = null
+}
+
+async function saveSchedule(rs: RuleSet) {
+  if (scheduleSaving.value) return
+  scheduleSaveError.value = null
+  // Client-side preflight matches the backend's "runTime required
+  // when scheduling is on" gate, so the user gets immediate feedback
+  // without a round-trip.
+  if (scheduleFormRunSchedule.value && scheduleFormRunTime.value.trim().length === 0) {
+    scheduleSaveError.value = t('rules.schedule.saveError.timeRequired')
+    return
+  }
+  scheduleSaving.value = true
+  try {
+    const result = await rules.setSchedule(
+      rs.id,
+      scheduleFormRunSchedule.value,
+      scheduleFormRunSchedule.value ? scheduleFormRunTime.value.trim() : null,
+    )
+    if (result.ok) {
+      scheduleFormOpen.value = false
+    } else {
+      scheduleSaveError.value = result.message
+    }
+  } finally {
+    scheduleSaving.value = false
+  }
+}
+
+// Close the schedule form when the user switches rule_sets — same
+// rationale as the test pane reset below: form state belonged to the
+// previous selection.
+watch(selectedId, () => {
+  scheduleFormOpen.value = false
+  scheduleSaveError.value = null
+})
 </script>
 
 <template>
@@ -397,8 +464,76 @@ function onImportCommitted() {
                 <dt class="text-slate-500">{{ t('rules.detail.crfVersion') }}</dt>
                 <dd class="text-slate-800">{{ selectedRuleSet.crfVersionName ?? '—' }}</dd>
                 <dt class="text-slate-500">{{ t('rules.detail.runSchedule') }}</dt>
-                <dd class="text-slate-800">{{ selectedRuleSet.runSchedule ? (selectedRuleSet.runTime ?? t('rules.detail.scheduledNoTime')) : t('rules.detail.notScheduled') }}</dd>
+                <dd class="text-slate-800 flex items-center gap-2 flex-wrap">
+                  <span>{{ selectedRuleSet.runSchedule ? (selectedRuleSet.runTime ?? t('rules.detail.scheduledNoTime')) : t('rules.detail.notScheduled') }}</span>
+                  <!--
+                    RX.7 — inline schedule edit entry. Gated to
+                    Administrator + Data Manager via canManage;
+                    backend re-checks via StudyAdminAuthorization.
+                  -->
+                  <button
+                    v-if="canManage && !scheduleFormOpen"
+                    type="button"
+                    class="text-[10px] px-2 py-0.5 border border-slate-300 rounded text-muw-blue hover:bg-muw-blue-50"
+                    @click="openScheduleForm(selectedRuleSet)"
+                  >
+                    {{ t('rules.schedule.editButton') }}
+                  </button>
+                </dd>
               </dl>
+
+              <!-- RX.7 — inline schedule edit form -->
+              <div
+                v-if="scheduleFormOpen"
+                class="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 space-y-2"
+              >
+                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                  {{ t('rules.schedule.heading') }}
+                </div>
+                <label class="flex items-center gap-2 text-xs text-slate-700">
+                  <input
+                    v-model="scheduleFormRunSchedule"
+                    type="checkbox"
+                    class="rounded border-slate-300"
+                  />
+                  {{ t('rules.schedule.runScheduleLabel') }}
+                </label>
+                <div>
+                  <label
+                    class="block text-[11px] text-slate-600 mb-1"
+                    :for="`schedule-run-time-${selectedRuleSet.id}`"
+                  >
+                    {{ t('rules.schedule.runTimeLabel') }}
+                  </label>
+                  <input
+                    :id="`schedule-run-time-${selectedRuleSet.id}`"
+                    v-model="scheduleFormRunTime"
+                    type="time"
+                    :disabled="!scheduleFormRunSchedule"
+                    class="px-2 py-1 text-xs border border-slate-200 rounded-md disabled:bg-slate-100 disabled:text-slate-400"
+                  />
+                  <p class="mt-1 text-[10px] text-slate-500">{{ t('rules.schedule.timeFormatHint') }}</p>
+                </div>
+                <p v-if="scheduleSaveError" class="text-xs text-rose-700">{{ scheduleSaveError }}</p>
+                <div class="flex items-center gap-2">
+                  <button
+                    type="button"
+                    class="px-3 py-1 text-xs font-medium border border-muw-blue text-muw-blue bg-white rounded-md hover:bg-muw-blue-50 disabled:opacity-50"
+                    :disabled="scheduleSaving"
+                    @click="saveSchedule(selectedRuleSet)"
+                  >
+                    {{ t('rules.schedule.saveButton') }}
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-1 text-xs border border-slate-300 text-slate-700 bg-white rounded-md hover:bg-slate-50"
+                    :disabled="scheduleSaving"
+                    @click="cancelScheduleForm"
+                  >
+                    {{ t('rules.schedule.cancelButton') }}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div>
