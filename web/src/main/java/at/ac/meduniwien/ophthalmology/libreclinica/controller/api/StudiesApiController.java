@@ -392,6 +392,186 @@ public class StudiesApiController {
         return lifecycle(studyOid, session, Status.AVAILABLE, "restore");
     }
 
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/studies/{studyOid}/status                            */
+    /*   (Phase E A8.5 — operational status lifecycle)                   */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Move a study through the operational state machine. Distinct
+     * from A8.1's disable/restore — those soft-delete the row;
+     * this endpoint handles the AVAILABLE / PENDING / LOCKED /
+     * FROZEN cluster.
+     *
+     * <p>Transition matrix (legal {@code target} per current state):
+     * <pre>
+     *   PENDING   → AVAILABLE
+     *   AVAILABLE → LOCKED, FROZEN, PENDING
+     *   LOCKED    → AVAILABLE, FROZEN
+     *   FROZEN    → AVAILABLE, LOCKED
+     * </pre>
+     *
+     * <p>{@code reason} is required for AVAILABLE→LOCKED and
+     * AVAILABLE→FROZEN (GCP audit-of-record requirement). The
+     * reason is captured in the {@code action_message} on the audit
+     * row.
+     *
+     * <p>Cascade: legal transitions also propagate to child sites
+     * via {@code StudyDAO.updateSitesStatus} (mirrors legacy
+     * RemoveStudyServlet's cascade pattern, applied to the
+     * status-only path).
+     *
+     * <p>Sysadmin-only — same MUW interpretation as A8.1's lifecycle.
+     */
+    @PostMapping("/{studyOid}/status")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = StudyIdentityDto.class)))
+    public ResponseEntity<?> setStatus(@PathVariable("studyOid") String studyOid,
+                                       @RequestBody(required = false) SetStudyStatusRequest body,
+                                       HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (!StudyAdminAuthorization.roleMayLifecycleStudy(me)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit study status transitions — sysadmin only"));
+        }
+        if (body == null || body.targetStatus() == null || body.targetStatus().isBlank()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "targetStatus", "targetStatus is required"))));
+        }
+
+        Status target;
+        try {
+            target = resolveTargetStatus(body.targetStatus());
+        } catch (IllegalArgumentException iae) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "targetStatus",
+                            "targetStatus must be one of AVAILABLE / PENDING / LOCKED / FROZEN "
+                                    + "(use /disable + /restore for the removed state)"))));
+        }
+
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean target_ = studyDao.findByOid(studyOid);
+        if (target_ == null || target_.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study with oid '" + studyOid + "'"));
+        }
+        Status currentStatus = target_.getStatus();
+        if (currentStatus == null) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Study '" + studyOid + "' has no current status — refuse transition"));
+        }
+        if (currentStatus.equals(target)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Study '" + studyOid + "' is already " + target.getName().toLowerCase()));
+        }
+        if (!isLegalTransition(currentStatus, target)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Illegal transition: " + currentStatus.getName()
+                            + " → " + target.getName()
+                            + ". Use /disable to remove, /restore to undelete."));
+        }
+
+        // GCP-sensitive transitions require a reason. The reason lands
+        // in the audit log so the operator's intent stays attached to
+        // the status flip.
+        boolean reasonRequired = currentStatus.equals(Status.AVAILABLE)
+                && (target.equals(Status.LOCKED) || target.equals(Status.FROZEN));
+        if (reasonRequired && (body.reason() == null || body.reason().isBlank())) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "reason",
+                            "reason is required for AVAILABLE → " + target.getName() + " transitions"))));
+        }
+
+        target_.setStatus(target);
+        target_.setUpdater(me);
+        target_.setUpdatedDate(new java.util.Date());
+        studyDao.updateStudyStatus(target_);
+
+        // Cascade to child sites — same pattern A8.1 uses.
+        try {
+            studyDao.updateSitesStatus(target_);
+        } catch (Exception e) {
+            LOG.warn("Cascade status to sites of study {} failed (continuing): {}",
+                    studyOid, e.getMessage());
+        }
+
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setStudyId(target_.getId());
+            ae.setStudyName(target_.getName() == null ? "" : target_.getName());
+            ae.setAuditTable("study");
+            ae.setEntityId(target_.getId());
+            ae.setColumnName("status_id");
+            ae.setOldValue(String.valueOf(currentStatus.getId()));
+            ae.setNewValue(String.valueOf(target.getId()));
+            String reason = body.reason() == null ? "" : body.reason().trim();
+            ae.setActionMessage("study_status_change: " + studyOid
+                    + " (" + currentStatus.getName() + " → " + target.getName() + ")"
+                    + (reason.isEmpty() ? "" : " reason: \"" + reason + "\"")
+                    + " by " + me.getName());
+            ae.setReasonForChange(reason);
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for study_status_change oid={} (continuing): {}",
+                    studyOid, e.getMessage());
+        }
+
+        LOG.info("Status transition: oid={} {} → {} by user={} reason='{}'",
+                studyOid, currentStatus.getName(), target.getName(), me.getName(),
+                body.reason() == null ? "" : body.reason());
+
+        return ResponseEntity.ok(toIdentityDto(target_, studyDao));
+    }
+
+    /**
+     * String → Status enum for the four lifecycle states A8.5 supports.
+     * DELETED + RESET + the rest are explicitly excluded.
+     */
+    private static Status resolveTargetStatus(String raw) {
+        String trimmed = raw.trim().toUpperCase(java.util.Locale.ROOT);
+        return switch (trimmed) {
+            case "AVAILABLE" -> Status.AVAILABLE;
+            case "PENDING"   -> Status.PENDING;
+            case "LOCKED"    -> Status.LOCKED;
+            case "FROZEN"    -> Status.FROZEN;
+            default -> throw new IllegalArgumentException("Unsupported targetStatus: " + raw);
+        };
+    }
+
+    /**
+     * @return {@code true} when {@code current → target} is a legal
+     *         operational transition per A8.5's matrix. Returns
+     *         {@code false} for any combination not enumerated.
+     */
+    private static boolean isLegalTransition(Status current, Status target) {
+        if (current.equals(Status.PENDING)) {
+            return target.equals(Status.AVAILABLE);
+        }
+        if (current.equals(Status.AVAILABLE)) {
+            return target.equals(Status.LOCKED)
+                    || target.equals(Status.FROZEN)
+                    || target.equals(Status.PENDING);
+        }
+        if (current.equals(Status.LOCKED)) {
+            return target.equals(Status.AVAILABLE) || target.equals(Status.FROZEN);
+        }
+        if (current.equals(Status.FROZEN)) {
+            return target.equals(Status.AVAILABLE) || target.equals(Status.LOCKED);
+        }
+        return false;
+    }
+
     private ResponseEntity<?> lifecycle(String studyOid,
                                         HttpSession session,
                                         Status targetStatus,
