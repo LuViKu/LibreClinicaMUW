@@ -398,4 +398,38 @@ class UsersApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(jsonPath("$.message")
                         .value(containsString("sysadmin only")));
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* POST /api/v1/users/{username}/resetPassword                            */
+    /*   (Phase E A7.4 — admin password reset)                                */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void resetPasswordReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/resetPassword")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void resetPasswordReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/resetPassword")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void resetPasswordReturns403WhenNonSysadminAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/resetPassword")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin only")));
+    }
 }

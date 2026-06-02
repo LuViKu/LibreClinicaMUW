@@ -266,6 +266,49 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  /**
+   * Phase E A7.4 — admin password reset via
+   * `POST /api/v1/users/{username}/resetPassword`.
+   *
+   * Returns `{generatedPassword}` so the caller can surface the
+   * one-time password. For SSO + LDAP users the backend rejects
+   * with 400 ("authenticated via the identity provider / directory")
+   * and that message flows back through the resolved-but-failed
+   * branch — the SPA should only invoke this for `auth: 'local'`
+   * users, so a 400 here represents a logic bug.
+   */
+  async function resetPassword(
+    username: string,
+  ): Promise<{ ok: true; generatedPassword: string | null } | { ok: false; message?: string }> {
+    try {
+      const res = await apiPost<{ generatedPassword: string | null }>(
+        `/pages/api/v1/users/${encodeURIComponent(username)}/resetPassword`,
+        { sendEmail: false },
+      )
+      return { ok: true, generatedPassword: res.generatedPassword }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Passwort-Reset nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        const msg = 'Backend nicht erreichbar — Passwort-Reset fehlgeschlagen. Bitte später erneut versuchen.'
+        error.value = msg
+        return { ok: false, message: msg }
+      }
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        const msg = body?.message ?? `Passwort-Reset fehlgeschlagen (HTTP ${e.status}).`
+        error.value = msg
+        return { ok: false, message: msg }
+      }
+      const msg = e instanceof Error ? e.message : 'Unbekannter Fehler beim Passwort-Reset.'
+      error.value = msg
+      return { ok: false, message: msg }
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -284,5 +327,6 @@ export const useUsersStore = defineStore('users', () => {
     updateUser,
     disableUser,
     restoreUser,
+    resetPassword,
   }
 })
