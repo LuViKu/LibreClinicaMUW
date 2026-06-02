@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * Phase E.4 M1 — current-user DTO.
  *
@@ -33,6 +35,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
  * {@code string | null} so a freshly-provisioned user with no
  * persisted locale still serialises cleanly.
  */
+@Schema(name = "MeDto")
 public record MeDto(
         String username,
         String displayName,
@@ -48,5 +51,6 @@ public record MeDto(
 ) {
 
     /** Minimal study summary embedded into MeDto. */
+    @Schema(name = "ActiveStudyDto")
     public record ActiveStudyDto(String oid, String name, boolean isSite) {}
 }

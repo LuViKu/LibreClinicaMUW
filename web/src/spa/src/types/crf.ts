@@ -8,12 +8,21 @@
  * the Pinia store hydrates from mock data with the production shape
  * until the adapter lands during E.5.3's backend pass.
  *
+ * Phase E.5 follow-up (2026-06-02, TODO #7): wire types derived
+ * from the openapi-typescript-generated {@code components.schemas}
+ * so the SPA's call sites stay aligned with the backend record shape.
+ * Narrow literal-union enums ({@link ItemDataType},
+ * {@link CrfEntryStatus}) stay hand-typed and are intersected in to
+ * keep the SPA's pattern-matching call sites happy.
+ *
  * Out of scope for the v0 (deferred to follow-up PRs):
  *  - Repetition groups (`ItemGroup.repeating === true`)
  *  - Rule-driven `showWhen` / `requiredWhen` predicates
  *  - Inline discrepancy threads per item
  *  - Multi-stage workflow gates (mark-complete, sign, etc.)
  */
+
+import type { components } from './api'
 
 export type ItemDataType =
   | 'string'
@@ -25,43 +34,32 @@ export type ItemDataType =
   | 'select-multi'
   | 'boolean'
 
-export interface ResponseOption {
-  code: string
-  label: string
-}
+export type ResponseOption = Required<components['schemas']['ResponseOptionDto']>
 
-export interface CrfItem {
-  /** OID of the ItemDef. */
-  oid: string
-  /** Human label shown next to the input. */
-  label: string
-  dataType: ItemDataType
-  required: boolean
-  /** Set when the type is `select-one` / `select-multi`. */
-  options?: ResponseOption[]
-  /** Optional helper text under the input. */
-  helper?: string
-  /** Inclusive numeric range when applicable. */
-  min?: number
-  max?: number
-}
+export type CrfItem =
+  Omit<Required<components['schemas']['CrfItemDto']>, 'dataType' | 'options' | 'helper' | 'min' | 'max'>
+  & {
+    dataType: ItemDataType
+    /** Set when the type is `select-one` / `select-multi`. */
+    options?: ResponseOption[]
+    /** Optional helper text under the input. */
+    helper?: string
+    /** Inclusive numeric range when applicable. */
+    min?: number
+    max?: number
+  }
 
-export interface CrfSection {
-  oid: string
-  title: string
-  /** Section instructions shown above the items. */
-  instructions?: string
-  items: CrfItem[]
-}
+export type CrfSection =
+  Omit<Required<components['schemas']['CrfSectionDto']>, 'instructions' | 'items'>
+  & {
+    /** Section instructions shown above the items. */
+    instructions?: string
+    items: CrfItem[]
+  }
 
-export interface CrfSchema {
-  /** OID of the CRFVersion. */
-  oid: string
-  name: string
-  /** Friendly version tag, e.g. "v2.1". */
-  version: string
-  sections: CrfSection[]
-}
+export type CrfSchema =
+  Omit<Required<components['schemas']['CrfSchemaDto']>, 'sections'>
+  & { sections: CrfSection[] }
 
 /**
  * Raw values keyed by item oid. The view binds form inputs to these
@@ -76,15 +74,12 @@ export type CrfEntryStatus =
   | 'complete'
   | 'locked'
 
-/** Snapshot returned by the backend adapter (planned). */
-export interface CrfEntry {
-  /** OID of the EventCRF row in the DB. */
-  eventCrfOid: string
-  subjectId: string
-  eventLabel: string
-  schema: CrfSchema
-  values: CrfValues
-  status: CrfEntryStatus
-  /** ISO-8601 instant of the last successful save. */
-  lastSavedAt: string | null
-}
+export type CrfEntry =
+  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt'>
+  & {
+    schema: CrfSchema
+    values: CrfValues
+    status: CrfEntryStatus
+    /** ISO-8601 instant of the last successful save. */
+    lastSavedAt: string | null
+  }

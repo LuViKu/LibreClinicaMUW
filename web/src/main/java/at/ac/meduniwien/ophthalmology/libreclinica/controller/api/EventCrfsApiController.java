@@ -64,6 +64,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -135,6 +138,8 @@ public class EventCrfsApiController {
     }
 
     @GetMapping("/{id:[0-9]+}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = CrfEntryDto.class)))
     public ResponseEntity<?> getEventCrf(@PathVariable("id") int eventCrfId, HttpSession session) {
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         if (currentUser == null || currentUser.getId() == 0) {

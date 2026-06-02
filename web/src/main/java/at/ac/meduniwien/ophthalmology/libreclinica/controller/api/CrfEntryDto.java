@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +31,7 @@ import java.util.Map;
  * @param status       CRF entry workflow status
  * @param lastSavedAt  ISO-8601 of last successful save, or null
  */
+@Schema(name = "CrfEntryDto")
 public record CrfEntryDto(
         String eventCrfOid,
         String subjectId,
@@ -41,6 +43,7 @@ public record CrfEntryDto(
 ) {
 
     /** Schema of a single CRF version (1:1 with the SPA's {@code CrfSchema}). */
+    @Schema(name = "CrfSchemaDto")
     public record CrfSchemaDto(
             String oid,
             String name,
@@ -49,6 +52,7 @@ public record CrfEntryDto(
     ) {}
 
     /** Section header + items list (1:1 with the SPA's {@code CrfSection}). */
+    @Schema(name = "CrfSectionDto")
     public record CrfSectionDto(
             String oid,
             String title,
@@ -67,6 +71,7 @@ public record CrfEntryDto(
      * as {@code null} or omits them per the SPA contract (the SPA
      * tolerates both).
      */
+    @Schema(name = "CrfItemDto")
     public record CrfItemDto(
             String oid,
             String label,
@@ -79,6 +84,7 @@ public record CrfEntryDto(
     ) {}
 
     /** Single allowed option for {@code select-one} / {@code select-multi}. */
+    @Schema(name = "ResponseOptionDto")
     public record ResponseOptionDto(
             String code,
             String label

@@ -46,6 +46,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -155,6 +158,8 @@ public class AuditApiController {
     }
 
     @GetMapping
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array", implementation = AuditEventDto.class)))
     public ResponseEntity<?> list(
             @RequestParam(value = "actor", required = false) String actorFilter,
             @RequestParam(value = "variant", required = false) String variantFilter,
