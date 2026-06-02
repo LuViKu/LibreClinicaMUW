@@ -71,6 +71,78 @@ export type SetScheduleResult =
   | { ok: false; message: string }
 
 /**
+ * Phase E RX.5b — wire-shape result for the inline rule-create
+ * endpoint ({@code POST /api/v1/rules}).
+ *
+ * The success branch returns the freshly persisted rule's id + the
+ * canonical-cased fields the backend chose; the wizard threads
+ * {@code oid} into the next step so the operator doesn't have to
+ * retype it.
+ *
+ * The failure branch collapses 400 / 403 / network into a single
+ * shape — the wizard renders inline per-field messages from
+ * {@code fieldErrors} and a global {@code message} for envelope-level
+ * problems. Empty {@code fieldErrors} with a {@code message} is the
+ * shape for "request couldn't even be parsed" / "permission denied".
+ */
+export interface CreatedRule {
+  id: number
+  oid: string
+  name: string
+  description: string
+  expression: string
+}
+export type CreateRuleResult =
+  | { ok: true; rule: CreatedRule }
+  | { ok: false; fieldErrors: Record<string, string>; message?: string }
+
+/**
+ * Phase E RX.5b — wire-shape result for inline rule_set create.
+ * Success carries the freshly persisted {@link RuleSet} DTO with the
+ * cascade-persisted {@code rule_set_rule} ids; the wizard threads the
+ * first attached row's id into step 3.
+ */
+export type CreateRuleSetResult =
+  | { ok: true; ruleSet: RuleSet }
+  | { ok: false; fieldErrors: Record<string, string>; message?: string }
+
+/** Phase E RX.5b — wire-shape result for inline action create. */
+export type CreateActionResult =
+  | { ok: true }
+  | { ok: false; fieldErrors: Record<string, string>; message?: string }
+
+/** Phase E RX.5b — wire-shape result for the live target-validation probe. */
+export interface ValidateTargetResult {
+  valid: boolean
+  errors: Array<{ message: string }>
+}
+
+/**
+ * Phase E RX.5b — request payload for {@code POST /api/v1/rule-sets/{id}/actions}.
+ *
+ * The wizard binds the four supported action types
+ * ({@code FILE_DISCREPANCY_NOTE} / {@code EMAIL} / {@code SHOW} /
+ * {@code HIDE}); the {@code properties} array is only meaningful for
+ * SHOW / HIDE and is skipped for the others (the backend rejects
+ * properties on Email / Discrepancy actions).
+ */
+export interface CreateActionInput {
+  ruleSetRuleId: number
+  actionType: string
+  expressionEvaluatesTo?: boolean
+  message?: string
+  to?: string
+  properties?: Array<{ oid: string; value?: string; valueExpression?: string }>
+  phaseGates: {
+    administrativeDataEntry?: boolean
+    initialDataEntry?: boolean
+    doubleDataEntry?: boolean
+    importDataEntry?: boolean
+    batch?: boolean
+  }
+}
+
+/**
  * Phase E RX.1 — rules store (read-only).
  *
  * Hydrates from `GET /api/v1/rule-sets`. The store keeps the full
@@ -442,6 +514,140 @@ export const useRulesStore = defineStore('rules', () => {
     }
   }
 
+  /* ---------------------------------------------------------------- */
+  /* Phase E RX.5b — inline create (wizard)                             */
+  /*                                                                    */
+  /* Four discriminated-union actions backing the 3-step wizard. Each   */
+  /* collapses 400 / 403 / network errors into the failure branch with  */
+  /* per-field messages where the backend supplies them, mirroring the  */
+  /* RX.7 {@code setSchedule} shape. Auth errors (401) propagate via    */
+  /* throw so the router guard can route to login.                      */
+  /* ---------------------------------------------------------------- */
+
+  /**
+   * Convert an {@link ApiError} body's `errors: [{field, message}]`
+   * envelope into a flat {field → message} map. Per-field messages
+   * are preserved as-is. Same shape the RX.5 backend uses for every
+   * validation error.
+   */
+  function extractFieldErrors(e: unknown): { fieldErrors: Record<string, string>; message?: string } {
+    if (e instanceof ApiError) {
+      if (e.isUnauthorized) throw e
+      const body = e.body as
+        | { message?: string; errors?: Array<{ field?: string; message?: string }> }
+        | null
+      const fieldErrors: Record<string, string> = {}
+      if (body?.errors) {
+        for (const fe of body.errors) {
+          const field = fe?.field
+          const message = fe?.message
+          if (field && message) fieldErrors[field] = message
+        }
+      }
+      return { fieldErrors, message: body?.message ?? `HTTP ${e.status}` }
+    }
+    if (e instanceof ApiNetworkError) {
+      return { fieldErrors: {}, message: 'Backend nicht erreichbar — Speichern fehlgeschlagen.' }
+    }
+    return {
+      fieldErrors: {},
+      message: e instanceof Error ? e.message : 'Unbekannter Fehler.',
+    }
+  }
+
+  async function createRule(input: {
+    oid: string
+    name: string
+    description?: string
+    expression: string
+  }): Promise<CreateRuleResult> {
+    try {
+      const body = await apiPost<CreatedRule>('/pages/api/v1/rules', {
+        oid: input.oid,
+        name: input.name,
+        description: input.description ?? '',
+        expression: input.expression,
+      })
+      return { ok: true, rule: body }
+    } catch (e) {
+      return { ok: false, ...extractFieldErrors(e) }
+    }
+  }
+
+  async function createRuleSet(input: {
+    target: string
+    studyEventDefinitionOid?: string
+    crfOid?: string
+    crfVersionOid?: string
+    ruleOids: string[]
+  }): Promise<CreateRuleSetResult> {
+    // Backend treats absent vs. blank optional scope fields the same
+    // (both resolve to "scope-wide"), so strip blanks here to keep the
+    // wire payload tidy and the future audit log readable.
+    const payload: Record<string, unknown> = {
+      target: input.target,
+      ruleOids: input.ruleOids,
+    }
+    if (input.studyEventDefinitionOid && input.studyEventDefinitionOid.trim().length > 0) {
+      payload.studyEventDefinitionOid = input.studyEventDefinitionOid.trim()
+    }
+    if (input.crfOid && input.crfOid.trim().length > 0) {
+      payload.crfOid = input.crfOid.trim()
+    }
+    if (input.crfVersionOid && input.crfVersionOid.trim().length > 0) {
+      payload.crfVersionOid = input.crfVersionOid.trim()
+    }
+    try {
+      const body = await apiPost<RuleSet>('/pages/api/v1/rule-sets', payload)
+      // Eagerly append so the list refresh isn't required to surface
+      // the new row to the operator. The post-wizard `rules.load()`
+      // still runs to keep state honest if anything raced.
+      rows.value = [...rows.value, body]
+      return { ok: true, ruleSet: body }
+    } catch (e) {
+      return { ok: false, ...extractFieldErrors(e) }
+    }
+  }
+
+  async function createAction(
+    ruleSetId: number,
+    input: CreateActionInput,
+  ): Promise<CreateActionResult> {
+    try {
+      await apiPost<unknown>(`/pages/api/v1/rule-sets/${ruleSetId}/actions`, input)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, ...extractFieldErrors(e) }
+    }
+  }
+
+  /**
+   * Probe {@code POST /api/v1/rules/validate-target}. The endpoint
+   * always returns 200; the validity verdict lives in the response
+   * body. Network / auth failures collapse into an invalid result
+   * with a single synthesized error so the wizard's inline status
+   * has a single render branch.
+   */
+  async function validateTarget(target: string): Promise<ValidateTargetResult> {
+    try {
+      const body = await apiPost<ValidateTargetResult>(
+        '/pages/api/v1/rules/validate-target',
+        { target },
+      )
+      return body
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) throw e
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        return { valid: false, errors: [{ message: body?.message ?? `HTTP ${e.status}` }] }
+      }
+      if (e instanceof ApiNetworkError) {
+        return { valid: false, errors: [{ message: 'Backend nicht erreichbar.' }] }
+      }
+      return { valid: false, errors: [{ message: e instanceof Error ? e.message : 'Unbekannter Fehler.' }] }
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -465,5 +671,9 @@ export const useRulesStore = defineStore('rules', () => {
     setSchedule,
     uploadRulesXml,
     commitImport,
+    createRule,
+    createRuleSet,
+    createAction,
+    validateTarget,
   }
 })

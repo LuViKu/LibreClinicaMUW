@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import RulesImportDialog from '@/components/RulesImportDialog.vue'
+import RuleAuthoringWizard from '@/components/RuleAuthoringWizard.vue'
 
 import { useAuthStore } from '@/stores/auth'
 import { useRulesStore, type TestExpressionResult } from '@/stores/rules'
@@ -286,6 +287,23 @@ function onImportCommitted() {
 }
 
 /* -------------------------------------------------------------- */
+/* RX.5b — Rule authoring wizard                                    */
+/* -------------------------------------------------------------- */
+
+/**
+ * RX.5b — 3-step inline authoring (rule body, target+scope, action).
+ * The wizard's `createRuleSet` action appends to `rules.rows` as
+ * soon as step 2 lands, so the new row is visible without waiting
+ * for the post-wizard reload. The reload below reconciles the
+ * cascade-persisted action ids on top of that.
+ */
+const createWizardOpen = ref(false)
+function openCreateWizard() { createWizardOpen.value = true }
+function onCreateWizardDone() {
+  rules.load()
+}
+
+/* -------------------------------------------------------------- */
 /* RX.7 — Schedule edit                                             */
 /* -------------------------------------------------------------- */
 
@@ -368,20 +386,35 @@ watch(selectedId, () => {
           <h1 class="text-xl font-semibold tracking-tight">{{ t('rules.title') }}</h1>
           <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">{{ t('rules.intro') }}</p>
         </div>
-        <!--
-          RX.2 — "Import rules" button. Gated to Administrator + Data
-          Manager via the same canManage gate as the disable/restore
-          actions. Backend re-checks via StudyAdminAuthorization, so
-          the SPA gate is a UI hint.
-        -->
-        <button
-          v-if="canManage"
-          type="button"
-          class="shrink-0 px-3 py-1.5 text-xs font-medium border border-muw-blue text-muw-blue bg-white rounded-md hover:bg-muw-blue-50"
-          @click="openImportDialog"
-        >
-          {{ t('rules.import.button') }}
-        </button>
+        <div v-if="canManage" class="shrink-0 flex items-center gap-2">
+          <!--
+            RX.5b — "New rule" entry point for the 3-step authoring
+            wizard. Same Administrator + Data Manager gate as the
+            other lifecycle buttons; backend re-checks via
+            StudyAdminAuthorization on each step's endpoint, so the
+            SPA gate is a UI hint.
+          -->
+          <button
+            type="button"
+            class="px-3 py-1.5 text-xs font-medium bg-muw-blue text-white rounded-md hover:opacity-90"
+            @click="openCreateWizard"
+          >
+            {{ t('rules.create.button.new') }}
+          </button>
+          <!--
+            RX.2 — "Import rules" button. Gated to Administrator + Data
+            Manager via the same canManage gate as the disable/restore
+            actions. Backend re-checks via StudyAdminAuthorization, so
+            the SPA gate is a UI hint.
+          -->
+          <button
+            type="button"
+            class="px-3 py-1.5 text-xs font-medium border border-muw-blue text-muw-blue bg-white rounded-md hover:bg-muw-blue-50"
+            @click="openImportDialog"
+          >
+            {{ t('rules.import.button') }}
+          </button>
+        </div>
       </div>
 
       <p v-if="rules.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
@@ -735,6 +768,11 @@ watch(selectedId, () => {
     <RulesImportDialog
       v-model:open="importDialogOpen"
       @committed="onImportCommitted"
+    />
+
+    <RuleAuthoringWizard
+      v-model:open="createWizardOpen"
+      @done="onCreateWizardDone"
     />
   </div>
 </template>

@@ -475,6 +475,62 @@
         "timeRequired": "Time is required when scheduling is on."
       }
     },
+    "create": {
+      "heading": "Author a new rule",
+      "actionTypeNote": "Inline create supports Discrepancy / Email / Show / Hide only. Use XML import for other action types.",
+      "step": {
+        "1": "Step 1 · Rule definition",
+        "2": "Step 2 · Target + scope",
+        "3": "Step 3 · Action",
+        "done": "Done"
+      },
+      "field": {
+        "oid": "Rule OID",
+        "oidHint": "Uppercase letters, digits, underscores. Must start with a letter. e.g. RUL_BP_HIGH",
+        "name": "Display name",
+        "description": "Description",
+        "expression": "Expression body",
+        "expressionHint": "e.g. ITEM_BP gt 140",
+        "target": "Target OID path",
+        "targetHint": "OID path the rule attaches to, e.g. ITEM_BP.GROUP1.CRF1.SED1",
+        "sedOid": "Event definition OID (optional)",
+        "crfOid": "CRF OID (optional)",
+        "crfVersionOid": "CRF version OID (optional)",
+        "rulesToAttach": "Rules to attach",
+        "actionType": "Action type",
+        "message": "Message",
+        "to": "To (email)",
+        "phaseGates": "Active in phases",
+        "expressionEvaluatesTo": "Fires when expression is TRUE"
+      },
+      "button": {
+        "new": "New rule",
+        "next": "Next",
+        "back": "Back",
+        "cancel": "Cancel",
+        "testExpression": "Test syntax",
+        "saveRule": "Save rule",
+        "saveRuleSet": "Save rule set",
+        "saveAction": "Save action",
+        "done": "Done"
+      },
+      "validation": {
+        "checking": "Checking…",
+        "valid": "Valid",
+        "invalid": "Invalid"
+      },
+      "result": {
+        "heading": "Rule authored",
+        "summary": "Created 1 rule, 1 rule set, and 1 action."
+      },
+      "phase": {
+        "admin": "Admin editing",
+        "initial": "Initial entry",
+        "double": "Double entry",
+        "import": "Import",
+        "batch": "Batch"
+      }
+    },
     "import": {
       "button": "Import rules",
       "downloadTemplate": "Download annotated template",
