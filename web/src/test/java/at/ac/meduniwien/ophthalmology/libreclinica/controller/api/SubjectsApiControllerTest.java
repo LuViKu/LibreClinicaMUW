@@ -407,4 +407,55 @@ class SubjectsApiControllerTest extends AbstractApiControllerTest {
         org.junit.jupiter.api.Assertions.assertFalse(
                 SubjectEditAuthorization.roleMayEdit(0));
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* POST /api/v1/subjects/{oid}/lock + /unlock (Phase E A3-lock)           */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void lockReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/lock")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void lockReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/lock")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void lockReturns403WhenInvestigatorAttempts() throws Exception {
+        // Lock reuses the lifecycle role gate — DM / Admin only.
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/lock")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit lock")));
+    }
+
+    @Test
+    void unlockReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/unlock")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void unlockReturns403WhenMonitorAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/subjects/M-001/unlock")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(3, "monitor", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.MONITOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit unlock")));
+    }
 }

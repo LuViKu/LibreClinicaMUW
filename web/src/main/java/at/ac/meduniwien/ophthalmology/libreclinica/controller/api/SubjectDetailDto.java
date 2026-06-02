@@ -61,6 +61,12 @@ public record SubjectDetailDto(
         String enrolledOn,
         List<EventCellDetailDto> events,
         boolean signed,
+        /**
+         * Phase E A3-lock — true when the study_subject's status is
+         * {@code LOCKED}. The SPA renders a "frozen" badge + hides
+         * edit / data-entry actions in that case.
+         */
+        boolean locked,
         int openQueries
 ) {
 

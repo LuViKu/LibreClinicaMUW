@@ -478,6 +478,52 @@ export const useSubjectsStore = defineStore('subjects', () => {
     }
   }
 
+  /**
+   * Phase E A3-lock — freeze a subject (status AVAILABLE → LOCKED).
+   * The subject row stays in the matrix; downstream edit /
+   * data-entry actions surface a "locked" warning. After success
+   * `selected` is refreshed so the locked badge appears immediately.
+   * DM / Admin only.
+   */
+  async function lockSubject(subjectId: string): Promise<boolean> {
+    return _lifecycleAction(subjectId, 'lock')
+  }
+
+  /** Phase E A3-lock — inverse of {@link lockSubject}. */
+  async function unlockSubject(subjectId: string): Promise<boolean> {
+    return _lifecycleAction(subjectId, 'unlock')
+  }
+
+  async function _lifecycleAction(subjectId: string, op: 'lock' | 'unlock'): Promise<boolean> {
+    try {
+      const detail = await apiPost<SubjectDetail>(
+        `/pages/api/v1/subjects/${encodeURIComponent(subjectId)}/${op}`,
+        {},
+      )
+      if (selected.value && selected.value.id === subjectId) {
+        selected.value = detail
+      }
+      return true
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `${op} nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          `Backend nicht erreichbar — ${op} fehlgeschlagen. Bitte später erneut versuchen.`
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `${op} fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value =
+          e instanceof Error ? e.message : `Unbekannter Fehler beim ${op}.`
+      }
+      return false
+    }
+  }
+
   return {
     // state
     rows,
@@ -505,6 +551,8 @@ export const useSubjectsStore = defineStore('subjects', () => {
     signSubject,
     removeSubject,
     updateSubject,
+    lockSubject,
+    unlockSubject,
   }
 })
 

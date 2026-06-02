@@ -693,6 +693,7 @@ public class SubjectsApiController {
                 body.enrolledOn(),
                 Collections.emptyList(),
                 /* signed */ false,
+                /* locked */ false,
                 /* openQueries */ 0
         );
 
@@ -1213,18 +1214,72 @@ public class SubjectsApiController {
     }
 
     /**
-     * Shared body for remove + restore. The transitions are
-     * structurally identical — flip the parent status, cascade the
-     * child rows — only the status pair differs. Encapsulating both
-     * here keeps the per-endpoint methods one-liners and ensures the
-     * cascade rules stay in lock-step.
+     * Phase E A3 (lock half) — freeze a study subject so that
+     * downstream edit / data-entry endpoints refuse with 409 until
+     * unlocked. The subject's row stays AVAILABLE in the matrix
+     * (so the SPA still renders it normally); the LOCKED marker is
+     * enforced as a per-endpoint precondition.
+     *
+     * <p>Distinct from {@link #remove}:
+     * <ul>
+     *   <li>Lock is a temporary halt; remove is a soft-delete.</li>
+     *   <li>Lock leaves child rows untouched (status=AVAILABLE);
+     *       remove cascades to AUTO_DELETED.</li>
+     *   <li>Lock is reversible via {@link #unlock}; remove is reversible
+     *       via {@link #restore}.</li>
+     * </ul>
+     *
+     * <p><strong>Downstream enforcement deferred:</strong> the SPA's
+     * other write endpoints (subject-edit, event-edit/cancel, CRF
+     * save, query-thread, SDV verify) don't yet check
+     * {@code ss.getStatus() == LOCKED}. The lock marker is recorded
+     * here so the audit trail captures intent; a follow-up slice
+     * adds the {@code refuse-if-locked} guard to each. The SPA
+     * surfaces a locked badge so the UI nudges users away from
+     * locked subjects in the meantime.
+     *
+     * <p>Role: DM / Admin only (same as remove).
+     */
+    @PostMapping("/{studySubjectOid}/lock")
+    public ResponseEntity<?> lock(@PathVariable("studySubjectOid") String studySubjectOid,
+                                  HttpSession session) {
+        return transitionLifecycle(studySubjectOid, session,
+                /* expectedCurrentStatus */ Status.AVAILABLE,
+                /* newSubjectStatus */ Status.LOCKED,
+                /* cascadeChildStatus */ null,
+                /* opName */ "lock",
+                /* alreadyMessage */ "Subject is not currently available — must be AVAILABLE to lock");
+    }
+
+    /**
+     * Phase E A3 (lock half) — inverse of {@link #lock}.
+     * Subject's status flips back to {@link Status#AVAILABLE}.
+     */
+    @PostMapping("/{studySubjectOid}/unlock")
+    public ResponseEntity<?> unlock(@PathVariable("studySubjectOid") String studySubjectOid,
+                                    HttpSession session) {
+        return transitionLifecycle(studySubjectOid, session,
+                /* expectedCurrentStatus */ Status.LOCKED,
+                /* newSubjectStatus */ Status.AVAILABLE,
+                /* cascadeChildStatus */ null,
+                /* opName */ "unlock",
+                /* alreadyMessage */ "Subject is not currently locked");
+    }
+
+    /**
+     * Shared body for remove / restore / lock / unlock. The
+     * transitions are structurally identical — flip the parent
+     * status, optionally cascade the child rows — only the status
+     * pair differs.
      *
      * @param expectedCurrentStatus parent's status must equal this
      *        before the transition; otherwise 409.
      * @param newSubjectStatus new {@link StudySubjectBean#getStatus()}.
-     * @param cascadeChildStatus new status for cascaded child rows.
-     *        {@link Status#AUTO_DELETED} for the remove cascade;
-     *        {@link Status#AVAILABLE} for restore.
+     * @param cascadeChildStatus new status for cascaded child rows,
+     *        or {@code null} to skip the cascade entirely. Remove
+     *        uses {@link Status#AUTO_DELETED}; restore uses
+     *        {@link Status#AVAILABLE}; lock / unlock pass {@code null}
+     *        (status is a parent-only marker).
      */
     private ResponseEntity<?> transitionLifecycle(String studySubjectOid,
                                                   HttpSession session,
@@ -1292,12 +1347,15 @@ public class SubjectsApiController {
         ss.setUpdatedDate(new java.util.Date());
         studySubjectDAO.update(ss);
 
-        cascadeChildren(ss, currentUser, cascadeChildStatus);
+        if (cascadeChildStatus != null) {
+            cascadeChildren(ss, currentUser, cascadeChildStatus);
+        }
 
         LOG.info("Subject lifecycle {}: study_subject {} (label={}) by user={} role={}; "
                         + "parent.status={} cascade.status={}",
                 opName, ss.getId(), ss.getLabel(), currentUser.getName(), roleId,
-                newSubjectStatus.getName(), cascadeChildStatus.getName());
+                newSubjectStatus.getName(),
+                cascadeChildStatus == null ? "none" : cascadeChildStatus.getName());
 
         // Refresh + project. The detail DTO drives the SPA's
         // SubjectDetailView; even after a remove the view stays open
@@ -1691,6 +1749,7 @@ public class SubjectsApiController {
         }));
 
         boolean signed = ss.getStatus() != null && ss.getStatus().equals(Status.SIGNED);
+        boolean locked = ss.getStatus() != null && ss.getStatus().equals(Status.LOCKED);
 
         return new SubjectDetailDto(
                 ss.getLabel(),
@@ -1705,6 +1764,7 @@ public class SubjectsApiController {
                 enrolledOn,
                 eventCells,
                 signed,
+                locked,
                 subjectOpenQueries
         );
     }
