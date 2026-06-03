@@ -901,7 +901,7 @@
         "ssoHelp": "The user signs in through the institutional identity provider. No password is generated."
       },
       "externalId": "Institutional principal (eppn)",
-      "externalIdPlaceholder": "user@meduniwien.ac.at",
+      "externalIdPlaceholder": "user{'@'}meduniwien.ac.at",
       "externalIdHelp": "Case-sensitive. Must match the principal the IdP sends in the eduPersonPrincipalName header."
     },
     "edit": {

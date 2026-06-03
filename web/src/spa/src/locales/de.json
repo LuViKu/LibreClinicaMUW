@@ -901,7 +901,7 @@
         "ssoHelp": "Die Anmeldung erfolgt über den institutionellen Identitätsanbieter. Es wird kein Passwort erzeugt."
       },
       "externalId": "Institutioneller Principal (eppn)",
-      "externalIdPlaceholder": "user@meduniwien.ac.at",
+      "externalIdPlaceholder": "user{'@'}meduniwien.ac.at",
       "externalIdHelp": "Groß-/Kleinschreibung beachten. Muss exakt mit dem Principal übereinstimmen, den der IdP im Header eduPersonPrincipalName liefert."
     },
     "edit": {
