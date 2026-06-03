@@ -16,6 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuthoritiesDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
@@ -40,10 +41,15 @@ import org.springframework.test.web.servlet.MockMvc;
 class UsersApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {
+        // Phase E.6: SsoProperties default ctor wires up the
+        // shibboleth-meduniwien provider name — sufficient for the
+        // shape tests below, which only need a non-null provider when
+        // the SSO branch is exercised.
         return mockMvcFor(new UsersApiController(mockDataSource(),
                 Mockito.mock(SiteVisibilityFilter.class),
                 Mockito.mock(SecurityManager.class),
-                Mockito.mock(AuthoritiesDao.class)));
+                Mockito.mock(AuthoritiesDao.class),
+                new SsoProperties()));
     }
 
     @Test
@@ -181,6 +187,66 @@ class UsersApiControllerTest extends AbstractApiControllerTest {
                         authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[?(@.field == 'userSource')]").exists());
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* SSO-bound invite (Phase E.6 — DR-014 follow-up)                        */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void createReturns400OnExternalIdMissingAtSign() throws Exception {
+        // eppn shape rule: must contain '@'. A bare username here would
+        // never match a SAML assertion, so we refuse server-side before
+        // a row is written.
+        mockMvcWith().perform(post("/api/v1/users")
+                .contentType("application/json")
+                .content("{\"username\":\"newuser\",\"firstName\":\"A\",\"lastName\":\"B\","
+                        + "\"email\":\"a@b.co\",\"institutionalAffiliation\":\"Inst\","
+                        + "\"studyId\":1,\"role\":\"Investigator\","
+                        + "\"externalId\":\"justausername\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'externalId')]").exists());
+    }
+
+    @Test
+    void createReturns400OnExternalIdTooLong() throws Exception {
+        // 256 chars — one over the schema column limit (varchar(255)).
+        String tooLong = "a".repeat(250) + "@x.io"; // 255 chars total of valid eppn... add one more
+        tooLong = "x" + tooLong; // 256 chars
+        mockMvcWith().perform(post("/api/v1/users")
+                .contentType("application/json")
+                .content("{\"username\":\"newuser\",\"firstName\":\"A\",\"lastName\":\"B\","
+                        + "\"email\":\"a@b.co\",\"institutionalAffiliation\":\"Inst\","
+                        + "\"studyId\":1,\"role\":\"Investigator\","
+                        + "\"externalId\":\"" + tooLong + "\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'externalId')]").exists());
+    }
+
+    @Test
+    void createBlankExternalIdIsAcceptedAsLocal() throws Exception {
+        // Whitespace-only externalId should NOT trip the externalId
+        // shape rule — it's treated as "operator left the field
+        // empty" → local account path. We don't have the DAO mock to
+        // assert the happy path completes, but we DO want to assert
+        // there's no externalId error in the validation bag — instead
+        // the request fails downstream at DAO time (which here surfaces
+        // as some other error, not externalId). The cheapest assertion
+        // is: validation pass for the externalId field specifically.
+        mockMvcWith().perform(post("/api/v1/users")
+                .contentType("application/json")
+                .content("{\"username\":\"newuser\",\"firstName\":\"A\",\"lastName\":\"B\","
+                        + "\"email\":\"a@b.co\",\"institutionalAffiliation\":\"Inst\","
+                        + "\"studyId\":1,\"role\":\"Investigator\","
+                        + "\"externalId\":\"   \"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                // Whatever status comes back, no externalId-shape error.
+                .andExpect(jsonPath("$.errors[?(@.field == 'externalId')]").doesNotExist());
     }
 
     /* ---------------------------------------------------------------------- */
