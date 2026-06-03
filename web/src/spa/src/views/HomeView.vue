@@ -46,14 +46,27 @@ const rules = useRulesStore()
  * Investigator landing in v1 — it's a thin variant of Investigator and
  * a dedicated landing is a separate slice after operator feedback.
  *
- * Administrator is a superset of Data Manager; the template renders
- * the DM cards under the Admin section too.
+ * Phase E.6 (2026-06-03): Administrator is no longer a Data Manager
+ * superset. Per operator feedback the Admin landing surfaces only
+ * platform-administration paths (Manage Users, Study identity,
+ * Sites, Audit log). Users needing data-management workflows sign
+ * in under a Data Manager binding.
  */
 const role = computed(() => auth.user?.role ?? null)
 const showInvestigator = computed(() => role.value === 'Investigator' || role.value === 'CRC')
 const showMonitor = computed(() => role.value === 'Monitor')
-const showDataManager = computed(() => role.value === 'Data Manager' || role.value === 'Administrator')
+const showDataManager = computed(() => role.value === 'Data Manager')
 const showAdministrator = computed(() => role.value === 'Administrator')
+
+/**
+ * Phase E.6 — surface a "Switch active study" card once the user has
+ * access to more than one study. Lazy-loads availableStudies via the
+ * existing /me/studies endpoint; failure modes (offline, single-study
+ * user) collapse to hiding the card.
+ */
+const canSwitchStudy = computed(
+  () => (auth.availableStudies?.length ?? 0) > 1,
+)
 
 /* ---------- count derivations from already-loaded store state ---------- */
 //
@@ -99,11 +112,13 @@ onMounted(() => {
   if (showMonitor.value || showDataManager.value) {
     inflight.push(sdv.load())
     inflight.push(notes.load())
-  }
-  if (showDataManager.value || showAdministrator.value) {
-    inflight.push(users.load())
     inflight.push(rules.load())
   }
+  if (showAdministrator.value || showDataManager.value) {
+    inflight.push(users.load())
+  }
+  // Always populate availableStudies for the multi-study switch card.
+  inflight.push(auth.loadStudies())
   // Promise.allSettled never rejects — fire and forget.
   void Promise.allSettled(inflight)
 })
@@ -185,7 +200,7 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
       />
     </section>
 
-    <!-- Data Manager landing (also visible to Administrator) -->
+    <!-- Data Manager landing — strict role (Administrator no longer inherits). -->
     <section v-if="showDataManager" :aria-label="t('home.dataManager.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
       <LandingCard
         :to="{ name: 'build-study' }"
@@ -235,8 +250,17 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
       />
     </section>
 
-    <!-- Administrator-only landing (study/site/event-definition admin). -->
+    <!-- Administrator-only landing (platform admin: users, study identity, sites, audit log). -->
     <section v-if="showAdministrator" :aria-label="t('home.administrator.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
+      <LandingCard
+        :to="{ name: 'manage-users' }"
+        role-variant="administrator"
+        :role-label="t('home.role.Administrator')"
+        :title="t('manageUsers.title')"
+        :description="t('home.administrator.manageUsersDesc')"
+        :badge="pendingInvitesCount"
+        :badge-aria-label="t('home.administrator.pendingInvitesBadgeAria', { n: pendingInvitesCount ?? 0 })"
+      />
       <LandingCard
         v-if="activeStudyOid"
         :to="{ name: 'study-edit', params: { oid: activeStudyOid } }"
@@ -246,6 +270,13 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
         :description="t('home.administrator.editStudyDesc')"
       />
       <LandingCard
+        :to="{ name: 'study-create' }"
+        role-variant="administrator"
+        :role-label="t('home.role.Administrator')"
+        :title="t('home.administrator.createStudyTitle')"
+        :description="t('home.administrator.createStudyDesc')"
+      />
+      <LandingCard
         :to="{ name: 'sites' }"
         role-variant="administrator"
         :role-label="t('home.role.Administrator')"
@@ -253,25 +284,30 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
         :description="t('home.administrator.sitesDesc')"
       />
       <LandingCard
-        :to="{ name: 'event-definitions' }"
+        :to="{ name: 'audit-log' }"
         role-variant="administrator"
         :role-label="t('home.role.Administrator')"
-        :title="t('home.administrator.eventDefinitionsTitle')"
-        :description="t('home.administrator.eventDefinitionsDesc')"
+        :title="t('auditLog.title')"
+        :description="t('home.administrator.auditLogDesc')"
       />
       <LandingCard
-        :to="{ name: 'crf-library' }"
+        v-if="canSwitchStudy"
+        :to="{ name: 'pick-study' }"
         role-variant="administrator"
         :role-label="t('home.role.Administrator')"
-        :title="t('home.administrator.crfLibraryTitle')"
-        :description="t('home.administrator.crfLibraryDesc')"
+        :title="t('home.switchStudyTitle')"
+        :description="t('home.switchStudyDesc')"
       />
+    </section>
+
+    <!-- Switch-study card (per-role landings other than Administrator). -->
+    <section v-if="canSwitchStudy && !showAdministrator" :aria-label="t('home.switchStudySectionLabel')" class="max-w-3xl mb-8">
       <LandingCard
-        :to="{ name: 'group-classes' }"
-        role-variant="administrator"
-        :role-label="t('home.role.Administrator')"
-        :title="t('home.administrator.groupClassesTitle')"
-        :description="t('home.administrator.groupClassesDesc')"
+        :to="{ name: 'pick-study' }"
+        :role-variant="role === 'Monitor' ? 'monitor' : role === 'Data Manager' ? 'data-manager' : 'investigator'"
+        :role-label="role ? t('home.role.' + role) : ''"
+        :title="t('home.switchStudyTitle')"
+        :description="t('home.switchStudyDesc')"
       />
     </section>
 

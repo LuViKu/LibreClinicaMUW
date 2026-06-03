@@ -60,17 +60,19 @@
     },
     "administrator": {
       "sectionLabel": "Administrator workflows",
+      "manageUsersDesc": "User accounts, role bindings per study, pending invites, password resets.",
+      "pendingInvitesBadgeAria": "{n} pending user invites",
       "editStudyTitle": "Edit study identity",
       "editStudyDesc": "Study name, sponsor, protocol number, summary, dates.",
+      "createStudyTitle": "Create new study",
+      "createStudyDesc": "Provision a top-level study. You are auto-bound as study coordinator.",
       "sitesTitle": "Manage sites",
       "sitesDesc": "Site identity + activation + per-site user roles.",
-      "eventDefinitionsTitle": "Event definitions",
-      "eventDefinitionsDesc": "Visit / event templates that schedule CRFs.",
-      "crfLibraryTitle": "CRF library",
-      "crfLibraryDesc": "Study-wide CRF templates and versions. Upload XLS to add new versions.",
-      "groupClassesTitle": "Subject group classes",
-      "groupClassesDesc": "Cohort + stratification group classes."
-    }
+      "auditLogDesc": "Platform audit trail with diff cards on every change."
+    },
+    "switchStudySectionLabel": "Switch active study",
+    "switchStudyTitle": "Switch active study",
+    "switchStudyDesc": "Pick another study you are assigned to. Only your bound studies are shown."
   },
   "common": {
     "loading": "Loading…",

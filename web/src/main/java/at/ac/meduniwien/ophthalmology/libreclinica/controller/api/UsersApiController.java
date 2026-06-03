@@ -12,6 +12,7 @@ import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -129,12 +130,25 @@ public class UsersApiController {
                 me, currentStudy, currentRole);
 
         // Roles scoped to the active study + its sites. The DAO
-        // returns one StudyUserRoleBean per (user, study) pair.
+        // returns one StudyUserRoleBean per (user, study) pair — so a
+        // user with two active bindings on the same study (e.g. seeded
+        // root with both `admin` and `director` rows) yielded duplicate
+        // rows in the SPA's user list (reported 2026-06-03 testing).
+        //
+        // Phase E.6 (2026-06-03): collapse to one row per user_id. When
+        // multiple bindings exist, pick the highest-priority role per
+        // ROLE_PRIORITY below — matches the legacy authorization
+        // model's "the highest grant wins" semantics. siteLabel is
+        // preserved from the first binding's study scope; lastLogin +
+        // active are user-attribute properties (not role-attribute) and
+        // are identical across all bindings for the same user.
         ArrayList<StudyUserRoleBean> bindings = userDao.findAllUsersByStudy(currentStudy.getId());
 
         Map<Integer, UserAccountBean> userCache = new HashMap<>();
         Map<Integer, StudyBean> studyCache = new HashMap<>();
-        List<StudyUserDto> out = new ArrayList<>();
+        // user_id → best-row-so-far. The best row is the one whose
+        // projected SPA role ranks highest in ROLE_PRIORITY.
+        Map<Integer, StudyUserDto> bestByUser = new LinkedHashMap<>();
 
         for (StudyUserRoleBean sur : bindings) {
             // A4 — skip bindings outside the visible study tree.
@@ -152,10 +166,15 @@ public class UsersApiController {
 
             String spaRole = sur.getRole() != null
                     ? RoleMapper.toSpaRole(sur.getRole().getName()) : "Investigator";
+            // Phase E.6: sysadmin/techadmin always project to Administrator
+            // — matches MeApiController so the user-list role chip and
+            // the role-chip in the top bar agree for these users.
+            if (ua.isSysAdmin() || ua.isTechAdmin()) spaRole = "Administrator";
             String siteLabel = isSite && roleStudy != null ? roleStudy.getName() : null;
             String auth = authForUser(ua);
             String lastLogin = ua.getLastVisitDate() == null ? null
-                    : ua.getLastVisitDate().toInstant().atZone(ZoneOffset.UTC)
+                    : java.time.Instant.ofEpochMilli(ua.getLastVisitDate().getTime())
+                            .atZone(ZoneOffset.UTC)
                             .truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
             boolean active = ua.getStatus() != null && ua.getStatus().getId() == Status.AVAILABLE.getId();
 
@@ -166,7 +185,7 @@ public class UsersApiController {
             }
             if (activeFilter != null && active != activeFilter) continue;
 
-            out.add(new StudyUserDto(
+            StudyUserDto candidate = new StudyUserDto(
                     String.valueOf(ua.getId()),
                     nullToEmpty(ua.getName()),
                     displayName(ua),
@@ -175,10 +194,32 @@ public class UsersApiController {
                     siteLabel,
                     auth,
                     lastLogin,
-                    active));
+                    active);
+            StudyUserDto current = bestByUser.get(ua.getId());
+            if (current == null || rolePriority(spaRole) > rolePriority(current.role())) {
+                bestByUser.put(ua.getId(), candidate);
+            }
         }
 
-        return ResponseEntity.ok(out);
+        return ResponseEntity.ok(new ArrayList<>(bestByUser.values()));
+    }
+
+    /**
+     * Phase E.6 — projected-role priority for user-list deduplication.
+     * Administrator wins over Data Manager wins over Monitor / CRC /
+     * Investigator. Matches the conventional "highest grant wins"
+     * model that the legacy authorization helpers ({@code UserAdminAuthorization.
+     * roleMayAdministerUsers}) implement.
+     */
+    private static int rolePriority(String spaRole) {
+        return switch (spaRole) {
+            case "Administrator" -> 5;
+            case "Data Manager"  -> 4;
+            case "Monitor"       -> 3;
+            case "CRC"           -> 2;
+            case "Investigator"  -> 1;
+            default              -> 0;
+        };
     }
 
     /* ----------------------------------------------------------------- */
