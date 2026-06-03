@@ -52,13 +52,13 @@ const router = createRouter({
       path: '/notes',
       name: 'notes',
       component: () => import('@/views/NotesDiscrepanciesView.vue'),
-      meta: { title: 'Notes & Discrepancies', role: 'Monitor' as const },
+      meta: { title: 'Notes & Discrepancies', role: ['Monitor', 'Data Manager'] as const },
     },
     {
       path: '/audit-log',
       name: 'audit-log',
       component: () => import('@/views/StudyAuditLogView.vue'),
-      meta: { title: 'Study Audit Log', role: 'Monitor' as const },
+      meta: { title: 'Study Audit Log', role: ['Monitor', 'Data Manager', 'Administrator'] as const },
     },
     /* Phase E.6 carry-over — Read-only CRF (Monitor's "View Within Record" path). */
     {
@@ -246,11 +246,21 @@ export function guard(
   // views can't render PHI to a stale credential.
   if (auth.needsPasswordChange) return { name: 'change-password' }
 
-  const requiredRole = to.meta.role as
+  // Phase E.6 (2026-06-03): meta.role accepts a single role OR an
+  // array of roles. Audit Trail, for example, opens to Monitor +
+  // Data Manager + Administrator — all three have legitimate
+  // compliance-review reasons to consult it. The array form is an
+  // ordered "any of" — actual role passes if it satisfies any entry
+  // (via roleSatisfies, so CRC→Investigator inheritance still
+  // applies inside the OR).
+  const roleMeta = to.meta.role as
     | 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'
+    | Array<'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'>
     | undefined
-  if (requiredRole && !roleSatisfies(auth.user?.role, requiredRole)) {
-    return { name: 'home' }
+  if (roleMeta) {
+    const required = Array.isArray(roleMeta) ? roleMeta : [roleMeta]
+    const ok = required.some((r) => roleSatisfies(auth.user?.role, r))
+    if (!ok) return { name: 'home' }
   }
 
   return true
