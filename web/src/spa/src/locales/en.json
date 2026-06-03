@@ -22,6 +22,56 @@
     "skipToMain": "Skip to main content",
     "signInLink": "Sign in"
   },
+  "home": {
+    "eyebrow": "Welcome",
+    "role": {
+      "Investigator": "Investigator",
+      "Monitor": "Monitor",
+      "Data Manager": "Data Manager",
+      "Administrator": "Administrator",
+      "CRC": "CRC"
+    },
+    "investigator": {
+      "sectionLabel": "Investigator workflows",
+      "subjectMatrixDesc": "Site-scoped subject list with per-event status. Search, filter, schedule new event, sign subject.",
+      "addSubjectDesc": "Enrol a study subject. PHI-aware validation, gender selector, three save modes.",
+      "signQueueTitle": "Sign-pending subjects",
+      "signQueueDesc": "Subjects with completed events ready for e-signature. 21 CFR Part 11 §11.50 attestation.",
+      "todaysCrfsTitle": "Today's pending CRFs",
+      "todaysCrfsDesc": "Subjects with events in data-entry-started state or scheduled for today."
+    },
+    "monitor": {
+      "sectionLabel": "Monitor workflows",
+      "sdvDesc": "Completed CRFs across all subjects with SDV requirement. Bulk-verify, inline Add Query.",
+      "sdvBadgeAria": "{n} CRFs pending source-data verification",
+      "openQueriesDesc": "Cross-subject query + annotation list with status / type / assigned-to-me filters.",
+      "openQueriesBadgeAria": "{n} open queries",
+      "auditLogDesc": "Gapless timeline with diff cards on reason-for-change. Filter by actor / event type / subject."
+    },
+    "dataManager": {
+      "sectionLabel": "Data Manager workflows",
+      "buildStudyDesc": "Seven-task setup tracker with progress bar and per-task status.",
+      "manageUsersDesc": "Per-user role + site + auth method. Pending invites badge.",
+      "pendingInvitesBadgeAria": "{n} pending user invites",
+      "openQueriesDesc": "Open queries across all sites.",
+      "auditLogDesc": "Audit trail with diff cards.",
+      "importCrfDesc": "Multi-step wizard: Upload → Map → Preview & resolve → Commit.",
+      "rulesDesc": "Validation + workflow rules attached to event-CRFs."
+    },
+    "administrator": {
+      "sectionLabel": "Administrator workflows",
+      "editStudyTitle": "Edit study identity",
+      "editStudyDesc": "Study name, sponsor, protocol number, summary, dates.",
+      "sitesTitle": "Manage sites",
+      "sitesDesc": "Site identity + activation + per-site user roles.",
+      "eventDefinitionsTitle": "Event definitions",
+      "eventDefinitionsDesc": "Visit / event templates that schedule CRFs.",
+      "crfLibraryTitle": "CRF library",
+      "crfLibraryDesc": "Study-wide CRF templates and versions. Upload XLS to add new versions.",
+      "groupClassesTitle": "Subject group classes",
+      "groupClassesDesc": "Cohort + stratification group classes."
+    }
+  },
   "common": {
     "loading": "Loading…",
     "saving": "Saving…",
