@@ -836,6 +836,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/activeStudy": {
         parameters: {
             query?: never;
@@ -1454,11 +1470,6 @@ export interface components {
             passwordChangeReason?: string;
             activeStudy?: components["schemas"]["ActiveStudyDto"];
         };
-        ChangePasswordRequest: {
-            currentPassword?: string;
-            newPassword?: string;
-            newPasswordRepeat?: string;
-        };
         UpdateEventRequest: {
             dateStarted?: string;
             dateEnded?: string;
@@ -1720,6 +1731,11 @@ export interface components {
             oid?: string;
             value?: string;
             valueExpression?: string;
+        };
+        PasswordChangeRequest: {
+            currentPassword?: string;
+            newPassword?: string;
+            newPasswordRepeat?: string;
         };
         ActiveStudyRequest: {
             oid?: string;
@@ -3512,6 +3528,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MeDto"];
                 };
             };
         };
