@@ -22,6 +22,56 @@
     "skipToMain": "Zum Hauptinhalt springen",
     "signInLink": "Anmelden"
   },
+  "home": {
+    "eyebrow": "Willkommen",
+    "role": {
+      "Investigator": "Prüfarzt/-ärztin",
+      "Monitor": "Monitor/-in",
+      "Data Manager": "Datenmanager/-in",
+      "Administrator": "Administrator/-in",
+      "CRC": "Studienkoordination"
+    },
+    "investigator": {
+      "sectionLabel": "Arbeitsabläufe Prüfarzt/-ärztin",
+      "subjectMatrixDesc": "Standortbezogene Teilnehmerübersicht mit Visiten-Status. Suchen, filtern, neue Visite planen, Teilnehmer signieren.",
+      "addSubjectDesc": "Studienteilnehmer/-in aufnehmen. PHI-bewusste Validierung, Geschlechtsauswahl, drei Speichermodi.",
+      "signQueueTitle": "Signatur ausstehend",
+      "signQueueDesc": "Teilnehmer mit abgeschlossenen Visiten zur E-Signatur. 21 CFR Part 11 §11.50 Attestierung.",
+      "todaysCrfsTitle": "Heutige offene CRFs",
+      "todaysCrfsDesc": "Teilnehmer mit Visiten in Dateneingabe oder für heute geplant."
+    },
+    "monitor": {
+      "sectionLabel": "Arbeitsabläufe Monitor/-in",
+      "sdvDesc": "Abgeschlossene CRFs aller Teilnehmer mit Quelldatenanforderung. Stapel-Verifikation, inline-Rückfragen.",
+      "sdvBadgeAria": "{n} CRFs warten auf Quelldatenvergleich",
+      "openQueriesDesc": "Studienweite Rückfragen + Anmerkungen. Filter nach Status / Art / Zuweisung.",
+      "openQueriesBadgeAria": "{n} offene Rückfragen",
+      "auditLogDesc": "Lückenlose Zeitleiste mit Diff-Karten bei Änderungsgründen. Filter nach Akteur / Ereignisart / Teilnehmer."
+    },
+    "dataManager": {
+      "sectionLabel": "Arbeitsabläufe Datenmanager/-in",
+      "buildStudyDesc": "Sieben-Schritt-Setup mit Fortschrittsbalken und Status je Aufgabe.",
+      "manageUsersDesc": "Nutzerrollen + Standort + Anmeldemethode. Offene Einladungen.",
+      "pendingInvitesBadgeAria": "{n} offene Einladungen",
+      "openQueriesDesc": "Offene Rückfragen an allen Standorten.",
+      "auditLogDesc": "Audit-Trail mit Diff-Karten.",
+      "importCrfDesc": "Mehrstufiger Assistent: Hochladen → Zuordnen → Vorschau & lösen → Übernehmen.",
+      "rulesDesc": "Validierungs- und Workflow-Regeln zu Event-CRFs."
+    },
+    "administrator": {
+      "sectionLabel": "Arbeitsabläufe Administrator/-in",
+      "editStudyTitle": "Studienidentität bearbeiten",
+      "editStudyDesc": "Studienname, Sponsor, Protokollnummer, Zusammenfassung, Daten.",
+      "sitesTitle": "Standorte verwalten",
+      "sitesDesc": "Standortidentität + Aktivierung + Nutzerrollen je Standort.",
+      "eventDefinitionsTitle": "Visiten-Definitionen",
+      "eventDefinitionsDesc": "Visiten- / Ereignis-Vorlagen, die CRFs planen.",
+      "crfLibraryTitle": "CRF-Bibliothek",
+      "crfLibraryDesc": "Studienweite CRF-Vorlagen und -Versionen. XLS hochladen, um neue Versionen anzulegen.",
+      "groupClassesTitle": "Teilnehmer-Gruppenklassen",
+      "groupClassesDesc": "Kohorten- und Stratifizierungsgruppenklassen."
+    }
+  },
   "common": {
     "loading": "Wird geladen…",
     "saving": "Wird gespeichert…",
