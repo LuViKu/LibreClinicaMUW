@@ -83,6 +83,30 @@ public class DataSourceConfig {
         SpringLiquibase liquibase = new SpringLiquibase();
         liquibase.setDataSource(dataSource);
         liquibase.setChangeLog("classpath:migration/master.xml");
+        // Phase E.5 chronic CI fix (2026-06-03): the demo-data seed
+        // changesets (lc-muw-2026-06-01-seed-demo-data*.xml + the
+        // -seed-demo-test-users.xml + the -prune-dn-item-data-map-*
+        // cleanup) are tagged context="demo". They should NOT run on
+        // production deployments (Vienna single-site clinic doesn't
+        // need M-001..M-007 mock patients) and they break the legacy
+        // DBUnit DAO tests (the seeded dn_item_data_map FKs block
+        // DBUnit's CLEAN_INSERT on item_data).
+        //
+        // Liquibase semantics: when contexts is null/empty, EVERY
+        // changeset runs — including context-tagged ones. To exclude
+        // a context the runtime contexts must use the negation form
+        // "!demo". So:
+        //   - LIQUIBASE_CONTEXTS unset (prod / CI tests) → "!demo":
+        //     untagged changesets run, demo ones are skipped.
+        //   - LIQUIBASE_CONTEXTS=demo (dev compose) → "demo":
+        //     untagged AND demo-tagged changesets run.
+        //   - LIQUIBASE_CONTEXTS=<other> → use the operator's value
+        //     verbatim (escape hatch for adding new contexts later).
+        String contexts = System.getenv("LIQUIBASE_CONTEXTS");
+        if (contexts == null || contexts.isBlank()) {
+            contexts = "!demo";
+        }
+        liquibase.setContexts(contexts);
         return liquibase;
     }
 }

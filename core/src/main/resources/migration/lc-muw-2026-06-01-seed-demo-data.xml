@@ -52,7 +52,7 @@
          Mirrors the hardcoded schema in
          web/src/spa/src/stores/crfEntry.ts.
          ============================================================ -->
-    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-crf-metadata">
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-crf-metadata" context="demo">
         <comment>Demographics CRF schema (1 crf + 1 crf_version + 2 sections + 5 items + 1 response_set + 5 item_form_metadata + 3 event-definition CRF links)</comment>
 
         <!-- 1 crf, 1 crf_version -->
@@ -244,7 +244,7 @@
     <!-- ============================================================
          Event definitions — V1 / V2 / V3 — plus their CRF assignment.
          ============================================================ -->
-    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-event-definitions">
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-event-definitions" context="demo">
         <comment>3 study_event_definition + 3 event_definition_crf rows linking each to Demographics</comment>
 
         <insert tableName="study_event_definition">
@@ -338,7 +338,7 @@
     <!-- ============================================================
          Subjects — the 7 people. Mirrors MOCK_SUBJECTS row-for-row.
          ============================================================ -->
-    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-subjects">
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-subjects" context="demo">
         <comment>7 subject + 7 study_subject rows (M-001 .. M-007), all enrolled in study_id=1</comment>
 
         <!-- M-001: F, YoB 1962, enrolled 2020-10-06 -->
@@ -505,7 +505,7 @@
              1=scheduled, 2=not scheduled, 3=data entry started,
              4=completed, 8=signed.
          ============================================================ -->
-    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-study-events">
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-study-events" context="demo">
         <comment>21 study_event rows mirroring per-event status of MOCK_SUBJECTS</comment>
 
         <!-- M-001: complete (4), complete (4), in-progress (3) -->
@@ -556,7 +556,7 @@
          Convention: completion_status_id=2 means the CRF is marked
          complete by the data-entry user; 1 means it's mid-edit.
          ============================================================ -->
-    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-event-crfs">
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-event-crfs" context="demo">
         <comment>~17 event_crf rows for scheduled/in-progress/completed/signed events</comment>
 
         <!-- M-001 V1 complete, V2 complete, V3 in-progress -->
@@ -598,7 +598,7 @@
            weight: 50-100 kg
            BP: 100-160 mmHg (skip some for the optional field)
          ============================================================ -->
-    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-item-data">
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-item-data" context="demo">
         <comment>~70 item_data rows — entered values for completed/in-progress event CRFs</comment>
 
         <!-- M-001 V1 (event_crf=1): all fields entered -->
@@ -676,7 +676,7 @@
          All resolution_status_id=1 (New), discrepancy_note_type_id=3
          (Query), entity_type='itemData'.
          ============================================================ -->
-    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-discrepancy-notes">
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-discrepancy-notes" context="demo">
         <comment>8 open queries on item_data — backs the openQueries count visible in the Subject Matrix</comment>
 
         <!-- M-001 V1: 1 query -->
@@ -717,7 +717,7 @@
          the highest seeded id so subsequent inserts via the legacy
          DAOs use fresh values.
          ============================================================ -->
-    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-bump-sequences" dbms="postgresql">
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-bump-sequences" dbms="postgresql" context="demo">
         <comment>Advance sequences past seeded PKs to avoid collisions on first runtime insert</comment>
         <sql splitStatements="false"><![CDATA[
             SELECT setval('crf_crf_id_seq',                                 (SELECT MAX(crf_id)               FROM crf));
