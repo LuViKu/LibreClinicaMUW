@@ -425,25 +425,29 @@
 			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
-		<!-- Phase E.5 #1 (CI hardening): explicit test-scope declarations
-		     for transitive deps the IT base directly references. The
-		     maven-dependency-plugin's analyze goal otherwise flags them
-		     as "used undeclared" because the IT instantiates
-		     SpringLiquibase + org.postgresql.Driver + uses DAODigester
-		     wiring that pulls these in through the core jar at runtime.
+		<!-- Phase E.5 #1 (CI hardening): explicit declarations for deps
+		     that AbstractApiControllerDatabaseIT references directly.
+		     The maven-dependency-plugin's analyze goal otherwise flags
+		     them as "used undeclared".
 		     Parent pom dependencyManagement pins the versions (liquibase
-		     3.6.3, postgres 42.7.5). Test scope keeps the production
-		     WAR untouched — the same artefacts are already inherited
-		     transitively from core at runtime via the WAR overlay. -->
+		     3.6.3, postgres 42.7.5).
+		     IMPORTANT: NO scope override here. Both artefacts are
+		     required at production runtime — SpringLiquibase runs
+		     migrations at app startup (applicationContext-core-db.xml)
+		     and the postgres driver is needed for JNDI DataSource
+		     resolution. The Phase E.5 CI hardening PR #88 originally
+		     declared these as <scope>test</scope>; that dropped both
+		     from WEB-INF/lib of the WAR and the compose smoke test
+		     failed with `NoClassDefFoundError: liquibase/integration/
+		     spring/SpringLiquibase` at app startup. Leave at the
+		     default compile scope so they ride into the WAR. -->
 		<dependency>
 			<groupId>org.liquibase</groupId>
 			<artifactId>liquibase-core</artifactId>
-			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
-			<scope>test</scope>
 		</dependency>
 		<!-- Selenium 4.x for the smoke-tests profile (browser-driven
 		     verification of jmesa cohort migrations). Only fetched +
