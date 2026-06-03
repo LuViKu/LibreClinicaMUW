@@ -113,7 +113,13 @@ function roleVariant(role: string): 'investigator' | 'monitor' | 'data-manager' 
         {{ localError ?? auth.error }}
       </p>
 
-      <div class="mt-8 text-center text-xs text-slate-500">
+      <div class="mt-8 text-center text-xs text-slate-500 flex items-center justify-center gap-4">
+        <button v-if="auth.user?.activeStudy"
+                type="button"
+                class="underline hover:text-slate-700"
+                @click="router.push({ name: 'home' })">
+          {{ t('common.cancel') }}
+        </button>
         <button type="button" class="underline hover:text-slate-700" @click="auth.logout">
           {{ t('studyPicker.signOut') }}
         </button>

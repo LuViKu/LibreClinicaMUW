@@ -106,7 +106,7 @@ const router = createRouter({
       path: '/sites',
       name: 'sites',
       component: () => import('@/views/SitesView.vue'),
-      meta: { title: 'Sites', role: 'Data Manager' as const },
+      meta: { title: 'Sites', role: 'Administrator' as const },
     },
     /* Phase E A8.6 — subject group classes (Arms, families, etc.). */
     {
@@ -126,7 +126,7 @@ const router = createRouter({
       path: '/manage-users',
       name: 'manage-users',
       component: () => import('@/views/ManageUsersView.vue'),
-      meta: { title: 'Manage Users', role: 'Data Manager' as const },
+      meta: { title: 'Manage Users', role: 'Administrator' as const },
     },
     {
       path: '/import-crf-data',
@@ -205,12 +205,19 @@ export function guard(
     return auth.isAnonymous ? true : { name: auth.needsProfile ? 'first-login' : 'home' }
   }
 
-  // Study picker requires an authenticated identity without an active study.
+  // Study picker requires an authenticated identity. Phase E.6:
+  // previously hard-redirected away whenever the user already had an
+  // active study — we let multi-study operators re-enter the picker
+  // to switch instead.
   if (to.name === 'pick-study') {
     if (auth.isAnonymous) return { name: 'login' }
     if (auth.needsProfile) return { name: 'first-login' }
+    // Forced password change wins over study switching (Phase E.6 / #102).
     if (auth.needsPasswordChange) return { name: 'change-password' }
-    return auth.needsStudyPick ? true : { name: 'home' }
+    // Phase E.6 / #101: allow authenticated multi-study operators to
+    // re-enter the picker to switch — do NOT bounce home when a study
+    // is already bound.
+    return true
   }
 
   // Phase E.6 — Forced password change view.
@@ -242,11 +249,34 @@ export function guard(
   const requiredRole = to.meta.role as
     | 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'
     | undefined
-  if (requiredRole && auth.user?.role !== requiredRole) {
+  if (requiredRole && !roleSatisfies(auth.user?.role, requiredRole)) {
     return { name: 'home' }
   }
 
   return true
+}
+
+/**
+ * Phase E.6 — role matching for route guards. Strict by default: a
+ * route demanding `Data Manager` accepts only `Data Manager`. The
+ * single exception is CRC → Investigator: CRC is a thin coordinator
+ * variant of Investigator in MUW's deployment and inherits its
+ * workflows in v1.
+ *
+ * Administrator does NOT inherit Data Manager (or any other role).
+ * Per the 2026-06-03 operator note: the Administrator landing only
+ * surfaces Admin-relevant paths; users with both responsibilities
+ * sign in under the role they need (e.g. the `datamanager` demo
+ * account, or any user with a Data Manager binding).
+ */
+export function roleSatisfies(
+  actual: 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC' | undefined,
+  required: 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC',
+): boolean {
+  if (actual === undefined) return false
+  if (actual === required) return true
+  if (actual === 'CRC' && required === 'Investigator') return true
+  return false
 }
 
 export default router

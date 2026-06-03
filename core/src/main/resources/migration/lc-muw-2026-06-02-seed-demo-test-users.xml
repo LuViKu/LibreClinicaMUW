@@ -127,4 +127,107 @@
         </insert>
     </changeSet>
 
+    <!--
+        Phase E.6 (2026-06-03): third demo test user covering the
+        Data Manager landing. The legacy role table maps to
+        Role.STUDYDIRECTOR (id 3, name "director"), which
+        RoleMapper.toSpaRole() projects to the SPA's "Data Manager"
+        label. This lets operators exercise the Build Study /
+        Manage Users / Import Data flows without logging in as root.
+    -->
+    <changeSet id="2026-06-03-seed-test-user-datamanager"
+               author="muw-ophthalmology"
+               context="demo">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM user_account WHERE user_name = 'datamanager';
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Insert the `datamanager` demo user with the Study Director
+            ("director") legacy role — projects to "Data Manager" in
+            the SPA. Same bcrypt-hashed password as the other demo
+            accounts ("12345678").
+        </comment>
+        <insert tableName="user_account">
+            <column name="user_id" valueNumeric="4"/>
+            <column name="user_name" value="datamanager"/>
+            <column name="passwd"
+                    value="{bcrypt}$2a$10$9QHaEdYWWSRQKYOaOECfbuQf8L1I1zWUPevUyMderR4S/ZmIc5/dG"/>
+            <column name="first_name" value="Demo"/>
+            <column name="last_name" value="DataManager"/>
+            <column name="email" value="datamanager@example.invalid"/>
+            <column name="active_study" valueNumeric="1"/>
+            <column name="institutional_affiliation" value="MUW Ophthalmology (demo)"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-03"/>
+            <column name="passwd_timestamp" valueDate="2026-06-03"/>
+            <column name="user_type_id" valueNumeric="2"/>
+            <column name="enabled" valueBoolean="true"/>
+            <column name="account_non_locked" valueBoolean="true"/>
+            <column name="lock_counter" valueNumeric="0"/>
+            <column name="run_webservices" valueBoolean="false"/>
+            <column name="authtype" value="STANDARD"/>
+            <column name="enable_api_key" valueBoolean="false"/>
+        </insert>
+        <insert tableName="study_user_role">
+            <column name="role_name" value="director"/>
+            <column name="study_id" valueNumeric="1"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-03"/>
+            <column name="user_name" value="datamanager"/>
+        </insert>
+    </changeSet>
+
+    <!--
+        Phase E.6 (2026-06-03): collapse any pre-existing duplicate
+        active binding for root on the Default Study. Whatever the
+        historical sequence (an early Monitor seed plus a later
+        SPA-driven admin update could both leave active rows since
+        study_user_role has no primary key + the table-level UPDATE
+        in updateRole only mutates one binding at a time), this
+        idempotent UPDATE deactivates every-but-one of root's active
+        rows on study_id=1.
+
+        Implementation uses PostgreSQL's ctid system column as a
+        stable per-row identifier — study_user_role intentionally has
+        no surrogate key, so ctid is the only thing that distinguishes
+        otherwise-identical rows. We keep one row arbitrarily (MIN
+        ctid) and mark the rest status_id=7 (AUTO-DELETED). Runs only
+        when more than one active root binding actually exists, which
+        is precisely the duplicate-in-SPA-user-list condition.
+    -->
+    <changeSet id="2026-06-03-dedupe-root-active-bindings"
+               author="muw-ophthalmology"
+               context="demo"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="t">
+                SELECT (COUNT(*) > 1)::text FROM study_user_role
+                WHERE user_name = 'root' AND study_id = 1 AND status_id = 1;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Deactivate root's surplus active bindings so a single row
+            survives. Backend already dedupes at read time (PR #101);
+            this also cleans up the underlying data so subsequent
+            updateRole calls hit one row deterministically.
+        </comment>
+        <sql>
+            UPDATE study_user_role
+               SET status_id = 7
+             WHERE user_name = 'root'
+               AND study_id  = 1
+               AND status_id = 1
+               AND ctid &lt;&gt; (
+                   SELECT MIN(ctid) FROM study_user_role
+                    WHERE user_name = 'root'
+                      AND study_id  = 1
+                      AND status_id = 1
+               );
+        </sql>
+    </changeSet>
+
 </databaseChangeLog>

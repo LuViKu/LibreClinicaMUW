@@ -61,6 +61,8 @@ function makeRouter() {
       { path: '/crf-library', name: 'crf-library', component: { template: '<div />' } },
       { path: '/group-classes', name: 'group-classes', component: { template: '<div />' } },
       { path: '/studies/:oid/edit', name: 'study-edit', component: { template: '<div />' } },
+      { path: '/studies/new', name: 'study-create', component: { template: '<div />' } },
+      { path: '/pick-study', name: 'pick-study', component: { template: '<div />' } },
     ],
   })
 }
@@ -139,12 +141,12 @@ describe('HomeView role-aware sections', () => {
     expect(w.find('[aria-label="Administrator workflows"]').exists()).toBe(false)
   })
 
-  it('shows the Data Manager + Administrator sections for Administrator', async () => {
+  it('shows only the Administrator section for Administrator (DM no longer inherited — 2026-06-03)', async () => {
     const w = mountWith('Administrator')
     await w.vm.$nextTick()
     expect(w.find('[aria-label="Investigator workflows"]').exists()).toBe(false)
     expect(w.find('[aria-label="Monitor workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Data Manager workflows"]').exists()).toBe(true)
+    expect(w.find('[aria-label="Data Manager workflows"]').exists()).toBe(false)
     expect(w.find('[aria-label="Administrator workflows"]').exists()).toBe(true)
   })
 

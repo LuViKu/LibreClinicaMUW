@@ -61,17 +61,19 @@
     },
     "administrator": {
       "sectionLabel": "Arbeitsabläufe Administrator/-in",
+      "manageUsersDesc": "Nutzerkonten, Rollenzuweisungen je Studie, offene Einladungen, Passwort-Rücksetzung.",
+      "pendingInvitesBadgeAria": "{n} offene Einladungen",
       "editStudyTitle": "Studienidentität bearbeiten",
       "editStudyDesc": "Studienname, Sponsor, Protokollnummer, Zusammenfassung, Daten.",
+      "createStudyTitle": "Neue Studie anlegen",
+      "createStudyDesc": "Top-Level-Studie erstellen. Sie werden automatisch als Studien-Koordinator/-in zugewiesen.",
       "sitesTitle": "Standorte verwalten",
       "sitesDesc": "Standortidentität + Aktivierung + Nutzerrollen je Standort.",
-      "eventDefinitionsTitle": "Visiten-Definitionen",
-      "eventDefinitionsDesc": "Visiten- / Ereignis-Vorlagen, die CRFs planen.",
-      "crfLibraryTitle": "CRF-Bibliothek",
-      "crfLibraryDesc": "Studienweite CRF-Vorlagen und -Versionen. XLS hochladen, um neue Versionen anzulegen.",
-      "groupClassesTitle": "Teilnehmer-Gruppenklassen",
-      "groupClassesDesc": "Kohorten- und Stratifizierungsgruppenklassen."
-    }
+      "auditLogDesc": "Plattform-Audit-Trail mit Diff-Karten bei jeder Änderung."
+    },
+    "switchStudySectionLabel": "Aktive Studie wechseln",
+    "switchStudyTitle": "Aktive Studie wechseln",
+    "switchStudyDesc": "Andere Studie auswählen, der Sie zugeordnet sind. Nur Ihre zugeordneten Studien werden angezeigt."
   },
   "common": {
     "loading": "Wird geladen…",
