@@ -31,7 +31,8 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {
         return mockMvcFor(new CrfsApiController(mockDataSource(),
-                Mockito.mock(CrfSpreadsheetParserService.class)));
+                Mockito.mock(CrfSpreadsheetParserService.class),
+                new CrfJsonToWorkbookAdapter()));
     }
 
     @Test
@@ -130,5 +131,119 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
         mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1/disable")
                 .session((org.springframework.mock.web.MockHttpSession) emptySession()))
                 .andExpect(status().isUnauthorized());
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Phase E.6 Milestone A — JSON authoring endpoint guards             */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Minimal authoring payload that passes shape validation. Used to
+     * exercise auth + content-type guards without tripping the
+     * validator.
+     */
+    private static final String MINIMAL_AUTHORING_JSON = "{"
+            + "\"versionName\":\"v1.0\","
+            + "\"versionDescription\":\"Demo\","
+            + "\"revisionNotes\":\"Initial\","
+            + "\"sections\":[{"
+            + "  \"label\":\"S1\",\"title\":\"Section 1\",\"instructions\":\"\",\"ordinal\":1,"
+            + "  \"items\":[{"
+            + "    \"name\":\"AGE\",\"oid\":\"\",\"descriptionLabel\":\"Age\","
+            + "    \"leftItemText\":\"Age in years\",\"dataType\":\"INTEGER\",\"required\":true"
+            + "  }]"
+            + "}]"
+            + "}";
+
+    @Test
+    void authorVersionReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(MINIMAL_AUTHORING_JSON)
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void authorVersionReturns403WhenInvestigatorAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(MINIMAL_AUTHORING_JSON)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit managing CRFs")));
+    }
+
+    @Test
+    void authorVersionReturns415OnXmlContentType() throws Exception {
+        // Spring routes the JSON variant on Content-Type:application/json;
+        // anything else falls through to the multipart variant which then
+        // rejects with 415 due to the missing multipart payload.
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/xml")
+                .content("<crf/>")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isUnsupportedMediaType());
+    }
+
+    @Test
+    void authorVersionReturns400OnMissingVersionName() throws Exception {
+        String body = "{"
+                + "\"versionName\":\"\","
+                + "\"sections\":[{"
+                + "  \"label\":\"S1\",\"title\":\"Section 1\",\"ordinal\":1,"
+                + "  \"items\":[{\"name\":\"AGE\",\"descriptionLabel\":\"Age\",\"dataType\":\"INTEGER\",\"required\":true}]"
+                + "}]"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Validation failed")))
+                .andExpect(jsonPath("$.errors[0].field").value("versionName"));
+    }
+
+    @Test
+    void authorVersionReturns400OnEmptySections() throws Exception {
+        String body = "{"
+                + "\"versionName\":\"v1.0\","
+                + "\"sections\":[]"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field")
+                        .value(org.hamcrest.Matchers.hasItem("sections")));
+    }
+
+    @Test
+    void authorVersionReturns400OnInvalidDataType() throws Exception {
+        String body = "{"
+                + "\"versionName\":\"v1.0\","
+                + "\"sections\":[{"
+                + "  \"label\":\"S1\",\"title\":\"Section 1\",\"ordinal\":1,"
+                + "  \"items\":[{\"name\":\"AGE\",\"descriptionLabel\":\"Age\",\"dataType\":\"REAL\",\"required\":true}]"
+                + "}]"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].message")
+                        .value(org.hamcrest.Matchers.hasItem(
+                                org.hamcrest.Matchers.containsString("Milestone A"))));
     }
 }

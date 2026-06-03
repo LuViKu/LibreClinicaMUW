@@ -105,12 +105,15 @@ public class CrfsApiController {
 
     private final DataSource dataSource;
     private final CrfSpreadsheetParserService parserService;
+    private final CrfJsonToWorkbookAdapter workbookAdapter;
 
     @Autowired
     public CrfsApiController(@Qualifier("dataSource") DataSource dataSource,
-                             CrfSpreadsheetParserService parserService) {
+                             CrfSpreadsheetParserService parserService,
+                             CrfJsonToWorkbookAdapter workbookAdapter) {
         this.dataSource = dataSource;
         this.parserService = parserService;
+        this.workbookAdapter = workbookAdapter;
     }
 
     /* ----------------------------------------------------------------- */
@@ -437,6 +440,216 @@ public class CrfsApiController {
         } catch (IllegalArgumentException iae) {
             return Locale.ENGLISH;
         }
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/crfs/{crfOid}/versions  (JSON body — authoring wiz)   */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 Milestone A — JSON variant of the version-create
+     * endpoint that produces a CRF version semantically identical to
+     * one uploaded via XLS.
+     *
+     * <p>Strategy: synthesise an HSSF workbook from the JSON payload
+     * via {@link CrfJsonToWorkbookAdapter} and hand it to the existing
+     * {@link CrfSpreadsheetParserService#parseAndPersist} pipeline. No
+     * new persistence code, no parity drift with the XLS path.
+     *
+     * <p>Milestone A scope locks the wire contract to ST / INTEGER / BL
+     * data types with a single TEXT response set per item — Milestones
+     * B/C/D extend {@link CrfVersionAuthoringRequest} with the full
+     * type taxonomy, response-set library, show-when, calculations,
+     * item groups and multi-language labels.
+     *
+     * <p>Spring routes by {@code Content-Type}: this method handles
+     * {@code application/json}; the multipart upload at the same path
+     * stays unchanged.
+     */
+    @PostMapping(value = "/{crfOid}/versions", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ApiResponse(responseCode = "201",
+                 content = @Content(schema = @Schema(implementation = CrfDto.CrfVersionDto.class)))
+    public ResponseEntity<?> authorVersion(
+            @PathVariable("crfOid") String crfOid,
+            @RequestBody(required = false) CrfVersionAuthoringRequest body,
+            @org.springframework.web.bind.annotation.RequestHeader(value = HttpHeaders.ACCEPT_LANGUAGE, required = false)
+                    String acceptLanguage,
+            HttpSession session) {
+        ResponseEntity<?> guard = preflightWrite(session);
+        if (guard != null) return guard;
+
+        if (body == null) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Request body is required",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+        }
+
+        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = validateAuthoringShape(body);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = crfDao.findByOid(crfOid);
+        if (crf == null || crf.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + crfOid + "'"));
+        }
+        if (crf.getStatus() != null && crf.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "CRF '" + crfOid + "' is removed — restore before authoring a new version"));
+        }
+
+        String versionNameTrim = body.versionName().trim();
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean dupCheck = versionDao.findByFullName(versionNameTrim, crf.getName());
+        if (dupCheck != null && dupCheck.getId() != 0) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "versionName",
+                            "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"))));
+        }
+
+        Path synthesizedFile;
+        try {
+            synthesizedFile = workbookAdapter.synthesize(body, crf);
+        } catch (IOException ioe) {
+            LOG.warn("Failed to synthesise authoring workbook for crfOid={}: {}", crfOid, ioe.getMessage(), ioe);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to materialise authoring workbook: " + ioe.getMessage()));
+        }
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        int studyId = currentStudy != null ? currentStudy.getId() : 0;
+        Locale locale = resolveLocale(acceptLanguage);
+
+        CrfSpreadsheetParserService.Result result =
+                parserService.parseAndPersist(synthesizedFile, crf, versionNameTrim, me, studyId, locale);
+
+        // Best-effort: the synthesised workbook is a temp file — drop
+        // it once the parser has finished with it. We don't surface a
+        // failure to delete because the parser already returned.
+        try {
+            Files.deleteIfExists(synthesizedFile);
+        } catch (IOException cleanupEx) {
+            LOG.debug("Could not delete synthesised workbook {} (continuing): {}",
+                    synthesizedFile, cleanupEx.getMessage());
+        }
+
+        if (!result.ok()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Authoring request rejected — see errors[].message",
+                    result.errors().stream()
+                            .map(e -> new SubjectsApiController.ValidationErrorBody.FieldError("body", e))
+                            .toList()));
+        }
+
+        CRFVersionBean persisted = result.version();
+
+        // Mirror the multipart endpoint's post-parse metadata patch.
+        boolean dirty = false;
+        if (body.versionDescription() != null && !body.versionDescription().isBlank()
+                && (persisted.getDescription() == null || persisted.getDescription().isBlank())) {
+            persisted.setDescription(body.versionDescription().trim());
+            dirty = true;
+        }
+        if (body.revisionNotes() != null && !body.revisionNotes().isBlank()
+                && (persisted.getRevisionNotes() == null || persisted.getRevisionNotes().isBlank())) {
+            persisted.setRevisionNotes(body.revisionNotes().trim());
+            dirty = true;
+        }
+        if (dirty) {
+            try {
+                versionDao.update(persisted);
+            } catch (Exception e) {
+                LOG.warn("Could not update post-parse metadata for crfOid={} versionOid={} (continuing): {}",
+                        crfOid, persisted.getOid(), e.getMessage());
+            }
+        }
+
+        LOG.info("Author CRF version (JSON): crfOid={} versionOid={} versionName={} sections={} items={} by user={}",
+                crfOid, persisted.getOid(), versionNameTrim,
+                body.sections() == null ? 0 : body.sections().size(),
+                countItems(body), me.getName());
+
+        return ResponseEntity.status(201).body(toVersionDto(persisted));
+    }
+
+    private static int countItems(CrfVersionAuthoringRequest body) {
+        if (body.sections() == null) return 0;
+        int total = 0;
+        for (CrfVersionAuthoringRequest.Section s : body.sections()) {
+            if (s.items() != null) total += s.items().size();
+        }
+        return total;
+    }
+
+    private static final java.util.Set<String> ALLOWED_DATA_TYPES = java.util.Set.of(
+            "ST", "INTEGER", "INT", "BL", "BOOLEAN");
+
+    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateAuthoringShape(
+            CrfVersionAuthoringRequest body) {
+        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        String vname = body.versionName() == null ? "" : body.versionName().trim();
+        if (vname.isEmpty()) {
+            out.add(fe("versionName", "versionName is required"));
+        } else if (vname.length() > 255) {
+            out.add(fe("versionName", "versionName must be 255 characters or fewer"));
+        }
+        if (body.sections() == null || body.sections().isEmpty()) {
+            out.add(fe("sections", "At least one section is required"));
+            return out;
+        }
+        java.util.Set<String> seenSectionLabels = new java.util.HashSet<>();
+        java.util.Set<String> seenItemNames = new java.util.HashSet<>();
+        int sectionIdx = 0;
+        for (CrfVersionAuthoringRequest.Section section : body.sections()) {
+            String prefix = "sections[" + sectionIdx + "]";
+            String label = section == null || section.label() == null ? "" : section.label().trim();
+            String title = section == null || section.title() == null ? "" : section.title().trim();
+            if (label.isEmpty()) {
+                out.add(fe(prefix + ".label", "Section label is required"));
+            } else if (!seenSectionLabels.add(label)) {
+                out.add(fe(prefix + ".label", "Duplicate section label '" + label + "'"));
+            }
+            if (title.isEmpty()) {
+                out.add(fe(prefix + ".title", "Section title is required"));
+            }
+            if (section == null || section.items() == null || section.items().isEmpty()) {
+                out.add(fe(prefix + ".items", "Section must contain at least one item"));
+                sectionIdx++;
+                continue;
+            }
+            int itemIdx = 0;
+            for (CrfVersionAuthoringRequest.Item item : section.items()) {
+                String iPrefix = prefix + ".items[" + itemIdx + "]";
+                String iname = item == null || item.name() == null ? "" : item.name().trim();
+                if (iname.isEmpty()) {
+                    out.add(fe(iPrefix + ".name", "Item name is required"));
+                } else if (!iname.matches("\\w+")) {
+                    out.add(fe(iPrefix + ".name", "Item name must contain only letters, digits and underscores"));
+                } else if (!seenItemNames.add(iname)) {
+                    out.add(fe(iPrefix + ".name", "Duplicate item name '" + iname + "'"));
+                }
+                String desc = item == null || item.descriptionLabel() == null ? "" : item.descriptionLabel().trim();
+                if (desc.isEmpty()) {
+                    out.add(fe(iPrefix + ".descriptionLabel", "Description label is required"));
+                }
+                String dataType = item == null || item.dataType() == null ? "" : item.dataType().trim().toUpperCase(Locale.ROOT);
+                if (dataType.isEmpty()) {
+                    out.add(fe(iPrefix + ".dataType", "Data type is required"));
+                } else if (!ALLOWED_DATA_TYPES.contains(dataType)) {
+                    out.add(fe(iPrefix + ".dataType",
+                            "Data type must be one of ST, INTEGER, BL (Milestone A scope)"));
+                }
+                itemIdx++;
+            }
+            sectionIdx++;
+        }
+        return out;
     }
 
     /* ----------------------------------------------------------------- */
