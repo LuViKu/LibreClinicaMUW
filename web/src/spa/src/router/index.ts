@@ -166,6 +166,13 @@ const router = createRouter({
       component: () => import('@/views/StudyPickerView.vue'),
       meta: { title: 'Pick a study' },
     },
+    /* Phase E.6 — Forced password change (first login or rotation). */
+    {
+      path: '/change-password',
+      name: 'change-password',
+      component: () => import('@/views/ChangePasswordView.vue'),
+      meta: { title: 'Change password' },
+    },
   ],
 })
 
@@ -205,7 +212,24 @@ export function guard(
   if (to.name === 'pick-study') {
     if (auth.isAnonymous) return { name: 'login' }
     if (auth.needsProfile) return { name: 'first-login' }
+    // Forced password change wins over study switching (Phase E.6 / #102).
+    if (auth.needsPasswordChange) return { name: 'change-password' }
+    // Phase E.6 / #101: allow authenticated multi-study operators to
+    // re-enter the picker to switch — do NOT bounce home when a study
+    // is already bound.
     return true
+  }
+
+  // Phase E.6 — Forced password change view.
+  // Must be reachable while needsPasswordChange === true (the legacy
+  // SecureController.passwdTimeOut() forwards every request to the
+  // ResetPassword JSP in that state; we mirror by routing every
+  // navigation here). Anonymous users go to login; authenticated
+  // users whose password is already up to date are bounced home.
+  if (to.name === 'change-password') {
+    if (auth.isAnonymous) return { name: 'login' }
+    if (auth.needsProfile) return { name: 'first-login' }
+    return auth.needsPasswordChange ? true : { name: 'home' }
   }
 
   if (isPublic) return true
@@ -215,6 +239,12 @@ export function guard(
   // Phase E.4 M1: a bound study is required for every protected route.
   // If the user lacks one, send them through the picker first.
   if (auth.needsStudyPick) return { name: 'pick-study' }
+  // Phase E.6: forced password change wins over role checks — the
+  // legacy SecureController bounces every request (except the
+  // ResetPassword target itself) to the change-password page until
+  // the user updates their credential. Mirror that here so role-gated
+  // views can't render PHI to a stale credential.
+  if (auth.needsPasswordChange) return { name: 'change-password' }
 
   const requiredRole = to.meta.role as
     | 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'

@@ -106,14 +106,17 @@ public class CrfsApiController {
     private final DataSource dataSource;
     private final CrfSpreadsheetParserService parserService;
     private final CrfJsonToWorkbookAdapter workbookAdapter;
+    private final CrfJsonValidator jsonValidator;
 
     @Autowired
     public CrfsApiController(@Qualifier("dataSource") DataSource dataSource,
                              CrfSpreadsheetParserService parserService,
-                             CrfJsonToWorkbookAdapter workbookAdapter) {
+                             CrfJsonToWorkbookAdapter workbookAdapter,
+                             CrfJsonValidator jsonValidator) {
         this.dataSource = dataSource;
         this.parserService = parserService;
         this.workbookAdapter = workbookAdapter;
+        this.jsonValidator = jsonValidator;
     }
 
     /* ----------------------------------------------------------------- */
@@ -484,7 +487,7 @@ public class CrfsApiController {
                     List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = validateAuthoringShape(body);
+        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
                     "Validation failed", errors));
@@ -587,70 +590,100 @@ public class CrfsApiController {
         return total;
     }
 
-    private static final java.util.Set<String> ALLOWED_DATA_TYPES = java.util.Set.of(
-            "ST", "INTEGER", "INT", "BL", "BOOLEAN");
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/crfs/{crfOid}/versions:preview  (dry-run validate)    */
+    /* ----------------------------------------------------------------- */
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateAuthoringShape(
-            CrfVersionAuthoringRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
-        String vname = body.versionName() == null ? "" : body.versionName().trim();
-        if (vname.isEmpty()) {
-            out.add(fe("versionName", "versionName is required"));
-        } else if (vname.length() > 255) {
-            out.add(fe("versionName", "versionName must be 255 characters or fewer"));
+    /**
+     * Phase E.6 Milestone B — dry-run preview endpoint.
+     *
+     * <p>Runs the same {@link CrfJsonValidator} the persist endpoint
+     * runs, but never touches the workbook adapter or the parser. Used
+     * by the SPA wizard on entering the Review step to surface
+     * structured errors before the operator hits Create.
+     *
+     * <p>Returns:
+     * <ul>
+     *   <li>{@code 200 OK} with a {@link PreviewResult} carrying a
+     *       summary (sections + items count + uniqueness echo) when
+     *       validation passes</li>
+     *   <li>{@code 400 Bad Request} with a
+     *       {@link SubjectsApiController.ValidationErrorBody} carrying
+     *       the per-field errors when validation fails</li>
+     * </ul>
+     *
+     * <p>Path discriminator: Spring routes the {@code :preview} suffix
+     * separately from the bare {@code /versions} POST. Trying to
+     * preview a non-existent CRF returns 404 just like the real submit.
+     */
+    @PostMapping(value = "/{crfOid}/versions:preview",
+                 consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = PreviewResult.class)))
+    public ResponseEntity<?> previewVersion(
+            @PathVariable("crfOid") String crfOid,
+            @RequestBody(required = false) CrfVersionAuthoringRequest body,
+            HttpSession session) {
+        ResponseEntity<?> guard = preflightWrite(session);
+        if (guard != null) return guard;
+
+        if (body == null) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Request body is required",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
         }
-        if (body.sections() == null || body.sections().isEmpty()) {
-            out.add(fe("sections", "At least one section is required"));
-            return out;
+
+        // Shape-level validation first — short-circuits before hitting
+        // any DAO so missing/malformed payloads surface as 400 even when
+        // the DataSource is a Mockito mock (test parity) or when the
+        // CRF lookup would fail for other reasons.
+        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed", errors));
         }
-        java.util.Set<String> seenSectionLabels = new java.util.HashSet<>();
-        java.util.Set<String> seenItemNames = new java.util.HashSet<>();
-        int sectionIdx = 0;
-        for (CrfVersionAuthoringRequest.Section section : body.sections()) {
-            String prefix = "sections[" + sectionIdx + "]";
-            String label = section == null || section.label() == null ? "" : section.label().trim();
-            String title = section == null || section.title() == null ? "" : section.title().trim();
-            if (label.isEmpty()) {
-                out.add(fe(prefix + ".label", "Section label is required"));
-            } else if (!seenSectionLabels.add(label)) {
-                out.add(fe(prefix + ".label", "Duplicate section label '" + label + "'"));
-            }
-            if (title.isEmpty()) {
-                out.add(fe(prefix + ".title", "Section title is required"));
-            }
-            if (section == null || section.items() == null || section.items().isEmpty()) {
-                out.add(fe(prefix + ".items", "Section must contain at least one item"));
-                sectionIdx++;
-                continue;
-            }
-            int itemIdx = 0;
-            for (CrfVersionAuthoringRequest.Item item : section.items()) {
-                String iPrefix = prefix + ".items[" + itemIdx + "]";
-                String iname = item == null || item.name() == null ? "" : item.name().trim();
-                if (iname.isEmpty()) {
-                    out.add(fe(iPrefix + ".name", "Item name is required"));
-                } else if (!iname.matches("\\w+")) {
-                    out.add(fe(iPrefix + ".name", "Item name must contain only letters, digits and underscores"));
-                } else if (!seenItemNames.add(iname)) {
-                    out.add(fe(iPrefix + ".name", "Duplicate item name '" + iname + "'"));
-                }
-                String desc = item == null || item.descriptionLabel() == null ? "" : item.descriptionLabel().trim();
-                if (desc.isEmpty()) {
-                    out.add(fe(iPrefix + ".descriptionLabel", "Description label is required"));
-                }
-                String dataType = item == null || item.dataType() == null ? "" : item.dataType().trim().toUpperCase(Locale.ROOT);
-                if (dataType.isEmpty()) {
-                    out.add(fe(iPrefix + ".dataType", "Data type is required"));
-                } else if (!ALLOWED_DATA_TYPES.contains(dataType)) {
-                    out.add(fe(iPrefix + ".dataType",
-                            "Data type must be one of ST, INTEGER, BL (Milestone A scope)"));
-                }
-                itemIdx++;
-            }
-            sectionIdx++;
+
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = crfDao.findByOid(crfOid);
+        if (crf == null || crf.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + crfOid + "'"));
         }
-        return out;
+        if (crf.getStatus() != null && crf.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "CRF '" + crfOid + "' is removed — restore before authoring a new version"));
+        }
+
+        // Cross-check against existing versions on the same CRF — the
+        // operator should see version-name collisions in preview rather
+        // than discovering them on Create. Shape validation has already
+        // guaranteed versionName is non-blank at this point.
+        String versionNameTrim = body.versionName().trim();
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean dupCheck = versionDao.findByFullName(versionNameTrim, crf.getName());
+        if (dupCheck != null && dupCheck.getId() != 0) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "versionName",
+                            "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"))));
+        }
+
+        return ResponseEntity.ok(new PreviewResult(
+                crf.getOid(),
+                versionNameTrim,
+                body.sections() == null ? 0 : body.sections().size(),
+                countItems(body)));
     }
+
+    /** Wire shape for the {@code :preview} success response. */
+    @Schema(name = "CrfVersionPreviewResult")
+    public record PreviewResult(
+            String crfOid,
+            String versionName,
+            int sectionCount,
+            int itemCount
+    ) {}
 
     /* ----------------------------------------------------------------- */
     /* POST /api/v1/crfs/{crfOid}/versions/{versionOid}/disable           */

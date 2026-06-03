@@ -25,6 +25,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
+import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.user.AuthoritiesBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -86,16 +87,19 @@ public class UsersApiController {
     private final SiteVisibilityFilter siteVisibilityFilter;
     private final SecurityManager securityManager;
     private final AuthoritiesDao authoritiesDao;
+    private final SsoProperties ssoProperties;
 
     @Autowired
     public UsersApiController(@Qualifier("dataSource") DataSource dataSource,
                               SiteVisibilityFilter siteVisibilityFilter,
                               @Qualifier("securityManager") SecurityManager securityManager,
-                              AuthoritiesDao authoritiesDao) {
+                              AuthoritiesDao authoritiesDao,
+                              SsoProperties ssoProperties) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.securityManager = securityManager;
         this.authoritiesDao = authoritiesDao;
+        this.ssoProperties = ssoProperties;
     }
 
     @GetMapping
@@ -295,6 +299,25 @@ public class UsersApiController {
                     "Validation failed", daoErrors));
         }
 
+        // Phase E.6 (DR-014 follow-up): pre-empt the composite-unique
+        // collision on (external_id_provider, external_id). Bubbling
+        // the SQLState up as a 500 would be opaque; explicit 409 with
+        // the conflicting field makes the SPA's per-field error
+        // rendering work.
+        if (body.externalId() != null && !body.externalId().trim().isEmpty()) {
+            String provider = ssoProperties.getProvider().getName();
+            String eppn = body.externalId().trim();
+            UserAccountBean clash = userDao.findByExternalIdentity(provider, eppn);
+            if (clash != null && clash.getId() != 0) {
+                return ResponseEntity.status(409).body(new SubjectsApiController.ValidationErrorBody(
+                        "An account is already bound to that institutional principal",
+                        List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                                "externalId",
+                                "User '" + clash.getName()
+                                        + "' is already bound to this SSO principal"))));
+            }
+        }
+
         Role legacyRole = RoleMapper.fromSpaRole(body.role());
         StudyBean initialStudy = (StudyBean) studyDao.findByPK(body.studyId());
 
@@ -314,9 +337,26 @@ public class UsersApiController {
             }
         }
 
+        // Phase E.6 (DR-014 follow-up): SSO-bound invite — when the
+        // operator supplied an externalId, skip the local-password
+        // generation entirely. The IdP owns the credential; the row's
+        // (external_id_provider, external_id) pair is what
+        // findByExternalIdentity (D.3) keys on at first SSO login.
+        boolean ssoBound = body.externalId() != null && !body.externalId().trim().isEmpty();
         boolean runWs = Boolean.TRUE.equals(body.runWebservices());
-        String generatedPassword = securityManager.genPassword();
-        String passwordHash = securityManager.encryptPassword(generatedPassword, runWs);
+        String generatedPassword = null;
+        String passwordHash;
+        if (ssoBound) {
+            // No local password — the bean's passwd column is non-null
+            // in the schema, so we write the legacy "directory-owned"
+            // sentinel ("*", UserAccountBean.LDAP_PASSWORD) that the
+            // restore + reset paths already use to recognise external
+            // credentials.
+            passwordHash = UserAccountBean.LDAP_PASSWORD;
+        } else {
+            generatedPassword = securityManager.genPassword();
+            passwordHash = securityManager.encryptPassword(generatedPassword, runWs);
+        }
 
         UserAccountBean newUser = new UserAccountBean();
         newUser.setName(body.username().trim());
@@ -335,6 +375,15 @@ public class UsersApiController {
         newUser.setEnableApiKey(true);
         newUser.setApiKey(generateUniqueApiKey(userDao));
         newUser.addUserType(userType);
+        // Phase E.6: bind the SSO identity. external_id case is
+        // preserved verbatim (SAML attribute case-sensitivity).
+        // external_id_provider is auto-filled from
+        // libreclinica.sso.provider.name — never exposed on the wire to
+        // keep the operator UI institution-agnostic.
+        if (ssoBound) {
+            newUser.setExternalId(body.externalId().trim());
+            newUser.setExternalIdProvider(ssoProperties.getProvider().getName());
+        }
 
         StudyUserRoleBean initialBinding = new StudyUserRoleBean();
         initialBinding.setStudyId(body.studyId());
@@ -377,8 +426,13 @@ public class UsersApiController {
 
         Map<String, Object> response = new HashMap<>();
         response.put("user", dto);
+        // SSO-bound users never carry a local password — return null
+        // regardless of sendEmail. For local accounts, mirror the
+        // legacy displayPwd switch: return the cleartext when the
+        // admin opted to distribute manually.
         response.put("generatedPassword",
-                Boolean.FALSE.equals(body.sendEmail()) ? generatedPassword : null);
+                ssoBound ? null
+                         : (Boolean.FALSE.equals(body.sendEmail()) ? generatedPassword : null));
         return ResponseEntity.status(201).body(response);
     }
 
@@ -430,6 +484,29 @@ public class UsersApiController {
         if ("ldap".equalsIgnoreCase(body.userSource())) {
             out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
                     "userSource", "LDAP user provisioning is not supported via this endpoint"));
+        }
+
+        // Phase E.6 (DR-014 follow-up): externalId shape — when
+        // present, must look like an eppn (contain '@') and fit the
+        // 255-char column. Case is preserved verbatim — SAML
+        // assertions are case-sensitive per spec, lowercasing here
+        // would break the lookup at first SSO login.
+        if (body.externalId() != null) {
+            String raw = body.externalId();
+            String trimmed = raw.trim();
+            if (trimmed.isEmpty()) {
+                // Treat blank-but-present as "not SSO" — the create
+                // handler's ssoBound branch only fires on non-blank,
+                // so this is OK; surface no error.
+            } else if (trimmed.length() > 255) {
+                out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                        "externalId",
+                        "External identifier must be 255 characters or fewer"));
+            } else if (!trimmed.contains("@")) {
+                out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                        "externalId",
+                        "External identifier must look like an institutional principal (e.g. user@meduniwien.ac.at)"));
+            }
         }
 
         return out;

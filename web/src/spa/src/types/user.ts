@@ -61,6 +61,20 @@ export interface CreateUserInput {
   authtype?: string | null
   runWebservices?: boolean
   sendEmail?: boolean
+  /**
+   * Phase E.6 (DR-014 follow-up) — institutional principal
+   * (Shibboleth eppn for MUW). When set, the new row is pre-bound to
+   * the SSO identity: `external_id` + `external_id_provider` are
+   * written so `findByExternalIdentity` matches on first SSO login,
+   * no local password is generated, and the response carries
+   * `generatedPassword: null` regardless of `sendEmail`.
+   *
+   * eppn case is preserved verbatim (SAML attribute case-sensitivity).
+   * The provider namespace is filled server-side from
+   * `libreclinica.sso.provider.name` — it is never on the wire from
+   * the SPA.
+   */
+  externalId?: string | null
 }
 
 /**

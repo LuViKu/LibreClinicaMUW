@@ -16,7 +16,8 @@
     "auditLog": "Audit Trail",
     "buildStudy": "Studienaufbau",
     "manageUsers": "Nutzer verwalten",
-    "importCrfData": "CRF-Daten importieren"
+    "importCrfData": "CRF-Daten importieren",
+    "changePassword": "Passwort ändern"
   },
   "a11y": {
     "skipToMain": "Zum Hauptinhalt springen",
@@ -1079,6 +1080,34 @@
     },
     "errors": {
       "saveFailed": "Profil konnte nicht gespeichert werden. Bitte erneut versuchen."
+    }
+  },
+  "changePassword": {
+    "title": "Passwort ändern",
+    "subtitle": "Angemeldet als {username}.",
+    "banner": {
+      "firstLogin": {
+        "title": "Willkommen — bitte ein neues Passwort setzen",
+        "body": "Sie melden sich zum ersten Mal an. Setzen Sie ein Passwort, das Sie hier noch nicht verwendet haben, und fahren Sie dann mit LibreClinica fort."
+      },
+      "rotation": {
+        "title": "Ihr Passwort ist abgelaufen",
+        "body": "Ihr Passwort ist älter, als die Rotationsrichtlinie erlaubt. Bitte setzen Sie ein neues Passwort, um fortzufahren."
+      }
+    },
+    "field": {
+      "currentPassword": "Aktuelles Passwort",
+      "newPassword": "Neues Passwort",
+      "newPasswordHelper": "Verwenden Sie ein starkes, eindeutiges Passwort — Ihre Administration kann Mindestlänge und Zeichenklassen-Regeln vorgeben.",
+      "newPasswordRepeat": "Neues Passwort wiederholen"
+    },
+    "submit": "Passwort ändern",
+    "submitting": "Wird gespeichert…",
+    "complianceTell": "Passwortänderungen werden im Audit-Trail gemäß 21 CFR Part 11 §11.10 protokolliert.",
+    "errors": {
+      "saveFailed": "Passwort konnte nicht geändert werden. Bitte erneut versuchen.",
+      "repeatMismatch": "Die beiden Felder für das neue Passwort stimmen nicht überein.",
+      "wrongCurrent": "Aktuelles Passwort ist falsch."
     }
   },
   "studyPicker": {
