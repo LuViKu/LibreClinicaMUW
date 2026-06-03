@@ -633,6 +633,16 @@ public class CrfsApiController {
                     List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
         }
 
+        // Shape-level validation first — short-circuits before hitting
+        // any DAO so missing/malformed payloads surface as 400 even when
+        // the DataSource is a Mockito mock (test parity) or when the
+        // CRF lookup would fail for other reasons.
+        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+
         CRFDAO crfDao = new CRFDAO(dataSource);
         CRFBean crf = crfDao.findByOid(crfOid);
         if (crf == null || crf.getId() == 0) {
@@ -644,25 +654,21 @@ public class CrfsApiController {
                     "CRF '" + crfOid + "' is removed — restore before authoring a new version"));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
         // Cross-check against existing versions on the same CRF — the
         // operator should see version-name collisions in preview rather
-        // than discovering them on Create.
-        String versionNameTrim = body.versionName() == null ? "" : body.versionName().trim();
-        if (!versionNameTrim.isEmpty()) {
-            CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
-            CRFVersionBean dupCheck = versionDao.findByFullName(versionNameTrim, crf.getName());
-            if (dupCheck != null && dupCheck.getId() != 0) {
-                errors.add(new SubjectsApiController.ValidationErrorBody.FieldError(
-                        "versionName",
-                        "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"));
-            }
+        // than discovering them on Create. Shape validation has already
+        // guaranteed versionName is non-blank at this point.
+        String versionNameTrim = body.versionName().trim();
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean dupCheck = versionDao.findByFullName(versionNameTrim, crf.getName());
+        if (dupCheck != null && dupCheck.getId() != 0) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "versionName",
+                            "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"))));
         }
 
-        if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
-                    "Validation failed", errors));
-        }
         return ResponseEntity.ok(new PreviewResult(
                 crf.getOid(),
                 versionNameTrim,

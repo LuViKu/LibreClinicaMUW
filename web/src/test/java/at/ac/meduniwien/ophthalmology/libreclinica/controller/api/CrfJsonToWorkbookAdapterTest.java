@@ -124,9 +124,15 @@ class CrfJsonToWorkbookAdapterTest {
     void itemRowSitsAtTheRepeatingTemplateColumnIndices() throws Exception {
         // Pin the cell layout the repeating parser reads. Shifting any
         // column reorders the parser's interpretation of the row.
+        // Record field order is (name, oid, descriptionLabel, leftItemText,
+        // rightItemText, units, dataType, defaultValue, required, …).
+        // The XLS canonical column order has UNITS at col 3 and
+        // RIGHT_ITEM_TEXT at col 4, so the constructor positions for
+        // rightItemText + units differ from the column positions —
+        // pin "completed" → rightItemText (col 4) and "yrs" → units (col 3).
         var item = new CrfVersionAuthoringRequest.Item(
                 "AGE", "", "Age in years", "Years",
-                "yrs", "completed", "INTEGER", "0",
+                "completed", "yrs", "INTEGER", "0",
                 true, null, null);
         var section = new CrfVersionAuthoringRequest.Section("S1", "Demographics", "", 1, List.of(item));
         var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
