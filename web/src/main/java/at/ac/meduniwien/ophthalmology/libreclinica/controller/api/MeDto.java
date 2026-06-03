@@ -34,6 +34,20 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * the SPA's {@code AuthenticatedUser} type carries them as
  * {@code string | null} so a freshly-provisioned user with no
  * persisted locale still serialises cleanly.
+ *
+ * <p>Phase E.6 — {@code mustChangePassword} + {@code
+ * passwordChangeReason} added to restore parity with the legacy
+ * {@code SecureController.passwdTimeOut()} +
+ * {@code MainMenuServlet} forced-rotation gates. The SPA's auth
+ * store reads {@code mustChangePassword} on every {@code /me}
+ * response and, when {@code true}, the router pushes the user to
+ * {@code /change-password}. {@code passwordChangeReason} is purely
+ * a UX hint that lets the change-password view show a localised
+ * banner ("first login" vs "password expired"); it is null when
+ * {@code mustChangePassword} is false. SSO-bound and LDAP users
+ * always serialise {@code mustChangePassword=false} — their
+ * upstream identity provider owns the credential lifecycle per
+ * DR-014.
  */
 @Schema(name = "MeDto")
 public record MeDto(
@@ -47,8 +61,14 @@ public record MeDto(
         boolean profileComplete,
         String locale,
         String timezone,
+        boolean mustChangePassword,
+        String passwordChangeReason,
         ActiveStudyDto activeStudy
 ) {
+
+    /** Allowed values of the {@code passwordChangeReason} field. */
+    public static final String REASON_FIRST_LOGIN = "first-login";
+    public static final String REASON_ROTATION = "rotation";
 
     /**
      * Minimal study summary embedded into MeDto.

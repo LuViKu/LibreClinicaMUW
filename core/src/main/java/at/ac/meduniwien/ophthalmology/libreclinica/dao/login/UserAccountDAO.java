@@ -346,10 +346,25 @@ public class UserAccountDAO extends AuditableEntityDAO<UserAccountBean> {
         variables.put(18, uab.getApiKey());
         variables.put(19, uab.getAuthtype());
         variables.put(20, uab.getAuthsecret());
+        // Phase E.6 (DR-014 follow-up, 2026-06-03): bind the federated
+        // identity columns. The pair is composite-unique (lc-muw-2026-05-30-
+        // add-external-identity.xml); the caller (UsersApiController.create
+        // for the invite path, SsoUserDetailsService for JIT) is
+        // responsible for the (provider, external_id) uniqueness check.
+        // Both columns nullable — local accounts get NULL/NULL.
+        variables.put(21, uab.getExternalId());
+        variables.put(22, uab.getExternalIdProvider());
 
         HashMap<Integer, Integer> nullables = new HashMap<>();
         if (uab.isAuthsecretAbsent()) {
             nullables.put(20, STRING);
+        }
+        // SSO columns: null = local account; bind as SQL NULL strings.
+        if (uab.getExternalId() == null || uab.getExternalId().isEmpty()) {
+            nullables.put(21, STRING);
+        }
+        if (uab.getExternalIdProvider() == null || uab.getExternalIdProvider().isEmpty()) {
+            nullables.put(22, STRING);
         }
 
         this.executeUpdate(digester.getQuery("insert"), variables, nullables);

@@ -2,7 +2,8 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
-  AuthState, AuthenticatedUser, ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption,
+  AuthState, AuthenticatedUser, PasswordChangeFieldError, PasswordChangeRequest,
+  ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption,
 } from '@/types/auth'
 
 /**
@@ -14,6 +15,19 @@ export class ProfileValidationError extends Error {
   constructor(public readonly errors: ProfileFieldError[]) {
     super(`Profile validation failed (${errors.length} error${errors.length === 1 ? '' : 's'})`)
     this.name = 'ProfileValidationError'
+  }
+}
+
+/**
+ * Phase E.6 — thrown by {@link useAuthStore.changePassword} on a 400
+ * from {@code POST /pages/api/v1/me/password}. Carries the per-field
+ * error list (wrong current password, complexity rule failures, repeat
+ * mismatch) so ChangePasswordView can render inline messages.
+ */
+export class PasswordChangeValidationError extends Error {
+  constructor(public readonly errors: PasswordChangeFieldError[]) {
+    super(`Password validation failed (${errors.length} error${errors.length === 1 ? '' : 's'})`)
+    this.name = 'PasswordChangeValidationError'
   }
 }
 
@@ -61,6 +75,18 @@ export const useAuthStore = defineStore('auth', () => {
   const isAnonymous = computed(() => state.value === 'anonymous')
   const needsStudyPick = computed(
     () => state.value === 'authenticated' && !user.value?.activeStudy,
+  )
+  /**
+   * Phase E.6 — true when the backend tells us the user must change
+   * their password before continuing (first login or rotation expired).
+   * Source of truth is the {@code mustChangePassword} field on the
+   * /me payload — refreshed by every {@link bootstrap} / {@link
+   * pickStudy} / {@link completeProfile} response so the flag clears
+   * the moment a successful {@link changePassword} returns the updated
+   * MeDto.
+   */
+  const needsPasswordChange = computed(
+    () => user.value?.mustChangePassword === true,
   )
 
   /**
@@ -204,6 +230,41 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Phase E.6 — POST {@code /pages/api/v1/me/password}.
+   *
+   * On success the backend returns the refreshed MeDto with
+   * {@code mustChangePassword=false} + a fresh
+   * {@code passwd_timestamp}, so the router guard immediately lets
+   * the user leave the change-password view.
+   *
+   * On 400 the per-field errors are thrown as a {@link
+   * PasswordChangeValidationError} so ChangePasswordView can render
+   * inline messages without re-validating client-side.
+   */
+  async function changePassword(req: PasswordChangeRequest): Promise<void> {
+    if (!user.value) return
+    isLoading.value = true
+    error.value = null
+    try {
+      const refreshed = await apiPost<AuthenticatedUser>('/pages/api/v1/me/password', req)
+      user.value = refreshed
+      state.value = refreshed.profileComplete ? 'authenticated' : 'profile-incomplete'
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 400) {
+        const body = e.body as { errors?: PasswordChangeFieldError[] } | null
+        const fieldErrors = body?.errors ?? []
+        throw new PasswordChangeValidationError(fieldErrors)
+      }
+      error.value = e instanceof ApiError ? e.message
+        : e instanceof ApiNetworkError ? 'Backend unreachable.'
+        : 'Failed to change password.'
+      throw e
+    } finally {
+      isLoading.value = false
+    }
+  }
+
   async function logout(): Promise<void> {
     try {
       await fetch('/LibreClinica/Logout', { method: 'GET', credentials: 'include' })
@@ -224,12 +285,14 @@ export const useAuthStore = defineStore('auth', () => {
     needsProfile,
     isAnonymous,
     needsStudyPick,
+    needsPasswordChange,
     bootstrap,
     localLogin,
     loadStudies,
     pickStudy,
     ssoBounce,
     completeProfile,
+    changePassword,
     logout,
   }
 })

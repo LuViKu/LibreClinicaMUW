@@ -16,7 +16,8 @@
     "auditLog": "Audit Trail",
     "buildStudy": "Build Study",
     "manageUsers": "Manage Users",
-    "importCrfData": "Import CRF Data"
+    "importCrfData": "Import CRF Data",
+    "changePassword": "Change password"
   },
   "a11y": {
     "skipToMain": "Skip to main content",
@@ -1077,6 +1078,34 @@
     },
     "errors": {
       "saveFailed": "Could not save your profile. Please try again."
+    }
+  },
+  "changePassword": {
+    "title": "Change your password",
+    "subtitle": "Signed in as {username}.",
+    "banner": {
+      "firstLogin": {
+        "title": "Welcome — please set a new password",
+        "body": "You are signing in for the first time. Set a password you have not used here before, then continue to LibreClinica."
+      },
+      "rotation": {
+        "title": "Your password has expired",
+        "body": "Your password is older than the rotation policy permits. Please set a new password to continue."
+      }
+    },
+    "field": {
+      "currentPassword": "Current password",
+      "newPassword": "New password",
+      "newPasswordHelper": "Use a strong, unique password — your administrator may enforce minimum length and character-class rules.",
+      "newPasswordRepeat": "Repeat new password"
+    },
+    "submit": "Change password",
+    "submitting": "Saving…",
+    "complianceTell": "Password changes are recorded in the audit log per 21 CFR Part 11 §11.10.",
+    "errors": {
+      "saveFailed": "Could not change your password. Please try again.",
+      "repeatMismatch": "The two new-password fields do not match.",
+      "wrongCurrent": "Current password is incorrect."
     }
   },
   "studyPicker": {

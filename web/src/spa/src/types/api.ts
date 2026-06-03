@@ -836,16 +836,16 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/response-sets": {
+    "/api/v1/me/password": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["list_7"];
+        get?: never;
         put?: never;
-        post: operations["create_6"];
+        post: operations["changePassword"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1482,6 +1482,8 @@ export interface components {
             profileComplete?: boolean;
             locale?: string;
             timezone?: string;
+            mustChangePassword?: boolean;
+            passwordChangeReason?: string;
             activeStudy?: components["schemas"]["ActiveStudyDto"];
         };
         UpdateEventRequest: {
@@ -1518,6 +1520,7 @@ export interface components {
             authtype?: string;
             runWebservices?: boolean;
             sendEmail?: boolean;
+            externalId?: string;
         };
         RestoreUserRequest: {
             sendEmail?: boolean;
@@ -1746,22 +1749,10 @@ export interface components {
             value?: string;
             valueExpression?: string;
         };
-        CreateResponseSetRequest: {
-            label?: string;
-            responseType?: string;
-            options?: components["schemas"]["CrfVersionAuthoringRequest.ResponseSet.Option"][];
-        };
-        "CrfVersionAuthoringRequest.ResponseSet.Option": {
-            text?: string;
-            value?: string;
-        };
-        ResponseSetCatalogEntry: {
-            label?: string;
-            responseType?: string;
-            options?: components["schemas"]["CrfVersionAuthoringRequest.ResponseSet.Option"][];
-            /** Format: int64 */
-            usageCount?: number;
-            inActiveStudy?: boolean;
+        PasswordChangeRequest: {
+            currentPassword?: string;
+            newPassword?: string;
+            newPasswordRepeat?: string;
         };
         ActiveStudyRequest: {
             oid?: string;
@@ -3584,18 +3575,18 @@ export interface operations {
             };
         };
     };
-    list_7: {
+    changePassword: {
         parameters: {
-            query?: {
-                q?: string;
-                responseType?: string;
-                limit?: number;
-            };
+            query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordChangeRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -3603,31 +3594,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ResponseSetCatalogEntry"];
-                };
-            };
-        };
-    };
-    create_6: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["CreateResponseSetRequest"];
-            };
-        };
-        responses: {
-            /** @description Created */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ResponseSetCatalogEntry"];
+                    "*/*": components["schemas"]["MeDto"];
                 };
             };
         };
