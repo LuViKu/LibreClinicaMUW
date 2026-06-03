@@ -36,7 +36,9 @@ export type AuthState =
  * convention so the existing optional-chaining code keeps compiling.
  */
 export type AuthenticatedUser =
-  Omit<Required<components['schemas']['MeDto']>, 'role' | 'source' | 'email' | 'siteLabel' | 'locale' | 'timezone' | 'activeStudy'>
+  Omit<Required<components['schemas']['MeDto']>,
+       'role' | 'source' | 'email' | 'siteLabel' | 'locale' | 'timezone'
+       | 'passwordChangeReason' | 'activeStudy'>
   & {
     role: UserRole
     source: AuthSource
@@ -44,8 +46,39 @@ export type AuthenticatedUser =
     siteLabel: string | null
     locale: string | null
     timezone: string | null
+    /**
+     * Phase E.6 — null when {@code mustChangePassword} is false. When
+     * true, drives the localised banner copy on ChangePasswordView
+     * ({@code 'first-login'} → "Welcome — please set a password before
+     * you continue"; {@code 'rotation'} → "Your password has expired
+     * and must be changed before you continue").
+     */
+    passwordChangeReason: PasswordChangeReason | null
     activeStudy: ActiveStudySummary | null
   }
+
+/** UX hint for the ChangePasswordView banner — see AuthenticatedUser. */
+export type PasswordChangeReason = 'first-login' | 'rotation'
+
+/**
+ * Phase E.6 — body of {@code POST /pages/api/v1/me/password}.
+ *
+ * Field names match the SPA's ChangePasswordView inputs. The backend
+ * verifies {@code currentPassword} against the bcrypt-stored hash,
+ * runs {@code newPassword} through the admin-configured complexity
+ * rules + reuse check, and confirms {@code newPasswordRepeat} matches.
+ */
+export interface PasswordChangeRequest {
+  currentPassword: string
+  newPassword: string
+  newPasswordRepeat: string
+}
+
+/** Per-field validation error returned by 400 responses on /me/password. */
+export interface PasswordChangeFieldError {
+  field: 'currentPassword' | 'newPassword' | 'newPasswordRepeat'
+  message: string
+}
 
 /**
  * Phase E.5 B1 — body of {@code PUT /pages/api/v1/me/profile}.
