@@ -32,7 +32,8 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
     private MockMvc mockMvcWith() {
         return mockMvcFor(new CrfsApiController(mockDataSource(),
                 Mockito.mock(CrfSpreadsheetParserService.class),
-                new CrfJsonToWorkbookAdapter()));
+                new CrfJsonToWorkbookAdapter(),
+                new CrfJsonValidator()));
     }
 
     @Test
@@ -233,7 +234,7 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 + "\"versionName\":\"v1.0\","
                 + "\"sections\":[{"
                 + "  \"label\":\"S1\",\"title\":\"Section 1\",\"ordinal\":1,"
-                + "  \"items\":[{\"name\":\"AGE\",\"descriptionLabel\":\"Age\",\"dataType\":\"REAL\",\"required\":true}]"
+                + "  \"items\":[{\"name\":\"AGE\",\"descriptionLabel\":\"Age\",\"dataType\":\"XYZ\",\"required\":true}]"
                 + "}]"
                 + "}";
         mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
@@ -242,8 +243,212 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errors[*].message")
+                .andExpect(jsonPath("$.errors[*].field")
+                        .value(org.hamcrest.Matchers.hasItem("sections[0].items[0].dataType")));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Phase E.6 Milestone B — full taxonomy + response-set + validation  */
+    /* ----------------------------------------------------------------- */
+
+    @Test
+    void authorVersionReturns400OnInvalidResponseType() throws Exception {
+        // Milestone B accepts every non-formula ResponseType; calculation
+        // variants belong to Milestone C and should be rejected at the
+        // shape layer.
+        String body = "{"
+                + "\"versionName\":\"v1.0\","
+                + "\"sections\":[{"
+                + "  \"label\":\"S1\",\"title\":\"Section 1\",\"ordinal\":1,"
+                + "  \"items\":[{"
+                + "    \"name\":\"AGE\",\"descriptionLabel\":\"Age\","
+                + "    \"dataType\":\"INTEGER\",\"required\":false,"
+                + "    \"responseSet\":{\"type\":\"calculation\",\"label\":\"calc1\"}"
+                + "  }]"
+                + "}]"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field")
+                        .value(org.hamcrest.Matchers.hasItem("sections[0].items[0].responseSet.type")));
+    }
+
+    @Test
+    void authorVersionReturns400OnChoiceTypeWithoutOptions() throws Exception {
+        String body = "{"
+                + "\"versionName\":\"v1.0\","
+                + "\"sections\":[{"
+                + "  \"label\":\"S1\",\"title\":\"Section 1\",\"ordinal\":1,"
+                + "  \"items\":[{"
+                + "    \"name\":\"SEX\",\"descriptionLabel\":\"Sex\","
+                + "    \"dataType\":\"ST\",\"required\":true,"
+                + "    \"responseSet\":{\"type\":\"single-select\",\"label\":\"sex\"}"
+                + "  }]"
+                + "}]"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field")
+                        .value(org.hamcrest.Matchers.hasItem("sections[0].items[0].responseSet.options")));
+    }
+
+    @Test
+    void authorVersionReturns400OnNumericOptionValueOnIntegerItem() throws Exception {
+        String body = "{"
+                + "\"versionName\":\"v1.0\","
+                + "\"sections\":[{"
+                + "  \"label\":\"S1\",\"title\":\"Section 1\",\"ordinal\":1,"
+                + "  \"items\":[{"
+                + "    \"name\":\"AGE_BAND\",\"descriptionLabel\":\"Age band\","
+                + "    \"dataType\":\"INTEGER\",\"required\":false,"
+                + "    \"responseSet\":{\"type\":\"radio\",\"label\":\"age_band\","
+                + "      \"options\":[{\"text\":\"Young\",\"value\":\"abc\"}]}"
+                + "  }]"
+                + "}]"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field")
                         .value(org.hamcrest.Matchers.hasItem(
-                                org.hamcrest.Matchers.containsString("Milestone A"))));
+                                "sections[0].items[0].responseSet.options[0].value")));
+    }
+
+    @Test
+    void authorVersionReturns400OnRegexpWithoutErrorMessage() throws Exception {
+        String body = "{"
+                + "\"versionName\":\"v1.0\","
+                + "\"sections\":[{"
+                + "  \"label\":\"S1\",\"title\":\"Section 1\",\"ordinal\":1,"
+                + "  \"items\":[{"
+                + "    \"name\":\"PHONE\",\"descriptionLabel\":\"Phone\","
+                + "    \"dataType\":\"ST\",\"required\":false,"
+                + "    \"validation\":{\"regexp\":\"^[0-9]+$\"}"
+                + "  }]"
+                + "}]"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field")
+                        .value(org.hamcrest.Matchers.hasItem(
+                                "sections[0].items[0].validation.errorMessage")));
+    }
+
+    @Test
+    void authorVersionReturns400OnInvalidRegexp() throws Exception {
+        String body = "{"
+                + "\"versionName\":\"v1.0\","
+                + "\"sections\":[{"
+                + "  \"label\":\"S1\",\"title\":\"Section 1\",\"ordinal\":1,"
+                + "  \"items\":[{"
+                + "    \"name\":\"PHONE\",\"descriptionLabel\":\"Phone\","
+                + "    \"dataType\":\"ST\",\"required\":false,"
+                + "    \"validation\":{\"regexp\":\"([0-9\",\"errorMessage\":\"Bad\"}"
+                + "  }]"
+                + "}]"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field")
+                        .value(org.hamcrest.Matchers.hasItem(
+                                "sections[0].items[0].validation.regexp")));
+    }
+
+    @Test
+    void authorVersionReturns400OnDefaultValueNotInOptions() throws Exception {
+        String body = "{"
+                + "\"versionName\":\"v1.0\","
+                + "\"sections\":[{"
+                + "  \"label\":\"S1\",\"title\":\"Section 1\",\"ordinal\":1,"
+                + "  \"items\":[{"
+                + "    \"name\":\"SEX\",\"descriptionLabel\":\"Sex\","
+                + "    \"dataType\":\"ST\",\"required\":false,"
+                + "    \"defaultValue\":\"X\","
+                + "    \"responseSet\":{\"type\":\"single-select\",\"label\":\"sex\","
+                + "      \"options\":[{\"text\":\"Male\",\"value\":\"M\"},{\"text\":\"Female\",\"value\":\"F\"}]}"
+                + "  }]"
+                + "}]"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field")
+                        .value(org.hamcrest.Matchers.hasItem(
+                                "sections[0].items[0].defaultValue")));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Phase E.6 Milestone B — :preview endpoint                          */
+    /* ----------------------------------------------------------------- */
+
+    @Test
+    void previewVersionReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:preview")
+                .contentType("application/json")
+                .content(MINIMAL_AUTHORING_JSON)
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void previewVersionReturns403WhenInvestigatorAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:preview")
+                .contentType("application/json")
+                .content(MINIMAL_AUTHORING_JSON)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void previewVersionReturns400OnMissingVersionName() throws Exception {
+        String body = "{"
+                + "\"versionName\":\"\","
+                + "\"sections\":[{"
+                + "  \"label\":\"S1\",\"title\":\"Section 1\",\"ordinal\":1,"
+                + "  \"items\":[{\"name\":\"AGE\",\"descriptionLabel\":\"Age\",\"dataType\":\"INTEGER\",\"required\":true}]"
+                + "}]"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:preview")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("versionName"));
+    }
+
+    @Test
+    void previewVersionReturns400OnMissingBody() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:preview")
+                .contentType("application/json")
+                .content("")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest());
     }
 }

@@ -836,6 +836,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/response-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_7"];
+        put?: never;
+        post: operations["create_6"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/password": {
         parameters: {
             query?: never;
@@ -875,7 +891,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_7"];
+        get: operations["list_8"];
         put?: never;
         post: operations["schedule"];
         delete?: never;
@@ -939,7 +955,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_8"];
+        get: operations["list_9"];
         put?: never;
         post: operations["add"];
         delete?: never;
@@ -971,9 +987,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_10"];
         put?: never;
-        post: operations["create_6"];
+        post: operations["create_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -990,6 +1006,22 @@ export interface paths {
         get: operations["listVersions"];
         put?: never;
         post: operations["uploadVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/versions:preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["previewVersion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1067,7 +1099,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_10"];
+        get: operations["list_11"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1163,7 +1195,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_11"];
+        get: operations["list_12"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1733,6 +1765,23 @@ export interface components {
             value?: string;
             valueExpression?: string;
         };
+        CreateResponseSetRequest: {
+            label?: string;
+            responseType?: string;
+            options?: components["schemas"]["CrfVersionAuthoringRequest.ResponseSet.Option"][];
+        };
+        "CrfVersionAuthoringRequest.ResponseSet.Option": {
+            text?: string;
+            value?: string;
+        };
+        ResponseSetCatalogEntry: {
+            label?: string;
+            responseType?: string;
+            options?: components["schemas"]["CrfVersionAuthoringRequest.ResponseSet.Option"][];
+            /** Format: int64 */
+            usageCount?: number;
+            inActiveStudy?: boolean;
+        };
         PasswordChangeRequest: {
             currentPassword?: string;
             newPassword?: string;
@@ -1805,8 +1854,22 @@ export interface components {
             oid?: string;
             descriptionLabel?: string;
             leftItemText?: string;
+            rightItemText?: string;
+            units?: string;
             dataType?: string;
+            defaultValue?: string;
             required?: boolean;
+            responseSet?: components["schemas"]["CrfVersionAuthoringRequest.ResponseSet"];
+            validation?: components["schemas"]["CrfVersionAuthoringRequest.Validation"];
+        };
+        "CrfVersionAuthoringRequest.ResponseSet": {
+            type?: string;
+            label?: string;
+            options?: components["schemas"]["CrfVersionAuthoringRequest.ResponseSet.Option"][];
+            ref?: components["schemas"]["CrfVersionAuthoringRequest.ResponseSetRef"];
+        };
+        "CrfVersionAuthoringRequest.ResponseSetRef": {
+            label?: string;
         };
         "CrfVersionAuthoringRequest.Section": {
             label?: string;
@@ -1815,6 +1878,18 @@ export interface components {
             /** Format: int32 */
             ordinal?: number;
             items?: components["schemas"]["CrfVersionAuthoringRequest.Item"][];
+        };
+        "CrfVersionAuthoringRequest.Validation": {
+            regexp?: string;
+            errorMessage?: string;
+        };
+        CrfVersionPreviewResult: {
+            crfOid?: string;
+            versionName?: string;
+            /** Format: int32 */
+            sectionCount?: number;
+            /** Format: int32 */
+            itemCount?: number;
         };
         EventCellDto: {
             eventDefinitionOid?: string;
@@ -3533,6 +3608,54 @@ export interface operations {
             };
         };
     };
+    list_7: {
+        parameters: {
+            query?: {
+                q?: string;
+                responseType?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ResponseSetCatalogEntry"];
+                };
+            };
+        };
+    };
+    create_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateResponseSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ResponseSetCatalogEntry"];
+                };
+            };
+        };
+    };
     changePassword: {
         parameters: {
             query?: never;
@@ -3581,7 +3704,7 @@ export interface operations {
             };
         };
     };
-    list_7: {
+    list_8: {
         parameters: {
             query?: {
                 subjectId?: string;
@@ -3699,7 +3822,7 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_9: {
         parameters: {
             query?: {
                 status?: string;
@@ -3773,7 +3896,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_10: {
         parameters: {
             query?: {
                 includeRemoved?: boolean;
@@ -3795,7 +3918,7 @@ export interface operations {
             };
         };
     };
-    create_6: {
+    create_7: {
         parameters: {
             query?: never;
             header?: never;
@@ -3872,6 +3995,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["CrfVersionDto"];
+                };
+            };
+        };
+    };
+    previewVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CrfVersionAuthoringRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfVersionPreviewResult"];
                 };
             };
         };
@@ -3965,7 +4114,7 @@ export interface operations {
             };
         };
     };
-    list_10: {
+    list_11: {
         parameters: {
             query?: never;
             header?: never;
@@ -4116,7 +4265,7 @@ export interface operations {
             };
         };
     };
-    list_11: {
+    list_12: {
         parameters: {
             query?: {
                 actor?: string;
