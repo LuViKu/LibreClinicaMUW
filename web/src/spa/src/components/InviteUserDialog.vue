@@ -36,6 +36,8 @@ const { t } = useI18n()
 const users = useUsersStore()
 const auth = useAuthStore()
 
+type AuthMethod = 'local' | 'sso'
+
 interface Form {
   username: string
   firstName: string
@@ -44,12 +46,27 @@ interface Form {
   institutionalAffiliation: string
   phone: string
   role: UserRole
+  /**
+   * Phase E.6 (DR-014 follow-up). 'sso' reveals the externalId input
+   * and tells the backend to pre-bind the row to the institutional
+   * SSO principal (no local password is generated). 'local' is the
+   * legacy path.
+   */
+  authMethod: AuthMethod
+  externalId: string
 }
 const form = ref<Form>(initialForm())
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 const isSubmitting = ref(false)
 const generatedPassword = ref<string | null>(null)
+/**
+ * Phase E.6: distinct success states. 'sso' means the row was
+ * created without a local password; the operator just confirms and
+ * the user can log in via the institutional URL. 'local' falls
+ * through to the legacy copy-one-time-password flow.
+ */
+const successKind = ref<'local' | 'sso' | null>(null)
 
 function initialForm(): Form {
   return {
@@ -60,6 +77,8 @@ function initialForm(): Form {
     institutionalAffiliation: '',
     phone: '',
     role: 'Investigator',
+    authMethod: 'local',
+    externalId: '',
   }
 }
 
@@ -68,6 +87,7 @@ function resetState() {
   fieldErrors.value = {}
   formError.value = null
   generatedPassword.value = null
+  successKind.value = null
 }
 
 // Reset when the dialog opens so a previous result doesn't bleed in.
@@ -84,15 +104,26 @@ const studyId = computed(() => {
   return active?.id && active.id > 0 ? active.id : null
 })
 
+const isSso = computed(() => form.value.authMethod === 'sso')
+
 const canSubmit = computed(() => {
-  return (
+  const baseOk =
     form.value.username.trim().length > 0 &&
     form.value.firstName.trim().length > 0 &&
     form.value.lastName.trim().length > 0 &&
     form.value.email.trim().length > 0 &&
     form.value.institutionalAffiliation.trim().length > 0 &&
     studyId.value != null
-  )
+  if (!baseOk) return false
+  if (isSso.value) {
+    // Phase E.6: SSO branch requires a non-blank eppn-shaped value.
+    // The server enforces the same rule — this is just for fast
+    // client-side feedback so the submit button gates correctly.
+    const ext = form.value.externalId.trim()
+    if (ext.length === 0) return false
+    if (!ext.includes('@')) return false
+  }
+  return true
 })
 
 const roleOptions: { v: UserRole; l: () => string }[] = [
@@ -109,6 +140,13 @@ async function submit() {
   formError.value = null
   isSubmitting.value = true
   try {
+    // Phase E.6: when the operator picked SSO, forward the eppn AND
+    // omit the password-display affordance entirely on the wire. The
+    // server is also defensive (it ignores any password input when
+    // externalId is set), but we keep the payload clean to avoid
+    // confusion in the API surface + audit log.
+    const ssoBranch = isSso.value
+    const ext = form.value.externalId.trim()
     const result = await users.createUser({
       username: form.value.username.trim(),
       firstName: form.value.firstName.trim(),
@@ -118,10 +156,16 @@ async function submit() {
       phone: form.value.phone.trim() === '' ? null : form.value.phone.trim(),
       studyId: studyId.value,
       role: form.value.role,
+      // Local-only sends sendEmail:false (returns one-time password).
+      // SSO branch always returns null generatedPassword from the
+      // server, so sendEmail is meaningless — keep it consistent.
       sendEmail: false,
+      // Phase E.6 — eppn case is NEVER lowercased.
+      ...(ssoBranch ? { externalId: ext } : {}),
     })
     if (result.ok) {
       generatedPassword.value = result.result.generatedPassword
+      successKind.value = ssoBranch ? 'sso' : 'local'
     } else {
       fieldErrors.value = result.fieldErrors
       formError.value = result.message ?? null
@@ -154,8 +198,17 @@ async function copyPassword() {
       </h2>
     </template>
 
-    <!-- Success view: show the one-time password and a copy button. -->
-    <div v-if="generatedPassword !== null" class="space-y-3">
+    <!-- SSO success view: no password to display — the IdP owns the
+         credential. Surface a short confirmation + reminder that the
+         user logs in via the institutional URL. -->
+    <div v-if="successKind === 'sso'" class="space-y-3">
+      <p class="text-sm text-slate-700">{{ t('manageUsers.invite.ssoSuccessIntro') }}</p>
+      <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900">
+        {{ t('manageUsers.invite.ssoSuccessHint') }}
+      </div>
+    </div>
+    <!-- Local-account success view: show the one-time password and a copy button. -->
+    <div v-else-if="generatedPassword !== null" class="space-y-3">
       <p class="text-sm text-slate-700">{{ t('manageUsers.invite.successIntro') }}</p>
       <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs">
         <div class="flex items-center justify-between gap-3">
@@ -175,6 +228,57 @@ async function copyPassword() {
     <div v-else class="space-y-4">
       <div v-if="studyId == null" class="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
         {{ t('manageUsers.invite.studyMissing') }}
+      </div>
+
+      <!-- Phase E.6: auth-method radio group. Local is the legacy
+           path (one-time password); SSO pre-binds the new row to the
+           institutional principal so the user can log in via the
+           reverse-proxy /sso URL without a local credential. -->
+      <fieldset class="space-y-2" data-testid="invite-authmethod">
+        <legend class="text-xs font-medium text-slate-700">
+          {{ t('manageUsers.invite.authMethod.label') }}
+        </legend>
+        <div class="flex flex-wrap gap-4">
+          <label class="inline-flex items-center gap-2 text-xs text-slate-800 cursor-pointer">
+            <input
+              type="radio"
+              name="invite-authmethod"
+              value="local"
+              v-model="form.authMethod"
+              class="text-muw-blue focus:ring-muw-blue"
+            />
+            <span>{{ t('manageUsers.invite.authMethod.local') }}</span>
+          </label>
+          <label class="inline-flex items-center gap-2 text-xs text-slate-800 cursor-pointer">
+            <input
+              type="radio"
+              name="invite-authmethod"
+              value="sso"
+              v-model="form.authMethod"
+              class="text-muw-blue focus:ring-muw-blue"
+            />
+            <span>{{ t('manageUsers.invite.authMethod.sso') }}</span>
+          </label>
+        </div>
+        <p class="text-[11px] text-slate-500">
+          {{ isSso ? t('manageUsers.invite.authMethod.ssoHelp') : t('manageUsers.invite.authMethod.localHelp') }}
+        </p>
+      </fieldset>
+
+      <!-- SSO branch: institutional principal (eppn for MUW). -->
+      <div v-if="isSso" class="space-y-1">
+        <FieldLabel for="invite-externalid" required>
+          {{ t('manageUsers.invite.externalId') }}
+        </FieldLabel>
+        <TextInput
+          id="invite-externalid"
+          v-model="form.externalId"
+          autocomplete="off"
+          spellcheck="false"
+          :placeholder="t('manageUsers.invite.externalIdPlaceholder')"
+        />
+        <ErrorText v-if="fieldErrors.externalId">{{ fieldErrors.externalId }}</ErrorText>
+        <p class="text-[11px] text-slate-500">{{ t('manageUsers.invite.externalIdHelp') }}</p>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
@@ -220,20 +324,22 @@ async function copyPassword() {
     </div>
 
     <template #footer>
-      <div v-if="generatedPassword === null" class="text-xs text-slate-500">
-        {{ t('manageUsers.invite.emailNotWiredNote') }}
+      <div v-if="successKind === null" class="text-xs text-slate-500">
+        <!-- Phase E.6: SSO branch sees a different note — no email is
+             sent, the user logs in via the institutional SSO URL. -->
+        {{ isSso ? t('manageUsers.invite.ssoNotWiredNote') : t('manageUsers.invite.emailNotWiredNote') }}
       </div>
       <div v-else class="text-xs text-slate-500" />
       <div class="flex items-center gap-2">
         <button
-          v-if="generatedPassword === null"
+          v-if="successKind === null"
           class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
           @click="close"
         >
           {{ t('common.cancel') }}
         </button>
         <button
-          v-if="generatedPassword === null"
+          v-if="successKind === null"
           class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
           :disabled="!canSubmit || isSubmitting"
           @click="submit"

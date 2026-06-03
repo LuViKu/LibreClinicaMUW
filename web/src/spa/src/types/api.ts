@@ -1486,6 +1486,7 @@ export interface components {
             authtype?: string;
             runWebservices?: boolean;
             sendEmail?: boolean;
+            externalId?: string;
         };
         RestoreUserRequest: {
             sendEmail?: boolean;
