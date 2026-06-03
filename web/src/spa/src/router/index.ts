@@ -216,11 +216,42 @@ export function guard(
   const requiredRole = to.meta.role as
     | 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'
     | undefined
-  if (requiredRole && auth.user?.role !== requiredRole) {
+  if (requiredRole && !roleSatisfies(auth.user?.role, requiredRole)) {
     return { name: 'home' }
   }
 
   return true
+}
+
+/**
+ * Phase E.6 (2026-06-03) — role hierarchy for route gating.
+ *
+ * <p>Matches the visibility logic in HomeView:
+ * <ul>
+ *   <li>Administrator (incl. sysadmin/techadmin via MeApiController
+ *       projection) is a superset — can access every protected route.</li>
+ *   <li>Data Manager / Monitor / Investigator each own their own
+ *       routes; no inheritance between them in v1.</li>
+ *   <li>CRC inherits Investigator routes (thin variant; a dedicated
+ *       CRC landing is a deferred follow-up).</li>
+ * </ul>
+ *
+ * <p>The legacy authorization model (study_user_role) is more
+ * complex — admin/director have overlap on user-admin paths,
+ * coordinator overlaps with both. The SPA simplifies to four-plus-CRC
+ * because every cross-role check ends up "is sysadmin or has the
+ * legacy role"; the legacy role is preserved in the session so
+ * controller-level auth checks still hold the canonical truth.
+ */
+function roleSatisfies(
+  actual: 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC' | undefined,
+  required: 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC',
+): boolean {
+  if (actual === undefined) return false
+  if (actual === required) return true
+  if (actual === 'Administrator') return true
+  if (actual === 'CRC' && required === 'Investigator') return true
+  return false
 }
 
 export default router
