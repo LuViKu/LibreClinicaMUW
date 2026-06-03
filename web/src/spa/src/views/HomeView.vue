@@ -214,15 +214,6 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
         :description="t('home.dataManager.buildStudyDesc')"
       />
       <LandingCard
-        :to="{ name: 'manage-users' }"
-        role-variant="data-manager"
-        :role-label="t('home.role.Data Manager')"
-        :title="t('manageUsers.title')"
-        :description="t('home.dataManager.manageUsersDesc')"
-        :badge="pendingInvitesCount"
-        :badge-aria-label="t('home.dataManager.pendingInvitesBadgeAria', { n: pendingInvitesCount ?? 0 })"
-      />
-      <LandingCard
         :to="{ name: 'notes' }"
         role-variant="data-manager"
         :role-label="t('home.role.Data Manager')"
