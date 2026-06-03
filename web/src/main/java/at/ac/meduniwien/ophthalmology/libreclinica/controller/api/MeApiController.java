@@ -637,6 +637,11 @@ public class MeApiController {
     /* ----------------------------------------------------------------- */
 
     private String readLocale(int userId) {
+        // Best-effort: any failure (driver missing, mocked DataSource
+        // returning null, column not in schema) silently falls back to
+        // null. Mockito mocks return null from getConnection() so we
+        // catch RuntimeException too — a SQLException-only catch lets
+        // the NPE on `null.prepareStatement` propagate as 500 in tests.
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "SELECT locale FROM user_account WHERE user_id = ?")) {
@@ -647,7 +652,7 @@ public class MeApiController {
                     return (v == null || v.isBlank()) ? null : v;
                 }
             }
-        } catch (SQLException e) {
+        } catch (SQLException | RuntimeException e) {
             LOG.debug("readLocale fallback for user_id={}: {}", userId, e.getMessage());
         }
         return null;
