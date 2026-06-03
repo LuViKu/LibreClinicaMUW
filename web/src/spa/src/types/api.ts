@@ -4,6 +4,38 @@
  */
 
 export interface paths {
+    "/api/v1/users/{username}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{username}/roles/{studyOid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateRole"];
+        post?: never;
+        delete: operations["revokeRole"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subjects/{studySubjectOid}": {
         parameters: {
             query?: never;
@@ -12,7 +44,135 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getOne"];
-        put: operations["update"];
+        put: operations["update_1"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_2"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/group-classes/{groupClassId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_3"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedOid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_4"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedOid}/crfs/{crfOid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateAssignment"];
+        post?: never;
+        delete: operations["removeAssignment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{parentOid}/sites/{siteOid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_5"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules/{ruleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateRule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets/{ruleSetId}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["setSchedule"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets/{ruleSetId}/actions/{actionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateAction"];
         post?: never;
         delete?: never;
         options?: never;
@@ -52,7 +212,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/subjects": {
+    "/api/v1/users": {
         parameters: {
             query?: never;
             header?: never;
@@ -62,6 +222,86 @@ export interface paths {
         get: operations["list"];
         put?: never;
         post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{username}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRoles"];
+        put?: never;
+        post: operations["grantRole"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{username}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{username}/resetPassword": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{username}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disable"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/subjects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_1"];
+        put?: never;
+        post: operations["create_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -109,7 +349,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["restore"];
+        post: operations["restore_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -148,6 +388,230 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_2"];
+        put?: never;
+        post: operations["create_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["setStatus"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/group-classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_3"];
+        put?: never;
+        post: operations["create_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/group-classes/{groupClassId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/group-classes/{groupClassId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disable_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_4"];
+        put?: never;
+        post: operations["create_4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedOid}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disable_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedOid}/crfs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listAssignments"];
+        put?: never;
+        post: operations["attachCrf"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["reorder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disable_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{parentOid}/sites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_5"];
+        put?: never;
+        post: operations["create_5"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{parentOid}/sites/{siteOid}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{parentOid}/sites/{siteOid}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disable_4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sdv/verify": {
         parameters: {
             query?: never;
@@ -180,6 +644,198 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules/validate-target": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validateTarget"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules/test-expression": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["testExpression"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["uploadImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["commitImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_6"];
+        put?: never;
+        post: operations["createRuleSet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets/{ruleSetId}/rules/{ruleSetRuleId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restoreAttachedRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets/{ruleSetId}/rules/{ruleSetRuleId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableAttachedRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets/{ruleSetId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restoreRuleSet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets/{ruleSetId}/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["dryRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets/{ruleSetId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableRuleSet"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets/{ruleSetId}/actions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["createAction"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/activeStudy": {
         parameters: {
             query?: never;
@@ -203,7 +859,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_1"];
+        get: operations["list_7"];
         put?: never;
         post: operations["schedule"];
         delete?: never;
@@ -267,7 +923,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_2"];
+        get: operations["list_8"];
         put?: never;
         post: operations["add"];
         delete?: never;
@@ -292,16 +948,64 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/users": {
+    "/api/v1/crfs": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["list_3"];
+        get: operations["list_9"];
         put?: never;
-        post?: never;
+        post: operations["create_6"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listVersions"];
+        put?: never;
+        post: operations["uploadVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/versions/{versionOid}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disableVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["disable_5"];
         delete?: never;
         options?: never;
         head?: never;
@@ -316,22 +1020,6 @@ export interface paths {
             cookie?: never;
         };
         get: operations["preflightForSign"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/studies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["list_4"];
         put?: never;
         post?: never;
         delete?: never;
@@ -363,7 +1051,55 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_5"];
+        get: operations["list_10"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rules/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets/{ruleSetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getOne_1"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteRuleSet"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rule-sets/{ruleSetId}/run-log": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getRunLog"];
         put?: never;
         post?: never;
         delete?: never;
@@ -411,7 +1147,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_6"];
+        get: operations["list_11"];
         put?: never;
         post?: never;
         delete?: never;
@@ -424,6 +1160,40 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        UpdateUserRequest: {
+            firstName?: string;
+            lastName?: string;
+            email?: string;
+            phone?: string;
+            institutionalAffiliation?: string;
+            userType?: string;
+            authtype?: string;
+            runWebservices?: boolean;
+        };
+        StudyUserDto: {
+            id?: string;
+            username?: string;
+            displayName?: string;
+            email?: string;
+            role?: string;
+            siteLabel?: string;
+            auth?: string;
+            lastLoginAt?: string;
+            active?: boolean;
+        };
+        RoleAssignmentRequest: {
+            studyOid?: string;
+            role?: string;
+        };
+        RoleBindingDto: {
+            /** Format: int32 */
+            studyId?: number;
+            studyOid?: string;
+            studyName?: string;
+            siteLabel?: string;
+            role?: string;
+            active?: boolean;
+        };
         UpdateSubjectRequest: {
             secondaryId?: string;
             gender?: string;
@@ -460,12 +1230,210 @@ export interface components {
             /** Format: int32 */
             openQueries?: number;
         };
+        UpdateStudyRequest: {
+            name?: string;
+            briefSummary?: string;
+            principalInvestigator?: string;
+            sponsor?: string;
+            officialTitle?: string;
+            secondaryProtocolId?: string;
+            collaborators?: string;
+            protocolDescription?: string;
+            contactEmail?: string;
+            protocolType?: string;
+            phase?: string;
+        };
+        StudyIdentityDto: {
+            oid?: string;
+            name?: string;
+            uniqueProtocolId?: string;
+            briefSummary?: string;
+            principalInvestigator?: string;
+            sponsor?: string;
+            officialTitle?: string;
+            secondaryProtocolId?: string;
+            collaborators?: string;
+            protocolDescription?: string;
+            contactEmail?: string;
+            protocolType?: string;
+            phase?: string;
+            status?: string;
+            parentStudyOid?: string;
+            parentStudyName?: string;
+        };
+        GroupEntry: {
+            /** Format: int32 */
+            id?: number;
+            name?: string;
+            description?: string;
+        };
+        UpdateGroupClassRequest: {
+            name?: string;
+            groupClassType?: string;
+            subjectAssignment?: string;
+            groups?: components["schemas"]["GroupEntry"][];
+        };
+        GroupClassDto: {
+            /** Format: int32 */
+            id?: number;
+            name?: string;
+            groupClassType?: string;
+            subjectAssignment?: string;
+            status?: string;
+            groups?: components["schemas"]["GroupDto"][];
+        };
+        GroupDto: {
+            /** Format: int32 */
+            id?: number;
+            name?: string;
+            description?: string;
+            status?: string;
+        };
+        UpdateEventDefinitionRequest: {
+            name?: string;
+            description?: string;
+            category?: string;
+            type?: string;
+            repeating?: boolean;
+        };
+        EventDefinitionDto: {
+            oid?: string;
+            name?: string;
+            description?: string;
+            category?: string;
+            type?: string;
+            repeating?: boolean;
+            /** Format: int32 */
+            ordinal?: number;
+            status?: string;
+        };
+        EventCrfAssignmentRequest: {
+            crfOid?: string;
+            defaultVersionOid?: string;
+            required?: boolean;
+            doubleEntry?: boolean;
+            decisionCondition?: boolean;
+            electronicSignature?: boolean;
+            hideCrf?: boolean;
+            sourceDataVerification?: string;
+            participantForm?: boolean;
+            allowAnonymousSubmission?: boolean;
+            submissionUrl?: string;
+            offline?: boolean;
+        };
+        EventCrfAssignmentDto: {
+            crfOid?: string;
+            crfName?: string;
+            defaultVersionOid?: string;
+            defaultVersionName?: string;
+            required?: boolean;
+            doubleEntry?: boolean;
+            decisionCondition?: boolean;
+            electronicSignature?: boolean;
+            hideCrf?: boolean;
+            sourceDataVerification?: string;
+            participantForm?: boolean;
+            allowAnonymousSubmission?: boolean;
+            submissionUrl?: string;
+            offline?: boolean;
+            status?: string;
+        };
+        UpdateSiteRequest: {
+            name?: string;
+            briefSummary?: string;
+            principalInvestigator?: string;
+            facilityName?: string;
+            facilityCity?: string;
+            facilityState?: string;
+            facilityZip?: string;
+            facilityCountry?: string;
+            facilityContactName?: string;
+            facilityContactDegree?: string;
+            facilityContactPhone?: string;
+            facilityContactEmail?: string;
+        };
+        UpdateRuleRequest: {
+            name?: string;
+            description?: string;
+            expression?: string;
+        };
+        CreateRuleResponse: {
+            /** Format: int32 */
+            id?: number;
+            oid?: string;
+            name?: string;
+            description?: string;
+            expression?: string;
+        };
+        SetRuleSetScheduleRequest: {
+            runSchedule?: boolean;
+            runTime?: string;
+        };
+        AttachedRuleDto: {
+            /** Format: int32 */
+            ruleSetRuleId?: number;
+            /** Format: int32 */
+            ruleId?: number;
+            ruleOid?: string;
+            ruleName?: string;
+            ruleDescription?: string;
+            ruleExpression?: string;
+            status?: string;
+            actions?: components["schemas"]["RuleActionDto"][];
+        };
+        PhaseGatesDto: {
+            administrativeDataEntry?: boolean;
+            initialDataEntry?: boolean;
+            doubleDataEntry?: boolean;
+            importDataEntry?: boolean;
+            batch?: boolean;
+        };
+        RuleActionDto: {
+            /** Format: int32 */
+            id?: number;
+            actionType?: string;
+            expressionEvaluatesTo?: boolean;
+            message?: string;
+            typeSpecific?: {
+                [key: string]: unknown;
+            };
+            phaseGates?: components["schemas"]["PhaseGatesDto"];
+        };
+        RuleSetDto: {
+            /** Format: int32 */
+            id?: number;
+            target?: string;
+            studyEventDefinitionOid?: string;
+            studyEventDefinitionName?: string;
+            crfOid?: string;
+            crfName?: string;
+            crfVersionOid?: string;
+            crfVersionName?: string;
+            runSchedule?: boolean;
+            runTime?: string;
+            status?: string;
+            attachedRules?: components["schemas"]["AttachedRuleDto"][];
+        };
+        "CreateRuleActionRequest.PhaseGatesInput": {
+            administrativeDataEntry?: boolean;
+            initialDataEntry?: boolean;
+            doubleDataEntry?: boolean;
+            importDataEntry?: boolean;
+            batch?: boolean;
+        };
+        UpdateRuleActionRequest: {
+            message?: string;
+            expressionEvaluatesTo?: boolean;
+            to?: string;
+            phaseGates?: components["schemas"]["CreateRuleActionRequest.PhaseGatesInput"];
+        };
         ProfileUpdateRequest: {
             displayName?: string;
             locale?: string;
             timezone?: string;
         };
         ActiveStudyDto: {
+            /** Format: int32 */
             id?: number;
             oid?: string;
             name?: string;
@@ -503,6 +1471,28 @@ export interface components {
             status?: string;
             repeating?: boolean;
         };
+        CreateUserRequest: {
+            username?: string;
+            firstName?: string;
+            lastName?: string;
+            email?: string;
+            institutionalAffiliation?: string;
+            phone?: string;
+            /** Format: int32 */
+            studyId?: number;
+            role?: string;
+            userType?: string;
+            userSource?: string;
+            authtype?: string;
+            runWebservices?: boolean;
+            sendEmail?: boolean;
+        };
+        RestoreUserRequest: {
+            sendEmail?: boolean;
+        };
+        ResetPasswordRequest: {
+            sendEmail?: boolean;
+        };
         AddSubjectRequest: {
             id?: string;
             secondaryId?: string;
@@ -516,6 +1506,61 @@ export interface components {
             password?: string;
             attestation?: boolean;
         };
+        CreateStudyRequest: {
+            name?: string;
+            uniqueProtocolId?: string;
+            briefSummary?: string;
+            principalInvestigator?: string;
+            sponsor?: string;
+            officialTitle?: string;
+            secondaryProtocolId?: string;
+            collaborators?: string;
+            protocolDescription?: string;
+            contactEmail?: string;
+            protocolType?: string;
+            phase?: string;
+        };
+        SetStudyStatusRequest: {
+            targetStatus?: string;
+            reason?: string;
+        };
+        CreateGroupClassRequest: {
+            name?: string;
+            groupClassType?: string;
+            subjectAssignment?: string;
+            groups?: components["schemas"]["GroupInput"][];
+        };
+        GroupInput: {
+            name?: string;
+            description?: string;
+        };
+        CreateEventDefinitionRequest: {
+            name?: string;
+            description?: string;
+            category?: string;
+            type?: string;
+            repeating?: boolean;
+        };
+        ReorderEventDefinitionsRequest: {
+            orderedOids?: string[];
+        };
+        CreateSiteRequest: {
+            name?: string;
+            uniqueProtocolId?: string;
+            briefSummary?: string;
+            principalInvestigator?: string;
+            facilityName?: string;
+            facilityCity?: string;
+            facilityState?: string;
+            facilityZip?: string;
+            facilityCountry?: string;
+            facilityContactName?: string;
+            facilityContactDegree?: string;
+            facilityContactPhone?: string;
+            facilityContactEmail?: string;
+            /** Format: int32 */
+            initialPrincipalInvestigatorUserId?: number;
+        };
         VerifyRequest: {
             eventCrfOids?: string[];
             verified?: boolean;
@@ -523,6 +1568,151 @@ export interface components {
         UnverifyRequest: {
             eventCrfOids?: string[];
             reason?: string;
+        };
+        CreateRuleRequest: {
+            oid?: string;
+            name?: string;
+            description?: string;
+            expression?: string;
+        };
+        ValidateTargetRequest: {
+            target?: string;
+        };
+        ValidateTargetResponse: {
+            valid?: boolean;
+            errors?: components["schemas"]["ValidateTargetResponse.ValidationIssue"][];
+        };
+        "ValidateTargetResponse.ValidationIssue": {
+            message?: string;
+        };
+        TestExpressionRequest: {
+            expression?: string;
+            testValues?: {
+                [key: string]: string;
+            };
+        };
+        TestExpressionResponse: {
+            result?: string;
+            evaluatedAt?: string;
+        };
+        ImportIssue: {
+            /** @description "rule" or "ruleSet". */
+            scope?: string;
+            /** @description Rule OID or rule-set target expression. */
+            identifier?: string;
+            /** @description "ERROR" (skip on commit) or "WARNING" (replace on commit). */
+            severity?: string;
+            /** @description Validator message; typically an OCRERR_* code with substituted parameters. */
+            message?: string;
+        };
+        RulesImportPreviewDto: {
+            /** @description Opaque token returned by /import; pass it back to /import/commit within 15 minutes. */
+            previewToken?: string;
+            /**
+             * Format: int32
+             * @description Number of new rule definitions the commit will persist.
+             */
+            validRuleCount?: number;
+            /**
+             * Format: int32
+             * @description Number of rule definitions whose OID already exists; commit will replace them unless ignoreDuplicates=true.
+             */
+            duplicateRuleCount?: number;
+            /**
+             * Format: int32
+             * @description Number of rule definitions the validator rejected; commit will skip them.
+             */
+            invalidRuleCount?: number;
+            /**
+             * Format: int32
+             * @description Number of new rule sets the commit will persist.
+             */
+            validRuleSetCount?: number;
+            /**
+             * Format: int32
+             * @description Number of rule sets whose target already has a definition; commit will replace them unless ignoreDuplicates=true.
+             */
+            duplicateRuleSetCount?: number;
+            /**
+             * Format: int32
+             * @description Number of rule sets the validator rejected; commit will skip them.
+             */
+            invalidRuleSetCount?: number;
+            /** @description Per-entry validator findings — surface these to operators before committing. */
+            issues?: components["schemas"]["ImportIssue"][];
+        };
+        CommitRequest: {
+            /** @description Preview token returned by /import. */
+            previewToken?: string;
+            /** @description When true, duplicate rules + rule sets are skipped; otherwise they overwrite existing definitions. */
+            ignoreDuplicates?: boolean;
+        };
+        RulesImportCommitResult: {
+            /**
+             * Format: int32
+             * @description Number of new rule definitions created.
+             */
+            rulesCreated?: number;
+            /**
+             * Format: int32
+             * @description Number of pre-existing rule definitions overwritten. Zero when ignoreDuplicates=true.
+             */
+            rulesReplaced?: number;
+            /**
+             * Format: int32
+             * @description Number of new rule sets created.
+             */
+            ruleSetsCreated?: number;
+            /**
+             * Format: int32
+             * @description Number of pre-existing rule sets overwritten. Zero when ignoreDuplicates=true.
+             */
+            ruleSetsReplaced?: number;
+            /**
+             * Format: int32
+             * @description Total action rows attached across the new + replaced rule sets.
+             */
+            actionsCreated?: number;
+            /** @description ISO-8601 instant the commit completed (server clock). */
+            committedAt?: string;
+        };
+        CreateRuleSetRequest: {
+            target?: string;
+            studyEventDefinitionOid?: string;
+            crfOid?: string;
+            crfVersionOid?: string;
+            ruleOids?: string[];
+        };
+        /** @description Per-rule preview of what a rule_set would do if run in SAVE mode. */
+        RuleSetDryRunResponse: {
+            /** Format: int32 */
+            ruleSetId?: number;
+            ruleSetTarget?: string;
+            results?: components["schemas"]["RuleSetDryRunResult"][];
+        };
+        RuleSetDryRunResult: {
+            ruleName?: string;
+            ruleOid?: string;
+            expression?: string;
+            executeOn?: string;
+            actionType?: string;
+            actionSummary?: string;
+            subjects?: string[];
+        };
+        CreateRuleActionRequest: {
+            /** Format: int32 */
+            ruleSetRuleId?: number;
+            actionType?: string;
+            expressionEvaluatesTo?: boolean;
+            message?: string;
+            to?: string;
+            properties?: components["schemas"]["CreateRuleActionRequest.PropertyInput"][];
+            phaseGates?: components["schemas"]["CreateRuleActionRequest.PhaseGatesInput"];
+        };
+        "CreateRuleActionRequest.PropertyInput": {
+            oid?: string;
+            value?: string;
+            valueExpression?: string;
         };
         ActiveStudyRequest: {
             oid?: string;
@@ -561,16 +1751,24 @@ export interface components {
             description?: string;
             assignedTo?: string;
         };
-        StudyUserDto: {
-            id?: string;
-            username?: string;
-            displayName?: string;
-            email?: string;
-            role?: string;
-            siteLabel?: string;
-            auth?: string;
-            lastLoginAt?: string;
-            active?: boolean;
+        CreateCrfRequest: {
+            name?: string;
+            description?: string;
+        };
+        CrfDto: {
+            oid?: string;
+            name?: string;
+            description?: string;
+            status?: string;
+            versions?: components["schemas"]["CrfVersionDto"][];
+        };
+        CrfVersionDto: {
+            oid?: string;
+            name?: string;
+            description?: string;
+            revisionNotes?: string;
+            status?: string;
+            uploadedAt?: string;
         };
         EventCellDto: {
             eventDefinitionOid?: string;
@@ -649,6 +1847,16 @@ export interface components {
             openQueries?: number;
             lastUpdatedAt?: string;
         };
+        RuleActionRunLogDto: {
+            /** Format: int32 */
+            id?: number;
+            actionType?: string;
+            ruleOid?: string;
+            /** Format: int32 */
+            itemDataId?: number;
+            value?: string;
+            firedAt?: string;
+        };
         CrfEntryDto: {
             eventCrfOid?: string;
             subjectId?: string;
@@ -711,6 +1919,82 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyUserDto"];
+                };
+            };
+        };
+    };
+    updateRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RoleAssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RoleBindingDto"];
+                };
+            };
+        };
+    };
+    revokeRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RoleBindingDto"];
+                };
+            };
+        };
+    };
     getOne: {
         parameters: {
             query?: never;
@@ -733,7 +2017,7 @@ export interface operations {
             };
         };
     };
-    update: {
+    update_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -755,6 +2039,244 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SubjectDetailDto"];
+                };
+            };
+        };
+    };
+    update_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateStudyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    update_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                groupClassId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateGroupClassRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GroupClassDto"];
+                };
+            };
+        };
+    };
+    update_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateEventDefinitionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventDefinitionDto"];
+                };
+            };
+        };
+    };
+    updateAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedOid: string;
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EventCrfAssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfAssignmentDto"];
+                };
+            };
+        };
+    };
+    removeAssignment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedOid: string;
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfAssignmentDto"];
+                };
+            };
+        };
+    };
+    update_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parentOid: string;
+                siteOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateSiteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    updateRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CreateRuleResponse"];
+                };
+            };
+        };
+    };
+    setSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleSetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SetRuleSetScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    updateAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleSetId: number;
+                actionId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateRuleActionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
                 };
             };
         };
@@ -833,6 +2355,176 @@ export interface operations {
     };
     list: {
         parameters: {
+            query?: {
+                role?: string;
+                siteOid?: string;
+                active?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyUserDto"];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateUserRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyUserDto"];
+                };
+            };
+        };
+    };
+    listRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RoleBindingDto"];
+                };
+            };
+        };
+    };
+    grantRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RoleAssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RoleBindingDto"];
+                };
+            };
+        };
+    };
+    restore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RestoreUserRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyUserDto"];
+                };
+            };
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    disable: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyUserDto"];
+                };
+            };
+        };
+    };
+    list_1: {
+        parameters: {
             query?: never;
             header?: never;
             path?: never;
@@ -851,7 +2543,7 @@ export interface operations {
             };
         };
     };
-    create: {
+    create_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -923,7 +2615,7 @@ export interface operations {
             };
         };
     };
-    restore: {
+    restore_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -989,6 +2681,455 @@ export interface operations {
             };
         };
     };
+    list_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyOptionDto"];
+                };
+            };
+        };
+    };
+    create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateStudyRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    setStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SetStudyStatusRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    restore_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    list_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GroupClassDto"];
+                };
+            };
+        };
+    };
+    create_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateGroupClassRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GroupClassDto"];
+                };
+            };
+        };
+    };
+    restore_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                groupClassId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GroupClassDto"];
+                };
+            };
+        };
+    };
+    disable_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                groupClassId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GroupClassDto"];
+                };
+            };
+        };
+    };
+    list_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventDefinitionDto"];
+                };
+            };
+        };
+    };
+    create_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateEventDefinitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventDefinitionDto"];
+                };
+            };
+        };
+    };
+    disable_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventDefinitionDto"];
+                };
+            };
+        };
+    };
+    listAssignments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfAssignmentDto"];
+                };
+            };
+        };
+    };
+    attachCrf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EventCrfAssignmentRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfAssignmentDto"];
+                };
+            };
+        };
+    };
+    reorder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReorderEventDefinitionsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventDefinitionDto"];
+                };
+            };
+        };
+    };
+    disable_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    list_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parentOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    create_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parentOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateSiteRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    restore_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parentOid: string;
+                siteOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    disable_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parentOid: string;
+                siteOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
     verify: {
         parameters: {
             query?: never;
@@ -1037,6 +3178,315 @@ export interface operations {
             };
         };
     };
+    createRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateRuleRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CreateRuleResponse"];
+                };
+            };
+        };
+    };
+    validateTarget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ValidateTargetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ValidateTargetResponse"];
+                };
+            };
+        };
+    };
+    testExpression: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Accept-Language"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TestExpressionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TestExpressionResponse"];
+                };
+            };
+        };
+    };
+    uploadImport: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Accept-Language"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RulesImportPreviewDto"];
+                };
+            };
+        };
+    };
+    commitImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CommitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RulesImportCommitResult"];
+                };
+            };
+        };
+    };
+    list_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    createRuleSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateRuleSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    restoreAttachedRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleSetId: number;
+                ruleSetRuleId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    disableAttachedRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleSetId: number;
+                ruleSetRuleId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    restoreRuleSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleSetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    dryRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleSetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDryRunResponse"];
+                };
+            };
+        };
+    };
+    disableRuleSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleSetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    createAction: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleSetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateRuleActionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
     setActiveStudy: {
         parameters: {
             query?: never;
@@ -1061,7 +3511,7 @@ export interface operations {
             };
         };
     };
-    list_1: {
+    list_7: {
         parameters: {
             query?: {
                 subjectId?: string;
@@ -1179,7 +3629,7 @@ export interface operations {
             };
         };
     };
-    list_2: {
+    list_8: {
         parameters: {
             query?: {
                 status?: string;
@@ -1253,12 +3703,10 @@ export interface operations {
             };
         };
     };
-    list_3: {
+    list_9: {
         parameters: {
             query?: {
-                role?: string;
-                siteOid?: string;
-                active?: boolean;
+                includeRemoved?: boolean;
             };
             header?: never;
             path?: never;
@@ -1272,7 +3720,132 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["StudyUserDto"];
+                    "*/*": components["schemas"]["CrfDto"];
+                };
+            };
+        };
+    };
+    create_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateCrfRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfDto"];
+                };
+            };
+        };
+    };
+    listVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfVersionDto"];
+                };
+            };
+        };
+    };
+    uploadVersion: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Accept-Language"?: string;
+            };
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    versionName: string;
+                    versionDescription?: string;
+                    revisionNotes?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfVersionDto"];
+                };
+            };
+        };
+    };
+    disableVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+                versionOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfVersionDto"];
+                };
+            };
+        };
+    };
+    disable_5: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfDto"];
                 };
             };
         };
@@ -1299,26 +3872,6 @@ export interface operations {
             };
         };
     };
-    list_4: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description OK */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["StudyOptionDto"];
-                };
-            };
-        };
-    };
     buildStatus: {
         parameters: {
             query?: never;
@@ -1341,7 +3894,7 @@ export interface operations {
             };
         };
     };
-    list_5: {
+    list_10: {
         parameters: {
             query?: never;
             header?: never;
@@ -1357,6 +3910,95 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SdvRowDto"];
+                };
+            };
+        };
+    };
+    downloadTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getOne_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleSetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    deleteRuleSet: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ruleSetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    getRunLog: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                ruleSetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RuleActionRunLogDto"];
                 };
             };
         };
@@ -1403,7 +4045,7 @@ export interface operations {
             };
         };
     };
-    list_6: {
+    list_11: {
         parameters: {
             query?: {
                 actor?: string;

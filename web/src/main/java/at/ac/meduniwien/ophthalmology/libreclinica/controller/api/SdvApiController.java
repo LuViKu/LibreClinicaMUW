@@ -219,7 +219,11 @@ public class SdvApiController {
             String eventStartDate = evt.getDateStarted() == null
                     ? "" : ISO_DATE.format(evt.getDateStarted());
             String lastUpdatedAt = ec.getUpdatedDate() == null
-                    ? "" : ec.getUpdatedDate().toInstant().truncatedTo(ChronoUnit.SECONDS).toString();
+                    // Phase E.5 fix (2026-06-03): see CrfsApiController.toVersionDto
+                    // — same java.sql.Date.toInstant() UnsupportedOperationException
+                    // gotcha. Coerce via getTime() → Instant.
+                    ? "" : java.time.Instant.ofEpochMilli(ec.getUpdatedDate().getTime())
+                            .truncatedTo(ChronoUnit.SECONDS).toString();
 
             String crfName = buildCrfDisplayName(crf, version);
 
