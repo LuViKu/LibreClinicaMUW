@@ -79,6 +79,7 @@
     "cancel": "Cancel",
     "back": "Back",
     "next": "Next",
+    "remove": "Remove",
     "search": "Search",
     "filter": "Filter",
     "clear": "Clear",
@@ -696,7 +697,50 @@
     "disable": "Remove",
     "disableConfirm": "Remove CRF \"{name}\"? Active assignments stay intact for audit but new data entry is blocked. The action is recorded in the audit trail.",
     "disableVersionConfirm": "Remove version \"{version}\" of \"{name}\"? Subjects currently entering data against this version are unaffected; new data entry will use the remaining versions.",
-    "empty": "No CRFs in the library yet."
+    "empty": "No CRFs in the library yet.",
+    "authorManually": "Manually author",
+    "author": {
+      "heading": "Author new version of \"{name}\"",
+      "subheading": "Phase E.6 Milestone A — vertical slice (one section, two-three items, TEXT response).",
+      "scopeNote": "Milestone A scope: ST / INTEGER / BL items with a single TEXT response set. Show-when, calculations, multi-language labels and reusable response sets land in Milestones B/C/D.",
+      "rail": {
+        "metadata": "1 · Metadata",
+        "sections": "2 · Sections",
+        "review": "3 · Review"
+      },
+      "metadata": {
+        "heading": "Version metadata"
+      },
+      "sections": {
+        "heading": "Sections and items"
+      },
+      "sectionLabel": "Section label",
+      "sectionTitle": "Section title",
+      "sectionInstructions": "Instructions",
+      "itemsHeading": "Items",
+      "itemsEmpty": "No items yet — add at least one to enable submit.",
+      "addItem": "+ Add item",
+      "itemName": "Item name",
+      "descriptionLabel": "Description label",
+      "leftItemText": "Left item text",
+      "dataTypeLabel": "Data type",
+      "required": "Required",
+      "dataType": {
+        "ST": "Text (ST)",
+        "INTEGER": "Integer (INTEGER)",
+        "BL": "Boolean (BL)"
+      },
+      "next": "Next",
+      "submit": "Create version",
+      "review": {
+        "heading": "Review and submit",
+        "intro": "On submit the server synthesises an XLS workbook from this draft and runs it through the legacy CRF parser. The resulting version is semantically identical to one uploaded via the upload-version flow.",
+        "sectionCount": "Sections",
+        "itemCount": "Items",
+        "incomplete": "Some required fields are still blank — go back and fill them in to enable submit.",
+        "parseErrors": "The parser rejected the synthesised workbook ({count} issue(s)):"
+      }
+    }
   },
   "assignCrfs": {
     "title": "Manage CRF assignments",

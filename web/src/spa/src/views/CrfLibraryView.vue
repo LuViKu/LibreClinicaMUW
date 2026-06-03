@@ -7,6 +7,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import CrfAuthoringWizard from '@/components/CrfAuthoringWizard.vue'
 
 import { useCrfLibraryStore } from '@/stores/crfLibrary'
 import { useAuthStore } from '@/stores/auth'
@@ -136,6 +137,20 @@ async function submitUpload() {
   }
 }
 
+/* --------------------------- Author wizard ------------------------ */
+// Phase E.6 Milestone A — JSON-body wizard launched per-CRF from the
+// list. On close, reload the library so the freshly-authored version
+// appears under its parent CRF.
+interface AuthoringState { crfOid: string; crfName: string }
+const authoring = ref<AuthoringState | null>(null)
+function openAuthoring(crf: Crf) {
+  authoring.value = { crfOid: crf.oid, crfName: crf.name }
+}
+function closeAuthoring() {
+  authoring.value = null
+  refresh()
+}
+
 /* ----------------------------- Disable ---------------------------- */
 async function onDisableCrf(crf: Crf) {
   if (!confirm(t('crfLibrary.disableConfirm', { name: crf.name }))) return
@@ -213,6 +228,11 @@ const visibleRows = computed(() =>
                 class="text-muw-blue hover:underline"
                 @click="openUpload(crf)"
               >{{ t('crfLibrary.uploadVersion') }}</button>
+              <span class="text-slate-300">·</span>
+              <button
+                class="text-muw-blue hover:underline"
+                @click="openAuthoring(crf)"
+              >{{ t('crfLibrary.authorManually') }}</button>
               <span class="text-slate-300">·</span>
               <button class="text-rose-600 hover:underline" @click="onDisableCrf(crf)">
                 {{ t('crfLibrary.disable') }}
@@ -324,5 +344,13 @@ const visibleRows = computed(() =>
         </div>
       </div>
     </main>
+
+    <CrfAuthoringWizard
+      v-if="authoring"
+      :open="true"
+      :crf-oid="authoring.crfOid"
+      :crf-name="authoring.crfName"
+      @close="closeAuthoring"
+    />
   </div>
 </template>

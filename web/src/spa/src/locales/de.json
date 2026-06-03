@@ -79,6 +79,7 @@
     "cancel": "Abbrechen",
     "back": "Zurück",
     "next": "Weiter",
+    "remove": "Entfernen",
     "search": "Suche",
     "filter": "Filter",
     "clear": "Zurücksetzen",
@@ -696,7 +697,50 @@
     "disable": "Entfernen",
     "disableConfirm": "CRF »{name}« entfernen? Bestehende Zuweisungen bleiben für den Audit Trail erhalten, neue Dateneingabe wird gesperrt. Die Aktion wird im Audit Trail dokumentiert.",
     "disableVersionConfirm": "Version »{version}« von »{name}« entfernen? Laufende Dateneingaben in dieser Version bleiben unverändert; neue Dateneingaben verwenden die verbleibenden Versionen.",
-    "empty": "Noch keine CRFs in der Bibliothek."
+    "empty": "Noch keine CRFs in der Bibliothek.",
+    "authorManually": "Manuell anlegen",
+    "author": {
+      "heading": "Neue Version von »{name}« anlegen",
+      "subheading": "Phase E.6 Milestone A — vertikaler Slice (eine Sektion, zwei-drei Items, TEXT-Antwort).",
+      "scopeNote": "Milestone-A-Umfang: ST / INTEGER / BL Items mit einem einzigen TEXT-Antwortset. Show-when, Berechnungen, mehrsprachige Bezeichnungen und wiederverwendbare Antwortsets folgen in Milestone B/C/D.",
+      "rail": {
+        "metadata": "1 · Metadaten",
+        "sections": "2 · Sektionen",
+        "review": "3 · Überprüfung"
+      },
+      "metadata": {
+        "heading": "Versions-Metadaten"
+      },
+      "sections": {
+        "heading": "Sektionen und Items"
+      },
+      "sectionLabel": "Sektions-Label",
+      "sectionTitle": "Sektions-Titel",
+      "sectionInstructions": "Hinweise",
+      "itemsHeading": "Items",
+      "itemsEmpty": "Noch keine Items — mindestens eines erforderlich.",
+      "addItem": "+ Item hinzufügen",
+      "itemName": "Item-Name",
+      "descriptionLabel": "Beschreibungs-Label",
+      "leftItemText": "Linker Item-Text",
+      "dataTypeLabel": "Datentyp",
+      "required": "Pflichtfeld",
+      "dataType": {
+        "ST": "Text (ST)",
+        "INTEGER": "Ganzzahl (INTEGER)",
+        "BL": "Boolesch (BL)"
+      },
+      "next": "Weiter",
+      "submit": "Version anlegen",
+      "review": {
+        "heading": "Überprüfen und absenden",
+        "intro": "Beim Absenden synthetisiert der Server eine XLS-Tabelle aus diesem Entwurf und schickt sie durch den bestehenden CRF-Parser. Die resultierende Version ist semantisch identisch mit einer per XLS-Upload erzeugten.",
+        "sectionCount": "Sektionen",
+        "itemCount": "Items",
+        "incomplete": "Pflichtfelder fehlen — bitte ergänzen, um das Absenden freizugeben.",
+        "parseErrors": "Der Parser hat die synthetisierte Tabelle abgelehnt ({count} Problem(e)):"
+      }
+    }
   },
   "assignCrfs": {
     "title": "CRF-Zuweisungen verwalten",
