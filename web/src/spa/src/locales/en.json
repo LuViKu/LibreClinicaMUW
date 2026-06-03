@@ -1,7 +1,10 @@
 {
   "app": {
     "name": "LibreClinica MUW",
-    "tagline": "Clinical study data platform of the Ophthalmology Department"
+    "tagline": "Clinical study data platform of the Ophthalmology Department",
+    "crumb": {
+      "studyFallback": "Study"
+    }
   },
   "nav": {
     "home": "Home",
