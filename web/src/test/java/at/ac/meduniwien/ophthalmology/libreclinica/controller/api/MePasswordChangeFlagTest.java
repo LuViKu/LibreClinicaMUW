@@ -8,7 +8,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -200,11 +199,4 @@ class MePasswordChangeFlagTest extends AbstractApiControllerTest {
                 .andExpect(jsonPath("$.source").value("local"));
     }
 
-    @Test
-    void verifyAssertJOnDate() {
-        // sanity: ensure AssertJ is on the classpath, otherwise the
-        // surefire engine would happily silently treat this test class
-        // as a no-op.
-        assertThat(new Date()).isNotNull();
-    }
 }
