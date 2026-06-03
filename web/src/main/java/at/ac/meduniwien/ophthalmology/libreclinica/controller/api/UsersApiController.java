@@ -753,12 +753,17 @@ public class UsersApiController {
         ResponseEntity<?> guard = preflightLifecycle(session, username);
         if (guard != null) return guard;
 
-        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
-        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
-                me, currentStudy, currentRole);
-
+        // Phase E.6 (2026-06-03): the sysadmin-only "manage roles for
+        // this user" dialog must see EVERY binding the target user has
+        // — including studies outside the caller's current scope. The
+        // user-list endpoint at line 105 stays site-visibility-scoped
+        // (that one is about "who can do work on the active study"),
+        // but listRoles is about "what bindings does this user
+        // already have anywhere so the dialog can offer the right
+        // grant / change / revoke actions". Without all bindings the
+        // dialog tries to grant a binding on a study the user already
+        // has one for (e.g. the auto-coordinator binding created by
+        // POST /api/v1/studies) and trips the 409 conflict guard.
         UserAccountDAO userDao = new UserAccountDAO(dataSource);
         UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
         if (target == null || target.getId() == 0) {
@@ -770,7 +775,6 @@ public class UsersApiController {
         StudyDAO studyDao = new StudyDAO(dataSource);
         List<RoleBindingDto> out = new ArrayList<>();
         for (StudyUserRoleBean sur : bindings) {
-            if (!visibleStudyIds.contains(sur.getStudyId())) continue;
             out.add(toRoleBindingDto(sur, studyDao));
         }
         return ResponseEntity.ok(out);
