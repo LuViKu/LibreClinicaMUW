@@ -32,7 +32,7 @@
         consistent with "the seed is the source of truth".
     -->
 
-    <changeSet author="muw-ophthalmology" id="2026-06-02-prune-dn-item-data-map-duplicates" dbms="postgresql">
+    <changeSet author="muw-ophthalmology" id="2026-06-02-prune-dn-item-data-map-duplicates" dbms="postgresql" context="demo">
         <preConditions onFail="MARK_RAN">
             <!-- Only run if duplicates exist; safe no-op when the DB has
                  already converged or when the seed never ran (test DBs). -->

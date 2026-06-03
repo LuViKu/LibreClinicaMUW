@@ -48,7 +48,7 @@
     xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
                         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
 
-    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-dn-item-data-map">
+    <changeSet author="muw-ophthalmology" id="2026-06-01-seed-dn-item-data-map" context="demo">
         <preConditions onFail="MARK_RAN">
             <!-- Phase E.5 A3 fix (2026-06-02): the Liquibase 3.6
                  changeset XSD requires <preConditions> to appear before

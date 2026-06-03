@@ -29,6 +29,14 @@ services:
       LIBRECLINICA_SSO_BUTTON_LABEL: "${LIBRECLINICA_SSO_BUTTON_LABEL:-Sign in with Institutional Account}"
       LIBRECLINICA_SSO_DELEGATE_MFA: "${LIBRECLINICA_SSO_DELEGATE_MFA:-true}"
       LIBRECLINICA_SSO_REAUTH: "${LIBRECLINICA_SSO_REAUTH:-false}"
+      # Phase E.5 chronic CI fix (2026-06-03): runs the demo-data
+      # Liquibase changesets (M-001..M-007 subjects + CRFs +
+      # discrepancy notes + demo users physician/monitor) on dev
+      # compose only. Production deployments leave this unset so the
+      # WAR boots against a clean schema. CI integration-tests also
+      # leave it unset so legacy DBUnit DAO tests aren't blocked by
+      # the seed's dn_item_data_map FK rows.
+      LIQUIBASE_CONTEXTS: "${LIQUIBASE_CONTEXTS:-demo}"
     develop:
       watch:
         # restart on config file changes
