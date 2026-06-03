@@ -332,15 +332,28 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
     </template>
 
     <!-- Switch-study card (per-role landings other than Administrator). -->
-    <section v-if="canSwitchStudy && !showAdministrator" :aria-label="t('home.switchStudySectionLabel')" class="max-w-3xl mb-8">
-      <LandingCard
-        :to="{ name: 'pick-study' }"
-        :role-variant="role === 'Monitor' ? 'monitor' : role === 'Data Manager' ? 'data-manager' : 'investigator'"
-        :role-label="role ? t('home.role.' + role) : ''"
-        :title="t('home.switchStudyTitle')"
-        :description="t('home.switchStudyDesc')"
-      />
-    </section>
+    <!-- Switch-study card sits in its own divider-led section, mirroring the
+         Administrator landing's platform-wide vs study-scoped split so the
+         intent (this action is cross-study, not scoped to the bound one)
+         is visually obvious. -->
+    <template v-if="canSwitchStudy && !showAdministrator">
+      <div class="max-w-5xl mb-6 flex items-center gap-3">
+        <hr class="flex-1 border-t border-slate-200" />
+        <span class="text-[11px] uppercase tracking-[0.14em] text-slate-500 whitespace-nowrap">
+          {{ t('home.switchStudySectionLabel') }}
+        </span>
+        <hr class="flex-1 border-t border-slate-200" />
+      </div>
+      <section :aria-label="t('home.switchStudySectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
+        <LandingCard
+          :to="{ name: 'pick-study' }"
+          :role-variant="role === 'Monitor' ? 'monitor' : role === 'Data Manager' ? 'data-manager' : 'investigator'"
+          :role-label="role ? t('home.role.' + role) : ''"
+          :title="t('home.switchStudyTitle')"
+          :description="t('home.switchStudyDesc')"
+        />
+      </section>
+    </template>
 
     <!-- Fallback when role hasn't loaded yet (auth.bootstrap() in flight). -->
     <p v-if="!role" class="text-slate-500 text-sm italic">
