@@ -601,7 +601,13 @@ public class CrfsApiController {
                 nullToEmpty(v.getRevisionNotes()),
                 v.getStatus() == null ? "" : v.getStatus().getName(),
                 v.getCreatedDate() == null ? null
-                        : v.getCreatedDate().toInstant().atZone(ZoneOffset.UTC)
+                        // Phase E.5 fix (2026-06-03): AuditableEntityBean.createdDate
+                        // is statically typed java.util.Date but the DAO populates it
+                        // with java.sql.Date (rs.getDate). java.sql.Date.toInstant()
+                        // throws UnsupportedOperationException per JDK API, so coerce
+                        // via getTime() → Instant first.
+                        : java.time.Instant.ofEpochMilli(v.getCreatedDate().getTime())
+                                .atZone(ZoneOffset.UTC)
                                 .truncatedTo(ChronoUnit.SECONDS).toInstant().toString());
     }
 
