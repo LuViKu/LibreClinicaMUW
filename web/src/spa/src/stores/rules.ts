@@ -111,6 +111,53 @@ export type CreateActionResult =
   | { ok: true }
   | { ok: false; fieldErrors: Record<string, string>; message?: string }
 
+/**
+ * Phase E.5 RX.6b — request payload for {@code PUT /api/v1/rules/{id}}.
+ *
+ * All fields optional — undefined fields are not sent to the backend
+ * which interprets absent fields as "leave unchanged". The SPA edit
+ * dialog submits the full object every save so the operator sees the
+ * persisted values before committing; the store passes through the
+ * minimal "actually changed" subset by computing the diff at the call
+ * site.
+ */
+export interface UpdateRuleInput {
+  name?: string
+  description?: string
+  expression?: string
+}
+
+/** Phase E.5 RX.6b — result for inline rule edit. */
+export type UpdateRuleResult =
+  | { ok: true; rule: CreatedRule }
+  | { ok: false; fieldErrors: Record<string, string>; message?: string }
+
+/**
+ * Phase E.5 RX.6b — request payload for
+ * {@code PUT /api/v1/rule-sets/{ruleSetId}/actions/{actionId}}.
+ *
+ * Same nullable-field semantics as {@link UpdateRuleInput}.
+ * {@code phaseGates} is wholesale on/off — non-null replaces all five
+ * gate booleans; null leaves them as-is.
+ */
+export interface UpdateActionInput {
+  message?: string
+  expressionEvaluatesTo?: boolean
+  to?: string
+  phaseGates?: {
+    administrativeDataEntry?: boolean
+    initialDataEntry?: boolean
+    doubleDataEntry?: boolean
+    importDataEntry?: boolean
+    batch?: boolean
+  }
+}
+
+/** Phase E.5 RX.6b — result for inline action edit. */
+export type UpdateActionResult =
+  | { ok: true }
+  | { ok: false; fieldErrors: Record<string, string>; message?: string }
+
 /** Phase E RX.5b — wire-shape result for the live target-validation probe. */
 export interface ValidateTargetResult {
   valid: boolean
@@ -648,6 +695,60 @@ export const useRulesStore = defineStore('rules', () => {
     }
   }
 
+  /**
+   * Phase E.5 RX.6b — PUT /api/v1/rules/{id}. Per-field nullable patch
+   * (undefined fields are sent as null, which the backend treats as
+   * "leave unchanged"). On success, refresh the selected rule_set so
+   * the operator sees the updated rule expression / name / description.
+   */
+  async function updateRule(
+    ruleId: number,
+    input: UpdateRuleInput,
+  ): Promise<UpdateRuleResult> {
+    try {
+      const body = await apiPut<CreatedRule>(`/pages/api/v1/rules/${ruleId}`, {
+        name: input.name ?? null,
+        description: input.description ?? null,
+        expression: input.expression ?? null,
+      })
+      if (selected.value) {
+        await fetchOne(selected.value.id)
+      }
+      return { ok: true, rule: body }
+    } catch (e) {
+      return { ok: false, ...extractFieldErrors(e) }
+    }
+  }
+
+  /**
+   * Phase E.5 RX.6b — PUT /api/v1/rule-sets/{ruleSetId}/actions/{actionId}.
+   * Per-field nullable patch. On success, refresh the rule_set so the
+   * updated action message / gates / target render correctly.
+   */
+  async function updateAction(
+    ruleSetId: number,
+    actionId: number,
+    input: UpdateActionInput,
+  ): Promise<UpdateActionResult> {
+    try {
+      await apiPut<unknown>(
+        `/pages/api/v1/rule-sets/${ruleSetId}/actions/${actionId}`,
+        {
+          message: input.message ?? null,
+          expressionEvaluatesTo: input.expressionEvaluatesTo ?? null,
+          to: input.to ?? null,
+          phaseGates: input.phaseGates ?? null,
+        },
+      )
+      if (selected.value && selected.value.id === ruleSetId) {
+        await fetchOne(ruleSetId)
+      }
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, ...extractFieldErrors(e) }
+    }
+  }
+
   return {
     rows,
     isLoading,
@@ -674,6 +775,8 @@ export const useRulesStore = defineStore('rules', () => {
     createRule,
     createRuleSet,
     createAction,
+    updateRule,
+    updateAction,
     validateTarget,
   }
 })

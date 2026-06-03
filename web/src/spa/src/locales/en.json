@@ -457,7 +457,27 @@
       "disableRuleSet": "Disable",
       "restoreRuleSet": "Restore",
       "disableRule": "Disable rule",
-      "restoreRule": "Restore rule"
+      "restoreRule": "Restore rule",
+      "editRule": "Edit rule",
+      "editAction": "Edit"
+    },
+    "edit": {
+      "title": "Edit rule"
+    },
+    "actionEdit": {
+      "title": "Edit action",
+      "firesOn": "Fires when expression evaluates to",
+      "message": "Message",
+      "to": "Email recipients (comma-separated)",
+      "phaseGatesLabel": "Active in phases",
+      "notEditable": "Inline edit not supported for {type}. Delete + recreate via the wizard."
+    },
+    "phaseGate": {
+      "administrativeDataEntry": "Administrative data entry",
+      "initialDataEntry": "Initial data entry",
+      "doubleDataEntry": "Double data entry",
+      "importDataEntry": "Import data entry",
+      "batch": "Scheduled batch"
     },
     "confirm": {
       "disableRuleSet": "Disable rule set on {target}? Existing fire history stays in the audit trail; the rules stop evaluating until restored.",

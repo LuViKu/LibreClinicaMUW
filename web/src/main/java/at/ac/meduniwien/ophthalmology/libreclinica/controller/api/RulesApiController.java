@@ -1883,6 +1883,7 @@ public class RulesApiController {
 
     private RuleSetDto.AttachedRuleDto toAttachedRuleDto(RuleSetRuleBean rsr) {
         RuleBean rule = rsr.getRuleBean();
+        int ruleId = rule == null ? 0 : rule.getId();
         String oid = rule == null ? null : rule.getOid();
         String name = rule == null ? null : rule.getName();
         String desc = rule == null ? null : rule.getDescription();
@@ -1898,6 +1899,7 @@ public class RulesApiController {
 
         return new RuleSetDto.AttachedRuleDto(
                 rsr.getId(),
+                ruleId,
                 oid,
                 name,
                 desc,

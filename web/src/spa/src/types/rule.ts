@@ -36,6 +36,13 @@ export interface RuleAction {
 
 export interface AttachedRule {
   ruleSetRuleId: number
+  /**
+   * The {@code rule.id} surrogate key — needed for
+   * {@code PUT /api/v1/rules/{id}} from the inline edit dialog
+   * (Phase E.5 RX.6b). Zero when the backend row has a detached
+   * rule_bean (only happens in malformed legacy data).
+   */
+  ruleId: number
   ruleOid: string | null
   ruleName: string | null
   ruleDescription: string | null

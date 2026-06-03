@@ -457,7 +457,27 @@
       "disableRuleSet": "Deaktivieren",
       "restoreRuleSet": "Wiederherstellen",
       "disableRule": "Regel deaktivieren",
-      "restoreRule": "Regel wiederherstellen"
+      "restoreRule": "Regel wiederherstellen",
+      "editRule": "Regel bearbeiten",
+      "editAction": "Bearbeiten"
+    },
+    "edit": {
+      "title": "Regel bearbeiten"
+    },
+    "actionEdit": {
+      "title": "Aktion bearbeiten",
+      "firesOn": "Auslöser-Auswertung ergibt",
+      "message": "Nachricht",
+      "to": "E-Mail-Empfänger (kommagetrennt)",
+      "phaseGatesLabel": "Aktiv in Phasen",
+      "notEditable": "Inline-Bearbeitung für {type} nicht unterstützt. Löschen und über den Assistenten neu anlegen."
+    },
+    "phaseGate": {
+      "administrativeDataEntry": "Administrative Dateneingabe",
+      "initialDataEntry": "Erste Dateneingabe",
+      "doubleDataEntry": "Doppelte Dateneingabe",
+      "importDataEntry": "Import-Dateneingabe",
+      "batch": "Geplanter Batch-Lauf"
     },
     "confirm": {
       "disableRuleSet": "Regelsatz auf {target} deaktivieren? Bisherige Ausführungs-Historie bleibt im Audit-Trail; die Regeln werden nicht mehr ausgewertet, bis sie wiederhergestellt werden.",
