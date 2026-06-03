@@ -187,7 +187,7 @@ public class AuditApiController {
 
         // A4 — per-site visibility. The audit SQL embeds the visible
         // ids as a parameterised IN clause (one of {n placeholders}
-        // per audit_table branch, five branches → 5n binds total). An
+        // per audit_table branch, six branches → 6n binds total). An
         // empty visible set would build an invalid `IN ()` clause; we
         // fall back to the bare currentStudy.id in that defensive
         // case so the endpoint still produces a result.
@@ -211,9 +211,11 @@ public class AuditApiController {
         List<AuditEventDto> out = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            // 5 IN clauses × n ids each.
+            // 6 IN clauses × n ids each (item_data, event_crf,
+            // study_subject, subject, study_event, study — the last
+            // one added Phase E.6 / 2026-06-03 for identity edits).
             int bindIdx = 1;
-            for (int branch = 0; branch < 5; branch++) {
+            for (int branch = 0; branch < 6; branch++) {
                 for (Integer sid : visibleStudyIds) {
                     ps.setInt(bindIdx++, sid);
                 }
