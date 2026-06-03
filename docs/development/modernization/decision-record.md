@@ -447,6 +447,46 @@ Five users per role is the **minimum** Nielsen / NIST guidance for usability tes
 
 ---
 
+## DR-020 — Cross-CRF response-set catalog is virtual, not a new table
+
+**Date:** 2026-06-03
+**Status:** **Accepted.** Frames the response-set sharing affordance shipped by the Phase E.6 Milestone B CRF-authoring wizard.
+**Owner:** Lead Developer (Lukas Kuchernig)
+**Related:** Phase E.6 plan (`robust-jumping-eich.md`), `ResponseSetsApiController`, `CrfJsonValidator`
+
+**Context.** Operators authoring CRFs through the wizard want to pick "Yes/No", "0–10 NRS pain scale", or other reusable response sets without re-typing the options on every new CRF. The legacy schema already stores option tuples in `response_set`, but every row is scoped to a specific CRF `version_id` — there is no global ID and label uniqueness is per-version.
+
+Three approaches were considered:
+
+1. **New `response_set_template` table.** Standalone catalog with its own ID space. Authoring picks a template; the JSON-to-workbook adapter inlines the chosen tuple into the version-specific `response_set` row.
+2. **Promote existing rows to global by clearing `version_id`.** Either dual-write or re-key — both risk breaking the parser's per-version persistence invariants.
+3. **Virtual catalog — distinct-tuples view of existing `response_set` rows, no new write path.** The catalog is a `GROUP BY (label, response_type, options_text, options_values)` projection over rows the spreadsheet parser already creates. `POST /api/v1/response-sets` accepts the entry shape, validates it, and echoes it back without persisting; the SPA caches it client-side. Persistence happens when the operator submits the CRF version — at which point the existing parser creates a fresh per-version `response_set` row the usual way.
+
+### Decision
+
+Option 3. The catalog is read-only at the database level; "create" is a UX affordance the SPA owns.
+
+### Why
+
+- **No schema change.** Approach (1) needed a new Liquibase changeset and a write path the legacy parser doesn't know about. Approach (3) reuses what's already there.
+- **Zero parity drift with XLS upload.** Every CRF authored through the wizard ends up with the same `response_set` row shape as one uploaded via XLS — both go through the same parser. Catalog templates never become a separate persistence concern that the XLS path could miss.
+- **Cheap to surface.** `response_set` is small enough at MUW (low thousands of rows) that a `GROUP BY` over the four key columns is sub-millisecond. A search index would be over-engineering.
+- **Reversible.** If usage grows or operators demand template ownership semantics, a follow-up DR can promote the catalog to a real table. Until then we ship the simpler thing.
+
+### Consequences
+
+- `POST /api/v1/response-sets` returns `201` but never writes; the response body is the echoed entry the SPA stuffs into its picker state.
+- A catalog entry only becomes "real" once at least one CRF version persists a `response_set` row carrying that label + tuple. Operators see fresh entries appear in `GET /api/v1/response-sets` after the first version-create that references them.
+- The SPA's `crfAuthoring` store treats catalog picks as inline-materialised options at submit time — `ref: { label }` resolves to the inline `type/label/options` shape before the workbook is synthesised.
+
+### Out of scope (for this DR)
+
+- Per-study scoping of catalog entries (deferred — current scope returns all entries, with an `inActiveStudy` boolean for UX hinting).
+- Ownership / authorship metadata on entries (the underlying `response_set` table has no owner column).
+- Template deletion (catalog tuples disappear when no CRF version references them anymore; explicit deletion would require either a real table or a CRF-version cleanup pass).
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)
