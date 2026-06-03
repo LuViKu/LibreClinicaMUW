@@ -23,17 +23,21 @@ const i18n = createI18n({
 const app = createApp(App)
 const pinia = createPinia()
 app.use(pinia)
-app.use(router)
 app.use(i18n)
 
 /**
- * Phase E.8 (2026-05-30): bootstrap the auth store before the first
- * navigation so the global router guard sees the correct state. The
- * mock `bootstrap()` reads sessionStorage; once the
- * `GET /pages/api/v1/me` adapter lands it will be replaced with an
- * `apiGet`. The guard runs after this returns; if the user lands on
- * a protected route while anonymous, the guard redirects to /login.
+ * Phase E.6 (2026-06-03): bootstrap auth state BEFORE installing the
+ * router. `app.use(router)` calls `router.install(app)` which kicks
+ * off the initial navigation immediately — earlier than the auth
+ * store has finished hydrating from /me. Until 2026-06-03 the
+ * sequence was install-router → bootstrap → mount, which fired the
+ * global guard with state='anonymous' and redirected every refresh
+ * to /login regardless of session validity.
+ *
+ * The fix: install pinia + i18n first, run bootstrap, then install
+ * the router so its first navigation sees the resolved state.
  */
 useAuthStore(pinia).bootstrap().finally(() => {
+  app.use(router)
   app.mount('#app')
 })
