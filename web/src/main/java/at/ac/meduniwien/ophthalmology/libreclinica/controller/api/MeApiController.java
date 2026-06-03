@@ -127,7 +127,17 @@ public class MeApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
 
         String spaRole;
-        if (currentRole != null && currentRole.getRole() != null) {
+        // Phase E.5 follow-up (2026-06-03): SYSADMIN + TECHADMIN users
+        // (UserAccountBean.user_type_id ∈ {2, 3}) bypass every legacy
+        // role check — they're superusers. They MUST project as
+        // "Administrator" in the SPA so role-gated UI (Invite user,
+        // edit user, study admin etc.) is reachable. Without this,
+        // the demo `root` user with both `admin` AND `director` legacy
+        // role rows ended up with spaRole="Data Manager" (whichever
+        // role row the session pre-populated) and saw no admin chrome.
+        if (ub.isSysAdmin() || ub.isTechAdmin()) {
+            spaRole = "Administrator";
+        } else if (currentRole != null && currentRole.getRole() != null) {
             spaRole = RoleMapper.toSpaRole(currentRole.getRole().getName());
         } else {
             spaRole = highestSpaRoleAnywhere(ub.getName());

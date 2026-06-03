@@ -18,7 +18,29 @@ function logout() {
 interface Crumb { label: string; to?: string }
 
 const breadcrumb = computed<Crumb[]>(() => {
-  const crumbs: Crumb[] = [{ label: 'LCDemo' }, { label: 'München' }]
+  // Phase E.5 follow-up (2026-06-03): replace the hardcoded
+  // "LCDemo · München" leftover from the Phase E.4 mock-data era
+  // with the actual session-bound study / site.
+  //   - bound to a site (activeStudy.isSite=true)     → [study, site]
+  //     where "study" is resolved heuristically below
+  //     and "site" is the activeStudy.name
+  //   - bound to a top-level study                    → [study]
+  //   - no active study (login / first-login / picker) → []
+  const crumbs: Crumb[] = []
+  const active = auth.user?.activeStudy
+  if (active) {
+    if (active.isSite) {
+      // The active study is a site row. The SPA doesn't carry the
+      // parent study's name in /me's wire shape — fall back to the
+      // siteLabel and a generic "Studie" parent. When the
+      // parent-study display name lands in the /me adapter, drop
+      // the placeholder.
+      crumbs.push({ label: t('app.crumb.studyFallback') })
+      crumbs.push({ label: active.name })
+    } else {
+      crumbs.push({ label: active.name })
+    }
+  }
   const routeTitle = route.meta?.title as string | undefined
   if (routeTitle && route.name !== 'home' && route.name !== 'login' && route.name !== 'first-login') {
     crumbs.push({ label: routeTitle })

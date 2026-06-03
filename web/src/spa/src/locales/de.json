@@ -1,7 +1,10 @@
 {
   "app": {
     "name": "LibreClinica MUW",
-    "tagline": "Klinische Studiendaten-Plattform der Augenklinik"
+    "tagline": "Klinische Studiendaten-Plattform der Augenklinik",
+    "crumb": {
+      "studyFallback": "Studie"
+    }
   },
   "nav": {
     "home": "Start",
