@@ -223,14 +223,22 @@ public class MeApiController {
         }
 
         UserAccountDAO userDAO = new UserAccountDAO(dataSource);
-        ArrayList<StudyBean> allStudies = studyDAO.findAll();
-        ArrayList<StudyUserRoleBean> roles = userDAO.findStudyByUser(ub.getName(), allStudies);
+        // findStudyByUser hardcodes `role_name != 'admin'` in its SQL —
+        // the legacy holdover from when admin was treated as a global
+        // role. For multi-study switching we accept ANY active binding
+        // including admin (root's most common binding), so iterate the
+        // full per-user role set and pick the first row with a
+        // matching study_id and status=AVAILABLE.
+        ArrayList<StudyUserRoleBean> roles = userDAO.findAllRolesByUserName(ub.getName());
         StudyUserRoleBean grantedRole = null;
         for (StudyUserRoleBean r : roles) {
-            if (r.getStudyId() == target.getId()) {
-                grantedRole = r;
-                break;
+            if (r.getStudyId() != target.getId()) continue;
+            if (r.getStatus() == null
+                    || r.getStatus().getId() != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE.getId()) {
+                continue;
             }
+            grantedRole = r;
+            break;
         }
         if (grantedRole == null) {
             return ResponseEntity.status(403).body(Map.of("message",
