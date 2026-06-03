@@ -96,14 +96,14 @@ public class SsoReauthController {
             // Fall back to the local login page.
             log.debug("/sso/reauth invoked but libreclinica.sso.enabled=false;"
                     + " redirecting to local login page");
-            return new RedirectView("/pages/login/login");
+            return contextRelativeRedirect("/pages/login/login");
         }
 
         String urlTemplate = ssoProperties.getReauth().getUrlTemplate();
         if (urlTemplate == null || urlTemplate.isEmpty()) {
             log.warn("/sso/reauth invoked but reauth.url-template is empty;"
                     + " redirecting to local login page");
-            return new RedirectView("/pages/login/login");
+            return contextRelativeRedirect("/pages/login/login");
         }
 
         String encodedTarget = URLEncoder.encode(target, StandardCharsets.UTF_8);
@@ -111,6 +111,35 @@ public class SsoReauthController {
 
         log.info("SSO re-auth requested for target='{}', redirecting via template",
                 target);
+        // External proxy/IdP URLs are emitted as-is — the proxy strips
+        // the existing session, re-prompts at the IdP, and proxies back
+        // to the original target. No context-path mangling needed.
         return new RedirectView(redirectUrl);
+    }
+
+    /**
+     * Phase E.5 follow-up (2026-06-03): emit {@code Location} headers that
+     * include the servlet context path ({@code /LibreClinica} in dev
+     * compose + production) so clients that follow redirects (browsers,
+     * {@code curl --location}, the CI smoke probe) land on the right
+     * Tomcat-context URL.
+     *
+     * <p>{@link RedirectView}'s default {@code contextRelative=false} sent
+     * {@code Location: /pages/login/login}, which a context-strip-aware
+     * client follows to {@code http://host/pages/login/login} — outside
+     * the LibreClinica context, where Tomcat returns 404. Setting
+     * {@code contextRelative=true} prepends the context so the Location
+     * is {@code /LibreClinica/pages/login/login} and the follow-redirect
+     * lands on the legacy login JSP as intended. This is why the CI
+     * smoke probe's {@code curl --location ... /pages/sso/reauth} was
+     * 404'ing (curl saw the 302, followed it outside the context,
+     * landed on Tomcat's NoServletMappingFoundException 404). Direct
+     * HEAD probes (no follow) reported the 302 correctly so the bug
+     * stayed hidden in local manual testing.
+     */
+    private static RedirectView contextRelativeRedirect(String path) {
+        RedirectView v = new RedirectView(path);
+        v.setContextRelative(true);
+        return v;
     }
 }
