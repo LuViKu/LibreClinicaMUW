@@ -233,21 +233,24 @@ jobs:
       # explicitly asserts that the high-value `/pages/*` routes resolve.
       # See post-Phase-D UI validation report + Phase E.0 sub-phase.
       #
-      # Phase E.5 chronic CI fix (2026-06-03): the route list trimmed from
-      # four down to two.
+      # Phase E.5 chronic CI fix (2026-06-03): one entry dropped, one restored.
       #   - `/pages/odmk/odm/v1/Studies`: no Spring MVC handler exists for
       #     this exact URL. OdmController only registers `/odmk/studies/{oid}/metadata`
       #     and `/odmk/study/{oid}/studysubject/{oid}/events`; ODMMetadataRestResource
       #     uses JAX-RS (`@Path("/metadata")`) but no Jersey servlet is wired
       #     in web.xml. The route was added speculatively by PR #51 (Phase E.4)
       #     based on a stale design doc; it has always 404'd. Removed.
-      #   - `/pages/sso/reauth`: works in dev compose (302 to the local login
-      #     page when SSO is disabled, which is the smoke environment's
-      #     condition) but 404'd in CI on PR #92's smoke run despite SsoReauthController
-      #     being on the WAR's classpath. Suspected wiring race in the pages
-      #     DispatcherServlet child context's startup; needs investigation in
-      #     its own slice. Tracked as a chronic-CI follow-up. Removed from
-      #     smoke until the wiring is understood.
+      #   - `/pages/sso/reauth`: restored. The "404 in CI / 302 locally" gap
+      #     turned out to be a context-path bug in SsoReauthController, not
+      #     a wiring race in the pages DispatcherServlet's child context.
+      #     The endpoint emitted `Location: /pages/login/login` (without
+      #     the /LibreClinica servlet-context prefix); curl --location then
+      #     followed that to an out-of-context URL where Tomcat returned 404.
+      #     The local HEAD probe (no follow) showed the 302 directly so the
+      #     bug hid in dev. Fixed by setContextRelative(true) on the
+      #     RedirectView in the controller — the Location header is now
+      #     `/LibreClinica/pages/login/login` and the follow-redirect lands
+      #     on the legacy login JSP as intended.
       - name: Smoke key /pages/* routes
         run: |
           set -e
@@ -255,6 +258,7 @@ jobs:
           ROUTES=(
             "/"
             "/pages/login/login"
+            "/pages/sso/reauth"
           )
           fail=0
           for r in "${ROUTES[@]}"; do
