@@ -434,6 +434,20 @@ public class StudiesApiController {
         target.setUpdatedDate(new java.util.Date());
         studyDao.update(target);
 
+        // Phase E.6 (2026-06-03): the session attribute "study" is a
+        // StudyBean captured at login (by SecureController +
+        // OpenClinicaUsernamePasswordAuthenticationFilter). MeApiController
+        // reads its name + oid from THAT bean, so the SPA's top-bar
+        // breadcrumb stays stale across an identity edit even after the
+        // SPA's auth.bootstrap() re-fetches /me — /me itself was still
+        // returning the snapshot. Refresh the attribute with the
+        // freshly-mutated bean when the edit targeted the currently
+        // active study so the next /me sees the new identity.
+        StudyBean sessionStudy = (StudyBean) session.getAttribute("study");
+        if (sessionStudy != null && sessionStudy.getId() == target.getId()) {
+            session.setAttribute("study", target);
+        }
+
         LOG.info("Update study: oid={} by admin={}", studyOid, me.getName());
 
         return ResponseEntity.ok(toIdentityDto(target, studyDao));
