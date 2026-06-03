@@ -111,8 +111,11 @@ onMounted(() => {
   const inflight: Array<Promise<unknown>> = []
   if (showMonitor.value || showDataManager.value) {
     inflight.push(sdv.load())
-    inflight.push(notes.load())
     inflight.push(rules.load())
+  }
+  // Notes is cross-role (Monitor + DM + Administrator all surface it).
+  if (showMonitor.value || showDataManager.value || showAdministrator.value) {
+    inflight.push(notes.load())
   }
   if (showAdministrator.value || showDataManager.value) {
     inflight.push(users.load())
@@ -289,6 +292,16 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
         :role-label="t('home.role.Administrator')"
         :title="t('auditLog.title')"
         :description="t('home.administrator.auditLogDesc')"
+      />
+      <!-- Phase E.6: Notes/queries is cross-role and Admin can legitimately
+           review pending queries during compliance/incident investigations. -->
+      <LandingCard
+        :to="{ name: 'notes' }"
+        role-variant="administrator"
+        :role-label="t('home.role.Administrator')"
+        :title="t('notes.title')"
+        :description="t('home.dataManager.openQueriesDesc')"
+        :badge="openQueriesCount"
       />
       <LandingCard
         v-if="canSwitchStudy"

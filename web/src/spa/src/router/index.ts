@@ -52,7 +52,7 @@ const router = createRouter({
       path: '/notes',
       name: 'notes',
       component: () => import('@/views/NotesDiscrepanciesView.vue'),
-      meta: { title: 'Notes & Discrepancies', role: ['Monitor', 'Data Manager'] as const },
+      meta: { title: 'Notes & Discrepancies', role: ['Monitor', 'Data Manager', 'Administrator'] as const },
     },
     {
       path: '/audit-log',
