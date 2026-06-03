@@ -886,6 +886,7 @@
       "submit": "Anlegen",
       "studyMissing": "Wählen Sie zuerst eine aktive Studie, bevor Sie eine/n Nutzer/in einladen.",
       "emailNotWiredNote": "E-Mail-Versand ist noch nicht verdrahtet — kopieren Sie das Einmal-Passwort und übermitteln Sie es über einen sicheren Kanal.",
+      "ssoNotWiredNote": "Es wird kein Passwort erzeugt. Nach dem Anlegen meldet sich die/der Nutzer/in über das institutionelle SSO-Portal an — stellen Sie sicher, dass die institutionelle Identität beim IdP eingerichtet ist.",
       "successIntro": "Nutzer/in angelegt. Übergeben Sie dieses Einmal-Passwort der/dem neuen Nutzer/in; bei der ersten Anmeldung muss es geändert werden.",
       "ssoSuccessIntro": "Nutzer/in angelegt. Die Anmeldung erfolgt über das institutionelle SSO-Portal — kein Passwort erforderlich.",
       "ssoSuccessHint": "Stellen Sie sicher, dass die institutionelle Identität beim IdP eingerichtet ist, bevor die/der Nutzer/in sich anmeldet.",
