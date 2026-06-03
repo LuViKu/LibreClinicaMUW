@@ -60,6 +60,8 @@
       "rulesDesc": "Validation + workflow rules attached to event-CRFs."
     },
     "administrator": {
+      "globalSectionLabel": "Platform-wide actions",
+      "studyScopedLabel": "On {study}",
       "sectionLabel": "Administrator workflows",
       "manageUsersDesc": "User accounts, role bindings per study, pending invites, password resets.",
       "pendingInvitesBadgeAria": "{n} pending user invites",

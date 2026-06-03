@@ -60,6 +60,8 @@
       "rulesDesc": "Validierungs- und Workflow-Regeln zu Event-CRFs."
     },
     "administrator": {
+      "globalSectionLabel": "Plattformweite Aktionen",
+      "studyScopedLabel": "In {study}",
       "sectionLabel": "Arbeitsabläufe Administrator/-in",
       "manageUsersDesc": "Nutzerkonten, Rollenzuweisungen je Studie, offene Einladungen, Passwort-Rücksetzung.",
       "pendingInvitesBadgeAria": "{n} offene Einladungen",
