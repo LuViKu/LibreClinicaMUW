@@ -14,18 +14,33 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.ResourceBundle;
 
 import javax.sql.DataSource;
+import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
+import at.ac.meduniwien.ophthalmology.libreclinica.control.login.PasswordValidator;
+import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ConfigurationDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.PasswordRequirementsDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
+
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -156,17 +171,32 @@ public class MeApiController {
         String locale = readLocale(ub.getId());
         String timezone = blankToNull(ub.getTime_zone());
 
+        // Phase E.6 — compute forced-password-change state with parity to
+        // SecureController.passwdTimeOut() + MainMenuServlet (lines 100-235).
+        // SSO-bound and LDAP users always serialise mustChangePassword=false
+        // because their IdP / directory owns the credential lifecycle per
+        // DR-014. For local users we mirror the legacy two-branch logic:
+        // (a) passwd_timestamp IS NULL && change_passwd_required = 1
+        //     → first-login forced change.
+        // (b) passwd_timestamp older than passwd_expiration_time days &&
+        //     change_passwd_required = 1 → rotation forced change.
+        PasswordChangeRequirement req = computePasswordChangeRequirement(ub);
+
+        String authSource = detectAuthSource(ub);
+
         MeDto dto = new MeDto(
                 ub.getName(),
                 joinName(ub.getFirstName(), ub.getLastName(), ub.getName()),
                 blankToNull(ub.getEmail()),
                 spaRole,
                 /* siteLabel */ activeStudy != null && activeStudy.isSite() ? activeStudy.name() : null,
-                /* source */ "local",
+                /* source */ authSource,
                 /* mfaSatisfied */ true,
                 /* profileComplete */ true,
                 locale,
                 timezone,
+                req.mustChange,
+                req.reason,
                 activeStudy
         );
 
@@ -368,6 +398,241 @@ public class MeApiController {
     }
 
     /* ----------------------------------------------------------------- */
+    /* Phase E.6 — Forced password change                                */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 — {@code POST /pages/api/v1/me/password}.
+     *
+     * <p>SPA-side endpoint for the {@code /change-password} view. Mirrors
+     * the legacy {@link at.ac.meduniwien.ophthalmology.libreclinica.control.login.ResetPasswordServlet}
+     * happy-path: verifies the current password via the
+     * {@link SecurityManager}, runs the new password through
+     * {@link PasswordValidator} (admin-configured min length / complexity
+     * rules + reuse check), and on success writes
+     * {@code passwd / passwd_timestamp / update_id / date_updated} via
+     * the regular {@link UserAccountDAO#update}.
+     *
+     * <p>SSO and LDAP users are rejected with {@code 403} — their
+     * credentials are owned by an upstream provider; the SPA's router
+     * guard should never push them at this view, but a defensive 403
+     * fails closed if it ever does. The session bean is refreshed so
+     * the next {@code GET /me} reports {@code mustChangePassword=false}.
+     */
+    @PostMapping("/password")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = MeDto.class)))
+    public ResponseEntity<?> changePassword(@RequestBody PasswordChangeRequest body, HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Empty request body"));
+        }
+
+        // Defensive: SSO + LDAP users have their credential lifecycle
+        // owned upstream. The router guard should never push them here,
+        // but the endpoint refuses defensively in case the client is
+        // doing something silly.
+        if (ub.isLdapUser() || ub.isSsoBound()) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Password is managed by your identity provider"));
+        }
+
+        List<Map<String, String>> errors = new ArrayList<>();
+        String currentPwd = body.currentPassword() == null ? "" : body.currentPassword();
+        String newPwd = body.newPassword() == null ? "" : body.newPassword();
+        String repeat = body.newPasswordRepeat() == null ? "" : body.newPasswordRepeat();
+
+        if (currentPwd.isEmpty()) {
+            errors.add(Map.of("field", "currentPassword",
+                    "message", "Current password is required"));
+        }
+        if (newPwd.isEmpty()) {
+            errors.add(Map.of("field", "newPassword",
+                    "message", "New password is required"));
+        }
+        if (!newPwd.equals(repeat)) {
+            errors.add(Map.of("field", "newPasswordRepeat",
+                    "message", "New password and repeat do not match"));
+        }
+        if (!newPwd.isEmpty() && newPwd.equals(currentPwd)) {
+            errors.add(Map.of("field", "newPassword",
+                    "message", "New password must differ from the current password"));
+        }
+
+        if (!errors.isEmpty()) {
+            return badRequestWithErrors(errors);
+        }
+
+        // Verify current password.
+        SecurityManager securityManager = securityManager();
+        UserDetails principal = currentPrincipal();
+        if (securityManager == null || principal == null) {
+            LOG.warn("changePassword: SecurityManager or principal unavailable for user_id={}",
+                    ub.getId());
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Authentication subsystem unavailable"));
+        }
+        if (!securityManager.verifyPassword(currentPwd, principal)) {
+            errors.add(Map.of("field", "currentPassword",
+                    "message", "Current password is incorrect"));
+            return badRequestWithErrors(errors);
+        }
+
+        // Validate the new password against the admin-configured rules
+        // (PasswordRequirementsDao) + the same reuse check the legacy
+        // ResetPasswordServlet runs.
+        UserAccountDAO udao = new UserAccountDAO(dataSource);
+        String newHash = securityManager.encryptPassword(newPwd, ub.getRunWebservices());
+        Locale locale = Locale.ENGLISH;
+        ResourceBundle resexception = ResourceBundleProvider.getExceptionsBundle(locale);
+        PasswordRequirementsDao prDao = passwordRequirementsDao();
+        if (prDao != null) {
+            List<String> pwdErrors = PasswordValidator.validatePassword(
+                    prDao, udao, ub.getId(), newPwd, newHash, resexception);
+            for (String e : pwdErrors) {
+                errors.add(Map.of("field", "newPassword", "message", e));
+            }
+            if (!errors.isEmpty()) {
+                return badRequestWithErrors(errors);
+            }
+        } else {
+            LOG.debug("PasswordRequirementsDao unavailable; skipping complexity rules");
+        }
+
+        // Persist via the session-resident bean — keeps the UPDATE path
+        // identical to the legacy ResetPasswordServlet so any existing
+        // audit triggers / hooks fire the same way. Capturing a fresh
+        // UserAccountBean via findByPK first avoids stomping fields
+        // mutated by other adapters between login and now.
+        UserAccountBean fresh = (UserAccountBean) udao.findByPK(ub.getId());
+        if (fresh == null || fresh.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "User row not found — session may be stale, please re-authenticate"));
+        }
+        fresh.setPasswd(newHash);
+        fresh.setPasswdTimestamp(new Date());
+        fresh.setOwner(fresh);
+        fresh.setUpdater(fresh);
+        udao.update(fresh);
+
+        // Refresh the session bean so the very next /me call no longer
+        // reports mustChangePassword=true.
+        ub.setPasswd(newHash);
+        ub.setPasswdTimestamp(fresh.getPasswdTimestamp());
+        session.setAttribute("userBean", ub);
+
+        LOG.info("Password changed via SPA /me/password for user={}", ub.getName());
+
+        return getMe(session);
+    }
+
+    /**
+     * Compute the forced-password-change requirement following the same
+     * rules SecureController.passwdTimeOut() + MainMenuServlet apply.
+     */
+    private PasswordChangeRequirement computePasswordChangeRequirement(UserAccountBean ub) {
+        if (ub.isLdapUser() || ub.isSsoBound()) {
+            return PasswordChangeRequirement.none();
+        }
+
+        int pwdChangeRequired;
+        long pwdExpireDay;
+        try {
+            pwdChangeRequired = Integer.parseInt(SQLInitServlet.getField("change_passwd_required"));
+        } catch (NumberFormatException nfe) {
+            // Empty / unparsable → treat as disabled (legacy SQLInit seed
+            // ships "1" but a brand-new install with a blank row should
+            // not lock the user out of their first login).
+            return PasswordChangeRequirement.none();
+        }
+        try {
+            pwdExpireDay = Long.parseLong(SQLInitServlet.getField("passwd_expiration_time"));
+        } catch (NumberFormatException nfe) {
+            pwdExpireDay = 0L;
+        }
+
+        if (pwdChangeRequired != 1) {
+            return PasswordChangeRequirement.none();
+        }
+
+        Date last = ub.getPasswdTimestamp();
+        // UserAccountBean.reset() defaults passwdTimestamp to epoch (1970-01-01)
+        // when nothing has been loaded; the legacy MainMenuServlet treats
+        // "null timestamp" as the first-login signal, so we mirror that
+        // by also treating the epoch sentinel as null.
+        boolean noTimestamp = last == null || last.getTime() <= 0L;
+        if (noTimestamp) {
+            return PasswordChangeRequirement.firstLogin();
+        }
+
+        if (pwdExpireDay > 0) {
+            long ageDays = Math.abs(System.currentTimeMillis() - last.getTime()) / (1000L * 60L * 60L * 24L);
+            if (ageDays >= pwdExpireDay) {
+                return PasswordChangeRequirement.rotation();
+            }
+        }
+        return PasswordChangeRequirement.none();
+    }
+
+    /** Best-effort source classification for the wire DTO. */
+    private static String detectAuthSource(UserAccountBean ub) {
+        if (ub.isSsoBound()) return "sso";
+        if (ub.isLdapUser()) return "ldap";
+        return "local";
+    }
+
+    /**
+     * Fetch the {@link SecurityManager} bean from the servlet context
+     * the same way {@link at.ac.meduniwien.ophthalmology.libreclinica.control.login.ResetPasswordServlet}
+     * does. Returns {@code null} if the bean isn't wired (test setups).
+     */
+    private SecurityManager securityManager() {
+        try {
+            ServletContext ctx = ((org.springframework.web.context.request.ServletRequestAttributes)
+                    org.springframework.web.context.request.RequestContextHolder
+                            .currentRequestAttributes())
+                    .getRequest().getServletContext();
+            return (SecurityManager) SpringServletAccess.getApplicationContext(ctx)
+                    .getBean("securityManager");
+        } catch (Exception e) {
+            LOG.debug("securityManager() lookup failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private PasswordRequirementsDao passwordRequirementsDao() {
+        try {
+            ServletContext ctx = ((org.springframework.web.context.request.ServletRequestAttributes)
+                    org.springframework.web.context.request.RequestContextHolder
+                            .currentRequestAttributes())
+                    .getRequest().getServletContext();
+            ConfigurationDao cfgDao = SpringServletAccess.getApplicationContext(ctx)
+                    .getBean(ConfigurationDao.class);
+            return new PasswordRequirementsDao(cfgDao);
+        } catch (Exception e) {
+            LOG.debug("passwordRequirementsDao() lookup failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private static UserDetails currentPrincipal() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return null;
+        Object principal = auth.getPrincipal();
+        return principal instanceof UserDetails ? (UserDetails) principal : null;
+    }
+
+    private static ResponseEntity<Map<String, Object>> badRequestWithErrors(List<Map<String, String>> errors) {
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("message", "Validation failed");
+        resp.put("errors", errors);
+        return ResponseEntity.badRequest().body(resp);
+    }
+
+    /* ----------------------------------------------------------------- */
     /* Helpers                                                           */
     /* ----------------------------------------------------------------- */
 
@@ -421,4 +686,27 @@ public class MeApiController {
             String locale,
             String timezone
     ) {}
+
+    /**
+     * Phase E.6 — body of {@code POST /pages/api/v1/me/password}.
+     * Field names follow the SPA's ChangePasswordView form inputs.
+     */
+    public record PasswordChangeRequest(
+            String currentPassword,
+            String newPassword,
+            String newPasswordRepeat
+    ) {}
+
+    /**
+     * Internal carrier for the forced-password-change decision computed
+     * during {@link #getMe(HttpSession)}. The two fields end up on the
+     * wire as {@code mustChangePassword} (boolean) and
+     * {@code passwordChangeReason} (nullable string, "first-login" or
+     * "rotation").
+     */
+    private record PasswordChangeRequirement(boolean mustChange, String reason) {
+        static PasswordChangeRequirement none()       { return new PasswordChangeRequirement(false, null); }
+        static PasswordChangeRequirement firstLogin() { return new PasswordChangeRequirement(true,  MeDto.REASON_FIRST_LOGIN); }
+        static PasswordChangeRequirement rotation()   { return new PasswordChangeRequirement(true,  MeDto.REASON_ROTATION); }
+    }
 }
