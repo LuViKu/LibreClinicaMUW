@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import SideRail from '@/components/SideRail.vue'
@@ -62,6 +62,27 @@ function dateHeading(iso: string): string {
   if (iso === today.value) return t('auditLog.heading.today')
   if (iso === yesterday.value) return t('auditLog.heading.yesterday')
   return formatDateHeading(iso)
+}
+
+/**
+ * Phase E.6 (2026-06-03) — collapsible audit cards.
+ *
+ * Each timeline row defaults to a one-line summary (title · subject ·
+ * scope · actor · time); expand to reveal the DiffCard + details +
+ * reason. Rows that carry no expandable content render no chevron.
+ */
+const expanded = ref<Set<string>>(new Set())
+function toggle(id: string): void {
+  if (expanded.value.has(id)) expanded.value.delete(id)
+  else expanded.value.add(id)
+  // Reactivity — replace the Set so dependents re-evaluate.
+  expanded.value = new Set(expanded.value)
+}
+function isExpanded(id: string): boolean { return expanded.value.has(id) }
+function hasExpandable(ev: AuditEvent): boolean {
+  return (ev.before != null && ev.after != null)
+    || (ev.details != null && ev.details !== '')
+    || (ev.reason != null && ev.reason !== '')
 }
 </script>
 
@@ -148,11 +169,32 @@ function dateHeading(iso: string): string {
             :key="ev.id"
             :variant="ev.variant"
           >
-            <div class="flex items-center justify-between text-xs flex-wrap gap-y-1">
+            <!-- Phase E.6: header row is a button when there's something to
+                 expand. Plain div when there's only the title to show. -->
+            <component
+              :is="hasExpandable(ev) ? 'button' : 'div'"
+              :type="hasExpandable(ev) ? 'button' : undefined"
+              class="w-full flex items-center justify-between text-xs flex-wrap gap-y-1 text-left"
+              :class="hasExpandable(ev) ? 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-muw-blue/30 rounded -mx-1 px-1' : ''"
+              :aria-expanded="hasExpandable(ev) ? isExpanded(ev.id) : undefined"
+              :aria-controls="hasExpandable(ev) ? `audit-${ev.id}-body` : undefined"
+              @click="hasExpandable(ev) && toggle(ev.id)"
+            >
               <div class="flex items-center gap-2 flex-wrap">
+                <svg
+                  v-if="hasExpandable(ev)"
+                  width="12" height="12" viewBox="0 0 24 24"
+                  fill="none" stroke="currentColor" stroke-width="2"
+                  class="text-slate-400 transition-transform"
+                  :class="isExpanded(ev.id) ? 'rotate-90' : ''"
+                  aria-hidden="true"
+                >
+                  <polyline points="9 6 15 12 9 18" />
+                </svg>
                 <span class="font-medium text-slate-900">{{ ev.title }}</span>
                 <StatusPill v-if="ev.subjectId" compact variant="neutral">{{ ev.subjectId }}</StatusPill>
                 <span v-if="ev.scope" class="font-mono text-slate-600">{{ ev.scope }}</span>
+                <span v-if="ev.details" class="font-mono text-slate-600">{{ ev.details }}</span>
                 <span class="text-slate-500">{{ t('auditLog.by') }}</span>
                 <span class="font-mono text-slate-700">{{ ev.actor }}</span>
                 <StatusPill v-if="ev.actorRole" compact :variant="roleVariant(ev.actorRole)">
@@ -161,24 +203,21 @@ function dateHeading(iso: string): string {
                 <span class="sr-only">· {{ variantLabel(ev.variant) }}</span>
               </div>
               <span class="text-slate-500 font-mono">{{ formatTime(ev.occurredAt) }}</span>
-            </div>
+            </component>
 
-            <!-- Phase E.6 (2026-06-03): render the before/after pair whenever
-                 the row carries both values — not just for the legacy
-                 reason-for-change / subject-group variants. Study identity
-                 edits (variant=admin, audit_log_event_type_id=51) carry
-                 the old/new field values and benefit from the same diff
-                 treatment so operators can see the actual change without
-                 cross-referencing the column name in `details`. -->
-            <div v-if="ev.before != null && ev.after != null" class="mt-2">
-              <DiffCard>
+            <!-- Expandable body. Holds the before/after diff + the
+                 inline reason note when present. -->
+            <div
+              v-if="hasExpandable(ev) && isExpanded(ev.id)"
+              :id="`audit-${ev.id}-body`"
+              class="mt-2 space-y-2"
+            >
+              <DiffCard v-if="ev.before != null && ev.after != null">
                 <template #before>{{ ev.before }}</template>
                 <template #after>{{ ev.after }}</template>
               </DiffCard>
+              <p v-if="ev.reason" class="text-xs text-slate-600 italic">&ldquo;{{ ev.reason }}&rdquo;</p>
             </div>
-
-            <p v-if="ev.details" class="text-xs text-slate-600 mt-1.5">{{ ev.details }}</p>
-            <p v-if="ev.reason" class="text-xs text-slate-600 italic mt-1.5">&ldquo;{{ ev.reason }}&rdquo;</p>
           </TimelineEvent>
         </template>
       </Timeline>
