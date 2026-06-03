@@ -1770,6 +1770,28 @@ export interface components {
             status?: string;
             uploadedAt?: string;
         };
+        CrfVersionAuthoringRequest: {
+            versionName?: string;
+            versionDescription?: string;
+            revisionNotes?: string;
+            sections?: components["schemas"]["CrfVersionAuthoringRequest.Section"][];
+        };
+        "CrfVersionAuthoringRequest.Item": {
+            name?: string;
+            oid?: string;
+            descriptionLabel?: string;
+            leftItemText?: string;
+            dataType?: string;
+            required?: boolean;
+        };
+        "CrfVersionAuthoringRequest.Section": {
+            label?: string;
+            title?: string;
+            instructions?: string;
+            /** Format: int32 */
+            ordinal?: number;
+            items?: components["schemas"]["CrfVersionAuthoringRequest.Item"][];
+        };
         EventCellDto: {
             eventDefinitionOid?: string;
             label?: string;
@@ -3791,6 +3813,7 @@ export interface operations {
                     versionDescription?: string;
                     revisionNotes?: string;
                 };
+                "application/json": components["schemas"]["CrfVersionAuthoringRequest"];
             };
         };
         responses: {
