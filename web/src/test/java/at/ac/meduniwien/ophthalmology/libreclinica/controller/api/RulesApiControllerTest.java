@@ -46,7 +46,8 @@ class RulesApiControllerTest extends AbstractApiControllerTest {
                 Mockito.mock(RuleSetDao.class),
                 Mockito.mock(RuleSetRuleDao.class),
                 Mockito.mock(RuleActionRunLogDao.class),
-                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleDao.class)));
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleDao.class),
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetService.class)));
     }
 
     @Test
@@ -327,6 +328,38 @@ class RulesApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(containsString("HH:mm")));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* RX.3b — dry-run preview                                                */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void dryRunReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/rule-sets/42/dry-run")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void dryRunReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/rule-sets/42/dry-run")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void dryRunReturns403WhenInvestigator() throws Exception {
+        mockMvcWith().perform(post("/api/v1/rule-sets/42/dry-run")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEMO", "Demo",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit")));
     }
 
     /* ---------------------------------------------------------------------- */

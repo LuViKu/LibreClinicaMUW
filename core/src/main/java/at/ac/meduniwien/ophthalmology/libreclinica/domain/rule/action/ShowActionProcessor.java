@@ -39,7 +39,14 @@ public class ShowActionProcessor implements ActionProcessor {
             if (ruleRunnerMode == RuleRunnerMode.DATA_ENTRY || ruleRunnerMode == RuleRunnerMode.RUN_ON_SCHEDULE) {
                 return null;
             } else {
-                dryRun(ruleAction, itemDataBean, itemData, currentStudy, ub);
+                // Phase E.5 RX.3b (2026-06-02): return the dryRun() result rather than
+                // discarding it and falling through. The original code had no `return` or
+                // `break;` after dryRun() so case SAVE: executed the side effect even on
+                // dry-runs from the TestRule / RunRuleSet UIs (modes other than DATA_ENTRY
+                // and RUN_ON_SCHEDULE), persisting `dynamics_item_form_metadata` rows that
+                // operators believed were only being previewed. dryRun() returns
+                // ruleAction unchanged — the same value the caller already passed in.
+                return dryRun(ruleAction, itemDataBean, itemData, currentStudy, ub);
             }
         }
         case SAVE: {
