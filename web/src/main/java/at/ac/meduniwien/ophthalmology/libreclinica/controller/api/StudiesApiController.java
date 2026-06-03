@@ -43,6 +43,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
 /**
  * Phase E.4 M1 — list studies the current user has a role on.
  *
@@ -805,30 +809,51 @@ public class StudiesApiController {
         return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
     }
 
-    private void writeStudyFieldAudit(AuditEventDAO auditDAO,
+    /**
+     * audit_log_event_type row for study-identity edits — id seeded by
+     * {@code lc-muw-2026-06-03-audit-event-type-study-identity.xml}.
+     * Mapped to the "admin" variant in {@code AuditApiController.
+     * variantForType}.
+     */
+    private static final int AUDIT_TYPE_STUDY_IDENTITY_UPDATED = 51;
+
+    /**
+     * Emit one {@code audit_log_event} row per identity field that
+     * actually changed. Skipped when old/new are equal.
+     *
+     * <p>Direct JDBC — same pattern as
+     * {@link MeApiController#emitProfileAudit}. The legacy
+     * {@code AuditEventDAO.create} writes to the {@code audit_event}
+     * table (not {@code audit_log_event}) and drops
+     * {@code audit_log_event_type_id / old_value / new_value /
+     * entity_name}, so events written via that path never surfaced in
+     * the SPA Audit Log view.
+     */
+    private void writeStudyFieldAudit(@SuppressWarnings("unused") AuditEventDAO auditDAO,
                                       UserAccountBean editor,
                                       StudyBean target,
                                       String columnName,
                                       String oldValue,
                                       String newValue) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(editor.getId());
-            ae.setStudyId(target.getId());
-            ae.setStudyName(target.getName() == null ? "" : target.getName());
-            ae.setAuditTable("study");
-            ae.setEntityId(target.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("study_identity_update: " + (target.getOid() == null ? "?" : target.getOid())
-                    + "." + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "'");
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for study field {}={} (continuing): {}",
-                    columnName, newValue, e.getMessage());
+        String oldVal = oldValue == null ? "" : oldValue;
+        String newVal = newValue == null ? "" : newValue;
+        if (oldVal.equals(newVal)) return;
+
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?)")) {
+            ps.setInt(1, AUDIT_TYPE_STUDY_IDENTITY_UPDATED);
+            ps.setInt(2, editor.getId());
+            ps.setInt(3, target.getId());
+            ps.setString(4, columnName);
+            ps.setString(5, oldVal);
+            ps.setString(6, newVal);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for study {} field {} (continuing): {}",
+                    target.getOid(), columnName, e.getMessage());
         }
     }
 

@@ -143,6 +143,13 @@ public class AuditApiController {
                   SELECT se.study_event_id FROM study_event se
                     JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id
                   WHERE ss.study_id IN __IN__))
+              -- Phase E.6 (2026-06-03): include study-identity edits.
+              -- StudiesApiController.writeStudyFieldAudit emits rows
+              -- with audit_table='study' and entity_id=study_id when
+              -- an admin edits the name, sponsor, PI, etc. The SPA
+              -- Audit Log was missing those entirely until this branch
+              -- joined them in.
+              OR ( a.audit_table = 'study' AND a.entity_id IN __IN__)
             ORDER BY a.audit_date DESC, a.audit_id DESC
             LIMIT 500
             """;
@@ -310,8 +317,13 @@ public class AuditApiController {
             // in audit_log_event.{old_value,new_value} by the
             // subject_group_map trigger).
             case 28, 29 -> "subject-group-change";
-            // Subject / study-subject / EDC lifecycle.
-            case 2, 3, 4, 5, 6, 7, 9, 27, 33 -> "admin";
+            // Subject / study-subject / EDC lifecycle, plus user-profile
+            // (50, Phase E.5 follow-up) and study-identity (51, Phase E.6)
+            // edits — all administrative actions surface under the
+            // existing "Admin" filter rather than the data-stream
+            // bucket so operators reviewing the audit trail can pivot
+            // by intent.
+            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51 -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,

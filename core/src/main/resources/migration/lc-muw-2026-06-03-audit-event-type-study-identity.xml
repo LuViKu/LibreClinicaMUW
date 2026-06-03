@@ -1,0 +1,44 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 (2026-06-03 evening): audit_log_event_type row for
+        study-identity edits emitted by StudiesApiController PUT.
+
+        Before this row existed, StudiesApiController.writeStudyFieldAudit
+        wrote to the LEGACY audit_event table via AuditEventDAO.create,
+        but the SPA's AuditApiController reads from audit_log_event
+        — so study edits never appeared in the Audit Trail view.
+
+        Allocates id 51, sibling of the Phase E.5 follow-up "user_account
+        profile updated" row (id 50, added in
+        lc-muw-2026-06-03-audit-event-type-user-profile.xml). variantForType
+        in AuditApiController is extended to map id 51 to the "admin"
+        bucket so it surfaces under the existing Admin filter.
+    -->
+    <changeSet id="2026-06-03-audit-event-type-study-identity"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 51;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the row the StudiesApiController emits via the
+            study-identity-updated direct INSERT in
+            audit_log_event.
+        </comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="51"/>
+            <column name="name" value="study_identity_updated"/>
+            <column name="display_name" value="Study identity updated"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
