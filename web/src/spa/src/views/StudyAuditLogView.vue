@@ -163,7 +163,14 @@ function dateHeading(iso: string): string {
               <span class="text-slate-500 font-mono">{{ formatTime(ev.occurredAt) }}</span>
             </div>
 
-            <div v-if="(ev.variant === 'reason-for-change' || ev.variant === 'subject-group-change') && ev.before != null && ev.after != null" class="mt-2">
+            <!-- Phase E.6 (2026-06-03): render the before/after pair whenever
+                 the row carries both values — not just for the legacy
+                 reason-for-change / subject-group variants. Study identity
+                 edits (variant=admin, audit_log_event_type_id=51) carry
+                 the old/new field values and benefit from the same diff
+                 treatment so operators can see the actual change without
+                 cross-referencing the column name in `details`. -->
+            <div v-if="ev.before != null && ev.after != null" class="mt-2">
               <DiffCard>
                 <template #before>{{ ev.before }}</template>
                 <template #after>{{ ev.after }}</template>

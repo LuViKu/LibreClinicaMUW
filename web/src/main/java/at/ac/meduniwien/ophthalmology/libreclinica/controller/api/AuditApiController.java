@@ -115,7 +115,7 @@ public class AuditApiController {
     private static final String STUDY_SCOPED_AUDIT_SQL_TEMPLATE = """
             SELECT
               a.audit_id, a.audit_date, a.audit_table, a.entity_id,
-              a.reason_for_change, a.audit_log_event_type_id,
+              a.entity_name, a.reason_for_change, a.audit_log_event_type_id,
               a.old_value, a.new_value, a.event_crf_id, a.study_event_id,
               a.user_id, ua.user_name, alet.name AS type_name,
               alet.display_name AS type_display_name
@@ -226,6 +226,7 @@ public class AuditApiController {
                     Timestamp ts = rs.getTimestamp("audit_date");
                     String auditTable = rs.getString("audit_table");
                     int entityId = rs.getInt("entity_id");
+                    String entityName = rs.getString("entity_name");
                     int eventCrfId = rs.getInt("event_crf_id");
                     int typeId = rs.getInt("audit_log_event_type_id");
                     String oldVal = rs.getString("old_value");
@@ -277,6 +278,20 @@ public class AuditApiController {
                     String prettyOld = prettifyValue(auditTable, typeName, oldVal);
                     String prettyNew = prettifyValue(auditTable, typeName, newVal);
 
+                    // Phase E.6 (2026-06-03): for study-identity edits (and
+                    // user-profile edits — type 50, written via
+                    // MeApiController.emitProfileAudit) the row's entity_name
+                    // holds the column key that changed. Surface it as
+                    // `details` so operators can tell at a glance whether
+                    // "name", "sponsor", "principalInvestigator" etc. changed
+                    // without having to compare the before/after strings.
+                    String details = null;
+                    if (("study".equalsIgnoreCase(auditTable)
+                            || "user_account".equalsIgnoreCase(auditTable))
+                            && entityName != null && !entityName.isBlank()) {
+                        details = entityName;
+                    }
+
                     out.add(new AuditEventDto(
                             String.valueOf(auditId),
                             occurredAt,
@@ -286,7 +301,7 @@ public class AuditApiController {
                             title,
                             subjectLabel,
                             scope,
-                            /* details */ null,
+                            details,
                             blankToNull(prettyOld),
                             blankToNull(prettyNew),
                             blankToNull(reason)));
