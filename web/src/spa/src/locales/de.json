@@ -834,8 +834,9 @@
     "edit": {
       "title": "Studien-Identität bearbeiten",
       "subTrail": "Studienaufbau",
-      "intro": "Lassen Sie ein Feld leer, um den aktuellen Wert beizubehalten. Jede Änderung erzeugt einen Audit-Trail-Eintrag mit alt + neu.",
+      "intro": "Pflichtfelder sind mit einem Sternchen markiert. Jede Änderung erzeugt einen Audit-Trail-Eintrag mit altem und neuem Wert.",
       "submit": "Änderungen speichern",
+      "saved": "Gespeichert. Die Änderungen sind plattformweit übernommen.",
       "leaveUnchanged": "— Unverändert lassen —"
     }
   },

@@ -834,8 +834,9 @@
     "edit": {
       "title": "Edit study identity",
       "subTrail": "Build study",
-      "intro": "Leave a field blank to keep its current value. Each change emits an audit-trail entry recording old + new values.",
+      "intro": "Fields marked with an asterisk are required. Every change emits an audit-trail entry recording the old and new values.",
       "submit": "Save changes",
+      "saved": "Saved. Changes are reflected throughout the platform.",
       "leaveUnchanged": "— Leave unchanged —"
     }
   },

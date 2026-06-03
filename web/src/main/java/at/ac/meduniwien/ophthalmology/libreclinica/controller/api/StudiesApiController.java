@@ -274,6 +274,35 @@ public class StudiesApiController {
     }
 
     /* ----------------------------------------------------------------- */
+    /* GET /api/v1/studies/{studyOid}  (Phase E.6 — single-study read)    */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Returns the full {@link StudyIdentityDto} for a study so the SPA
+     * can pre-populate the edit form with every protocol field — not
+     * just the name. Without this the edit view only had the dashboard's
+     * studyName and operators sending blank fields lost everything but
+     * the name (the PUT treats blank-after-trim as "leave unchanged").
+     */
+    @GetMapping("/{studyOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = StudyIdentityDto.class)))
+    public ResponseEntity<?> get(@PathVariable("studyOid") String studyOid,
+                                 HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean target = studyDao.findByOid(studyOid);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study with oid '" + studyOid + "'"));
+        }
+        return ResponseEntity.ok(toIdentityDto(target, studyDao));
+    }
+
+    /* ----------------------------------------------------------------- */
     /* PUT /api/v1/studies/{studyOid}  (Phase E A8.1 — edit identity)    */
     /* ----------------------------------------------------------------- */
 
