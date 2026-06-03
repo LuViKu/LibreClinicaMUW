@@ -1048,6 +1048,7 @@
     "username": "Benutzername",
     "password": "Passwort",
     "signInLocal": "Lokal anmelden",
+    "signingInLocal": "Wird angemeldet…",
     "localPurpose": "Für Sponsor-Monitore, externes Personal und Notfallzugänge ohne institutionelle Identität.",
     "devShortcuts": "Dev-Rollenwechsel (Mock-Identität)",
     "terms": "AGB",

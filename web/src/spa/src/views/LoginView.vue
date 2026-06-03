@@ -109,8 +109,16 @@ function onSsoBounce() {
             <FieldLabel for="login-password" required>{{ t('login.password') }}</FieldLabel>
             <TextInput id="login-password" v-model="password" type="password" autocomplete="current-password" />
           </div>
-          <button type="submit" class="w-full px-4 py-2 text-xs border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 font-medium muw-focus">
-            {{ t('login.signInLocal') }}
+          <button
+            type="submit"
+            class="w-full px-4 py-2 text-xs border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 font-medium muw-focus disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+            :disabled="auth.isLoading"
+          >
+            <svg v-if="auth.isLoading" class="h-3 w-3 animate-spin text-slate-600" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle class="opacity-30" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+              <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+            </svg>
+            <span>{{ auth.isLoading ? t('login.signingInLocal') : t('login.signInLocal') }}</span>
           </button>
           <p class="text-[11px] text-slate-500 leading-relaxed">{{ t('login.localPurpose') }}</p>
         </form>

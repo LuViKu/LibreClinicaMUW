@@ -1048,6 +1048,7 @@
     "username": "Username",
     "password": "Password",
     "signInLocal": "Sign in with local account",
+    "signingInLocal": "Signing in…",
     "localPurpose": "For sponsor monitors, external personnel, and break-glass accounts that don't have an institutional identity.",
     "devShortcuts": "Dev role-switcher (mock identity)",
     "terms": "Terms",
