@@ -887,8 +887,20 @@
       "studyMissing": "Pick an active study before inviting a user.",
       "emailNotWiredNote": "Welcome email delivery is not yet wired — copy the one-time password and share it with the new user via a secure channel.",
       "successIntro": "User created. Share this one-time password with the new user; they will be required to change it on first login.",
+      "ssoSuccessIntro": "User created. They will sign in via the institutional SSO portal — no password is needed.",
+      "ssoSuccessHint": "Make sure their institutional identity is provisioned at the IdP before they attempt to sign in.",
       "copyPassword": "Copy",
-      "firstLoginNote": "The password is shown once and is not stored. Make sure it is captured before closing this dialog."
+      "firstLoginNote": "The password is shown once and is not stored. Make sure it is captured before closing this dialog.",
+      "authMethod": {
+        "label": "Authentication method",
+        "local": "Local password",
+        "localHelp": "A one-time password will be generated and shown after the user is created.",
+        "sso": "Institutional SSO",
+        "ssoHelp": "The user signs in through the institutional identity provider. No password is generated."
+      },
+      "externalId": "Institutional principal (eppn)",
+      "externalIdPlaceholder": "user@meduniwien.ac.at",
+      "externalIdHelp": "Case-sensitive. Must match the principal the IdP sends in the eduPersonPrincipalName header."
     },
     "edit": {
       "title": "Edit user profile",
