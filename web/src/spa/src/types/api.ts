@@ -1450,7 +1450,14 @@ export interface components {
             profileComplete?: boolean;
             locale?: string;
             timezone?: string;
+            mustChangePassword?: boolean;
+            passwordChangeReason?: string;
             activeStudy?: components["schemas"]["ActiveStudyDto"];
+        };
+        ChangePasswordRequest: {
+            currentPassword?: string;
+            newPassword?: string;
+            newPasswordRepeat?: string;
         };
         UpdateEventRequest: {
             dateStarted?: string;
