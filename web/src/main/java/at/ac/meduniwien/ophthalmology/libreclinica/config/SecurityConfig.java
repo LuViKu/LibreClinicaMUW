@@ -173,7 +173,40 @@ public class SecurityConfig {
                         "/pages/v3/api-docs/**",
                         "/pages/v3/api-docs.yaml",
                         "/pages/swagger-ui.html",
-                        "/pages/swagger-ui/**"
+                        "/pages/swagger-ui/**",
+                        // Phase E.5 (2026-06-03): Vue 3 SPA static bundle.
+                        // The SPA's index.html, /app/assets/* (JS + CSS +
+                        // source maps), favicon.svg and every client-side
+                        // route (/app/login, /app/first-login, /app/home,
+                        // /app/subjects, ...) all serve the same index.html
+                        // and the router handles routing in-browser.
+                        //
+                        // Anonymous access is intentional + safe:
+                        //   - the bundle contains zero PHI and zero secrets;
+                        //     only compiled Vue source code that references
+                        //     API URLs that are independently auth-gated;
+                        //   - the SPA's auth.bootstrap() probes
+                        //     GET /pages/api/v1/me on load — that endpoint
+                        //     stays behind hasRole("USER"), returns 401 for
+                        //     anonymous, and the router-guard then routes
+                        //     the SPA to /app/login client-side;
+                        //   - API endpoint paths the bundle exposes are also
+                        //     discoverable from springdoc-openapi at
+                        //     /pages/v3/api-docs (already permitAll above),
+                        //     so opening /app/** doesn't widen the
+                        //     enumeration surface;
+                        //   - source maps reveal source structure but no
+                        //     secrets; matches the standard SPA-on-static-
+                        //     hosting threat model (S3 + CloudFront + API
+                        //     behind auth).
+                        //
+                        // Without this rule, /app/login itself was behind
+                        // hasRole("USER") and unauthenticated users got
+                        // 302'd to the legacy /pages/login/login JSP before
+                        // the SPA's LoginView ever loaded — the SPA's own
+                        // login screen was unreachable in production builds
+                        // and only visible via the Vite dev server.
+                        "/app/**"
                 )).permitAll()
                 .anyRequest().hasRole("USER")
             )
