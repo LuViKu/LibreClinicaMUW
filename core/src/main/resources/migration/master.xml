@@ -26,6 +26,7 @@
   <include  file="migration/lc-muw-2026-06-02-add-profile-columns.xml"/>
   <include  file="migration/lc-muw-2026-06-02-audit-event-type-display-names.xml"/>
   <include  file="migration/lc-muw-2026-06-02-prune-dn-item-data-map-duplicates.xml"/>
+  <include  file="migration/lc-muw-2026-06-02-prune-dn-item-data-map-duplicates-v2.xml"/>
   <include  file="migration/lc-muw-2026-06-03-audit-event-type-user-profile.xml"/>
   <include  file="migration/lc-muw-2026-06-02-seed-demo-test-users.xml"/>
 </databaseChangeLog>
