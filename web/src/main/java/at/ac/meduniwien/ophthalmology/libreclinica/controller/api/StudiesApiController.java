@@ -208,6 +208,10 @@ public class StudiesApiController {
         // seed-data shape used by every demo / fixture study).
         String generatedOid = "S_" + body.uniqueProtocolId().trim().toUpperCase();
         persisted.setOid(generatedOid);
+        // StudyDAO.updateStepOne dereferences oldStatus on every update
+        // (NPE otherwise). We're not changing the status here — just
+        // back-filling the generated OID — so mirror the current value.
+        persisted.setOldStatus(persisted.getStatus());
         studyDao.update(persisted);
 
         // Auto-bind the caller as COORDINATOR on the new study — they
