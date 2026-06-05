@@ -16,6 +16,7 @@ import { useCrfLibraryStore } from './crfLibrary'
 import { useSitesStore } from './sites'
 import { useUsersStore } from './users'
 import { useStudyStore } from './study'
+import { useDatasetsStore } from './datasets'
 
 /**
  * Thrown by {@link useAuthStore.completeProfile} on a 400 from
@@ -253,6 +254,7 @@ export const useAuthStore = defineStore('auth', () => {
     useSitesStore().reset()
     useUsersStore().reset()
     useStudyStore().reset()
+    useDatasetsStore().reset()
   }
 
   /**
