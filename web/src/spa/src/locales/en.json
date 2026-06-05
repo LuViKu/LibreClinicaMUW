@@ -1354,5 +1354,58 @@
       "formatLabel": "Format",
       "submit": "Run export"
     }
+  },
+  "filters": {
+    "itemLabel": "Item",
+    "operatorLabel": "Operator",
+    "valueLabel": "Value",
+    "valuesLabel": "Values",
+    "valuesPlaceholder": "Comma-separated",
+    "betweenLabel": "Range",
+    "betweenAnd": "and",
+    "noValueRequired": "No value required",
+    "addRow": "Add filter",
+    "removeRowAria": "Remove filter row {n}",
+    "emptyHint": "No filters yet — every subject + CRF will be exported.",
+    "previewLoading": "Counting…",
+    "previewLine": "{matchingSubjects} of {totalSubjects} subjects · {matchingCrfs} of {totalCrfs} CRFs",
+    "operators": {
+      "=": "equals",
+      "!=": "does not equal",
+      "<": "less than",
+      "<=": "less than or equal",
+      ">": "greater than",
+      ">=": "greater than or equal",
+      "in": "is one of",
+      "between": "between",
+      "is-null": "is empty",
+      "not-null": "is not empty"
+    }
+  },
+  "exportWizard": {
+    "back": "Back",
+    "next": "Next",
+    "steps": {
+      "metadata": "Metadata",
+      "items": "Items",
+      "filters": "Filters",
+      "confirm": "Confirm"
+    },
+    "metadata": {
+      "heading": "Dataset metadata",
+      "placeholder": "Name + description fields land with Phase 2."
+    },
+    "items": {
+      "heading": "Pick items",
+      "placeholder": "Items tree picker lands with Phase 2."
+    },
+    "filters": {
+      "heading": "Filters",
+      "lead": "Add per-item predicates the export should satisfy. Preview updates as you type."
+    },
+    "confirm": {
+      "heading": "Confirm",
+      "placeholder": "Confirmation surface lands with Phase 2."
+    }
   }
 }

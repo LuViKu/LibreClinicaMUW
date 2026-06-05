@@ -13,21 +13,29 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DatasetItemStatus;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ItemDataType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ArchivedDatasetFileBean;
@@ -37,11 +45,13 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.extract.ExtractBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.ArchivedDatasetFileDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.extract.DatasetDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleSetRuleDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.extract.GenerateExtractFileService;
 
 import org.slf4j.Logger;
@@ -672,5 +682,328 @@ public class DatasetsApiController {
                 default -> null;
             };
         }
+    }
+
+    /* ============================================================== */
+    /*  Phase E.6 P3 — filter test surface                            */
+    /*  POST /api/v1/datasets/{datasetId}:test-filter                 */
+    /* ============================================================== */
+
+    /**
+     * Operators the {@link DatasetFilterDto} accepts.
+     *
+     * <p>{@code in} carries a list of values, {@code between} carries
+     * a {@code [low, high]} pair, the unary {@code is-null} +
+     * {@code not-null} need no value. Anything else is treated as a
+     * scalar comparison.
+     */
+    static final Set<String> KNOWN_OPS = Set.of(
+            "=", "!=", "<", "<=", ">", ">=", "in", "between", "is-null", "not-null");
+
+    private static final Set<String> NUMERIC_ONLY_OPS = Set.of("<", "<=", ">", ">=", "between");
+    private static final Set<String> UNARY_OPS = Set.of("is-null", "not-null");
+
+    /** ItemDataType.name() values that admit numeric/date-style ordering operators. */
+    private static final Set<String> NUMERIC_OR_DATE_TYPES = Set.of(
+            ItemDataType.INTEGER.getName(),
+            ItemDataType.REAL.getName(),
+            ItemDataType.DATE.getName(),
+            ItemDataType.PDATE.getName());
+
+    /**
+     * Counts subjects + CRFs that satisfy the supplied predicate
+     * list. Does NOT persist anything — this is the wizard's live
+     * preview endpoint.
+     */
+    @PostMapping("/datasets/{datasetId}:test-filter")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = FilterTestResult.class)))
+    public ResponseEntity<?> testFilter(@PathVariable("datasetId") String datasetId,
+                                        @RequestBody(required = false) TestFilterRequest body,
+                                        HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+
+        if (body == null || body.filters() == null) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "'filters' is required"));
+        }
+
+        // Validate each filter row against the same rules the wizard
+        // enforces client-side, so the live preview can't desync from
+        // what the persist path would accept later.
+        ItemDAO itemDao = new ItemDAO(dataSource);
+        Map<String, ItemBean> resolvedItems = new HashMap<>();
+        for (int i = 0; i < body.filters().size(); i++) {
+            DatasetFilterDto row = body.filters().get(i);
+            ResponseEntity<?> err = validateFilterRow(row, i, itemDao, resolvedItems);
+            if (err != null) return err;
+        }
+
+        try {
+            FilterTestResult result = runCounts(currentStudy.getId(), body.filters(), resolvedItems);
+            return ResponseEntity.ok(result);
+        } catch (SQLException e) {
+            LOG.warn("Failed to run :test-filter count for datasetId={} studyId={}",
+                    datasetId, currentStudy.getId(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to run filter count — see server log"));
+        }
+    }
+
+    /**
+     * Returns a 400 ResponseEntity when the row is malformed, or
+     * {@code null} when it's accepted. Populates
+     * {@code resolvedItems} as a side-effect so the SQL-builder
+     * downstream doesn't re-resolve the OID.
+     */
+    private ResponseEntity<?> validateFilterRow(DatasetFilterDto row, int index,
+                                                ItemDAO itemDao,
+                                                Map<String, ItemBean> resolvedItems) {
+        if (row == null || row.itemOid() == null || row.itemOid().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "filters[" + index + "].itemOid is required"));
+        }
+        if (row.operator() == null || row.operator().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "filters[" + index + "].operator is required"));
+        }
+        String op = row.operator();
+        if (!KNOWN_OPS.contains(op)) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "filters[" + index + "].operator '" + op + "' is not supported"));
+        }
+
+        ItemBean item = resolvedItems.computeIfAbsent(row.itemOid(), oid -> {
+            ArrayList<ItemBean> hits = itemDao.findByOid(oid);
+            return hits.isEmpty() ? null : hits.get(0);
+        });
+        if (item == null || item.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "filters[" + index + "].itemOid '" + row.itemOid() + "' does not resolve to a known item"));
+        }
+
+        // Numeric/date-only operators (<, <=, >, >=, between) must
+        // sit on a numeric or date item.
+        if (NUMERIC_ONLY_OPS.contains(op)
+                && !NUMERIC_OR_DATE_TYPES.contains(item.getDataType().getName())) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "filters[" + index + "].operator '" + op
+                    + "' requires a numeric or date item; '" + row.itemOid()
+                    + "' is " + item.getDataType().getName()));
+        }
+
+        // `in` needs a non-empty value list.
+        if ("in".equals(op)) {
+            if (row.values() == null || row.values().isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "filters[" + index + "].values is required for 'in'"));
+            }
+        }
+        // `between` needs exactly two values.
+        if ("between".equals(op)) {
+            if (row.values() == null || row.values().size() != 2) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "filters[" + index + "].values must hold exactly two entries for 'between'"));
+            }
+        }
+        // Scalar comparisons need a value.
+        if (!UNARY_OPS.contains(op) && !"in".equals(op) && !"between".equals(op)) {
+            if (row.value() == null) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "filters[" + index + "].value is required for '" + op + "'"));
+            }
+        }
+        return null;
+    }
+
+    private FilterTestResult runCounts(int studyId, List<DatasetFilterDto> filters,
+                                       Map<String, ItemBean> resolvedItems) throws SQLException {
+        int totalSubjects = countTotalSubjects(studyId);
+        int totalCrfs = countTotalCrfs(studyId);
+
+        // No filters → match-all.
+        if (filters.isEmpty()) {
+            return new FilterTestResult(totalSubjects, totalCrfs, totalSubjects, totalCrfs);
+        }
+
+        StringBuilder subjectSql = new StringBuilder(
+                "SELECT COUNT(DISTINCT ss.study_subject_id) " +
+                "FROM study_subject ss WHERE ss.study_id = ? ");
+        StringBuilder crfSql = new StringBuilder(
+                "SELECT COUNT(DISTINCT ec.event_crf_id) " +
+                "FROM event_crf ec " +
+                "JOIN study_event se ON se.study_event_id = ec.study_event_id " +
+                "JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id " +
+                "WHERE ss.study_id = ? ");
+
+        // Each filter row appends an EXISTS clause to both queries
+        // and contributes (item_id, ...value params...) — collect
+        // both parameter lists in lock-step.
+        List<Object> subjectParams = new ArrayList<>();
+        List<Object> crfParams = new ArrayList<>();
+        subjectParams.add(studyId);
+        crfParams.add(studyId);
+
+        for (DatasetFilterDto row : filters) {
+            ItemBean item = resolvedItems.get(row.itemOid());
+            PredicateFragment pf = renderPredicate(row);
+            subjectSql.append(" AND EXISTS (SELECT 1 FROM item_data id " +
+                    "JOIN event_crf ec2 ON ec2.event_crf_id = id.event_crf_id " +
+                    "JOIN study_event se2 ON se2.study_event_id = ec2.study_event_id " +
+                    "WHERE se2.study_subject_id = ss.study_subject_id " +
+                    "  AND id.item_id = ? AND " + pf.sqlFragment() + ") ");
+            crfSql.append(" AND EXISTS (SELECT 1 FROM item_data id " +
+                    "WHERE id.event_crf_id = ec.event_crf_id " +
+                    "  AND id.item_id = ? AND " + pf.sqlFragment() + ") ");
+            subjectParams.add(item.getId());
+            subjectParams.addAll(pf.params());
+            crfParams.add(item.getId());
+            crfParams.addAll(pf.params());
+        }
+
+        int matchingSubjects = runCount(subjectSql.toString(), subjectParams);
+        int matchingCrfs = runCount(crfSql.toString(), crfParams);
+        return new FilterTestResult(matchingSubjects, matchingCrfs, totalSubjects, totalCrfs);
+    }
+
+    private int countTotalSubjects(int studyId) throws SQLException {
+        return runCount(
+                "SELECT COUNT(*) FROM study_subject WHERE study_id = ?",
+                List.of(studyId));
+    }
+
+    private int countTotalCrfs(int studyId) throws SQLException {
+        return runCount(
+                "SELECT COUNT(*) FROM event_crf ec " +
+                "JOIN study_event se ON se.study_event_id = ec.study_event_id " +
+                "JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id " +
+                "WHERE ss.study_id = ?",
+                List.of(studyId));
+    }
+
+    private int runCount(String sql, List<Object> params) throws SQLException {
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Renders the predicate fragment for one filter row. The result
+     * is a {@code (sqlFragment, params)} pair that gets spliced into
+     * the EXISTS clause downstream. The operator is whitelisted
+     * upstream by {@link #validateFilterRow}, so the raw splice into
+     * the SQL string is safe.
+     */
+    private PredicateFragment renderPredicate(DatasetFilterDto row) {
+        String op = row.operator();
+        if ("is-null".equals(op)) {
+            return new PredicateFragment(
+                    "(id.value IS NULL OR id.value = '')", Collections.emptyList());
+        }
+        if ("not-null".equals(op)) {
+            return new PredicateFragment(
+                    "(id.value IS NOT NULL AND id.value <> '')", Collections.emptyList());
+        }
+        if ("in".equals(op)) {
+            String placeholders = String.join(",",
+                    Collections.nCopies(row.values().size(), "?"));
+            return new PredicateFragment(
+                    "id.value IN (" + placeholders + ")",
+                    new ArrayList<>(row.values()));
+        }
+        if ("between".equals(op)) {
+            return new PredicateFragment(
+                    "id.value BETWEEN ? AND ?",
+                    List.of(row.values().get(0), row.values().get(1)));
+        }
+        return new PredicateFragment(
+                "id.value " + op + " ?",
+                List.of(row.value()));
+    }
+
+    /* ---- Phase 3 records ---- */
+
+    /**
+     * Phase 3 wire shape — one predicate row.
+     *
+     * <p>{@code value} holds the scalar (or {@code null} for unary +
+     * list ops); {@code values} holds the list (for {@code in}) or
+     * the two-tuple (for {@code between}). Older clients can omit
+     * either field — the controller picks the right one based on
+     * the operator.
+     */
+    public record DatasetFilterDto(String itemOid, String operator,
+                                   String value, List<String> values) {}
+
+    /** Request body for {@code POST /datasets/{id}:test-filter}. */
+    public record TestFilterRequest(List<DatasetFilterDto> filters) {}
+
+    /**
+     * Response body for {@code POST /datasets/{id}:test-filter}.
+     *
+     * <p>The matching counts include the predicate set; the totals
+     * are the un-filtered study population. The wizard renders the
+     * ratio.
+     */
+    public record FilterTestResult(int matchingSubjects, int matchingCrfs,
+                                   int totalSubjects, int totalCrfs) {}
+
+    /**
+     * Future Phase 2 extension — the create-dataset wizard's full
+     * payload. Published in this PR so Phase 3 can reference the
+     * shared {@link DatasetFilterDto} list shape without circular
+     * dependencies; Phase 2's wizard PR will extend this record with
+     * the rest of the dataset metadata + the items tree it
+     * authors.
+     */
+    public record CreateDatasetRequest(String name, String description,
+                                       List<String> selectedItemOids,
+                                       List<DatasetFilterDto> filters) {}
+
+    /**
+     * Internal pair of rendered SQL fragment + the JDBC parameters
+     * it needs (in order). Not part of the public wire vocabulary.
+     */
+    private record PredicateFragment(String sqlFragment, List<Object> params) {}
+
+    /**
+     * Stable lowercase canonicalization for operator strings — used
+     * in the unit tests to assert the validation path treats
+     * mixed-case operator strings consistently.
+     */
+    static String normalizeOperator(String op) {
+        if (op == null) return null;
+        return op.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Visible-for-test helper — exposes the static op classification
+     * so the test class doesn't duplicate the predicate tables.
+     */
+    static boolean operatorIsNumericOnly(String op) {
+        return NUMERIC_ONLY_OPS.contains(op);
+    }
+
+    static boolean operatorIsUnary(String op) {
+        return UNARY_OPS.contains(op);
+    }
+
+    static Set<String> dataTypesAcceptingOrderingOps() {
+        return new HashSet<>(NUMERIC_OR_DATE_TYPES);
     }
 }

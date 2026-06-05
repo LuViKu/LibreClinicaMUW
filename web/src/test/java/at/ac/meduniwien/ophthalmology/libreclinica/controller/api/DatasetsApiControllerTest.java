@@ -28,14 +28,14 @@ import org.springframework.test.web.servlet.MockMvc;
 
 /**
  * Phase E.6 — MockMvc IT pinning the
- * {@link DatasetsApiController} session-guard + role-check surface.
+ * {@link DatasetsApiController} session-guard + role-check surface,
+ * spanning both the Phase 1 export-trigger endpoints and the
+ * Phase 3 {@code :test-filter} validation surface.
  *
- * <p>Like the other Phase E.4 MockMvc tests, this focuses on the
- * easy-to-pin contract points (auth, study binding, role gating,
- * request-body validation, path-variable shape). Happy-path tests
- * that exercise GenerateExtractFileService end-to-end need a real
- * DataSource + Hibernate context and ride the existing legacy
- * ExportDataset smoke ITs.
+ * <p>Happy-path tests that exercise GenerateExtractFileService or
+ * count the joined item_data rows end-to-end need a real DataSource +
+ * Hibernate context and ride the existing legacy ExportDataset smoke
+ * ITs (Phase 1) or a Testcontainers cut (Phase 3 counts).
  */
 class DatasetsApiControllerTest extends AbstractApiControllerTest {
 
@@ -196,5 +196,89 @@ class DatasetsApiControllerTest extends AbstractApiControllerTest {
         u.setId(2);
         u.setName("operator");
         return u;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* POST /api/v1/datasets/{datasetId}:test-filter (Phase 3)            */
+    /* ------------------------------------------------------------------ */
+
+    @Test
+    void testFilterReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/datasets/0:test-filter")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"filters\":[]}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void testFilterReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/datasets/0:test-filter")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"filters\":[]}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void testFilterReturns400WhenFiltersFieldMissing() throws Exception {
+        mockMvcWith().perform(post("/api/v1/datasets/0:test-filter")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("'filters' is required")));
+    }
+
+    @Test
+    void testFilterReturns400WhenBodyMissing() throws Exception {
+        mockMvcWith().perform(post("/api/v1/datasets/0:test-filter")
+                .contentType(MediaType.APPLICATION_JSON)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("'filters' is required")));
+    }
+
+    @Test
+    void testFilterReturns400OnRowMissingItemOid() throws Exception {
+        mockMvcWith().perform(post("/api/v1/datasets/0:test-filter")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"filters\":[{\"operator\":\"=\",\"value\":\"42\"}]}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("itemOid is required")));
+    }
+
+    @Test
+    void testFilterReturns400OnRowMissingOperator() throws Exception {
+        mockMvcWith().perform(post("/api/v1/datasets/0:test-filter")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"filters\":[{\"itemOid\":\"I_AGE\",\"value\":\"42\"}]}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("operator is required")));
+    }
+
+    @Test
+    void testFilterReturns400OnUnsupportedOperator() throws Exception {
+        mockMvcWith().perform(post("/api/v1/datasets/0:test-filter")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"filters\":[{\"itemOid\":\"I_AGE\",\"operator\":\"like\",\"value\":\"42\"}]}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("is not supported")));
     }
 }

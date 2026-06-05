@@ -2,15 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useDatasetsStore } from '../datasets'
 import { ApiError, ApiNetworkError } from '@/api/client'
-import type { ArchivedFileDto, DatasetDto, ExportTriggerResponse } from '@/types/export'
+import type {
+  ArchivedFileDto,
+  DatasetDto,
+  DatasetFilterDto,
+  ExportTriggerResponse,
+  FilterTestResult,
+} from '@/types/export'
 
 /**
  * Phase E.6 — Vitest coverage for the data-export store. Pins:
- *   - `load(studyOid)` hits /pages/api/v1/studies/{oid}/datasets and stores rows.
- *   - `loadFiles(studyOid, datasetId)` caches per-dataset file lists.
- *   - `triggerExport(...)` POSTs the right body + bumps fileCount + lastRunAt.
- *   - `quickOdm(studyOid)` POSTs to the :quick-odm verb endpoint.
- *   - `reset()` clears every piece of state (covers the auth.pickStudy hook).
+ *   - Phase 1: load/loadFiles/triggerExport/quickOdm + reset.
+ *   - Phase 3: testFilter (debounce + cancellation + previewError).
  *   - 401/403 propagate; network failures surface in `error`.
  */
 vi.mock('@/api/client', async () => {
@@ -60,6 +63,17 @@ const FILE_FOR_11: ArchivedFileDto = {
 const EXPORT_RESPONSE: ExportTriggerResponse = {
   archivedDatasetFileId: 777,
   downloadUrl: '/LibreClinica/pages/api/v1/archived-files/777/download',
+}
+
+const FILTERS: DatasetFilterDto[] = [
+  { itemOid: 'I_AGE', operator: '>=', value: '18' },
+]
+
+const FILTER_RESULT: FilterTestResult = {
+  matchingSubjects: 12,
+  totalSubjects: 50,
+  matchingCrfs: 36,
+  totalCrfs: 150,
 }
 
 describe('useDatasetsStore', () => {
@@ -197,5 +211,91 @@ describe('useDatasetsStore', () => {
     expect(ds.error).toBeNull()
     expect(ds.isLoading).toBe(false)
     expect(ds.isQuickOdm).toBe(false)
+  })
+})
+
+describe('useDatasetsStore.testFilter (Phase 3)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('POSTs to /pages/api/v1/datasets/{id}:test-filter with the filters body', async () => {
+    const datasets = useDatasetsStore()
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce(FILTER_RESULT)
+
+    const out = await datasets.testFilter('42', FILTERS, 0)
+
+    expect(apiPost).toHaveBeenCalledWith(
+      '/pages/api/v1/datasets/42:test-filter',
+      { filters: FILTERS },
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    )
+    expect(out).toEqual(FILTER_RESULT)
+    expect(datasets.preview).toEqual(FILTER_RESULT)
+    expect(datasets.isLoadingPreview).toBe(false)
+    expect(datasets.previewError).toBeNull()
+  })
+
+  it('debounces — only the latest call hits the network', async () => {
+    const datasets = useDatasetsStore()
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValue(FILTER_RESULT)
+
+    vi.useFakeTimers()
+    try {
+      const p1 = datasets.testFilter('0', [
+        { itemOid: 'I_AGE', operator: '=', value: '40' },
+      ])
+      const p2 = datasets.testFilter('0', [
+        { itemOid: 'I_AGE', operator: '=', value: '41' },
+      ])
+      const p3 = datasets.testFilter('0', FILTERS)
+
+      // The first two should resolve to null (superseded by p3).
+      expect(apiPost).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(350)
+
+      const [r1, r2, r3] = await Promise.all([p1, p2, p3])
+      expect(r1).toBeNull()
+      expect(r2).toBeNull()
+      expect(r3).toEqual(FILTER_RESULT)
+      // Only one request — the debounced winner.
+      expect(apiPost).toHaveBeenCalledTimes(1)
+      expect(apiPost).toHaveBeenLastCalledWith(
+        '/pages/api/v1/datasets/0:test-filter',
+        { filters: FILTERS },
+        expect.any(Object),
+      )
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('surfaces ApiError into previewError without throwing', async () => {
+    const datasets = useDatasetsStore()
+    ;(apiPost as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new ApiError(400, "filters[0].operator 'like' is not supported"),
+    )
+
+    const out = await datasets.testFilter('0', FILTERS, 0)
+
+    expect(out).toBeNull()
+    expect(datasets.previewError).toContain('not supported')
+    expect(datasets.isLoadingPreview).toBe(false)
+  })
+
+  it('reset() clears draft + preview state', async () => {
+    const datasets = useDatasetsStore()
+    datasets.draft.name = 'My export'
+    datasets.draft.filters = FILTERS
+    datasets.preview = FILTER_RESULT
+    datasets.previewError = 'oops'
+
+    datasets.reset()
+
+    expect(datasets.draft.name).toBe('')
+    expect(datasets.draft.filters).toEqual([])
+    expect(datasets.preview).toBeNull()
+    expect(datasets.previewError).toBeNull()
   })
 })

@@ -3,13 +3,18 @@ import { ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import type {
   ArchivedFileDto,
+  CreateDatasetRequest,
   DatasetDto,
+  DatasetFilterDto,
   ExportFormat,
   ExportTriggerResponse,
+  FilterTestResult,
 } from '@/types/export'
 
 /**
- * Phase E.6 — Data Export MVP store.
+ * Phase E.6 — Data Export store.
+ *
+ * <h2>Phase 1 — saved-dataset list + export trigger</h2>
  *
  * Backs {@code DatasetListView}. Hydrates from:
  *   - {@code GET /pages/api/v1/studies/{oid}/datasets}                                — saved datasets
@@ -23,10 +28,21 @@ import type {
  *
  * <p>Per-study reset: wired into {@code useAuthStore.pickStudy} so
  * switching the active study clears every dataset row + the
- * per-dataset file cache. Without this the operator would still see
- * study-A datasets after binding study B.
+ * per-dataset file cache + every Phase-3 wizard draft. Without this
+ * the operator would still see study-A datasets after binding study B.
+ *
+ * <h2>Phase 3 — filters (create-dataset wizard)</h2>
+ *
+ * Holds the create-dataset wizard's draft + drives the live filter
+ * preview against {@code POST /pages/api/v1/datasets/{id}:test-filter}.
+ * The {@link testFilter} call debounces against rapid filter edits —
+ * the wizard's inline preview pane re-runs the count probe 300 ms after
+ * the last keystroke. Concurrent edits cancel the previous in-flight
+ * request via an {@link AbortController}.
  */
 export const useDatasetsStore = defineStore('datasets', () => {
+  /* ---- Phase 1 state ---- */
+
   const rows = ref<DatasetDto[]>([])
   /** dataset.id → ArchivedFileDto[] (lazy-loaded). */
   const filesByDataset = ref<Map<number, ArchivedFileDto[]>>(new Map())
@@ -35,6 +51,26 @@ export const useDatasetsStore = defineStore('datasets', () => {
   const isExporting = ref<Set<number>>(new Set())
   const isQuickOdm = ref(false)
   const error = ref<string | null>(null)
+
+  /* ---- Phase 3 wizard state ---- */
+
+  const draft = ref<CreateDatasetRequest>({
+    name: '',
+    description: '',
+    selectedItemOids: [],
+    filters: [],
+  })
+
+  const preview = ref<FilterTestResult | null>(null)
+  const isLoadingPreview = ref(false)
+  const previewError = ref<string | null>(null)
+
+  // Debounce + cancellation state for `testFilter` — the wizard calls
+  // it on every filter-row mutation so we collapse rapid edits into a
+  // single backend probe.
+  let debounceHandle: ReturnType<typeof setTimeout> | null = null
+  let inFlightController: AbortController | null = null
+  let pendingResolvers: Array<(value: FilterTestResult | null) => void> = []
 
   /**
    * Load the saved-dataset list for the active study. Replaces the
@@ -202,9 +238,90 @@ export const useDatasetsStore = defineStore('datasets', () => {
   }
 
   /**
+   * Debounced filter-preview probe.
+   *
+   * @param datasetId     dataset_id to scope against. Pass {@code '0'}
+   *                       for the new-dataset case (the backend treats
+   *                       it as the active-study scope).
+   * @param filters       The current filter list. Passed through
+   *                       verbatim to the backend.
+   * @param debounceMs    Override the default 300 ms debounce. Tests
+   *                       pass 0 to skip the timer.
+   * @returns A promise that resolves to the latest {@link FilterTestResult},
+   *          or {@code null} if the call was cancelled / aborted.
+   */
+  function testFilter(
+    datasetId: string,
+    filters: DatasetFilterDto[],
+    debounceMs = 300,
+  ): Promise<FilterTestResult | null> {
+    if (debounceHandle !== null) {
+      clearTimeout(debounceHandle)
+      debounceHandle = null
+    }
+    if (inFlightController !== null) {
+      inFlightController.abort()
+      inFlightController = null
+    }
+    for (const r of pendingResolvers) r(null)
+    pendingResolvers = []
+
+    return new Promise<FilterTestResult | null>((resolve) => {
+      pendingResolvers.push(resolve)
+      const runProbe = async () => {
+        debounceHandle = null
+        const myResolvers = pendingResolvers
+        pendingResolvers = []
+        const controller = new AbortController()
+        inFlightController = controller
+        isLoadingPreview.value = true
+        previewError.value = null
+        try {
+          const result = await apiPost<FilterTestResult>(
+            `/pages/api/v1/datasets/${encodeURIComponent(datasetId)}:test-filter`,
+            { filters },
+            { signal: controller.signal },
+          )
+          if (controller.signal.aborted) {
+            for (const r of myResolvers) r(null)
+            return
+          }
+          preview.value = result
+          for (const r of myResolvers) r(result)
+        } catch (err) {
+          if (controller.signal.aborted) {
+            for (const r of myResolvers) r(null)
+            return
+          }
+          if (err instanceof ApiError) {
+            previewError.value = err.message
+          } else if (err instanceof ApiNetworkError) {
+            previewError.value = 'Backend nicht erreichbar'
+          } else {
+            previewError.value = (err as Error).message ?? 'Unbekannter Fehler'
+          }
+          for (const r of myResolvers) r(null)
+        } finally {
+          isLoadingPreview.value = false
+          if (inFlightController === controller) {
+            inFlightController = null
+          }
+        }
+      }
+      if (debounceMs <= 0) {
+        void runProbe()
+      } else {
+        debounceHandle = setTimeout(() => { void runProbe() }, debounceMs)
+      }
+    })
+  }
+
+  /**
    * Clear every piece of per-study state. Called by
    * {@link useAuthStore.pickStudy} before re-bootstrapping so the
    * operator never sees study-A datasets after switching to study B.
+   * Also called when the create-dataset wizard closes so the next
+   * launch starts from a clean draft.
    */
   function reset(): void {
     rows.value = []
@@ -214,9 +331,30 @@ export const useDatasetsStore = defineStore('datasets', () => {
     isExporting.value = new Set()
     isQuickOdm.value = false
     error.value = null
+
+    if (debounceHandle !== null) {
+      clearTimeout(debounceHandle)
+      debounceHandle = null
+    }
+    if (inFlightController !== null) {
+      inFlightController.abort()
+      inFlightController = null
+    }
+    for (const r of pendingResolvers) r(null)
+    pendingResolvers = []
+    draft.value = {
+      name: '',
+      description: '',
+      selectedItemOids: [],
+      filters: [],
+    }
+    preview.value = null
+    isLoadingPreview.value = false
+    previewError.value = null
   }
 
   return {
+    /* Phase 1 */
     rows,
     filesByDataset,
     isLoading,
@@ -228,6 +366,13 @@ export const useDatasetsStore = defineStore('datasets', () => {
     loadFiles,
     triggerExport,
     quickOdm,
+    /* Phase 3 */
+    draft,
+    preview,
+    isLoadingPreview,
+    previewError,
+    testFilter,
+    /* Both */
     reset,
   }
 })
