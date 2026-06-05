@@ -64,6 +64,12 @@ export const useDatasetsStore = defineStore('datasets', () => {
   const isExporting = ref<Set<number>>(new Set())
   const isQuickOdm = ref(false)
   const error = ref<string | null>(null)
+  /**
+   * Phase E.6 restore-quickwins — when true, `load()` appends
+   * `?includeRemoved=true` so the dataset list view can surface
+   * soft-deleted rows for the Restore action.
+   */
+  const showRemoved = ref(false)
 
   /* ---- Phase 2 — event tree + wizard draft ---- */
 
@@ -105,8 +111,9 @@ export const useDatasetsStore = defineStore('datasets', () => {
     isLoading.value = true
     error.value = null
     try {
+      const suffix = showRemoved.value ? '?includeRemoved=true' : ''
       rows.value = await apiGet<DatasetDto[]>(
-        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/datasets`,
+        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/datasets${suffix}`,
       )
       loadedForStudyOid.value = studyOid
     } catch (e) {
@@ -422,6 +429,31 @@ export const useDatasetsStore = defineStore('datasets', () => {
     )
   }
 
+  /**
+   * Phase E.6 restore-quickwins — restore a soft-deleted dataset.
+   * Backend (`POST /api/v1/datasets/{datasetId}/restore`) flips
+   * DELETED → AVAILABLE so the row reappears in the list view +
+   * can be re-run. Same role gate as delete.
+   *
+   * <p>On success, replaces the row in place so the SPA reflects
+   * the new status without a full reload. If the list was not
+   * including removed rows the freshly-restored row stays present
+   * (it just changes status from "removed" to its previous one).
+   */
+  async function restoreDataset(datasetId: number): Promise<MutationResult> {
+    return mutate(
+      () => apiPost<DatasetDto>(`/pages/api/v1/datasets/${datasetId}/restore`, {}),
+      (dataset) => {
+        const idx = rows.value.findIndex((r) => r.id === dataset.id)
+        if (idx >= 0) {
+          rows.value = [...rows.value.slice(0, idx), dataset, ...rows.value.slice(idx + 1)]
+        } else {
+          rows.value = [dataset, ...rows.value]
+        }
+      },
+    )
+  }
+
   /** Pick create vs update from the draft and dispatch. */
   async function saveDraft(studyOid: string): Promise<MutationResult> {
     if (!draft.value) {
@@ -566,6 +598,7 @@ export const useDatasetsStore = defineStore('datasets', () => {
     isExporting.value = new Set()
     isQuickOdm.value = false
     error.value = null
+    showRemoved.value = false
 
     eventTree.value = []
     eventTreeError.value = null
@@ -597,6 +630,7 @@ export const useDatasetsStore = defineStore('datasets', () => {
     isExporting,
     isQuickOdm,
     error,
+    showRemoved,
     load,
     loadList,
     loadFiles,
@@ -620,6 +654,7 @@ export const useDatasetsStore = defineStore('datasets', () => {
     createDataset,
     updateDataset,
     removeDataset,
+    restoreDataset,
     saveDraft,
     /* Phase 3 — filter preview */
     preview,

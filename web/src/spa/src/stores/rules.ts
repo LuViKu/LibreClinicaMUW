@@ -165,6 +165,37 @@ export interface ValidateTargetResult {
 }
 
 /**
+ * Phase E.6 restore-quickwins — single previewed action row from
+ * {@code POST /api/v1/rule-sets/{id}/dry-run}. Mirrors the backend
+ * {@code RuleSetDryRunResponse.Result}.
+ */
+export interface DryRunActionResult {
+  ruleName: string
+  ruleOid: string
+  expression: string
+  executeOn: string
+  actionType: string
+  actionSummary: string
+  subjects: string[]
+}
+
+/**
+ * Phase E.6 restore-quickwins — full dry-run response envelope.
+ * Empty {@code results} means the rule_set would not fire under the
+ * current item_data — the view renders the
+ * {@code rules.dryRun.empty} i18n key.
+ */
+export interface DryRunResponse {
+  ruleSetId: number
+  target: string | null
+  results: DryRunActionResult[]
+}
+
+export type DryRunResult =
+  | { ok: true; response: DryRunResponse }
+  | { ok: false; message: string }
+
+/**
  * Phase E RX.5b — request payload for {@code POST /api/v1/rule-sets/{id}/actions}.
  *
  * The wizard binds the four supported action types
@@ -750,6 +781,72 @@ export const useRulesStore = defineStore('rules', () => {
   }
 
   /**
+   * Phase E.6 restore-quickwins — preview a rule_set's actions without
+   * persisting any side effects. Wraps
+   * {@code POST /api/v1/rule-sets/{id}/dry-run}. The response is a
+   * list of "this is what would fire" rows the RulesView renders in
+   * a side panel. Empty {@code results} means the set wouldn't fire
+   * under current item_data — the view renders the
+   * {@code rules.dryRun.empty} i18n key.
+   */
+  async function dryRunRuleSet(ruleSetId: number): Promise<DryRunResult> {
+    try {
+      const response = await apiPost<DryRunResponse>(
+        `/pages/api/v1/rule-sets/${ruleSetId}/dry-run`,
+        {},
+      )
+      return { ok: true, response }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        throw new Error(body?.message ?? `HTTP ${e.status}`)
+      }
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        return { ok: false, message: body?.message ?? `HTTP ${e.status}` }
+      }
+      if (e instanceof ApiNetworkError) {
+        return { ok: false, message: 'Backend nicht erreichbar — Dry-Run fehlgeschlagen.' }
+      }
+      return { ok: false, message: e instanceof Error ? e.message : 'Unbekannter Fehler.' }
+    }
+  }
+
+  /**
+   * Phase E.6 restore-quickwins — trigger a browser download of the
+   * rule_set XML for the supplied {@code rule_set_rule} ids. Wraps
+   * {@code GET /api/v1/rule-sets/export?ruleSetRuleIds=…}. The
+   * backend already sets {@code Content-Disposition: attachment} so
+   * we hand the URL to {@code window.location} and let the browser's
+   * download manager take it from there — same UX as the legacy
+   * {@code DownloadRuleSetXmlServlet} link.
+   *
+   * <p>No streaming through Pinia — the response can be megabytes for
+   * large rule sets and the SPA has no reason to materialize it in
+   * memory. Returns true so the view can mark "download triggered" in
+   * the toast; the actual success/failure happens browser-side.
+   */
+  function exportRulesXml(ruleSetRuleIds: number[]): boolean {
+    if (!ruleSetRuleIds || ruleSetRuleIds.length === 0) return false
+    const csv = ruleSetRuleIds.map((id) => String(id)).join(',')
+    const url =
+      '/pages/api/v1/rule-sets/export?ruleSetRuleIds=' + encodeURIComponent(csv)
+    // Use an invisible anchor + click() so the download leaves the
+    // current SPA page intact (assigning window.location replaces the
+    // history entry).
+    if (typeof document !== 'undefined') {
+      const a = document.createElement('a')
+      a.href = url
+      a.rel = 'noopener'
+      a.download = '' // hint the browser to download rather than navigate
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+    }
+    return true
+  }
+
+  /**
    * Phase E.6 — clear every piece of study-scoped state so the rules
    * view doesn't carry study-A rule_sets / run-log entries into study
    * B. Called by {@link useAuthStore.pickStudy} before re-bootstrapping.
@@ -796,6 +893,8 @@ export const useRulesStore = defineStore('rules', () => {
     updateRule,
     updateAction,
     validateTarget,
+    dryRunRuleSet,
+    exportRulesXml,
     reset,
   }
 })
