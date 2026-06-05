@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 — Data Export Phase 4 (async + schedules).
+
+        Two new tables:
+
+        export_job              — one row per fire-and-poll export request.
+                                  Inserted in 'queued' state by either:
+                                    - POST /api/v1/datasets/{id}/export
+                                      (manual trigger, returns 202)
+                                    - the schedule firing in Quartz
+                                  Picked up by ExportJobRunner which advances
+                                  it through 'running' → 'done' or 'failed'.
+
+        export_schedule         — one row per recurring export. Quartz reads
+                                  active rows on startup and on schedule
+                                  create/delete. Each tick inserts a fresh
+                                  export_job row, which then rides the same
+                                  ExportJobRunner path as manual triggers.
+
+        Phase 1 ships the underlying synchronous export endpoint + the
+        archived_dataset_file write path; Phase 4 only adds the async
+        envelope around it. The archived_dataset_file_id FK is nullable
+        because the row is created upfront (queued) and only filled once
+        the runner has finished and persisted the archived file.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-05-create-export-job">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="export_job"/></not>
+        </preConditions>
+        <createTable tableName="export_job">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="dataset_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="format" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="submitted_by" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="submitted_at" type="TIMESTAMP" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="started_at" type="TIMESTAMP"/>
+            <column name="finished_at" type="TIMESTAMP"/>
+            <column name="archived_dataset_file_id" type="INT"/>
+            <column name="error_message" type="TEXT"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="export_job" baseColumnNames="dataset_id"
+                                 constraintName="fk_export_job_dataset"
+                                 referencedTableName="dataset" referencedColumnNames="dataset_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="export_job" baseColumnNames="submitted_by"
+                                 constraintName="fk_export_job_submitted_by"
+                                 referencedTableName="user_account" referencedColumnNames="user_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="export_job" baseColumnNames="archived_dataset_file_id"
+                                 constraintName="fk_export_job_archived_file"
+                                 referencedTableName="archived_dataset_file"
+                                 referencedColumnNames="archived_dataset_file_id"
+                                 onDelete="SET NULL" onUpdate="RESTRICT"/>
+        <createIndex tableName="export_job" indexName="ix_export_job_status_submitted">
+            <column name="status"/>
+            <column name="submitted_at"/>
+        </createIndex>
+        <createIndex tableName="export_job" indexName="ix_export_job_dataset_submitted">
+            <column name="dataset_id"/>
+            <column name="submitted_at"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-06-05-create-export-schedule">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="export_schedule"/></not>
+        </preConditions>
+        <createTable tableName="export_schedule">
+            <column autoIncrement="true" name="id" type="BIGSERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="dataset_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="format" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cron_expression" type="VARCHAR(128)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="active" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="next_run_at" type="TIMESTAMP"/>
+            <column name="last_run_at" type="TIMESTAMP"/>
+            <column name="last_run_job_id" type="BIGINT"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="export_schedule" baseColumnNames="dataset_id"
+                                 constraintName="fk_export_schedule_dataset"
+                                 referencedTableName="dataset" referencedColumnNames="dataset_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="export_schedule" baseColumnNames="created_by"
+                                 constraintName="fk_export_schedule_created_by"
+                                 referencedTableName="user_account" referencedColumnNames="user_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="export_schedule" baseColumnNames="last_run_job_id"
+                                 constraintName="fk_export_schedule_last_job"
+                                 referencedTableName="export_job" referencedColumnNames="id"
+                                 onDelete="SET NULL" onUpdate="RESTRICT"/>
+        <createIndex tableName="export_schedule" indexName="ix_export_schedule_active_next">
+            <column name="active"/>
+            <column name="next_run_at"/>
+        </createIndex>
+        <createIndex tableName="export_schedule" indexName="ix_export_schedule_dataset">
+            <column name="dataset_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>
