@@ -144,7 +144,7 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
     </p>
 
     <!-- Investigator + CRC landing -->
-    <section v-if="showInvestigator" :aria-label="t('home.investigator.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mb-8">
+    <section v-if="showInvestigator" :aria-label="t('home.investigator.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
       <LandingCard
         :to="{ name: 'subject-matrix' }"
         role-variant="investigator"
@@ -176,7 +176,7 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
     </section>
 
     <!-- Monitor landing -->
-    <section v-if="showMonitor" :aria-label="t('home.monitor.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mb-8">
+    <section v-if="showMonitor" :aria-label="t('home.monitor.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
       <LandingCard
         :to="{ name: 'sdv' }"
         role-variant="monitor"
