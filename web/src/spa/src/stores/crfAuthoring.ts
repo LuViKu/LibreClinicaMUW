@@ -88,6 +88,13 @@ export interface AuthoringValidation {
 }
 
 export interface AuthoringItem {
+  /**
+   * Stable client-side identity used by vuedraggable's `item-key` so the
+   * row doesn't remount when the operator-typed OID mutates — without
+   * this, the auto-suggest watch on `name → oid` rewrites the key on
+   * every keystroke and the focused input gets destroyed.
+   */
+  uid: string
   name: string
   oid: string
   descriptionLabel: string
@@ -103,6 +110,8 @@ export interface AuthoringItem {
 }
 
 export interface AuthoringSection {
+  /** Stable uid for vuedraggable item-key; see {@link AuthoringItem.uid}. */
+  uid: string
   label: string
   title: string
   instructions: string
@@ -164,6 +173,12 @@ function emptyValidation(): AuthoringValidation {
   return { regexp: '', errorMessage: '' }
 }
 
+let uidCounter = 0
+function nextUid(prefix: string): string {
+  uidCounter += 1
+  return `${prefix}-${uidCounter}`
+}
+
 function emptyDraft(): AuthoringDraft {
   return {
     versionName: '',
@@ -171,6 +186,7 @@ function emptyDraft(): AuthoringDraft {
     revisionNotes: '',
     sections: [
       {
+        uid: nextUid('sec'),
         label: 'S1',
         title: 'Section 1',
         instructions: '',
@@ -183,6 +199,7 @@ function emptyDraft(): AuthoringDraft {
 
 function emptyItem(): AuthoringItem {
   return {
+    uid: nextUid('item'),
     name: '',
     oid: '',
     descriptionLabel: '',
@@ -232,6 +249,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   function addSection(seed?: Partial<AuthoringSection>): void {
     const next = draft.value.sections.length + 1
     draft.value.sections.push({
+      uid: seed?.uid ?? nextUid('sec'),
       label: seed?.label ?? `S${next}`,
       title: seed?.title ?? `Section ${next}`,
       instructions: seed?.instructions ?? '',

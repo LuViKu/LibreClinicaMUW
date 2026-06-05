@@ -276,7 +276,7 @@ function onCancel(): void {
 
           <draggable
             v-model="sectionList"
-            item-key="label"
+            item-key="uid"
             handle=".section-drag-handle"
             ghost-class="opacity-50"
             class="space-y-5"
@@ -357,7 +357,7 @@ function onCancel(): void {
                   </p>
                   <draggable
                     :model-value="section.items"
-                    item-key="oid"
+                    item-key="uid"
                     handle=".item-drag-handle"
                     ghost-class="opacity-50"
                     class="space-y-3"

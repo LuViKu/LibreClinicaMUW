@@ -538,12 +538,19 @@ function dataEntryStageLabel(stage: string | null): string {
                     class="text-rose-700 hover:underline"
                     @click="onCancelEvent(ev)"
                   >{{ t('subjectDetail.event.cancel') }}</button>
-                  <RouterLink
-                    :to="`/event-crfs/EC_${subject.id.replace('-', '')}_${ev.eventDefinitionOid.replace('SE_', '')}_DEMO`"
+                  <!-- Phase E.6: SPA event-CRF entry view is M4 (not built);
+                       the previously hardcoded synthetic OID was a Phase E.4
+                       mock leftover and 404'd against the real backend.
+                       Bridge to the legacy "enter data" table-of-contents
+                       page (a JSP that lists CRFs for the event) until the
+                       SPA event-detail view ships. -->
+                  <a
+                    v-if="ev.eventId"
+                    :href="`/LibreClinica/pages/EnterDataForStudyEvent?eventId=${ev.eventId}`"
                     class="text-muw-blue hover:underline"
                   >
                     {{ t('subjectDetail.openEvent') }}
-                  </RouterLink>
+                  </a>
                 </td>
               </tr>
 

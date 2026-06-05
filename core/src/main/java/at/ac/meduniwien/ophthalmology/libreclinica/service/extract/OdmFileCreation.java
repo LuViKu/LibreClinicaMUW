@@ -108,9 +108,15 @@ public class OdmFileCreation {
                 adc.setOdmbean(odmb);
                 cdc.setODMBean(odmb);
             } else if ("oc1.3".equals(odmVersion)) {
+                // The MDC's OdmDataCollector parent has early-return paths
+                // (null ds, inactive study, createFakeStudyObj) that can
+                // leave the bean uninitialised. Quick-ODM's ad-hoc dataset
+                // hits one of those — without this guard we NPE'd here.
                 ODMBean odmb = mdc.getODMBean();
-                //odmb.setSchemaLocation("http://www.cdisc.org/ns/odm/v1.3 OpenClinica-ODM1-3-0.xsd");
-                //odmb.setSchemaLocation("http://www.cdisc.org/ns/odm/v1.3 OpenClinica-ODM1-3-0-OC1.xsd");
+                if (odmb == null) {
+                    odmb = new ODMBean();
+                    mdc.setODMBean(odmb);
+                }
                 odmb.setSchemaLocation("http://www.cdisc.org/ns/odm/v1.3 OpenClinica-ODM1-3-0-OC2-0.xsd");
                 ArrayList<String> xmlnsList = new ArrayList<String>();
                 xmlnsList.add("xmlns=\"http://www.cdisc.org/ns/odm/v1.3\"");
