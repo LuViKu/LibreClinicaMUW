@@ -354,6 +354,8 @@
     "title": "CRF-Datenerfassung",
     "railHeading": "Abschnitte",
     "readOnlyTell": "Schreibgeschützt · Monitor-Ansicht",
+    "lockedTell": "Gesperrt · Teilnehmer signiert",
+    "lockedBanner": "Dieses CRF ist gesperrt, weil der Teilnehmer signiert hat. Eingaben sind nicht mehr möglich. Zur Wiedereröffnung wenden Sie sich an die Studienleitung.",
     "unsaved": "Ungespeicherte Änderungen",
     "saving": "Automatisches Speichern…",
     "lastSaved": "Zuletzt gespeichert um {at}",

@@ -354,6 +354,8 @@
     "title": "CRF data entry",
     "railHeading": "Sections",
     "readOnlyTell": "Read-only · Monitor view",
+    "lockedTell": "Locked · Subject signed",
+    "lockedBanner": "This CRF is locked because the subject is signed. No edits are accepted. Contact the study lead to reopen.",
     "unsaved": "Unsaved changes",
     "saving": "Auto-saving…",
     "lastSaved": "Last saved at {at}",
