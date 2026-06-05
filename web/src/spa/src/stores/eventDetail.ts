@@ -1,7 +1,11 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
-import type { EventDetailDto } from '@/types/event'
+import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import type {
+  EventDetailDto,
+  StartEventCrfRequest,
+  StartEventCrfResponse,
+} from '@/types/event'
 
 /**
  * Phase E.6 — Event Detail store.
@@ -24,6 +28,15 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
   const notFound = ref(false)
   const forbidden = ref(false)
   const network = ref(false)
+
+  /**
+   * Phase E.6 — error surface for the {@link startCrf} action. The
+   * view's inline "could not start" toast reads from this; the
+   * top-level `error` ref is reserved for `load()` failures so the
+   * surrounding error banner doesn't hide the loaded event metadata.
+   */
+  const startCrfError = ref<string | null>(null)
+  const isStartingCrf = ref(false)
 
   async function load(eventId: number | string): Promise<void> {
     isLoading.value = true
@@ -64,6 +77,61 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
     }
   }
 
+  /**
+   * Phase E.6 — POST to start a fresh event_crf row for an
+   * unstarted CRF slot, then return the freshly-minted
+   * {@code eventCrfOid} so the view can `router.push` into the
+   * existing CrfEntryView. Resolves to `null` (and sets
+   * {@link startCrfError}) on any 4xx/5xx/network failure so the
+   * caller can present an inline toast without throwing.
+   *
+   * <p>409 (slot already started server-side) is handled gracefully:
+   * the response body carries the existing {@code eventCrfOid}, so
+   * we route to that row instead of bouncing the user.
+   */
+  async function startCrf(
+    eventId: number | string,
+    eventDefinitionCrfId: number,
+    body: StartEventCrfRequest = {},
+  ): Promise<string | null> {
+    isStartingCrf.value = true
+    startCrfError.value = null
+    try {
+      const res = await apiPost<StartEventCrfResponse>(
+        `/pages/api/v1/events/${encodeURIComponent(String(eventId))}/crfs/${encodeURIComponent(
+          String(eventDefinitionCrfId),
+        )}:start`,
+        body,
+      )
+      return res.eventCrfOid
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.isUnauthorized) {
+          throw e
+        }
+        // 409 surfaces the existing row — let the view route there
+        // instead of stranding the operator on a "couldn't start" toast.
+        const body409 = e.body as
+          | { eventCrfOid?: string | null; message?: string }
+          | null
+        if (e.status === 409 && body409?.eventCrfOid) {
+          return String(body409.eventCrfOid)
+        }
+        const parsed = e.body as { message?: string } | null
+        startCrfError.value = parsed?.message ?? `HTTP ${e.status}`
+        return null
+      }
+      if (e instanceof ApiNetworkError) {
+        startCrfError.value = 'network'
+        return null
+      }
+      startCrfError.value = e instanceof Error ? e.message : 'Unknown error'
+      return null
+    } finally {
+      isStartingCrf.value = false
+    }
+  }
+
   function reset(): void {
     event.value = null
     isLoading.value = false
@@ -71,6 +139,8 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
     notFound.value = false
     forbidden.value = false
     network.value = false
+    startCrfError.value = null
+    isStartingCrf.value = false
   }
 
   return {
@@ -80,7 +150,10 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
     notFound,
     forbidden,
     network,
+    startCrfError,
+    isStartingCrf,
     load,
+    startCrf,
     reset,
   }
 })

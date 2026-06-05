@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
@@ -23,9 +23,17 @@ import type { EventCrfRowStatus, StudyEventStatus } from '@/types/event'
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const store = useEventDetailStore()
 
 const eventId = computed<string>(() => String(route.params.eventId))
+
+/**
+ * Phase E.6 — track which CRF row is currently starting so we can
+ * disable just that row's button + render its inline spinner without
+ * affecting siblings. Keyed by {@code eventDefinitionCrfId}.
+ */
+const startingEdcId = ref<number | null>(null)
 
 onMounted(() => {
   void store.load(eventId.value)
@@ -78,16 +86,24 @@ function formatDate(iso: string | null | undefined): string {
 }
 
 /**
- * v1 bridge — for CRF slots that don't yet have an event_crf row,
- * the SPA can't render the CrfEntryView (no schema to load), so we
- * open the legacy EnterDataForStudyEvent in a NEW TAB. Operator
- * sees the existing classic flow without losing their Vue session.
+ * Phase E.6 — start data entry for a CRF slot that has no
+ * event_crf row yet. POSTs to the backend, then routes into the
+ * existing CrfEntryView via the freshly-minted eventCrfOid. Inline
+ * error toast (shared across rows) on failure; per-row disabled
+ * state via {@link startingEdcId}.
  */
-const legacyEntryHref = computed(() =>
-  event.value
-    ? `/LibreClinica/pages/EnterDataForStudyEvent?eventId=${encodeURIComponent(String(event.value.eventId))}`
-    : '',
-)
+async function startCrf(eventDefinitionCrfId: number): Promise<void> {
+  if (!event.value) return
+  startingEdcId.value = eventDefinitionCrfId
+  try {
+    const oid = await store.startCrf(event.value.eventId, eventDefinitionCrfId)
+    if (oid != null) {
+      await router.push({ name: 'crf-entry', params: { eventCrfOid: oid } })
+    }
+  } finally {
+    startingEdcId.value = null
+  }
+}
 </script>
 
 <template>
@@ -144,6 +160,18 @@ const legacyEntryHref = computed(() =>
           <p class="text-xs text-slate-500 mt-1 font-mono">{{ formatDate(event.dateStart) }}</p>
         </div>
 
+        <!-- Phase E.6 — inline error toast for the "start data entry" action.
+             Sits above the CRF table so the operator sees it without losing
+             the row context; auto-clears on the next startCrf attempt. -->
+        <div
+          v-if="store.startCrfError"
+          class="rounded-muw border border-rose-200 bg-rose-50 px-4 py-2 mb-3 text-xs text-rose-800"
+          data-test="event-detail-start-error"
+          role="alert"
+        >
+          {{ t('eventDetail.error.startFailed') }}
+        </div>
+
         <!-- CRFs -->
         <section class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5">
           <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
@@ -189,16 +217,19 @@ const legacyEntryHref = computed(() =>
                   {{ t('eventDetail.action.open') }}
                 </RouterLink>
                 <template v-else>
-                  <a
-                    :href="legacyEntryHref"
-                    target="_blank"
-                    rel="noopener"
-                    class="text-muw-blue hover:underline"
-                    data-test="event-detail-start-legacy"
+                  <button
+                    type="button"
+                    class="text-muw-blue hover:underline disabled:text-slate-400 disabled:cursor-not-allowed"
+                    :disabled="startingEdcId === crf.eventDefinitionCrfId || store.isStartingCrf"
+                    data-test="event-detail-start-spa"
+                    @click="startCrf(crf.eventDefinitionCrfId)"
                   >
-                    {{ t('eventDetail.action.startLegacy') }}
-                  </a>
-                  <div class="text-[10px] text-slate-400 mt-0.5">{{ t('eventDetail.action.legacyHint') }}</div>
+                    {{
+                      startingEdcId === crf.eventDefinitionCrfId
+                        ? t('eventDetail.action.starting')
+                        : t('eventDetail.action.startSpa')
+                    }}
+                  </button>
                 </template>
               </td>
             </tr>

@@ -124,3 +124,32 @@ export interface EventDetailDto {
   repeating: boolean
   crfs: EventCrfRowDto[]
 }
+
+/* ------------------------------------------------------------------ */
+/* Phase E.6 — POST /pages/api/v1/events/{id}/crfs/{edcId}:start.     */
+/*                                                                    */
+/* Creates a fresh event_crf row for an event_definition_crf slot     */
+/* that has no entry yet, so the SPA can route to CrfEntryView        */
+/* without bridging through the legacy EnterDataForStudyEvent JSP.    */
+/* Manually shaped (not via openapi-typescript) for the same reason   */
+/* the EventDetailDto block above is.                                 */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Body of POST /pages/api/v1/events/{id}/crfs/{edcId}:start.
+ * Both fields optional; an omitted {@code crfVersionId} defaults
+ * to the slot's {@code default_version_id}.
+ */
+export interface StartEventCrfRequest {
+  crfVersionId?: number
+}
+
+/** Response of POST /pages/api/v1/events/{id}/crfs/{edcId}:start. */
+export interface StartEventCrfResponse {
+  eventCrfId: number
+  eventCrfOid: string
+  eventId: number
+  eventDefinitionCrfId: number
+  crfVersionId: number
+  status: EventCrfRowStatus
+}
