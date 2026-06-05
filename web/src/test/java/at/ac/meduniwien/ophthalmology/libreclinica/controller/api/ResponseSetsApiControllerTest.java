@@ -70,9 +70,12 @@ class ResponseSetsApiControllerTest extends AbstractApiControllerTest {
 
     @Test
     void createReturns400OnInvalidResponseType() throws Exception {
+        // Phase E.6 M-C (#112): "calculation" is now an accepted response
+        // type, so use a genuinely unknown vocabulary token to exercise
+        // the type-validation branch.
         mockMvc().perform(post("/api/v1/response-sets")
                 .contentType("application/json")
-                .content("{\"label\":\"yes_no\",\"responseType\":\"calculation\"}")
+                .content("{\"label\":\"yes_no\",\"responseType\":\"nonsense\"}")
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isBadRequest())

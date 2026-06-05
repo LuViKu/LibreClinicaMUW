@@ -19,6 +19,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 
 import jakarta.servlet.http.HttpSession;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.Mockito;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
@@ -113,6 +114,18 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * collaborators, so the lightweight {@code standaloneSetup} works.
  */
 abstract class AbstractApiControllerTest {
+
+    /**
+     * Bind a locale on the current test thread so any
+     * {@link StudyUserRoleBean#setRole(Role)} call — even outside the
+     * authenticated-session helpers — can resolve {@code Term.getName()}
+     * via {@link ResourceBundleProvider}. Without this, role-predicate
+     * unit tests run in isolation NPE on a ThreadLocal-bundle miss.
+     */
+    @BeforeEach
+    void bindTestLocale() {
+        ResourceBundleProvider.updateLocale(Locale.ENGLISH);
+    }
 
     /**
      * Build a MockMvc that routes only the supplied controller(s),

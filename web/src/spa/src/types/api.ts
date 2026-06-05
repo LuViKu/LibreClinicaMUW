@@ -59,7 +59,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["get"];
         put: operations["update_2"];
         post?: never;
         delete?: never;
@@ -404,6 +404,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/subjects/{label}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["export"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/status": {
         parameters: {
             query?: never;
@@ -558,6 +574,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["disable_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/datasets:quick-odm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["quickOdm"];
         delete?: never;
         options?: never;
         head?: never;
@@ -980,6 +1012,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/datasets/{id}/schedules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSchedules"];
+        put?: never;
+        post: operations["createSchedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/datasets/{id}/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["enqueueExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/datasets/{datasetId}:test-filter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["testFilter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/datasets/{datasetId}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["triggerExport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/crfs": {
         parameters: {
             query?: never;
@@ -1006,6 +1102,22 @@ export interface paths {
         get: operations["listVersions"];
         put?: never;
         post: operations["uploadVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/versions:validate-expression": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["validateExpression"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1068,6 +1180,54 @@ export interface paths {
             cookie?: never;
         };
         get: operations["preflightForSign"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/export-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listJobsByStudy"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDatasets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/datasets/{datasetId}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listFiles"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1172,6 +1332,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exports/{jobId}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/eventCrfs/{id}": {
         parameters: {
             query?: never;
@@ -1199,6 +1407,38 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/archived-files/{id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadFile"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedules/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteSchedule"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1277,9 +1517,7 @@ export interface components {
             locked?: boolean;
             /** Format: int32 */
             openQueries?: number;
-            /** Phase E.6 Tier 1 — ophthalmology study-eye scope. */
             studyEye?: string;
-            /** Phase E.6 Tier 1 — eligibility-screening date (ISO YYYY-MM-DD). */
             screeningDate?: string;
         };
         UpdateStudyRequest: {
@@ -1556,9 +1794,7 @@ export interface components {
             yearOfBirth?: number;
             enrolledOn?: string;
             groupLabel?: string;
-            /** Phase E.6 Tier 1 — ophthalmology study-eye scope. */
             studyEye?: string;
-            /** Phase E.6 Tier 1 — eligibility-screening date (ISO YYYY-MM-DD). */
             screeningDate?: string;
         };
         SignSubjectRequest: {
@@ -1578,6 +1814,9 @@ export interface components {
             contactEmail?: string;
             protocolType?: string;
             phase?: string;
+        };
+        ExportRequest: {
+            format?: string;
         };
         SetStudyStatusRequest: {
             targetStatus?: string;
@@ -1602,6 +1841,11 @@ export interface components {
         };
         ReorderEventDefinitionsRequest: {
             orderedOids?: string[];
+        };
+        ExportTriggerResponse: {
+            /** Format: int32 */
+            archivedDatasetFileId?: number;
+            downloadUrl?: string;
         };
         CreateSiteRequest: {
             name?: string;
@@ -1832,6 +2076,66 @@ export interface components {
             description?: string;
             assignedTo?: string;
         };
+        CreateScheduleRequest: {
+            format?: string;
+            cronExpression?: string;
+        };
+        ExportScheduleDto: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int32 */
+            datasetId?: number;
+            format?: string;
+            cronExpression?: string;
+            active?: boolean;
+            createdAt?: string;
+            nextRunAt?: string;
+            lastRunAt?: string;
+            /** Format: int64 */
+            lastRunJobId?: number;
+        };
+        EnqueueExportRequest: {
+            format?: string;
+        };
+        ExportJobDto: {
+            /** Format: int64 */
+            id?: number;
+            /** Format: int32 */
+            datasetId?: number;
+            format?: string;
+            status?: string;
+            /** Format: int32 */
+            progressPct?: number;
+            submittedAt?: string;
+            startedAt?: string;
+            finishedAt?: string;
+            /** Format: int32 */
+            archivedDatasetFileId?: number;
+            errorMessage?: string;
+            downloadUrl?: string;
+        };
+        DatasetFilterDto: {
+            itemOid?: string;
+            operator?: string;
+            value?: string;
+            values?: string[];
+        };
+        TestFilterRequest: {
+            filters?: components["schemas"]["DatasetFilterDto"][];
+        };
+        FilterTestResult: {
+            /** Format: int32 */
+            matchingSubjects?: number;
+            /** Format: int32 */
+            matchingCrfs?: number;
+            /** Format: int32 */
+            totalSubjects?: number;
+            /** Format: int32 */
+            totalCrfs?: number;
+        };
+        ExportTriggerRequest: {
+            format?: string;
+        };
         CreateCrfRequest: {
             name?: string;
             description?: string;
@@ -1869,6 +2173,12 @@ export interface components {
             required?: boolean;
             responseSet?: components["schemas"]["CrfVersionAuthoringRequest.ResponseSet"];
             validation?: components["schemas"]["CrfVersionAuthoringRequest.Validation"];
+            showItem?: string;
+            parentItemOid?: string;
+            header?: string;
+            subHeader?: string;
+            pageBreak?: boolean;
+            groupLabel?: string;
         };
         "CrfVersionAuthoringRequest.ResponseSet": {
             type?: string;
@@ -1890,6 +2200,18 @@ export interface components {
         "CrfVersionAuthoringRequest.Validation": {
             regexp?: string;
             errorMessage?: string;
+        };
+        CrfValidateExpressionRequest: {
+            expression?: string;
+            draftItemOids?: string[];
+            draftItemDataTypes?: {
+                [key: string]: string;
+            };
+        };
+        ExpressionValidationResult: {
+            valid?: boolean;
+            errorMessage?: string;
+            referencedOids?: string[];
         };
         CrfVersionPreviewResult: {
             crfOid?: string;
@@ -1920,7 +2242,6 @@ export interface components {
             signed?: boolean;
             /** Format: int32 */
             openQueries?: number;
-            /** Phase E.6 Tier 1 — ophthalmology study-eye scope (matrix view). */
             studyEye?: string;
         };
         CheckRow: {
@@ -1946,6 +2267,28 @@ export interface components {
             role?: string;
             isSite?: boolean;
             isActive?: boolean;
+        };
+        DatasetDto: {
+            oid?: string;
+            /** Format: int32 */
+            id?: number;
+            name?: string;
+            description?: string;
+            ownerName?: string;
+            dateCreated?: string;
+            lastRunAt?: string;
+            /** Format: int32 */
+            fileCount?: number;
+        };
+        ArchivedFileDto: {
+            /** Format: int32 */
+            id?: number;
+            name?: string;
+            formatName?: string;
+            /** Format: int64 */
+            sizeBytes?: number;
+            generatedAt?: string;
+            downloadUrl?: string;
         };
         StudyBuildDto: {
             studyOid?: string;
@@ -1987,6 +2330,15 @@ export interface components {
             itemDataId?: number;
             value?: string;
             firedAt?: string;
+        };
+        ExportJobListResponse: {
+            jobs?: components["schemas"]["ExportJobDto"][];
+            /** Format: int64 */
+            total?: number;
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            pageSize?: number;
         };
         CrfEntryDto: {
             eventCrfOid?: string;
@@ -2170,6 +2522,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SubjectDetailDto"];
+                };
+            };
+        };
+    };
+    get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyIdentityDto"];
                 };
             };
         };
@@ -2856,6 +3230,33 @@ export interface operations {
             };
         };
     };
+    export: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                label: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ExportRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     setStatus: {
         parameters: {
             query?: never;
@@ -3163,6 +3564,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    quickOdm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExportTriggerResponse"];
                 };
             };
         };
@@ -3906,6 +4329,132 @@ export interface operations {
             };
         };
     };
+    listSchedules: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExportScheduleDto"];
+                };
+            };
+        };
+    };
+    createSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateScheduleRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExportScheduleDto"];
+                };
+            };
+        };
+    };
+    enqueueExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["EnqueueExportRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExportJobDto"];
+                };
+            };
+        };
+    };
+    testFilter: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TestFilterRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FilterTestResult"];
+                };
+            };
+        };
+    };
+    triggerExport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ExportTriggerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExportTriggerResponse"];
+                };
+            };
+        };
+    };
     list_10: {
         parameters: {
             query?: {
@@ -4009,6 +4558,32 @@ export interface operations {
             };
         };
     };
+    validateExpression: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CrfValidateExpressionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExpressionValidationResult"];
+                };
+            };
+        };
+    };
     previewVersion: {
         parameters: {
             query?: never;
@@ -4098,6 +4673,73 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SignPreflightDto"];
+                };
+            };
+        };
+    };
+    listJobsByStudy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExportJobDto"];
+                };
+            };
+        };
+    };
+    listDatasets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDto"];
+                };
+            };
+        };
+    };
+    listFiles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                datasetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ArchivedFileDto"];
                 };
             };
         };
@@ -4253,6 +4895,73 @@ export interface operations {
             };
         };
     };
+    listJobs: {
+        parameters: {
+            query?: {
+                status?: string;
+                format?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExportJobListResponse"];
+                };
+            };
+        };
+    };
+    getJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ExportJobDto"];
+                };
+            };
+        };
+    };
+    downloadJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     getEventCrf: {
         parameters: {
             query?: never;
@@ -4295,6 +5004,48 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AuditEventDto"];
+                };
+            };
+        };
+    };
+    downloadFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteSchedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
                 };
             };
         };
