@@ -12,9 +12,12 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.job.ArchivedFileRetentionScheduler;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.JobExecutionExceptionListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.JobTriggerListener;
 import at.ac.meduniwien.ophthalmology.libreclinica.job.OpenClinicaSchedulerFactoryBean;
+
+import org.quartz.Scheduler;
 
 /**
  * Phase C.5: Java replacement for applicationContext-core-scheduler.xml.
@@ -83,5 +86,17 @@ public class QuartzConfig {
         factory.setGlobalTriggerListeners(new TriggerListener[]{new JobTriggerListener()});
 
         return factory;
+    }
+
+    /**
+     * Phase E.6 — register the daily archived-export retention sweep
+     * with the shared Quartz scheduler. {@code @DependsOn} the
+     * schedulerFactoryBean so the {@link Scheduler} is fully started
+     * before the bean's {@code @PostConstruct} runs.
+     */
+    @Bean
+    @DependsOn("schedulerFactoryBean")
+    public ArchivedFileRetentionScheduler archivedFileRetentionScheduler(Scheduler scheduler) {
+        return new ArchivedFileRetentionScheduler(scheduler);
     }
 }

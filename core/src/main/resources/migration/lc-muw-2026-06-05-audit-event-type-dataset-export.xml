@@ -1,0 +1,51 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 (2026-06-05): audit_log_event_type row for dataset
+        exports emitted by ExportAuditService.emitExportAudit.
+
+        Allocates id 52, next to the Phase E.5/E.6 admin-bucket siblings
+        50 ("user_account_profile_updated") and 51 ("study_identity_updated").
+        AuditApiController.variantForType is extended to map id 52 into
+        the "admin" bucket so the new rows surface under the existing
+        Admin filter.
+
+        Why a new type vs. piggy-backing on an existing one:
+        Dataset exports leave the system boundary (data egress), which
+        operators review as part of the GxP audit trail. Surfacing them
+        under their own display label ("Dataset exported") rather than
+        a generic "extract" event lets the SPA timeline distinguish
+        admin-of-config edits from data-egress events at a glance.
+
+        Retention GC passes (ArchivedFileRetentionService) reuse the
+        same type id with a system user_id — exactly one row per pass —
+        so the audit log records when expired files were swept and how
+        many were removed.
+    -->
+    <changeSet id="2026-06-05-audit-event-type-dataset-export"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 52;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the row ExportAuditService.emitExportAudit and
+            ArchivedFileRetentionService.garbageCollect emit via
+            direct INSERTs into audit_log_event.
+        </comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="52"/>
+            <column name="name" value="dataset_exported"/>
+            <column name="display_name" value="Dataset exported"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

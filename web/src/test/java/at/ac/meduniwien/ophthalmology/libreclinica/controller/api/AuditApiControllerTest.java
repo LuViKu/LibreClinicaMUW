@@ -11,11 +11,13 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import java.lang.reflect.Field;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
@@ -123,6 +125,64 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
         // at least one id (falling back to the current study) before
         // reaching this point.
         assertEquals("(NULL)", AuditApiController.buildInClause(0));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Phase E.6 (2026-06-05) — dataset-export branch in the audit query      */
+    /* ---------------------------------------------------------------------- */
+
+    /**
+     * Pins that the SQL template now UNIONs in {@code audit_table = 'dataset'}.
+     * Without this branch the {@code ExportAuditService.emitExportAudit}
+     * rows would never surface in {@code GET /api/v1/audit}. The literal
+     * {@code dataset_id FROM dataset WHERE study_id IN __IN__} subquery is
+     * what makes the egress-event row study-scoped via the dataset.study_id
+     * foreign key.
+     */
+    @Test
+    void sqlTemplateIncludesDatasetExportBranch() throws Exception {
+        Field f = AuditApiController.class.getDeclaredField("STUDY_SCOPED_AUDIT_SQL_TEMPLATE");
+        f.setAccessible(true);
+        String sql = (String) f.get(null);
+        assertTrue(sql.contains("a.audit_table = 'dataset'"),
+                "SQL template should UNION in audit_table='dataset' for dataset-export rows");
+        assertTrue(sql.contains("FROM dataset WHERE study_id IN __IN__"),
+                "dataset branch should be study-scoped via dataset.study_id FK join");
+    }
+
+    /**
+     * Pins that dataset-export rows (type 52) fall into the "admin" bucket.
+     * The SPA's audit-log view uses the variant chip to colour-code rows —
+     * dropping these into "data" by accident would break operator pivoting
+     * on the admin filter.
+     */
+    @Test
+    void variantForDatasetExportedMapsToAdmin() throws Exception {
+        java.lang.reflect.Method m =
+                AuditApiController.class.getDeclaredMethod("variantForType", int.class, String.class);
+        m.setAccessible(true);
+        assertEquals("admin", m.invoke(null, 52, null));
+        assertEquals("admin", m.invoke(null, 52, ""));
+        // A non-empty reason-for-change still wins, mirroring the legacy
+        // mapping the SPA's existing variants depend on.
+        assertEquals("reason-for-change", m.invoke(null, 52, "operator override"));
+    }
+
+    /**
+     * MockMvc surface: {@code GET /api/v1/audit?variant=admin} accepts
+     * the filter parameter and reaches the SQL try-block. With the mock
+     * DataSource the query throws inside the try/catch and we get a 500;
+     * that's the contract-reached marker — proves the bind-loop change
+     * from 6 → 7 placeholder branches didn't break routing.
+     */
+    @Test
+    void listAcceptsAdminVariantFilterAfterDatasetBranchAdded() throws Exception {
+        mockMvcWith().perform(get("/api/v1/audit")
+                .param("variant", "admin")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").exists());
     }
 
     @Test
