@@ -128,6 +128,13 @@ const router = createRouter({
       component: () => import('@/views/ManageUsersView.vue'),
       meta: { title: 'Manage Users', role: 'Administrator' as const },
     },
+    /* Phase E.6 — Data Export MVP. */
+    {
+      path: '/export',
+      name: 'data-export',
+      component: () => import('@/views/DatasetListView.vue'),
+      meta: { title: 'Data Export', role: ['Data Manager', 'Administrator', 'Monitor'] as const },
+    },
     {
       path: '/import-crf-data',
       name: 'import-crf-data',

@@ -63,6 +63,7 @@ function makeRouter() {
       { path: '/studies/:oid/edit', name: 'study-edit', component: { template: '<div />' } },
       { path: '/studies/new', name: 'study-create', component: { template: '<div />' } },
       { path: '/pick-study', name: 'pick-study', component: { template: '<div />' } },
+      { path: '/export', name: 'data-export', component: { template: '<div />' } },
     ],
   })
 }

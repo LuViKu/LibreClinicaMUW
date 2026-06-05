@@ -250,6 +250,13 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
         :description="t('home.dataManager.rulesDesc')"
         :badge="activeRuleSetsCount"
       />
+      <LandingCard
+        :to="{ name: 'data-export' }"
+        role-variant="data-manager"
+        :role-label="t('home.role.Data Manager')"
+        :title="t('home.dataManager.dataExportTitle')"
+        :description="t('home.dataManager.dataExportDesc')"
+      />
     </section>
 
     <!-- Administrator landing — split into two zones so the operator can
@@ -334,6 +341,13 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
           :title="t('notes.title')"
           :description="t('home.dataManager.openQueriesDesc')"
           :badge="openQueriesCount"
+        />
+        <LandingCard
+          :to="{ name: 'data-export' }"
+          role-variant="administrator"
+          :role-label="t('home.role.Administrator')"
+          :title="t('home.administrator.dataExportTitle')"
+          :description="t('home.administrator.dataExportDesc')"
         />
       </section>
     </template>

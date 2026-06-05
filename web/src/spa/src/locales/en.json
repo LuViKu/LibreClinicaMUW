@@ -17,6 +17,7 @@
     "buildStudy": "Build Study",
     "manageUsers": "Manage Users",
     "importCrfData": "Import CRF Data",
+    "dataExport": "Data Export",
     "changePassword": "Change password"
   },
   "a11y": {
@@ -59,7 +60,9 @@
       "openQueriesDesc": "Open queries across all sites.",
       "auditLogDesc": "Audit trail with diff cards.",
       "importCrfDesc": "Multi-step wizard: Upload → Map → Preview & resolve → Commit.",
-      "rulesDesc": "Validation + workflow rules attached to event-CRFs."
+      "rulesDesc": "Validation + workflow rules attached to event-CRFs.",
+      "dataExportTitle": "Data Export",
+      "dataExportDesc": "Saved datasets for the active study — trigger ODM, CSV, TSV, Excel, SAS, or SPSS exports and download generated files."
     },
     "administrator": {
       "globalSectionLabel": "Platform-wide actions",
@@ -73,7 +76,9 @@
       "createStudyDesc": "Provision a top-level study. You are auto-bound as study coordinator.",
       "sitesTitle": "Manage sites",
       "sitesDesc": "Site identity + activation + per-site user roles.",
-      "auditLogDesc": "Platform audit trail with diff cards on every change."
+      "auditLogDesc": "Platform audit trail with diff cards on every change.",
+      "dataExportTitle": "Data Export",
+      "dataExportDesc": "Saved datasets for the active study — trigger exports and download generated files."
     },
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
@@ -1211,6 +1216,52 @@
       "dateRequired": "Start date is required.",
       "dateInvalid": "Date must be in YYYY-MM-DD format.",
       "generic": "Could not schedule the event. Please try again."
+    }
+  },
+  "dataExport": {
+    "title": "Data Export",
+    "subTrail": "Saved datasets for the active study",
+    "intro": "Trigger export runs against previously-saved datasets and download generated files. Use the legacy /Extract Data wizard to create new datasets — a SPA-native create flow will land in a later sub-phase.",
+    "sectionLabel": "Data export",
+    "quickOdmButton": "Quick ODM export",
+    "quickOdmRunning": "Generating ODM…",
+    "exportNow": "Export now",
+    "exporting": "Exporting…",
+    "viewFiles": "View files",
+    "hideFiles": "Hide files",
+    "noFilesYet": "No generated files yet — trigger an export to populate this list.",
+    "emptyTitle": "No saved datasets for this study yet.",
+    "emptyDescription": "Datasets are created via the legacy Extract Data wizard. Once saved, they appear here so you can re-run and download them from the SPA.",
+    "openLegacyWizard": "Open legacy Extract Data wizard",
+    "column": {
+      "name": "Dataset",
+      "owner": "Owner",
+      "created": "Created",
+      "lastRun": "Last run",
+      "files": "Files",
+      "actions": "Actions"
+    },
+    "file": {
+      "name": "File",
+      "format": "Format",
+      "size": "Size",
+      "generated": "Generated",
+      "action": "Action",
+      "download": "Download"
+    },
+    "format": {
+      "odm": "ODM (CDISC XML)",
+      "csv": "CSV (comma-separated)",
+      "tsv": "TSV (tab-separated)",
+      "excel": "Excel (.xls)",
+      "sas": "SAS",
+      "spss": "SPSS"
+    },
+    "modal": {
+      "title": "Export dataset",
+      "subTitle": "Choose the output format for \"{dataset}\".",
+      "formatLabel": "Format",
+      "submit": "Run export"
     }
   }
 }

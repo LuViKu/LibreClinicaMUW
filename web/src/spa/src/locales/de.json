@@ -17,6 +17,7 @@
     "buildStudy": "Studienaufbau",
     "manageUsers": "Nutzer verwalten",
     "importCrfData": "CRF-Daten importieren",
+    "dataExport": "Datenexport",
     "changePassword": "Passwort ändern"
   },
   "a11y": {
@@ -59,7 +60,9 @@
       "openQueriesDesc": "Offene Rückfragen an allen Standorten.",
       "auditLogDesc": "Audit-Trail mit Diff-Karten.",
       "importCrfDesc": "Mehrstufiger Assistent: Hochladen → Zuordnen → Vorschau & lösen → Übernehmen.",
-      "rulesDesc": "Validierungs- und Workflow-Regeln zu Event-CRFs."
+      "rulesDesc": "Validierungs- und Workflow-Regeln zu Event-CRFs.",
+      "dataExportTitle": "Datenexport",
+      "dataExportDesc": "Gespeicherte Datensätze der aktiven Studie — ODM, CSV, TSV, Excel, SAS oder SPSS exportieren und generierte Dateien herunterladen."
     },
     "administrator": {
       "globalSectionLabel": "Plattformweite Aktionen",
@@ -73,7 +76,9 @@
       "createStudyDesc": "Top-Level-Studie erstellen. Sie werden automatisch als Studien-Koordinator/-in zugewiesen.",
       "sitesTitle": "Standorte verwalten",
       "sitesDesc": "Standortidentität + Aktivierung + Nutzerrollen je Standort.",
-      "auditLogDesc": "Plattform-Audit-Trail mit Diff-Karten bei jeder Änderung."
+      "auditLogDesc": "Plattform-Audit-Trail mit Diff-Karten bei jeder Änderung.",
+      "dataExportTitle": "Datenexport",
+      "dataExportDesc": "Gespeicherte Datensätze der aktiven Studie — Exporte starten und generierte Dateien herunterladen."
     },
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
@@ -1211,6 +1216,52 @@
       "dateRequired": "Startdatum ist erforderlich.",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
       "generic": "Visite konnte nicht geplant werden. Bitte erneut versuchen."
+    }
+  },
+  "dataExport": {
+    "title": "Datenexport",
+    "subTrail": "Gespeicherte Datensätze der aktiven Studie",
+    "intro": "Bereits gespeicherte Datensätze als Export erneut ausführen und generierte Dateien herunterladen. Zum Anlegen neuer Datensätze bitte vorerst den klassischen /Extract Data-Assistenten verwenden — eine SPA-native Anlage folgt in einer späteren Phase.",
+    "sectionLabel": "Datenexport",
+    "quickOdmButton": "Schnell-ODM-Export",
+    "quickOdmRunning": "ODM wird generiert…",
+    "exportNow": "Jetzt exportieren",
+    "exporting": "Export läuft…",
+    "viewFiles": "Dateien anzeigen",
+    "hideFiles": "Dateien ausblenden",
+    "noFilesYet": "Noch keine generierten Dateien — bitte einen Export ausführen.",
+    "emptyTitle": "Für diese Studie sind noch keine Datensätze gespeichert.",
+    "emptyDescription": "Datensätze werden über den klassischen Extract-Data-Assistenten angelegt. Einmal gespeichert, erscheinen sie hier und können in der SPA erneut ausgeführt und heruntergeladen werden.",
+    "openLegacyWizard": "Klassischen Extract-Data-Assistenten öffnen",
+    "column": {
+      "name": "Datensatz",
+      "owner": "Besitzer",
+      "created": "Erstellt",
+      "lastRun": "Letzter Lauf",
+      "files": "Dateien",
+      "actions": "Aktionen"
+    },
+    "file": {
+      "name": "Datei",
+      "format": "Format",
+      "size": "Größe",
+      "generated": "Generiert",
+      "action": "Aktion",
+      "download": "Herunterladen"
+    },
+    "format": {
+      "odm": "ODM (CDISC XML)",
+      "csv": "CSV (kommagetrennt)",
+      "tsv": "TSV (tabgetrennt)",
+      "excel": "Excel (.xls)",
+      "sas": "SAS",
+      "spss": "SPSS"
+    },
+    "modal": {
+      "title": "Datensatz exportieren",
+      "subTitle": "Format für \"{dataset}\" auswählen.",
+      "formatLabel": "Format",
+      "submit": "Export starten"
     }
   }
 }
