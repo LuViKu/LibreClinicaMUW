@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
@@ -40,7 +41,8 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {
         return mockMvcFor(new EventCrfsApiController(mockDataSource(),
-                Mockito.mock(SiteVisibilityFilter.class)));
+                Mockito.mock(SiteVisibilityFilter.class),
+                new EventCrfPresenceRegistry()));
     }
 
     /* ---------------------------------------------------------------------- */

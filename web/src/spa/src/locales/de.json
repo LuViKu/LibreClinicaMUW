@@ -377,6 +377,20 @@
       "markComplete": "CRF als abgeschlossen markieren",
       "reopen": "CRF erneut öffnen",
       "reopenConfirm": "Dieses CRF wieder zur Bearbeitung freigeben? Bereits abgezeichnete Daten werden wieder editierbar. Die Aktion wird im Audit-Trail vermerkt."
+    },
+    "sectionBadge": {
+      "requiredFilled": "{filled} von {required} Pflichtfeldern ausgefüllt",
+      "errors": "{count} Validierungsfehler",
+      "openQueries": "{count} offene Rückfrage(n)"
+    },
+    "concurrentEdit": {
+      "bannerTitle": "Ein anderer Benutzer bearbeitet dieses CRF",
+      "lastSeen": "aktiv um {at}"
+    },
+    "itemNote": {
+      "openThread": "Diskussionsthread öffnen",
+      "statusNew": "{count} offen",
+      "statusResolved": "{count} erledigt"
     }
   },
   "buildStudy": {

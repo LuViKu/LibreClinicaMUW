@@ -377,6 +377,20 @@
       "markComplete": "Mark CRF complete",
       "reopen": "Reopen CRF",
       "reopenConfirm": "Reopen this CRF for editing? Previously signed-off data will be editable again. The action is recorded in the audit trail."
+    },
+    "sectionBadge": {
+      "requiredFilled": "{filled} of {required} required items filled",
+      "errors": "{count} validation error(s)",
+      "openQueries": "{count} open query(ies)"
+    },
+    "concurrentEdit": {
+      "bannerTitle": "Another user is editing this CRF",
+      "lastSeen": "active at {at}"
+    },
+    "itemNote": {
+      "openThread": "Open discussion thread",
+      "statusNew": "{count} open",
+      "statusResolved": "{count} resolved"
     }
   },
   "buildStudy": {

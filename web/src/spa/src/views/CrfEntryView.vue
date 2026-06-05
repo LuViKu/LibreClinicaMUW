@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -9,6 +9,11 @@ import { useRoute, useRouter } from 'vue-router'
  * `meta.readOnly = true`. In read-only mode every input is disabled,
  * the save + mark-complete buttons disappear, and the page header
  * shows a "Read-only — Monitor view" tell.
+ *
+ * Phase E.6 crf-entry-advanced (2026-06-05): SideRail badges +
+ * concurrent-edit banner + per-item note indicators. Composed via
+ * the {@link useCrfEntryAdvancedStore} so the existing
+ * {@link useCrfEntryStore} stays focused on item entry.
  */
 
 import SideRail from '@/components/SideRail.vue'
@@ -18,8 +23,12 @@ import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import SectionBadge from '@/components/SectionBadge.vue'
+import ConcurrentEditBanner from '@/components/ConcurrentEditBanner.vue'
+import ItemNoteIndicator from '@/components/ItemNoteIndicator.vue'
 
 import { useCrfEntryStore } from '@/stores/crfEntry'
+import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
@@ -28,6 +37,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useCrfEntryStore()
+const advanced = useCrfEntryAdvancedStore()
 const auth = useAuthStore()
 
 const eventCrfOid = computed(() => String(route.params.eventCrfOid))
@@ -43,8 +53,27 @@ const readOnlyLabel = computed(() => isLocked.value
   ? t('crfEntry.lockedTell')
   : t('crfEntry.readOnlyTell'))
 
-onMounted(() => store.load(eventCrfOid.value))
-watch(eventCrfOid, (oid) => { void store.load(oid) })
+onMounted(() => {
+  void store.load(eventCrfOid.value)
+  void advanced.loadAll(eventCrfOid.value)
+  // Soft-lock heartbeat: do NOT start when the view is read-only
+  // (Monitor view + signed/locked CRFs) — those sessions aren't
+  // editing and don't need to claim presence.
+  if (!isReadOnly.value) {
+    advanced.startHeartbeat(eventCrfOid.value)
+  }
+})
+
+watch(eventCrfOid, (oid) => {
+  void store.load(oid)
+  void advanced.loadAll(oid)
+  advanced.stopHeartbeat()
+  if (!isReadOnly.value) {
+    advanced.startHeartbeat(oid)
+  }
+})
+
+onUnmounted(() => advanced.stopHeartbeat())
 
 function statusVariant(s: CrfEntryStatus): 'success' | 'info' | 'warning' | 'neutral' {
   switch (s) {
@@ -107,6 +136,33 @@ const canReopen = computed(() => {
   if (!role || !store.entry) return false
   return canReopenCrf(role, store.entry.status)
 })
+
+/**
+ * Phase E.6 — merge the server-side {@link SectionStatus} (required
+ * + filled + openQueries) with the client-side derived
+ * {@link sectionFilledCounts} so badges reflect typed-but-unsaved
+ * edits immediately. The server's filled count is authoritative
+ * for persisted state, so we max() the two so unsaved typing
+ * upgrades the badge ahead of the next save.
+ */
+function badgeFor(sectionOid: string): { required: number; filled: number; errors: number; openQueries: number } {
+  const server = advanced.sectionStatusByOid[sectionOid]
+  const client = store.sectionFilledCounts[sectionOid] ?? { required: 0, filled: 0, errors: 0 }
+  const required = server?.requiredCount ?? client.required
+  const filled = Math.max(server?.filledCount ?? 0, client.filled)
+  const errors = client.errors
+  const openQueries = server?.openQueries ?? 0
+  return { required, filled, errors, openQueries }
+}
+
+/** Click handler stub for the item-note indicator — wires to the
+ *  popover thread view in the next slice. For now navigate to the
+ *  filtered notes list pinned to this CRF. */
+function onItemNoteOpen(_noteIds: string[]) {
+  // Defer: open NotesDiscrepanciesView with these note ids
+  // pre-selected. Tracked in the deferred list for harmonization.
+  router.push({ name: 'notes-discrepancies' })
+}
 </script>
 
 <template>
@@ -131,9 +187,15 @@ const canReopen = computed(() => {
           v-for="section in store.schema.sections"
           :key="section.oid"
           :href="`#${section.oid}`"
-          class="block px-2.5 py-1.5 rounded-md text-slate-600 hover:bg-white text-xs"
+          class="flex items-center justify-between px-2.5 py-1.5 rounded-md text-slate-600 hover:bg-white text-xs"
         >
-          {{ section.title }}
+          <span class="truncate">{{ section.title }}</span>
+          <SectionBadge
+            :required-count="badgeFor(section.oid).required"
+            :filled-count="badgeFor(section.oid).filled"
+            :error-count="badgeFor(section.oid).errors"
+            :open-queries="badgeFor(section.oid).openQueries"
+          />
         </a>
       </nav>
     </SideRail>
@@ -173,6 +235,10 @@ const canReopen = computed(() => {
         {{ t('crfEntry.lockedBanner') }}
       </div>
 
+      <!-- Phase E.6 crf-entry-advanced: soft-lock concurrent-editor
+           warning. Renders when another session's heartbeat is active. -->
+      <ConcurrentEditBanner v-if="!isReadOnly" :probe="advanced.lockProbe" />
+
       <form
         v-if="store.entry && !store.isLoading"
         class="space-y-6"
@@ -197,6 +263,11 @@ const canReopen = computed(() => {
             <div v-for="item in section.items" :key="item.oid">
               <FieldLabel :for="`item-${item.oid}`" :required="item.required">
                 {{ item.label }}
+                <ItemNoteIndicator
+                  v-if="advanced.noteSummaryByItemOid[item.oid]"
+                  :summary="advanced.noteSummaryByItemOid[item.oid]"
+                  @open="onItemNoteOpen"
+                />
               </FieldLabel>
 
               <template v-if="item.dataType === 'select-one' && item.options">
