@@ -1085,6 +1085,15 @@ public class EventsApiController {
         if (ec.getStatus() != null && ec.getStatus().equals(Status.UNAVAILABLE)) {
             return "signed";
         }
+        // date_completed is the legacy "operator marked complete" stamp;
+        // honour it before the completion_status_id switch. The Mark
+        // Complete handler stamps date_completed but does NOT always
+        // bump completion_status_id (legacy DataEntryServlet leaves it
+        // at 1 in the demo seed + some happy paths), so trusting the
+        // switch alone surfaces a complete CRF as "Nicht begonnen" in
+        // the event-detail view. Mirror the precedence the
+        // dataEntryStage column already uses on SubjectsApiController.
+        if (ec.getDateCompleted() != null) return "completed";
         int csi = ec.getCompletionStatusId();
         return switch (csi) {
             case 1 -> "not-started";
@@ -1092,7 +1101,7 @@ public class EventsApiController {
             case 3, 4, 5 -> "completed";
             case 6 -> "stopped";
             case 7 -> "signed";
-            default -> ec.getDateCompleted() != null ? "completed" : "not-started";
+            default -> "not-started";
         };
     }
 
