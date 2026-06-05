@@ -149,7 +149,11 @@ describe('useDatasetsStore', () => {
 
   it('triggerExport() POSTs the right body and returns the response', async () => {
     const ds = useDatasetsStore()
-    ds.rows = [ROW_A, ROW_B]
+    // Spread to avoid mutating the shared fixtures — triggerExport
+    // writes lastRunAt + fileCount in-place and that leaked across
+    // tests, eventually flaking the "bumps … in-place" assertion when
+    // Date.now() collided with the prior test's millisecond.
+    ds.rows = [{ ...ROW_A }, { ...ROW_B }]
     ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce(EXPORT_RESPONSE)
 
     const result = await ds.triggerExport(STUDY_OID, ROW_A.id, 'csv')
@@ -178,7 +182,7 @@ describe('useDatasetsStore', () => {
 
   it('triggerExport() surfaces 403 via `error` and rethrows so callers can react', async () => {
     const ds = useDatasetsStore()
-    ds.rows = [ROW_A]
+    ds.rows = [{ ...ROW_A }]
     const forbidden = new ApiError(403, 'Forbidden', { message: 'Your role does not permit exporting data.' })
     ;(apiPost as ReturnType<typeof vi.fn>).mockRejectedValueOnce(forbidden)
 
@@ -204,7 +208,7 @@ describe('useDatasetsStore', () => {
 
   it('reset() clears every piece of state', async () => {
     const ds = useDatasetsStore()
-    ds.rows = [ROW_A, ROW_B]
+    ds.rows = [{ ...ROW_A }, { ...ROW_B }]
     ds.filesByDataset = new Map([[11, [FILE_FOR_11]]])
     ds.error = 'some prior error'
 
