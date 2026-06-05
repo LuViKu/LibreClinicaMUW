@@ -619,7 +619,12 @@ public class EventCrfsApiController {
      * roll back the user-facing save — losing an audit row is annoying
      * but losing the data is worse.
      */
-    private static void writeAuditEvent(AuditEventDAO dao, UserAccountBean user,
+    // Phase E.6 dde — promoted from `private` to package-private so
+    // {@code at.ac.meduniwien.ophthalmology.libreclinica.controller.api.service.dde.DdeService}
+    // can emit the same packed-actionMessage audit rows when committing
+    // pass-2 + resolving conflicts. Same package keeps the visibility
+    // tight; we deliberately do NOT make this `public`.
+    static void writeAuditEvent(AuditEventDAO dao, UserAccountBean user,
                                         StudyBean study, StudySubjectBean ss,
                                         String actionMessage, String auditTable,
                                         int entityId, String columnName,
