@@ -1212,5 +1212,58 @@
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
       "generic": "Visite konnte nicht geplant werden. Bitte erneut versuchen."
     }
+  },
+  "filters": {
+    "itemLabel": "Item",
+    "operatorLabel": "Operator",
+    "valueLabel": "Wert",
+    "valuesLabel": "Werte",
+    "valuesPlaceholder": "Kommagetrennt",
+    "betweenLabel": "Bereich",
+    "betweenAnd": "bis",
+    "noValueRequired": "Kein Wert erforderlich",
+    "addRow": "Filter hinzufügen",
+    "removeRowAria": "Filterzeile {n} entfernen",
+    "emptyHint": "Noch keine Filter — alle Teilnehmer/-innen und CRFs werden exportiert.",
+    "previewLoading": "Zähle…",
+    "previewLine": "{matchingSubjects} von {totalSubjects} Teilnehmer/-innen · {matchingCrfs} von {totalCrfs} CRFs",
+    "operators": {
+      "=": "gleich",
+      "!=": "ungleich",
+      "<": "kleiner als",
+      "<=": "kleiner oder gleich",
+      ">": "größer als",
+      ">=": "größer oder gleich",
+      "in": "ist eines von",
+      "between": "zwischen",
+      "is-null": "ist leer",
+      "not-null": "ist nicht leer"
+    }
+  },
+  "exportWizard": {
+    "back": "Zurück",
+    "next": "Weiter",
+    "steps": {
+      "metadata": "Metadaten",
+      "items": "Items",
+      "filters": "Filter",
+      "confirm": "Bestätigen"
+    },
+    "metadata": {
+      "heading": "Datensatz-Metadaten",
+      "placeholder": "Name + Beschreibung folgen mit Phase 2."
+    },
+    "items": {
+      "heading": "Items auswählen",
+      "placeholder": "Item-Baumauswahl folgt mit Phase 2."
+    },
+    "filters": {
+      "heading": "Filter",
+      "lead": "Per-Item-Bedingungen, die der Export erfüllen soll. Vorschau aktualisiert sich beim Tippen."
+    },
+    "confirm": {
+      "heading": "Bestätigen",
+      "placeholder": "Bestätigungsoberfläche folgt mit Phase 2."
+    }
   }
 }
