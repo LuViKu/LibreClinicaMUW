@@ -6,6 +6,7 @@ import type {
   EventStatus,
   Gender,
   SignPreflight,
+  StudyEye,
   Subject,
   SubjectDetail,
 } from '@/types/subject'
@@ -195,6 +196,9 @@ export const useSubjectsStore = defineStore('subjects', () => {
         yearOfBirth: input.yearOfBirth ?? null,
         enrolledOn: input.enrolledOn,
         groupLabel: input.groupLabel ?? null,
+        // Phase E.6 Tier 1 — ophthalmology domain fields.
+        studyEye: input.studyEye ?? null,
+        screeningDate: input.screeningDate?.trim() || null,
       }
       const detail = await apiPost<SubjectDetail>('/pages/api/v1/subjects', payload)
 
@@ -216,6 +220,8 @@ export const useSubjectsStore = defineStore('subjects', () => {
         enrolledOn: detail.enrolledOn,
         signed: detail.signed,
         openQueries: detail.openQueries,
+        // Phase E.6 Tier 1 — propagate study-eye scope to the matrix.
+        studyEye: detail.studyEye as StudyEye | null,
         // No events scheduled yet — M11 will schedule them.
         events: [],
       }
@@ -356,6 +362,8 @@ export const useSubjectsStore = defineStore('subjects', () => {
         enrolledOn: detail.enrolledOn,
         signed: detail.signed,
         openQueries: detail.openQueries,
+        // Phase E.6 Tier 1 — propagate study-eye scope to the matrix.
+        studyEye: detail.studyEye as StudyEye | null,
         events: eventSnapshots,
       }
     }
@@ -609,6 +617,16 @@ export interface AddSubjectInput {
   groupLabel?: string | null
   /** ISO `YYYY-MM-DD`. */
   enrolledOn: string
+  /**
+   * Phase E.6 Tier 1 — ophthalmology study-eye scope. Optional;
+   * non-ophth studies leave this blank. One of OD / OS / OU.
+   */
+  studyEye?: StudyEye | null
+  /**
+   * Phase E.6 Tier 1 — eligibility-screening date (ISO YYYY-MM-DD).
+   * Optional; some MUW deployments don't run a separate screening.
+   */
+  screeningDate?: string | null
 }
 
 export type AddSubjectErrorField =

@@ -32,5 +32,7 @@
   <include  file="migration/lc-muw-2026-06-03-redo-root-dedupe.xml"/>
   <include  file="migration/lc-muw-2026-06-03-audit-event-type-study-identity.xml"/>
   <include  file="migration/lc-muw-2026-06-03-seed-demo-test-users-authorities.xml"/>
+  <include  file="migration/lc-muw-2026-06-05-ophth-subject-eye.xml"/>
+  <include  file="migration/lc-muw-2026-06-05-ophth-visit-crf-seed.xml"/>
 </databaseChangeLog>
 

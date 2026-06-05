@@ -22,6 +22,17 @@ import type { components } from './api'
 
 export type Gender = 'F' | 'M' | 'O' | 'U'
 
+/**
+ * Phase E.6 Tier 1 — ophthalmology study-eye scope.
+ *
+ * Mirrors the backend `study_subject.study_eye` column. `null` is the
+ * legitimate "not applicable" / "not yet randomized" state.
+ *   - 'OD' = right eye (oculus dexter)
+ *   - 'OS' = left eye (oculus sinister)
+ *   - 'OU' = both eyes (oculus uterque)
+ */
+export type StudyEye = 'OD' | 'OS' | 'OU'
+
 /** Per-event CRF completion state. */
 export type EventStatus =
   | 'not-scheduled'
@@ -36,13 +47,19 @@ export type EventCellSnapshot =
   & { status: EventStatus }
 
 export type Subject =
-  Omit<Required<components['schemas']['SubjectListItemDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events'>
+  Omit<Required<components['schemas']['SubjectListItemDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events' | 'studyEye'>
   & {
     gender: Gender
     secondaryId: string | null
     yearOfBirth: number | null
     groupLabel: string | null
     events: EventCellSnapshot[]
+    /**
+     * Phase E.6 Tier 1 — ophthalmology study-eye scope.
+     * Surfaced on the Subject Matrix so investigators can pattern-match
+     * one-eye cohorts at a glance.
+     */
+    studyEye: StudyEye | null
   }
 
 /* ------------------------------------------------------------------ */
@@ -120,13 +137,23 @@ export type EventCellDetail =
  * fields; the detail view fetches them separately.
  */
 export type SubjectDetail =
-  Omit<Required<components['schemas']['SubjectDetailDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events'>
+  Omit<Required<components['schemas']['SubjectDetailDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events' | 'studyEye' | 'screeningDate'>
   & {
     gender: Gender
     secondaryId: string | null
     yearOfBirth: number | null
     groupLabel: string | null
     events: EventCellDetail[]
+    /**
+     * Phase E.6 Tier 1 — ophthalmology study-eye scope (subject detail).
+     * Null for non-ophth studies or pre-randomization subjects.
+     */
+    studyEye: StudyEye | null
+    /**
+     * Phase E.6 Tier 1 — eligibility-screening date (ISO YYYY-MM-DD).
+     * Null when not recorded or no separate screening visit was run.
+     */
+    screeningDate: string | null
   }
 
 /**

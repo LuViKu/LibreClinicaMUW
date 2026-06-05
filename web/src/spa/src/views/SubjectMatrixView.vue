@@ -220,6 +220,7 @@ const ariaSortLabel = (subject: Subject) =>
           <tr class="border-b border-slate-200">
             <th scope="col" class="px-3 py-2 font-medium w-24">{{ t('subjectMatrix.column.subject') }}</th>
             <th scope="col" class="px-3 py-2 font-medium w-20">{{ t('subjectMatrix.column.gender') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-16">{{ t('ophth.studyEye.column') }}</th>
             <th scope="col" class="px-3 py-2 font-medium w-28">{{ t('subjectMatrix.column.group') }}</th>
             <th scope="col" class="px-3 py-2 font-medium w-24">{{ t('subjectMatrix.column.enrolled') }}</th>
             <th
@@ -267,6 +268,12 @@ const ariaSortLabel = (subject: Subject) =>
             </span>
           </td>
           <td class="px-3 py-2 text-slate-600">{{ subject.gender }}</td>
+          <td class="px-3 py-2 text-slate-600 font-mono text-[11px]">
+            <span v-if="subject.studyEye" class="px-1.5 py-0.5 rounded bg-muw-blue-50 text-muw-blue border border-muw-blue-100">
+              {{ subject.studyEye }}
+            </span>
+            <span v-else class="text-slate-400">—</span>
+          </td>
           <td class="px-3 py-2 text-slate-600">{{ subject.groupLabel ?? '—' }}</td>
           <td class="px-3 py-2 text-slate-600 font-mono text-xs">{{ formatDate(subject.enrolledOn) }}</td>
 

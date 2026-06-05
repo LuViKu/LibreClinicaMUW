@@ -53,7 +53,14 @@ public record SubjectListItemDto(
         String enrolledOn,
         List<EventCellDto> events,
         boolean signed,
-        int openQueries
+        int openQueries,
+        /**
+         * Phase E.6 Tier 1 — ophthalmology study-eye scope (matrix view).
+         * One of {@code "OD" / "OS" / "OU"} or {@code null}. The matrix
+         * surfaces this as an at-a-glance column so investigators can
+         * filter to one-eye cohorts without opening each subject.
+         */
+        String studyEye
 ) {
 
     /**

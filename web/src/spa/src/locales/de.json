@@ -1212,5 +1212,25 @@
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
       "generic": "Visite konnte nicht geplant werden. Bitte erneut versuchen."
     }
+  },
+  "ophth": {
+    "studyEye": {
+      "label": "Studienauge",
+      "helper": "Auf welches Auge sich die Studien-Endpunkte beziehen. Bei nicht-ophthalmologischen Studien leer lassen.",
+      "notSet": "Nicht gesetzt",
+      "od": "Rechts (OD)",
+      "os": "Links (OS)",
+      "ou": "Beide (OU)",
+      "short": {
+        "od": "OD",
+        "os": "OS",
+        "ou": "OU"
+      },
+      "column": "Auge"
+    },
+    "screeningDate": {
+      "label": "Screening-Datum",
+      "helper": "Datum der Eligibilitäts-Screeningvisite. Optional — meist 1-30 Tage vor Einschluss."
+    }
   }
 }

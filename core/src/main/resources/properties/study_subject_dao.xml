@@ -249,20 +249,24 @@
         </sql>
 	</query>
 	<query>
+		<!-- Phase E.6 Tier 1: STUDY_EYE + SCREENING_DATE appended (both nullable). -->
 		<name>create</name>
 		<sql>
 		   INSERT INTO study_subject
 		   (LABEL,  SUBJECT_ID,  STUDY_ID, STATUS_ID,
-		    DATE_CREATED, OWNER_ID, ENROLLMENT_DATE, SECONDARY_LABEL, OC_OID)
-		   VALUES (?,?,?,?,now(),?,?,?,?)
+		    DATE_CREATED, OWNER_ID, ENROLLMENT_DATE, SECONDARY_LABEL, OC_OID,
+		    STUDY_EYE, SCREENING_DATE)
+		   VALUES (?,?,?,?,now(),?,?,?,?,?,?)
 		</sql>
 	</query>
 	<query>
+		<!-- Phase E.6 Tier 1: STUDY_EYE + SCREENING_DATE appended (both nullable). -->
 		<name>update</name>
 		<sql>
 		  UPDATE study_subject SET LABEL=?,  SUBJECT_ID=?,  STUDY_ID=?,
 		  STATUS_ID=?, ENROLLMENT_DATE=?, DATE_UPDATED=now(),
-		  UPDATE_ID=?, SECONDARY_LABEL=?, TIME_ZONE=? WHERE STUDY_SUBJECT_ID=?
+		  UPDATE_ID=?, SECONDARY_LABEL=?, TIME_ZONE=?,
+		  STUDY_EYE=?, SCREENING_DATE=? WHERE STUDY_SUBJECT_ID=?
 	    </sql>
 	</query>
 	<query>
