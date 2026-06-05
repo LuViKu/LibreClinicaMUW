@@ -75,14 +75,43 @@ export type CrfEntryStatus =
   | 'locked'
 
 export type CrfEntry =
-  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt'>
+  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt' | 'requiresReasonForChange'>
   & {
     schema: CrfSchema
     values: CrfValues
     status: CrfEntryStatus
     /** ISO-8601 instant of the last successful save. */
     lastSavedAt: string | null
+    /**
+     * Phase E.6 admin-rfc — true when the CRF is past
+     * {@code date_completed} so subsequent edits require an RFC note.
+     * The view uses this to gate the {@code ReasonForChangeModal}; the
+     * store re-arms the modal whenever the backend returns 400 with
+     * {@code missingReasonItemOids}.
+     */
+    requiresReasonForChange: boolean
   }
+
+/**
+ * Phase E.6 admin-rfc — POST /pages/api/v1/eventCrfs/{id}/items body.
+ * Mirrors the Java {@code SaveItemsRequest} record byte-for-byte.
+ */
+export interface SaveItemsRequest {
+  values: CrfValues
+  /** Item OID → reason text. Required for every changed item once the CRF is complete. */
+  reasons?: Record<string, string>
+}
+
+/**
+ * Phase E.6 admin-rfc — POST /items 400 body when the controller
+ * rejects a post-complete save without enough reason coverage. The
+ * SPA reads {@code missingReasonItemOids} to re-arm the modal
+ * scoped to just the offending oids.
+ */
+export interface MissingReasonsError {
+  message: string
+  missingReasonItemOids: string[]
+}
 
 /* ------------------------------------------------------------------ */
 /* Phase E A5 — CRF reopen role-aware helper.                         */
