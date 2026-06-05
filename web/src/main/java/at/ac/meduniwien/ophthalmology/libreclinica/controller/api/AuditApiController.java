@@ -150,6 +150,14 @@ public class AuditApiController {
               -- Audit Log was missing those entirely until this branch
               -- joined them in.
               OR ( a.audit_table = 'study' AND a.entity_id IN __IN__)
+              -- Phase E.6 (2026-06-05): include dataset-export events.
+              -- ExportAuditService.emitExportAudit + the retention GC
+              -- pass write rows with audit_table='dataset' and
+              -- entity_id=dataset_id. Dataset rows belong to a study
+              -- via the dataset.study_id FK, so visibility is gated
+              -- on that join rather than on the entity_id itself.
+              OR ( a.audit_table = 'dataset' AND a.entity_id IN (
+                  SELECT dataset_id FROM dataset WHERE study_id IN __IN__))
             ORDER BY a.audit_date DESC, a.audit_id DESC
             LIMIT 500
             """;
@@ -211,11 +219,13 @@ public class AuditApiController {
         List<AuditEventDto> out = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            // 6 IN clauses × n ids each (item_data, event_crf,
-            // study_subject, subject, study_event, study — the last
-            // one added Phase E.6 / 2026-06-03 for identity edits).
+            // 7 IN clauses × n ids each (item_data, event_crf,
+            // study_subject, subject, study_event, study, dataset —
+            // the study branch was added Phase E.6 / 2026-06-03 for
+            // identity edits, dataset added Phase E.6 / 2026-06-05
+            // for dataset-export audit events).
             int bindIdx = 1;
-            for (int branch = 0; branch < 6; branch++) {
+            for (int branch = 0; branch < 7; branch++) {
                 for (Integer sid : visibleStudyIds) {
                     ps.setInt(bindIdx++, sid);
                 }
@@ -285,9 +295,15 @@ public class AuditApiController {
                     // `details` so operators can tell at a glance whether
                     // "name", "sponsor", "principalInvestigator" etc. changed
                     // without having to compare the before/after strings.
+                    // Phase E.6 (2026-06-05): dataset rows reuse this slot
+                    // for their study/dataset label written by
+                    // ExportAuditService.emitExportAudit ("Study X/CRF
+                    // Dataset Y") so the SPA timeline shows the right
+                    // export context.
                     String details = null;
                     if (("study".equalsIgnoreCase(auditTable)
-                            || "user_account".equalsIgnoreCase(auditTable))
+                            || "user_account".equalsIgnoreCase(auditTable)
+                            || "dataset".equalsIgnoreCase(auditTable))
                             && entityName != null && !entityName.isBlank()) {
                         details = entityName;
                     }
@@ -335,12 +351,13 @@ public class AuditApiController {
             // subject_group_map trigger).
             case 28, 29 -> "subject-group-change";
             // Subject / study-subject / EDC lifecycle, plus user-profile
-            // (50, Phase E.5 follow-up) and study-identity (51, Phase E.6)
-            // edits — all administrative actions surface under the
-            // existing "Admin" filter rather than the data-stream
-            // bucket so operators reviewing the audit trail can pivot
-            // by intent.
-            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51 -> "admin";
+            // (50, Phase E.5 follow-up), study-identity (51, Phase E.6)
+            // and dataset-export (52, Phase E.6 — data egress: SPA
+            // dataset download + retention GC) edits — all administrative
+            // actions surface under the existing "Admin" filter rather
+            // than the data-stream bucket so operators reviewing the
+            // audit trail can pivot by intent.
+            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51, 52 -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,
