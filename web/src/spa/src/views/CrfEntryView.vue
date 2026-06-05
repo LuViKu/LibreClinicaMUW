@@ -18,6 +18,7 @@ import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import ReasonForChangeModal from '@/components/ReasonForChangeModal.vue'
 
 import { useCrfEntryStore } from '@/stores/crfEntry'
 import { useAuthStore } from '@/stores/auth'
@@ -82,7 +83,85 @@ function inputBindings(item: CrfItem) {
   }
 }
 
-async function onSave() { await store.save() }
+/* -------------------------------------------------------------------- */
+/* Phase E.6 admin-rfc — Reason-For-Change modal wiring.                 */
+/*                                                                       */
+/* The store flips `missingReasonItemOids` when (a) the operator clicks  */
+/* Save on a post-complete entry with dirty oids missing reasons, or (b) */
+/* the backend returns 400 with `missingReasonItemOids` body. Both       */
+/* paths converge here: when the list is non-empty, the modal opens     */
+/* with one prompt per oid + the from→to value tell so the operator     */
+/* can write a defensible reason without leaving the form.              */
+/* -------------------------------------------------------------------- */
+
+import { ref, watchEffect } from 'vue'
+
+interface RfcPrompt {
+  oid: string
+  label: string
+  currentValue?: string
+  originalValue?: string
+}
+
+const rfcModalOpen = ref(false)
+
+watchEffect(() => {
+  rfcModalOpen.value = store.missingReasonItemOids.length > 0
+})
+
+function labelFor(oid: string): string {
+  if (!store.schema) return oid
+  for (const section of store.schema.sections) {
+    for (const item of section.items) {
+      if (item.oid === oid) return item.label
+    }
+  }
+  return oid
+}
+
+const rfcPrompts = computed<RfcPrompt[]>(() => {
+  if (!store.entry) return []
+  return store.missingReasonItemOids.map((oid) => {
+    const raw = store.values[oid]
+    return {
+      oid,
+      label: labelFor(oid),
+      currentValue: raw == null ? '' : String(raw),
+      // We don't keep the pre-edit value in the store today; the from
+      // column stays blank for now. M10 audit-log will populate it from
+      // the existing item_data row server-side.
+    }
+  })
+})
+
+function onRfcConfirm(reasons: Record<string, string>): void {
+  for (const [oid, reason] of Object.entries(reasons)) {
+    store.stageReason(oid, reason)
+  }
+  // Retry the save now that every dirty oid has a reason; the store's
+  // own guard re-checks before POSTing.
+  void store.save()
+}
+
+function onRfcCancel(): void {
+  store.dismissReasonModal()
+}
+
+const saveBlockedByRfc = computed(
+  () => store.requiresReasonForChange && store.itemsAwaitingReason.length > 0,
+)
+
+function onSave() {
+  // If the operator clicks Save on a post-complete entry without
+  // every reason staged, route through the modal rather than firing
+  // a save that the backend will 400. The store's guard does the
+  // same — this just shortens the round-trip.
+  if (saveBlockedByRfc.value) {
+    store.missingReasonItemOids = [...store.itemsAwaitingReason]
+    return
+  }
+  void store.save()
+}
 async function onMarkComplete() {
   await store.markComplete()
   if (store.status === 'complete') {
