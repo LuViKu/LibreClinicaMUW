@@ -1194,6 +1194,30 @@ public class DiscrepancyNoteDAO extends AuditableEntityDAO<DiscrepancyNoteBean> 
     }
 
     /**
+     * Phase E.6 admin-rfc — return the {@code discrepancy_note_id} of the
+     * most recent {@code REASON_FOR_CHANGE} parent note (type_id = 4 and
+     * {@code parent_dn_id IS NULL}) attached to the given {@code item_data}
+     * row, or {@code 0} when no RFC parent exists for that item yet.
+     *
+     * <p>Threading model: every save after the first DN-bearing edit hangs
+     * off the existing parent so the discrepancy view renders one thread
+     * per item, with the original RFC at the root and subsequent edits as
+     * children. Callers use {@code 0} as the sentinel for "create a new
+     * parent" because {@link DiscrepancyNoteBean#getParentDnId()} also
+     * uses {@code 0} for the no-parent case.
+     */
+    public int findLatestRfcParentForItemData(int itemDataId) {
+        this.unsetTypeExpected();
+        this.setTypeExpected(1, TypeNames.INT);
+        HashMap<Integer, Object> variables = variables(itemDataId);
+        ArrayList<HashMap<String, Object>> rows =
+                this.select(digester.getQuery("findLatestRfcParentForItemData"), variables);
+        if (rows == null || rows.isEmpty()) return 0;
+        Object id = rows.get(0).get("discrepancy_note_id");
+        return id instanceof Integer ? (Integer) id : 0;
+    }
+
+    /**
      * Creates a new discrepancy note
      */
     @Override
