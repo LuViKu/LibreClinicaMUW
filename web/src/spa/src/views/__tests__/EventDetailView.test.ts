@@ -2,13 +2,15 @@
  * Phase E.6 — EventDetailView render spec.
  *
  * Pins what the view shows in the four shapes the store can land in:
- *  - loaded with rows (Open + Start-legacy actions)
+ *  - loaded with rows (Open existing + Start-fresh actions)
  *  - empty rows
  *  - 404 not-found
  *  - 403 forbidden
  *
- * Action-link targets matter — they're the whole point of this view
- * (Vue routes vs new-tab legacy URL).
+ * Action targets matter — they're the whole point of this view: an
+ * existing CRF deep-links into CrfEntryView; an unstarted CRF clicks
+ * a button that POSTs to start the event_crf and then routes to the
+ * same CrfEntryView. No more legacy JSP bridge.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
@@ -42,7 +44,7 @@ vi.mock('@/api/client', () => {
 })
 
 // eslint-disable-next-line import/first
-import { apiGet, ApiError } from '@/api/client'
+import { apiGet, apiPost, ApiError } from '@/api/client'
 // eslint-disable-next-line import/first
 import EventDetailView from '@/views/EventDetailView.vue'
 // eslint-disable-next-line import/first
@@ -51,6 +53,7 @@ import type { EventDetailDto } from '@/types/event'
 import enMessages from '@/locales/en.json'
 
 const apiGetMock = apiGet as unknown as ReturnType<typeof vi.fn>
+const apiPostMock = apiPost as unknown as ReturnType<typeof vi.fn>
 
 const i18n = createI18n({
   legacy: false,
@@ -131,6 +134,7 @@ async function mountAt(eventId: number, options: { rows?: EventDetailDto | 'empt
 describe('EventDetailView', () => {
   beforeEach(() => {
     apiGetMock.mockReset()
+    apiPostMock.mockReset()
   })
 
   it('renders one row per CRF and points the started one at CrfEntryView', async () => {
@@ -142,12 +146,50 @@ describe('EventDetailView', () => {
     expect(openLinks.length).toBe(1)
     expect(openLinks[0]!.attributes('href')).toContain('/event-crfs/7')
 
-    const legacyLinks = w.findAll('[data-test="event-detail-start-legacy"]')
-    expect(legacyLinks.length).toBe(1)
-    expect(legacyLinks[0]!.attributes('href')).toBe(
-      '/LibreClinica/pages/EnterDataForStudyEvent?eventId=42',
+    // Unstarted CRF renders a button (not a legacy JSP link).
+    const startButtons = w.findAll('[data-test="event-detail-start-spa"]')
+    expect(startButtons.length).toBe(1)
+    expect(startButtons[0]!.element.tagName).toBe('BUTTON')
+
+    // No more legacy bridge.
+    expect(w.findAll('[data-test="event-detail-start-legacy"]').length).toBe(0)
+  })
+
+  it('clicking "Start data entry" posts to the start endpoint and routes to CrfEntryView', async () => {
+    apiPostMock.mockResolvedValueOnce({
+      eventCrfId: 99,
+      eventCrfOid: '99',
+      eventId: 42,
+      eventDefinitionCrfId: 101,
+      crfVersionId: 5,
+      status: 'data-entry-started',
+    })
+    const w = await mountAt(42, { rows: TWO_ROWS })
+
+    const startBtn = w.find('[data-test="event-detail-start-spa"]')
+    expect(startBtn.exists()).toBe(true)
+    await startBtn.trigger('click')
+    await flushPromises()
+
+    expect(apiPostMock).toHaveBeenCalledWith(
+      '/pages/api/v1/events/42/crfs/101:start',
+      {},
     )
-    expect(legacyLinks[0]!.attributes('target')).toBe('_blank')
+    // Router should be at the CrfEntryView for the new eventCrfOid.
+    const route = w.vm.$route
+    expect(route.fullPath).toBe('/event-crfs/99')
+  })
+
+  it('shows the inline error toast when starting a CRF fails', async () => {
+    apiPostMock.mockRejectedValueOnce(new ApiError(500, 'boom', { message: 'DB exploded' }))
+    const w = await mountAt(42, { rows: TWO_ROWS })
+
+    await w.find('[data-test="event-detail-start-spa"]').trigger('click')
+    await flushPromises()
+
+    const toast = w.find('[data-test="event-detail-start-error"]')
+    expect(toast.exists()).toBe(true)
+    expect(toast.text()).toContain('Could not start')
   })
 
   it('renders the empty placeholder when the event has no CRFs', async () => {

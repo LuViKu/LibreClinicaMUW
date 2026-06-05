@@ -1278,13 +1278,14 @@
     },
     "action": {
       "open": "CRF öffnen →",
-      "startLegacy": "Datenerfassung starten →",
-      "legacyHint": "Öffnet im Klassik-Modus (neuer Tab)"
+      "startSpa": "Datenerfassung starten →",
+      "starting": "Wird gestartet…"
     },
     "error": {
       "notFound": "Visite nicht gefunden.",
       "forbidden": "Kein Zugriff auf diese Visite.",
-      "network": "Backend nicht erreichbar — bitte später erneut versuchen."
+      "network": "Backend nicht erreichbar — bitte später erneut versuchen.",
+      "startFailed": "Datenerfassung konnte nicht gestartet werden — bitte erneut versuchen."
     }
   },
   "subjectExport": {

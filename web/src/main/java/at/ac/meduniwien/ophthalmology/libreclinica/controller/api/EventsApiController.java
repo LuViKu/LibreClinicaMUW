@@ -287,6 +287,227 @@ public class EventsApiController {
         return ResponseEntity.ok(dto);
     }
 
+    /**
+     * Phase E.6 — start data entry for a CRF slot that has no
+     * {@code event_crf} row yet. Replaces the legacy bridge from
+     * {@code SubjectDetailView} → {@code /pages/EnterDataForStudyEvent}
+     * JSP for the "unstarted CRF" case: the SPA now stays in-shell,
+     * POSTs here, then routes to the existing {@code CrfEntryView} via
+     * the returned {@code eventCrfOid}.
+     *
+     * <p>Body (all fields optional):
+     * <pre>
+     *   { "crfVersionId": 7 }   // override the default version
+     * </pre>
+     * When {@code crfVersionId} is omitted the
+     * {@code event_definition_crf.default_version_id} is used.
+     *
+     * <p>Mirrors the legacy {@code DataEntryServlet.createEventCRF}
+     * insert pattern: status=AVAILABLE, completion_status_id=1
+     * (not-started), owner=current user, interviewer-name/date pulled
+     * from study config + parent event. The DAO INSERT path is the
+     * same one the legacy servlet uses, so audit triggers + study-event
+     * status cascades stay consistent.
+     *
+     * <p>Guards: 401 anonymous / 400 no active study / 404 unknown
+     * event id or event_definition_crf id / 403 wrong-study visibility
+     * / 409 already-started slot (an event_crf for this CRF already
+     * exists on the event).
+     *
+     * <p>Audit: writes one {@code audit_log_event} row keyed by the
+     * new event_crf id ({@code audit_table=event_crf},
+     * {@code action_message="event_crf_started"}). Wrapped in
+     * try/catch so audit failure doesn't roll back the data insert.
+     */
+    @PostMapping("/{id:[0-9]+}/crfs/{edcId:[0-9]+}:start")
+    @Operation(operationId = "startEventCrf")
+    @ApiResponse(responseCode = "201",
+                 content = @Content(schema = @Schema(implementation = StartEventCrfResponse.class)))
+    public ResponseEntity<?> startEventCrf(@PathVariable("id") int eventId,
+                                           @PathVariable("edcId") int edcId,
+                                           @RequestBody(required = false) StartEventCrfRequest body,
+                                           HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+
+        StudyEventDAO seDao = new StudyEventDAO(dataSource);
+        StudyEventBean ev = (StudyEventBean) seDao.findByPK(eventId);
+        if (ev == null || ev.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study_event with id " + eventId));
+        }
+
+        // Resolve subject + verify the event lives in the caller's
+        // visible study set (same A4 visibility chain as getEventDetail).
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ev.getStudySubjectId());
+        if (ss == null || ss.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "study_event " + eventId + " has no resolvable study_subject"));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "study_event " + eventId + " belongs to a different study"));
+        }
+
+        // Resolve the event_definition_crf slot the SPA is asking to
+        // populate, and verify it belongs to the same event definition
+        // the parent study_event is wired to.
+        EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
+        EventDefinitionCRFBean edc = (EventDefinitionCRFBean) edcDao.findByPK(edcId);
+        if (edc == null || edc.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_definition_crf with id " + edcId));
+        }
+        if (edc.getStudyEventDefinitionId() != ev.getStudyEventDefinitionId()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "event_definition_crf " + edcId + " is not wired into this event's definition"));
+        }
+
+        // Resolve the CRF version. Body override wins; otherwise the
+        // default version pinned on the event_definition_crf row.
+        int crfVersionId = (body != null && body.crfVersionId() != null && body.crfVersionId() > 0)
+                ? body.crfVersionId()
+                : edc.getDefaultVersionId();
+        if (crfVersionId <= 0) {
+            return ResponseEntity.status(400).body(Map.of("message",
+                    "event_definition_crf " + edcId + " has no default_version_id — pass 'crfVersionId' explicitly"));
+        }
+        CRFVersionDAO crfvDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean crfv = (CRFVersionBean) crfvDao.findByPK(crfVersionId);
+        if (crfv == null || crfv.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No crf_version with id " + crfVersionId));
+        }
+        // Confirm the chosen version belongs to the CRF the slot expects.
+        if (crfv.getCrfId() != edc.getCrfId()) {
+            return ResponseEntity.status(400).body(Map.of("message",
+                    "crf_version " + crfVersionId + " does not belong to crf " + edc.getCrfId()));
+        }
+
+        // Refuse if a non-deleted event_crf for this version already
+        // exists on the event — operator should "Open" the existing
+        // row, not start a duplicate. Mirrors the legacy
+        // findByEventSubjectVersion guard.
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        ArrayList<EventCRFBean> existing = ecDao.findAllByStudyEvent(ev);
+        if (existing != null) {
+            for (EventCRFBean candidate : existing) {
+                if (candidate == null || candidate.getId() == 0) continue;
+                if (candidate.getStatus() != null
+                        && (candidate.getStatus().equals(Status.DELETED)
+                                || candidate.getStatus().equals(Status.AUTO_DELETED))) continue;
+                if (candidate.getCRFVersionId() != crfVersionId) continue;
+                return ResponseEntity.status(409).body(Map.of("message",
+                        "event_crf already exists for this slot (id=" + candidate.getId() + ")",
+                        "eventCrfId", candidate.getId(),
+                        "eventCrfOid", String.valueOf(candidate.getId())));
+            }
+        }
+
+        // Mirror the legacy DataEntryServlet insert: not-started,
+        // owned by the current user, interviewer-name/date defaulted
+        // per study config (currentStudy carries the parent study's
+        // params for sites).
+        EventCRFBean ecb = new EventCRFBean();
+        ecb.setAnnotations("");
+        ecb.setCreatedDate(new Date());
+        ecb.setCRFVersionId(crfVersionId);
+
+        String interviewDefault = currentStudy.getStudyParameterConfig() == null
+                ? "blank"
+                : currentStudy.getStudyParameterConfig().getInterviewerNameDefault();
+        if ("blank".equals(interviewDefault)) {
+            ecb.setInterviewerName("");
+        } else {
+            // legacy: event owner's name (we don't have it loaded — use ub).
+            ecb.setInterviewerName(ub.getName() == null ? "" : ub.getName());
+        }
+        String interviewDateDefault = currentStudy.getStudyParameterConfig() == null
+                ? "blank"
+                : currentStudy.getStudyParameterConfig().getInterviewDateDefault();
+        if (!"blank".equals(interviewDateDefault) && ev.getDateStarted() != null) {
+            ecb.setDateInterviewed(ev.getDateStarted());
+        } else {
+            ecb.setDateInterviewed(null);
+        }
+        ecb.setOwner(ub);
+        ecb.setStatus(Status.AVAILABLE);
+        ecb.setCompletionStatusId(1); // not-started
+        ecb.setStudySubjectId(ss.getId());
+        ecb.setStudyEventId(ev.getId());
+        ecb.setValidateString("");
+        ecb.setValidatorAnnotations("");
+
+        try {
+            ecb = ecDao.create(ecb);
+        } catch (Exception e) {
+            LOG.error("Failed to create event_crf for event={} edc={} version={}",
+                    eventId, edcId, crfVersionId, e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to start CRF: " + e.getMessage()));
+        }
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to start CRF — DAO returned no id"));
+        }
+
+        // Cascade study_event status to data-entry-started if it was
+        // still scheduled. Mirrors what the legacy entry flow does on
+        // first data-entry of the visit.
+        if (ev.getSubjectEventStatus() != null
+                && ev.getSubjectEventStatus().equals(SubjectEventStatus.SCHEDULED)) {
+            ev.setSubjectEventStatus(SubjectEventStatus.DATA_ENTRY_STARTED);
+            ev.setUpdater(ub);
+            ev.setUpdatedDate(new Date());
+            try { seDao.update(ev); } catch (Exception ignored) { /* best-effort */ }
+        }
+
+        // Audit row — best-effort. Mirrors SdvApiController's pattern
+        // (no audit_log_event_type_id setter on AuditEventDAO.create()).
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(ub.getId());
+            ae.setStudyId(currentStudy.getId());
+            ae.setSubjectId(ss.getId());
+            ae.setStudyName(currentStudy.getName() == null ? "" : currentStudy.getName());
+            ae.setSubjectName(ss.getLabel() == null ? "" : ss.getLabel());
+            ae.setAuditTable("event_crf");
+            ae.setEntityId(ecb.getId());
+            ae.setColumnName("event_crf_id");
+            ae.setOldValue("");
+            ae.setNewValue(String.valueOf(ecb.getId()));
+            ae.setActionMessage("event_crf_started: event=" + eventId
+                    + " edc=" + edcId + " version=" + crfVersionId);
+            auditDAO.create(ae);
+        } catch (Exception auditEx) {
+            LOG.warn("Audit write failed for event_crf_started id={} (continuing): {}",
+                    ecb.getId(), auditEx.getMessage());
+        }
+
+        LOG.info("event_crf_started: id={} event={} edc={} version={} by user={}",
+                ecb.getId(), eventId, edcId, crfVersionId, ub.getName());
+
+        return ResponseEntity.status(201).body(new StartEventCrfResponse(
+                ecb.getId(),
+                String.valueOf(ecb.getId()),
+                eventId,
+                edcId,
+                crfVersionId,
+                "data-entry-started"));
+    }
+
     @GetMapping
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(type = "array", implementation = StudyEventDto.class)))
@@ -904,5 +1125,28 @@ public class EventsApiController {
             String eventDefinitionOid,
             String dateStarted,
             String location
+    ) {}
+
+    /**
+     * Body of POST /pages/api/v1/events/{id}/crfs/{edcId}:start.
+     * Both fields optional; {@code crfVersionId} omitted falls back
+     * to the {@code event_definition_crf.default_version_id}.
+     */
+    public record StartEventCrfRequest(Integer crfVersionId) {}
+
+    /**
+     * Response of POST /pages/api/v1/events/{id}/crfs/{edcId}:start.
+     * The SPA uses {@code eventCrfOid} to route into the existing
+     * CrfEntryView; the numeric {@code eventCrfId} is included so
+     * deep links (audit log → CRF) can build their own URLs without
+     * a follow-up GET.
+     */
+    public record StartEventCrfResponse(
+            int eventCrfId,
+            String eventCrfOid,
+            int eventId,
+            int eventDefinitionCrfId,
+            int crfVersionId,
+            String status
     ) {}
 }

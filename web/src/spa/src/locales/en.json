@@ -1278,13 +1278,14 @@
     },
     "action": {
       "open": "Open CRF →",
-      "startLegacy": "Start data entry →",
-      "legacyHint": "Opens in classic mode (new tab)"
+      "startSpa": "Start data entry →",
+      "starting": "Starting…"
     },
     "error": {
       "notFound": "Event not found.",
       "forbidden": "You do not have access to this event.",
-      "network": "Backend unreachable — please retry."
+      "network": "Backend unreachable — please retry.",
+      "startFailed": "Could not start data entry — please retry."
     }
   },
   "subjectExport": {
