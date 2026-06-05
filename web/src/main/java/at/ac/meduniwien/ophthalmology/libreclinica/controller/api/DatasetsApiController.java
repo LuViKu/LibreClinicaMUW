@@ -553,7 +553,12 @@ public class DatasetsApiController {
 
     private static String toIsoUtc(Date d) {
         if (d == null) return null;
-        return d.toInstant().atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
+        // java.sql.Date.toInstant() throws UnsupportedOperationException
+        // unconditionally — the JDBC drivers hand us sql.Date for any
+        // DATE-typed column. Go via getTime() to handle both
+        // java.util.Date and java.sql.Date uniformly.
+        return java.time.Instant.ofEpochMilli(d.getTime())
+                .atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
     }
 
     /** Wraps the legacy GenerateExtractFileService dispatch. */

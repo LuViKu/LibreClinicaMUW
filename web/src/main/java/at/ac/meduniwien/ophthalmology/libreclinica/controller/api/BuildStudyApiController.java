@@ -143,7 +143,12 @@ public class BuildStudyApiController {
         StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
         UserAccountDAO userDao = new UserAccountDAO(dataSource);
 
-        int crfs = crfDao.findAllByStudy(studyId).size();
+        // findAllByStudy filters by `source_study_id` — but seeded /
+        // institution-wide CRFs (Demographics, Ophthalmology Visit, etc.)
+        // ship with source_study_id NULL so they're shared across the
+        // single-site deployment. Count globally so the Build Study tracker
+        // reflects what the operator actually sees in the CRF library.
+        int crfs = crfDao.findAll().size();
         int events = sedDao.findAllByStudy(study).size();
         ArrayList<StudyGroupClassBean> groupClasses = sgcDao.findAllActiveByStudy(study);
         int groups = groupClasses == null ? 0 : groupClasses.size();

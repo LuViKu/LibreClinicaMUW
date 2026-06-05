@@ -135,6 +135,19 @@ public class OdmFileCreation {
 
         //////////////////////////////////////////
         ////////// MetaData Extraction //////////
+        // Defensive: the parent OdmDataCollector's early-return paths
+        // (null ds, inactive study, site-without-parent) can leave
+        // studyBaseMap null on Quick-ODM's ad-hoc dataset. Populate from
+        // the current study so collectFileData has something to iterate.
+        if (mdc.getStudyBaseMap() == null) {
+            mdc.setStudyBaseMap(mdc.populateStudyBaseMap(currentStudy.getId()));
+        }
+        if (adc.getStudyBaseMap() == null) {
+            adc.setStudyBaseMap(adc.populateStudyBaseMap(currentStudy.getId()));
+        }
+        if (cdc.getStudyBaseMap() == null) {
+            cdc.setStudyBaseMap(cdc.populateStudyBaseMap(currentStudy.getId()));
+        }
         mdc.collectFileData();
         MetaDataReportBean metaReport = new MetaDataReportBean(mdc.getOdmStudyMap(),coreResources);
         metaReport.setODMVersion(odmVersion);
