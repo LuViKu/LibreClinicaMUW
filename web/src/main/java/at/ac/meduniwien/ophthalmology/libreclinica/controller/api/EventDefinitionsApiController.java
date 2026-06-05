@@ -182,6 +182,18 @@ public class EventDefinitionsApiController {
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to persist event definition"));
         }
+        // Phase E.6 (2026-06-05): the legacy DAO writes the
+        // randomized OID into the oc_oid column inside the INSERT but
+        // never calls setOid() on the bean it returns, so persisted.
+        // getOid() is null and the SPA gets oid:null in the DTO —
+        // breaking any subsequent attach-CRF / disable / update call
+        // that uses the OID in the URL. Re-hydrate from the DB so the
+        // DTO carries the actual OID.
+        StudyEventDefinitionBean rehydrated =
+                (StudyEventDefinitionBean) sedDao.findByPK(persisted.getId());
+        if (rehydrated != null && rehydrated.getId() != 0) {
+            persisted = rehydrated;
+        }
 
         LOG.info("Create event definition: oid={} name={} study={} by admin={}",
                 persisted.getOid(), persisted.getName(), studyOid, me.getName());
