@@ -203,10 +203,26 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["getEventDetail"];
         put: operations["updateEvent"];
         post?: never;
         delete: operations["cancel"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/datasets/{datasetId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDataset"];
+        put: operations["updateDataset"];
+        post?: never;
+        delete: operations["removeDataset"];
         options?: never;
         head?: never;
         patch?: never;
@@ -574,6 +590,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["disable_3"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/datasets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listDatasets"];
+        put?: never;
+        post: operations["createDataset"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1204,14 +1236,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/studies/{studyOid}/datasets": {
+    "/api/v1/studies/{studyOid}/event-tree": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["listDatasets"];
+        get: operations["eventTree"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1763,6 +1795,48 @@ export interface components {
             status?: string;
             repeating?: boolean;
         };
+        CreateDatasetRequest: {
+            name?: string;
+            description?: string;
+            eventDefinitionOids?: string[];
+            crfVersionIds?: number[];
+            itemIds?: number[];
+            includeFlags?: {
+                [key: string]: boolean;
+            };
+            selectedItemOids?: string[];
+            filters?: components["schemas"]["DatasetFilterDto"][];
+        };
+        DatasetFilterDto: {
+            itemOid?: string;
+            operator?: string;
+            value?: string;
+            values?: string[];
+        };
+        DatasetDto: {
+            oid?: string;
+            /** Format: int32 */
+            id?: number;
+            name?: string;
+            description?: string;
+            ownerName?: string;
+            dateCreated?: string;
+            lastRunAt?: string;
+            /** Format: int32 */
+            fileCount?: number;
+            /** Format: int32 */
+            studyId?: number;
+            status?: string;
+            eventDefinitionOids?: string[];
+            crfVersionIds?: number[];
+            itemIds?: number[];
+            includeFlags?: {
+                [key: string]: boolean;
+            };
+            /** Format: int32 */
+            numRuns?: number;
+            hasRun?: boolean;
+        };
         CreateUserRequest: {
             username?: string;
             firstName?: string;
@@ -2114,12 +2188,6 @@ export interface components {
             errorMessage?: string;
             downloadUrl?: string;
         };
-        DatasetFilterDto: {
-            itemOid?: string;
-            operator?: string;
-            value?: string;
-            values?: string[];
-        };
         TestFilterRequest: {
             filters?: components["schemas"]["DatasetFilterDto"][];
         };
@@ -2268,17 +2336,32 @@ export interface components {
             isSite?: boolean;
             isActive?: boolean;
         };
-        DatasetDto: {
+        EventTreeCrfNode: {
+            crfOid?: string;
+            crfName?: string;
+            versions?: components["schemas"]["EventTreeVersionNode"][];
+        };
+        EventTreeItemNode: {
+            /** Format: int32 */
+            itemId?: number;
             oid?: string;
-            /** Format: int32 */
-            id?: number;
             name?: string;
-            description?: string;
-            ownerName?: string;
-            dateCreated?: string;
-            lastRunAt?: string;
+            dataType?: string;
+        };
+        EventTreeNode: {
+            eventOid?: string;
+            eventName?: string;
             /** Format: int32 */
-            fileCount?: number;
+            eventOrdinal?: number;
+            repeating?: boolean;
+            crfs?: components["schemas"]["EventTreeCrfNode"][];
+        };
+        EventTreeVersionNode: {
+            /** Format: int32 */
+            versionId?: number;
+            versionOid?: string;
+            versionName?: string;
+            items?: components["schemas"]["EventTreeItemNode"][];
         };
         ArchivedFileDto: {
             /** Format: int32 */
@@ -2339,6 +2422,35 @@ export interface components {
             page?: number;
             /** Format: int32 */
             pageSize?: number;
+        };
+        EventCrfRowDto: {
+            /** Format: int32 */
+            eventCrfId?: number;
+            eventCrfOid?: string;
+            crfName?: string;
+            crfVersionName?: string;
+            crfVersionOid?: string;
+            /** Format: int32 */
+            eventDefinitionCrfId?: number;
+            status?: string;
+            required?: boolean;
+            passwordRequired?: boolean;
+        };
+        EventDetailDto: {
+            /** Format: int32 */
+            eventId?: number;
+            eventDefinitionOid?: string;
+            eventDefinitionName?: string;
+            subjectLabel?: string;
+            subjectOid?: string;
+            studyOid?: string;
+            studyName?: string;
+            dateStart?: string;
+            status?: string;
+            /** Format: int32 */
+            ordinal?: number;
+            repeating?: boolean;
+            crfs?: components["schemas"]["EventCrfRowDto"][];
         };
         CrfEntryDto: {
             eventCrfOid?: string;
@@ -2810,6 +2922,28 @@ export interface operations {
             };
         };
     };
+    getEventDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventDetailDto"];
+                };
+            };
+        };
+    };
     updateEvent: {
         parameters: {
             query?: never;
@@ -2854,6 +2988,76 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDto"];
+                };
+            };
+        };
+    };
+    updateDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateDatasetRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDto"];
+                };
+            };
+        };
+    };
+    removeDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDto"];
                 };
             };
         };
@@ -3564,6 +3768,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    listDatasets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDto"];
+                };
+            };
+        };
+    };
+    createDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CreateDatasetRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDto"];
                 };
             };
         };
@@ -4699,7 +4951,7 @@ export interface operations {
             };
         };
     };
-    listDatasets: {
+    eventTree: {
         parameters: {
             query?: never;
             header?: never;
@@ -4716,7 +4968,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["DatasetDto"];
+                    "*/*": components["schemas"]["EventTreeNode"];
                 };
             };
         };
