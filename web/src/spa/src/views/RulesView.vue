@@ -406,6 +406,65 @@ watch(selectedId, () => {
   scheduleFormOpen.value = false
   scheduleSaveError.value = null
 })
+
+/* -------------------------------------------------------------- */
+/* Phase E.6 restore-quickwins — Dry-run + Download XML            */
+/* -------------------------------------------------------------- */
+
+/**
+ * Dry-run preview state. The {@code results} array holds whichever
+ * action rows the backend produced; {@code null} means "no dry-run
+ * has been run for this selection yet". Empty array surfaces the
+ * {@code rules.dryRun.empty} i18n key.
+ */
+import type { DryRunActionResult } from '@/stores/rules'
+const dryRunBusy = ref(false)
+const dryRunError = ref<string | null>(null)
+const dryRunResults = ref<DryRunActionResult[] | null>(null)
+const exportBusy = ref(false)
+
+async function onDryRun() {
+  if (!selectedRuleSet.value || dryRunBusy.value) return
+  dryRunBusy.value = true
+  dryRunError.value = null
+  try {
+    const result = await rules.dryRunRuleSet(selectedRuleSet.value.id)
+    if (result.ok) {
+      dryRunResults.value = result.response.results
+    } else {
+      dryRunError.value = result.message
+      dryRunResults.value = null
+    }
+  } finally {
+    dryRunBusy.value = false
+  }
+}
+
+/**
+ * Hit the XML export endpoint for the current selection. The backend
+ * accepts a comma-list of {@code rule_set_rule} ids; we feed it every
+ * attached rule on the selected rule_set so the operator gets the
+ * full set in one click. The store wraps the URL in an anchor click
+ * so the SPA page stays put while the browser handles the byte stream.
+ */
+function onExportXml() {
+  if (!selectedRuleSet.value || exportBusy.value) return
+  const ids = selectedRuleSet.value.attachedRules.map((ar) => ar.ruleSetRuleId)
+  if (ids.length === 0) return
+  exportBusy.value = true
+  try {
+    rules.exportRulesXml(ids)
+  } finally {
+    exportBusy.value = false
+  }
+}
+
+// Clear dry-run state on selection change so a previous selection's
+// preview doesn't bleed into the new pane.
+watch(selectedId, () => {
+  dryRunResults.value = null
+  dryRunError.value = null
+})
 </script>
 
 <template>
@@ -681,6 +740,61 @@ watch(selectedId, () => {
                   </ul>
                 </li>
               </ul>
+            </div>
+
+            <!-- Phase E.6 restore-quickwins — Dry-run + Download XML -->
+            <div v-if="canManage" class="border-t border-slate-100 pt-3">
+              <div class="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-xs font-medium border border-muw-blue text-muw-blue bg-white rounded-md hover:bg-muw-blue-50 disabled:opacity-50"
+                  data-testid="rules-dryrun-button"
+                  :disabled="dryRunBusy || selectedRuleSet.attachedRules.length === 0"
+                  @click="onDryRun"
+                >
+                  {{ dryRunBusy ? t('common.loading') : t('rules.action.dryRun') }}
+                </button>
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-xs font-medium border border-slate-300 text-slate-700 bg-white rounded-md hover:bg-slate-50 disabled:opacity-50"
+                  data-testid="rules-export-xml-button"
+                  :disabled="exportBusy || selectedRuleSet.attachedRules.length === 0"
+                  @click="onExportXml"
+                >
+                  {{ t('rules.action.exportXml') }}
+                </button>
+              </div>
+              <p v-if="dryRunError" class="mt-2 text-xs text-rose-700">{{ dryRunError }}</p>
+              <div v-if="dryRunResults !== null" class="mt-3 rounded-md bg-slate-50 border border-slate-200 p-3">
+                <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                  {{ t('rules.dryRun.heading') }}
+                </div>
+                <p
+                  v-if="dryRunResults.length === 0"
+                  class="mt-2 text-xs text-slate-500 italic"
+                  data-testid="rules-dryrun-empty"
+                >
+                  {{ t('rules.dryRun.empty') }}
+                </p>
+                <ul v-else class="mt-2 space-y-2">
+                  <li
+                    v-for="(r, idx) in dryRunResults"
+                    :key="`${r.ruleOid}-${idx}`"
+                    class="rounded-md border border-slate-200 bg-white p-2 text-xs"
+                  >
+                    <div class="flex items-baseline gap-2 flex-wrap">
+                      <code class="font-mono text-slate-800 break-all">{{ r.ruleOid }}</code>
+                      <span class="text-slate-500">{{ r.ruleName }}</span>
+                      <StatusPill variant="neutral">{{ r.actionType }}</StatusPill>
+                    </div>
+                    <div class="mt-1 text-[11px] text-slate-700">{{ r.actionSummary }}</div>
+                    <div v-if="r.subjects.length > 0" class="mt-1 text-[10px] text-slate-500">
+                      {{ t('rules.dryRun.subjects', { count: r.subjects.length }) }}:
+                      <span class="font-mono">{{ r.subjects.slice(0, 8).join(', ') }}<span v-if="r.subjects.length > 8">, …</span></span>
+                    </div>
+                  </li>
+                </ul>
+              </div>
             </div>
 
             <!-- RX.1b — fire history (rule_action_run_log) -->

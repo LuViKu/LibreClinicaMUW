@@ -535,7 +535,14 @@
       "disableRule": "Regel deaktivieren",
       "restoreRule": "Regel wiederherstellen",
       "editRule": "Regel bearbeiten",
-      "editAction": "Bearbeiten"
+      "editAction": "Bearbeiten",
+      "dryRun": "Probelauf",
+      "exportXml": "XML herunterladen"
+    },
+    "dryRun": {
+      "heading": "Probelauf-Vorschau",
+      "empty": "Mit den aktuellen Daten würden keine Aktionen ausgelöst.",
+      "subjects": "{count} Subjekt(e)"
     },
     "edit": {
       "title": "Regel bearbeiten"
@@ -1276,7 +1283,12 @@
       "data-entry-started": "In Bearbeitung",
       "completed": "Abgeschlossen",
       "stopped": "Abgebrochen",
-      "signed": "Signiert"
+      "signed": "Signiert",
+      "removed": "Entfernt"
+    },
+    "crf": {
+      "restore": "CRF wiederherstellen",
+      "restoreFailed": "CRF konnte nicht wiederhergestellt werden — bitte erneut versuchen."
     },
     "table": {
       "crfName": "CRF",
@@ -1364,7 +1376,10 @@
     "openWizard": "Im Assistenten öffnen",
     "openReadOnly": "Anzeigen",
     "editDisabledHasRun": "Dieses Dataset wurde bereits exportiert und ist gegen strukturelle Änderungen gesperrt. Duplizieren Sie es, um eine neue Variante zu erstellen.",
-    "hasRunBadge": "{n} Lauf(e)"
+    "hasRunBadge": "{n} Lauf(e)",
+    "showRemoved": "Entfernte anzeigen",
+    "restore": "Wiederherstellen",
+    "confirmRestore": "Dataset „{name}“ wiederherstellen? Damit erscheint es wieder in der Liste und kann erneut ausgeführt werden."
   },
   "createDataset": {
     "eyebrow": "Datenexport",

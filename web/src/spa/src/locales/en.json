@@ -535,7 +535,14 @@
       "disableRule": "Disable rule",
       "restoreRule": "Restore rule",
       "editRule": "Edit rule",
-      "editAction": "Edit"
+      "editAction": "Edit",
+      "dryRun": "Dry-run",
+      "exportXml": "Download XML"
+    },
+    "dryRun": {
+      "heading": "Dry-run preview",
+      "empty": "No actions would fire under the current data.",
+      "subjects": "{count} subject(s)"
     },
     "edit": {
       "title": "Edit rule"
@@ -1276,7 +1283,12 @@
       "data-entry-started": "In progress",
       "completed": "Completed",
       "stopped": "Stopped",
-      "signed": "Signed"
+      "signed": "Signed",
+      "removed": "Removed"
+    },
+    "crf": {
+      "restore": "Restore CRF",
+      "restoreFailed": "Could not restore CRF — please retry."
     },
     "table": {
       "crfName": "CRF",
@@ -1364,7 +1376,10 @@
     "openWizard": "Open in wizard",
     "openReadOnly": "View",
     "editDisabledHasRun": "This dataset has been executed and is locked from structural edits. Duplicate it to compose a new variant.",
-    "hasRunBadge": "{n} run(s)"
+    "hasRunBadge": "{n} run(s)",
+    "showRemoved": "Show removed",
+    "restore": "Restore",
+    "confirmRestore": "Restore dataset '{name}'? This brings it back into the list so it can be re-run."
   },
   "createDataset": {
     "eyebrow": "Data export",

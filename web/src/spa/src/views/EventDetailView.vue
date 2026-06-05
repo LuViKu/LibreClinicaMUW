@@ -72,9 +72,27 @@ function rowStatusVariant(s: EventCrfRowStatus): 'success' | 'info' | 'warning' 
     case 'data-entry-started':
       return 'info'
     case 'stopped':
+    case 'removed':
       return 'warning'
     default:
       return 'neutral'
+  }
+}
+
+/**
+ * Phase E.6 restore-quickwins — track which CRF row's Restore button
+ * is in-flight, so the row dims without freezing the table. Keyed by
+ * {@code eventCrfId} (only AUTO_DELETED rows have a non-null id).
+ */
+const restoringEventCrfId = ref<number | null>(null)
+
+async function restoreCrfRow(eventCrfId: number | null): Promise<void> {
+  if (eventCrfId == null) return
+  restoringEventCrfId.value = eventCrfId
+  try {
+    await store.restoreCrf(eventCrfId)
+  } finally {
+    restoringEventCrfId.value = null
   }
 }
 
@@ -171,6 +189,19 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
         >
           {{ t('eventDetail.error.startFailed') }}
         </div>
+        <!-- Phase E.6 restore-quickwins — same toast pattern for the
+             event_crf restore action. Shared across rows; auto-clears
+             on the next restoreCrf attempt. -->
+        <div
+          v-if="store.restoreCrfError"
+          class="rounded-muw border border-rose-200 bg-rose-50 px-4 py-2 mb-3 text-xs text-rose-800"
+          data-test="event-detail-restore-error"
+          role="alert"
+        >
+          {{ store.restoreCrfError === 'network'
+              ? t('eventDetail.error.network')
+              : t('eventDetail.crf.restoreFailed') }}
+        </div>
 
         <!-- CRFs -->
         <section class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5">
@@ -208,8 +239,23 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
                 <span v-else class="text-slate-400">—</span>
               </td>
               <td class="px-5 py-2.5 text-right text-xs">
+                <template v-if="crf.status === 'removed'">
+                  <button
+                    type="button"
+                    class="text-emerald-700 hover:underline disabled:text-slate-400 disabled:cursor-not-allowed"
+                    :disabled="restoringEventCrfId === crf.eventCrfId || store.isRestoringCrf"
+                    data-test="event-detail-restore-crf"
+                    @click="restoreCrfRow(crf.eventCrfId)"
+                  >
+                    {{
+                      restoringEventCrfId === crf.eventCrfId
+                        ? t('common.loading')
+                        : t('eventDetail.crf.restore')
+                    }}
+                  </button>
+                </template>
                 <RouterLink
-                  v-if="crf.eventCrfOid"
+                  v-else-if="crf.eventCrfOid"
                   :to="`/event-crfs/${crf.eventCrfOid}`"
                   class="text-muw-blue hover:underline"
                   data-test="event-detail-open-crf"
