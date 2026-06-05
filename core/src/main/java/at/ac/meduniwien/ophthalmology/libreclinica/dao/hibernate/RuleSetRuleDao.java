@@ -160,9 +160,14 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
                 + " join rule_expression re on rs.rule_expression_id = re.id " + " join rule r on r.id = rsr.rule_id "
                 + " join rule_expression rer on r.rule_expression_id = rer.id " + " join rule_action ra on ra.rule_set_rule_id = rsr.id " + " where rs.study_id = " + study.getId() + "  AND  rsr.status_id = 1";
 
-        NativeQuery<Number> q = getCurrentSession().createNativeQuery(query, Number.class);
-        Number result = q.uniqueResult();
-        return result == null ? 0 : result.intValue();
+        // Pass Object.class — Hibernate can't instantiate abstract
+        // Number directly. The Postgres driver returns whichever
+        // numeric type its COUNT(*) decoder picks (Long on jakarta
+        // / Hibernate 5.6; BigInteger on older drivers). Both
+        // implement Number, so the cast below works either way.
+        NativeQuery<Object> q = getCurrentSession().createNativeQuery(query, Object.class);
+        Object result = q.uniqueResult();
+        return result instanceof Number n ? n.intValue() : 0;
     }
 
 
