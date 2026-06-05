@@ -31,7 +31,17 @@ const store = useCrfEntryStore()
 const auth = useAuthStore()
 
 const eventCrfOid = computed(() => String(route.params.eventCrfOid))
-const isReadOnly = computed(() => route.meta?.readOnly === true)
+// Phase E.6: a CRF whose backing event_crf is SIGNED or LOCKED comes
+// back as wire status 'locked'. Treat it as read-only on the SPA so
+// inputs are disabled and Save draft / Mark complete buttons hide —
+// the backend already 409s any write, but the legacy form let users
+// type into the fields and then surprised them at submit time. The
+// existing meta.readOnly path stays for the Monitor view-only mode.
+const isLocked = computed(() => store.status === 'locked')
+const isReadOnly = computed(() => route.meta?.readOnly === true || isLocked.value)
+const readOnlyLabel = computed(() => isLocked.value
+  ? t('crfEntry.lockedTell')
+  : t('crfEntry.readOnlyTell'))
 
 onMounted(() => store.load(eventCrfOid.value))
 watch(eventCrfOid, (oid) => { void store.load(oid) })
@@ -138,7 +148,7 @@ const canReopen = computed(() => {
             {{ store.schema.name }} <span class="text-slate-400 font-normal text-sm ml-1">{{ store.schema.version }}</span>
           </h1>
           <StatusPill :variant="statusVariant(store.status)">{{ statusLabel(store.status) }}</StatusPill>
-          <StatusPill v-if="isReadOnly" variant="monitor">{{ t('crfEntry.readOnlyTell') }}</StatusPill>
+          <StatusPill v-if="isReadOnly" variant="monitor">{{ readOnlyLabel }}</StatusPill>
           <span v-if="!isReadOnly && store.pendingChanges && !store.isSaving" class="text-[11px] text-amber-700">
             {{ t('crfEntry.unsaved') }}
           </span>
@@ -149,6 +159,19 @@ const canReopen = computed(() => {
       <p v-if="store.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
 
       <p v-if="store.error && !store.entry" class="text-rose-700">{{ store.error }}</p>
+
+      <!-- Phase E.6: explanatory banner when the CRF is locked because the
+           subject has been signed. The fieldset below is already disabled
+           via :disabled="isReadOnly" and the action row hides itself; the
+           banner makes the *reason* legible so the operator doesn't think
+           the form is broken. -->
+      <div
+        v-if="isLocked && store.entry && !store.isLoading"
+        class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-4"
+        role="status"
+      >
+        {{ t('crfEntry.lockedBanner') }}
+      </div>
 
       <form
         v-if="store.entry && !store.isLoading"
