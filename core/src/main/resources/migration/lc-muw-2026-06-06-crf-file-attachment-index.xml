@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 cluster `crf-data-types` PR (b) — speed up the new file
+        upload + download endpoints (and the existing saveItems path).
+
+        The new `EventCrfsApiController.uploadItemFile` / `downloadItemFile`
+        / `deleteItemFile` endpoints all call
+        `ItemDataDAO.findByItemIdAndEventCRFIdAndOrdinal(item_id,
+        event_crf_id, ordinal)` on every multipart hit. The DAO's
+        existing SQL is a single SELECT against `item_data` with the
+        three-column predicate, so the natural index is
+        `(event_crf_id, item_id, ordinal)`.
+
+        Same predicate is hit by the repeating-group save path in
+        `saveItems` and the row-delete path in `deleteGroupRow`, so
+        the index also covers PR (a) write hot-paths.
+
+        Per-table-size estimate on the lc-develop seed (~14k item_data
+        rows): the index lands at ~500 KB. Production sites with
+        millions of item_data rows benefit by orders of magnitude on
+        the lookup; without it Postgres falls back to a SeqScan that
+        latency-bombs each save call.
+
+        Idempotent: `not-exists` precondition skips the change if the
+        index is already present.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-06-crf-file-attachment-index">
+        <preConditions onFail="MARK_RAN">
+            <not><indexExists indexName="idx_item_data_ec_item_ord" tableName="item_data"/></not>
+        </preConditions>
+        <createIndex indexName="idx_item_data_ec_item_ord" tableName="item_data">
+            <column name="event_crf_id"/>
+            <column name="item_id"/>
+            <column name="ordinal"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

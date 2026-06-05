@@ -8,6 +8,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -71,6 +75,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -136,12 +147,15 @@ public class EventCrfsApiController {
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
+    private final CrfFileStorageService fileStorageService;
 
     @Autowired
     public EventCrfsApiController(@Qualifier("dataSource") DataSource dataSource,
-                                  SiteVisibilityFilter siteVisibilityFilter) {
+                                  SiteVisibilityFilter siteVisibilityFilter,
+                                  CrfFileStorageService fileStorageService) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
+        this.fileStorageService = fileStorageService;
     }
 
     @GetMapping("/{id:[0-9]+}")
@@ -1336,5 +1350,300 @@ public class EventCrfsApiController {
             if (!found) return false;
         }
         return true;
+    }
+
+    /* ================================================================== */
+    /* Phase E.6 PR (b) -- file-upload item endpoints.                    */
+    /*                                                                    */
+    /* The SPA's FileUploadInput widget hits three endpoints:             */
+    /*                                                                    */
+    /*   POST   /eventCrfs/{id}/items/{itemOid}/file    (multipart)       */
+    /*          -> CrfFileUploadResponseDto                               */
+    /*   GET    /eventCrfs/{id}/items/{itemOid}/file?rowOrdinal=N         */
+    /*          -> application/octet-stream                               */
+    /*   DELETE /eventCrfs/{id}/items/{itemOid}/file?rowOrdinal=N -> 204  */
+    /*                                                                    */
+    /* The legacy storage convention (absolute path string written into   */
+    /* item_data.value) is preserved -- the SPA renders the filename      */
+    /* component back from the stored ref, the audit trail keeps the      */
+    /* path, and the legacy /pages/UploadFileServlet read-back keeps      */
+    /* working for backwards compatibility.                               */
+    /* ================================================================== */
+
+    @PostMapping(path = "/{id:[0-9]+}/items/{itemOid}/file",
+                 consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> uploadItemFile(@PathVariable("id") int eventCrfId,
+                                            @PathVariable("itemOid") String itemOid,
+                                            @RequestPart("file") MultipartFile file,
+                                            @RequestParam(value = "rowOrdinal", defaultValue = "1") int rowOrdinal,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "file part is required"));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is locked -- cannot upload files"));
+        }
+
+        // Size + extension gates before reading the stream.
+        if (!fileStorageService.checkSize(file)) {
+            return ResponseEntity.status(413).body(Map.of(
+                    "message", "File exceeds cap of " + fileStorageService.maxBytes() + " bytes",
+                    "code", "FILE_TOO_LARGE"));
+        }
+        if (fileStorageService.isPotentiallyExecutable(file)
+                || !fileStorageService.checkExtension(file)) {
+            return ResponseEntity.status(415).body(Map.of(
+                    "message", "File extension is not in the allowlist: "
+                            + fileStorageService.allowedExtensionsCsv(),
+                    "code", "FILE_BAD_EXTENSION"));
+        }
+
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+        if (candidates == null || candidates.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No item with oid " + itemOid));
+        }
+        ItemBean item = candidates.get(0);
+
+        // Build the on-disk write path. crfOid + crfVersionOid let the
+        // legacy admin tools recover an uploaded file even after the
+        // item_data row is soft-deleted.
+        CRFVersionDAO cvDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean cv = (CRFVersionBean) cvDao.findByPK(ecb.getCRFVersionId());
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = cv != null ? (CRFBean) crfDao.findByPK(cv.getCrfId()) : null;
+        String crfOid = crf != null && crf.getOid() != null ? crf.getOid() : "CRF" + (crf == null ? 0 : crf.getId());
+        String crfVersionOid = cv != null && cv.getOid() != null ? cv.getOid() : "CV" + (cv == null ? 0 : cv.getId());
+
+        Path target;
+        try {
+            target = fileStorageService.store(crfOid, crfVersionOid, file);
+        } catch (IOException ioEx) {
+            LOG.error("Failed to persist upload for event_crf {} item {}: {}",
+                    eventCrfId, itemOid, ioEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to persist file: " + ioEx.getMessage()));
+        }
+        String absolutePath = target.toString();
+        String storedFilename = target.getFileName().toString();
+
+        // Upsert the item_data row with the absolute path as the value.
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        int ordinal = Math.max(1, rowOrdinal);
+        ItemDataBean existing = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
+                item.getId(), ecb.getId(), ordinal);
+        String oldValue = "";
+        boolean isCreate;
+        if (existing != null && existing.getId() > 0) {
+            oldValue = existing.getValue() == null ? "" : existing.getValue();
+            // Best-effort: drop the previous on-disk blob so we don't
+            // accumulate dead bytes on the filesystem when a user
+            // replaces an uploaded file.
+            if (!oldValue.isBlank() && !oldValue.equals(absolutePath)) {
+                fileStorageService.delete(oldValue);
+            }
+            existing.setValue(absolutePath);
+            existing.setUpdater(currentUser);
+            existing.setUpdaterId(currentUser.getId());
+            existing.setStatus(Status.AVAILABLE);
+            existing.setOldStatus(Status.AVAILABLE);
+            idDAO.update(existing);
+            isCreate = false;
+        } else {
+            ItemDataBean idb = new ItemDataBean();
+            idb.setEventCRFId(ecb.getId());
+            idb.setItemId(item.getId());
+            idb.setValue(absolutePath);
+            idb.setOrdinal(ordinal);
+            idb.setOwnerId(currentUser.getId());
+            idb.setOwner(currentUser);
+            idb.setStatus(Status.AVAILABLE);
+            idb.setOldStatus(Status.AVAILABLE);
+            idb.setDeleted(false);
+            idDAO.create(idb);
+            existing = idb;
+            isCreate = true;
+        }
+
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                isCreate ? "item_data_file_upload" : "item_data_file_replace",
+                "item_data", existing.getId(),
+                itemOid + "[" + ordinal + "]", oldValue, absolutePath);
+
+        // Touch the EventCRF so {date_updated} reflects the upload.
+        ecb.setUpdater(currentUser);
+        ecb.setUpdatedDate(new Date());
+        eventCrfDAO.update(ecb);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("itemOid", itemOid);
+        out.put("rowOrdinal", ordinal);
+        out.put("filename", storedFilename);
+        out.put("bytes", file.getSize());
+        out.put("contentType", file.getContentType());
+        out.put("storedPath", absolutePath);
+        out.put("lastSavedAt", Instant.now().toString());
+        return ResponseEntity.ok(out);
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping(
+            path = "/{id:[0-9]+}/items/{itemOid}/file")
+    public ResponseEntity<?> downloadItemFile(@PathVariable("id") int eventCrfId,
+                                              @PathVariable("itemOid") String itemOid,
+                                              @RequestParam(value = "rowOrdinal", defaultValue = "1") int rowOrdinal,
+                                              HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+        if (candidates == null || candidates.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No item with oid " + itemOid));
+        }
+        ItemBean item = candidates.get(0);
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        ItemDataBean idb = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
+                item.getId(), ecb.getId(), Math.max(1, rowOrdinal));
+        if (idb == null || idb.getId() == 0
+                || idb.getValue() == null || idb.getValue().isBlank()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No file attached for item " + itemOid));
+        }
+        String absolutePath = idb.getValue();
+        Path target = Paths.get(absolutePath).toAbsolutePath().normalize();
+        Path root = fileStorageService.baseDir().toAbsolutePath().normalize();
+        if (!target.startsWith(root) || !Files.isReadable(target)) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "Attached file no longer accessible"));
+        }
+        String filename = target.getFileName().toString();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentDisposition(
+                org.springframework.http.ContentDisposition.attachment()
+                        .filename(filename).build());
+        return ResponseEntity.ok().headers(headers).body(new FileSystemResource(target));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping(
+            path = "/{id:[0-9]+}/items/{itemOid}/file")
+    public ResponseEntity<?> deleteItemFile(@PathVariable("id") int eventCrfId,
+                                            @PathVariable("itemOid") String itemOid,
+                                            @RequestParam(value = "rowOrdinal", defaultValue = "1") int rowOrdinal,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is locked -- cannot delete files"));
+        }
+
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+        if (candidates == null || candidates.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No item with oid " + itemOid));
+        }
+        ItemBean item = candidates.get(0);
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        ItemDataBean idb = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
+                item.getId(), ecb.getId(), Math.max(1, rowOrdinal));
+        if (idb == null || idb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No file attached for item " + itemOid));
+        }
+        String oldValue = idb.getValue() == null ? "" : idb.getValue();
+        // Drop the on-disk blob first; if that fails the value stays
+        // pointing at a now-missing path -- safer than the inverse
+        // (orphan bytes after a DB success).
+        if (!oldValue.isBlank()) fileStorageService.delete(oldValue);
+
+        idb.setValue("");
+        idb.setStatus(Status.DELETED);
+        idb.setUpdater(currentUser);
+        idb.setUpdaterId(currentUser.getId());
+        idDAO.update(idb);
+
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                "item_data_file_delete", "item_data", idb.getId(),
+                itemOid + "[" + Math.max(1, rowOrdinal) + "]", oldValue, "");
+
+        // Touch the EventCRF so {date_updated} reflects the delete.
+        ecb.setUpdater(currentUser);
+        ecb.setUpdatedDate(new Date());
+        eventCrfDAO.update(ecb);
+
+        return ResponseEntity.noContent().build();
     }
 }
