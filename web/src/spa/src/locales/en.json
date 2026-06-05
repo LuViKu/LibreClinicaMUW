@@ -393,6 +393,7 @@
     "adminOnly": "Administrator only",
     "createAction": "New study",
     "editAction": "Edit identity",
+    "parametersAction": "Parameters",
     "statusAction": "Change status…",
     "statusTarget": {
       "AVAILABLE": "Available",
@@ -1211,6 +1212,67 @@
     "siteBadge": "Site",
     "binding": "Binding…",
     "signOut": "Sign out"
+  },
+  "studyParameters": {
+    "title": "Study parameters",
+    "intro": "Configure how this study handles subject identifiers, data discrepancies, interviewer/date prefills, and optional modules. Changes are audited per handle.",
+    "saved": "Parameters updated.",
+    "save": "Save parameters",
+    "sections": {
+      "subjectId": "Subject identification",
+      "discrepancy": "Discrepancy management",
+      "interviewer": "Interviewer & interview-date defaults",
+      "modules": "Optional modules"
+    },
+    "fields": {
+      "subjectIdGeneration": "Subject ID generation",
+      "subjectIdPrefixSuffix": "Allow site-specific prefix/suffix",
+      "subjectPersonIdRequired": "Person ID requirement",
+      "personIdShownOnCRF": "Show Person ID on CRF header",
+      "collectDob": "Collect date of birth",
+      "genderRequired": "Gender required",
+      "eventLocationRequired": "Event location requirement",
+      "discrepancyManagement": "Discrepancy notes enabled",
+      "interviewerNameRequired": "Interviewer name requirement",
+      "interviewerNameDefault": "Interviewer name default",
+      "interviewerNameEditable": "Interviewer name editable",
+      "interviewDateRequired": "Interview date requirement",
+      "interviewDateDefault": "Interview date default",
+      "interviewDateEditable": "Interview date editable",
+      "secondaryLabelViewable": "Secondary label viewable",
+      "adminForcedReasonForChange": "Force reason-for-change after completion",
+      "participantPortal": "Participant portal",
+      "randomization": "Randomization"
+    },
+    "enums": {
+      "subjectIdGeneration": {
+        "manual": "Manual",
+        "auto non-editable": "Auto (non-editable)",
+        "auto editable": "Auto (editable)"
+      },
+      "collectDob": {
+        "1": "Full date of birth",
+        "2": "Year only",
+        "3": "Not collected"
+      },
+      "required": {
+        "required": "Required",
+        "optional": "Optional",
+        "not_used": "Not used"
+      },
+      "bool": {
+        "true": "Yes",
+        "false": "No"
+      },
+      "blankPrepopulated": {
+        "blank": "Blank",
+        "pre-populated": "Pre-populated"
+      },
+      "enabledDisabled": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      }
+    }
   },
   "subjectDetail": {
     "subTrail": "subject detail",
