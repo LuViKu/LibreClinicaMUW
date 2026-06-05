@@ -33,7 +33,8 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
         return mockMvcFor(new CrfsApiController(mockDataSource(),
                 Mockito.mock(CrfSpreadsheetParserService.class),
                 new CrfJsonToWorkbookAdapter(),
-                new CrfJsonValidator()));
+                new CrfJsonValidator(),
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService.class)));
     }
 
     @Test
