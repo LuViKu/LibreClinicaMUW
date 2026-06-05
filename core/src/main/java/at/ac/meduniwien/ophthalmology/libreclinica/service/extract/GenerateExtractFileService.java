@@ -131,7 +131,18 @@ public class GenerateExtractFileService {
             StudyBean currentStudy, String generalFileDirCopy,ExtractBean eb,
             Integer currentStudyId, Integer parentStudyId, String studySubjectNumber, boolean zipped, boolean saveToDB, boolean deleteOld, String odmType, UserAccountBean userBean){
 
-        return new OdmFileCreation().createODMFile(odmVersion, sysTimeBegin, generalFileDir, datasetBean,
+        // OdmFileCreation has no DI-aware constructor and the default
+        // ctor leaves dataSource/ruleSetRuleDao/coreResources null.
+        // This service's own constructor accepted coreResources +
+        // ruleSetRuleDao but never stored them, so we only have `ds`
+        // to forward. The CDISC OdmDataCollector chain dereferences ds
+        // immediately (StudyDAO.findByPK → ds.getConnection), so at
+        // minimum forward what we have. Callers that need rules
+        // resolution or CoreResources should call OdmFileCreation
+        // directly with the full set of deps wired.
+        OdmFileCreation ofc = new OdmFileCreation();
+        ofc.setDataSource(ds);
+        return ofc.createODMFile(odmVersion, sysTimeBegin, generalFileDir, datasetBean,
                 currentStudy, generalFileDirCopy, eb,
                 currentStudyId, parentStudyId, studySubjectNumber, zipped, saveToDB, deleteOld, odmType, userBean);
     }
