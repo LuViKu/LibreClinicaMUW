@@ -377,6 +377,20 @@
       "markComplete": "CRF als abgeschlossen markieren",
       "reopen": "CRF erneut öffnen",
       "reopenConfirm": "Dieses CRF wieder zur Bearbeitung freigeben? Bereits abgezeichnete Daten werden wieder editierbar. Die Aktion wird im Audit-Trail vermerkt."
+    },
+    "rfc": {
+      "modalTitle": "Begründung der Änderung erforderlich",
+      "headerTell": "Dieses CRF war bereits abgeschlossen. Änderungen erfordern eine dokumentierte Begründung.",
+      "prompt": "Bitte begründen Sie die Änderung an {count} Feld.|Bitte begründen Sie die Änderungen an {count} Feldern.",
+      "placeholder": "z. B. Laborwert anhand korrigiertem Quelldokument neu erfasst.",
+      "confirm": "Begründungen bestätigen",
+      "cancel": "Abbrechen",
+      "capturedChip": "Begründung erfasst",
+      "missingForItem": "Für diese Änderung ist eine Begründung erforderlich.",
+      "fromTo": {
+        "from": "Vorher",
+        "to": "Nachher"
+      }
     }
   },
   "buildStudy": {

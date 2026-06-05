@@ -377,6 +377,20 @@
       "markComplete": "Mark CRF complete",
       "reopen": "Reopen CRF",
       "reopenConfirm": "Reopen this CRF for editing? Previously signed-off data will be editable again. The action is recorded in the audit trail."
+    },
+    "rfc": {
+      "modalTitle": "Reason for change required",
+      "headerTell": "This CRF was previously marked complete. Edits require a documented reason.",
+      "prompt": "Please document the reason for changing {count} item(s):|Please document the reason for changing {count} item(s):",
+      "placeholder": "e.g. Lab value re-keyed from corrected source document.",
+      "confirm": "Confirm reasons",
+      "cancel": "Cancel",
+      "capturedChip": "Reason captured",
+      "missingForItem": "A reason is required for this change.",
+      "fromTo": {
+        "from": "From",
+        "to": "To"
+      }
     }
   },
   "buildStudy": {
