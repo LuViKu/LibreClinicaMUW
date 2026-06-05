@@ -22,14 +22,20 @@ import java.util.Map;
  * {@code schema} is render-driven — the SPA does not call any
  * additional metadata endpoints after this one.
  *
- * @param eventCrfOid  numeric event_crf_id as a string (the SPA
- *                     treats it as opaque)
- * @param subjectId    StudySubject.label (e.g. "M-001")
- * @param eventLabel   friendly event name (e.g. "V1 Inclusion")
- * @param schema       CRF version + sections + items
- * @param values       saved values keyed by item OID
- * @param status       CRF entry workflow status
- * @param lastSavedAt  ISO-8601 of last successful save, or null
+ * @param eventCrfOid             numeric event_crf_id as a string
+ *                                (the SPA treats it as opaque)
+ * @param subjectId               StudySubject.label (e.g. "M-001")
+ * @param eventLabel              friendly event name (e.g. "V1 Inclusion")
+ * @param schema                  CRF version + sections + items
+ * @param values                  saved values keyed by item OID
+ * @param status                  CRF entry workflow status
+ * @param lastSavedAt             ISO-8601 of last successful save,
+ *                                or null
+ * @param requiresReasonForChange Phase E.6 admin-rfc — true when the
+ *                                CRF is past {@code date_completed}, so
+ *                                every subsequent edit needs an RFC
+ *                                note. The SPA uses this to gate the
+ *                                {@code ReasonForChangeModal}.
  */
 @Schema(name = "CrfEntryDto")
 public record CrfEntryDto(
@@ -39,7 +45,8 @@ public record CrfEntryDto(
         CrfSchemaDto schema,
         Map<String, Object> values,
         String status,
-        String lastSavedAt
+        String lastSavedAt,
+        boolean requiresReasonForChange
 ) {
 
     /** Schema of a single CRF version (1:1 with the SPA's {@code CrfSchema}). */
