@@ -999,10 +999,17 @@
     "lifecycle": {
       "disable": "Disable",
       "restore": "Re-enable",
+      "unlock": "Unlock",
       "disableConfirm": "Disable user {username}? They will be unable to log in. Their study-role bindings are soft-deleted alongside; re-enabling restores them. The action is recorded in the audit trail.",
       "restoreConfirm": "Re-enable user {username}? A new one-time password is generated; they must change it on first login. The action is recorded in the audit trail.",
+      "unlockConfirm": "Unlock user {username}? The account lock is cleared, the failed-login counter is reset, and a new one-time password is generated; they must change it on first login. The action is recorded in the audit trail.",
       "restoredIntro": "User {username} is re-enabled. Share the one-time password via a secure channel.",
+      "unlockedIntro": "User {username} is unlocked. Share the one-time password via a secure channel.",
       "restoredNoPassword": "The credential is owned by the directory or identity provider — no local password was generated. Tell the user they may log in with their existing credentials."
+    },
+    "locked": {
+      "badge": "Locked",
+      "tooltip": "Account locked by too many failed login attempts. Use Unlock to restore access."
     },
     "resetPassword": {
       "action": "Reset password",

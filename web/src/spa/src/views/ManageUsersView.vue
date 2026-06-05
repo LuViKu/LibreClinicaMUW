@@ -39,7 +39,7 @@ function openEdit(u: StudyUser) {
    via a native dialog; restore returns a one-time password we surface
    in a small inline panel until the operator dismisses it. */
 const isLifecycleBusy = ref<string | null>(null)
-const restoredPanel = ref<{ username: string; password: string | null } | null>(null)
+const restoredPanel = ref<{ username: string; password: string | null; kind: 'restore' | 'reset' | 'unlock' } | null>(null)
 
 async function onDisable(u: StudyUser) {
   if (!confirm(t('manageUsers.lifecycle.disableConfirm', { username: u.username }))) return
@@ -53,7 +53,7 @@ async function onRestore(u: StudyUser) {
   isLifecycleBusy.value = u.username
   try {
     const result = await users.restoreUser(u.username)
-    if (result.ok) restoredPanel.value = { username: result.user.username, password: result.generatedPassword }
+    if (result.ok) restoredPanel.value = { username: result.user.username, password: result.generatedPassword, kind: 'restore' }
   } finally { isLifecycleBusy.value = null }
 }
 
@@ -75,7 +75,25 @@ async function onResetPassword(u: StudyUser) {
   isLifecycleBusy.value = u.username
   try {
     const result = await users.resetPassword(u.username)
-    if (result.ok) restoredPanel.value = { username: u.username, password: result.generatedPassword }
+    if (result.ok) restoredPanel.value = { username: u.username, password: result.generatedPassword, kind: 'reset' }
+  } finally { isLifecycleBusy.value = null }
+}
+
+/* Phase E.6 unlock-user — per-row Unlock affordance. Only meaningful
+   for local users that are currently locked out by repeated failed
+   logins; SSO + LDAP users are gated out because the IdP / directory
+   owns the credential. Disabled users land on the Restore button
+   instead — restore implicitly clears the lock state as well. */
+function canUnlock(u: StudyUser): boolean {
+  return u.active && u.locked && u.auth === 'local'
+}
+
+async function onUnlock(u: StudyUser) {
+  if (!confirm(t('manageUsers.lifecycle.unlockConfirm', { username: u.username }))) return
+  isLifecycleBusy.value = u.username
+  try {
+    const result = await users.unlock(u.username)
+    if (result.ok) restoredPanel.value = { username: u.username, password: result.generatedPassword, kind: 'unlock' }
   } finally { isLifecycleBusy.value = null }
 }
 
@@ -259,8 +277,18 @@ function formatDate(iso: string | null): string {
           </td>
           <td class="px-3 py-2 text-slate-600 font-mono text-xs">{{ formatDate(u.lastLoginAt) }}</td>
           <td class="px-3 py-2">
-            <StatusPill v-if="u.active" variant="success">{{ t('manageUsers.activeYes') }}</StatusPill>
-            <StatusPill v-else variant="neutral">{{ t('manageUsers.activeNo') }}</StatusPill>
+            <div class="flex flex-wrap items-center gap-1">
+              <StatusPill v-if="u.active" variant="success">{{ t('manageUsers.activeYes') }}</StatusPill>
+              <StatusPill v-else variant="neutral">{{ t('manageUsers.activeNo') }}</StatusPill>
+              <StatusPill
+                v-if="u.locked && u.auth === 'local'"
+                variant="warning"
+                compact
+                :title="t('manageUsers.locked.tooltip')"
+              >
+                {{ t('manageUsers.locked.badge') }}
+              </StatusPill>
+            </div>
           </td>
           <td class="px-3 py-2 text-right">
             <div v-if="canInvite" class="inline-flex items-center gap-2 text-xs">
@@ -298,6 +326,16 @@ function formatDate(iso: string | null): string {
                   {{ t('manageUsers.resetPassword.action') }}
                 </button>
               </template>
+              <template v-if="canUnlock(u)">
+                <span class="text-slate-300">·</span>
+                <button
+                  class="text-amber-700 hover:underline disabled:opacity-50"
+                  :disabled="isLifecycleBusy === u.username"
+                  @click="onUnlock(u)"
+                >
+                  {{ t('manageUsers.lifecycle.unlock') }}
+                </button>
+              </template>
               <span class="text-slate-300">·</span>
               <button
                 class="text-muw-blue hover:underline disabled:opacity-50"
@@ -318,7 +356,12 @@ function formatDate(iso: string | null): string {
         class="mt-4 max-w-2xl rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs"
       >
         <p class="text-emerald-900 mb-2">
-          {{ t('manageUsers.lifecycle.restoredIntro', { username: restoredPanel.username }) }}
+          <template v-if="restoredPanel.kind === 'unlock'">
+            {{ t('manageUsers.lifecycle.unlockedIntro', { username: restoredPanel.username }) }}
+          </template>
+          <template v-else>
+            {{ t('manageUsers.lifecycle.restoredIntro', { username: restoredPanel.username }) }}
+          </template>
         </p>
         <div v-if="restoredPanel.password" class="flex items-center justify-between gap-3 bg-white border border-emerald-200 rounded-md p-2">
           <code class="font-mono text-sm">{{ restoredPanel.password }}</code>
