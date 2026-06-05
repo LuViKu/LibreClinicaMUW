@@ -253,9 +253,10 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
 
     @Test
     void authorVersionReturns400OnInvalidResponseType() throws Exception {
-        // Milestone B accepts every non-formula ResponseType; calculation
-        // variants belong to Milestone C and should be rejected at the
-        // shape layer.
+        // Milestone B accepted every non-formula ResponseType; Milestone
+        // C extends the vocabulary with the three calculation variants.
+        // A response set with an unrecognised type must still be
+        // rejected at the type layer.
         String body = "{"
                 + "\"versionName\":\"v1.0\","
                 + "\"sections\":[{"
@@ -263,7 +264,7 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 + "  \"items\":[{"
                 + "    \"name\":\"AGE\",\"descriptionLabel\":\"Age\","
                 + "    \"dataType\":\"INTEGER\",\"required\":false,"
-                + "    \"responseSet\":{\"type\":\"calculation\",\"label\":\"calc1\"}"
+                + "    \"responseSet\":{\"type\":\"nonsense\",\"label\":\"calc1\"}"
                 + "  }]"
                 + "}]"
                 + "}";
@@ -450,5 +451,132 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isBadRequest());
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Phase E.6 Milestone C — :validate-expression endpoint              */
+    /* ----------------------------------------------------------------- */
+
+    @Test
+    void validateExpressionReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:validate-expression")
+                .contentType("application/json")
+                .content("{\"expression\":\"1 + 1\",\"draftItemOids\":[],\"draftItemDataTypes\":{}}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void validateExpressionReturns403WhenInvestigatorAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:validate-expression")
+                .contentType("application/json")
+                .content("{\"expression\":\"1 + 1\",\"draftItemOids\":[],\"draftItemDataTypes\":{}}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void validateExpressionReturns400OnMissingBody() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:validate-expression")
+                .contentType("application/json")
+                .content("")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void validateExpressionReturns400OnMissingExpressionField() throws Exception {
+        // body shape is valid JSON but expression is null — shape failure
+        // surfaces as 400 with a field-keyed error.
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:validate-expression")
+                .contentType("application/json")
+                .content("{\"draftItemOids\":[],\"draftItemDataTypes\":{}}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("expression"));
+    }
+
+    @Test
+    void validateExpressionReturns200OnValidFormula() throws Exception {
+        // M-C — a syntactically valid formula referencing only draft
+        // OIDs returns 200 with valid:true.
+        String body = "{"
+                + "\"expression\":\"AGE + 1\","
+                + "\"draftItemOids\":[\"AGE\"],"
+                + "\"draftItemDataTypes\":{\"AGE\":\"INT\"}"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:validate-expression")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(true))
+                .andExpect(jsonPath("$.referencedOids[0]").value("AGE"));
+    }
+
+    @Test
+    void validateExpressionReturns200ValidFalseOnSyntaxError() throws Exception {
+        // M-C — broken syntax returns 200 with valid:false + an error
+        // message. The endpoint never returns 4xx for in-body validation
+        // failures — those land in the response body.
+        String body = "{"
+                + "\"expression\":\"(1 + 2\","
+                + "\"draftItemOids\":[],"
+                + "\"draftItemDataTypes\":{}"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:validate-expression")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(false))
+                .andExpect(jsonPath("$.errorMessage")
+                        .value(containsString("Expression failed to parse")));
+    }
+
+    @Test
+    void validateExpressionResolvesAgainstDraftOidsNotInDb() throws Exception {
+        // M-C — the endpoint never touches the DB; OIDs referenced in
+        // the expression are resolved against the in-flight draft scope
+        // the SPA supplies. Mid-authoring OIDs that don't yet exist as
+        // item rows still resolve.
+        String body = "{"
+                + "\"expression\":\"WEIGHT_KG / HEIGHT_M\","
+                + "\"draftItemOids\":[\"WEIGHT_KG\",\"HEIGHT_M\"],"
+                + "\"draftItemDataTypes\":{\"WEIGHT_KG\":\"REAL\",\"HEIGHT_M\":\"REAL\"}"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_NEWBORN/versions:validate-expression")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(true));
+    }
+
+    @Test
+    void validateExpressionReturns200ValidFalseOnUnknownOid() throws Exception {
+        // M-C — formula parses cleanly but references an OID outside
+        // the draft scope → valid:false (body, not status).
+        String body = "{"
+                + "\"expression\":\"AGE + WEIGHT\","
+                + "\"draftItemOids\":[\"AGE\"],"
+                + "\"draftItemDataTypes\":{\"AGE\":\"INT\"}"
+                + "}";
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions:validate-expression")
+                .contentType("application/json")
+                .content(body)
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.valid").value(false))
+                .andExpect(jsonPath("$.errorMessage").value(containsString("WEIGHT")));
     }
 }

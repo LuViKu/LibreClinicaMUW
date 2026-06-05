@@ -79,23 +79,41 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
  *   3  UNITS                           may be blank
  *   4  RIGHT_ITEM_TEXT                 may be blank
  *   5  SECTION_LABEL               R   must match a Sections row
- *   6  GROUP_LABEL                     blank in M-B (Ungrouped default)
- *   7  HEADER                          may be blank
- *   8  SUBHEADER                       may be blank
- *   9  PARENT_ITEM                     blank in M-B (Milestone C)
+ *   6  GROUP_LABEL                     M-C — emit groupLabel verbatim
+ *                                      (blank means "Ungrouped" default)
+ *   7  HEADER                          M-C — emit header verbatim
+ *   8  SUBHEADER                       M-C — emit subHeader verbatim
+ *   9  PARENT_ITEM                     M-C — emit parentItemOid when
+ *                                      showItem is set
  *  10  COLUMN_NUMBER                   blank
  *  11  PAGE_NUMBER                     blank
  *  12  QUESTION_NUMBER                 blank
  *  13  RESPONSE_TYPE               R   "text" / "textarea" / "radio" /
  *                                      "single-select" / "multi-select" /
- *                                      "checkbox" / "file"
+ *                                      "checkbox" / "file" plus M-C:
+ *                                      "calculation" / "instant-calculation" /
+ *                                      "group-calculation"
  *  14  RESPONSE_LABEL              R*  parser auto-coerces to "text" for
- *                                      text/textarea
+ *                                      text/textarea; for calc variants we
+ *                                      emit the type token as the label
  *  15  RESPONSE_OPTIONS_TEXT       R*  comma-separated option labels
- *                                      (auto-coerces for text/textarea)
+ *                                      (auto-coerces for text/textarea); for
+ *                                      calc variants we emit the formula
+ *                                      (single "option" — parity with the
+ *                                      legacy XLS convention where the
+ *                                      formula goes in both the OPTIONS_TEXT
+ *                                      and VALUES_OR_CALCS columns).
  *  16  RESPONSE_VALUES_OR_CALCS    R*  comma-separated option values
- *                                      (auto-coerces for text/textarea)
- *  17  RESPONSE_LAYOUT                 blank
+ *                                      (auto-coerces for text/textarea); for
+ *                                      calc variants the formula expression
+ *                                      lives here, optionally prefixed
+ *                                      with "func:" — the parser
+ *                                      (SpreadSheetTableRepeating:566-619)
+ *                                      strips the prefix and runs
+ *                                      ScoreValidator over the body.
+ *  17  RESPONSE_LAYOUT                 M-C — "page-break" when
+ *                                      {@code pageBreak} is true,
+ *                                      otherwise blank
  *  18  DEFAULT_VALUE                   optional
  *  19  DATA_TYPE                   R   "ST" / "INT" / "REAL" / "DATE" /
  *                                      "PDATE" / "FILE" / "BL"
@@ -104,8 +122,20 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
  *  22  VALIDATION_ERROR_MESSAGE        required iff VALIDATION set
  *  23  PHI                         R   numeric 0 / 1
  *  24  REQUIRED                    R   numeric 0 / 1
- *  25  ITEM_DISPLAY_STATUS             blank in M-B (Show by default)
- *  26  SIMPLE_CONDITIONAL_DISPLAY      blank in M-B
+ *  25  ITEM_DISPLAY_STATUS             M-C — "Hide" when showItem is
+ *                                      set, blank (Show) otherwise.
+ *                                      The parser rejects rows where
+ *                                      ITEM_DISPLAY_STATUS is anything
+ *                                      other than blank or "Hide" while
+ *                                      SIMPLE_CONDITIONAL_DISPLAY is
+ *                                      non-blank (SpreadSheetTableRepeating:1032).
+ *  26  SIMPLE_CONDITIONAL_DISPLAY      M-C — comma triple
+ *                                      "parentItemOid,parentValue,message"
+ *                                      when showItem is set. The parser
+ *                                      splits on "," (with "\\," escapes)
+ *                                      and validates the parent item +
+ *                                      that the parent value exists in
+ *                                      the parent's option set.
  * </pre>
  *
  * <p>For PHI (col 23) the parser reads via {@code cell.getCellType() ==
@@ -120,12 +150,17 @@ public class CrfJsonToWorkbookAdapter {
 
     /**
      * Canonical response-type tokens accepted in
-     * {@link CrfVersionAuthoringRequest.ResponseSet#type()}. Calculation
-     * variants are deferred to Milestone C.
+     * {@link CrfVersionAuthoringRequest.ResponseSet#type()}. Milestone C
+     * adds the three calculation variants.
      */
     public static final java.util.Set<String> ALLOWED_RESPONSE_TYPES = java.util.Set.of(
             "text", "textarea", "radio", "single-select", "multi-select",
-            "checkbox", "file");
+            "checkbox", "file",
+            "calculation", "instant-calculation", "group-calculation");
+
+    /** Calculation variants — formula text lives in {@code options[0]}. */
+    public static final java.util.Set<String> CALCULATION_TYPES = java.util.Set.of(
+            "calculation", "instant-calculation", "group-calculation");
 
     /**
      * Synthesise the workbook and persist it to a fresh temp file the
@@ -215,9 +250,28 @@ public class CrfJsonToWorkbookAdapter {
     /**
      * Emit the {@code Groups} sheet. Its presence is what flips the
      * parser into "repeating template" mode (the parser detects it
-     * during construction). Milestone B only emits the header — items
-     * land in the parser-managed default "Ungrouped" group. Milestone
-     * C will append authored item groups in rows 1..N.
+     * during construction).
+     *
+     * <p>Milestone B emitted only the header — items landed in the
+     * parser-managed default "Ungrouped" group. Milestone C appends one
+     * row per distinct {@code groupLabel} authored on the items, with:
+     * <ul>
+     *   <li>col 0 — group label (verbatim from the item)</li>
+     *   <li>col 1 — group layout, hard-coded to {@code "grid"} which
+     *       flips the parser into repeating-group mode (the legacy
+     *       parser treats any non-"grid" value as non-repeating; M-C
+     *       flat repeating groups always go in as grids).</li>
+     *   <li>col 2 — group header, blank (M-C doesn't author this)</li>
+     *   <li>col 3 — repeat_number, fixed to {@code "1"} (first row is
+     *       always rendered)</li>
+     *   <li>col 4 — repeat_max, fixed to {@code "40"} (matches the
+     *       legacy default when the operator leaves the cell blank;
+     *       SpreadSheetTableRepeating:1579)</li>
+     *   <li>col 5 — group display status, blank (always shown)</li>
+     * </ul>
+     *
+     * <p>The labels are emitted in first-seen order across the
+     * authored sections; duplicates are collapsed.
      */
     private void writeGroupsSheet(HSSFWorkbook wb, CrfVersionAuthoringRequest request) {
         HSSFSheet sheet = wb.createSheet("Groups");
@@ -228,6 +282,32 @@ public class CrfJsonToWorkbookAdapter {
         setStringCell(header, 3, "GROUP_REPEAT_NUMBER");
         setStringCell(header, 4, "GROUP_REPEAT_MAX");
         setStringCell(header, 5, "GROUP_DISPLAY_STATUS");
+
+        // M-C: one row per distinct authored groupLabel, first-seen
+        // order. The parser dedupes by name on persistence so a stable
+        // first-seen ordering keeps SQL output deterministic.
+        java.util.LinkedHashSet<String> labels = new java.util.LinkedHashSet<>();
+        if (request.sections() != null) {
+            for (CrfVersionAuthoringRequest.Section section : request.sections()) {
+                if (section.items() == null) continue;
+                for (CrfVersionAuthoringRequest.Item item : section.items()) {
+                    String label = item.groupLabel();
+                    if (label != null && !label.trim().isEmpty()) {
+                        labels.add(label.trim());
+                    }
+                }
+            }
+        }
+        int rowIdx = 1;
+        for (String label : labels) {
+            HSSFRow row = sheet.createRow(rowIdx++);
+            setStringCell(row, 0, label);
+            setStringCell(row, 1, "grid");
+            setStringCell(row, 2, "");
+            setStringCell(row, 3, "1");
+            setStringCell(row, 4, "40");
+            setStringCell(row, 5, "");
+        }
     }
 
     /**
@@ -297,16 +377,18 @@ public class CrfJsonToWorkbookAdapter {
                               CrfVersionAuthoringRequest.Item item) {
         ResponseSetCells rc = resolveResponseSetCells(item.responseSet());
 
+        boolean hasShowItem = item.showItem() != null && !item.showItem().trim().isEmpty();
+
         setStringCell(row, 0, nullSafe(item.name()));
         setStringCell(row, 1, nullSafe(item.descriptionLabel()));
         setStringCell(row, 2, nullSafe(item.leftItemText()));
         setStringCell(row, 3, nullSafe(item.units()));
         setStringCell(row, 4, nullSafe(item.rightItemText()));
         setStringCell(row, 5, nullSafe(section.label()));
-        setStringCell(row, 6, "");                                      // group label (M-C)
-        setStringCell(row, 7, "");                                      // header (M-C)
-        setStringCell(row, 8, "");                                      // subheader (M-C)
-        setStringCell(row, 9, "");                                      // parent item (M-C)
+        setStringCell(row, 6, nullSafe(item.groupLabel()));             // GROUP_LABEL (M-C)
+        setStringCell(row, 7, nullSafe(item.header()));                 // HEADER (M-C)
+        setStringCell(row, 8, nullSafe(item.subHeader()));              // SUBHEADER (M-C)
+        setStringCell(row, 9, hasShowItem ? nullSafe(item.parentItemOid()) : ""); // PARENT_ITEM (M-C)
         setStringCell(row, 10, "");                                     // column number
         setStringCell(row, 11, "");                                     // page number
         setStringCell(row, 12, "");                                     // question number
@@ -314,7 +396,7 @@ public class CrfJsonToWorkbookAdapter {
         setStringCell(row, 14, rc.responseLabel);
         setStringCell(row, 15, rc.optionsText);
         setStringCell(row, 16, rc.optionsValues);
-        setStringCell(row, 17, "");                                     // response layout
+        setStringCell(row, 17, item.pageBreak() ? "page-break" : "");   // RESPONSE_LAYOUT (M-C page break)
         setStringCell(row, 18, nullSafe(item.defaultValue()));
         setStringCell(row, 19, canonicalDataType(item.dataType()));
         setStringCell(row, 20, "");                                     // width_decimal
@@ -323,8 +405,52 @@ public class CrfJsonToWorkbookAdapter {
         // PHI must be numeric — see class javadoc.
         setNumericCell(row, 23, 0.0d);
         setNumericCell(row, 24, item.required() ? 1.0d : 0.0d);
-        setStringCell(row, 25, "");                                     // ITEM_DISPLAY_STATUS (M-C)
-        setStringCell(row, 26, "");                                     // SIMPLE_CONDITIONAL_DISPLAY (M-C)
+        // M-C show-when: when set, ITEM_DISPLAY_STATUS="Hide" + the
+        // SIMPLE_CONDITIONAL_DISPLAY triple (parent OID, expected
+        // value, message). The parser splits on "," (with "\\," escape)
+        // and rejects rows where ITEM_DISPLAY_STATUS is non-blank and
+        // non-"Hide" while SIMPLE_CONDITIONAL_DISPLAY is set.
+        setStringCell(row, 25, hasShowItem ? "Hide" : "");
+        setStringCell(row, 26, hasShowItem
+                ? formatShowItemTriple(item.parentItemOid(), item.showItem())
+                : "");
+    }
+
+    /**
+     * Format the SIMPLE_CONDITIONAL_DISPLAY triple the legacy parser
+     * expects: {@code parentItemOid,parentValue,message}.
+     *
+     * <p>{@code showItem} is split on the first {@code |} into
+     * {@code (parentValue, message)}. If no {@code |} is present we
+     * treat the whole {@code showItem} as the parent value and emit a
+     * generic message — operators authoring through the SPA will
+     * typically use {@code "value|message"} but the looser form keeps
+     * the wire model forgiving.
+     *
+     * <p>Embedded commas in either component are escaped as
+     * {@code "\\,"} so the parser's {@code split(",")} doesn't trip on
+     * them (SpreadSheetTableRepeating:1041).
+     */
+    private static String formatShowItemTriple(String parentItemOid, String showItem) {
+        String parent = parentItemOid == null ? "" : parentItemOid.trim();
+        String raw = showItem == null ? "" : showItem.trim();
+        String value;
+        String message;
+        int pipeIdx = raw.indexOf('|');
+        if (pipeIdx >= 0) {
+            value = raw.substring(0, pipeIdx).trim();
+            message = raw.substring(pipeIdx + 1).trim();
+            if (message.isEmpty()) message = "Hidden until " + parent + " = " + value;
+        } else {
+            value = raw;
+            message = "Hidden until " + parent + " = " + value;
+        }
+        return escapeComma(parent) + "," + escapeComma(value) + "," + escapeComma(message);
+    }
+
+    /** Mirror the parser's "\\," escape convention for embedded commas. */
+    private static String escapeComma(String s) {
+        return s == null ? "" : s.replace(",", "\\,");
     }
 
     /* ----------------------------------------------------------------- */
@@ -377,6 +503,19 @@ public class CrfJsonToWorkbookAdapter {
             return new ResponseSetCells("file", "file", "file", "file");
         }
 
+        // M-C calculation variants — the wire contract carries the
+        // formula in options[0].value (text and value are conventionally
+        // the same for calculations). The parser reads the formula from
+        // col 16 (RESPONSE_VALUES_OR_CALCS); col 15 (RESPONSE_OPTIONS)
+        // also carries the formula in the canonical XLS template so
+        // we mirror that here.
+        if (CALCULATION_TYPES.contains(type)) {
+            String label = rs.label() == null ? "" : rs.label().trim();
+            if (label.isEmpty()) label = type;
+            String formula = extractFormula(rs);
+            return new ResponseSetCells(type, label, formula, formula);
+        }
+
         String label = rs.label() == null ? "" : rs.label().trim();
         if (label.isEmpty()) {
             // The parser requires a non-empty label for non-text
@@ -389,6 +528,26 @@ public class CrfJsonToWorkbookAdapter {
         String optionsText = joinOptions(rs.options(), CrfVersionAuthoringRequest.Option::text);
         String optionsValues = joinOptions(rs.options(), CrfVersionAuthoringRequest.Option::value);
         return new ResponseSetCells(type, label, optionsText, optionsValues);
+    }
+
+    /**
+     * Pull the formula text from a calculation response set. The wire
+     * contract carries it in {@code options[0]} (either field — text
+     * and value are conventionally the same for calculations); we tolerate
+     * either. The parser
+     * ({@link at.ac.meduniwien.ophthalmology.libreclinica.control.admin.SpreadSheetTableRepeating#toNewCRF})
+     * strips an optional {@code "func:"} prefix and rewrites embedded
+     * commas — we hand the formula through verbatim and let it.
+     */
+    private static String extractFormula(CrfVersionAuthoringRequest.ResponseSet rs) {
+        List<CrfVersionAuthoringRequest.Option> opts = rs.options();
+        if (opts == null || opts.isEmpty()) return "";
+        CrfVersionAuthoringRequest.Option first = opts.get(0);
+        if (first == null) return "";
+        String value = first.value();
+        if (value != null && !value.trim().isEmpty()) return value.trim();
+        String text = first.text();
+        return text == null ? "" : text.trim();
     }
 
     /** Functional handle for joining the option text or value columns. */

@@ -18,9 +18,11 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *
  * <p>Milestone B extends the Milestone A vertical slice to cover the
  * full non-formula response-type taxonomy + per-item validation +
- * default values + the cross-CRF response-set catalog. Milestones C/D
- * layer on show-when, calculation expressions, item groups and
- * multi-language labels.
+ * default values + the cross-CRF response-set catalog. Milestone C
+ * layers on show-when conditional display, the three CALCULATION
+ * response types (calculation / instant-calculation / group-calculation),
+ * flat repeating item groups and layout hints (header / subHeader /
+ * pageBreak). Milestone D will fold in multi-language labels.
  *
  * <p>The controller synthesises an HSSF workbook from this payload and
  * hands it to {@link CrfSpreadsheetParserService#parseAndPersist} —
@@ -58,15 +60,40 @@ public record CrfVersionAuthoringRequest(
      *   <li>{@code dataType} covers {@code ST}, {@code INTEGER}/{@code INT},
      *       {@code REAL}, {@code DATE}, {@code PDATE}, {@code FILE},
      *       {@code BL}.</li>
-     *   <li>{@code responseSet} covers every non-formula
+     *   <li>{@code responseSet} covers every
      *       {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType}
      *       — TEXT, TEXTAREA, RADIO, SELECT (single-select), SELECTMULTI
-     *       (multi-select), CHECKBOX, FILE. CALCULATION /
-     *       INSTANT-CALCULATION / GROUP-CALCULATION are deferred to
-     *       Milestone C.</li>
+     *       (multi-select), CHECKBOX, FILE plus (M-C) CALCULATION /
+     *       INSTANT-CALCULATION / GROUP-CALCULATION.</li>
      *   <li>{@code validation} carries the optional regexp clause +
      *       a per-item error message.</li>
      *   <li>{@code defaultValue} pre-populates the data-entry field.</li>
+     * </ul>
+     *
+     * <p>Milestone C extensions:
+     * <ul>
+     *   <li>{@code showItem} — OpenClinica expression that drives
+     *       conditional display. When non-null the item is hidden until
+     *       the expression evaluates to true. Null means always show.
+     *       The legacy parser stores this as
+     *       {@code SIMPLE_CONDITIONAL_DISPLAY = parentItem,value,message}
+     *       (column 26) plus a {@code ITEM_DISPLAY_STATUS = "Hide"}
+     *       toggle (column 25).</li>
+     *   <li>{@code parentItemOid} — the OID of the item the
+     *       {@code showItem} expression scopes against (its value is
+     *       evaluated when the parent changes). Null when
+     *       {@code showItem} is null. Validated to exist in the draft
+     *       and to precede this item in section order.</li>
+     *   <li>{@code header} / {@code subHeader} — layout hints (columns
+     *       7 and 8 on the Items sheet).</li>
+     *   <li>{@code pageBreak} — when true the data-entry UI starts a
+     *       new page at this item; rendered via the
+     *       {@code RESPONSE_LAYOUT} column (17) as the string
+     *       {@code "page-break"}.</li>
+     *   <li>{@code groupLabel} — when non-null the item joins a flat
+     *       repeating group with that label. All items sharing the
+     *       same label form one group; the adapter emits a row on the
+     *       Groups sheet per distinct label.</li>
      * </ul>
      */
     @Schema(name = "CrfVersionAuthoringRequest.Item")
@@ -81,7 +108,13 @@ public record CrfVersionAuthoringRequest(
             String defaultValue,
             boolean required,
             ResponseSet responseSet,
-            Validation validation
+            Validation validation,
+            String showItem,
+            String parentItemOid,
+            String header,
+            String subHeader,
+            boolean pageBreak,
+            String groupLabel
     ) {}
 
     /**
@@ -111,8 +144,13 @@ public record CrfVersionAuthoringRequest(
      * at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType}
      * canonical names ({@code "text"}, {@code "textarea"}, {@code "radio"},
      * {@code "single-select"}, {@code "multi-select"}, {@code "checkbox"},
-     * {@code "file"}). CALCULATION variants are rejected at the
-     * shape-validation layer in Milestone B.
+     * {@code "file"}). Milestone C extends the accepted vocabulary with
+     * the calculation variants: {@code "calculation"} (post-save
+     * evaluation against persisted item_data), {@code "instant-calculation"}
+     * (form-time evaluation), and {@code "group-calculation"} (across-group
+     * aggregate). For all three calculation variants the {@code options}
+     * field carries the single formula string (text and value are both
+     * set to the formula source — the legacy parser convention).
      */
     @Schema(name = "CrfVersionAuthoringRequest.ResponseSet")
     public record ResponseSet(
