@@ -5,6 +5,7 @@ import type {
   EventCellSnapshot,
   EventStatus,
   Gender,
+  GroupAssignmentInput,
   SignPreflight,
   StudyEye,
   Subject,
@@ -61,6 +62,14 @@ export const useSubjectsStore = defineStore('subjects', () => {
   const query = ref('')
   const statusFilter = ref<'all' | 'open-events' | 'all-events-complete' | 'signed'>('all')
   const onlyWithQueries = ref(false)
+  /**
+   * Phase E.6 subject-lifecycle — Show-removed toggle. Persisted
+   * across navigation so a DM / Admin who flipped it on for a
+   * remediation pass doesn't have to flip it on again when they
+   * come back to the matrix. The store re-fetches the matrix when
+   * this flips because the backend filters server-side.
+   */
+  const showRemoved = ref(false)
 
   const filtered = computed<Subject[]>(() => {
     const q = query.value.trim().toLowerCase()
@@ -91,7 +100,13 @@ export const useSubjectsStore = defineStore('subjects', () => {
     isLoading.value = true
     error.value = null
     try {
-      rows.value = await apiGet<Subject[]>('/pages/api/v1/subjects')
+      // Phase E.6 subject-lifecycle — propagate the showRemoved flag
+      // server-side. Default (false) keeps the legacy matrix shape
+      // (only AVAILABLE / LOCKED / SIGNED rows); true brings the
+      // DELETED + AUTO_DELETED rows in so DM/Admin can pick a
+      // candidate to Restore.
+      const qs = showRemoved.value ? '?includeRemoved=true' : ''
+      rows.value = await apiGet<Subject[]>(`/pages/api/v1/subjects${qs}`)
     } catch (e) {
       // Always clear rows on error so the view doesn't show stale data
       // alongside a fresh error message.
@@ -199,6 +214,11 @@ export const useSubjectsStore = defineStore('subjects', () => {
         // Phase E.6 Tier 1 — ophthalmology domain fields.
         studyEye: input.studyEye ?? null,
         screeningDate: input.screeningDate?.trim() || null,
+        // Phase E.6 subject-lifecycle — Person-ID re-enrol + initial
+        // group-class picks. Both optional server-side; the SPA omits
+        // them on the legacy enrolment path.
+        personId: input.personId?.trim() || null,
+        groupAssignments: input.groupAssignments ?? null,
       }
       const detail = await apiPost<SubjectDetail>('/pages/api/v1/subjects', payload)
 
@@ -533,6 +553,139 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
+   * Phase E.6 subject-lifecycle — toggle the Show-removed filter
+   * and re-fetch the matrix. Wrapping the boolean flip + reload in
+   * one action keeps the view code from having to remember the
+   * order.
+   */
+  async function setShowRemoved(value: boolean) {
+    if (showRemoved.value === value) return
+    showRemoved.value = value
+    await load()
+  }
+
+  /**
+   * Phase E.6 subject-lifecycle — inverse of removeSubject. Restores
+   * a soft-deleted subject + cascades the child rows back to
+   * AVAILABLE. The view code uses this when the user clicks the
+   * Restore button on a Show-removed row.
+   *
+   * On success: the in-memory matrix row's status flips to
+   * 'available' and the selected detail (if matching) is cleared so
+   * the next navigation fetches a fresh copy.
+   */
+  async function restoreSubject(subjectId: string): Promise<boolean> {
+    try {
+      await apiPost<unknown>(
+        `/pages/api/v1/subjects/${encodeURIComponent(subjectId)}/restore`,
+        {},
+      )
+      const idx = rows.value.findIndex((s) => s.id === subjectId)
+      if (idx >= 0) {
+        rows.value[idx] = { ...rows.value[idx], status: 'available' }
+      }
+      if (selected.value && selected.value.id === subjectId) {
+        // Force a refetch on next navigation so the events / group
+        // assignments come back fresh after the cascade.
+        selected.value = null
+      }
+      return true
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Wiederherstellen nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Wiederherstellen fehlgeschlagen. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Wiederherstellen fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Wiederherstellen.'
+      }
+      return false
+    }
+  }
+
+  /**
+   * Phase E.6 subject-lifecycle — replace a subject's full
+   * group-class assignment state. The SPA always sends the desired
+   * final state (not deltas); the backend reconciles inserts +
+   * soft-deletes + group switches in one call.
+   *
+   * On 200 the refreshed SubjectDetail replaces both `selected`
+   * (if matching) and the matching matrix row's `groupAssignments`
+   * cell so the SPA renders the new arms without a refetch.
+   *
+   * On 400 with structured field errors, the caller receives them
+   * in the resolved tuple's `fieldErrors` map keyed by the
+   * `assignments[<groupClassId>]` shape from the backend
+   * ValidationErrorBody.
+   */
+  async function replaceGroups(
+    subjectId: string,
+    assignments: GroupAssignmentInput[],
+  ): Promise<
+    | { ok: true; detail: SubjectDetail }
+    | { ok: false; fieldErrors: Record<string, string>; message?: string }
+  > {
+    try {
+      const detail = await apiPut<SubjectDetail>(
+        `/pages/api/v1/subjects/${encodeURIComponent(subjectId)}/groups`,
+        { assignments },
+      )
+      if (selected.value && selected.value.id === subjectId) {
+        selected.value = detail
+      }
+      const idx = rows.value.findIndex((r) => r.id === subjectId)
+      if (idx >= 0) {
+        rows.value[idx] = {
+          ...rows.value[idx],
+          groupAssignments: detail.groupAssignments ?? [],
+        }
+      }
+      return { ok: true, detail }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Zuweisung nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiError) {
+        const errBody = e.body as
+          | { message?: string; errors?: Array<{ field: string; message: string }> }
+          | null
+        const fieldErrors: Record<string, string> = {}
+        if (errBody?.errors) {
+          for (const fe of errBody.errors) {
+            fieldErrors[fe.field] = fe.message
+          }
+        }
+        return {
+          ok: false,
+          fieldErrors,
+          message: errBody?.message ?? `Gruppenzuweisung fehlgeschlagen (HTTP ${e.status}).`,
+        }
+      }
+      if (e instanceof ApiNetworkError) {
+        return {
+          ok: false,
+          fieldErrors: {},
+          message:
+            'Backend nicht erreichbar — Gruppenzuweisung fehlgeschlagen. Bitte später erneut versuchen.',
+        }
+      }
+      return {
+        ok: false,
+        fieldErrors: {},
+        message: e instanceof Error ? e.message : 'Unbekannter Fehler bei der Gruppenzuweisung.',
+      }
+    }
+  }
+
+  /**
    * Phase E.6 — clear every piece of study-scoped state so the store
    * doesn't bleed subjects from study A into the matrix after the
    * user switches to study B. Called by {@link useAuthStore.pickStudy}
@@ -553,6 +706,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
     query.value = ''
     statusFilter.value = 'all'
     onlyWithQueries.value = false
+    showRemoved.value = false
   }
 
   return {
@@ -563,6 +717,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
     query,
     statusFilter,
     onlyWithQueries,
+    showRemoved,
     selected,
     isLoadingSelected,
     selectedError,
@@ -581,6 +736,9 @@ export const useSubjectsStore = defineStore('subjects', () => {
     loadPreflight,
     signSubject,
     removeSubject,
+    restoreSubject,
+    setShowRemoved,
+    replaceGroups,
     updateSubject,
     lockSubject,
     unlockSubject,
@@ -627,6 +785,19 @@ export interface AddSubjectInput {
    * Optional; some MUW deployments don't run a separate screening.
    */
   screeningDate?: string | null
+  /**
+   * Phase E.6 subject-lifecycle — Person-ID (subject.unique_identifier).
+   * When supplied and a matching subject exists in the tree, the new
+   * enrolment reuses the existing subject_id (one human, many
+   * studies). When omitted, a fresh subject row is created.
+   */
+  personId?: string | null
+  /**
+   * Phase E.6 subject-lifecycle — initial group-class picks. Same
+   * shape as the PUT /groups body; sent in the same POST as the
+   * enrolment so the SPA doesn't need a second round trip.
+   */
+  groupAssignments?: GroupAssignmentInput[] | null
 }
 
 export type AddSubjectErrorField =
@@ -635,6 +806,7 @@ export type AddSubjectErrorField =
   | 'enrolledOn'
   | 'gender'
   | 'yearOfBirth'
+  | 'personId'
 
 export interface AddSubjectError {
   field: AddSubjectErrorField
@@ -668,6 +840,7 @@ const allowedErrorFields: ReadonlyArray<AddSubjectErrorField> = [
   'enrolledOn',
   'gender',
   'yearOfBirth',
+  'personId',
 ]
 
 function isAddSubjectError(value: unknown): value is AddSubjectError {
