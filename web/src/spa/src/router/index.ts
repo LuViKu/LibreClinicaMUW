@@ -135,6 +135,25 @@ const router = createRouter({
       component: () => import('@/views/DatasetListView.vue'),
       meta: { title: 'Data Export', role: ['Data Manager', 'Administrator', 'Monitor'] as const },
     },
+    /* Phase E.6 P2 — Create-dataset wizard (revival of PR #114). */
+    {
+      path: '/datasets/new',
+      name: 'dataset-new',
+      component: () => import('@/views/CreateDatasetView.vue'),
+      meta: {
+        title: 'Create dataset',
+        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
+      },
+    },
+    {
+      path: '/datasets/:datasetId/edit',
+      name: 'dataset-edit',
+      component: () => import('@/views/CreateDatasetView.vue'),
+      meta: {
+        title: 'Edit dataset',
+        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
+      },
+    },
     {
       path: '/import-crf-data',
       name: 'import-crf-data',

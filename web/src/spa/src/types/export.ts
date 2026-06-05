@@ -41,6 +41,21 @@ export interface DatasetDto {
   lastRunAt: string | null
   /** Number of {@code archived_dataset_file} rows currently on disk. */
   fileCount: number
+  /* ------------------------------------------------------------------ */
+  /* Phase 2 wizard hydration — populated only by the single-fetch +    */
+  /* create/update echo paths; left empty on the list endpoint to       */
+  /* avoid N+1 SQL on the saved-datasets table view.                    */
+  /* ------------------------------------------------------------------ */
+  studyId?: number
+  /** Legacy Status enum name — "available" / "removed" / etc. */
+  status?: string
+  eventDefinitionOids?: string[]
+  crfVersionIds?: number[]
+  itemIds?: number[]
+  includeFlags?: InclusionFlags
+  numRuns?: number
+  /** True when {@code numRuns > 0}. Wizard disables structural edits. */
+  hasRun?: boolean
 }
 
 /** One generated export file row in the SPA's per-dataset sub-table. */
@@ -171,16 +186,225 @@ export interface FilterItemDto {
 }
 
 /**
- * Phase 2 wire shape — full create-dataset payload. Published here
- * so Phase 3's {@code filters} field anchors the shared record
- * without circular type imports; Phase 2's wizard PR will extend
- * with the metadata-confirmation surface (label, units format, ...).
+ * Phase 2 + Phase 3 — the full create-dataset payload sent to
+ * {@code POST /api/v1/studies/{oid}/datasets} +
+ * {@code PUT /api/v1/datasets/{id}}.
+ *
+ * <ul>
+ *   <li>{@code name} / {@code description} — dataset metadata.</li>
+ *   <li>{@code eventDefinitionOids} / {@code crfVersionIds} /
+ *       {@code itemIds} / {@code includeFlags} — Phase 2 wizard
+ *       payload (required by the create-dataset wizard).</li>
+ *   <li>{@code selectedItemOids} / {@code filters} — Phase 3 filter
+ *       carry-over (optional; reserved for Phase 4 async-export).</li>
+ * </ul>
  */
 export interface CreateDatasetRequest {
   name: string
   description: string
-  selectedItemOids: string[]
-  filters: DatasetFilterDto[]
+  eventDefinitionOids: string[]
+  crfVersionIds: number[]
+  itemIds: number[]
+  includeFlags: InclusionFlags
+  /** Phase 3 — items the filter builder may reference. Optional. */
+  selectedItemOids?: string[]
+  /** Phase 3 — filter predicate list. Optional. */
+  filters?: DatasetFilterDto[]
+}
+
+/* ------------------------------------------------------------------ */
+/*  Phase 2 — wizard shapes (event tree, inclusion flags, draft)      */
+/* ------------------------------------------------------------------ */
+
+/** Returned by {@code GET /api/v1/studies/{oid}/event-tree}. */
+export interface EventTreeNode {
+  eventOid: string
+  eventName: string
+  eventOrdinal: number
+  repeating: boolean
+  crfs: EventTreeCrfNode[]
+}
+
+export interface EventTreeCrfNode {
+  crfOid: string
+  crfName: string
+  versions: EventTreeVersionNode[]
+}
+
+export interface EventTreeVersionNode {
+  versionId: number
+  versionOid: string
+  versionName: string
+  items: EventTreeItemNode[]
+}
+
+export interface EventTreeItemNode {
+  itemId: number
+  oid: string
+  name: string
+  dataType: string
+}
+
+/**
+ * Phase 2 — inclusion flags, grouped semantically into 5 sections.
+ *
+ * The legacy DatasetBean carries 35 boolean columns. The MUW
+ * deployment exercises 18 of them; the remaining 17 are either
+ * deprecated or duplicated by other columns and were never used by
+ * the OpenClinica 3.x CreateDataset JSP either. See
+ * {@code DatasetsApiController.applyFlags} for the controller-side
+ * mapping. Adding a flag here:
+ *   1. add the key to {@link InclusionFlags},
+ *   2. add it to {@link FLAG_DEFAULTS},
+ *   3. add it to the appropriate FLAG_SECTION group,
+ *   4. teach the controller's applyFlags + toDto round-trip.
+ */
+export interface InclusionFlags {
+  // Subject metadata
+  dob: boolean
+  gender: boolean
+  subjectStatus: boolean
+  uniqueIdentifier: boolean
+  secondaryId: boolean
+  ageAtEvent: boolean
+  groupInformation: boolean
+  // Event metadata
+  eventLocation: boolean
+  eventStartDate: boolean
+  eventEndDate: boolean
+  eventStartTime: boolean
+  eventEndTime: boolean
+  eventStatus: boolean
+  // CRF / audit
+  crfStatus: boolean
+  crfVersion: boolean
+  interviewerName: boolean
+  interviewerDate: boolean
+  completionDate: boolean
+  // Discrepancy notes
+  discNotes: boolean
+}
+
+export type InclusionFlagKey = keyof InclusionFlags
+
+/**
+ * MUW operator defaults — the create-dataset wizard pre-checks the
+ * flags most clinical reviewers rely on. The operator can untoggle
+ * any of them on the Inclusion-flags step.
+ */
+export const FLAG_DEFAULTS: InclusionFlags = {
+  dob: false,
+  gender: true,
+  subjectStatus: true,
+  uniqueIdentifier: true,
+  secondaryId: false,
+  ageAtEvent: true,
+  groupInformation: false,
+
+  eventLocation: false,
+  eventStartDate: true,
+  eventEndDate: false,
+  eventStartTime: false,
+  eventEndTime: false,
+  eventStatus: true,
+
+  crfStatus: true,
+  crfVersion: true,
+  interviewerName: false,
+  interviewerDate: false,
+  completionDate: false,
+
+  discNotes: false,
+}
+
+/**
+ * Semantic grouping of the inclusion flags into the five collapsible
+ * sections rendered by {@code InclusionFlagsForm}. Order is the order
+ * the wizard renders them in.
+ */
+export interface FlagSection {
+  /** i18n key under {@code createDataset.flagSection.<id>.title}. */
+  id: 'subject' | 'event' | 'crf' | 'interviewer' | 'notes'
+  keys: InclusionFlagKey[]
+}
+
+export const FLAG_SECTIONS: FlagSection[] = [
+  {
+    id: 'subject',
+    keys: [
+      'dob',
+      'gender',
+      'subjectStatus',
+      'uniqueIdentifier',
+      'secondaryId',
+      'ageAtEvent',
+      'groupInformation',
+    ],
+  },
+  {
+    id: 'event',
+    keys: [
+      'eventLocation',
+      'eventStartDate',
+      'eventEndDate',
+      'eventStartTime',
+      'eventEndTime',
+      'eventStatus',
+    ],
+  },
+  {
+    id: 'crf',
+    keys: ['crfStatus', 'crfVersion'],
+  },
+  {
+    id: 'interviewer',
+    keys: ['interviewerName', 'interviewerDate', 'completionDate'],
+  },
+  {
+    id: 'notes',
+    keys: ['discNotes'],
+  },
+]
+
+/**
+ * Wire shape of {@code POST /api/v1/studies/{oid}/datasets} +
+ * {@code PUT /api/v1/datasets/{id}} — alias for {@link CreateDatasetRequest}
+ * kept distinct so the wizard's draft type can re-shape later without
+ * disturbing the Phase 3 filter wire.
+ */
+export type CreateDatasetInput = CreateDatasetRequest
+
+/**
+ * The wizard keeps its in-flight selection state in the store as a
+ * single draft. Cancelling the wizard clears the draft; navigating
+ * between steps preserves it.
+ */
+export interface CreateDatasetDraft extends CreateDatasetInput {
+  /** Truthy when editing an existing dataset; undefined for create. */
+  editingDatasetId?: number
+  /** Wizard step index (0-based). */
+  step: number
+}
+
+/** Default-empty draft seed. */
+export const EMPTY_DRAFT: CreateDatasetDraft = {
+  name: '',
+  description: '',
+  eventDefinitionOids: [],
+  crfVersionIds: [],
+  itemIds: [],
+  includeFlags: { ...FLAG_DEFAULTS },
+  step: 0,
+}
+
+/**
+ * Wire shape for the 400 validation error body returned by the
+ * wizard's create / update endpoints. Mirrors
+ * {@code SubjectsApiController.ValidationErrorBody}.
+ */
+export interface DatasetValidationError {
+  message: string
+  errors: Array<{ field: string; message: string }>
 }
 
 /**
