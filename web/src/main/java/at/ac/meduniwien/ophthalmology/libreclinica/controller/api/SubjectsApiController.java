@@ -1323,6 +1323,132 @@ public class SubjectsApiController {
     }
 
     /**
+     * Phase E.6 subject-lifecycle — replace a subject's full
+     * {@code subject_group_map} state.
+     *
+     * <p>Accepts the desired final assignment list. The service
+     * reconciles inserts + soft-deletes + group switches in a single
+     * call, returning the refreshed subject detail (the SPA replaces
+     * its in-memory copy on success).
+     *
+     * <p>Authorization mirrors {@link SubjectEditAuthorization}:
+     * Investigator, CRC, Data Manager, Administrator may write;
+     * Monitor / RA / RA2 are refused with 403. Locked or signed
+     * subjects are refused with 409 — group assignment changes
+     * during a signed window would invalidate the e-signature.
+     *
+     * <p>404 on unknown OID; 403 on the subject belonging to a study
+     * outside the user's grant tree; 400 on validation failure (per-
+     * assignment field errors via {@link ValidationErrorBody}).
+     */
+    @PutMapping("/{studySubjectOid}/groups")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = SubjectDetailDto.class)))
+    public ResponseEntity<?> replaceGroups(@PathVariable("studySubjectOid") String studySubjectOid,
+                                           @RequestBody(required = false) UpdateSubjectGroupsRequest body,
+                                           HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!SubjectEditAuthorization.roleMayEdit(roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit editing subject group assignments"));
+        }
+
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
+        if (ss == null || ss.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Subject with OID '" + studySubjectOid + "' not found."));
+        }
+
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visible.contains(Integer.valueOf(ss.getStudyId()))) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Subject belongs to a study outside your grant tree"));
+        }
+
+        if (ss.getStatus() != null && Status.SIGNED.equals(ss.getStatus())) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Subject is signed — un-sign before changing group assignments"));
+        }
+        if (ss.getStatus() != null && Status.LOCKED.equals(ss.getStatus())) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Subject is locked — unlock before changing group assignments"));
+        }
+        if (ss.getStatus() != null
+                && (Status.DELETED.equals(ss.getStatus())
+                    || Status.AUTO_DELETED.equals(ss.getStatus()))) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Subject is removed — restore before changing group assignments"));
+        }
+
+        // Look up the actual study the subject lives in (not the
+        // session-bound study, which can be the top-level parent in a
+        // multi-site setup). Group classes live at the top level only,
+        // so we walk up if needed via StudyDAO.
+        StudyBean assignmentStudy = currentStudy;
+        if (currentStudy.getParentStudyId() != 0
+                || currentStudy.getId() != ss.getStudyId()) {
+            StudyBean ssStudy = new StudyDAO(dataSource).findByPK(ss.getStudyId());
+            if (ssStudy != null && ssStudy.getId() != 0) {
+                if (ssStudy.getParentStudyId() != 0) {
+                    StudyBean parent = new StudyDAO(dataSource).findByPK(ssStudy.getParentStudyId());
+                    if (parent != null && parent.getId() != 0) assignmentStudy = parent;
+                } else {
+                    assignmentStudy = ssStudy;
+                }
+            }
+        }
+
+        SubjectGroupAssignmentService service = new SubjectGroupAssignmentService(dataSource);
+        List<UpdateSubjectGroupsRequest.Assignment> desired = (body == null) ? null : body.assignments();
+        List<ValidationErrorBody.FieldError> errors = service.validate(assignmentStudy, desired);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+
+        int touched;
+        try {
+            touched = service.reconcile(ss.getId(), currentUser, desired,
+                    new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO(dataSource));
+        } catch (RuntimeException e) {
+            LOG.error("Group-assignment reconcile failed for ss={} oid={} by user={}",
+                    ss.getId(), studySubjectOid, currentUser.getName(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Group assignment update failed — see server log."));
+        }
+
+        LOG.info("Group assignments updated for subject {} (study_subject_id={}): "
+                        + "{} row(s) touched by user {}",
+                studySubjectOid, ss.getId(), touched, currentUser.getName());
+
+        // Refresh detail for the response. Reload the subject so the
+        // status / refreshed audit columns are up to date.
+        StudySubjectBean refreshed = studySubjectDAO.findByPK(ss.getId());
+        SubjectBean subj = new SubjectDAO(dataSource).findByPK(refreshed.getSubjectId());
+        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
+        StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(dataSource);
+        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
+        Map<Integer, StudyEventDefinitionBean> defCache = new HashMap<>();
+        Map<Integer, Integer> openQueriesByEvent = loadOpenQueryCountsForStudy(refreshed.getStudyId());
+        SubjectDetailDto dto = toDetailDto(refreshed, subj, currentStudy, studyEventDAO,
+                studyEventDefinitionDAO, eventCRFDAO, defCache, openQueriesByEvent);
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
      * Shared body for remove / restore / lock / unlock. The
      * transitions are structurally identical — flip the parent
      * status, optionally cascade the child rows — only the status
