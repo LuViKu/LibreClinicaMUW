@@ -1038,7 +1038,11 @@
       "heading": "CDISC ODM 1.3 XML hochladen",
       "description": "Teilnehmer / Visite / CRF / Item müssen bereits in der Studie definiert sein.",
       "cta": "Datei wählen oder per Drag-and-Drop ablegen",
-      "hint": "Akzeptiert: .xml · maximal 50 MB"
+      "hint": "Akzeptiert: .xml · maximal 50 MB",
+      "uploading": "Lade hoch und validiere die XML…",
+      "errorXsd": "Die Datei ist keine gültige CDISC ODM 1.3 XML.",
+      "errorWrongStudy": "Die studyOID der Datei stimmt nicht mit der aktiven Studie überein — Studie wechseln oder Quelle neu exportieren.",
+      "errorFileType": "Es werden nur .xml-CRF-Datendateien akzeptiert."
     },
     "map": {
       "heading": "Erkannte Mengen",
@@ -1060,6 +1064,10 @@
       "reasonHint": "{count} Überschreibungen erfordern einen Änderungsgrund. Wird im Audit Trail bei jedem überschriebenen Item dokumentiert.",
       "reasonPlaceholder": "z. B. Standort hat korrigierte ODM nach Vor-Ort-Quelldatenabgleich gesendet.",
       "cta": "Weiter zum Commit",
+      "noRows": "Die hochgeladene XML enthielt keine Item-Datenzeilen.",
+      "loadingMoreRows": "{shown} von {total} Zeilen angezeigt. Scrollen, um weitere zu laden.",
+      "issuesHeading": "Validierungsbefunde",
+      "overwriteModeHeading": "Überschreibungs-Strategie",
       "column": {
         "status": "Status",
         "subject": "Teilnehmer",
@@ -1074,11 +1082,23 @@
         "error": "Fehler"
       }
     },
+    "overwriteMode": {
+      "replace": "Vorhandene Werte überschreiben (Änderungsgrund erforderlich)",
+      "skip": "Zeilen überspringen, die vorhandene Werte überschreiben würden"
+    },
     "commit": {
       "workingHeading": "Commit läuft…",
       "workingDetail": "Zeilen und Audit-Trail-Einträge werden geschrieben.",
       "successHeading": "Import abgeschlossen",
-      "successDetail": "{ready} neu + {overwrite} überschrieben · {error} übersprungen."
+      "successDetail": "{ready} neu + {overwrite} überschrieben · {error} übersprungen.",
+      "rowsInserted": "Zeilen eingefügt",
+      "rowsOverwritten": "Zeilen überschrieben",
+      "rowsSkipped": "Zeilen übersprungen",
+      "discrepancyNotes": "Diskrepanz-Notizen",
+      "tokenExpired": "Vorschau abgelaufen",
+      "reupload": "XML neu hochladen",
+      "startOver": "Neu beginnen",
+      "failedHeading": "Commit fehlgeschlagen"
     }
   },
   "signSubject": {
