@@ -275,6 +275,14 @@ public class CrfJsonValidator {
             }
             return;
         }
+        // Catalog refs carry their type via the referenced set, not the
+        // inline payload. The SPA's ResponseSetPicker emits only
+        // {ref: {label}} when picking from the catalog — accept that as
+        // a complete declaration and skip the type/options/file checks
+        // that target inline declarations.
+        if (rs.ref() != null) {
+            return;
+        }
         String type = rs.type() == null ? "" : rs.type().trim().toLowerCase(Locale.ROOT);
         if (type.isEmpty()) {
             out.add(fe(iPrefix + ".responseSet.type", "Response type is required"));

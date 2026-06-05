@@ -324,11 +324,14 @@ public class DatasetsApiController {
         // ODM serialisation needs the metadata-version oids; the legacy
         // CreateDatasetServlet leaves these blank when the operator
         // doesn't pick a versioning prior, so we do the same — the
-        // OdmFileCreation pass synthesises defaults.
-        adhoc.setODMMetaDataVersionName(null);
-        adhoc.setODMMetaDataVersionOid(null);
-        adhoc.setODMPriorStudyOid(null);
-        adhoc.setODMPriorMetaDataVersionOid(null);
+        // OdmFileCreation pass synthesises defaults. Use empty strings
+        // rather than nulls: DatasetDAO.create binds these positions
+        // via setTypeExpected(VARCHAR), and PreparedStatementFactory
+        // NPEs on a literal null without a matching nullVars entry.
+        adhoc.setODMMetaDataVersionName("");
+        adhoc.setODMMetaDataVersionOid("");
+        adhoc.setODMPriorStudyOid("");
+        adhoc.setODMPriorMetaDataVersionOid("");
         // Show every "show_*" flag so the ODM has the broadest possible
         // attribute coverage. Operators using the legacy CreateDataset
         // wizard tick these by hand; quick-ODM is the one-click
@@ -550,7 +553,12 @@ public class DatasetsApiController {
 
     private static String toIsoUtc(Date d) {
         if (d == null) return null;
-        return d.toInstant().atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
+        // java.sql.Date.toInstant() throws UnsupportedOperationException
+        // unconditionally — the JDBC drivers hand us sql.Date for any
+        // DATE-typed column. Go via getTime() to handle both
+        // java.util.Date and java.sql.Date uniformly.
+        return java.time.Instant.ofEpochMilli(d.getTime())
+                .atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
     }
 
     /** Wraps the legacy GenerateExtractFileService dispatch. */
