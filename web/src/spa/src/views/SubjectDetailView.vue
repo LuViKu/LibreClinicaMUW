@@ -11,6 +11,7 @@ import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
+import SubjectExportButton from '@/components/SubjectExportButton.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
 import { useEventsStore } from '@/stores/events'
@@ -605,17 +606,11 @@ function dataEntryStageLabel(stage: string | null): string {
             ← {{ t('subjectDetail.backToMatrix') }}
           </RouterLink>
           <div class="flex items-center gap-2">
-            <button
-              type="button"
-              class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" x2="12" y1="15" y2="3" />
-              </svg>
-              {{ t('subjectDetail.actions.downloadCasebook') }}
-            </button>
+            <!-- Phase E.6 P5 — per-subject data snapshot (ODM/CSV/PDF). -->
+            <SubjectExportButton
+              :study-oid="auth.user?.activeStudy?.oid ?? null"
+              :subject-label="subject.id"
+            />
             <RouterLink
               v-if="!subject.signed"
               :to="`/subjects/${subject.id}/sign`"
