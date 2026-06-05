@@ -66,6 +66,32 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
     }
 
     /* ---------------------------------------------------------------------- */
+    /* GET /api/v1/events/{id} — Phase E.6 event detail                       */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void getEventDetailReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/events/42")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getEventDetailReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/events/42")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    // 404 (unknown event id) + 403 (visibility) + 200 happy-path pin
+    // need a real backing DataSource so the StudyEventDAO can resolve
+    // — they ride the Testcontainers Postgres follow-up alongside the
+    // 409 dup-non-repeating coverage already noted on this class.
+
+    /* ---------------------------------------------------------------------- */
     /* POST /api/v1/events                                                    */
     /* ---------------------------------------------------------------------- */
 

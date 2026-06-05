@@ -1256,6 +1256,37 @@
     },
     "locked": "Locked"
   },
+  "eventDetail": {
+    "title": "CRFs for this event",
+    "subTitle": "forms",
+    "breadcrumb": "{study} / {subject} / {event}",
+    "empty": "This event definition has no CRFs wired in yet.",
+    "back": "Back to subject",
+    "statusLabels": {
+      "not-started": "Not started",
+      "data-entry-started": "In progress",
+      "completed": "Completed",
+      "stopped": "Stopped",
+      "signed": "Signed"
+    },
+    "table": {
+      "crfName": "CRF",
+      "version": "Version",
+      "status": "Status",
+      "required": "Req.",
+      "action": ""
+    },
+    "action": {
+      "open": "Open CRF →",
+      "startLegacy": "Start data entry →",
+      "legacyHint": "Opens in classic mode (new tab)"
+    },
+    "error": {
+      "notFound": "Event not found.",
+      "forbidden": "You do not have access to this event.",
+      "network": "Backend unreachable — please retry."
+    }
+  },
   "subjectExport": {
     "title": "Download data",
     "formatLabel": "Format",

@@ -538,19 +538,21 @@ function dataEntryStageLabel(stage: string | null): string {
                     class="text-rose-700 hover:underline"
                     @click="onCancelEvent(ev)"
                   >{{ t('subjectDetail.event.cancel') }}</button>
-                  <!-- Phase E.6: SPA event-CRF entry view is M4 (not built);
-                       the previously hardcoded synthetic OID was a Phase E.4
-                       mock leftover and 404'd against the real backend.
-                       Bridge to the legacy "enter data" table-of-contents
-                       page (a JSP that lists CRFs for the event) until the
-                       SPA event-detail view ships. -->
-                  <a
+                  <!-- Phase E.6: link straight to the SPA's Event
+                       Detail view (see EventDetailView.vue) so the
+                       operator stays in-shell. v0 sent users into the
+                       legacy /pages/EnterDataForStudyEvent JSP which
+                       was jarring + often errored for non-Investigator
+                       roles. eventId is empty until the event row is
+                       actually scheduled — render nothing in that
+                       case (Schedule button covers the path). -->
+                  <RouterLink
                     v-if="ev.eventId"
-                    :href="`/LibreClinica/pages/EnterDataForStudyEvent?eventId=${ev.eventId}`"
+                    :to="`/events/${ev.eventId}`"
                     class="text-muw-blue hover:underline"
                   >
                     {{ t('subjectDetail.openEvent') }}
-                  </a>
+                  </RouterLink>
                 </td>
               </tr>
 

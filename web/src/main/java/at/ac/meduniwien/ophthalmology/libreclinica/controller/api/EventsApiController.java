@@ -21,21 +21,27 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
@@ -112,6 +118,173 @@ public class EventsApiController {
                                SiteVisibilityFilter siteVisibilityFilter) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
+    }
+
+    /**
+     * Phase E.6 — Event Detail adapter. Replaces the legacy
+     * {@code /pages/EnterDataForStudyEvent?eventId=…} JSP redirect
+     * the SubjectDetailView used to bridge into; the SPA now stays
+     * in-shell with a Vue view that consumes this endpoint.
+     *
+     * <p>Returns the event metadata + one row per
+     * {@code event_definition_crf} entry wired into the event
+     * definition. Each row carries the matching {@code event_crf}'s
+     * id when it exists (so the SPA can deep-link to CrfEntryView);
+     * otherwise the row reports {@code status=not-started} with a
+     * null {@code eventCrfId}, and the SPA renders a "start data
+     * entry" affordance instead.
+     *
+     * <p>Guards: {@code 401} anonymous / {@code 400} no active
+     * study / {@code 404} unknown event id / {@code 403} when the
+     * event's subject lives outside the caller's visible study set.
+     */
+    @GetMapping("/{id:[0-9]+}")
+    @Operation(operationId = "getEventDetail")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventDetailDto.class)))
+    public ResponseEntity<?> getEventDetail(@PathVariable("id") int eventId, HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+
+        StudyEventDAO seDao = new StudyEventDAO(dataSource);
+        StudyEventBean ev = (StudyEventBean) seDao.findByPK(eventId);
+        if (ev == null || ev.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study_event with id " + eventId));
+        }
+
+        // Resolve subject + verify it lives in the visible study tree.
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ev.getStudySubjectId());
+        if (ss == null || ss.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "study_event " + eventId + " has no resolvable study_subject"));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "study_event " + eventId + " belongs to a different study"));
+        }
+
+        // Owning study (for the breadcrumb) — may be a site different
+        // from the session's currentStudy when a Monitor walked into
+        // it from the parent.
+        StudyDAO sDao = new StudyDAO(dataSource);
+        StudyBean owningStudy = (ss.getStudyId() == currentStudy.getId())
+                ? currentStudy
+                : (StudyBean) sDao.findByPK(ss.getStudyId());
+        if (owningStudy == null || owningStudy.getId() == 0) {
+            owningStudy = currentStudy;
+        }
+
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean def = (StudyEventDefinitionBean) sedDao.findByPK(
+                ev.getStudyEventDefinitionId());
+
+        // Enumerate the event_definition_crf rows (the catalogue of
+        // CRFs the event definition wires in) + look up any existing
+        // event_crf rows keyed by crf_version_id so we can mark each
+        // slot started / not-started.
+        EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        CRFVersionDAO crfvDao = new CRFVersionDAO(dataSource);
+        CRFDAO crfDao = new CRFDAO(dataSource);
+
+        List<EventDefinitionCRFBean> edcs = (def == null || def.getId() == 0)
+                ? List.of()
+                : edcDao.findAllByEventDefinitionId(owningStudy, def.getId());
+        if (edcs == null) edcs = List.of();
+
+        // Sort by ordinal so the SPA renders the canonical order.
+        ArrayList<EventDefinitionCRFBean> orderedEdcs = new ArrayList<>(edcs);
+        orderedEdcs.sort((a, b) -> Integer.compare(a.getOrdinal(), b.getOrdinal()));
+
+        // Map crf_version_id -> matching event_crf for fast lookup.
+        Map<Integer, EventCRFBean> existingByVersion = new HashMap<>();
+        ArrayList<EventCRFBean> existing = ecDao.findAllByStudyEvent(ev);
+        if (existing != null) {
+            for (EventCRFBean ec : existing) {
+                if (ec == null || ec.getId() == 0) continue;
+                // Skip soft-deleted CRFs — UI shouldn't surface them.
+                if (ec.getStatus() != null
+                        && (ec.getStatus().equals(Status.DELETED)
+                                || ec.getStatus().equals(Status.AUTO_DELETED))) continue;
+                existingByVersion.put(ec.getCRFVersionId(), ec);
+            }
+        }
+
+        List<EventCrfRowDto> crfRows = new ArrayList<>(orderedEdcs.size());
+        for (EventDefinitionCRFBean edc : orderedEdcs) {
+            CRFVersionBean cv = (edc.getDefaultVersionId() > 0)
+                    ? (CRFVersionBean) crfvDao.findByPK(edc.getDefaultVersionId())
+                    : null;
+            String crfName = (edc.getCrfName() == null || edc.getCrfName().isBlank())
+                    ? lookupCrfName(crfDao, edc.getCrfId(), cv)
+                    : edc.getCrfName();
+            String versionName = (cv != null && cv.getName() != null) ? cv.getName() : "";
+            String versionOid = (cv != null) ? cv.getOid() : null;
+
+            // Pick an event_crf row for this slot. Prefer the row
+            // pinned to the default version; fall back to any row
+            // referencing a non-default version of the same CRF
+            // (operators can swap versions per row in the legacy
+            // EnterDataForStudyEvent flow — we still want to surface
+            // started entries here).
+            EventCRFBean ec = (cv != null) ? existingByVersion.get(cv.getId()) : null;
+            if (ec == null && existing != null) {
+                for (EventCRFBean candidate : existing) {
+                    if (candidate == null || candidate.getId() == 0) continue;
+                    if (candidate.getStatus() != null
+                            && (candidate.getStatus().equals(Status.DELETED)
+                                    || candidate.getStatus().equals(Status.AUTO_DELETED))) continue;
+                    CRFVersionBean cvCand = (CRFVersionBean) crfvDao.findByPK(candidate.getCRFVersionId());
+                    if (cvCand != null && cvCand.getCrfId() == edc.getCrfId()) {
+                        ec = candidate;
+                        break;
+                    }
+                }
+            }
+
+            Integer eventCrfId = (ec != null && ec.getId() > 0) ? ec.getId() : null;
+            String eventCrfOid = (eventCrfId == null) ? null : String.valueOf(eventCrfId);
+            String rowStatus = statusForEventCrf(ec);
+
+            crfRows.add(new EventCrfRowDto(
+                    eventCrfId,
+                    eventCrfOid,
+                    nullToEmpty(crfName),
+                    versionName,
+                    versionOid,
+                    edc.getId(),
+                    rowStatus,
+                    edc.isRequiredCRF(),
+                    edc.isElectronicSignature()));
+        }
+
+        EventDetailDto dto = new EventDetailDto(
+                ev.getId(),
+                def == null ? "" : nullToEmpty(def.getOid()),
+                def == null ? "" : nullToEmpty(def.getName()),
+                nullToEmpty(ss.getLabel()),
+                nullToEmpty(ss.getOid()),
+                nullToEmpty(owningStudy.getOid()),
+                nullToEmpty(owningStudy.getName()),
+                ev.getDateStarted() == null ? "" : ISO_DATE.format(ev.getDateStarted()),
+                statusForSubjectEventStatus(ev.getSubjectEventStatus()),
+                ev.getSampleOrdinal(),
+                def != null && def.isRepeating(),
+                crfRows);
+
+        return ResponseEntity.ok(dto);
     }
 
     @GetMapping
@@ -649,6 +822,58 @@ public class EventsApiController {
     /* ----------------------------------------------------------------- */
     /* Helpers                                                           */
     /* ----------------------------------------------------------------- */
+
+    /**
+     * Resolve a CRF display name when {@link EventDefinitionCRFBean#getCrfName()}
+     * comes back blank. Falls back through the CRF version's parent
+     * CRF row, then the version name itself. Used by Phase E.6's
+     * {@code getEventDetail} adapter.
+     */
+    private static String lookupCrfName(CRFDAO crfDao, int crfId, CRFVersionBean cv) {
+        if (crfId > 0) {
+            CRFBean crf = (CRFBean) crfDao.findByPK(crfId);
+            if (crf != null && crf.getName() != null && !crf.getName().isBlank()) {
+                return crf.getName();
+            }
+        }
+        if (cv != null && cv.getName() != null && !cv.getName().isBlank()) {
+            return cv.getName();
+        }
+        return "";
+    }
+
+    /**
+     * Map an {@link EventCRFBean}'s lifecycle into a stable wire
+     * vocabulary the SPA consumes. Returns {@code "not-started"} for
+     * a null bean (i.e. the event_definition_crf slot is unstarted).
+     *
+     * <p>Order of precedence (mirrors the legacy
+     * {@code ViewSectionDataEntryServlet}):
+     * <ol>
+     *   <li>Status flips to LOCKED (event_crf.status_id 2)
+     *       → {@code signed}</li>
+     *   <li>completion_status_id covers the rest:
+     *       1=not-started, 2=data-being-entered, 3/4/5=completed,
+     *       6=stopped, 7=signed</li>
+     *   <li>Otherwise: date_completed set → completed; else
+     *       not-started.</li>
+     * </ol>
+     */
+    private static String statusForEventCrf(EventCRFBean ec) {
+        if (ec == null || ec.getId() == 0) return "not-started";
+        if (ec.getStatus() != null && ec.getStatus().equals(Status.UNAVAILABLE)) {
+            return "signed";
+        }
+        int csi = ec.getCompletionStatusId();
+        return switch (csi) {
+            case 1 -> "not-started";
+            case 2 -> "data-entry-started";
+            case 3, 4, 5 -> "completed";
+            case 6 -> "stopped";
+            case 7 -> "signed";
+            default -> ec.getDateCompleted() != null ? "completed" : "not-started";
+        };
+    }
 
     private static String statusForSubjectEventStatus(SubjectEventStatus s) {
         if (s == null) return "not-scheduled";
