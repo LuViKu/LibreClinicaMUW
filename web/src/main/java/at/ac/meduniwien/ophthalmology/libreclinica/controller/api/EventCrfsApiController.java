@@ -11,13 +11,16 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import javax.sql.DataSource;
@@ -55,7 +58,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SectionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,12 +139,15 @@ public class EventCrfsApiController {
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
+    private final EventCrfPresenceRegistry presenceRegistry;
 
     @Autowired
     public EventCrfsApiController(@Qualifier("dataSource") DataSource dataSource,
-                                  SiteVisibilityFilter siteVisibilityFilter) {
+                                  SiteVisibilityFilter siteVisibilityFilter,
+                                  EventCrfPresenceRegistry presenceRegistry) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
+        this.presenceRegistry = presenceRegistry;
     }
 
     @GetMapping("/{id:[0-9]+}")
@@ -602,6 +612,356 @@ public class EventCrfsApiController {
                 refreshed.getId(), currentUser.getName(), roleId, currentStudy.getOid());
 
         return ResponseEntity.ok(out);
+    }
+
+    /* ====================================================================== */
+    /* Phase E.6 crf-entry-advanced — TOC badges + concurrent-edit probe +    */
+    /* per-item notes roll-up. Four read endpoints + one heartbeat write.     */
+    /*                                                                        */
+    /* All four are session-guard + site-visibility-filtered like the rest of */
+    /* this controller. The presence registry is in-memory (no Liquibase).    */
+    /* ====================================================================== */
+
+    /**
+     * Phase E.6 — read-only soft-lock probe. Returns the freshest
+     * non-stale {@link EventCrfPresenceRegistry.PresenceEntry} for
+     * the event_crf as an {@link EventCrfLockProbeDto}. The SPA
+     * shows the {@code ConcurrentEditBanner} when {@code sameUser =
+     * false}; otherwise it silently starts its heartbeat.
+     */
+    @GetMapping("/{id:[0-9]+}/lock-status")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventCrfLockProbeDto.class)))
+    public ResponseEntity<?> lockStatus(@PathVariable("id") int eventCrfId,
+                                        HttpSession session) {
+        ResponseEntity<?> guard = guardEventCrfAccess(eventCrfId, session);
+        if (guard != null) return guard;
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+
+        Optional<EventCrfPresenceRegistry.PresenceEntry> freshest =
+                presenceRegistry.freshestEntry(eventCrfId);
+        boolean sameUser = freshest.map(p -> p.userId() == currentUser.getId()).orElse(true);
+        String editorName = freshest.map(EventCrfPresenceRegistry.PresenceEntry::userName).orElse(null);
+        String lastSeenAt = freshest
+                .map(EventCrfPresenceRegistry.PresenceEntry::lastSeenAt)
+                .map(i -> i.truncatedTo(ChronoUnit.SECONDS).toString())
+                .orElse(null);
+
+        return ResponseEntity.ok(new EventCrfLockProbeDto(
+                String.valueOf(eventCrfId),
+                sameUser,
+                editorName,
+                lastSeenAt,
+                EventCrfPresenceRegistry.TTL_SECONDS));
+    }
+
+    /**
+     * Phase E.6 — heartbeat. The SPA POSTs this every
+     * {@link EventCrfPresenceRegistry#TTL_SECONDS} / 2 seconds while
+     * the entry view is mounted. Records/refreshes the caller's
+     * presence and returns the freshest non-stale entry (which may
+     * differ from the caller's own if another user heartbeated in
+     * the same window).
+     *
+     * <p>Always 200 — even when a concurrent editor is detected,
+     * {@code sameUser = false} is the only signal. The original
+     * playbook listed "409 collision" but that conflated the soft
+     * lock with a hard write conflict; we use a non-error response
+     * to keep the SPA's heartbeat loop trivially retriable.
+     */
+    @PostMapping("/{id:[0-9]+}/heartbeat")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventCrfLockProbeDto.class)))
+    public ResponseEntity<?> heartbeat(@PathVariable("id") int eventCrfId,
+                                       HttpSession session) {
+        ResponseEntity<?> guard = guardEventCrfAccess(eventCrfId, session);
+        if (guard != null) return guard;
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+
+        EventCrfPresenceRegistry.PresenceEntry freshest = presenceRegistry.heartbeat(
+                eventCrfId, currentUser.getId(),
+                currentUser.getName() != null ? currentUser.getName() : "");
+        boolean sameUser = freshest.userId() == currentUser.getId();
+        return ResponseEntity.ok(new EventCrfLockProbeDto(
+                String.valueOf(eventCrfId),
+                sameUser,
+                freshest.userName(),
+                freshest.lastSeenAt().truncatedTo(ChronoUnit.SECONDS).toString(),
+                EventCrfPresenceRegistry.TTL_SECONDS));
+    }
+
+    /**
+     * Phase E.6 — per-item discrepancy roll-up. The SPA renders the
+     * {@code ItemNoteIndicator} chip on each item with at least one
+     * parent note attached. The popover lazily loads the full thread
+     * via {@code GET /pages/api/v1/discrepancies?…} when the user
+     * clicks the chip — this endpoint returns only the summary
+     * needed for badge counts + tooltips.
+     */
+    @GetMapping("/{id:[0-9]+}/notes")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventCrfNotesRollupDto.class)))
+    public ResponseEntity<?> notesRollup(@PathVariable("id") int eventCrfId,
+                                         HttpSession session) {
+        ResponseEntity<?> guard = guardEventCrfAccess(eventCrfId, session);
+        if (guard != null) return guard;
+
+        DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
+        dnDao.setFetchMapping(true);
+        @SuppressWarnings("unchecked")
+        List<DiscrepancyNoteBean> notes = dnDao.findAllParentItemNotesByEventCRF(eventCrfId);
+        if (notes == null) notes = new ArrayList<>();
+
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        Map<Integer, String> oidByItemId = new HashMap<>();
+        // entityId on a parent note is the item_data id; resolve back to item_oid.
+        Map<String, Integer> openByOid = new HashMap<>();
+        Map<String, Integer> totalByOid = new HashMap<>();
+        Map<String, Instant> latestByOid = new HashMap<>();
+        Map<String, List<String>> noteIdsByOid = new HashMap<>();
+        int totalCount = 0;
+        int openCount = 0;
+        for (DiscrepancyNoteBean n : notes) {
+            if (n == null || n.getId() == 0) continue;
+            totalCount++;
+            boolean isOpen = isOpenStatus(n.getResolutionStatusId());
+            if (isOpen) openCount++;
+            String itemOid = resolveItemOidForParentNote(n, idDAO, itemDAO, oidByItemId);
+            if (itemOid == null || itemOid.isBlank()) continue;
+            totalByOid.merge(itemOid, 1, Integer::sum);
+            if (isOpen) openByOid.merge(itemOid, 1, Integer::sum);
+            Instant when = latestActivityInstant(n);
+            latestByOid.merge(itemOid, when, (a, b) -> a.isAfter(b) ? a : b);
+            noteIdsByOid.computeIfAbsent(itemOid, k -> new ArrayList<>())
+                    .add(String.valueOf(n.getId()));
+        }
+
+        Map<String, EventCrfNotesRollupDto.ItemNoteSummary> byItem = new LinkedHashMap<>();
+        for (String oid : totalByOid.keySet()) {
+            int t = totalByOid.getOrDefault(oid, 0);
+            int o = openByOid.getOrDefault(oid, 0);
+            Instant ts = latestByOid.get(oid);
+            byItem.put(oid, new EventCrfNotesRollupDto.ItemNoteSummary(
+                    t, o,
+                    o > 0 ? "open" : "resolved",
+                    ts != null ? ts.truncatedTo(ChronoUnit.SECONDS).toString() : null,
+                    noteIdsByOid.getOrDefault(oid, List.of())));
+        }
+
+        return ResponseEntity.ok(new EventCrfNotesRollupDto(
+                String.valueOf(eventCrfId), totalCount, openCount, byItem));
+    }
+
+    /**
+     * Phase E.6 — per-section TOC roll-up.
+     *
+     * <p>For each section in the event_crf's CRF version, count
+     * (required, filled-required, error, open-queries). The error
+     * count is currently 0 in this first cut — server-side typed
+     * validation runs at save time; the SPA's client-side validator
+     * already covers the entry-time guidance. A future revision can
+     * extend this to surface persisted invalid-because-rules state.
+     */
+    @GetMapping("/{id:[0-9]+}/section-status")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array", implementation = SectionStatusDto.class)))
+    public ResponseEntity<?> sectionStatus(@PathVariable("id") int eventCrfId,
+                                           HttpSession session) {
+        ResponseEntity<?> guard = guardEventCrfAccess(eventCrfId, session);
+        if (guard != null) return guard;
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        CRFVersionDAO crfvDAO = new CRFVersionDAO(dataSource);
+        CRFVersionBean crfv = (CRFVersionBean) crfvDAO.findByPK(ecb.getCRFVersionId());
+        if (crfv == null || crfv.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "event_crf " + eventCrfId + " references missing crf_version"));
+        }
+
+        // Pre-fetch item-form-metadata so we know which items are required.
+        ItemFormMetadataDAO ifmDAO = new ItemFormMetadataDAO(dataSource);
+        Map<Integer, Boolean> requiredByItemId = new HashMap<>();
+        try {
+            List<ItemFormMetadataBean> allIfms = ifmDAO.findAllByCRFVersionId(crfv.getId());
+            for (ItemFormMetadataBean ifm : allIfms) {
+                requiredByItemId.put(ifm.getItemId(), ifm.isRequired());
+            }
+        } catch (Exception ifmEx) {
+            LOG.error("section-status: failed to load IFMs for crf_version {}", crfv.getId(), ifmEx);
+            return ResponseEntity.internalServerError().body(Map.of("message",
+                    "Schema load failed: " + ifmEx.getMessage()));
+        }
+
+        // Walk the discrepancy notes once and bucket them by section.
+        DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
+        dnDao.setFetchMapping(true);
+        @SuppressWarnings("unchecked")
+        List<DiscrepancyNoteBean> notes = dnDao.findAllParentItemNotesByEventCRF(eventCrfId);
+        if (notes == null) notes = new ArrayList<>();
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+
+        // Resolve each note's section_id via item_data → item → item.section_id.
+        // Cache item lookups so a section's notes share the work.
+        Map<Integer, Integer> sectionIdByItemDataId = new HashMap<>();
+        Map<Integer, Boolean> openByNoteId = new HashMap<>();
+        for (DiscrepancyNoteBean n : notes) {
+            if (n == null || n.getId() == 0) continue;
+            if (!"itemData".equalsIgnoreCase(n.getEntityType())) continue;
+            int idbId = n.getEntityId();
+            if (idbId <= 0) continue;
+            Integer secId = sectionIdByItemDataId.get(idbId);
+            if (secId == null) {
+                ItemDataBean idb = (ItemDataBean) idDAO.findByPK(idbId);
+                if (idb == null || idb.getId() == 0) continue;
+                ItemBean item = (ItemBean) itemDAO.findByPK(idb.getItemId());
+                if (item == null || item.getId() == 0) continue;
+                // Item bean's section_id isn't a direct column on the
+                // legacy schema; item-form-metadata carries it. Fall
+                // through with -1 if no IFM row exists (defensive).
+                ItemFormMetadataBean ifm = findIfmForItem(item.getId(), crfv.getId(), ifmDAO);
+                secId = (ifm != null ? ifm.getSectionId() : -1);
+                sectionIdByItemDataId.put(idbId, secId);
+            }
+            openByNoteId.put(n.getId(), isOpenStatus(n.getResolutionStatusId()));
+        }
+
+        List<SectionStatusDto> out = new ArrayList<>();
+        SectionDAO sectionDAO = new SectionDAO(dataSource);
+        List<SectionBean> sections = sectionDAO.findAllByCRFVersionId(crfv.getId());
+        sections.sort(Comparator.comparingInt(SectionBean::getOrdinal));
+        for (SectionBean sb : sections) {
+            int requiredCount = 0;
+            int filledCount = 0;
+            // Iterate items in this section.
+            List<ItemBean> items = itemDAO.findAllBySectionIdOrderedByItemFormMetadataOrdinal(sb.getId());
+            Set<Integer> requiredItemIds = new HashSet<>();
+            for (ItemBean ib : items) {
+                if (Boolean.TRUE.equals(requiredByItemId.get(ib.getId()))) {
+                    requiredCount++;
+                    requiredItemIds.add(ib.getId());
+                }
+            }
+            // Resolve which required items have a non-blank persisted value.
+            List<ItemDataBean> dataRows = idDAO.findAllBySectionIdAndEventCRFId(sb.getId(), ecb.getId());
+            for (ItemDataBean idb : dataRows) {
+                if (idb == null) continue;
+                if (!requiredItemIds.contains(idb.getItemId())) continue;
+                String v = idb.getValue();
+                if (v != null && !v.isBlank()) filledCount++;
+            }
+            // Open-queries: count notes that landed in this section.
+            int openQueries = 0;
+            for (DiscrepancyNoteBean n : notes) {
+                if (n == null || n.getId() == 0) continue;
+                if (!"itemData".equalsIgnoreCase(n.getEntityType())) continue;
+                Integer secId = sectionIdByItemDataId.get(n.getEntityId());
+                if (secId == null || secId != sb.getId()) continue;
+                if (Boolean.TRUE.equals(openByNoteId.get(n.getId()))) openQueries++;
+            }
+
+            out.add(new SectionStatusDto(
+                    sb.getLabel(),
+                    blankToNull(sb.getTitle(), sb.getLabel()),
+                    requiredCount,
+                    filledCount,
+                    /* errorCount */ 0,
+                    openQueries));
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /* ----- Phase E.6 helpers ------------------------------------------------ */
+
+    /**
+     * Centralised guard: 401 if no user, 400 if no active study, 404
+     * if no event_crf, 403 if the event_crf belongs to a different
+     * study. Mirrors the inline guards in {@link #getEventCrf} but
+     * pulled out so the four new endpoints stay terse.
+     *
+     * @return non-null {@link ResponseEntity} when the request must
+     *         be rejected; {@code null} when the caller may proceed
+     */
+    private ResponseEntity<?> guardEventCrfAccess(int eventCrfId, HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session — POST /pages/api/v1/me/activeStudy first."
+            ));
+        }
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = ecDao.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (ss == null || !visibleStudyIds.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        return null;
+    }
+
+    private static boolean isOpenStatus(int resolutionStatusId) {
+        // 1=new, 2=updated, 3=resolution-proposed are "open"; 4=closed,
+        // 5=not-applicable are "resolved" (per the SPA's
+        // resolutionStatus union).
+        return resolutionStatusId == ResolutionStatus.OPEN.getId()
+                || resolutionStatusId == ResolutionStatus.UPDATED.getId()
+                || resolutionStatusId == ResolutionStatus.RESOLVED.getId();
+    }
+
+    private static Instant latestActivityInstant(DiscrepancyNoteBean n) {
+        Date updated = n.getUpdatedDate();
+        Date created = n.getCreatedDate();
+        Date pick = (updated != null) ? updated : created;
+        if (pick != null) return pick.toInstant();
+        // Final fallback: derive from getDays() (set by the legacy DAO).
+        int days = n.getDays() == null ? 0 : Math.max(n.getDays(), 0);
+        return Instant.now().minus(days, ChronoUnit.DAYS);
+    }
+
+    private String resolveItemOidForParentNote(DiscrepancyNoteBean note,
+                                               ItemDataDAO idDAO, ItemDAO itemDAO,
+                                               Map<Integer, String> oidByItemId) {
+        if (!"itemData".equalsIgnoreCase(note.getEntityType())) return null;
+        int idbId = note.getEntityId();
+        if (idbId <= 0) return null;
+        ItemDataBean idb = (ItemDataBean) idDAO.findByPK(idbId);
+        if (idb == null || idb.getId() == 0) return null;
+        String cached = oidByItemId.get(idb.getItemId());
+        if (cached != null) return cached;
+        ItemBean item = (ItemBean) itemDAO.findByPK(idb.getItemId());
+        if (item == null || item.getOid() == null) return null;
+        oidByItemId.put(idb.getItemId(), item.getOid());
+        return item.getOid();
+    }
+
+    private static ItemFormMetadataBean findIfmForItem(int itemId, int crfVersionId,
+                                                       ItemFormMetadataDAO ifmDAO) {
+        try {
+            List<ItemFormMetadataBean> all = ifmDAO.findAllByCRFVersionId(crfVersionId);
+            for (ItemFormMetadataBean ifm : all) {
+                if (ifm.getItemId() == itemId) return ifm;
+            }
+        } catch (Exception ignored) {
+            // best-effort
+        }
+        return null;
     }
 
     /**
