@@ -92,6 +92,7 @@
     "back": "Back",
     "next": "Next",
     "remove": "Remove",
+    "removing": "Removing…",
     "search": "Search",
     "filter": "Filter",
     "clear": "Clear",
@@ -1644,6 +1645,8 @@
     "flagsTitle": "Inclusion flags",
     "filtersTitle": "Filters",
     "filtersBlurb": "Restrict the exported rows by subject, event status, or item value.",
+    "filtersPlaceholderTitle": "Filters land in Phase 3.",
+    "filtersPlaceholderBlurb": "The Phase 3 ticket adds subject filters, event-status filters, and per-item value filters. Until then the dataset exports every row matching the scope you selected on step 1.",
     "reviewTitle": "Review",
     "reviewBlurb": "Double-check the definition before saving. You can return to any earlier step from the stepper above.",
     "steps": {
