@@ -129,7 +129,12 @@
       "not-scheduled": "Nicht geplant",
       "scheduled": "Geplant",
       "in-progress": "In Bearbeitung",
+      "data-entry-started": "In Bearbeitung",
       "complete": "Abgeschlossen",
+      "completed": "Abgeschlossen",
+      "stopped": "Abgebrochen",
+      "skipped": "Übersprungen",
+      "not-started": "Nicht begonnen",
       "signed": "Signiert",
       "locked": "Gesperrt"
     },
