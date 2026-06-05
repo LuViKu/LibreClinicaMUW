@@ -1,0 +1,57 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 (2026-06-03 evening): re-do of
+        2026-06-03-dedupe-root-active-bindings in
+        lc-muw-2026-06-02-seed-demo-test-users.xml. The original
+        preCondition used (COUNT(*) > 1)::text which Postgres renders
+        as the FULL word 'true' / 'false', NOT the single-char
+        't' / 'f'; the expectedResult="t" therefore never matched and
+        the changeset was MARK_RAN without ever executing the dedupe.
+
+        That left dev compose instances with 2× root admin bindings
+        on Default Study, and any updateRole call hit both rows
+        simultaneously (existing latent bug in updateStudyUserRole's
+        WHERE clause — see follow-up).
+
+        Same idempotent dedupe logic, this time with a preCondition
+        Postgres will actually evaluate correctly. Picks one ctid via
+        MIN and retires the rest by flipping status_id → 7
+        (AUTO-DELETED). Runs only when more than one active root
+        binding actually exists on study_id=1.
+    -->
+    <changeSet id="2026-06-03-redo-dedupe-root-active-bindings"
+               author="muw-ophthalmology"
+               context="demo"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="true">
+                SELECT (COUNT(*) > 1)::text FROM study_user_role
+                WHERE user_name = 'root' AND study_id = 1 AND status_id = 1;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Retire root's surplus active bindings on Default Study so a
+            single row survives.
+        </comment>
+        <sql>
+            UPDATE study_user_role
+               SET status_id = 7
+             WHERE user_name = 'root'
+               AND study_id  = 1
+               AND status_id = 1
+               AND ctid &lt;&gt; (
+                   SELECT MIN(ctid) FROM study_user_role
+                    WHERE user_name = 'root'
+                      AND study_id  = 1
+                      AND status_id = 1
+               );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

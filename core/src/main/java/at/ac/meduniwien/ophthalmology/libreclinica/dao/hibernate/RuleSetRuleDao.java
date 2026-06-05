@@ -147,8 +147,11 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
     }
 
     // TODO update to CriteriaQuery 
-    @SuppressWarnings("unchecked")
-	public int getCountByStudy(StudyBean study) {
+    public int getCountByStudy(StudyBean study) {
+        // Phase E.6 (2026-06-04): Hibernate 5.6 on jakarta-namespaced
+        // jdbc returns COUNT(*) on Postgres as java.lang.Long — not
+        // BigInteger like the legacy mappings assumed. Bind via Number
+        // so either type works; the caller only needs intValue().
         String query =
             "select COUNT(*) from rule_set_rule rsr " + " join rule_set rs on rs.id = rsr.rule_set_id "
                 + " left outer join study_event_definition sed on rs.study_event_definition_id = sed.study_event_definition_id "
@@ -157,8 +160,14 @@ public class RuleSetRuleDao extends AbstractDomainDao<RuleSetRuleBean> {
                 + " join rule_expression re on rs.rule_expression_id = re.id " + " join rule r on r.id = rsr.rule_id "
                 + " join rule_expression rer on r.rule_expression_id = rer.id " + " join rule_action ra on ra.rule_set_rule_id = rsr.id " + " where rs.study_id = " + study.getId() + "  AND  rsr.status_id = 1";
 
-        NativeQuery<BigInteger> q = getCurrentSession().createNativeQuery(query);
-        return q.uniqueResult().intValue();
+        // Pass Object.class — Hibernate can't instantiate abstract
+        // Number directly. The Postgres driver returns whichever
+        // numeric type its COUNT(*) decoder picks (Long on jakarta
+        // / Hibernate 5.6; BigInteger on older drivers). Both
+        // implement Number, so the cast below works either way.
+        NativeQuery<Object> q = getCurrentSession().createNativeQuery(query, Object.class);
+        Object result = q.uniqueResult();
+        return result instanceof Number n ? n.intValue() : 0;
     }
 
 

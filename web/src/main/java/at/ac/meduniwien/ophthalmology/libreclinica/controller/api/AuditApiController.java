@@ -115,7 +115,7 @@ public class AuditApiController {
     private static final String STUDY_SCOPED_AUDIT_SQL_TEMPLATE = """
             SELECT
               a.audit_id, a.audit_date, a.audit_table, a.entity_id,
-              a.reason_for_change, a.audit_log_event_type_id,
+              a.entity_name, a.reason_for_change, a.audit_log_event_type_id,
               a.old_value, a.new_value, a.event_crf_id, a.study_event_id,
               a.user_id, ua.user_name, alet.name AS type_name,
               alet.display_name AS type_display_name
@@ -143,6 +143,13 @@ public class AuditApiController {
                   SELECT se.study_event_id FROM study_event se
                     JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id
                   WHERE ss.study_id IN __IN__))
+              -- Phase E.6 (2026-06-03): include study-identity edits.
+              -- StudiesApiController.writeStudyFieldAudit emits rows
+              -- with audit_table='study' and entity_id=study_id when
+              -- an admin edits the name, sponsor, PI, etc. The SPA
+              -- Audit Log was missing those entirely until this branch
+              -- joined them in.
+              OR ( a.audit_table = 'study' AND a.entity_id IN __IN__)
             ORDER BY a.audit_date DESC, a.audit_id DESC
             LIMIT 500
             """;
@@ -180,7 +187,7 @@ public class AuditApiController {
 
         // A4 — per-site visibility. The audit SQL embeds the visible
         // ids as a parameterised IN clause (one of {n placeholders}
-        // per audit_table branch, five branches → 5n binds total). An
+        // per audit_table branch, six branches → 6n binds total). An
         // empty visible set would build an invalid `IN ()` clause; we
         // fall back to the bare currentStudy.id in that defensive
         // case so the endpoint still produces a result.
@@ -204,9 +211,11 @@ public class AuditApiController {
         List<AuditEventDto> out = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            // 5 IN clauses × n ids each.
+            // 6 IN clauses × n ids each (item_data, event_crf,
+            // study_subject, subject, study_event, study — the last
+            // one added Phase E.6 / 2026-06-03 for identity edits).
             int bindIdx = 1;
-            for (int branch = 0; branch < 5; branch++) {
+            for (int branch = 0; branch < 6; branch++) {
                 for (Integer sid : visibleStudyIds) {
                     ps.setInt(bindIdx++, sid);
                 }
@@ -217,6 +226,7 @@ public class AuditApiController {
                     Timestamp ts = rs.getTimestamp("audit_date");
                     String auditTable = rs.getString("audit_table");
                     int entityId = rs.getInt("entity_id");
+                    String entityName = rs.getString("entity_name");
                     int eventCrfId = rs.getInt("event_crf_id");
                     int typeId = rs.getInt("audit_log_event_type_id");
                     String oldVal = rs.getString("old_value");
@@ -268,6 +278,20 @@ public class AuditApiController {
                     String prettyOld = prettifyValue(auditTable, typeName, oldVal);
                     String prettyNew = prettifyValue(auditTable, typeName, newVal);
 
+                    // Phase E.6 (2026-06-03): for study-identity edits (and
+                    // user-profile edits — type 50, written via
+                    // MeApiController.emitProfileAudit) the row's entity_name
+                    // holds the column key that changed. Surface it as
+                    // `details` so operators can tell at a glance whether
+                    // "name", "sponsor", "principalInvestigator" etc. changed
+                    // without having to compare the before/after strings.
+                    String details = null;
+                    if (("study".equalsIgnoreCase(auditTable)
+                            || "user_account".equalsIgnoreCase(auditTable))
+                            && entityName != null && !entityName.isBlank()) {
+                        details = entityName;
+                    }
+
                     out.add(new AuditEventDto(
                             String.valueOf(auditId),
                             occurredAt,
@@ -277,7 +301,7 @@ public class AuditApiController {
                             title,
                             subjectLabel,
                             scope,
-                            /* details */ null,
+                            details,
                             blankToNull(prettyOld),
                             blankToNull(prettyNew),
                             blankToNull(reason)));
@@ -310,8 +334,13 @@ public class AuditApiController {
             // in audit_log_event.{old_value,new_value} by the
             // subject_group_map trigger).
             case 28, 29 -> "subject-group-change";
-            // Subject / study-subject / EDC lifecycle.
-            case 2, 3, 4, 5, 6, 7, 9, 27, 33 -> "admin";
+            // Subject / study-subject / EDC lifecycle, plus user-profile
+            // (50, Phase E.5 follow-up) and study-identity (51, Phase E.6)
+            // edits — all administrative actions surface under the
+            // existing "Admin" filter rather than the data-stream
+            // bucket so operators reviewing the audit trail can pivot
+            // by intent.
+            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51 -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,

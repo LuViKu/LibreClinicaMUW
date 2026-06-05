@@ -10,7 +10,12 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.DelegatingAuthenticationEntryPoint;
+import org.springframework.security.web.authentication.HttpStatusEntryPoint;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+
+import java.util.LinkedHashMap;
 import org.springframework.security.web.authentication.logout.LogoutSuccessHandler;
 import org.springframework.security.web.authentication.preauth.PreAuthenticatedAuthenticationProvider;
 import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
@@ -90,9 +95,25 @@ public class SecurityConfig {
             // local-password and SSO pre-auth paths.
             LoginAuditService loginAuditService) throws Exception {
 
+        // Phase E.6 (2026-06-03) — SPA-vs-legacy entry-point split.
+        // The legacy form-login entry point at /pages/login/login emits
+        // a 302 redirect for unauthenticated requests, which breaks the
+        // SPA: on a full page reload, auth.bootstrap() calls
+        // /pages/api/v1/me, follows the redirect to /pages/login/login,
+        // gets HTML, can't parse it, falls through to anonymous and
+        // bounces to /app/login. The fix is to return a clean 401 for
+        // /pages/api/** (SPA channel) while keeping the 302 redirect
+        // for every other unauthenticated request (legacy JSP channel).
+        LinkedHashMap<RequestMatcher, AuthenticationEntryPoint> entryPoints = new LinkedHashMap<>();
+        entryPoints.put(new AntPathRequestMatcher("/pages/api/**"),
+                new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED));
+        DelegatingAuthenticationEntryPoint splitEntryPoint =
+                new DelegatingAuthenticationEntryPoint(entryPoints);
+        splitEntryPoint.setDefaultEntryPoint(authenticationEntryPoint);
+
         http
             .securityContext(sc -> sc.securityContextRepository(securityContextRepository))
-            .exceptionHandling(eh -> eh.authenticationEntryPoint(authenticationEntryPoint))
+            .exceptionHandling(eh -> eh.authenticationEntryPoint(splitEntryPoint))
             .csrf(csrf -> csrf.disable())
             .anonymous(anon -> {})
             .sessionManagement(sm -> sm.sessionAuthenticationStrategy(sas))

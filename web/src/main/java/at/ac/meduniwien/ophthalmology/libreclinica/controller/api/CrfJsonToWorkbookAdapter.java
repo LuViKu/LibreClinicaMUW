@@ -147,6 +147,13 @@ public class CrfJsonToWorkbookAdapter {
         writeSectionsSheet(wb, request);
         writeGroupsSheet(wb, request);
         writeItemsSheet(wb, request);
+        // Phase E.6 (2026-06-05): repeating parser reads
+        // wb.getSheetAt(4).getRow(1).getCell(0) for the version number
+        // (SpreadSheetTableRepeating.java:191). The canonical XLS
+        // template carries this in an "Instructions" sheet. Emit a
+        // minimal placeholder so the parser's getSheetAt(4) doesn't
+        // IndexOutOfBoundsException.
+        writeInstructionsSheet(wb, request);
 
         Path target = createTempWorkbookFile();
         try (OutputStream out = Files.newOutputStream(target)) {
@@ -221,6 +228,25 @@ public class CrfJsonToWorkbookAdapter {
         setStringCell(header, 3, "GROUP_REPEAT_NUMBER");
         setStringCell(header, 4, "GROUP_REPEAT_MAX");
         setStringCell(header, 5, "GROUP_DISPLAY_STATUS");
+    }
+
+    /**
+     * Phase E.6 (2026-06-05): the legacy repeating parser
+     * ({@link at.ac.meduniwien.ophthalmology.libreclinica.control.admin.SpreadSheetTableRepeating#toNewCRF})
+     * reads {@code wb.getSheetAt(4).getRow(1).getCell(0)} for the
+     * version number — that's the "Instructions" sheet position in the
+     * canonical XLS template. The JSON adapter previously emitted only
+     * 4 sheets (CRF, Sections, Groups, Items), so the parser tripped
+     * IndexOutOfBoundsException on every authoring attempt. Emit a
+     * minimal Instructions sheet whose row 1 column 0 carries the
+     * version name (parser uses it as a debug-info fallback only).
+     */
+    private void writeInstructionsSheet(HSSFWorkbook wb, CrfVersionAuthoringRequest request) {
+        HSSFSheet sheet = wb.createSheet("Instructions");
+        HSSFRow header = sheet.createRow(0);
+        setStringCell(header, 0, "INSTRUCTIONS");
+        HSSFRow data = sheet.createRow(1);
+        setStringCell(data, 0, nullSafe(request.versionName()));
     }
 
     private void writeItemsSheet(HSSFWorkbook wb, CrfVersionAuthoringRequest request) {

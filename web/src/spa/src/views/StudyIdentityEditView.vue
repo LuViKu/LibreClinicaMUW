@@ -10,6 +10,7 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
 import { apiGet } from '@/api/client'
+import { useAuthStore } from '@/stores/auth'
 import { useStudyStore } from '@/stores/study'
 import type { StudyIdentity } from '@/types/study'
 
@@ -37,6 +38,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const studies = useStudyStore()
+const auth = useAuthStore()
 
 const oid = computed(() => String(route.params.oid))
 
@@ -66,19 +68,30 @@ const formError = ref<string | null>(null)
 const isLoading = ref(false)
 const isSubmitting = ref(false)
 const loadError = ref<string | null>(null)
+const savedAt = ref<number | null>(null)
 
 onMounted(async () => {
   isLoading.value = true
   try {
-    // The dashboard already exposes name + identifier — those are
-    // enough to seed the form's identity fields. The remaining
-    // protocol fields stay blank; the operator can fill anything
-    // they want to change and leave the rest untouched (the backend
-    // treats undefined as "leave unchanged").
-    const dash = await apiGet<{ studyName: string }>(
-      `/pages/api/v1/studies/${encodeURIComponent(oid.value)}/build-status`,
+    // Phase E.6 (2026-06-03): load the full StudyIdentityDto so every
+    // field can be pre-populated. Previously this view only loaded
+    // the name from the build-status dashboard and left every other
+    // field blank — combined with the PUT endpoint treating blanks
+    // as "leave unchanged", that meant operators who hit Save without
+    // re-typing every field had ALL of those fields silently dropped.
+    const identity = await apiGet<StudyIdentity>(
+      `/pages/api/v1/studies/${encodeURIComponent(oid.value)}`,
     )
-    form.value.name = dash.studyName ?? ''
+    form.value = {
+      name: identity.name ?? '',
+      briefSummary: identity.briefSummary ?? '',
+      principalInvestigator: identity.principalInvestigator ?? '',
+      sponsor: identity.sponsor ?? '',
+      officialTitle: identity.officialTitle ?? '',
+      secondaryProtocolId: identity.secondaryProtocolId ?? '',
+      protocolType: identity.protocolType ?? '',
+      phase: identity.phase ?? '',
+    }
   } catch (e) {
     loadError.value = e instanceof Error ? e.message : 'Unknown error'
   } finally {
@@ -89,18 +102,33 @@ onMounted(async () => {
 async function submit() {
   fieldErrors.value = {}
   formError.value = null
+  savedAt.value = null
   isSubmitting.value = true
   try {
-    // Only forward non-blank fields — blanks mean "leave unchanged"
-    // (mirrors the backend's null-vs-string semantics).
+    // Phase E.6: send EVERY field, not just non-blank ones. The form
+    // is now fully pre-populated from the GET so blanking a field
+    // means "clear it", not "leave unchanged". The backend trims and
+    // accepts empty strings on the optional fields.
     const patch: Record<string, string> = {}
     for (const key of Object.keys(form.value) as (keyof Form)[]) {
-      const v = (form.value[key] as string).trim()
-      if (v !== '') patch[key] = v
+      patch[key] = (form.value[key] as string).trim()
     }
     const result = await studies.update(oid.value, patch as Partial<StudyIdentity>)
     if (result.ok) {
-      router.push('/build-study')
+      savedAt.value = Date.now()
+      // Phase E.6: header breadcrumb derives from auth.user.activeStudy.
+      // After a successful save we rehydrate /me so the top bar reflects
+      // the new study name (and any other identity bits) without forcing
+      // a hard refresh.
+      if (auth.user?.activeStudy?.oid === oid.value) {
+        void auth.bootstrap()
+      }
+      // Drop the "saved" banner after 4 seconds; user stays on the view.
+      setTimeout(() => {
+        if (savedAt.value !== null && Date.now() - savedAt.value >= 3500) {
+          savedAt.value = null
+        }
+      }, 4000)
     } else {
       fieldErrors.value = result.fieldErrors
       formError.value = result.message ?? null
@@ -135,10 +163,22 @@ function cancel() {
 
       <p class="text-sm text-slate-700 mb-5">{{ t('studyForm.edit.intro') }}</p>
 
+      <!-- Phase E.6: inline success banner — stays for ~4s after a clean save. -->
+      <div
+        v-if="savedAt !== null"
+        class="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900 mb-4 flex items-center gap-2"
+        role="status"
+      >
+        <svg class="h-3.5 w-3.5 text-emerald-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.7-9.3a1 1 0 00-1.4-1.4L9 10.6 7.7 9.3a1 1 0 10-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clip-rule="evenodd" />
+        </svg>
+        <span>{{ t('studyForm.edit.saved') }}</span>
+      </div>
+
       <div class="space-y-4">
         <div class="grid grid-cols-2 gap-3">
           <div class="col-span-2">
-            <FieldLabel for="study-name">{{ t('studyForm.name') }}</FieldLabel>
+            <FieldLabel for="study-name" required>{{ t('studyForm.name') }}</FieldLabel>
             <TextInput id="study-name" v-model="form.name" />
             <ErrorText v-if="fieldErrors.name">{{ fieldErrors.name }}</ErrorText>
           </div>
@@ -151,17 +191,17 @@ function cancel() {
             <TextInput id="study-phase" v-model="form.phase" />
           </div>
           <div class="col-span-2">
-            <FieldLabel for="study-summary">{{ t('studyForm.briefSummary') }}</FieldLabel>
+            <FieldLabel for="study-summary" required>{{ t('studyForm.briefSummary') }}</FieldLabel>
             <TextInput id="study-summary" v-model="form.briefSummary" />
             <ErrorText v-if="fieldErrors.briefSummary">{{ fieldErrors.briefSummary }}</ErrorText>
           </div>
           <div>
-            <FieldLabel for="study-pi">{{ t('studyForm.principalInvestigator') }}</FieldLabel>
+            <FieldLabel for="study-pi" required>{{ t('studyForm.principalInvestigator') }}</FieldLabel>
             <TextInput id="study-pi" v-model="form.principalInvestigator" />
             <ErrorText v-if="fieldErrors.principalInvestigator">{{ fieldErrors.principalInvestigator }}</ErrorText>
           </div>
           <div>
-            <FieldLabel for="study-sponsor">{{ t('studyForm.sponsor') }}</FieldLabel>
+            <FieldLabel for="study-sponsor" required>{{ t('studyForm.sponsor') }}</FieldLabel>
             <TextInput id="study-sponsor" v-model="form.sponsor" />
             <ErrorText v-if="fieldErrors.sponsor">{{ fieldErrors.sponsor }}</ErrorText>
           </div>

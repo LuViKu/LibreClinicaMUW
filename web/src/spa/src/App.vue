@@ -10,8 +10,14 @@ const router = useRouter()
 const auth = useAuthStore()
 const { t } = useI18n()
 
-function logout() {
-  auth.logout()
+async function logout() {
+  // Await the store action so state flips to 'anonymous' BEFORE the
+  // router navigation fires — otherwise the global guard's
+  // /login branch (`return auth.isAnonymous ? true : { name: 'home' }`)
+  // still sees state='authenticated' and refuses the redirect.
+  // Symptom before this fix: clicking the top-bar logout button
+  // appeared to do nothing until the user manually refreshed.
+  await auth.logout()
   router.push({ name: 'login' })
 }
 

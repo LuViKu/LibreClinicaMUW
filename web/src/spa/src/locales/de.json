@@ -60,6 +60,8 @@
       "rulesDesc": "Validierungs- und Workflow-Regeln zu Event-CRFs."
     },
     "administrator": {
+      "globalSectionLabel": "Plattformweite Aktionen",
+      "studyScopedLabel": "In {study}",
       "sectionLabel": "Arbeitsabläufe Administrator/-in",
       "manageUsersDesc": "Nutzerkonten, Rollenzuweisungen je Studie, offene Einladungen, Passwort-Rücksetzung.",
       "pendingInvitesBadgeAria": "{n} offene Einladungen",
@@ -834,8 +836,9 @@
     "edit": {
       "title": "Studien-Identität bearbeiten",
       "subTrail": "Studienaufbau",
-      "intro": "Lassen Sie ein Feld leer, um den aktuellen Wert beizubehalten. Jede Änderung erzeugt einen Audit-Trail-Eintrag mit alt + neu.",
+      "intro": "Pflichtfelder sind mit einem Sternchen markiert. Jede Änderung erzeugt einen Audit-Trail-Eintrag mit altem und neuem Wert.",
       "submit": "Änderungen speichern",
+      "saved": "Gespeichert. Die Änderungen sind plattformweit übernommen.",
       "leaveUnchanged": "— Unverändert lassen —"
     }
   },
@@ -886,9 +889,22 @@
       "submit": "Anlegen",
       "studyMissing": "Wählen Sie zuerst eine aktive Studie, bevor Sie eine/n Nutzer/in einladen.",
       "emailNotWiredNote": "E-Mail-Versand ist noch nicht verdrahtet — kopieren Sie das Einmal-Passwort und übermitteln Sie es über einen sicheren Kanal.",
+      "ssoNotWiredNote": "Es wird kein Passwort erzeugt. Nach dem Anlegen meldet sich die/der Nutzer/in über das institutionelle SSO-Portal an — stellen Sie sicher, dass die institutionelle Identität beim IdP eingerichtet ist.",
       "successIntro": "Nutzer/in angelegt. Übergeben Sie dieses Einmal-Passwort der/dem neuen Nutzer/in; bei der ersten Anmeldung muss es geändert werden.",
+      "ssoSuccessIntro": "Nutzer/in angelegt. Die Anmeldung erfolgt über das institutionelle SSO-Portal — kein Passwort erforderlich.",
+      "ssoSuccessHint": "Stellen Sie sicher, dass die institutionelle Identität beim IdP eingerichtet ist, bevor die/der Nutzer/in sich anmeldet.",
       "copyPassword": "Kopieren",
-      "firstLoginNote": "Das Passwort wird einmal angezeigt und nicht gespeichert. Bitte vor dem Schließen sichern."
+      "firstLoginNote": "Das Passwort wird einmal angezeigt und nicht gespeichert. Bitte vor dem Schließen sichern.",
+      "authMethod": {
+        "label": "Anmeldemethode",
+        "local": "Lokales Passwort",
+        "localHelp": "Nach dem Anlegen wird ein Einmal-Passwort generiert und einmalig angezeigt.",
+        "sso": "Institutionelles SSO",
+        "ssoHelp": "Die Anmeldung erfolgt über den institutionellen Identitätsanbieter. Es wird kein Passwort erzeugt."
+      },
+      "externalId": "Institutioneller Principal (eppn)",
+      "externalIdPlaceholder": "user{'@'}meduniwien.ac.at",
+      "externalIdHelp": "Groß-/Kleinschreibung beachten. Muss exakt mit dem Principal übereinstimmen, den der IdP im Header eduPersonPrincipalName liefert."
     },
     "edit": {
       "title": "Profil bearbeiten",
@@ -1036,6 +1052,7 @@
     "username": "Benutzername",
     "password": "Passwort",
     "signInLocal": "Lokal anmelden",
+    "signingInLocal": "Wird angemeldet…",
     "localPurpose": "Für Sponsor-Monitore, externes Personal und Notfallzugänge ohne institutionelle Identität.",
     "devShortcuts": "Dev-Rollenwechsel (Mock-Identität)",
     "terms": "AGB",

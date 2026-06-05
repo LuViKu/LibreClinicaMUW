@@ -111,8 +111,11 @@ onMounted(() => {
   const inflight: Array<Promise<unknown>> = []
   if (showMonitor.value || showDataManager.value) {
     inflight.push(sdv.load())
-    inflight.push(notes.load())
     inflight.push(rules.load())
+  }
+  // Notes is cross-role (Monitor + DM + Administrator all surface it).
+  if (showMonitor.value || showDataManager.value || showAdministrator.value) {
+    inflight.push(notes.load())
   }
   if (showAdministrator.value || showDataManager.value) {
     inflight.push(users.load())
@@ -124,6 +127,7 @@ onMounted(() => {
 })
 
 const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
+const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
 </script>
 
 <template>
@@ -140,7 +144,7 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
     </p>
 
     <!-- Investigator + CRC landing -->
-    <section v-if="showInvestigator" :aria-label="t('home.investigator.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mb-8">
+    <section v-if="showInvestigator" :aria-label="t('home.investigator.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
       <LandingCard
         :to="{ name: 'subject-matrix' }"
         role-variant="investigator"
@@ -172,7 +176,7 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
     </section>
 
     <!-- Monitor landing -->
-    <section v-if="showMonitor" :aria-label="t('home.monitor.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mb-8">
+    <section v-if="showMonitor" :aria-label="t('home.monitor.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
       <LandingCard
         :to="{ name: 'sdv' }"
         role-variant="monitor"
@@ -210,15 +214,6 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
         :description="t('home.dataManager.buildStudyDesc')"
       />
       <LandingCard
-        :to="{ name: 'manage-users' }"
-        role-variant="data-manager"
-        :role-label="t('home.role.Data Manager')"
-        :title="t('manageUsers.title')"
-        :description="t('home.dataManager.manageUsersDesc')"
-        :badge="pendingInvitesCount"
-        :badge-aria-label="t('home.dataManager.pendingInvitesBadgeAria', { n: pendingInvitesCount ?? 0 })"
-      />
-      <LandingCard
         :to="{ name: 'notes' }"
         role-variant="data-manager"
         :role-label="t('home.role.Data Manager')"
@@ -250,66 +245,115 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
       />
     </section>
 
-    <!-- Administrator-only landing (platform admin: users, study identity, sites, audit log). -->
-    <section v-if="showAdministrator" :aria-label="t('home.administrator.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
-      <LandingCard
-        :to="{ name: 'manage-users' }"
-        role-variant="administrator"
-        :role-label="t('home.role.Administrator')"
-        :title="t('manageUsers.title')"
-        :description="t('home.administrator.manageUsersDesc')"
-        :badge="pendingInvitesCount"
-        :badge-aria-label="t('home.administrator.pendingInvitesBadgeAria', { n: pendingInvitesCount ?? 0 })"
-      />
-      <LandingCard
-        v-if="activeStudyOid"
-        :to="{ name: 'study-edit', params: { oid: activeStudyOid } }"
-        role-variant="administrator"
-        :role-label="t('home.role.Administrator')"
-        :title="t('home.administrator.editStudyTitle')"
-        :description="t('home.administrator.editStudyDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'study-create' }"
-        role-variant="administrator"
-        :role-label="t('home.role.Administrator')"
-        :title="t('home.administrator.createStudyTitle')"
-        :description="t('home.administrator.createStudyDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'sites' }"
-        role-variant="administrator"
-        :role-label="t('home.role.Administrator')"
-        :title="t('home.administrator.sitesTitle')"
-        :description="t('home.administrator.sitesDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'audit-log' }"
-        role-variant="administrator"
-        :role-label="t('home.role.Administrator')"
-        :title="t('auditLog.title')"
-        :description="t('home.administrator.auditLogDesc')"
-      />
-      <LandingCard
-        v-if="canSwitchStudy"
-        :to="{ name: 'pick-study' }"
-        role-variant="administrator"
-        :role-label="t('home.role.Administrator')"
-        :title="t('home.switchStudyTitle')"
-        :description="t('home.switchStudyDesc')"
-      />
-    </section>
+    <!-- Administrator landing — split into two zones so the operator can
+         tell at a glance which actions are platform-wide vs scoped to
+         the currently active study. -->
+    <template v-if="showAdministrator">
+      <!-- Platform-wide actions: cross-study user lifecycle, new-study
+           provisioning, switching the active study. None of these
+           depend on which study is currently bound. -->
+      <section
+        :aria-label="t('home.administrator.globalSectionLabel')"
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-6"
+      >
+        <LandingCard
+          :to="{ name: 'manage-users' }"
+          role-variant="administrator"
+          :role-label="t('home.role.Administrator')"
+          :title="t('manageUsers.title')"
+          :description="t('home.administrator.manageUsersDesc')"
+          :badge="pendingInvitesCount"
+          :badge-aria-label="t('home.administrator.pendingInvitesBadgeAria', { n: pendingInvitesCount ?? 0 })"
+        />
+        <LandingCard
+          :to="{ name: 'study-create' }"
+          role-variant="administrator"
+          :role-label="t('home.role.Administrator')"
+          :title="t('home.administrator.createStudyTitle')"
+          :description="t('home.administrator.createStudyDesc')"
+        />
+        <LandingCard
+          v-if="canSwitchStudy"
+          :to="{ name: 'pick-study' }"
+          role-variant="administrator"
+          :role-label="t('home.role.Administrator')"
+          :title="t('home.switchStudyTitle')"
+          :description="t('home.switchStudyDesc')"
+        />
+      </section>
+
+      <!-- Visual divider + label between platform-wide and study-scoped. -->
+      <div class="max-w-5xl mb-6 flex items-center gap-3">
+        <hr class="flex-1 border-t border-slate-200" />
+        <span class="text-[11px] uppercase tracking-[0.14em] text-slate-500 whitespace-nowrap">
+          {{ t('home.administrator.studyScopedLabel', { study: activeStudyName }) }}
+        </span>
+        <hr class="flex-1 border-t border-slate-200" />
+      </div>
+
+      <!-- Study-scoped actions: everything that operates on the
+           currently active study (its identity, sites, audit trail,
+           open queries). -->
+      <section
+        :aria-label="t('home.administrator.sectionLabel')"
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8"
+      >
+        <LandingCard
+          v-if="activeStudyOid"
+          :to="{ name: 'study-edit', params: { oid: activeStudyOid } }"
+          role-variant="administrator"
+          :role-label="t('home.role.Administrator')"
+          :title="t('home.administrator.editStudyTitle')"
+          :description="t('home.administrator.editStudyDesc')"
+        />
+        <LandingCard
+          :to="{ name: 'sites' }"
+          role-variant="administrator"
+          :role-label="t('home.role.Administrator')"
+          :title="t('home.administrator.sitesTitle')"
+          :description="t('home.administrator.sitesDesc')"
+        />
+        <LandingCard
+          :to="{ name: 'audit-log' }"
+          role-variant="administrator"
+          :role-label="t('home.role.Administrator')"
+          :title="t('auditLog.title')"
+          :description="t('home.administrator.auditLogDesc')"
+        />
+        <LandingCard
+          :to="{ name: 'notes' }"
+          role-variant="administrator"
+          :role-label="t('home.role.Administrator')"
+          :title="t('notes.title')"
+          :description="t('home.dataManager.openQueriesDesc')"
+          :badge="openQueriesCount"
+        />
+      </section>
+    </template>
 
     <!-- Switch-study card (per-role landings other than Administrator). -->
-    <section v-if="canSwitchStudy && !showAdministrator" :aria-label="t('home.switchStudySectionLabel')" class="max-w-3xl mb-8">
-      <LandingCard
-        :to="{ name: 'pick-study' }"
-        :role-variant="role === 'Monitor' ? 'monitor' : role === 'Data Manager' ? 'data-manager' : 'investigator'"
-        :role-label="role ? t('home.role.' + role) : ''"
-        :title="t('home.switchStudyTitle')"
-        :description="t('home.switchStudyDesc')"
-      />
-    </section>
+    <!-- Switch-study card sits in its own divider-led section, mirroring the
+         Administrator landing's platform-wide vs study-scoped split so the
+         intent (this action is cross-study, not scoped to the bound one)
+         is visually obvious. -->
+    <template v-if="canSwitchStudy && !showAdministrator">
+      <div class="max-w-5xl mb-6 flex items-center gap-3">
+        <hr class="flex-1 border-t border-slate-200" />
+        <span class="text-[11px] uppercase tracking-[0.14em] text-slate-500 whitespace-nowrap">
+          {{ t('home.switchStudySectionLabel') }}
+        </span>
+        <hr class="flex-1 border-t border-slate-200" />
+      </div>
+      <section :aria-label="t('home.switchStudySectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
+        <LandingCard
+          :to="{ name: 'pick-study' }"
+          :role-variant="role === 'Monitor' ? 'monitor' : role === 'Data Manager' ? 'data-manager' : 'investigator'"
+          :role-label="role ? t('home.role.' + role) : ''"
+          :title="t('home.switchStudyTitle')"
+          :description="t('home.switchStudyDesc')"
+        />
+      </section>
+    </template>
 
     <!-- Fallback when role hasn't loaded yet (auth.bootstrap() in flight). -->
     <p v-if="!role" class="text-slate-500 text-sm italic">

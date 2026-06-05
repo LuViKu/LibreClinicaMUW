@@ -78,7 +78,7 @@ function roleVariant(role: string): 'investigator' | 'monitor' | 'data-manager' 
         <li v-for="option in auth.availableStudies" :key="option.oid">
           <button
             type="button"
-            class="w-full bg-white border border-slate-200 rounded-muw px-5 py-4 hover:bg-slate-50 hover:border-muw-blue transition-colors text-left flex items-center justify-between gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full bg-white border border-slate-200 rounded-muw px-5 py-4 cursor-pointer hover:bg-slate-50 hover:border-muw-blue transition-colors text-left flex items-center justify-between gap-4 disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="submitting !== null"
             @click="choose(option)"
           >

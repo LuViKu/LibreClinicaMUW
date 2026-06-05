@@ -60,6 +60,8 @@
       "rulesDesc": "Validation + workflow rules attached to event-CRFs."
     },
     "administrator": {
+      "globalSectionLabel": "Platform-wide actions",
+      "studyScopedLabel": "On {study}",
       "sectionLabel": "Administrator workflows",
       "manageUsersDesc": "User accounts, role bindings per study, pending invites, password resets.",
       "pendingInvitesBadgeAria": "{n} pending user invites",
@@ -834,8 +836,9 @@
     "edit": {
       "title": "Edit study identity",
       "subTrail": "Build study",
-      "intro": "Leave a field blank to keep its current value. Each change emits an audit-trail entry recording old + new values.",
+      "intro": "Fields marked with an asterisk are required. Every change emits an audit-trail entry recording the old and new values.",
       "submit": "Save changes",
+      "saved": "Saved. Changes are reflected throughout the platform.",
       "leaveUnchanged": "— Leave unchanged —"
     }
   },
@@ -886,9 +889,22 @@
       "submit": "Create user",
       "studyMissing": "Pick an active study before inviting a user.",
       "emailNotWiredNote": "Welcome email delivery is not yet wired — copy the one-time password and share it with the new user via a secure channel.",
+      "ssoNotWiredNote": "No password is generated. After submit, the user signs in via the institutional SSO portal — make sure their institutional identity is provisioned at the IdP.",
       "successIntro": "User created. Share this one-time password with the new user; they will be required to change it on first login.",
+      "ssoSuccessIntro": "User created. They will sign in via the institutional SSO portal — no password is needed.",
+      "ssoSuccessHint": "Make sure their institutional identity is provisioned at the IdP before they attempt to sign in.",
       "copyPassword": "Copy",
-      "firstLoginNote": "The password is shown once and is not stored. Make sure it is captured before closing this dialog."
+      "firstLoginNote": "The password is shown once and is not stored. Make sure it is captured before closing this dialog.",
+      "authMethod": {
+        "label": "Authentication method",
+        "local": "Local password",
+        "localHelp": "A one-time password will be generated and shown after the user is created.",
+        "sso": "Institutional SSO",
+        "ssoHelp": "The user signs in through the institutional identity provider. No password is generated."
+      },
+      "externalId": "Institutional principal (eppn)",
+      "externalIdPlaceholder": "user{'@'}meduniwien.ac.at",
+      "externalIdHelp": "Case-sensitive. Must match the principal the IdP sends in the eduPersonPrincipalName header."
     },
     "edit": {
       "title": "Edit user profile",
@@ -1036,6 +1052,7 @@
     "username": "Username",
     "password": "Password",
     "signInLocal": "Sign in with local account",
+    "signingInLocal": "Signing in…",
     "localPurpose": "For sponsor monitors, external personnel, and break-glass accounts that don't have an institutional identity.",
     "devShortcuts": "Dev role-switcher (mock identity)",
     "terms": "Terms",

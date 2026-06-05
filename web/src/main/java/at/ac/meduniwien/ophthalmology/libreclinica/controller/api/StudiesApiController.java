@@ -43,6 +43,10 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
 /**
  * Phase E.4 M1 — list studies the current user has a role on.
  *
@@ -85,7 +89,15 @@ public class StudiesApiController {
         UserAccountDAO userDAO = new UserAccountDAO(dataSource);
 
         ArrayList<StudyBean> allStudies = studyDAO.findAll();
-        ArrayList<StudyUserRoleBean> grants = userDAO.findStudyByUser(ub.getName(), allStudies);
+        // findStudyByUser has a hardcoded `role_name != 'admin'` filter
+        // in its SQL — legacy holdover from when 'admin' was treated as
+        // a cross-study role rather than a per-study binding. For the
+        // SPA's "where am I assigned?" question we want every binding,
+        // including admin ones — that's how root surfaces the Default
+        // Study + every other study they have a binding on for the
+        // switch-active-study card. Use findAllRolesByUserName instead
+        // (no role filter) and join study identity ourselves.
+        ArrayList<StudyUserRoleBean> grants = userDAO.findAllRolesByUserName(ub.getName());
 
         // Index studies by id for parent-name lookup, and by id for role join.
         Map<Integer, StudyBean> studyById = new HashMap<>();
@@ -93,23 +105,51 @@ public class StudiesApiController {
 
         int activeStudyId = ub.getActiveStudyId();
         List<StudyOptionDto> out = new ArrayList<>();
+        // Phase E.6 (2026-06-03): de-dup by study_id when the user has
+        // more than one active binding on the same study (the latent
+        // updateRole-touches-all-rows bug surfaces those duplicates).
+        // Keep the highest-priority projected role per study.
+        Map<Integer, StudyOptionDto> bestByStudy = new java.util.LinkedHashMap<>();
         for (StudyUserRoleBean r : grants) {
+            // Skip inactive bindings — only Status.AVAILABLE counts.
+            if (r.getStatus() == null
+                    || r.getStatus().getId() != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE.getId()) {
+                continue;
+            }
             StudyBean s = studyById.get(r.getStudyId());
             if (s == null) continue;
             boolean isSite = s.getParentStudyId() > 0;
             StudyBean parent = isSite ? studyById.get(s.getParentStudyId()) : null;
-            out.add(new StudyOptionDto(
+            String spaRole = r.getRole() == null ? "Investigator"
+                    : RoleMapper.toSpaRole(r.getRole().getName());
+            StudyOptionDto candidate = new StudyOptionDto(
                     s.getOid(),
                     s.getName(),
                     parent == null ? null : parent.getOid(),
                     parent == null ? null : parent.getName(),
-                    r.getRole() == null ? "Investigator"
-                            : RoleMapper.toSpaRole(r.getRole().getName()),
+                    spaRole,
                     isSite,
                     s.getId() == activeStudyId
-            ));
+            );
+            StudyOptionDto existing = bestByStudy.get(s.getId());
+            if (existing == null || studyRolePriority(spaRole) > studyRolePriority(existing.role())) {
+                bestByStudy.put(s.getId(), candidate);
+            }
         }
+        out.addAll(bestByStudy.values());
         return ResponseEntity.ok(out);
+    }
+
+    /** Phase E.6 — same priority order as UsersApiController.rolePriority. */
+    private static int studyRolePriority(String spaRole) {
+        return switch (spaRole) {
+            case "Administrator" -> 5;
+            case "Data Manager"  -> 4;
+            case "Monitor"       -> 3;
+            case "CRC"           -> 2;
+            case "Investigator"  -> 1;
+            default              -> 0;
+        };
     }
 
     /* ----------------------------------------------------------------- */
@@ -208,6 +248,10 @@ public class StudiesApiController {
         // seed-data shape used by every demo / fixture study).
         String generatedOid = "S_" + body.uniqueProtocolId().trim().toUpperCase();
         persisted.setOid(generatedOid);
+        // StudyDAO.updateStepOne dereferences oldStatus on every update
+        // (NPE otherwise). We're not changing the status here — just
+        // back-filling the generated OID — so mirror the current value.
+        persisted.setOldStatus(persisted.getStatus());
         studyDao.update(persisted);
 
         // Auto-bind the caller as COORDINATOR on the new study — they
@@ -231,6 +275,35 @@ public class StudiesApiController {
                 generatedOid, body.name(), me.getName());
 
         return ResponseEntity.status(201).body(toIdentityDto(persisted, studyDao));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* GET /api/v1/studies/{studyOid}  (Phase E.6 — single-study read)    */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Returns the full {@link StudyIdentityDto} for a study so the SPA
+     * can pre-populate the edit form with every protocol field — not
+     * just the name. Without this the edit view only had the dashboard's
+     * studyName and operators sending blank fields lost everything but
+     * the name (the PUT treats blank-after-trim as "leave unchanged").
+     */
+    @GetMapping("/{studyOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = StudyIdentityDto.class)))
+    public ResponseEntity<?> get(@PathVariable("studyOid") String studyOid,
+                                 HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean target = studyDao.findByOid(studyOid);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study with oid '" + studyOid + "'"));
+        }
+        return ResponseEntity.ok(toIdentityDto(target, studyDao));
     }
 
     /* ----------------------------------------------------------------- */
@@ -364,6 +437,20 @@ public class StudiesApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         studyDao.update(target);
+
+        // Phase E.6 (2026-06-03): the session attribute "study" is a
+        // StudyBean captured at login (by SecureController +
+        // OpenClinicaUsernamePasswordAuthenticationFilter). MeApiController
+        // reads its name + oid from THAT bean, so the SPA's top-bar
+        // breadcrumb stays stale across an identity edit even after the
+        // SPA's auth.bootstrap() re-fetches /me — /me itself was still
+        // returning the snapshot. Refresh the attribute with the
+        // freshly-mutated bean when the edit targeted the currently
+        // active study so the next /me sees the new identity.
+        StudyBean sessionStudy = (StudyBean) session.getAttribute("study");
+        if (sessionStudy != null && sessionStudy.getId() == target.getId()) {
+            session.setAttribute("study", target);
+        }
 
         LOG.info("Update study: oid={} by admin={}", studyOid, me.getName());
 
@@ -722,30 +809,51 @@ public class StudiesApiController {
         return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
     }
 
-    private void writeStudyFieldAudit(AuditEventDAO auditDAO,
+    /**
+     * audit_log_event_type row for study-identity edits — id seeded by
+     * {@code lc-muw-2026-06-03-audit-event-type-study-identity.xml}.
+     * Mapped to the "admin" variant in {@code AuditApiController.
+     * variantForType}.
+     */
+    private static final int AUDIT_TYPE_STUDY_IDENTITY_UPDATED = 51;
+
+    /**
+     * Emit one {@code audit_log_event} row per identity field that
+     * actually changed. Skipped when old/new are equal.
+     *
+     * <p>Direct JDBC — same pattern as
+     * {@link MeApiController#emitProfileAudit}. The legacy
+     * {@code AuditEventDAO.create} writes to the {@code audit_event}
+     * table (not {@code audit_log_event}) and drops
+     * {@code audit_log_event_type_id / old_value / new_value /
+     * entity_name}, so events written via that path never surfaced in
+     * the SPA Audit Log view.
+     */
+    private void writeStudyFieldAudit(@SuppressWarnings("unused") AuditEventDAO auditDAO,
                                       UserAccountBean editor,
                                       StudyBean target,
                                       String columnName,
                                       String oldValue,
                                       String newValue) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(editor.getId());
-            ae.setStudyId(target.getId());
-            ae.setStudyName(target.getName() == null ? "" : target.getName());
-            ae.setAuditTable("study");
-            ae.setEntityId(target.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("study_identity_update: " + (target.getOid() == null ? "?" : target.getOid())
-                    + "." + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "'");
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for study field {}={} (continuing): {}",
-                    columnName, newValue, e.getMessage());
+        String oldVal = oldValue == null ? "" : oldValue;
+        String newVal = newValue == null ? "" : newValue;
+        if (oldVal.equals(newVal)) return;
+
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?)")) {
+            ps.setInt(1, AUDIT_TYPE_STUDY_IDENTITY_UPDATED);
+            ps.setInt(2, editor.getId());
+            ps.setInt(3, target.getId());
+            ps.setString(4, columnName);
+            ps.setString(5, oldVal);
+            ps.setString(6, newVal);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for study {} field {} (continuing): {}",
+                    target.getOid(), columnName, e.getMessage());
         }
     }
 

@@ -116,37 +116,72 @@ public class UsersApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        if (currentStudy == null || currentStudy.getId() == 0) {
-            return ResponseEntity.badRequest().body(Map.of("message",
-                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
-        }
 
         UserAccountDAO userDao = new UserAccountDAO(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
 
-        // A4 — per-site visibility. The legacy
-        // findAllUsersByStudy(parent) already returns roles for the
-        // parent + every site under it; for narrower views (Monitor
-        // with one site grant) we filter the result by the user's
-        // visible study set.
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
-                me, currentStudy, currentRole);
-
-        // Roles scoped to the active study + its sites. The DAO
-        // returns one StudyUserRoleBean per (user, study) pair — so a
-        // user with two active bindings on the same study (e.g. seeded
-        // root with both `admin` and `director` rows) yielded duplicate
-        // rows in the SPA's user list (reported 2026-06-03 testing).
+        // Phase E.6 (2026-06-03 evening): sysadmin / techadmin callers
+        // get a PLATFORM-WIDE user list. The user-list view is the
+        // entry point for user account lifecycle (invite, disable,
+        // reset password); role bindings on individual studies are
+        // managed from the per-user Roles dialog which can grant any
+        // study. Scoping the list itself to the active study made the
+        // admin landing's "Manage Users" surface inconsistent — a
+        // newly-invited user wouldn't appear until the admin switched
+        // to a study where the new binding existed.
         //
-        // Phase E.6 (2026-06-03): collapse to one row per user_id. When
-        // multiple bindings exist, pick the highest-priority role per
-        // ROLE_PRIORITY below — matches the legacy authorization
-        // model's "the highest grant wins" semantics. siteLabel is
-        // preserved from the first binding's study scope; lastLogin +
-        // active are user-attribute properties (not role-attribute) and
-        // are identical across all bindings for the same user.
-        ArrayList<StudyUserRoleBean> bindings = userDao.findAllUsersByStudy(currentStudy.getId());
+        // For non-sysadmin callers (DM coordinator etc.) we keep the
+        // study-scoped list — they should only see users who have a
+        // binding on their currently active study.
+        ArrayList<StudyUserRoleBean> bindings;
+        Set<Integer> visibleStudyIds;
+        boolean globalList = me.isSysAdmin() || me.isTechAdmin();
+        if (globalList) {
+            // Platform-wide list: walk every user, then collect their
+            // active bindings via findAllRolesByUserName. N+1 query but
+            // N is tiny at MUW scale (low hundreds of users); avoids
+            // adding a new SQL+DAO method.
+            bindings = new ArrayList<>();
+            ArrayList<UserAccountBean> everyone = userDao.findAll();
+            for (UserAccountBean ua : everyone) {
+                if (ua == null || ua.getId() == 0) continue;
+                ArrayList<StudyUserRoleBean> userRoles = userDao.findAllRolesByUserName(ua.getName());
+                // Synthesize a (user, no-study) row when the user has
+                // no active binding anywhere — otherwise sysadmin-only
+                // newly-invited accounts wouldn't appear at all.
+                boolean addedAny = false;
+                for (StudyUserRoleBean r : userRoles) {
+                    if (r.getStatus() != null
+                            && r.getStatus().getId() == at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE.getId()) {
+                        r.setUserAccountId(ua.getId());
+                        bindings.add(r);
+                        addedAny = true;
+                    }
+                }
+                if (!addedAny) {
+                    StudyUserRoleBean synth = new StudyUserRoleBean();
+                    synth.setStudyId(0);
+                    synth.setUserAccountId(ua.getId());
+                    synth.setStatus(at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE);
+                    bindings.add(synth);
+                }
+            }
+            visibleStudyIds = null;
+        } else {
+            if (currentStudy == null || currentStudy.getId() == 0) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+            }
+            // A4 — per-site visibility. The legacy
+            // findAllUsersByStudy(parent) already returns roles for the
+            // parent + every site under it; for narrower views (Monitor
+            // with one site grant) we filter the result by the user's
+            // visible study set.
+            StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+            visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                    me, currentStudy, currentRole);
+            bindings = userDao.findAllUsersByStudy(currentStudy.getId());
+        }
 
         Map<Integer, UserAccountBean> userCache = new HashMap<>();
         Map<Integer, StudyBean> studyCache = new HashMap<>();
@@ -155,8 +190,19 @@ public class UsersApiController {
         Map<Integer, StudyUserDto> bestByUser = new LinkedHashMap<>();
 
         for (StudyUserRoleBean sur : bindings) {
-            // A4 — skip bindings outside the visible study tree.
-            if (!visibleStudyIds.contains(sur.getStudyId())) continue;
+            // A4 — skip bindings outside the visible study tree. For
+            // sysadmin's global list visibleStudyIds is null, meaning
+            // "no restriction".
+            if (visibleStudyIds != null && !visibleStudyIds.contains(sur.getStudyId())) continue;
+            // For the global list, filter inactive bindings here too
+            // (the legacy study-scoped DAO query already includes
+            // status_id=1; findAllRoles returns every row).
+            if (globalList) {
+                if (sur.getStatus() == null
+                        || sur.getStatus().getId() != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE.getId()) {
+                    continue;
+                }
+            }
 
             UserAccountBean ua = userCache.computeIfAbsent(sur.getUserAccountId(),
                     id -> userDao.findByPK(id));
@@ -753,12 +799,17 @@ public class UsersApiController {
         ResponseEntity<?> guard = preflightLifecycle(session, username);
         if (guard != null) return guard;
 
-        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
-        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
-                me, currentStudy, currentRole);
-
+        // Phase E.6 (2026-06-03): the sysadmin-only "manage roles for
+        // this user" dialog must see EVERY binding the target user has
+        // — including studies outside the caller's current scope. The
+        // user-list endpoint at line 105 stays site-visibility-scoped
+        // (that one is about "who can do work on the active study"),
+        // but listRoles is about "what bindings does this user
+        // already have anywhere so the dialog can offer the right
+        // grant / change / revoke actions". Without all bindings the
+        // dialog tries to grant a binding on a study the user already
+        // has one for (e.g. the auto-coordinator binding created by
+        // POST /api/v1/studies) and trips the 409 conflict guard.
         UserAccountDAO userDao = new UserAccountDAO(dataSource);
         UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
         if (target == null || target.getId() == 0) {
@@ -770,7 +821,6 @@ public class UsersApiController {
         StudyDAO studyDao = new StudyDAO(dataSource);
         List<RoleBindingDto> out = new ArrayList<>();
         for (StudyUserRoleBean sur : bindings) {
-            if (!visibleStudyIds.contains(sur.getStudyId())) continue;
             out.add(toRoleBindingDto(sur, studyDao));
         }
         return ResponseEntity.ok(out);
