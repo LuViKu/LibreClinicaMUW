@@ -740,6 +740,9 @@
       },
       "next": "Weiter",
       "submit": "Version anlegen",
+      "addSection": "+ Sektion hinzufügen",
+      "dragSection": "Sektion durch Ziehen umsortieren",
+      "dragItem": "Item durch Ziehen umsortieren",
       "review": {
         "heading": "Überprüfen und absenden",
         "intro": "Beim Absenden synthetisiert der Server eine XLS-Tabelle aus diesem Entwurf und schickt sie durch den bestehenden CRF-Parser. Die resultierende Version ist semantisch identisch mit einer per XLS-Upload erzeugten.",
@@ -748,6 +751,62 @@
         "incomplete": "Pflichtfelder fehlen — bitte ergänzen, um das Absenden freizugeben.",
         "parseErrors": "Der Parser hat die synthetisierte Tabelle abgelehnt ({count} Problem(e)):"
       }
+    }
+  },
+  "crfAuthoring": {
+    "dataType": {
+      "ST": "Text (ST)",
+      "INT": "Ganzzahl (INT)",
+      "REAL": "Reelle Zahl (REAL)",
+      "DATE": "Datum (DATE)",
+      "PDATE": "Teildatum (PDATE)",
+      "FILE": "Dateianhang (FILE)"
+    },
+    "responseType": {
+      "text": "Einzeiliger Text",
+      "textarea": "Mehrzeiliger Text",
+      "radio": "Auswahlknöpfe",
+      "single-select": "Einfachauswahl-Liste",
+      "multi-select": "Mehrfachauswahl-Liste",
+      "checkbox": "Checkbox-Gruppe",
+      "file": "Datei-Upload"
+    },
+    "item": {
+      "name": "Item-Name",
+      "oid": "Item-OID",
+      "oidHelper": "Wird aus dem Item-Namen vorgeschlagen; überschreibbar bei Bedarf.",
+      "descriptionLabel": "Beschreibungs-Label",
+      "leftItemText": "Linker Item-Text",
+      "rightItemText": "Rechter Item-Text",
+      "units": "Einheit",
+      "dataType": "Datentyp",
+      "responseType": "Antworttyp",
+      "defaultValue": "Standardwert",
+      "required": "Pflichtfeld",
+      "regex": "Validierungs-Regex",
+      "errorMessage": "Validierungs-Fehlermeldung"
+    },
+    "responseSetPicker": {
+      "title": "Antwortset",
+      "placeholder": "Katalog-Eintrag auswählen…",
+      "catalog": "Katalog",
+      "createNew": "Neues Antwortset anlegen",
+      "label": "Label",
+      "labelHelper": "Wiederverwendbarer Bezeichner — wählen Sie etwas Aussagekräftiges wie »ja_nein« oder »snellen_zeilen«.",
+      "options": "Optionen",
+      "optionText": "Anzeigetext",
+      "optionValue": "Gespeicherter Wert",
+      "addOption": "+ Option hinzufügen",
+      "save": "Im Katalog speichern",
+      "cancel": "Abbrechen",
+      "labelRequired": "Label ist erforderlich.",
+      "optionsRequired": "Mindestens eine Option hinzufügen.",
+      "saveFailed": "Antwortset konnte nicht gespeichert werden."
+    },
+    "preview": {
+      "button": "Validieren (Vorschau)",
+      "success": "Sieht gut aus — {sections} Sektion(en), {items} Item(s).",
+      "errorsTitle": "Die Vorschau hat den Entwurf abgelehnt:"
     }
   },
   "assignCrfs": {
