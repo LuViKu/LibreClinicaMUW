@@ -1,29 +1,36 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import draggable from 'vuedraggable'
 
 import Modal from '@/components/Modal.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
-import SelectInput from '@/components/SelectInput.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import ItemEditor from '@/components/ItemEditor.vue'
 
-import { useCrfAuthoringStore, type AuthoringDataType } from '@/stores/crfAuthoring'
+import {
+  useCrfAuthoringStore,
+  type AuthoringItem,
+  type AuthoringPreviewSuccess,
+} from '@/stores/crfAuthoring'
 
 /**
- * Phase E.6 Milestone A — manual eCRF authoring wizard.
+ * Phase E.6 Milestone B — manual eCRF authoring wizard.
  *
  * <p>Side-rail wizard with three sections: Metadata → Sections → Review.
- * Locked to the Milestone A scope: one section, two-three items,
- * three data types (ST / INTEGER / BL), one TEXT response set. No
- * show-when, no calculations, no item groups beyond the implicit
- * ungrouped default. Final-submit persistence — closing discards.
+ * Milestone B widens Milestone A's vertical slice to the full
+ * non-formula taxonomy (see {@code crfAuthoring.ts}), adds multi-section
+ * drag-reorder + per-section item drag-reorder via {@code vuedraggable},
+ * and wires a Preview button on the Review step against the backend
+ * {@code :preview} dry-run endpoint.
  *
- * <p>Backend wire: {@code POST /pages/api/v1/crfs/{crfOid}/versions}
- * with {@code Content-Type: application/json}. The backend synthesises
- * an XLS workbook from the JSON and feeds it to the existing
- * spreadsheet parser pipeline — zero parity drift with XLS upload.
+ * <p>Backend wire (unchanged from A): {@code POST
+ * /pages/api/v1/crfs/{crfOid}/versions} with {@code Content-Type:
+ * application/json}. The backend synthesises an HSSF workbook from
+ * the JSON and feeds it to the existing spreadsheet parser pipeline —
+ * zero parity drift with XLS upload.
  */
 
 interface Props {
@@ -47,6 +54,11 @@ const formError = ref<string | null>(null)
 const submitParseErrors = ref<string[]>([])
 const submitFieldErrors = ref<Record<string, string>>({})
 
+const previewSummary = ref<AuthoringPreviewSuccess | null>(null)
+const previewFieldErrors = ref<Record<string, string>>({})
+const previewParseErrors = ref<string[]>([])
+const previewError = ref<string | null>(null)
+
 watch(
   () => props.open,
   (next) => {
@@ -56,17 +68,27 @@ watch(
       formError.value = null
       submitParseErrors.value = []
       submitFieldErrors.value = {}
+      previewSummary.value = null
+      previewFieldErrors.value = {}
+      previewParseErrors.value = []
+      previewError.value = null
+      // Pull the response-set catalog so the inline picker can offer
+      // existing entries. Failure is a soft fall-back (empty catalog).
+      void store.loadResponseSetCatalog()
     }
   },
 )
 
-const dataTypeOptions: Array<{ value: AuthoringDataType; labelKey: string }> = [
-  { value: 'ST', labelKey: 'crfLibrary.author.dataType.ST' },
-  { value: 'INTEGER', labelKey: 'crfLibrary.author.dataType.INTEGER' },
-  { value: 'BL', labelKey: 'crfLibrary.author.dataType.BL' },
-]
+onMounted(() => {
+  if (props.open) {
+    void store.loadResponseSetCatalog()
+  }
+})
 
-const sectionList = computed(() => store.draft.sections)
+const sectionList = computed({
+  get: () => store.draft.sections,
+  set: (next) => store.reorderSections(next),
+})
 
 const canSubmit = computed(() => {
   const d = store.draft
@@ -94,6 +116,34 @@ function onAddItem(sectionIndex: number): void {
 
 function onRemoveItem(sectionIndex: number, itemIndex: number): void {
   store.removeItem(sectionIndex, itemIndex)
+}
+
+function onAddSection(): void {
+  store.addSection()
+}
+
+function onRemoveSection(sectionIndex: number): void {
+  store.removeSection(sectionIndex)
+}
+
+function onItemsReorder(sectionIndex: number, reordered: AuthoringItem[]): void {
+  store.reorderItems(sectionIndex, reordered)
+}
+
+async function onPreview(): Promise<void> {
+  if (store.isPreviewing) return
+  previewSummary.value = null
+  previewFieldErrors.value = {}
+  previewParseErrors.value = []
+  previewError.value = null
+  const result = await store.preview(props.crfOid)
+  if (result.ok) {
+    previewSummary.value = result.preview
+  } else {
+    previewFieldErrors.value = result.fieldErrors
+    previewParseErrors.value = result.parseErrors
+    previewError.value = result.message ?? null
+  }
 }
 
 async function onSubmit(): Promise<void> {
@@ -214,122 +264,136 @@ function onCancel(): void {
 
         <!-- Sections step -->
         <div v-if="currentStep === 'sections'" class="space-y-5">
-          <h3 class="text-sm font-semibold">{{ t('crfLibrary.author.sections.heading') }}</h3>
-          <div
-            v-for="(section, sIdx) in sectionList"
-            :key="`s-${sIdx}`"
-            class="rounded-md border border-slate-200 bg-white p-3"
-          >
-            <div class="grid grid-cols-2 gap-3">
-              <div>
-                <FieldLabel :for="`crf-author-slabel-${sIdx}`" required>
-                  {{ t('crfLibrary.author.sectionLabel') }}
-                </FieldLabel>
-                <TextInput
-                  :id="`crf-author-slabel-${sIdx}`"
-                  v-model="section.label"
-                />
-              </div>
-              <div>
-                <FieldLabel :for="`crf-author-stitle-${sIdx}`" required>
-                  {{ t('crfLibrary.author.sectionTitle') }}
-                </FieldLabel>
-                <TextInput
-                  :id="`crf-author-stitle-${sIdx}`"
-                  v-model="section.title"
-                />
-              </div>
-              <div class="col-span-2">
-                <FieldLabel :for="`crf-author-sinstr-${sIdx}`">
-                  {{ t('crfLibrary.author.sectionInstructions') }}
-                </FieldLabel>
-                <TextInput
-                  :id="`crf-author-sinstr-${sIdx}`"
-                  v-model="section.instructions"
-                />
-              </div>
-            </div>
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold">{{ t('crfLibrary.author.sections.heading') }}</h3>
+            <button
+              type="button"
+              class="text-xs text-muw-blue hover:underline"
+              data-testid="crf-author-add-section"
+              @click="onAddSection"
+            >{{ t('crfLibrary.author.addSection') }}</button>
+          </div>
 
-            <div class="mt-4">
-              <div class="flex items-center justify-between mb-2">
-                <h4 class="text-xs font-semibold text-slate-700">
-                  {{ t('crfLibrary.author.itemsHeading') }}
-                </h4>
-                <button
-                  type="button"
-                  class="text-xs text-muw-blue hover:underline"
-                  @click="onAddItem(sIdx)"
-                >{{ t('crfLibrary.author.addItem') }}</button>
-              </div>
-              <p v-if="section.items.length === 0" class="text-xs italic text-slate-500">
-                {{ t('crfLibrary.author.itemsEmpty') }}
-              </p>
-              <ul class="space-y-3">
-                <li
-                  v-for="(item, iIdx) in section.items"
-                  :key="`s-${sIdx}-i-${iIdx}`"
-                  class="rounded-md border border-slate-200 bg-slate-50/60 p-3"
-                >
-                  <div class="grid grid-cols-2 gap-3">
-                    <div>
-                      <FieldLabel :for="`crf-author-iname-${sIdx}-${iIdx}`" required>
-                        {{ t('crfLibrary.author.itemName') }}
-                      </FieldLabel>
-                      <TextInput
-                        :id="`crf-author-iname-${sIdx}-${iIdx}`"
-                        v-model="item.name"
-                        placeholder="AGE"
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel :for="`crf-author-idesc-${sIdx}-${iIdx}`" required>
-                        {{ t('crfLibrary.author.descriptionLabel') }}
-                      </FieldLabel>
-                      <TextInput
-                        :id="`crf-author-idesc-${sIdx}-${iIdx}`"
-                        v-model="item.descriptionLabel"
-                      />
-                    </div>
-                    <div class="col-span-2">
-                      <FieldLabel :for="`crf-author-iltext-${sIdx}-${iIdx}`">
-                        {{ t('crfLibrary.author.leftItemText') }}
-                      </FieldLabel>
-                      <TextInput
-                        :id="`crf-author-iltext-${sIdx}-${iIdx}`"
-                        v-model="item.leftItemText"
-                      />
-                    </div>
-                    <div>
-                      <FieldLabel :for="`crf-author-idtype-${sIdx}-${iIdx}`" required>
-                        {{ t('crfLibrary.author.dataTypeLabel') }}
-                      </FieldLabel>
-                      <SelectInput
-                        :id="`crf-author-idtype-${sIdx}-${iIdx}`"
-                        v-model="item.dataType"
-                      >
-                        <option v-for="opt in dataTypeOptions" :key="opt.value" :value="opt.value">
-                          {{ t(opt.labelKey) }}
-                        </option>
-                      </SelectInput>
-                    </div>
-                    <div class="flex items-end pb-1">
-                      <label class="inline-flex items-center gap-2 text-xs text-slate-700">
-                        <input type="checkbox" v-model="item.required" />
-                        {{ t('crfLibrary.author.required') }}
-                      </label>
-                    </div>
+          <draggable
+            v-model="sectionList"
+            item-key="label"
+            handle=".section-drag-handle"
+            ghost-class="opacity-50"
+            class="space-y-5"
+            data-testid="crf-author-sections-dragroot"
+          >
+            <template #item="{ element: section, index: sIdx }">
+              <div
+                class="rounded-md border border-slate-200 bg-white p-3"
+                :data-testid="`crf-author-section-${sIdx}`"
+              >
+                <div class="flex items-start justify-between gap-2 mb-2">
+                  <button
+                    type="button"
+                    class="section-drag-handle inline-flex items-center text-[11px] text-slate-400 hover:text-slate-600 cursor-grab"
+                    :aria-label="t('crfLibrary.author.dragSection')"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                      <circle cx="9" cy="6" r="1.2" fill="currentColor" />
+                      <circle cx="15" cy="6" r="1.2" fill="currentColor" />
+                      <circle cx="9" cy="12" r="1.2" fill="currentColor" />
+                      <circle cx="15" cy="12" r="1.2" fill="currentColor" />
+                      <circle cx="9" cy="18" r="1.2" fill="currentColor" />
+                      <circle cx="15" cy="18" r="1.2" fill="currentColor" />
+                    </svg>
+                  </button>
+                  <button
+                    v-if="sectionList.length > 1"
+                    type="button"
+                    class="text-[11px] text-rose-600 hover:underline"
+                    @click="onRemoveSection(sIdx)"
+                  >{{ t('common.remove') }}</button>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <FieldLabel :for="`crf-author-slabel-${sIdx}`" required>
+                      {{ t('crfLibrary.author.sectionLabel') }}
+                    </FieldLabel>
+                    <TextInput
+                      :id="`crf-author-slabel-${sIdx}`"
+                      v-model="section.label"
+                    />
                   </div>
-                  <div class="mt-2 text-right">
+                  <div>
+                    <FieldLabel :for="`crf-author-stitle-${sIdx}`" required>
+                      {{ t('crfLibrary.author.sectionTitle') }}
+                    </FieldLabel>
+                    <TextInput
+                      :id="`crf-author-stitle-${sIdx}`"
+                      v-model="section.title"
+                    />
+                  </div>
+                  <div class="col-span-2">
+                    <FieldLabel :for="`crf-author-sinstr-${sIdx}`">
+                      {{ t('crfLibrary.author.sectionInstructions') }}
+                    </FieldLabel>
+                    <TextInput
+                      :id="`crf-author-sinstr-${sIdx}`"
+                      v-model="section.instructions"
+                    />
+                  </div>
+                </div>
+
+                <div class="mt-4">
+                  <div class="flex items-center justify-between mb-2">
+                    <h4 class="text-xs font-semibold text-slate-700">
+                      {{ t('crfLibrary.author.itemsHeading') }}
+                    </h4>
                     <button
                       type="button"
-                      class="text-[11px] text-rose-600 hover:underline"
-                      @click="onRemoveItem(sIdx, iIdx)"
-                    >{{ t('common.remove') }}</button>
+                      class="text-xs text-muw-blue hover:underline"
+                      :data-testid="`crf-author-add-item-${sIdx}`"
+                      @click="onAddItem(sIdx)"
+                    >{{ t('crfLibrary.author.addItem') }}</button>
                   </div>
-                </li>
-              </ul>
-            </div>
-          </div>
+                  <p v-if="section.items.length === 0" class="text-xs italic text-slate-500">
+                    {{ t('crfLibrary.author.itemsEmpty') }}
+                  </p>
+                  <draggable
+                    :model-value="section.items"
+                    item-key="oid"
+                    handle=".item-drag-handle"
+                    ghost-class="opacity-50"
+                    class="space-y-3"
+                    :data-testid="`crf-author-items-dragroot-${sIdx}`"
+                    @update:model-value="(next: typeof section.items) => onItemsReorder(sIdx, next)"
+                  >
+                    <template #item="{ element: item, index: iIdx }">
+                      <div class="relative">
+                        <button
+                          type="button"
+                          class="item-drag-handle absolute left-1 top-2 text-[11px] text-slate-400 hover:text-slate-600 cursor-grab"
+                          :aria-label="t('crfLibrary.author.dragItem')"
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                            <circle cx="9" cy="6" r="1.2" fill="currentColor" />
+                            <circle cx="15" cy="6" r="1.2" fill="currentColor" />
+                            <circle cx="9" cy="12" r="1.2" fill="currentColor" />
+                            <circle cx="15" cy="12" r="1.2" fill="currentColor" />
+                            <circle cx="9" cy="18" r="1.2" fill="currentColor" />
+                            <circle cx="15" cy="18" r="1.2" fill="currentColor" />
+                          </svg>
+                        </button>
+                        <ItemEditor
+                          :item="item"
+                          :sections="sectionList"
+                          :available-response-sets="store.responseSetCatalog"
+                          :id-prefix="`crf-author-${sIdx}-${iIdx}`"
+                          @remove="onRemoveItem(sIdx, iIdx)"
+                        />
+                      </div>
+                    </template>
+                  </draggable>
+                </div>
+              </div>
+            </template>
+          </draggable>
         </div>
 
         <!-- Review step -->
@@ -356,6 +420,44 @@ function onCancel(): void {
               <dd class="flex-1">{{ store.draft.sections.reduce((acc, s) => acc + s.items.length, 0) }}</dd>
             </div>
           </dl>
+
+          <!-- Preview button + summary / errors -->
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              class="px-3 py-1.5 text-xs border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-50"
+              :disabled="store.isPreviewing"
+              data-testid="crf-author-preview"
+              @click="onPreview"
+            >{{ store.isPreviewing ? t('common.saving') : t('crfAuthoring.preview.button') }}</button>
+            <StatusPill v-if="previewSummary" variant="success">
+              {{ t('crfAuthoring.preview.success', {
+                sections: previewSummary.sectionCount,
+                items: previewSummary.itemCount,
+              }) }}
+            </StatusPill>
+          </div>
+
+          <div
+            v-if="Object.keys(previewFieldErrors).length > 0"
+            class="rounded-md border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-800"
+            data-testid="crf-author-preview-field-errors"
+          >
+            <div class="font-medium mb-1">{{ t('crfAuthoring.preview.errorsTitle') }}</div>
+            <ul class="list-disc pl-4 space-y-0.5">
+              <li v-for="(msg, field) in previewFieldErrors" :key="field">
+                <span class="font-mono">{{ field }}</span>: {{ msg }}
+              </li>
+            </ul>
+          </div>
+          <div v-if="previewParseErrors.length > 0" class="rounded-md border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-800">
+            <div class="font-medium mb-1">{{ t('crfLibrary.author.review.parseErrors', { count: previewParseErrors.length }) }}</div>
+            <ul class="list-disc pl-4 space-y-0.5">
+              <li v-for="(msg, i) in previewParseErrors" :key="i">{{ msg }}</li>
+            </ul>
+          </div>
+          <ErrorText v-if="previewError">{{ previewError }}</ErrorText>
+
           <div v-if="!canSubmit" class="rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900">
             {{ t('crfLibrary.author.review.incomplete') }}
           </div>

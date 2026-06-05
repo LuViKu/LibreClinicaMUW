@@ -740,6 +740,9 @@
       },
       "next": "Next",
       "submit": "Create version",
+      "addSection": "+ Add section",
+      "dragSection": "Drag to reorder section",
+      "dragItem": "Drag to reorder item",
       "review": {
         "heading": "Review and submit",
         "intro": "On submit the server synthesises an XLS workbook from this draft and runs it through the legacy CRF parser. The resulting version is semantically identical to one uploaded via the upload-version flow.",
@@ -748,6 +751,62 @@
         "incomplete": "Some required fields are still blank — go back and fill them in to enable submit.",
         "parseErrors": "The parser rejected the synthesised workbook ({count} issue(s)):"
       }
+    }
+  },
+  "crfAuthoring": {
+    "dataType": {
+      "ST": "Text (ST)",
+      "INT": "Integer (INT)",
+      "REAL": "Real number (REAL)",
+      "DATE": "Date (DATE)",
+      "PDATE": "Partial date (PDATE)",
+      "FILE": "File attachment (FILE)"
+    },
+    "responseType": {
+      "text": "Single-line text",
+      "textarea": "Multi-line text",
+      "radio": "Radio buttons",
+      "single-select": "Single-select dropdown",
+      "multi-select": "Multi-select dropdown",
+      "checkbox": "Checkbox group",
+      "file": "File upload"
+    },
+    "item": {
+      "name": "Item name",
+      "oid": "Item OID",
+      "oidHelper": "Auto-suggested from the item name; override if you need a specific identifier.",
+      "descriptionLabel": "Description label",
+      "leftItemText": "Left item text",
+      "rightItemText": "Right item text",
+      "units": "Units",
+      "dataType": "Data type",
+      "responseType": "Response type",
+      "defaultValue": "Default value",
+      "required": "Required",
+      "regex": "Validation regex",
+      "errorMessage": "Validation error message"
+    },
+    "responseSetPicker": {
+      "title": "Response set",
+      "placeholder": "Select a catalog entry…",
+      "catalog": "Catalog",
+      "createNew": "Create new response set",
+      "label": "Label",
+      "labelHelper": "Reusable identifier — pick something descriptive like \"yes_no\" or \"snellen_lines\".",
+      "options": "Options",
+      "optionText": "Display text",
+      "optionValue": "Stored value",
+      "addOption": "+ Add option",
+      "save": "Save to catalog",
+      "cancel": "Cancel",
+      "labelRequired": "Label is required.",
+      "optionsRequired": "Add at least one option.",
+      "saveFailed": "Could not save the response set."
+    },
+    "preview": {
+      "button": "Validate (preview)",
+      "success": "Looks good — {sections} section(s), {items} item(s).",
+      "errorsTitle": "The preview rejected the draft:"
     }
   },
   "assignCrfs": {

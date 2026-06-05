@@ -1,33 +1,105 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import type { CrfVersion } from '@/types/crfLibrary'
 
 /**
- * Phase E.6 Milestone A — manual eCRF authoring store.
+ * Phase E.6 Milestone B — manual eCRF authoring store.
  *
- * <p>Holds the draft tree for one CRF version being authored in the
- * SPA wizard. Milestone A locks the scope to one section + two-three
- * items + one TEXT response set; Milestones B/C/D extend the draft
- * shape to cover the full XLS feature surface.
+ * <p>Milestone A locked the scope to one section + two-three items +
+ * one TEXT response set. Milestone B widens the surface to the full
+ * non-formula taxonomy:
+ *
+ * <ul>
+ *   <li>Data types {@code ST, INT, REAL, DATE, PDATE, FILE} matching
+ *       the backend {@code CrfVersionAuthoringRequest.Item.dataType}.</li>
+ *   <li>Response types {@code text, textarea, radio, single-select,
+ *       multi-select, checkbox, file} (canonical names per
+ *       {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType}).</li>
+ *   <li>Per-item validation (regexp + errorMessage), {@code defaultValue},
+ *       {@code rightItemText}, {@code units}.</li>
+ *   <li>Inline OR by-ref response set (catalog-pick via the
+ *       cross-CRF {@code GET /api/v1/response-sets} virtual catalog).</li>
+ * </ul>
  *
  * <p><b>Persistence strategy</b>: final-submit only. No POSTs fire
  * until the operator hits "Create" — closing the wizard discards the
- * local draft. This matches the plan's "Wizard state persistence"
- * decision (DR-014-style trade-off: per-step POSTs orphan rows on
- * cancel).
+ * local draft. Per the {@code :preview} dry-run endpoint, the SPA can
+ * surface structured validation errors at the Review step without
+ * partial commits.
  */
 
-/** Authoring DTO mirrors the backend record CrfVersionAuthoringRequest. */
-export type AuthoringDataType = 'ST' | 'INTEGER' | 'BL'
+/**
+ * Authoring data type — matches the canonical names accepted by
+ * {@code CrfJsonValidator.ALLOWED_DATA_TYPES}. The legacy {@code INTEGER}
+ * alias still works on the wire but the SPA writes the canonical
+ * {@code INT} form per the Milestone B contract.
+ */
+export type AuthoringDataType = 'ST' | 'INT' | 'REAL' | 'DATE' | 'PDATE' | 'FILE'
+
+/**
+ * Authoring response type — canonical names per the backend
+ * {@code ResponseType}. CALCULATION variants are out of scope for
+ * Milestone B (deferred to C).
+ */
+export type AuthoringResponseType =
+  | 'text'
+  | 'textarea'
+  | 'radio'
+  | 'single-select'
+  | 'multi-select'
+  | 'checkbox'
+  | 'file'
+
+/**
+ * One option in a response set. Mirrors the backend
+ * {@code CrfVersionAuthoringRequest.Option} record.
+ */
+export interface ResponseSetOption {
+  text: string
+  value: string
+}
+
+/**
+ * Inline response set authored on the item. Mirrors
+ * {@code CrfVersionAuthoringRequest.ResponseSet} (inline branch).
+ */
+export interface InlineResponseSet {
+  type: AuthoringResponseType
+  label: string
+  options: ResponseSetOption[]
+}
+
+/**
+ * By-reference response set — operator picked a catalog entry. The
+ * controller re-materialises the inline definition by label before
+ * synthesising the workbook. Mirrors
+ * {@code CrfVersionAuthoringRequest.ResponseSetRef}.
+ */
+export interface ResponseSetRef {
+  ref: { label: string }
+}
+
+export type AuthoringResponseSet = InlineResponseSet | ResponseSetRef | null
+
+export interface AuthoringValidation {
+  regexp: string
+  errorMessage: string
+}
 
 export interface AuthoringItem {
   name: string
   oid: string
   descriptionLabel: string
   leftItemText: string
+  rightItemText: string
+  units: string
   dataType: AuthoringDataType
+  responseType: AuthoringResponseType
+  defaultValue: string
   required: boolean
+  responseSet: AuthoringResponseSet
+  validation: AuthoringValidation
 }
 
 export interface AuthoringSection {
@@ -45,9 +117,52 @@ export interface AuthoringDraft {
   sections: AuthoringSection[]
 }
 
+/**
+ * One entry in the cross-CRF response-set catalog. Mirrors
+ * {@code ResponseSetCatalogEntry} (i.e. {@code ResponseSetDto}).
+ */
+export interface ResponseSetCatalogEntry {
+  label: string
+  responseType: AuthoringResponseType | string
+  options: ResponseSetOption[]
+  usageCount: number
+  inActiveStudy: boolean
+}
+
 export type AuthoringSubmitResult =
   | { ok: true; version: CrfVersion }
   | { ok: false; fieldErrors: Record<string, string>; parseErrors: string[]; message?: string }
+
+export interface AuthoringPreviewSuccess {
+  crfOid: string
+  versionName: string
+  sectionCount: number
+  itemCount: number
+}
+
+export type AuthoringPreviewResult =
+  | { ok: true; preview: AuthoringPreviewSuccess }
+  | { ok: false; fieldErrors: Record<string, string>; parseErrors: string[]; message?: string }
+
+/**
+ * Response types that carry a finite option list — radio, single-/
+ * multi-select, checkbox. The SPA wizard renders the response-set
+ * picker exactly for these.
+ */
+const OPTION_RESPONSE_TYPES = new Set<AuthoringResponseType>([
+  'radio',
+  'single-select',
+  'multi-select',
+  'checkbox',
+])
+
+export function responseTypeRequiresOptions(t: AuthoringResponseType): boolean {
+  return OPTION_RESPONSE_TYPES.has(t)
+}
+
+function emptyValidation(): AuthoringValidation {
+  return { regexp: '', errorMessage: '' }
+}
 
 function emptyDraft(): AuthoringDraft {
   return {
@@ -72,20 +187,32 @@ function emptyItem(): AuthoringItem {
     oid: '',
     descriptionLabel: '',
     leftItemText: '',
+    rightItemText: '',
+    units: '',
     dataType: 'ST',
+    responseType: 'text',
+    defaultValue: '',
     required: false,
+    responseSet: null,
+    validation: emptyValidation(),
   }
 }
 
 export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   const draft = ref<AuthoringDraft>(emptyDraft())
   const isSubmitting = ref(false)
+  const isPreviewing = ref(false)
   const error = ref<string | null>(null)
+
+  /** Cached catalog from {@code GET /api/v1/response-sets}. */
+  const responseSetCatalog = ref<ResponseSetCatalogEntry[]>([])
+  const isLoadingCatalog = ref(false)
 
   function reset(): void {
     draft.value = emptyDraft()
     error.value = null
     isSubmitting.value = false
+    isPreviewing.value = false
   }
 
   function setMetadata(patch: Partial<Pick<AuthoringDraft, 'versionName' | 'versionDescription' | 'revisionNotes'>>): void {
@@ -113,6 +240,19 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     })
   }
 
+  function removeSection(sectionIndex: number): void {
+    if (draft.value.sections.length <= 1) return
+    draft.value.sections.splice(sectionIndex, 1)
+    // Re-number ordinals so the persisted payload is contiguous.
+    draft.value.sections.forEach((s, i) => {
+      s.ordinal = i + 1
+    })
+  }
+
+  function reorderSections(reordered: AuthoringSection[]): void {
+    draft.value.sections = reordered.map((s, i) => ({ ...s, ordinal: i + 1 }))
+  }
+
   function addItem(sectionIndex: number, seed?: Partial<AuthoringItem>): void {
     const section = draft.value.sections[sectionIndex]
     if (!section) return
@@ -138,12 +278,33 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     section.items.splice(itemIndex, 1)
   }
 
+  function reorderItems(sectionIndex: number, reordered: AuthoringItem[]): void {
+    const section = draft.value.sections[sectionIndex]
+    if (!section) return
+    section.items = reordered
+  }
+
   /**
-   * Build the wire payload from the draft. Trims whitespace and drops
-   * the SPA-only `oid` field on items (the backend auto-generates OIDs
-   * via the legacy parser for Milestone A).
+   * Auto-suggest an item OID from the operator-typed item name.
+   * Simple convention: uppercase + collapse non-word chars to a
+   * single underscore. Operators can override the suggestion at the
+   * Item editor — `setItemField(s, i, 'oid', …)`.
    */
-  function buildPayload(): AuthoringDraft {
+  function suggestOid(name: string): string {
+    if (!name) return ''
+    return name
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+  }
+
+  /**
+   * Build the wire payload from the draft. Trims whitespace and
+   * drops empty optional sub-objects so the wire shape matches the
+   * backend's null-tolerant record fields.
+   */
+  function buildPayload(): Record<string, unknown> {
     return {
       versionName: draft.value.versionName.trim(),
       versionDescription: draft.value.versionDescription.trim(),
@@ -153,16 +314,66 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
         title: s.title.trim(),
         instructions: s.instructions.trim(),
         ordinal: s.ordinal || idx + 1,
-        items: s.items.map((it) => ({
-          name: it.name.trim(),
-          oid: it.oid.trim(),
-          descriptionLabel: it.descriptionLabel.trim(),
-          leftItemText: it.leftItemText.trim(),
-          dataType: it.dataType,
-          required: it.required,
-        })),
+        items: s.items.map((it) => buildItemPayload(it)),
       })),
     }
+  }
+
+  function buildItemPayload(it: AuthoringItem): Record<string, unknown> {
+    const out: Record<string, unknown> = {
+      name: it.name.trim(),
+      oid: it.oid.trim(),
+      descriptionLabel: it.descriptionLabel.trim(),
+      leftItemText: it.leftItemText.trim(),
+      rightItemText: it.rightItemText.trim(),
+      units: it.units.trim(),
+      dataType: it.dataType,
+      defaultValue: it.defaultValue.trim(),
+      required: it.required,
+    }
+    const rs = buildResponseSetPayload(it)
+    if (rs) out.responseSet = rs
+    const v = buildValidationPayload(it.validation)
+    if (v) out.validation = v
+    return out
+  }
+
+  function buildResponseSetPayload(it: AuthoringItem): Record<string, unknown> | null {
+    // Open-text responses (text / textarea / file) don't need an explicit
+    // response-set on the wire — the synthesised workbook treats the
+    // dataType + the absence of options as the open-text branch.
+    const rs = it.responseSet
+    if (rs == null) {
+      // The picker is omitted entirely; surface the implicit responseType
+      // so the backend stamps the correct ResponseType on the synthesised
+      // workbook (single source of truth = item.responseType).
+      return { type: it.responseType, label: implicitOpenLabel(it) }
+    }
+    if ('ref' in rs) {
+      return { ref: { label: rs.ref.label } }
+    }
+    return {
+      type: rs.type,
+      label: rs.label.trim(),
+      options: rs.options
+        .map((opt) => ({ text: opt.text.trim(), value: opt.value.trim() }))
+        .filter((opt) => opt.text !== '' || opt.value !== ''),
+    }
+  }
+
+  function implicitOpenLabel(it: AuthoringItem): string {
+    // Synthetic label so the parser sees a non-empty response_set.label
+    // (it's required at the workbook column level). The label is
+    // operator-visible only via the picker once Milestone C lands.
+    if (it.name.trim() !== '') return it.name.trim().toLowerCase() + '_response'
+    return 'open_response'
+  }
+
+  function buildValidationPayload(v: AuthoringValidation): Record<string, string> | null {
+    const regexp = v.regexp.trim()
+    const errorMessage = v.errorMessage.trim()
+    if (regexp === '' && errorMessage === '') return null
+    return { regexp, errorMessage }
   }
 
   async function submit(crfOid: string): Promise<AuthoringSubmitResult> {
@@ -176,13 +387,114 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
       )
       return { ok: true, version }
     } catch (e) {
-      return mapSubmitError(e)
+      return mapError(e) as AuthoringSubmitResult
     } finally {
       isSubmitting.value = false
     }
   }
 
-  function mapSubmitError(e: unknown): AuthoringSubmitResult {
+  /**
+   * Phase E.6 Milestone B — dry-run preview against the backend
+   * {@code :preview} endpoint. Runs the same {@code CrfJsonValidator}
+   * the persist path runs but never touches the workbook adapter or the
+   * parser. Surfaces structured errors at the Review step before the
+   * operator commits.
+   */
+  async function preview(crfOid: string): Promise<AuthoringPreviewResult> {
+    isPreviewing.value = true
+    error.value = null
+    try {
+      const payload = buildPayload()
+      const preview = await apiPost<AuthoringPreviewSuccess>(
+        `/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions:preview`,
+        payload,
+      )
+      return { ok: true, preview }
+    } catch (e) {
+      return mapError(e) as AuthoringPreviewResult
+    } finally {
+      isPreviewing.value = false
+    }
+  }
+
+  /**
+   * Load the cross-CRF response-set catalog from the backend virtual
+   * catalog endpoint. The result is cached on the store; re-calling
+   * refreshes the cache.
+   */
+  async function loadResponseSetCatalog(): Promise<void> {
+    isLoadingCatalog.value = true
+    try {
+      const list = await apiGet<ResponseSetCatalogEntry[]>('/pages/api/v1/response-sets')
+      responseSetCatalog.value = Array.isArray(list) ? list : []
+    } catch (e) {
+      // Catalog is a UX affordance, not a hard requirement — swallow
+      // network errors and surface an empty catalog so the wizard's
+      // inline-create branch still works offline.
+      if (e instanceof ApiError) {
+        error.value = `Antwortset-Katalog nicht verfügbar (HTTP ${e.status}).`
+      } else if (e instanceof ApiNetworkError) {
+        error.value = 'Antwortset-Katalog nicht erreichbar.'
+      }
+      responseSetCatalog.value = []
+    } finally {
+      isLoadingCatalog.value = false
+    }
+  }
+
+  /**
+   * Virtual-create a catalog entry via the backend
+   * {@code POST /api/v1/response-sets} endpoint. The endpoint validates
+   * the shape + echoes the entry back (DR-020 — no row is persisted
+   * until the next CRF version create). The SPA caches the entry so
+   * subsequent picker opens can select it without a round-trip.
+   */
+  async function createCatalogEntry(
+    entry: { label: string; responseType: AuthoringResponseType; options: ResponseSetOption[] },
+  ): Promise<ResponseSetCatalogEntry | null> {
+    try {
+      const created = await apiPost<ResponseSetCatalogEntry>(
+        '/pages/api/v1/response-sets',
+        {
+          label: entry.label.trim(),
+          responseType: entry.responseType,
+          options: entry.options
+            .map((opt) => ({ text: opt.text.trim(), value: opt.value.trim() }))
+            .filter((opt) => opt.text !== '' || opt.value !== ''),
+        },
+      )
+      const echoed: ResponseSetCatalogEntry = {
+        label: created.label,
+        responseType: created.responseType,
+        options: created.options ?? [],
+        usageCount: created.usageCount ?? 0,
+        inActiveStudy: created.inActiveStudy ?? false,
+      }
+      // De-dupe on (label, responseType) — the catalog is keyed by
+      // distinct tuples.
+      const existing = responseSetCatalog.value.findIndex(
+        (e) => e.label === echoed.label && e.responseType === echoed.responseType,
+      )
+      if (existing >= 0) responseSetCatalog.value.splice(existing, 1, echoed)
+      else responseSetCatalog.value.unshift(echoed)
+      return echoed
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Antwortset konnte nicht angelegt werden (HTTP ${e.status}).`
+      } else {
+        error.value = 'Antwortset konnte nicht angelegt werden.'
+      }
+      return null
+    }
+  }
+
+  function mapError(e: unknown): {
+    ok: false
+    fieldErrors: Record<string, string>
+    parseErrors: string[]
+    message?: string
+  } {
     if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
       error.value = (e.body as { message?: string } | null)?.message
         ?? `CRF authoring nicht erlaubt (HTTP ${e.status}).`
@@ -232,16 +544,26 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   return {
     draft,
     isSubmitting,
+    isPreviewing,
     error,
+    responseSetCatalog,
+    isLoadingCatalog,
     reset,
     setMetadata,
     setVersionName,
     setVersionDescription,
     addSection,
+    removeSection,
+    reorderSections,
     addItem,
     setItemField,
     removeItem,
+    reorderItems,
+    suggestOid,
     buildPayload,
     submit,
+    preview,
+    loadResponseSetCatalog,
+    createCatalogEntry,
   }
 })
