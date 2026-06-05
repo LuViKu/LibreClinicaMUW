@@ -36,5 +36,6 @@
   <include  file="migration/lc-muw-2026-06-05-ophth-visit-crf-seed.xml"/>
   <include  file="migration/lc-muw-2026-06-05-audit-event-type-dataset-export.xml"/>
   <include  file="migration/lc-muw-2026-06-05-audit-event-type-subject-export.xml"/>
+  <include  file="migration/lc-muw-2026-06-05-export-job.xml"/>
 </databaseChangeLog>
 
