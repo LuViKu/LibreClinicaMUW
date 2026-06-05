@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -43,10 +44,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataB
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseOptionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.ReasonForChangeWriter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
@@ -267,6 +270,13 @@ public class EventCrfsApiController {
                 sectionDtos
         );
 
+        // Phase E.6 admin-rfc — `requiresReasonForChange` true once the
+        // CRF is past date_completed. The SPA reads this flag to mount
+        // the ReasonForChangeModal before re-enabling Save on edits to
+        // post-complete entries. SIGNED / LOCKED rows still 409 on save
+        // (legacy unlock path), so we don't need a third state here.
+        boolean requiresRfc = ecb.getDateCompleted() != null;
+
         CrfEntryDto dto = new CrfEntryDto(
                 String.valueOf(ecb.getId()),
                 ss.getLabel(),
@@ -274,7 +284,8 @@ public class EventCrfsApiController {
                 schema,
                 values,
                 status,
-                lastSavedAt
+                lastSavedAt,
+                requiresRfc
         );
 
         LOG.debug("CRF Entry adapter served event_crf {} (subject {} / event {}) for study {} (user {})",
@@ -340,23 +351,73 @@ public class EventCrfsApiController {
         ItemDataDAO idDAO = new ItemDataDAO(dataSource);
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
 
+        // Phase E.6 admin-rfc — post-complete edits MUST carry a non-blank
+        // reason for every changed item. We do a pre-pass against the
+        // existing values so we can fail-fast with `missingReasonItemOids`
+        // before we touch any rows.
+        boolean postComplete = ecb.getDateCompleted() != null;
+        Map<String, String> reasons = body.reasons() == null ? Map.of() : body.reasons();
+        List<String> missingReasonItemOids = new ArrayList<>();
+        Map<String, ItemBean> resolvedItems = new HashMap<>();
+        Map<String, ItemDataBean> existingByOid = new HashMap<>();
+        if (postComplete) {
+            for (Map.Entry<String, Object> entry : body.values().entrySet()) {
+                String itemOid = entry.getKey();
+                String newValue = entry.getValue() == null ? "" : String.valueOf(entry.getValue());
+                ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+                if (candidates == null || candidates.isEmpty()) continue;
+                ItemBean item = candidates.get(0);
+                resolvedItems.put(itemOid, item);
+                ItemDataBean existing = idDAO.findByItemIdAndEventCRFId(item.getId(), ecb.getId());
+                existingByOid.put(itemOid, existing);
+                String oldValue = (existing != null && existing.getId() > 0 && existing.getValue() != null)
+                        ? existing.getValue() : "";
+                boolean willChange = !oldValue.equals(newValue);
+                if (willChange) {
+                    String reason = reasons.get(itemOid);
+                    if (reason == null || reason.trim().isEmpty()) {
+                        missingReasonItemOids.add(itemOid);
+                    }
+                }
+            }
+            if (!missingReasonItemOids.isEmpty()) {
+                Map<String, Object> err = new LinkedHashMap<>();
+                err.put("message", "Reason-for-change required for post-complete edits");
+                err.put("missingReasonItemOids", missingReasonItemOids);
+                LOG.info("saveItems: blocked post-complete edit on event_crf {} — missing reasons for {} items",
+                        ecb.getId(), missingReasonItemOids.size());
+                return ResponseEntity.status(400).body(err);
+            }
+        }
+
+        ReasonForChangeWriter rfcWriter = postComplete
+                ? new ReasonForChangeWriter(new DiscrepancyNoteDAO(dataSource))
+                : null;
+
         int saved = 0;
         int rejected = 0;
+        int rfcCreatedCount = 0;
         for (Map.Entry<String, Object> entry : body.values().entrySet()) {
             String itemOid = entry.getKey();
             String newValue = entry.getValue() == null ? "" : String.valueOf(entry.getValue());
 
-            ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
-            if (candidates == null || candidates.isEmpty()) {
-                LOG.warn("saveItems: unknown item OID '{}' on event_crf {} (skipped)", itemOid, eventCrfId);
-                rejected++;
-                continue;
+            ItemBean item = resolvedItems.get(itemOid);
+            if (item == null) {
+                ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+                if (candidates == null || candidates.isEmpty()) {
+                    LOG.warn("saveItems: unknown item OID '{}' on event_crf {} (skipped)", itemOid, eventCrfId);
+                    rejected++;
+                    continue;
+                }
+                item = candidates.get(0);
             }
-            ItemBean item = candidates.get(0);
 
-            ItemDataBean existing = idDAO.findByItemIdAndEventCRFId(item.getId(), ecb.getId());
+            ItemDataBean existing = existingByOid.containsKey(itemOid)
+                    ? existingByOid.get(itemOid)
+                    : idDAO.findByItemIdAndEventCRFId(item.getId(), ecb.getId());
             String oldValue = "";
             boolean isCreate;
+            int itemDataIdAfter;
             if (existing != null && existing.getId() > 0) {
                 oldValue = existing.getValue() == null ? "" : existing.getValue();
                 if (oldValue.equals(newValue)) {
@@ -371,6 +432,7 @@ public class EventCrfsApiController {
                 existing.setOldStatus(Status.AVAILABLE);
                 idDAO.update(existing);
                 isCreate = false;
+                itemDataIdAfter = existing.getId();
             } else {
                 ItemDataBean idb = new ItemDataBean();
                 idb.setEventCRFId(ecb.getId());
@@ -382,14 +444,37 @@ public class EventCrfsApiController {
                 idb.setStatus(Status.AVAILABLE);
                 idb.setOldStatus(Status.AVAILABLE);
                 idb.setDeleted(false);
-                idDAO.create(idb);
+                ItemDataBean createdRow = idDAO.create(idb);
                 isCreate = true;
+                itemDataIdAfter = createdRow != null ? createdRow.getId() : idb.getId();
             }
 
             writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
                     isCreate ? "item_data_create" : "item_data_update",
-                    "item_data", existing != null ? existing.getId() : 0,
+                    "item_data", itemDataIdAfter,
                     itemOid, oldValue, newValue);
+
+            // Phase E.6 admin-rfc — write the RFC discrepancy note + mapping
+            // when this is a post-complete edit. The writer is best-effort:
+            // it logs + swallows DAO failures so a flaky RFC write never
+            // rolls back the item_data save.
+            if (rfcWriter != null && itemDataIdAfter > 0) {
+                String reason = reasons.get(itemOid);
+                if (reason != null && !reason.trim().isEmpty()) {
+                    DiscrepancyNoteBean rfcDn = rfcWriter.writeRfc(
+                            itemDataIdAfter, currentStudy, currentUser, reason);
+                    if (rfcDn != null) {
+                        rfcCreatedCount++;
+                        // Also emit an audit_event row tagged item_data_rfc so
+                        // the audit-log view (M10) can correlate the RFC with
+                        // the item_data update.
+                        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                                "item_data_rfc", "item_data", itemDataIdAfter,
+                                itemOid, oldValue, newValue);
+                    }
+                }
+            }
+
             saved++;
         }
 
@@ -403,11 +488,12 @@ public class EventCrfsApiController {
         out.put("eventCrfOid", String.valueOf(ecb.getId()));
         out.put("savedItemCount", saved);
         out.put("rejectedItemCount", rejected);
+        out.put("rfcCreatedCount", rfcCreatedCount);
         out.put("lastSavedAt", formatIsoInstant(latestUpdate(eventCrfDAO.findByPK(ecb.getId()))));
         out.put("status", computeStatus(ecb, /* re-check after touch */ saved > 0));
 
-        LOG.info("CRF save: event_crf {} got {} items (rejected {}); user {} study {}",
-                ecb.getId(), saved, rejected, currentUser.getName(), currentStudy.getOid());
+        LOG.info("CRF save: event_crf {} got {} items (rejected {}, rfc {}); user {} study {}",
+                ecb.getId(), saved, rejected, rfcCreatedCount, currentUser.getName(), currentStudy.getOid());
 
         return ResponseEntity.ok(out);
     }
@@ -652,8 +738,9 @@ public class EventCrfsApiController {
         }
     }
 
-    /** Body of POST /pages/api/v1/eventCrfs/{id}/items. */
-    public record SaveItemsRequest(Map<String, Object> values) {}
+    /* Phase E.6 admin-rfc — SaveItemsRequest promoted to its own file
+     * ({@link SaveItemsRequest}). The promoted record carries the
+     * {@code reasons} map needed for Reason-For-Change capture. */
 
     /**
      * Build a single item DTO. The {@code dataType} mapping prefers the
