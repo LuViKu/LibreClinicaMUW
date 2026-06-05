@@ -72,7 +72,27 @@ public class StudySubjectBean extends AuditableEntityBean {
 
     private OidGenerator oidGenerator = new StudySubjectOidGenerator();
     private String time_zone;
-    	
+
+    /**
+     * Phase E.6 Tier 1 — ophthalmology study-eye scope.
+     *
+     * <p>One of {@code "OD"} (right), {@code "OS"} (left), {@code "OU"}
+     * (both), or {@code null} for non-ophth studies / pre-randomization.
+     * Persisted in {@code study_subject.study_eye} (VARCHAR(3),
+     * nullable, no DB-level CHECK — enforced in Java + SPA).
+     */
+    private String studyEye;
+
+    /**
+     * Phase E.6 Tier 1 — date of the eligibility screening visit.
+     *
+     * <p>Typically a few days before {@link #enrollmentDate}; may be
+     * null for retrospective imports or non-MUW deployments that don't
+     * run a separate screening visit. Persisted in
+     * {@code study_subject.screening_date} (DATE, nullable).
+     */
+    private Date screeningDate;
+
 	public StudySubjectBean() {
         studyGroupMaps = new ArrayList<>();
     }
@@ -289,6 +309,38 @@ public class StudySubjectBean extends AuditableEntityBean {
 	public void setTime_zone(String time_zone) {
 		this.time_zone = time_zone;
 	}
-    
+
+    /**
+     * @return the ophthalmology study-eye scope ("OD" / "OS" / "OU" or
+     *         {@code null}).
+     */
+    public String getStudyEye() {
+        return studyEye;
+    }
+
+    /**
+     * @param studyEye one of {@code "OD" / "OS" / "OU"} or {@code null}.
+     *                 Caller is responsible for validation; this setter
+     *                 does not enforce the enum (the
+     *                 {@code SubjectsApiController} does).
+     */
+    public void setStudyEye(String studyEye) {
+        this.studyEye = studyEye;
+    }
+
+    /**
+     * @return the eligibility-screening date, or {@code null} if not
+     *         recorded.
+     */
+    public Date getScreeningDate() {
+        return screeningDate;
+    }
+
+    /**
+     * @param screeningDate eligibility-screening date.
+     */
+    public void setScreeningDate(Date screeningDate) {
+        this.screeningDate = screeningDate;
+    }
 
 }

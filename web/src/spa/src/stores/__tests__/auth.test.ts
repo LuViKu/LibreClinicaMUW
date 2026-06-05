@@ -252,6 +252,7 @@ describe('useAuthStore', () => {
         gender: 'F', yearOfBirth: 1962, groupLabel: null, enrolledOn: '2020-10-06',
         signed: false, openQueries: 2,
         events: [],
+        studyEye: null,
       }
       const subjects = useSubjectsStore()
       subjects.rows = [STUDY_A_SUBJECT]

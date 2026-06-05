@@ -1,0 +1,66 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 Tier 1 — ophthalmology-domain subject extension.
+
+        Ophthalmology trials systematically scope each enrolled subject
+        to ONE eye (or both) for the study endpoints, because most
+        interventions (intravitreal injections, lens implants, gonio
+        surgery, etc.) target a single eye. Recording this at the
+        study_subject level avoids re-asking it on every visit form and
+        gives the matrix / exports a single source of truth.
+
+        Two new columns:
+
+          - `study_eye` VARCHAR(3): the study-eye scope. Allowed values
+            'OD' (right), 'OS' (left), 'OU' (both). NULL is permitted
+            (non-ophth studies, or pre-screening before randomization).
+            Deliberately NO Postgres ENUM / CHECK constraint — enum
+            evolution in Postgres is painful (ALTER TYPE ... ADD VALUE
+            can't run in a transaction; rename / drop is multi-step
+            with downtime); enforcement lives in the Java DTO
+            validator + SPA SelectInput options. This matches the
+            project's existing pattern (gender stored as char without
+            a CHECK).
+
+          - `screening_date` DATE: the date the subject was screened
+            for eligibility — typically 1-30 days before
+            `enrollment_date`. Optional because non-MUW deployments
+            may run studies without a screening visit, and because
+            data for retrospective imports is sometimes missing.
+
+        Both columns are nullable + un-defaulted: this changeset is
+        context-FREE (runs on every install, demo + production +
+        on-prem) and must not invalidate any existing row.
+
+        No CHECK constraint at the DB level because:
+          1) study_eye enum evolution would be painful for future
+             extensions like 'BIL' / 'XX' / per-arm overrides.
+          2) screening_date <= enrollment_date is a logical rule, but
+             enforcing it as a CHECK breaks legacy imports where
+             screening_date is later than enrollment by 1-2 days due
+             to administrative dating differences. Java + SPA enforce
+             the validator-friendly version of the rule.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-06-05-ophth-subject-eye-and-screening-date">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <not><columnExists tableName="study_subject" columnName="study_eye"/></not>
+                <not><columnExists tableName="study_subject" columnName="screening_date"/></not>
+            </and>
+        </preConditions>
+        <addColumn tableName="study_subject">
+            <column name="study_eye" type="VARCHAR(3)">
+                <constraints nullable="true"/>
+            </column>
+            <column name="screening_date" type="DATE">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+    </changeSet>
+</databaseChangeLog>

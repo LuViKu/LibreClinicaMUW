@@ -663,6 +663,17 @@ public class SubjectsApiController {
         ssb.setOwner(currentUser);
         // groupLabel intentionally ignored per M4 scope.
 
+        // Phase E.6 Tier 1 — ophthalmology domain fields. Both optional;
+        // pre-validated by validateAddSubject (studyEye normalized to
+        // upper-case for storage; empty strings become null).
+        if (body.studyEye() != null) {
+            String eyeRaw = body.studyEye().trim();
+            ssb.setStudyEye(eyeRaw.isEmpty() ? null : eyeRaw.toUpperCase());
+        }
+        if (body.screeningDate() != null && !body.screeningDate().trim().isEmpty()) {
+            ssb.setScreeningDate(java.sql.Date.valueOf(LocalDate.parse(body.screeningDate().trim())));
+        }
+
         try {
             ssb = studySubjectDAO.create(ssb);
         } catch (Exception e) {
@@ -694,7 +705,9 @@ public class SubjectsApiController {
                 Collections.emptyList(),
                 /* signed */ false,
                 /* locked */ false,
-                /* openQueries */ 0
+                /* openQueries */ 0,
+                ssb.getStudyEye(),
+                formatIsoDate(ssb.getScreeningDate())
         );
 
         LOG.info("Add Subject: created study_subject id={} oid={} label={} (study {}, user {})",
@@ -1624,6 +1637,29 @@ public class SubjectsApiController {
 
         // ---- groupLabel: ignored (out of scope for M4) ----
 
+        // ---- studyEye (Phase E.6 Tier 1): optional; one of OD/OS/OU ----
+        if (body.studyEye() != null) {
+            String eye = body.studyEye().trim().toUpperCase();
+            if (!eye.isEmpty() && !eye.equals("OD") && !eye.equals("OS") && !eye.equals("OU")) {
+                errors.add(new ValidationErrorBody.FieldError("studyEye",
+                        "'" + body.studyEye() + "' is not a valid study-eye code (OD / OS / OU)."));
+            }
+        }
+
+        // ---- screeningDate (Phase E.6 Tier 1): optional; ISO date ----
+        // Logical screeningDate <= enrolledOn rule is NOT enforced at
+        // the controller layer — legacy imports sometimes flip the two
+        // due to administrative-dating quirks. SPA surfaces a soft
+        // warning; data managers reconcile after import.
+        if (body.screeningDate() != null && !body.screeningDate().trim().isEmpty()) {
+            try {
+                LocalDate.parse(body.screeningDate().trim());
+            } catch (java.time.format.DateTimeParseException e) {
+                errors.add(new ValidationErrorBody.FieldError("screeningDate",
+                        "Screening date must be a valid ISO date (YYYY-MM-DD)."));
+            }
+        }
+
         return errors;
     }
 
@@ -1676,6 +1712,11 @@ public class SubjectsApiController {
      * server-side from the active study. {@code groupLabel} is
      * accepted but ignored in M4 — its plumbing arrives in a later
      * compliance slice.
+     *
+     * <p>Phase E.6 Tier 1: {@code studyEye} + {@code screeningDate}
+     * persist the ophthalmology-domain extension. Both optional;
+     * {@code studyEye} must be one of {@code "OD" / "OS" / "OU"} when
+     * present (validated in {@link #validateAddSubject}).
      */
     public record AddSubjectRequest(
             String id,
@@ -1683,7 +1724,9 @@ public class SubjectsApiController {
             String gender,
             Integer yearOfBirth,
             String enrolledOn,
-            String groupLabel
+            String groupLabel,
+            String studyEye,
+            String screeningDate
     ) {}
 
     /**
@@ -1770,7 +1813,9 @@ public class SubjectsApiController {
                 eventCells,
                 signed,
                 locked,
-                subjectOpenQueries
+                subjectOpenQueries,
+                ss.getStudyEye(),
+                formatIsoDate(ss.getScreeningDate())
         );
     }
 
@@ -1894,7 +1939,8 @@ public class SubjectsApiController {
                 enrolledOn,
                 eventCells,
                 signed,
-                subjectOpenQueries
+                subjectOpenQueries,
+                ss.getStudyEye()
         );
     }
 

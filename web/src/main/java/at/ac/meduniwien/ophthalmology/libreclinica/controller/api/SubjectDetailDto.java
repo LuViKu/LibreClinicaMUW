@@ -67,7 +67,21 @@ public record SubjectDetailDto(
          * edit / data-entry actions in that case.
          */
         boolean locked,
-        int openQueries
+        int openQueries,
+        /**
+         * Phase E.6 Tier 1 — ophthalmology study-eye scope.
+         *
+         * <p>One of {@code "OD" / "OS" / "OU"} or {@code null} for
+         * non-ophth studies / pre-randomization subjects. Persisted in
+         * {@code study_subject.study_eye}.
+         */
+        String studyEye,
+        /**
+         * Phase E.6 Tier 1 — eligibility-screening date as ISO
+         * {@code YYYY-MM-DD}. {@code null} when not recorded.
+         * Persisted in {@code study_subject.screening_date}.
+         */
+        String screeningDate
 ) {
 
     /**

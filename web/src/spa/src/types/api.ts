@@ -1277,6 +1277,10 @@ export interface components {
             locked?: boolean;
             /** Format: int32 */
             openQueries?: number;
+            /** Phase E.6 Tier 1 — ophthalmology study-eye scope. */
+            studyEye?: string;
+            /** Phase E.6 Tier 1 — eligibility-screening date (ISO YYYY-MM-DD). */
+            screeningDate?: string;
         };
         UpdateStudyRequest: {
             name?: string;
@@ -1552,6 +1556,10 @@ export interface components {
             yearOfBirth?: number;
             enrolledOn?: string;
             groupLabel?: string;
+            /** Phase E.6 Tier 1 — ophthalmology study-eye scope. */
+            studyEye?: string;
+            /** Phase E.6 Tier 1 — eligibility-screening date (ISO YYYY-MM-DD). */
+            screeningDate?: string;
         };
         SignSubjectRequest: {
             password?: string;
@@ -1912,6 +1920,8 @@ export interface components {
             signed?: boolean;
             /** Format: int32 */
             openQueries?: number;
+            /** Phase E.6 Tier 1 — ophthalmology study-eye scope (matrix view). */
+            studyEye?: string;
         };
         CheckRow: {
             id?: string;

@@ -30,7 +30,7 @@ const FIXTURE_SUBJECTS: Subject[] = [
   {
     id: 'M-001', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
     gender: 'F', yearOfBirth: 1962, groupLabel: null, enrolledOn: '2020-10-06',
-    signed: false, openQueries: 2,
+    signed: false, openQueries: 2, studyEye: null,
     events: [
       { eventDefinitionOid: 'SE_V1_INCLUSION', label: 'V1 Inclusion', status: 'complete', openQueries: 1 },
       { eventDefinitionOid: 'SE_V2_DAY30',     label: 'V2 Day 30',    status: 'complete', openQueries: 1 },
@@ -40,7 +40,7 @@ const FIXTURE_SUBJECTS: Subject[] = [
   {
     id: 'M-002', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
     gender: 'M', yearOfBirth: 1955, groupLabel: null, enrolledOn: '2020-10-09',
-    signed: false, openQueries: 2,
+    signed: false, openQueries: 2, studyEye: null,
     events: [
       { eventDefinitionOid: 'SE_V1_INCLUSION', label: 'V1 Inclusion', status: 'complete', openQueries: 0 },
       { eventDefinitionOid: 'SE_V2_DAY30',     label: 'V2 Day 30',    status: 'in-progress', openQueries: 2 },
@@ -50,7 +50,7 @@ const FIXTURE_SUBJECTS: Subject[] = [
   {
     id: 'M-003', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
     gender: 'F', yearOfBirth: 1949, groupLabel: null, enrolledOn: '2020-10-15',
-    signed: true, openQueries: 0,
+    signed: true, openQueries: 0, studyEye: null,
     events: [
       { eventDefinitionOid: 'SE_V1_INCLUSION', label: 'V1 Inclusion', status: 'complete', openQueries: 0 },
       { eventDefinitionOid: 'SE_V2_DAY30',     label: 'V2 Day 30',    status: 'complete', openQueries: 0 },
@@ -60,7 +60,7 @@ const FIXTURE_SUBJECTS: Subject[] = [
   {
     id: 'M-004', secondaryId: '04-MUW', siteOid: 'TDS0004', siteLabel: 'München',
     gender: 'M', yearOfBirth: 1971, groupLabel: null, enrolledOn: '2020-11-02',
-    signed: false, openQueries: 3,
+    signed: false, openQueries: 3, studyEye: null,
     events: [
       { eventDefinitionOid: 'SE_V1_INCLUSION', label: 'V1 Inclusion', status: 'in-progress', openQueries: 3 },
       { eventDefinitionOid: 'SE_V2_DAY30',     label: 'V2 Day 30',    status: 'not-scheduled', openQueries: 0 },
@@ -70,7 +70,7 @@ const FIXTURE_SUBJECTS: Subject[] = [
   {
     id: 'M-005', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
     gender: 'F', yearOfBirth: 1980, groupLabel: null, enrolledOn: '2020-11-12',
-    signed: false, openQueries: 0,
+    signed: false, openQueries: 0, studyEye: null,
     events: [
       { eventDefinitionOid: 'SE_V1_INCLUSION', label: 'V1 Inclusion', status: 'complete', openQueries: 0 },
       { eventDefinitionOid: 'SE_V2_DAY30',     label: 'V2 Day 30',    status: 'complete', openQueries: 0 },
@@ -80,7 +80,7 @@ const FIXTURE_SUBJECTS: Subject[] = [
   {
     id: 'M-006', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
     gender: 'M', yearOfBirth: 1958, groupLabel: null, enrolledOn: '2020-12-01',
-    signed: true, openQueries: 0,
+    signed: true, openQueries: 0, studyEye: null,
     events: [
       { eventDefinitionOid: 'SE_V1_INCLUSION', label: 'V1 Inclusion', status: 'signed', openQueries: 0 },
       { eventDefinitionOid: 'SE_V2_DAY30',     label: 'V2 Day 30',    status: 'signed', openQueries: 0 },
@@ -90,7 +90,7 @@ const FIXTURE_SUBJECTS: Subject[] = [
   {
     id: 'M-007', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
     gender: 'F', yearOfBirth: 1972, groupLabel: null, enrolledOn: '2021-01-15',
-    signed: false, openQueries: 1,
+    signed: false, openQueries: 1, studyEye: null,
     events: [
       { eventDefinitionOid: 'SE_V1_INCLUSION', label: 'V1 Inclusion', status: 'complete', openQueries: 0 },
       { eventDefinitionOid: 'SE_V2_DAY30',     label: 'V2 Day 30',    status: 'in-progress', openQueries: 1 },
@@ -288,8 +288,12 @@ describe('useSubjectsStore — add()', () => {
       groupLabel: input.groupLabel ?? null,
       enrolledOn: input.enrolledOn,
       signed: false,
+      locked: false,
       openQueries: 0,
       events: [],
+      // Phase E.6 Tier 1 — ophthalmology domain fields.
+      studyEye: null,
+      screeningDate: null,
     }
   }
 

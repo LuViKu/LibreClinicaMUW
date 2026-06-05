@@ -1,0 +1,602 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 Tier 3 — Ophthalmology Visit CRF template.
+
+        Seeds a reusable "OPHTH_VISIT" CRF (v1.0) with the four sections
+        every MUW ophthalmology study collects at every clinical visit:
+
+          1. Visual Acuity (LogMAR + ETDRS, per-eye)
+          2. Intraocular Pressure (per-eye, mmHg) + method
+          3. Refraction (manifest: sphere / cylinder / axis, per-eye)
+          4. Lens status (Phakic / Pseudophakic / Aphakic, per-eye)
+
+        This is NOT context=demo — it runs on every MUW deployment so
+        the CRF is immediately usable as a template for new studies.
+        Tier 2's "reusable response sets" surface automatically via the
+        M-B virtual-catalog backend once this CRF references them.
+
+        IDs allocated assuming the demo seed
+        (lc-muw-2026-06-01-seed-demo-data.xml) is the only prior
+        contributor of CRF metadata:
+
+          - crf_id = 2                (demo used 1)
+          - crf_version_id = 2        (demo used 1)
+          - section_id = 3..6         (demo used 1..2)
+          - response_set_id = 3..7    (demo used 1..2)
+          - item_id = 6..20           (demo used 1..5)
+          - item_form_metadata_id = 6..20 (demo used 1..5)
+
+        Item naming convention: `<DOMAIN>_<EYE>_<SUBFIELD>` so SAS
+        operators can pattern-match per-eye columns in exports.
+
+        Per-eye items (OD = right, OS = left) use LEFT_ITEM_TEXT for
+        the eye label so the rendered form puts "Right eye (OD): [ ]"
+        and "Left eye (OS): [ ]" side-by-side under each section
+        header. The longer-form prompts ("LogMAR (decimal)") live in
+        the section title; item-level RIGHT_ITEM_TEXT carries the unit
+        suffix where applicable.
+
+        Response sets seeded (Tier 2 deliverable, embedded here per
+        plan: response sets become "catalog" entries once a CRF
+        references them):
+
+          - rs_id=3  LogMAR     (single-select, 25 options -0.3..+2.0 step 0.1)
+          - rs_id=4  Snellen    (single-select, 20/16..20/400 + CF/HM/LP/NLP/NR)
+          - rs_id=5  IOP units  (single-select, "mmHg" only — documents unit)
+          - rs_id=6  Lens status (radio, Phakic / Pseudophakic / Aphakic)
+          - rs_id=7  freetext   (text, required by item_form_metadata
+                                 even on REAL / INT items)
+
+        ETDRS letters (0-100) use response_set_id=7 (freetext) +
+        item_data_type=INT + regexp range check, NOT a discrete
+        select — there are too many values (101) for a usable
+        dropdown.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-05-ophth-visit-crf-metadata">
+        <comment>OPHTH_VISIT CRF v1.0 — 1 crf + 1 crf_version + 4 sections + 15 items + 5 response_sets + 15 item_form_metadata.</comment>
+
+        <!-- ============================================================
+             CRF + version
+             ============================================================ -->
+        <insert tableName="crf">
+            <column name="crf_id" valueNumeric="2"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="name" value="Ophthalmology Visit"/>
+            <column name="description" value="Per-visit eye examination: visual acuity, intraocular pressure, manifest refraction, lens status. Per-eye items use OD (right) / OS (left); both eyes recorded each visit unless the study-eye scope excludes one."/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="F_OPHTH_VISIT"/>
+        </insert>
+        <insert tableName="crf_version">
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="crf_id" valueNumeric="2"/>
+            <column name="name" value="v1.0"/>
+            <column name="description" value="Initial Ophthalmology Visit version — MUW Department of Ophthalmology &amp; Optometry standard."/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="oc_oid" value="F_OPHTH_VISIT_V1"/>
+        </insert>
+
+        <!-- ============================================================
+             Sections
+             ============================================================ -->
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="3"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_OPHTH_VA"/>
+            <column name="title" value="Visual Acuity"/>
+            <column name="instructions" value="Best-corrected distance visual acuity. Capture both LogMAR (decimal) and ETDRS letter score (0-100) per eye. If only one method was used, leave the other blank — the export pipeline handles missing values."/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="4"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_OPHTH_IOP"/>
+            <column name="title" value="Intraocular Pressure"/>
+            <column name="instructions" value="Single IOP reading per eye in mmHg. Record the measurement method (GAT, Tono-Pen, iCare, etc.) — affects downstream comparability."/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="5"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_OPHTH_REFRACT"/>
+            <column name="title" value="Refraction (manifest)"/>
+            <column name="instructions" value="Manifest refraction — sphere (-30 to +30 D), cylinder (-10 to +10 D), axis (0-180°). Cycloplegic refraction has a separate CRF; do not combine here."/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="6"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_OPHTH_LENS"/>
+            <column name="title" value="Lens status"/>
+            <column name="instructions" value="Anatomical lens status per eye: Phakic (natural lens present), Pseudophakic (IOL implanted), or Aphakic (lens removed without IOL)."/>
+            <column name="ordinal" valueNumeric="4"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+
+        <!-- ============================================================
+             Response sets (Tier 2 deliverable, lives inside this CRF
+             so the M-B virtual catalog picks them up automatically)
+             ============================================================ -->
+
+        <!-- rs_id=3 LogMAR: 25 values from -0.3 to +2.0 step 0.1
+             Listed as label/value pairs separated by comma. The
+             options_text and options_values columns must match
+             1:1 (same count, same order); LibreClinica's
+             form-rendering layer indexes them by ordinal. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="3"/>
+            <column name="response_type_id" valueNumeric="6"/> <!-- single-select -->
+            <column name="label" value="logmar"/>
+            <column name="options_text" value="-0.3,-0.2,-0.1,0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2.0"/>
+            <column name="options_values" value="-0.3,-0.2,-0.1,0.0,0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,2.0"/>
+            <column name="version_id" valueNumeric="2"/>
+        </insert>
+
+        <!-- rs_id=4 Snellen (US 20-ft fractions) + low-vision codes.
+             CF=count fingers, HM=hand motion, LP=light perception,
+             NLP=no light perception, NR=not recordable. Same coding
+             convention as ETDRS protocol acuity charts. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="4"/>
+            <column name="response_type_id" valueNumeric="6"/> <!-- single-select -->
+            <column name="label" value="snellen_20ft"/>
+            <column name="options_text" value="20/16,20/20,20/25,20/32,20/40,20/50,20/63,20/80,20/100,20/125,20/160,20/200,20/250,20/320,20/400,CF,HM,LP,NLP,NR"/>
+            <column name="options_values" value="20/16,20/20,20/25,20/32,20/40,20/50,20/63,20/80,20/100,20/125,20/160,20/200,20/250,20/320,20/400,CF,HM,LP,NLP,NR"/>
+            <column name="version_id" valueNumeric="2"/>
+        </insert>
+
+        <!-- rs_id=5 IOP units — single value, but the dropdown
+             documents the unit explicitly so a downstream consumer
+             can never misinterpret IOP values. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="5"/>
+            <column name="response_type_id" valueNumeric="6"/> <!-- single-select -->
+            <column name="label" value="iop_units"/>
+            <column name="options_text" value="mmHg"/>
+            <column name="options_values" value="mmHg"/>
+            <column name="version_id" valueNumeric="2"/>
+        </insert>
+
+        <!-- rs_id=6 Lens status — radio (response_type=5) since
+             there are exactly 3 options and they're mutually
+             exclusive. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="6"/>
+            <column name="response_type_id" valueNumeric="5"/> <!-- radio -->
+            <column name="label" value="lens_status"/>
+            <column name="options_text" value="Phakic,Pseudophakic,Aphakic"/>
+            <column name="options_values" value="PHAKIC,PSEUDOPHAKIC,APHAKIC"/>
+            <column name="version_id" valueNumeric="2"/>
+        </insert>
+
+        <!-- rs_id=7 free-text placeholder. Required by every
+             item_form_metadata row even on REAL / INT items
+             (LibreClinica's form-rendering layer hard-requires a
+             response_set link); the type=text response_type is the
+             standard "no-op" choice for non-select items. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="response_type_id" valueNumeric="1"/> <!-- text -->
+            <column name="label" value="freetext_ophth"/>
+            <column name="options_text" value=""/>
+            <column name="options_values" value=""/>
+            <column name="version_id" valueNumeric="2"/>
+        </insert>
+
+        <!-- ============================================================
+             Items — 15 total
+             ============================================================ -->
+
+        <!-- Section 1: Visual Acuity (item_id 6..9) -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="6"/>
+            <column name="name" value="VA_OD_LOGMAR"/>
+            <column name="description" value="Best-corrected LogMAR visual acuity, right eye (OD)"/>
+            <column name="units" value="LogMAR"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_VA_OD_LOGMAR"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="7"/>
+            <column name="name" value="VA_OS_LOGMAR"/>
+            <column name="description" value="Best-corrected LogMAR visual acuity, left eye (OS)"/>
+            <column name="units" value="LogMAR"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_VA_OS_LOGMAR"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="8"/>
+            <column name="name" value="VA_OD_ETDRS"/>
+            <column name="description" value="ETDRS letter score, right eye (OD), 0-100"/>
+            <column name="units" value="letters"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="6"/> <!-- INT -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_VA_OD_ETDRS"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="9"/>
+            <column name="name" value="VA_OS_ETDRS"/>
+            <column name="description" value="ETDRS letter score, left eye (OS), 0-100"/>
+            <column name="units" value="letters"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="6"/> <!-- INT -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_VA_OS_ETDRS"/>
+        </insert>
+
+        <!-- Section 2: IOP (item_id 10..12) -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="10"/>
+            <column name="name" value="IOP_OD"/>
+            <column name="description" value="Intraocular pressure, right eye (OD), mmHg"/>
+            <column name="units" value="mmHg"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_IOP_OD"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="11"/>
+            <column name="name" value="IOP_OS"/>
+            <column name="description" value="Intraocular pressure, left eye (OS), mmHg"/>
+            <column name="units" value="mmHg"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_IOP_OS"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="12"/>
+            <column name="name" value="IOP_METHOD"/>
+            <column name="description" value="Tonometry method (free text: GAT, Tono-Pen, iCare, etc.)"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_IOP_METHOD"/>
+        </insert>
+
+        <!-- Section 3: Refraction (item_id 13..18) -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="13"/>
+            <column name="name" value="REFRACT_OD_SPH"/>
+            <column name="description" value="Manifest refraction sphere, right eye (OD), dioptres"/>
+            <column name="units" value="D"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_REFRACT_OD_SPH"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="14"/>
+            <column name="name" value="REFRACT_OD_CYL"/>
+            <column name="description" value="Manifest refraction cylinder, right eye (OD), dioptres"/>
+            <column name="units" value="D"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_REFRACT_OD_CYL"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="15"/>
+            <column name="name" value="REFRACT_OD_AXIS"/>
+            <column name="description" value="Manifest refraction axis, right eye (OD), degrees"/>
+            <column name="units" value="deg"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="6"/> <!-- INT -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_REFRACT_OD_AXIS"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="16"/>
+            <column name="name" value="REFRACT_OS_SPH"/>
+            <column name="description" value="Manifest refraction sphere, left eye (OS), dioptres"/>
+            <column name="units" value="D"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_REFRACT_OS_SPH"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="17"/>
+            <column name="name" value="REFRACT_OS_CYL"/>
+            <column name="description" value="Manifest refraction cylinder, left eye (OS), dioptres"/>
+            <column name="units" value="D"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_REFRACT_OS_CYL"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="18"/>
+            <column name="name" value="REFRACT_OS_AXIS"/>
+            <column name="description" value="Manifest refraction axis, left eye (OS), degrees"/>
+            <column name="units" value="deg"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="6"/> <!-- INT -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_REFRACT_OS_AXIS"/>
+        </insert>
+
+        <!-- Section 4: Lens (item_id 19..20) -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="19"/>
+            <column name="name" value="LENS_OD"/>
+            <column name="description" value="Anatomical lens status, right eye (OD)"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_LENS_OD"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="20"/>
+            <column name="name" value="LENS_OS"/>
+            <column name="description" value="Anatomical lens status, left eye (OS)"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-05"/>
+            <column name="oc_oid" value="I_LENS_OS"/>
+        </insert>
+
+        <!-- ============================================================
+             item_form_metadata — one per item, ordinals 1..N within
+             each section. left_item_text carries the eye label; the
+             section header carries the test name.
+             ============================================================ -->
+
+        <!-- Section 1 Visual Acuity -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="6"/>
+            <column name="item_id" valueNumeric="6"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="3"/>
+            <column name="response_set_id" valueNumeric="3"/> <!-- LogMAR -->
+            <column name="left_item_text" value="Right eye (OD) — LogMAR"/>
+            <column name="right_item_text" value="LogMAR"/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="7"/>
+            <column name="item_id" valueNumeric="7"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="3"/>
+            <column name="response_set_id" valueNumeric="3"/> <!-- LogMAR -->
+            <column name="left_item_text" value="Left eye (OS) — LogMAR"/>
+            <column name="right_item_text" value="LogMAR"/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="8"/>
+            <column name="item_id" valueNumeric="8"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="3"/>
+            <column name="response_set_id" valueNumeric="7"/> <!-- freetext + INT type -->
+            <column name="left_item_text" value="Right eye (OD) — ETDRS letters"/>
+            <column name="right_item_text" value="letters (0-100)"/>
+            <column name="regexp" value="^(100|[1-9]?[0-9])$"/>
+            <column name="regexp_error_msg" value="ETDRS letter score must be an integer 0-100."/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="9"/>
+            <column name="item_id" valueNumeric="9"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="3"/>
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="left_item_text" value="Left eye (OS) — ETDRS letters"/>
+            <column name="right_item_text" value="letters (0-100)"/>
+            <column name="regexp" value="^(100|[1-9]?[0-9])$"/>
+            <column name="regexp_error_msg" value="ETDRS letter score must be an integer 0-100."/>
+            <column name="ordinal" valueNumeric="4"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+
+        <!-- Section 2 IOP -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="10"/>
+            <column name="item_id" valueNumeric="10"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="4"/>
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="left_item_text" value="Right eye (OD) — IOP"/>
+            <column name="right_item_text" value="mmHg (0-80)"/>
+            <column name="width_decimal" value="(4,1)"/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="11"/>
+            <column name="item_id" valueNumeric="11"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="4"/>
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="left_item_text" value="Left eye (OS) — IOP"/>
+            <column name="right_item_text" value="mmHg (0-80)"/>
+            <column name="width_decimal" value="(4,1)"/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="12"/>
+            <column name="item_id" valueNumeric="12"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="4"/>
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="left_item_text" value="Tonometry method"/>
+            <column name="right_item_text" value="e.g. GAT, Tono-Pen, iCare"/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+
+        <!-- Section 3 Refraction -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="13"/>
+            <column name="item_id" valueNumeric="13"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="5"/>
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="left_item_text" value="Right eye (OD) — Sphere"/>
+            <column name="right_item_text" value="D (-30 to +30)"/>
+            <column name="width_decimal" value="(5,2)"/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="14"/>
+            <column name="item_id" valueNumeric="14"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="5"/>
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="left_item_text" value="Right eye (OD) — Cylinder"/>
+            <column name="right_item_text" value="D (-10 to +10)"/>
+            <column name="width_decimal" value="(5,2)"/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="15"/>
+            <column name="item_id" valueNumeric="15"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="5"/>
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="left_item_text" value="Right eye (OD) — Axis"/>
+            <column name="right_item_text" value="degrees (0-180)"/>
+            <column name="regexp" value="^(180|1[0-7][0-9]|[1-9]?[0-9])$"/>
+            <column name="regexp_error_msg" value="Axis must be an integer 0-180."/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="16"/>
+            <column name="item_id" valueNumeric="16"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="5"/>
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="left_item_text" value="Left eye (OS) — Sphere"/>
+            <column name="right_item_text" value="D (-30 to +30)"/>
+            <column name="width_decimal" value="(5,2)"/>
+            <column name="ordinal" valueNumeric="4"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="17"/>
+            <column name="item_id" valueNumeric="17"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="5"/>
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="left_item_text" value="Left eye (OS) — Cylinder"/>
+            <column name="right_item_text" value="D (-10 to +10)"/>
+            <column name="width_decimal" value="(5,2)"/>
+            <column name="ordinal" valueNumeric="5"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="18"/>
+            <column name="item_id" valueNumeric="18"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="5"/>
+            <column name="response_set_id" valueNumeric="7"/>
+            <column name="left_item_text" value="Left eye (OS) — Axis"/>
+            <column name="right_item_text" value="degrees (0-180)"/>
+            <column name="regexp" value="^(180|1[0-7][0-9]|[1-9]?[0-9])$"/>
+            <column name="regexp_error_msg" value="Axis must be an integer 0-180."/>
+            <column name="ordinal" valueNumeric="6"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+
+        <!-- Section 4 Lens (radio with lens_status response set) -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="19"/>
+            <column name="item_id" valueNumeric="19"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="6"/>
+            <column name="response_set_id" valueNumeric="6"/> <!-- lens_status -->
+            <column name="left_item_text" value="Right eye (OD) — Lens status"/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="20"/>
+            <column name="item_id" valueNumeric="20"/>
+            <column name="crf_version_id" valueNumeric="2"/>
+            <column name="section_id" valueNumeric="6"/>
+            <column name="response_set_id" valueNumeric="6"/> <!-- lens_status -->
+            <column name="left_item_text" value="Left eye (OS) — Lens status"/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

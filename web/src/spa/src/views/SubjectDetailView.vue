@@ -384,6 +384,16 @@ function dataEntryStageLabel(stage: string | null): string {
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.yearOfBirth') }}</dt><dd class="font-medium">{{ subject.yearOfBirth ?? '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.groupLabel') }}</dt><dd class="font-medium">{{ subject.groupLabel ?? '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.enrolledOn') }}</dt><dd class="font-medium font-mono text-xs">{{ formatDate(subject.enrolledOn) }}</dd></div>
+            <!-- Phase E.6 Tier 1 — ophthalmology study-eye + screening date.
+                 Read-only here; editing arrives in a later milestone
+                 along with the eye-scope per-arm overrides. -->
+            <div class="flex justify-between"><dt class="text-slate-500">{{ t('ophth.studyEye.label') }}</dt>
+              <dd class="font-medium">
+                <span v-if="subject.studyEye" class="font-mono text-xs px-1.5 py-0.5 rounded bg-muw-blue-50 text-muw-blue border border-muw-blue-100">{{ subject.studyEye }}</span>
+                <span v-else class="text-slate-400">—</span>
+              </dd>
+            </div>
+            <div class="flex justify-between"><dt class="text-slate-500">{{ t('ophth.screeningDate.label') }}</dt><dd class="font-medium font-mono text-xs">{{ subject.screeningDate ? formatDate(subject.screeningDate) : '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('subjectDetail.openQueries') }}</dt>
               <dd class="font-medium">
                 <StatusPill v-if="subject.openQueries > 0" variant="danger">{{ subject.openQueries }}</StatusPill>

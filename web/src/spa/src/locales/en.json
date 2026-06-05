@@ -1212,5 +1212,25 @@
       "dateInvalid": "Date must be in YYYY-MM-DD format.",
       "generic": "Could not schedule the event. Please try again."
     }
+  },
+  "ophth": {
+    "studyEye": {
+      "label": "Study eye",
+      "helper": "Which eye the study endpoints scope to. Leave blank for non-ophthalmology studies.",
+      "notSet": "Not set",
+      "od": "Right (OD)",
+      "os": "Left (OS)",
+      "ou": "Both (OU)",
+      "short": {
+        "od": "OD",
+        "os": "OS",
+        "ou": "OU"
+      },
+      "column": "Eye"
+    },
+    "screeningDate": {
+      "label": "Screening date",
+      "helper": "Eligibility screening visit date. Optional — usually 1-30 days before enrolment."
+    }
   }
 }

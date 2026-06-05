@@ -19,7 +19,7 @@ import {
   type AddSubjectErrorField,
   type AddSubjectInput,
 } from '@/stores/subjects'
-import type { Gender } from '@/types/subject'
+import type { Gender, StudyEye } from '@/types/subject'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -36,6 +36,10 @@ const form = reactive<AddSubjectInput>({
   yearOfBirth: null,
   groupLabel: null,
   enrolledOn: todayIso.value,
+  // Phase E.6 Tier 1 — ophthalmology domain fields. Both optional;
+  // null keeps non-ophth studies free of forced eye scope.
+  studyEye: null,
+  screeningDate: '',
 })
 
 const submitAttempted = ref(false)
@@ -66,6 +70,15 @@ function setGender(value: Gender) {
   clearServerErrorFor('gender')
 }
 
+/**
+ * Phase E.6 Tier 1 — translate the empty-string select value into a
+ * proper `null` so the StudyEye union stays narrow ('OD' | 'OS' | 'OU').
+ */
+function onStudyEyeChange(e: Event) {
+  const v = (e.target as HTMLSelectElement).value
+  form.studyEye = v === '' ? null : (v as StudyEye)
+}
+
 function clearServerErrorFor(field: AddSubjectErrorField) {
   if (!serverFieldErrors.value) return
   serverFieldErrors.value = serverFieldErrors.value.filter((e) => e.field !== field)
@@ -91,6 +104,9 @@ async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
       form.yearOfBirth = null
       form.groupLabel = null
       form.enrolledOn = todayIso.value
+      // Phase E.6 Tier 1 — reset ophth fields too.
+      form.studyEye = null
+      form.screeningDate = ''
       submitAttempted.value = false
     } else if (redirect === 'schedule') {
       router.push({ path: `/subjects/${encodeURIComponent(subject.id)}` })
@@ -290,6 +306,56 @@ const yearMax = computed(() => Number(todayIso.value.slice(0, 4)))
                 <option value="Arm A">Arm A</option>
                 <option value="Arm B">Arm B</option>
               </SelectInput>
+            </div>
+          </div>
+        </section>
+
+        <hr class="border-slate-200" />
+
+        <!-- Ophthalmology section (Phase E.6 Tier 1).
+             Both fields optional — non-ophth deployments leave them
+             blank and the form posts null to the backend. The studyEye
+             value drives the matrix's at-a-glance eye column and the
+             per-visit CRF rendering (the OPHTH_VISIT template can be
+             rendered as one-eye when the scope is OD or OS). -->
+        <section>
+          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-3">
+            Ophthalmology
+          </h2>
+
+          <div class="grid grid-cols-2 gap-x-6 gap-y-4">
+            <div>
+              <FieldLabel for="study-eye">{{ t('ophth.studyEye.label') }}</FieldLabel>
+              <!-- Native select for null-aware modelling: the value
+                   attribute on the empty option is the empty string,
+                   and we project ''→null at the v-model layer so the
+                   bean carries `null` not an empty StudyEye literal.
+                   The SelectInput primitive's typed string emit doesn't
+                   model `null` cleanly, so we drop down here. -->
+              <select
+                id="study-eye"
+                :value="form.studyEye ?? ''"
+                class="w-full px-3 py-2 rounded-md text-sm border border-slate-300 bg-white focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100 muw-focus appearance-none cursor-pointer pr-8"
+                @change="onStudyEyeChange"
+              >
+                <option value="">{{ t('ophth.studyEye.notSet') }}</option>
+                <option value="OD">{{ t('ophth.studyEye.od') }}</option>
+                <option value="OS">{{ t('ophth.studyEye.os') }}</option>
+                <option value="OU">{{ t('ophth.studyEye.ou') }}</option>
+              </select>
+              <HelperText>{{ t('ophth.studyEye.helper') }}</HelperText>
+            </div>
+
+            <div>
+              <FieldLabel for="screening-date">{{ t('ophth.screeningDate.label') }}</FieldLabel>
+              <TextInput
+                id="screening-date"
+                v-model="form.screeningDate"
+                type="date"
+                placeholder="YYYY-MM-DD"
+                autocomplete="off"
+              />
+              <HelperText>{{ t('ophth.screeningDate.helper') }}</HelperText>
             </div>
           </div>
         </section>

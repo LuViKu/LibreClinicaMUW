@@ -76,6 +76,10 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         // date_updated | date |
         // owner_id | numeric |
         // update_id | numeric |
+        // oc_oid | character varying |
+        // time_zone | character varying |
+        // study_eye | character varying(3)  -- Phase E.6 Tier 1
+        // screening_date | date              -- Phase E.6 Tier 1
 
         this.unsetTypeExpected();
         int ind = 1;
@@ -106,6 +110,14 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         ind++; // oc oid
         this.setTypeExpected(ind, TypeNames.STRING);
         ind++; // time_zone
+        // Phase E.6 Tier 1 — ophthalmology domain columns. Both nullable
+        // VARCHAR(3) for study_eye ('OD'/'OS'/'OU') and DATE for
+        // screening_date. Liquibase appends new columns at the end of
+        // the table, so these come after time_zone in SELECT * ordinal.
+        this.setTypeExpected(ind, TypeNames.STRING);
+        ind++; // study_eye
+        this.setTypeExpected(ind, TypeNames.DATE);
+        ind++; // screening_date
         // this.setTypeExpected(ind, TypeNames.INT);
         // ind++;
     }
@@ -135,6 +147,9 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         // eb.setEventStartDate((Date) hm.get("date_start"));
         // eb.setActive(true);
         eb.setTime_zone((String) hm.get("time_zone"));
+        // Phase E.6 Tier 1 — ophthalmology study-eye + screening-date.
+        eb.setStudyEye((String) hm.get("study_eye"));
+        eb.setScreeningDate((Date) hm.get("screening_date"));
         return eb;
     }
 
@@ -247,7 +262,9 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
     public StudySubjectBean findByPK(int ID) {
         this.setTypesExpected();
         // type for 'unique_identifier' from the subject table
-        setTypeExpected(14, TypeNames.STRING);
+        // Phase E.6 Tier 1: positional override bumped from 14 → 16
+        // because setTypesExpected now declares 15 columns (was 13).
+        setTypeExpected(16, TypeNames.STRING);
 
         HashMap<Integer, Object> variables = variables(ID);
 
@@ -316,6 +333,25 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         }
         variables.put(ind++, sb.getSecondaryLabel());
         variables.put(ind++, getValidOid(sb));
+
+        // Phase E.6 Tier 1 — ophthalmology study-eye + screening-date.
+        // Both are nullable; null on the bean translates to SQL NULL.
+        String studyEye = sb.getStudyEye();
+        if (studyEye == null || studyEye.isEmpty()) {
+            nullVars.put(ind, Types.VARCHAR);
+            variables.put(ind, null);
+            ind++;
+        } else {
+            variables.put(ind++, studyEye);
+        }
+        Date screeningDate = sb.getScreeningDate();
+        if (screeningDate == null) {
+            nullVars.put(ind, Types.DATE);
+            variables.put(ind, null);
+            ind++;
+        } else {
+            variables.put(ind++, screeningDate);
+        }
 
         this.executeUpdateWithPK(digester.getQuery("create"), variables, nullVars);
         if (isQuerySuccessful()) {
@@ -387,7 +423,8 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
     public ArrayList<StudySubjectBean> getWithFilterAndSort(StudyBean currentStudy, FindSubjectsFilter filter, FindSubjectsSort sort, int rowStart, int rowEnd) {
         setTypesExpected();
         // type for Study unique_identifier from StudySubject getWithFilterAndSort query
-        setTypeExpected(14, TypeNames.STRING);
+        // Phase E.6 Tier 1: positional override bumped 14 → 16.
+        setTypeExpected(16, TypeNames.STRING);
         
         String partialSql;
         HashMap<Integer, Object> variables = variables(currentStudy.getId(), currentStudy.getId());
@@ -508,9 +545,10 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
 
     public ArrayList<StudySubjectBean> getWithFilterAndSort(StudyBean currentStudy, StudyAuditLogFilter filter, StudyAuditLogSort sort, int rowStart, int rowEnd) {
         setTypesExpected();
-        this.setTypeExpected(14, TypeNames.DATE);
-        this.setTypeExpected(15, TypeNames.STRING);
-        this.setTypeExpected(16, TypeNames.STRING);
+        // Phase E.6 Tier 1: positional overrides bumped 14/15/16 → 16/17/18.
+        this.setTypeExpected(16, TypeNames.DATE);
+        this.setTypeExpected(17, TypeNames.STRING);
+        this.setTypeExpected(18, TypeNames.STRING);
 
         HashMap<Integer, Object> variables = variables(currentStudy.getId(), currentStudy.getId());
         String sql = digester.getQuery("getWithFilterAndSortAuditLog");
@@ -540,7 +578,8 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
             int rowStart, int rowEnd) {
         setTypesExpected();
         // type for Study unique_identifier from StudySubject getWithFilterAndSort query
-        setTypeExpected(14, TypeNames.STRING);
+        // Phase E.6 Tier 1: positional override bumped 14 → 16.
+        setTypeExpected(16, TypeNames.STRING);
 
         HashMap<Integer, Object> variables = variables(currentStudy.getId(), currentStudy.getId());
         String sql = digester.getQuery("getWithFilterAndSort");
@@ -607,6 +646,23 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         } else {
             variables.put(ind++, sb.getTime_zone());
         }
+        // Phase E.6 Tier 1 — ophthalmology study-eye + screening-date.
+        String studyEye = sb.getStudyEye();
+        if (studyEye == null || studyEye.isEmpty()) {
+            nullVars.put(ind, Types.VARCHAR);
+            variables.put(ind, null);
+            ind++;
+        } else {
+            variables.put(ind++, studyEye);
+        }
+        Date screeningDate = sb.getScreeningDate();
+        if (screeningDate == null) {
+            nullVars.put(ind, Types.DATE);
+            variables.put(ind, null);
+            ind++;
+        } else {
+            variables.put(ind++, screeningDate);
+        }
         variables.put(ind++, sb.getId());
 
         String sql = digester.getQuery("update");
@@ -637,7 +693,8 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
     public StudySubjectBean findBySubjectIdAndStudy(int subjectId, StudyBean study) {
         setTypesExpected();
         // type for 'unique_identifier' from the study table
-        setTypeExpected(14, TypeNames.STRING);
+        // Phase E.6 Tier 1: positional override bumped 14 → 16.
+        setTypeExpected(16, TypeNames.STRING);
 
         HashMap<Integer, Object> variables = variables(subjectId, study.getId(), study.getId());
 
@@ -660,11 +717,12 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
 
     public ArrayList<StudySubjectBean> findAllByStudyIdAndLimit(int studyId, boolean isLimited) {
         this.setTypesExpected();
-        this.setTypeExpected(14, TypeNames.STRING);
-        // unique_identifier
-        this.setTypeExpected(15, TypeNames.STRING);
-        // gender
+        // Phase E.6 Tier 1: positional overrides bumped 14/15/16 → 16/17/18.
         this.setTypeExpected(16, TypeNames.STRING);
+        // unique_identifier
+        this.setTypeExpected(17, TypeNames.STRING);
+        // gender
+        this.setTypeExpected(18, TypeNames.STRING);
         // study.name
 
         HashMap<Integer, Object> variables = variables(studyId, studyId);
