@@ -24,6 +24,17 @@
 	</properties>
 
 	<dependencies>
+		<!-- Phase E.6 P5: SubjectExportApiController uses iText directly
+		     for the per-subject PDF snapshot. The transitive route from
+		     LibreClinica-core works at compile-time but
+		     maven-dependency-plugin's analyze-only step rejects undeclared
+		     usage — declare it explicitly here. Version is managed in the
+		     parent pom (2.1.2). -->
+		<dependency>
+			<groupId>com.lowagie</groupId>
+			<artifactId>itext</artifactId>
+		</dependency>
+
 		<!-- Phase C.1: Spring Boot web starter. Brings spring-webmvc +
 		     embedded Tomcat (the embedded Tomcat is excluded for now since
 		     this module still packages as WAR for external Tomcat 10
