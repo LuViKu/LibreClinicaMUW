@@ -383,6 +383,7 @@
     "sites": "Sites",
     "enrolledSubjects": "Enrolled subjects",
     "noDeepLinkYet": "View pending",
+    "adminOnly": "Administrator only",
     "createAction": "New study",
     "editAction": "Edit identity",
     "statusAction": "Change status…",

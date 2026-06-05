@@ -85,16 +85,7 @@ const router = createRouter({
       path: '/studies/:oid/edit',
       name: 'study-edit',
       component: () => import('@/views/StudyIdentityEditView.vue'),
-      // Data Manager + Administrator can reach the form. Backend's
-      // StudyAdminAuthorization re-checks on PUT so non-sysadmins
-      // attempting a write get a 403 from the controller — this gate
-      // is UX-only. Without this widening the Build Study "Weiter"
-      // button on the create-study card bounced Data Managers (who
-      // already passed /build-study's role gate) to home.
-      meta: {
-        title: 'Edit Study',
-        role: ['Administrator', 'Data Manager'] as const,
-      },
+      meta: { title: 'Edit Study', role: 'Administrator' as const },
     },
     /* Phase E A8.2 — Event-definition CRUD for the active study. */
     {

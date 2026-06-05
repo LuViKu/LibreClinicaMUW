@@ -383,6 +383,7 @@
     "sites": "Standorte",
     "enrolledSubjects": "Aufgenommene Teilnehmer",
     "noDeepLinkYet": "Ansicht ausstehend",
+    "adminOnly": "Nur Administrator",
     "createAction": "Neue Studie",
     "editAction": "Identität bearbeiten",
     "statusAction": "Status ändern…",
