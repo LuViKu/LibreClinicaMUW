@@ -538,8 +538,17 @@ function dataEntryStageLabel(stage: string | null): string {
                     class="text-rose-700 hover:underline"
                     @click="onCancelEvent(ev)"
                   >{{ t('subjectDetail.event.cancel') }}</button>
+                  <!-- Phase E.6: link straight to the SPA's Event
+                       Detail view (see EventDetailView.vue) so the
+                       operator stays in-shell. v0 sent users into the
+                       legacy /pages/EnterDataForStudyEvent JSP which
+                       was jarring + often errored for non-Investigator
+                       roles. eventId is empty until the event row is
+                       actually scheduled — render nothing in that
+                       case (Schedule button covers the path). -->
                   <RouterLink
-                    :to="`/event-crfs/EC_${subject.id.replace('-', '')}_${ev.eventDefinitionOid.replace('SE_', '')}_DEMO`"
+                    v-if="ev.eventId"
+                    :to="`/events/${ev.eventId}`"
                     class="text-muw-blue hover:underline"
                   >
                     {{ t('subjectDetail.openEvent') }}

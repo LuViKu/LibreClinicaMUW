@@ -1256,6 +1256,37 @@
     },
     "locked": "Gesperrt"
   },
+  "eventDetail": {
+    "title": "CRFs dieser Visite",
+    "subTitle": "Formulare",
+    "breadcrumb": "{study} / {subject} / {event}",
+    "empty": "Diese Visitendefinition hat noch keine CRFs zugewiesen.",
+    "back": "Zurück zum Probanden",
+    "statusLabels": {
+      "not-started": "Nicht begonnen",
+      "data-entry-started": "In Bearbeitung",
+      "completed": "Abgeschlossen",
+      "stopped": "Abgebrochen",
+      "signed": "Signiert"
+    },
+    "table": {
+      "crfName": "CRF",
+      "version": "Version",
+      "status": "Status",
+      "required": "Pfl.",
+      "action": ""
+    },
+    "action": {
+      "open": "CRF öffnen →",
+      "startLegacy": "Datenerfassung starten →",
+      "legacyHint": "Öffnet im Klassik-Modus (neuer Tab)"
+    },
+    "error": {
+      "notFound": "Visite nicht gefunden.",
+      "forbidden": "Kein Zugriff auf diese Visite.",
+      "network": "Backend nicht erreichbar — bitte später erneut versuchen."
+    }
+  },
   "subjectExport": {
     "title": "Daten herunterladen",
     "formatLabel": "Format",

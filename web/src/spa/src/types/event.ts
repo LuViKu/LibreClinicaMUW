@@ -77,3 +77,50 @@ export function canCancelEvent(role: UserRole, status: StudyEventStatus): boolea
 
 /** Phase E A4 — body of PUT /api/v1/events/{id}. */
 export type UpdateEventRequest = components['schemas']['UpdateEventRequest']
+
+/* ------------------------------------------------------------------ */
+/* Phase E.6 — Event Detail view types.                                */
+/*                                                                    */
+/* Wire shape of `GET /pages/api/v1/events/{id}`. Replaces the legacy */
+/* `/pages/EnterDataForStudyEvent` JSP that SubjectDetailView used to */
+/* bridge into. Defined manually (not via openapi-typescript) because */
+/* the generator runs against a live server and the new EventDetailDto */
+/* won't appear in api.ts until the next codegen pass.                */
+/* ------------------------------------------------------------------ */
+
+/** State of one CRF slot in the Event Detail view. */
+export type EventCrfRowStatus =
+  | 'not-started'
+  | 'data-entry-started'
+  | 'completed'
+  | 'stopped'
+  | 'signed'
+
+/** One row of {@link EventDetailDto.crfs}. */
+export interface EventCrfRowDto {
+  eventCrfId: number | null
+  eventCrfOid: string | null
+  crfName: string
+  crfVersionName: string
+  crfVersionOid: string | null
+  eventDefinitionCrfId: number
+  status: EventCrfRowStatus
+  required: boolean
+  passwordRequired: boolean
+}
+
+/** GET /pages/api/v1/events/{id} response. */
+export interface EventDetailDto {
+  eventId: number
+  eventDefinitionOid: string
+  eventDefinitionName: string
+  subjectLabel: string
+  subjectOid: string
+  studyOid: string
+  studyName: string
+  dateStart: string
+  status: StudyEventStatus
+  ordinal: number
+  repeating: boolean
+  crfs: EventCrfRowDto[]
+}

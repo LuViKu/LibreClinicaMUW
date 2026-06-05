@@ -153,6 +153,18 @@ const router = createRouter({
       component: () => import('@/views/SubjectDetailView.vue'),
       meta: { title: 'Subject', role: 'Investigator' as const },
     },
+    /* Phase E.6 — standalone Event Detail (replaces the legacy
+       /pages/EnterDataForStudyEvent JSP that SubjectDetailView used
+       to bridge into). CRC inherits Investigator (see roleSatisfies). */
+    {
+      path: '/events/:eventId',
+      name: 'event-detail',
+      component: () => import('@/views/EventDetailView.vue'),
+      meta: {
+        title: 'Event',
+        role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
+      },
+    },
     /* Phase E.8 — Auth. */
     {
       path: '/login',
