@@ -7,12 +7,15 @@ import SideRail from '@/components/SideRail.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
+import SubjectExportButton from '@/components/SubjectExportButton.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
+import { useAuthStore } from '@/stores/auth'
 import type { EventStatus, Subject } from '@/types/subject'
 
 const { t } = useI18n()
 const subjects = useSubjectsStore()
+const auth = useAuthStore()
 const route = useRoute()
 
 /**
@@ -289,9 +292,18 @@ const ariaSortLabel = (subject: Subject) =>
           </td>
 
           <td class="px-3 py-2 text-right">
-            <RouterLink :to="`/subjects/${subject.id}`" class="text-muw-blue text-xs hover:underline">
-              {{ t('subjectMatrix.openSubject') }}
-            </RouterLink>
+            <div class="inline-flex items-center gap-2 justify-end">
+              <!-- Phase E.6 P5 — per-row data snapshot trigger. Compact
+                   to keep the matrix's last column from sprawling. -->
+              <SubjectExportButton
+                :study-oid="auth.user?.activeStudy?.oid ?? null"
+                :subject-label="subject.id"
+                compact
+              />
+              <RouterLink :to="`/subjects/${subject.id}`" class="text-muw-blue text-xs hover:underline">
+                {{ t('subjectMatrix.openSubject') }}
+              </RouterLink>
+            </div>
           </td>
         </tr>
 

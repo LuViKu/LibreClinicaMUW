@@ -1192,6 +1192,18 @@
     },
     "locked": "Gesperrt"
   },
+  "subjectExport": {
+    "title": "Daten herunterladen",
+    "formatLabel": "Format",
+    "format": {
+      "odm": "CDISC ODM (XML)",
+      "csv": "Tabelle (CSV)",
+      "pdf": "PDF-Bericht"
+    },
+    "downloading": "Lädt herunter…",
+    "success": "Download gestartet.",
+    "failed": "Export fehlgeschlagen"
+  },
   "scheduleEvent": {
     "title": "Visite planen",
     "subtitle": "Teilnehmer/-in {id}",

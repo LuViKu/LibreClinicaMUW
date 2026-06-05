@@ -1192,6 +1192,18 @@
     },
     "locked": "Locked"
   },
+  "subjectExport": {
+    "title": "Download data",
+    "formatLabel": "Format",
+    "format": {
+      "odm": "CDISC ODM (XML)",
+      "csv": "Spreadsheet (CSV)",
+      "pdf": "PDF report"
+    },
+    "downloading": "Downloading…",
+    "success": "Download started.",
+    "failed": "Export failed"
+  },
   "scheduleEvent": {
     "title": "Schedule event",
     "subtitle": "Subject {id}",
