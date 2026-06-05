@@ -26,6 +26,8 @@ import jakarta.servlet.http.HttpSession;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -41,6 +43,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataB
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseOptionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
@@ -465,6 +468,15 @@ public class EventCrfsApiController {
                     "event_crf_mark_complete", "event_crf", ecb.getId(),
                     /* columnName */ "date_completed", /* old */ "",
                     /* new */ Instant.now().toString());
+
+            // Cascade the parent study_event status when every required
+            // event_definition_crf for the SED has a complete event_crf.
+            // The legacy DataEntryServlet skipped this step, leaving the
+            // visit pinned at DATA_ENTRY_STARTED forever — the SPA's
+            // event-detail and subject-detail views then contradicted
+            // each other. Idempotent: if already COMPLETED / SIGNED /
+            // LOCKED we leave it alone.
+            cascadeEventStatusIfAllCrfsComplete(ecb.getStudyEventId(), currentUser);
         }
 
         EventCRFBean refreshed = eventCrfDAO.findByPK(ecb.getId());
@@ -571,6 +583,13 @@ public class EventCrfsApiController {
                 /* columnName */ "date_completed",
                 /* old */ previousCompletedAt,
                 /* new */ "");
+
+        // Inverse of the markComplete cascade: if the parent
+        // study_event was COMPLETED because this was the last
+        // required CRF, rewind it to DATA_ENTRY_STARTED. SIGNED /
+        // LOCKED states are terminal and left alone (an admin
+        // un-sign / un-lock flow predates this point).
+        rewindEventStatusOnReopen(ecb.getStudyEventId(), currentUser);
 
         EventCRFBean refreshed = eventCrfDAO.findByPK(ecb.getId());
 
@@ -776,5 +795,97 @@ public class EventCrfsApiController {
     private static String blankToNull(String s, String fallback) {
         if (s == null || s.isBlank()) return fallback;
         return s;
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Phase E.6 — study_event status cascade after CRF mark/reopen.       */
+    /*                                                                    */
+    /* Operators saw "Abgeschlossen" on every CRF row and a parent visit  */
+    /* still pinned at "In Bearbeitung" because the legacy markComplete   */
+    /* never bumped the visit. Cascade now: when every required EDC has  */
+    /* a complete event_crf, flip study_event → COMPLETED. The reopen    */
+    /* path rewinds COMPLETED back to DATA_ENTRY_STARTED for symmetry.   */
+    /*                                                                    */
+    /* "Required" matches the legacy edc.required_crf flag. Optional     */
+    /* CRFs don't gate the cascade; their state is operator discretion.  */
+    /* SIGNED / LOCKED visits are terminal — left alone in both helpers. */
+    /* ------------------------------------------------------------------ */
+
+    private void cascadeEventStatusIfAllCrfsComplete(int studyEventId, UserAccountBean actor) {
+        try {
+            StudyEventDAO seDAO = new StudyEventDAO(dataSource);
+            StudyEventBean ev = (StudyEventBean) seDAO.findByPK(studyEventId);
+            if (ev == null || ev.getId() == 0) return;
+            SubjectEventStatus current = ev.getSubjectEventStatus();
+            if (current == null
+                    || current.equals(SubjectEventStatus.COMPLETED)
+                    || current.equals(SubjectEventStatus.SIGNED)
+                    || current.equals(SubjectEventStatus.LOCKED)) {
+                return;
+            }
+            if (!allRequiredEventCrfsComplete(ev)) return;
+            ev.setSubjectEventStatus(SubjectEventStatus.COMPLETED);
+            ev.setUpdater(actor);
+            ev.setUpdatedDate(new Date());
+            seDAO.update(ev);
+        } catch (Exception cascadeEx) {
+            // Best-effort — the CRF mark already committed. Don't let
+            // the cascade failure surface as a 500 to the SPA.
+            LOG.warn("study_event {} cascade-to-COMPLETED failed (continuing): {}",
+                    studyEventId, cascadeEx.getMessage());
+        }
+    }
+
+    private void rewindEventStatusOnReopen(int studyEventId, UserAccountBean actor) {
+        try {
+            StudyEventDAO seDAO = new StudyEventDAO(dataSource);
+            StudyEventBean ev = (StudyEventBean) seDAO.findByPK(studyEventId);
+            if (ev == null || ev.getId() == 0) return;
+            SubjectEventStatus current = ev.getSubjectEventStatus();
+            if (current == null || !current.equals(SubjectEventStatus.COMPLETED)) return;
+            ev.setSubjectEventStatus(SubjectEventStatus.DATA_ENTRY_STARTED);
+            ev.setUpdater(actor);
+            ev.setUpdatedDate(new Date());
+            seDAO.update(ev);
+        } catch (Exception rewindEx) {
+            LOG.warn("study_event {} rewind-to-DATA_ENTRY_STARTED failed (continuing): {}",
+                    studyEventId, rewindEx.getMessage());
+        }
+    }
+
+    private boolean allRequiredEventCrfsComplete(StudyEventBean ev) {
+        EventDefinitionCRFDAO edcDAO = new EventDefinitionCRFDAO(dataSource);
+        @SuppressWarnings("unchecked")
+        List<EventDefinitionCRFBean> edcs =
+                edcDAO.findAllParentsByEventDefinitionId(ev.getStudyEventDefinitionId());
+        if (edcs == null || edcs.isEmpty()) return false;
+        EventCRFDAO ecDAO = new EventCRFDAO(dataSource);
+        @SuppressWarnings("unchecked")
+        List<EventCRFBean> ecs = ecDAO.findAllByStudyEvent(ev);
+        for (EventDefinitionCRFBean edc : edcs) {
+            if (edc == null || !edc.isRequiredCRF()) continue;
+            boolean found = false;
+            if (ecs != null) {
+                for (EventCRFBean ec : ecs) {
+                    if (ec == null || ec.getId() == 0) continue;
+                    if (ec.getStatus() != null
+                            && (ec.getStatus().equals(Status.DELETED)
+                                    || ec.getStatus().equals(Status.AUTO_DELETED))) continue;
+                    // Match the row to the slot via its CRF id. We
+                    // accept any non-deleted row for the slot's CRF —
+                    // operators can swap versions via the legacy flow.
+                    CRFVersionDAO cvDao = new CRFVersionDAO(dataSource);
+                    CRFVersionBean cv = (CRFVersionBean) cvDao.findByPK(ec.getCRFVersionId());
+                    if (cv == null || cv.getCrfId() != edc.getCrfId()) continue;
+                    boolean done = ec.getDateCompleted() != null
+                            || (ec.getStatus() != null
+                                    && (ec.getStatus().equals(Status.SIGNED)
+                                            || ec.getStatus().equals(Status.LOCKED)));
+                    if (done) { found = true; break; }
+                }
+            }
+            if (!found) return false;
+        }
+        return true;
     }
 }
