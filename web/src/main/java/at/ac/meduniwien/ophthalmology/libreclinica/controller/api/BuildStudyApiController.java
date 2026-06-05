@@ -161,9 +161,14 @@ public class BuildStudyApiController {
         tasks.add(task("create-study", null, "complete", null));
         tasks.add(task("crf", crfs, statusForCount(crfs), null));
         tasks.add(task("events", events, statusForCount(events), null));
-        tasks.add(task("groups", groups, statusForCount(groups), null));
-        tasks.add(task("rules", rules, statusForCount(rules), null));
-        tasks.add(task("sites", sites, statusForCount(sites), null));
+        // groups / rules / sites are operator-discretion: a single-site
+        // observational study at MUW often has zero of each and that's
+        // a valid completion state. Report "optional" instead of
+        // "not-started" so the SPA tracker doesn't paint them as
+        // outstanding work.
+        tasks.add(task("groups", groups, statusForOptionalCount(groups), null));
+        tasks.add(task("rules", rules, statusForOptionalCount(rules), null));
+        tasks.add(task("sites", sites, statusForOptionalCount(sites), null));
         tasks.add(task("users", users, statusForCount(users), "/manage-users"));
 
         StudyBuildDto dto = new StudyBuildDto(
@@ -200,6 +205,16 @@ public class BuildStudyApiController {
 
     private static String statusForCount(int count) {
         return count > 0 ? "complete" : "not-started";
+    }
+
+    /**
+     * Status helper for operator-discretion tasks (groups / rules /
+     * sites). Returns "optional" instead of "not-started" so the SPA
+     * tracker renders a non-blocking pill — the study isn't waiting on
+     * the operator to define groups if the protocol doesn't need them.
+     */
+    private static String statusForOptionalCount(int count) {
+        return count > 0 ? "complete" : "optional";
     }
 
     private static String nullToEmpty(String s) {

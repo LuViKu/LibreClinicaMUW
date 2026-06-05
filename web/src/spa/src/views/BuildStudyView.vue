@@ -66,6 +66,10 @@ async function submitStatusChange() {
  */
 function deepLinkFor(taskId: StudyBuildTaskId, backendTo: string | null): string | null {
   switch (taskId) {
+    case 'create-study': {
+      const oid = activeStudyOid.value
+      return oid ? `/studies/${encodeURIComponent(oid)}/edit` : null
+    }
     case 'events': return '/event-definitions'
     case 'crf':    return '/crf-library'
     case 'sites':  return '/sites'
@@ -81,6 +85,7 @@ function variantFor(s: StudyBuildTaskStatus): 'success' | 'warning' | 'neutral' 
     case 'complete':    return 'success'
     case 'in-progress': return 'warning'
     case 'not-started': return 'neutral'
+    case 'optional':    return 'neutral'
   }
 }
 

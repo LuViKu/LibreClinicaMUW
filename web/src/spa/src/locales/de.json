@@ -404,7 +404,8 @@
     "status": {
       "not-started": "Nicht begonnen",
       "in-progress": "In Bearbeitung",
-      "complete": "Abgeschlossen"
+      "complete": "Abgeschlossen",
+      "optional": "Optional"
     },
     "task": {
       "create-study": { "title": "Studie anlegen", "summary": "{count} aktiv", "description": "Studien-Metadaten, Version, OID, Sponsor + Protokollnummer." },

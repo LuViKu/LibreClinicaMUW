@@ -27,6 +27,7 @@ export type StudyBuildTaskStatus =
   | 'not-started'
   | 'in-progress'
   | 'complete'
+  | 'optional'
 
 export type StudyBuildTask =
   Omit<Required<components['schemas']['StudyBuildTaskDto']>, 'id' | 'status' | 'count' | 'to'>
