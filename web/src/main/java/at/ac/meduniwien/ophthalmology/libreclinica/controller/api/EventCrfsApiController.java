@@ -459,7 +459,12 @@ public class EventCrfsApiController {
                     "event_crf " + eventCrfId + " is already locked"));
         }
 
-        // Already complete (date_completed set) → return idempotently.
+        // Already complete (date_completed set) → return idempotently —
+        // but still run the cascade. Operators who completed CRFs before
+        // the cascade shipped need a way to reconcile their visit pill,
+        // and the cascade helper is idempotent (it early-returns on
+        // COMPLETED / SIGNED / LOCKED) so re-running it on already-
+        // cascaded visits costs one StudyEventDAO.findByPK.
         if (ecb.getDateCompleted() == null) {
             eventCrfDAO.markComplete(ecb, /* ide */ true);
 
@@ -468,16 +473,13 @@ public class EventCrfsApiController {
                     "event_crf_mark_complete", "event_crf", ecb.getId(),
                     /* columnName */ "date_completed", /* old */ "",
                     /* new */ Instant.now().toString());
-
-            // Cascade the parent study_event status when every required
-            // event_definition_crf for the SED has a complete event_crf.
-            // The legacy DataEntryServlet skipped this step, leaving the
-            // visit pinned at DATA_ENTRY_STARTED forever — the SPA's
-            // event-detail and subject-detail views then contradicted
-            // each other. Idempotent: if already COMPLETED / SIGNED /
-            // LOCKED we leave it alone.
-            cascadeEventStatusIfAllCrfsComplete(ecb.getStudyEventId(), currentUser);
         }
+
+        // Cascade unconditionally — covers both the fresh-complete and
+        // already-complete paths. The legacy DataEntryServlet never
+        // bumped subject_event_status, leaving visits pinned at
+        // DATA_ENTRY_STARTED forever; we reconcile on every mark.
+        cascadeEventStatusIfAllCrfsComplete(ecb.getStudyEventId(), currentUser);
 
         EventCRFBean refreshed = eventCrfDAO.findByPK(ecb.getId());
 
