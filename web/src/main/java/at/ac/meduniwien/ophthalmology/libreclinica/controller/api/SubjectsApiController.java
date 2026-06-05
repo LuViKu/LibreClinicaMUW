@@ -657,6 +657,40 @@ public class SubjectsApiController {
         List<ValidationErrorBody.FieldError> errors =
                 validateAddSubject(body, currentStudy, studySubjectDAO);
 
+        // Phase E.6 subject-lifecycle — Person-ID re-enrol validation +
+        // group-assignment validation gate fold into the same errors
+        // list so the SPA renders one consolidated error envelope.
+        SubjectGroupAssignmentService groupService =
+                new SubjectGroupAssignmentService(dataSource);
+        SubjectBean existingByPersonId = null;
+        String personId = body.personId() == null ? null : body.personId().trim();
+        if (personId != null && !personId.isEmpty()) {
+            SubjectDAO subjectDAO = new SubjectDAO(dataSource);
+            existingByPersonId = subjectDAO.findByUniqueIdentifier(personId);
+            if (existingByPersonId != null && existingByPersonId.getId() != 0) {
+                // 409-style conflict surfaced as a validation error so the
+                // SPA can flag the field directly: re-enrolling the same
+                // person in the same study is a hard refusal (one
+                // study_subject row per person per study).
+                List<StudySubjectBean> peers = studySubjectDAO.findAllBySubjectId(existingByPersonId.getId());
+                if (peers != null) {
+                    for (StudySubjectBean peer : peers) {
+                        if (peer.getStudyId() == currentStudy.getId()) {
+                            errors.add(new ValidationErrorBody.FieldError(
+                                    "personId",
+                                    "Person-ID '" + personId
+                                            + "' is already enrolled in this study"));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (body.groupAssignments() != null) {
+            errors.addAll(groupService.validate(currentStudy, body.groupAssignments()));
+        }
+
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
@@ -672,13 +706,24 @@ public class SubjectsApiController {
         boolean dobCollected = body.yearOfBirth() != null;
         java.sql.Date enrolledOn = java.sql.Date.valueOf(LocalDate.parse(body.enrolledOn()));
 
+        // Phase E.6 subject-lifecycle — Person-ID re-enrol branch.
+        // Reuse an existing subject_id rather than inserting a new
+        // subject row. The SPA flagged "Reusing existing record" in
+        // the AddSubject form when this matched.
         int newSubjectId;
-        try {
-            newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId());
-        } catch (SQLException e) {
-            LOG.error("Failed to insert subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to create subject — see server log."));
+        if (existingByPersonId != null && existingByPersonId.getId() != 0) {
+            newSubjectId = existingByPersonId.getId();
+            LOG.info("Person-ID re-enrol: reusing subject_id={} for personId={} study={}",
+                    newSubjectId, personId, currentStudy.getOid());
+        } else {
+            try {
+                newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId(),
+                        personId == null || personId.isEmpty() ? null : personId);
+            } catch (SQLException e) {
+                LOG.error("Failed to insert subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
+                return ResponseEntity.status(500).body(Map.of("message",
+                        "Failed to create subject — see server log."));
+            }
         }
 
         // ----- Persist study_subject row via DAO (reuse OID generator) -----
@@ -714,6 +759,21 @@ public class SubjectsApiController {
             LOG.error("study_subject insert returned no PK for label={} study={}", trimmedId, currentStudy.getOid());
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to enrol subject — no PK returned."));
+        }
+
+        // Phase E.6 subject-lifecycle — apply the SPA's group-assignment
+        // picks. Validation already ran above, so this only enforces
+        // the reconciliation algorithm. Failures roll the audit log
+        // forward without rolling the study_subject row back — matches
+        // legacy semantics where each insert is its own connection.
+        if (body.groupAssignments() != null && !body.groupAssignments().isEmpty()) {
+            try {
+                groupService.reconcile(ssb.getId(), currentUser, body.groupAssignments(),
+                        new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO(dataSource));
+            } catch (RuntimeException e) {
+                LOG.error("Initial group assignment failed for study_subject={} oid={} (subject enrolled but unassigned)",
+                        ssb.getId(), ssb.getOid(), e);
+            }
         }
 
         // ----- Build the response DTO -----
@@ -1841,7 +1901,8 @@ public class SubjectsApiController {
      * auto-incremented PK, matching the {@code SubjectDAO.create}
      * convention of {@code getLatestPK} after the insert.
      */
-    private int insertSubjectRow(char gender, java.sql.Date dob, boolean dobCollected, int ownerId)
+    private int insertSubjectRow(char gender, java.sql.Date dob, boolean dobCollected, int ownerId,
+                                 String personId)
             throws SQLException {
         String sql = "INSERT INTO subject (status_id, date_of_birth, gender, unique_identifier, "
                 + "owner_id, date_created, dob_collected) "
@@ -1855,7 +1916,15 @@ public class SubjectsApiController {
                 ps.setDate(2, dob);
             }
             ps.setString(3, String.valueOf(gender));
-            ps.setNull(4, Types.VARCHAR); // unique_identifier nullable, not used by M4
+            // Phase E.6 subject-lifecycle — Person-ID stored in
+            // subject.unique_identifier when provided. The legacy
+            // FindSubjectsServlet keys re-enrol lookups off this
+            // column.
+            if (personId == null || personId.isEmpty()) {
+                ps.setNull(4, Types.VARCHAR);
+            } else {
+                ps.setString(4, personId);
+            }
             ps.setInt(5, ownerId);
             ps.setBoolean(6, dobCollected);
             ps.executeUpdate();
@@ -1874,13 +1943,32 @@ public class SubjectsApiController {
      * <p>Fields mirror the SPA's {@code AddSubjectInput} TS interface
      * minus {@code siteOid} / {@code siteLabel} which are derived
      * server-side from the active study. {@code groupLabel} is
-     * accepted but ignored in M4 — its plumbing arrives in a later
-     * compliance slice.
+     * accepted but ignored — {@code groupAssignments} is the structured
+     * replacement.
      *
      * <p>Phase E.6 Tier 1: {@code studyEye} + {@code screeningDate}
      * persist the ophthalmology-domain extension. Both optional;
      * {@code studyEye} must be one of {@code "OD" / "OS" / "OU"} when
      * present (validated in {@link #validateAddSubject}).
+     *
+     * <p>Phase E.6 subject-lifecycle: {@code personId} and
+     * {@code groupAssignments} are optional.
+     * <ul>
+     *   <li>{@code personId} — the {@code subject.unique_identifier}
+     *       value. When present and a matching subject exists in the
+     *       study tree, the new study_subject row reuses the existing
+     *       subject_id (Person-ID re-enrol branch — one human, multiple
+     *       study participations). When absent or unmatched, a fresh
+     *       subject row is created.</li>
+     *   <li>{@code groupAssignments} — desired
+     *       {@code subject_group_map} state for the new subject. Same
+     *       shape as the PUT body; validation runs against the study's
+     *       active group classes; REQUIRED classes must be covered.</li>
+     * </ul>
+     *
+     * <p>Spring's JSON binding deserializes by field name (not
+     * position), so adding fields at the end is back-compat with
+     * existing SPA call sites that omit them.
      */
     public record AddSubjectRequest(
             String id,
@@ -1890,7 +1978,9 @@ public class SubjectsApiController {
             String enrolledOn,
             String groupLabel,
             String studyEye,
-            String screeningDate
+            String screeningDate,
+            String personId,
+            List<UpdateSubjectGroupsRequest.Assignment> groupAssignments
     ) {}
 
     /**
