@@ -351,13 +351,16 @@ public class AuditApiController {
             // subject_group_map trigger).
             case 28, 29 -> "subject-group-change";
             // Subject / study-subject / EDC lifecycle, plus user-profile
-            // (50, Phase E.5 follow-up), study-identity (51, Phase E.6)
-            // and dataset-export (52, Phase E.6 — data egress: SPA
-            // dataset download + retention GC) edits — all administrative
-            // actions surface under the existing "Admin" filter rather
-            // than the data-stream bucket so operators reviewing the
-            // audit trail can pivot by intent.
-            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51, 52 -> "admin";
+            // (50, Phase E.5 follow-up), study-identity (51, Phase E.6),
+            // dataset-export (52, Phase E.6 — data egress: SPA dataset
+            // download + retention GC), subject-export (53, Phase E.6)
+            // and study-parameters (54, Phase E.6 study-params — per-
+            // handle audit fan-out from PUT /studies/{oid}/parameters)
+            // edits — all administrative actions surface under the
+            // existing "Admin" filter rather than the data-stream
+            // bucket so operators reviewing the audit trail can pivot
+            // by intent.
+            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51, 52, 53, 54 -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,
