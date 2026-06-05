@@ -66,6 +66,16 @@ async function submitStatusChange() {
  */
 function deepLinkFor(taskId: StudyBuildTaskId, backendTo: string | null): string | null {
   switch (taskId) {
+    case 'create-study': {
+      // Study identity edit is sysadmin-only per legacy
+      // StudyAdminAuthorization. Non-Admins land at the same view but
+      // the SPA route guard would bounce them — gate at the link source
+      // so non-Admins see the "view-only" hint instead of a button
+      // that 404s into /home.
+      if (!canManageStudy.value) return null
+      const oid = activeStudyOid.value
+      return oid ? `/studies/${encodeURIComponent(oid)}/edit` : null
+    }
     case 'events': return '/event-definitions'
     case 'crf':    return '/crf-library'
     case 'sites':  return '/sites'
@@ -81,6 +91,7 @@ function variantFor(s: StudyBuildTaskStatus): 'success' | 'warning' | 'neutral' 
     case 'complete':    return 'success'
     case 'in-progress': return 'warning'
     case 'not-started': return 'neutral'
+    case 'optional':    return 'neutral'
   }
 }
 
@@ -229,6 +240,11 @@ function iconFor(id: StudyBuildTaskId): string {
             >
               {{ t('common.next') }} →
             </RouterLink>
+            <span
+              v-else-if="task.id === 'create-study' && !canManageStudy"
+              class="text-xs text-slate-400 italic"
+              :title="t('buildStudy.adminOnly')"
+            >{{ t('buildStudy.adminOnly') }}</span>
             <span v-else class="text-xs text-slate-400">{{ t('buildStudy.noDeepLinkYet') }}</span>
           </li>
         </ol>

@@ -383,6 +383,7 @@
     "sites": "Sites",
     "enrolledSubjects": "Enrolled subjects",
     "noDeepLinkYet": "View pending",
+    "adminOnly": "Administrator only",
     "createAction": "New study",
     "editAction": "Edit identity",
     "statusAction": "Change status…",
@@ -404,7 +405,8 @@
     "status": {
       "not-started": "Not started",
       "in-progress": "In progress",
-      "complete": "Complete"
+      "complete": "Complete",
+      "optional": "Optional"
     },
     "task": {
       "create-study": { "title": "Create study", "summary": "{count} active", "description": "Study metadata, version, OID, sponsor + protocol number." },

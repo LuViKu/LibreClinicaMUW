@@ -383,6 +383,7 @@
     "sites": "Standorte",
     "enrolledSubjects": "Aufgenommene Teilnehmer",
     "noDeepLinkYet": "Ansicht ausstehend",
+    "adminOnly": "Nur Administrator",
     "createAction": "Neue Studie",
     "editAction": "Identität bearbeiten",
     "statusAction": "Status ändern…",
@@ -404,7 +405,8 @@
     "status": {
       "not-started": "Nicht begonnen",
       "in-progress": "In Bearbeitung",
-      "complete": "Abgeschlossen"
+      "complete": "Abgeschlossen",
+      "optional": "Optional"
     },
     "task": {
       "create-study": { "title": "Studie anlegen", "summary": "{count} aktiv", "description": "Studien-Metadaten, Version, OID, Sponsor + Protokollnummer." },
