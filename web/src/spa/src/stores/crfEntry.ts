@@ -7,6 +7,8 @@ import type {
   CrfItem,
   CrfSchema,
   CrfValues,
+  MissingReasonsError,
+  SaveItemsRequest,
 } from '@/types/crf'
 
 /**
@@ -37,9 +39,49 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
   const error = ref<string | null>(null)
   const pendingChanges = ref(false)
 
+  /**
+   * Phase E.6 admin-rfc — staged reason-for-change text per dirty item.
+   * Populated by {@link stageReason} when the user submits the
+   * {@code ReasonForChangeModal}; sent alongside `values` on `save()`
+   * when the backing entry is `requiresReasonForChange`.
+   *
+   * Cleared on successful save; partially re-armed when the backend
+   * returns a 400 with `missingReasonItemOids` (we drop the served
+   * oids' staged reasons so the modal asks again for just those).
+   */
+  const pendingReasons = ref<Record<string, string>>({})
+
+  /**
+   * Phase E.6 admin-rfc — item OIDs the modal should currently solicit
+   * reasons for. The view watches this; non-empty means open the modal
+   * with one prompt per oid.
+   */
+  const missingReasonItemOids = ref<string[]>([])
+
   const schema = computed<CrfSchema | null>(() => entry.value?.schema ?? null)
   const values = computed<CrfValues>(() => entry.value?.values ?? {})
   const status = computed<CrfEntryStatus>(() => entry.value?.status ?? 'not-started')
+
+  /** True when the backing entry needs an RFC for every edit (post-complete). */
+  const requiresReasonForChange = computed<boolean>(
+    () => entry.value?.requiresReasonForChange === true,
+  )
+
+  /**
+   * Phase E.6 — dirty item OIDs (set via setValue since the last save).
+   * The modal prompts for one reason per dirty oid; the view also reads
+   * this so Save stays disabled while any dirty oid lacks a staged
+   * reason on a post-complete entry.
+   */
+  const dirtyItemOids = ref<Set<string>>(new Set())
+
+  /** OIDs that need a reason before Save can fire (post-complete only). */
+  const itemsAwaitingReason = computed<string[]>(() => {
+    if (!requiresReasonForChange.value) return []
+    return Array.from(dirtyItemOids.value).filter(
+      (oid) => !pendingReasons.value[oid] || pendingReasons.value[oid].trim().length === 0,
+    )
+  })
 
   /** Item oids whose validation currently fails (used by the section badge). */
   const itemErrors = computed<Record<string, string>>(() => {
@@ -60,6 +102,9 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     error.value = null
     pendingChanges.value = false
     entry.value = null
+    pendingReasons.value = {}
+    missingReasonItemOids.value = []
+    dirtyItemOids.value = new Set()
     try {
       entry.value = await apiGet<CrfEntry>(
         `/pages/api/v1/eventCrfs/${encodeURIComponent(eventCrfOid)}`,
@@ -89,6 +134,38 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     entry.value.values[itemOid] = value
     pendingChanges.value = true
     if (entry.value.status === 'not-started') entry.value.status = 'in-progress'
+    // Phase E.6 admin-rfc — track dirty oids so the modal knows which
+    // items still need a reason before Save can fire.
+    if (entry.value.requiresReasonForChange) {
+      dirtyItemOids.value = new Set([...dirtyItemOids.value, itemOid])
+    }
+  }
+
+  /**
+   * Phase E.6 admin-rfc — record a reason for one item OID. Called by
+   * the {@code ReasonForChangeModal} per prompt. Trims whitespace; an
+   * empty reason removes the staged entry so the modal will re-ask.
+   */
+  function stageReason(itemOid: string, reason: string): void {
+    const trimmed = reason.trim()
+    if (trimmed.length === 0) {
+      const { [itemOid]: _drop, ...rest } = pendingReasons.value
+      pendingReasons.value = rest
+      return
+    }
+    pendingReasons.value = { ...pendingReasons.value, [itemOid]: trimmed }
+    // Drop this oid from the missing list so the modal can dismiss
+    // once every prompt has been answered.
+    missingReasonItemOids.value = missingReasonItemOids.value.filter((o) => o !== itemOid)
+  }
+
+  /**
+   * Phase E.6 admin-rfc — explicit modal-dismiss helper. Clears the
+   * `missingReasonItemOids` ref so the view's `v-model:open` flips back
+   * to closed; pending reasons stay staged for the next save attempt.
+   */
+  function dismissReasonModal(): void {
+    missingReasonItemOids.value = []
   }
 
   async function save(): Promise<void> {
@@ -96,19 +173,59 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     const target = entry.value
     isSaving.value = true
     error.value = null
+    // Phase E.6 admin-rfc — short-circuit if the entry is post-complete
+    // and any dirty item is missing a staged reason. The view shouldn't
+    // call save() in this state (the button is gated), but the guard
+    // makes the contract explicit + simplifies tests.
+    if (requiresReasonForChange.value && itemsAwaitingReason.value.length > 0) {
+      missingReasonItemOids.value = [...itemsAwaitingReason.value]
+      isSaving.value = false
+      return
+    }
+    // Build the request body. Pre-complete edits omit `reasons`; the
+    // backend treats null + missing identically.
+    const body: SaveItemsRequest = requiresReasonForChange.value
+      ? { values: target.values, reasons: { ...pendingReasons.value } }
+      : { values: target.values }
     try {
       const response = await apiPost<SaveItemsResponse>(
         `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}/items`,
-        { values: target.values },
+        body,
       )
       target.lastSavedAt = response.lastSavedAt ?? new Date().toISOString()
       if (response.status === 'in-progress' && target.status === 'not-started') {
         target.status = 'in-progress'
       }
       pendingChanges.value = false
+      // Save committed — drop staged reasons + clear dirty oid tracker.
+      pendingReasons.value = {}
+      missingReasonItemOids.value = []
+      dirtyItemOids.value = new Set()
     } catch (e) {
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
         throw e
+      }
+      // Phase E.6 admin-rfc — 400 with `missingReasonItemOids` re-arms
+      // the modal scoped to the offending oids so the operator can
+      // supply the reasons + retry without losing typed values.
+      if (e instanceof ApiError && e.status === 400) {
+        const body = e.body as MissingReasonsError | { message?: string } | null
+        const oids = (body as MissingReasonsError | null)?.missingReasonItemOids
+        if (Array.isArray(oids) && oids.length > 0) {
+          missingReasonItemOids.value = [...oids]
+          // Drop the offending oids' staged reasons so the modal
+          // re-prompts (the backend won't trust a reason we already
+          // sent + it rejected as missing).
+          const next = { ...pendingReasons.value }
+          for (const oid of oids) delete next[oid]
+          pendingReasons.value = next
+          error.value = (body as { message?: string } | null)?.message
+            ?? 'Bitte Begründung für die markierten Felder eintragen.'
+          return
+        }
+        const errBody = e.body as { message?: string } | null
+        error.value = errBody?.message ?? `Speichern fehlgeschlagen (HTTP ${e.status}).`
+        return
       }
       if (e instanceof ApiNetworkError) {
         error.value =
@@ -224,11 +341,19 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     status,
     itemErrors,
     isComplete,
+    // Phase E.6 admin-rfc — RFC capture surface.
+    pendingReasons,
+    missingReasonItemOids,
+    dirtyItemOids,
+    requiresReasonForChange,
+    itemsAwaitingReason,
     load,
     setValue,
     save,
     markComplete,
     reopen,
+    stageReason,
+    dismissReasonModal,
   }
 })
 
@@ -311,11 +436,13 @@ function validateItem(item: CrfItem, raw: unknown): string | null {
 /* POST /pages/api/v1/eventCrfs/{id}/items  + POST .../markComplete (M6).      */
 /* -------------------------------------------------------------------------- */
 
-/** Wire shape of the POST /items endpoint response (M6). */
+/** Wire shape of the POST /items endpoint response (M6 + E.6). */
 interface SaveItemsResponse {
   eventCrfOid: string
   savedItemCount: number
   rejectedItemCount: number
+  /** Phase E.6 admin-rfc — count of `discrepancy_note` rows written. */
+  rfcCreatedCount?: number
   lastSavedAt: string | null
   status: CrfEntryStatus
 }
