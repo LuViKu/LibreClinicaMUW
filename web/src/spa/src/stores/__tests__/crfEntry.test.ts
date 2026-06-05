@@ -106,6 +106,10 @@ const DEMOGRAPHICS_ENTRY: CrfEntry = {
   values: {},
   status: 'not-started',
   lastSavedAt: null,
+  // Phase E.6 fields default to empty so legacy assertions stay valid.
+  groups: [],
+  maxFileBytes: 52_428_800,
+  fileExtensions: 'pdf,jpg,jpeg,png,tif,tiff',
 }
 
 describe('useCrfEntryStore', () => {

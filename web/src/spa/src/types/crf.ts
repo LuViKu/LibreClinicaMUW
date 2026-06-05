@@ -33,11 +33,12 @@ export type ItemDataType =
   | 'select-one'
   | 'select-multi'
   | 'boolean'
+  | 'file'
 
 export type ResponseOption = Required<components['schemas']['ResponseOptionDto']>
 
 export type CrfItem =
-  Omit<Required<components['schemas']['CrfItemDto']>, 'dataType' | 'options' | 'helper' | 'min' | 'max'>
+  Omit<Required<components['schemas']['CrfItemDto']>, 'dataType' | 'options' | 'helper' | 'min' | 'max' | 'groupOid'>
   & {
     dataType: ItemDataType
     /** Set when the type is `select-one` / `select-multi`. */
@@ -47,6 +48,10 @@ export type CrfItem =
     /** Inclusive numeric range when applicable. */
     min?: number
     max?: number
+    /** Phase E.6: when set, the item lives inside the matching
+     *  repeating group's row template rather than the top-level
+     *  values map. The SPA filters items by groupOid at render time. */
+    groupOid?: string | null
   }
 
 export type CrfSection =
@@ -74,14 +79,55 @@ export type CrfEntryStatus =
   | 'complete'
   | 'locked'
 
+/**
+ * Phase E.6 — a saved row inside a repeating item group. `ordinal` is
+ * 1-based and matches `item_data.ordinal`; `values` is keyed by item OID
+ * just like the top-level {@link CrfValues} map.
+ */
+export type CrfGroupRow = {
+  ordinal: number
+  values: CrfValues
+}
+
+/**
+ * Phase E.6 — a repeating item group. The SPA renders one
+ * {@code RepeatingGroupSection} per entry; each row binds its values
+ * via the store's {@code setValueInRow} action.
+ */
+export type CrfItemGroup = {
+  oid: string
+  label: string
+  repeatMax: number
+  /** Item OIDs that belong to this group, in display order. */
+  itemOids: string[]
+  rows: CrfGroupRow[]
+}
+
+/**
+ * Phase E.6 — server-supplied file-upload metadata + caps. Surfaced
+ * directly inside the {@link CrfEntry} so the dropzone widget can show
+ * the cap in its helper text and pre-validate before the multipart POST.
+ */
+export type CrfFileMetadata = {
+  /** Max bytes per upload; server enforces, SPA pre-checks. */
+  maxFileBytes: number
+  /** Comma-joined extension allowlist (e.g. "pdf,jpg,jpeg,png"). */
+  fileExtensions: string
+}
+
 export type CrfEntry =
-  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt'>
+  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt' | 'groups' | 'maxFileBytes' | 'fileExtensions'>
   & {
     schema: CrfSchema
     values: CrfValues
     status: CrfEntryStatus
     /** ISO-8601 instant of the last successful save. */
     lastSavedAt: string | null
+    /** Phase E.6: repeating item groups + their saved rows. */
+    groups: CrfItemGroup[]
+    /** Phase E.6: server-side caps mirrored into the SPA. */
+    maxFileBytes: number
+    fileExtensions: string
   }
 
 /* ------------------------------------------------------------------ */

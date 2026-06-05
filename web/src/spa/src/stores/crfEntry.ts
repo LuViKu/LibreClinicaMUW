@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { apiDelete, apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { apiUpload } from '@/api/upload'
 import type {
   CrfEntry,
   CrfEntryStatus,
+  CrfGroupRow,
   CrfItem,
+  CrfItemGroup,
   CrfSchema,
   CrfValues,
 } from '@/types/crf'
@@ -40,6 +43,12 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
   const schema = computed<CrfSchema | null>(() => entry.value?.schema ?? null)
   const values = computed<CrfValues>(() => entry.value?.values ?? {})
   const status = computed<CrfEntryStatus>(() => entry.value?.status ?? 'not-started')
+  const groups = computed<CrfItemGroup[]>(() => entry.value?.groups ?? [])
+
+  /** Phase E.6 — per-group, per-row dirty values awaiting flush in save(). */
+  const dirtyGroupRows = ref<
+    Map<string, Map<number, Map<string, unknown>>>
+  >(new Map())
 
   /** Item oids whose validation currently fails (used by the section badge). */
   const itemErrors = computed<Record<string, string>>(() => {
@@ -91,20 +100,240 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     if (entry.value.status === 'not-started') entry.value.status = 'in-progress'
   }
 
+  /**
+   * Phase E.6 — write the value for an item inside a repeating group's
+   * row. Mirrors {@link setValue} but routes the write into the matching
+   * {@link CrfGroupRow#values}; the row is also tracked in
+   * {@code dirtyGroupRows} so {@link save} flushes it to the backend.
+   */
+  function setValueInRow(
+    groupOid: string,
+    rowOrdinal: number,
+    itemOid: string,
+    value: unknown,
+  ): void {
+    if (!entry.value) return
+    const group = entry.value.groups.find((g) => g.oid === groupOid)
+    if (!group) return
+    let row = group.rows.find((r) => r.ordinal === rowOrdinal)
+    if (!row) {
+      row = { ordinal: rowOrdinal, values: {} }
+      group.rows.push(row)
+      group.rows.sort((a, b) => a.ordinal - b.ordinal)
+    }
+    row.values[itemOid] = value
+    let byOrd = dirtyGroupRows.value.get(groupOid)
+    if (!byOrd) {
+      byOrd = new Map()
+      dirtyGroupRows.value.set(groupOid, byOrd)
+    }
+    let byItem = byOrd.get(rowOrdinal)
+    if (!byItem) {
+      byItem = new Map()
+      byOrd.set(rowOrdinal, byItem)
+    }
+    byItem.set(itemOid, value)
+    pendingChanges.value = true
+    if (entry.value.status === 'not-started') entry.value.status = 'in-progress'
+  }
+
+  /**
+   * Phase E.6 — POST a new row into a repeating group. Backend
+   * allocates the next ordinal and returns it; the SPA appends a
+   * fresh blank row to the in-memory group so the user can start
+   * typing into it immediately. Rejects when {@code repeatMax} is
+   * already reached (backend returns 409 + REPEAT_MAX_REACHED).
+   */
+  async function addGroupRow(groupOid: string): Promise<CrfGroupRow | null> {
+    if (!entry.value) return null
+    const target = entry.value
+    const group = target.groups.find((g) => g.oid === groupOid)
+    if (!group) {
+      error.value = `Unknown repeating group: ${groupOid}`
+      return null
+    }
+    if (group.rows.length >= group.repeatMax) {
+      // The view should grey out the button already, but guard anyway.
+      error.value = `crfEntry.group.repeatMaxReached`
+      return null
+    }
+    isSaving.value = true
+    error.value = null
+    try {
+      const res = await apiPost<AddGroupRowResponse>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}` +
+          `/groups/${encodeURIComponent(groupOid)}/rows`,
+        {},
+      )
+      const newRow: CrfGroupRow = { ordinal: res.rowOrdinal, values: res.values ?? {} }
+      group.rows.push(newRow)
+      group.rows.sort((a, b) => a.ordinal - b.ordinal)
+      return newRow
+    } catch (e) {
+      handleApiError(e, 'Hinzufügen einer Zeile')
+      return null
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  /**
+   * Phase E.6 — DELETE a row from a repeating group. The backend
+   * soft-deletes every {@code item_data} row at the matching ordinal;
+   * the SPA drops the row from the in-memory group on success.
+   */
+  async function deleteGroupRow(
+    groupOid: string,
+    rowOrdinal: number,
+  ): Promise<boolean> {
+    if (!entry.value) return false
+    const target = entry.value
+    const group = target.groups.find((g) => g.oid === groupOid)
+    if (!group) return false
+    isSaving.value = true
+    error.value = null
+    try {
+      await apiDelete<void>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}` +
+          `/groups/${encodeURIComponent(groupOid)}/rows/${rowOrdinal}`,
+      )
+      group.rows = group.rows.filter((r) => r.ordinal !== rowOrdinal)
+      const byOrd = dirtyGroupRows.value.get(groupOid)
+      byOrd?.delete(rowOrdinal)
+      return true
+    } catch (e) {
+      handleApiError(e, 'Löschen der Zeile')
+      return false
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  /**
+   * Phase E.6 — upload a file for a file-typed item. POSTs the file
+   * via multipart/form-data; the backend stores the bytes under
+   * {@code attached_file_location} and writes the resolved path
+   * into {@code item_data.value}. The SPA pre-validates the size
+   * + extension against the cap surfaced in {@link CrfEntry}.
+   */
+  async function uploadFile(
+    itemOid: string,
+    file: File,
+    rowOrdinal = 1,
+  ): Promise<boolean> {
+    if (!entry.value) return false
+    const target = entry.value
+    // Client-side pre-check; backend enforces too.
+    if (target.maxFileBytes > 0 && file.size > target.maxFileBytes) {
+      error.value = 'crfEntry.file.tooBig'
+      return false
+    }
+    if (target.fileExtensions) {
+      const ext = (file.name.split('.').pop() ?? '').toLowerCase()
+      const allowed = target.fileExtensions.split(',').map((s) => s.trim().toLowerCase())
+      if (ext && !allowed.includes(ext)) {
+        error.value = 'crfEntry.file.badExtension'
+        return false
+      }
+    }
+    isSaving.value = true
+    error.value = null
+    try {
+      const res = await apiUpload<FileUploadResponse>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}` +
+          `/items/${encodeURIComponent(itemOid)}/file`,
+        file,
+        { rowOrdinal: String(rowOrdinal) },
+      )
+      const fileRef = {
+        filename: res.filename,
+        bytes: res.bytes,
+        contentType: res.contentType,
+        storedPath: res.storedPath,
+        rowOrdinal: res.rowOrdinal ?? rowOrdinal,
+      }
+      if (rowOrdinal === 1) {
+        target.values[itemOid] = fileRef
+      } else {
+        for (const g of target.groups) {
+          const row = g.rows.find((r) => r.ordinal === rowOrdinal)
+          if (row && g.itemOids.includes(itemOid)) {
+            row.values[itemOid] = fileRef
+            break
+          }
+        }
+      }
+      target.lastSavedAt = res.lastSavedAt ?? new Date().toISOString()
+      return true
+    } catch (e) {
+      handleApiError(e, 'Hochladen der Datei')
+      return false
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  /** Phase E.6 — DELETE an uploaded file for a file-typed item. */
+  async function deleteFile(itemOid: string, rowOrdinal = 1): Promise<boolean> {
+    if (!entry.value) return false
+    const target = entry.value
+    isSaving.value = true
+    error.value = null
+    try {
+      await apiDelete<void>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}` +
+          `/items/${encodeURIComponent(itemOid)}/file?rowOrdinal=${rowOrdinal}`,
+      )
+      if (rowOrdinal === 1) {
+        delete target.values[itemOid]
+      } else {
+        for (const g of target.groups) {
+          const row = g.rows.find((r) => r.ordinal === rowOrdinal)
+          if (row) delete row.values[itemOid]
+        }
+      }
+      return true
+    } catch (e) {
+      handleApiError(e, 'Löschen der Datei')
+      return false
+    } finally {
+      isSaving.value = false
+    }
+  }
+
   async function save(): Promise<void> {
     if (!entry.value || !pendingChanges.value) return
     const target = entry.value
     isSaving.value = true
     error.value = null
     try {
+      // Phase E.6 — bundle dirty repeating-group row writes with the
+      // top-level values payload so the backend gets a single saveItems
+      // call. The backend response carries groupRowsSaved which we
+      // surface for the optional Toast.
+      const groupsPayload: Array<{
+        groupOid: string
+        rowOrdinal: number
+        values: Record<string, unknown>
+      }> = []
+      for (const [groupOid, byOrd] of dirtyGroupRows.value.entries()) {
+        for (const [rowOrdinal, byItem] of byOrd.entries()) {
+          const vals: Record<string, unknown> = {}
+          byItem.forEach((v, k) => {
+            vals[k] = v
+          })
+          groupsPayload.push({ groupOid, rowOrdinal, values: vals })
+        }
+      }
       const response = await apiPost<SaveItemsResponse>(
         `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}/items`,
-        { values: target.values },
+        { values: target.values, groups: groupsPayload },
       )
       target.lastSavedAt = response.lastSavedAt ?? new Date().toISOString()
       if (response.status === 'in-progress' && target.status === 'not-started') {
         target.status = 'in-progress'
       }
+      dirtyGroupRows.value.clear()
       pendingChanges.value = false
     } catch (e) {
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
@@ -121,6 +350,27 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
       }
     } finally {
       isSaving.value = false
+    }
+  }
+
+  /** Phase E.6 — shared error handler for the new mutating actions. */
+  function handleApiError(e: unknown, op: string): void {
+    if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+      const body = e.body as { message?: string } | null
+      error.value = body?.message ?? `${op} verweigert (HTTP ${e.status}).`
+      return
+    }
+    if (e instanceof ApiNetworkError) {
+      error.value = `Backend nicht erreichbar — ${op} fehlgeschlagen.`
+    } else if (e instanceof ApiError) {
+      const body = e.body as { message?: string; code?: string } | null
+      if (body?.code === 'REPEAT_MAX_REACHED') {
+        error.value = 'crfEntry.group.repeatMaxReached'
+      } else {
+        error.value = body?.message ?? `${op} fehlgeschlagen (HTTP ${e.status}).`
+      }
+    } else {
+      error.value = e instanceof Error ? e.message : `Unbekannter Fehler — ${op}.`
     }
   }
 
@@ -222,10 +472,16 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     schema,
     values,
     status,
+    groups,
     itemErrors,
     isComplete,
     load,
     setValue,
+    setValueInRow,
+    addGroupRow,
+    deleteGroupRow,
+    uploadFile,
+    deleteFile,
     save,
     markComplete,
     reopen,
@@ -311,13 +567,33 @@ function validateItem(item: CrfItem, raw: unknown): string | null {
 /* POST /pages/api/v1/eventCrfs/{id}/items  + POST .../markComplete (M6).      */
 /* -------------------------------------------------------------------------- */
 
-/** Wire shape of the POST /items endpoint response (M6). */
+/** Wire shape of the POST /items endpoint response (M6 + E.6). */
 interface SaveItemsResponse {
   eventCrfOid: string
   savedItemCount: number
   rejectedItemCount: number
+  /** Phase E.6 — count of repeating-group item writes that landed. */
+  groupRowsSaved?: number
   lastSavedAt: string | null
   status: CrfEntryStatus
+}
+
+/** Phase E.6 — wire shape of POST /eventCrfs/{id}/groups/{groupOid}/rows. */
+interface AddGroupRowResponse {
+  groupOid: string
+  rowOrdinal: number
+  values?: Record<string, unknown>
+}
+
+/** Phase E.6 — wire shape of POST /eventCrfs/{id}/items/{itemOid}/file. */
+interface FileUploadResponse {
+  itemOid: string
+  rowOrdinal?: number
+  filename: string
+  bytes: number
+  contentType: string | null
+  storedPath: string
+  lastSavedAt: string | null
 }
 
 /** Wire shape of the POST /markComplete endpoint response (M6). */
