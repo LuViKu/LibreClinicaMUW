@@ -77,6 +77,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -188,6 +189,8 @@ public class DatasetsApiController {
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(type = "array", implementation = DatasetDto.class)))
     public ResponseEntity<?> listDatasets(@PathVariable("studyOid") String studyOid,
+                                          @RequestParam(value = "includeRemoved", required = false,
+                                                        defaultValue = "false") boolean includeRemoved,
                                           HttpSession session) {
         ResolvedContext ctx = resolveContext(studyOid, session);
         if (ctx.errorResponse != null) return ctx.errorResponse;
@@ -198,10 +201,12 @@ public class DatasetsApiController {
         ArrayList<DatasetBean> datasets = datasetDao.findAllByStudyId(ctx.study.getId());
         List<DatasetDto> out = new ArrayList<>(datasets.size());
         for (DatasetBean db : datasets) {
-            // Skip soft-deleted rows from the list view — the wizard
-            // restore path can resurface them via the single-fetch
-            // endpoint if/when needed.
-            if (db.getStatus() != null && db.getStatus().isDeleted()) continue;
+            // Phase E.6 restore-quickwins: caller opts in via
+            // ?includeRemoved=true to see soft-deleted rows. The SPA
+            // 'Show removed' toggle flips that flag so the Restore
+            // action has something to act on.
+            if (!includeRemoved
+                    && db.getStatus() != null && db.getStatus().isDeleted()) continue;
             int fileCount = 0;
             try {
                 ArrayList<ArchivedDatasetFileBean> files = archivedDao.findByDatasetId(db.getId());
@@ -1294,6 +1299,65 @@ public class DatasetsApiController {
         datasetDao.update(target);
 
         LOG.info("Soft-delete dataset: id={} name={} by user={}",
+                target.getId(), target.getName(), me.getName());
+
+        return ResponseEntity.ok(toWizardDto(target));
+    }
+
+    /**
+     * POST {@code /api/v1/datasets/{datasetId}/restore} — inverse of the
+     * soft-delete above. Flips a {@link Status#DELETED} dataset back to
+     * {@link Status#AVAILABLE} so it reappears in the list view and can
+     * be re-run. Guards mirror the delete path:
+     * <ul>
+     *   <li>{@code 401} — no authenticated user.</li>
+     *   <li>{@code 404} — no dataset with that id.</li>
+     *   <li>{@code 403} — caller's role lacks export-edit permission on
+     *       the dataset's owning study.</li>
+     *   <li>{@code 409} — dataset is not currently removed.</li>
+     * </ul>
+     *
+     * <p>Phase E.6 restore-quickwins. Mirrors no legacy servlet — the
+     * removed-dataset list page in OpenClinica 3.x lived inside the
+     * old admin-management UI and was never wired to a dedicated
+     * restore endpoint; this is parity with the new SPA Show-removed
+     * toggle.
+     */
+    @PostMapping("/datasets/{datasetId}/restore")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = DatasetDto.class)))
+    public ResponseEntity<?> restoreDataset(@PathVariable("datasetId") int datasetId,
+                                            HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+
+        DatasetDAO datasetDao = new DatasetDAO(dataSource);
+        DatasetBean target = (DatasetBean) datasetDao.findByPK(datasetId);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No dataset with id " + datasetId));
+        }
+        if (target.getStatus() == null || !target.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Dataset is not currently removed"));
+        }
+
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean parentStudy = (StudyBean) studyDao.findByPK(target.getStudyId());
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (parentStudy != null && !roleMayEditExports(me, currentRole, parentStudy)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit restoring datasets on this study"));
+        }
+
+        target.setStatus(Status.AVAILABLE);
+        target.setUpdater(me);
+        target.setUpdatedDate(new Date());
+        datasetDao.update(target);
+
+        LOG.info("Restore dataset: id={} name={} by user={}",
                 target.getId(), target.getName(), me.getName());
 
         return ResponseEntity.ok(toWizardDto(target));
