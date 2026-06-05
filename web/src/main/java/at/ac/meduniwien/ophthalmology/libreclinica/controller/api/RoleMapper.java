@@ -26,15 +26,25 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 final class RoleMapper {
     private RoleMapper() {}
 
-    /** Map a legacy role name (Role.getName()) to the SPA UserRole union. */
+    /**
+     * Map a legacy role name (Role.getName()) to the SPA UserRole union.
+     *
+     * <p>Case-insensitive: the canonical Role.getName() tokens are
+     * lowercase ('monitor', 'coordinator', etc.) — except 'Investigator'
+     * which is mixed-case in the enum for legacy reasons. Historical
+     * data + the legacy JSP admin can also persist title-cased variants
+     * ('Monitor') that match Role.getDescription() instead. Normalise
+     * here so e.g. a row that landed as 'Monitor' projects as Monitor
+     * instead of falling through to the default Investigator.
+     */
     static String toSpaRole(String legacyRoleName) {
         if (legacyRoleName == null) return "Investigator";
-        return switch (legacyRoleName) {
+        return switch (legacyRoleName.toLowerCase()) {
             case "admin" -> "Administrator";
             case "director" -> "Data Manager";
             case "coordinator" -> "CRC";
             case "monitor" -> "Monitor";
-            case "Investigator", "ra", "ra2" -> "Investigator";
+            case "investigator", "ra", "ra2" -> "Investigator";
             default -> "Investigator";
         };
     }
