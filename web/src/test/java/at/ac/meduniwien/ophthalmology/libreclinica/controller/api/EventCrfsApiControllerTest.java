@@ -88,8 +88,10 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isBadRequest())
+                // Phase E.6 PR (a) reworded the message — now mentions
+                // both 'values' and 'groups' as acceptable payload keys.
                 .andExpect(jsonPath("$.message")
-                        .value(containsString("Missing 'values'")));
+                        .value(containsString("'values'")));
     }
 
     @Test
