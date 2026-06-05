@@ -1340,6 +1340,101 @@
       "helper": "Datum der Eligibilitäts-Screeningvisite. Optional — meist 1-30 Tage vor Einschluss."
     }
   },
+  "datasetList": {
+    "eyebrow": "Datenexport",
+    "title": "Gespeicherte Datasets",
+    "blurb": "Gespeicherte Dataset-Definitionen für diese Studie. Eine Zeile öffnen, um Scope oder Inklusionsflags zu bearbeiten; entfernen archiviert die Definition.",
+    "newButton": "Neues Dataset",
+    "count": "{n} gespeicherte Datasets",
+    "emptyTitle": "Noch keine Datasets angelegt",
+    "emptyBlurb": "Ein Dataset bündelt Visiten, CRFs und Items, die exportiert werden sollen. Mehrere alternative Scopes können nebeneinander gespeichert und für Exporte wiederverwendet werden.",
+    "emptyCta": "Erstes Dataset anlegen",
+    "confirmRemove": "Dataset „{name}“ entfernen? Die Definition wird soft-gelöscht; bestehende Exporte bleiben erhalten, aber die Zeile verschwindet aus der Liste.",
+    "scopeSummary": "{events} Visite(n) · {versions} CRF-Version(en) · {items} Item(s)",
+    "openWizard": "Im Assistenten öffnen",
+    "openReadOnly": "Anzeigen",
+    "editDisabledHasRun": "Dieses Dataset wurde bereits exportiert und ist gegen strukturelle Änderungen gesperrt. Duplizieren Sie es, um eine neue Variante zu erstellen.",
+    "hasRunBadge": "{n} Lauf(e)"
+  },
+  "createDataset": {
+    "eyebrow": "Datenexport",
+    "title": "Neues Dataset",
+    "editTitle": "Dataset bearbeiten",
+    "blurb": "Eine wiederverwendbare Dataset-Definition zusammenstellen: Scope (Visiten, CRFs, Items) wählen, Inklusionsflags setzen und prüfen.",
+    "editBlurb": "Scope oder Inklusionsflags eines bestehenden Datasets anpassen. Bereits exportierte Datasets sind gegen strukturelle Änderungen gesperrt.",
+    "preparing": "Assistent wird vorbereitet…",
+    "saving": "Wird gespeichert…",
+    "save": "Dataset speichern",
+    "saveEdit": "Änderungen speichern",
+    "expandAll": "Alle ausklappen",
+    "collapseAll": "Alle einklappen",
+    "included": "enthalten",
+    "flagsBlurb": "Bitte auswählen, welche Metadaten-Spalten im Export enthalten sein sollen. Der asynchrone Phase-4-Export nutzt diese Flags zur Spaltenwahl.",
+    "flagsTitle": "Inklusionsflags",
+    "filtersTitle": "Filter",
+    "filtersBlurb": "Exportierte Zeilen nach Studienteilnehmer, Eventstatus oder Item-Wert eingrenzen.",
+    "reviewTitle": "Prüfen",
+    "reviewBlurb": "Definition vor dem Speichern prüfen. Sie können jederzeit über den Stepper zu einem früheren Schritt zurückkehren.",
+    "steps": {
+      "scope": "Scope",
+      "flags": "Inklusionsflags",
+      "filters": "Filter",
+      "review": "Prüfen"
+    },
+    "scope": {
+      "title": "Scope",
+      "blurb": "Dem Dataset einen Namen geben und auswählen, welche Visiten, CRFs und Items es umfasst.",
+      "treeTitle": "Visiten, CRFs und Items"
+    },
+    "review": {
+      "scope": "Scope",
+      "scopeSummary": "{events} Visite(n) · {versions} CRF-Version(en) · {items} Item(s)",
+      "flagsTitle": "Inklusionsflags",
+      "noFlagsInSection": "(keines ausgewählt)"
+    },
+    "fields": {
+      "name": "Dataset-Name",
+      "namePlaceholder": "z. B. 2026 Q3 Rekrutierungs-Kohorte",
+      "nameHelp": "Innerhalb der Studie eindeutig; bis zu 2000 Zeichen.",
+      "description": "Beschreibung",
+      "descriptionPlaceholder": "Optional",
+      "descriptionHelp": "Kurze Notiz für Kolleg:innen — wird in der Dataset-Liste angezeigt."
+    },
+    "errors": {
+      "nameRequired": "Dataset-Name ist erforderlich.",
+      "eventRequired": "Mindestens eine Visite auswählen.",
+      "versionRequired": "Mindestens eine CRF-Version auswählen.",
+      "itemRequired": "Mindestens ein Item auswählen."
+    },
+    "flagSection": {
+      "subject": { "title": "Studienteilnehmer-Metadaten" },
+      "event": { "title": "Visiten-Metadaten" },
+      "crf": { "title": "CRF-Status" },
+      "interviewer": { "title": "Interviewer-Felder" },
+      "notes": { "title": "Discrepancy Notes" }
+    },
+    "flag": {
+      "dob": { "label": "Geburtsdatum", "hint": "Vollständiges DOB. PHI — für de-identifizierte Auszüge deaktivieren." },
+      "gender": { "label": "Geschlecht", "hint": "Bildet das Geschlechts-Code-Feld ab." },
+      "subjectStatus": { "label": "Status (Studienteilnehmer)", "hint": "Verfügbar, entfernt, gelöscht, signiert, …" },
+      "uniqueIdentifier": { "label": "Eindeutige Studienteilnehmer-ID", "hint": "Site- oder studienweit eindeutige ID." },
+      "secondaryId": { "label": "Sekundär-ID", "hint": "Sponsor- oder Register-ID." },
+      "ageAtEvent": { "label": "Alter zum Visiten-Zeitpunkt", "hint": "Aus DOB und Visiten-Startdatum berechnet." },
+      "groupInformation": { "label": "Gruppe", "hint": "Arm / Familie / Gruppenklassen-Zuordnung." },
+      "eventLocation": { "label": "Visiten-Ort", "hint": "Freitext-Ort auf der Visite." },
+      "eventStartDate": { "label": "Visiten-Startdatum", "hint": "Geplant oder tatsächlich, abhängig vom Status." },
+      "eventEndDate": { "label": "Visiten-Enddatum", "hint": "Für Visiten mit Dauer." },
+      "eventStartTime": { "label": "Visiten-Startzeit", "hint": "Wenn auf der Visiten-Definition konfiguriert." },
+      "eventEndTime": { "label": "Visiten-Endzeit", "hint": "Wenn auf der Visiten-Definition konfiguriert." },
+      "eventStatus": { "label": "Visiten-Status", "hint": "Geplant, in Bearbeitung, abgeschlossen, gestoppt, übersprungen, signiert, gesperrt." },
+      "crfStatus": { "label": "CRF-Status", "hint": "Initial / abgeschlossen / signiert / gesperrt / ungültig." },
+      "crfVersion": { "label": "CRF-Version", "hint": "Versionsname und OID pro CRF-Zeile." },
+      "interviewerName": { "label": "Interviewer-Name", "hint": "Freitext „wer hat das CRF erfasst“." },
+      "interviewerDate": { "label": "Interviewer-Datum", "hint": "Datum, auf das sich der Interviewer-Eintrag bezieht." },
+      "completionDate": { "label": "Abschlussdatum CRF", "hint": "ISO-8601 Zeitpunkt." },
+      "discNotes": { "label": "Discrepancy Notes", "hint": "Hängt eine Spalte mit verknüpften Queries / Annotationen an. Phase 4 verdrahtet die tatsächliche Emission." }
+    }
+  },
   "dataExport": {
     "title": "Datenexport",
     "subTrail": "Gespeicherte Datensätze der aktiven Studie",

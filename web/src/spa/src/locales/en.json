@@ -1340,6 +1340,101 @@
       "helper": "Eligibility screening visit date. Optional — usually 1-30 days before enrolment."
     }
   },
+  "datasetList": {
+    "eyebrow": "Data export",
+    "title": "Saved datasets",
+    "blurb": "Saved dataset definitions for this study. Open a row to edit its scope or inclusion flags; remove a row to retire the definition.",
+    "newButton": "New dataset",
+    "count": "{n} saved dataset(s)",
+    "emptyTitle": "No datasets defined yet",
+    "emptyBlurb": "Define a dataset to capture which events, CRFs and items get exported. You can save several alternative scopes and reuse them across exports.",
+    "emptyCta": "Create the first dataset",
+    "confirmRemove": "Remove dataset '{name}'? This soft-deletes the definition; running exports are preserved but the row will no longer appear in the list.",
+    "scopeSummary": "{events} event(s) · {versions} CRF version(s) · {items} item(s)",
+    "openWizard": "Open in wizard",
+    "openReadOnly": "View",
+    "editDisabledHasRun": "This dataset has been executed and is locked from structural edits. Duplicate it to compose a new variant.",
+    "hasRunBadge": "{n} run(s)"
+  },
+  "createDataset": {
+    "eyebrow": "Data export",
+    "title": "New dataset",
+    "editTitle": "Edit dataset",
+    "blurb": "Compose a reusable dataset definition: pick the scope (events, CRFs, items), set the inclusion flags, and review.",
+    "editBlurb": "Adjust the scope or inclusion flags of an existing dataset. Datasets that have already been exported are locked from structural edits.",
+    "preparing": "Preparing wizard…",
+    "saving": "Saving…",
+    "save": "Save dataset",
+    "saveEdit": "Save changes",
+    "expandAll": "Expand all",
+    "collapseAll": "Collapse all",
+    "included": "included",
+    "flagsBlurb": "Pick which metadata columns the export should include. The Phase 4 async export uses these flags to decide which columns to emit.",
+    "flagsTitle": "Inclusion flags",
+    "filtersTitle": "Filters",
+    "filtersBlurb": "Restrict the exported rows by subject, event status, or item value.",
+    "reviewTitle": "Review",
+    "reviewBlurb": "Double-check the definition before saving. You can return to any earlier step from the stepper above.",
+    "steps": {
+      "scope": "Scope",
+      "flags": "Inclusion flags",
+      "filters": "Filters",
+      "review": "Review"
+    },
+    "scope": {
+      "title": "Scope",
+      "blurb": "Give the dataset a name, then pick which events, CRFs and items it covers.",
+      "treeTitle": "Events, CRFs and items"
+    },
+    "review": {
+      "scope": "Scope",
+      "scopeSummary": "{events} event(s) · {versions} CRF version(s) · {items} item(s)",
+      "flagsTitle": "Inclusion flags",
+      "noFlagsInSection": "(none selected)"
+    },
+    "fields": {
+      "name": "Dataset name",
+      "namePlaceholder": "e.g. 2026 Q3 enrolment cohort",
+      "nameHelp": "Unique within this study; up to 2000 characters.",
+      "description": "Description",
+      "descriptionPlaceholder": "Optional",
+      "descriptionHelp": "Short note for your fellow operators — shown in the dataset list."
+    },
+    "errors": {
+      "nameRequired": "Dataset name is required.",
+      "eventRequired": "Select at least one event.",
+      "versionRequired": "Select at least one CRF version.",
+      "itemRequired": "Select at least one item."
+    },
+    "flagSection": {
+      "subject": { "title": "Subject metadata" },
+      "event": { "title": "Event metadata" },
+      "crf": { "title": "CRF status" },
+      "interviewer": { "title": "Interviewer fields" },
+      "notes": { "title": "Discrepancy notes" }
+    },
+    "flag": {
+      "dob": { "label": "Date of birth", "hint": "Full DOB column. Includes PHI — disable for de-identified extracts." },
+      "gender": { "label": "Gender", "hint": "Maps to the subject's gender code." },
+      "subjectStatus": { "label": "Subject status", "hint": "Available, removed, deleted, signed, …" },
+      "uniqueIdentifier": { "label": "Subject unique ID", "hint": "Site- or study-scoped subject identifier." },
+      "secondaryId": { "label": "Secondary ID", "hint": "Sponsor or registry secondary identifier." },
+      "ageAtEvent": { "label": "Age at event", "hint": "Computed from DOB and the event start date." },
+      "groupInformation": { "label": "Subject group", "hint": "Arm / family / group-class membership." },
+      "eventLocation": { "label": "Event location", "hint": "Free-text location captured on the event." },
+      "eventStartDate": { "label": "Event start date", "hint": "Scheduled or actual start, depending on event status." },
+      "eventEndDate": { "label": "Event end date", "hint": "Captured for events with a duration." },
+      "eventStartTime": { "label": "Event start time", "hint": "Captured when configured on the event definition." },
+      "eventEndTime": { "label": "Event end time", "hint": "Captured when configured on the event definition." },
+      "eventStatus": { "label": "Event status", "hint": "Scheduled, data-entry-started, completed, stopped, skipped, signed, locked." },
+      "crfStatus": { "label": "CRF status", "hint": "Initial / completed / signed / locked / invalid." },
+      "crfVersion": { "label": "CRF version", "hint": "Version name and OID for each CRF row." },
+      "interviewerName": { "label": "Interviewer name", "hint": "Free-text 'who entered the CRF' label." },
+      "interviewerDate": { "label": "Interviewer date", "hint": "Date the interviewer column refers to." },
+      "completionDate": { "label": "CRF completion date", "hint": "ISO-8601 completion timestamp." },
+      "discNotes": { "label": "Discrepancy notes", "hint": "Appends an extra column with linked query / annotation notes. Phase 4 wires the actual emission." }
+    }
+  },
   "dataExport": {
     "title": "Data Export",
     "subTrail": "Saved datasets for the active study",

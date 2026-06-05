@@ -22,10 +22,14 @@ vi.mock('@/api/client', async () => {
     ...actual,
     apiGet: vi.fn(),
     apiPost: vi.fn(),
+    apiPut: vi.fn(),
+    apiDelete: vi.fn(),
   }
 })
 
-import { apiGet, apiPost } from '@/api/client'
+import { apiGet, apiPost, apiPut, apiDelete } from '@/api/client'
+import type { EventTreeNode, InclusionFlags } from '@/types/export'
+import { FLAG_DEFAULTS } from '@/types/export'
 
 const STUDY_OID = 'S_DEFAULT'
 
@@ -286,16 +290,258 @@ describe('useDatasetsStore.testFilter (Phase 3)', () => {
 
   it('reset() clears draft + preview state', async () => {
     const datasets = useDatasetsStore()
-    datasets.draft.name = 'My export'
-    datasets.draft.filters = FILTERS
+    // Phase 2 reshape: `draft` is now CreateDatasetDraft | null —
+    // launching a wizard is what seeds it. Reset returns it to null
+    // (no wizard in flight).
+    datasets.startNewDraft()
+    datasets.draft!.name = 'My export'
+    datasets.draft!.filters = FILTERS
     datasets.preview = FILTER_RESULT
     datasets.previewError = 'oops'
 
     datasets.reset()
 
-    expect(datasets.draft.name).toBe('')
-    expect(datasets.draft.filters).toEqual([])
+    expect(datasets.draft).toBeNull()
     expect(datasets.preview).toBeNull()
     expect(datasets.previewError).toBeNull()
+  })
+})
+
+/* =================================================================== */
+/* Phase 2 — create-dataset wizard (revival of PR #114).               */
+/* =================================================================== */
+
+const TREE: EventTreeNode[] = [
+  {
+    eventOid: 'SE_VISIT1',
+    eventName: 'Visit 1',
+    eventOrdinal: 1,
+    repeating: false,
+    crfs: [
+      {
+        crfOid: 'F_OPHTH',
+        crfName: 'Ophthalmology core',
+        versions: [
+          {
+            versionId: 901,
+            versionOid: 'V_OPHTH_1',
+            versionName: 'v1.0',
+            items: [
+              { itemId: 5001, oid: 'I_VA_OD', name: 'VA OD', dataType: 'real' },
+              { itemId: 5002, oid: 'I_VA_OS', name: 'VA OS', dataType: 'real' },
+            ],
+          },
+        ],
+      },
+    ],
+  },
+]
+
+const WIZARD_ROW: DatasetDto = {
+  oid: '88',
+  id: 88,
+  name: 'Visit 1 — OD/OS visual acuity',
+  description: 'Smoke cohort',
+  ownerName: 'datamanager',
+  dateCreated: '2026-06-05T12:00:00Z',
+  lastRunAt: null,
+  fileCount: 0,
+  studyId: 1,
+  status: 'available',
+  eventDefinitionOids: ['SE_VISIT1'],
+  crfVersionIds: [901],
+  itemIds: [5001, 5002],
+  includeFlags: { ...FLAG_DEFAULTS } as InclusionFlags,
+  numRuns: 0,
+  hasRun: false,
+}
+
+describe('useDatasetsStore (Phase 2 wizard)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  it('loadList() is an alias for load()', async () => {
+    const ds = useDatasetsStore()
+    ;(apiGet as ReturnType<typeof vi.fn>).mockResolvedValueOnce([WIZARD_ROW])
+    await ds.loadList(STUDY_OID)
+    expect(ds.rows).toEqual([WIZARD_ROW])
+    expect(ds.loadedForStudyOid).toBe(STUDY_OID)
+  })
+
+  it('loadEventTree() GETs /event-tree and stores the tree', async () => {
+    const ds = useDatasetsStore()
+    ;(apiGet as ReturnType<typeof vi.fn>).mockResolvedValueOnce(TREE)
+    await ds.loadEventTree(STUDY_OID)
+    expect(apiGet).toHaveBeenCalledWith(
+      `/pages/api/v1/studies/${STUDY_OID}/event-tree`,
+    )
+    expect(ds.eventTree).toEqual(TREE)
+  })
+
+  it('loadEventTree() resets to empty + surfaces error on failure', async () => {
+    const ds = useDatasetsStore()
+    ;(apiGet as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new ApiNetworkError('down', new Error('boom')),
+    )
+    await ds.loadEventTree(STUDY_OID)
+    expect(ds.eventTree).toEqual([])
+    expect(ds.eventTreeError).not.toBeNull()
+  })
+
+  it('loadOne() GETs /datasets/{id} and returns the row', async () => {
+    const ds = useDatasetsStore()
+    ;(apiGet as ReturnType<typeof vi.fn>).mockResolvedValueOnce(WIZARD_ROW)
+    const out = await ds.loadOne(88)
+    expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/datasets/88')
+    expect(out).toEqual(WIZARD_ROW)
+  })
+
+  it('startNewDraft() seeds the draft with flag defaults + empty selection', () => {
+    const ds = useDatasetsStore()
+    ds.startNewDraft()
+    expect(ds.draft).not.toBeNull()
+    expect(ds.draft!.name).toBe('')
+    expect(ds.draft!.eventDefinitionOids).toEqual([])
+    expect(ds.draft!.includeFlags.gender).toBe(true) // FLAG_DEFAULTS.gender
+    expect(ds.isEditing).toBe(false)
+  })
+
+  it('startEditDraft() hydrates from an existing dataset + flips isEditing', () => {
+    const ds = useDatasetsStore()
+    ds.startEditDraft(WIZARD_ROW)
+    expect(ds.draft).not.toBeNull()
+    expect(ds.draft!.editingDatasetId).toBe(88)
+    expect(ds.draft!.itemIds).toEqual([5001, 5002])
+    expect(ds.isEditing).toBe(true)
+  })
+
+  it('patchDraft() shallow-merges into the current draft', () => {
+    const ds = useDatasetsStore()
+    ds.startNewDraft()
+    ds.patchDraft({ name: 'Foo' })
+    expect(ds.draft!.name).toBe('Foo')
+    // unrelated fields stay intact
+    expect(ds.draft!.includeFlags.gender).toBe(true)
+  })
+
+  it('setFlag() flips one flag without disturbing the others', () => {
+    const ds = useDatasetsStore()
+    ds.startNewDraft()
+    expect(ds.draft!.includeFlags.dob).toBe(false)
+    ds.setFlag('dob', true)
+    expect(ds.draft!.includeFlags.dob).toBe(true)
+    expect(ds.draft!.includeFlags.gender).toBe(true)
+  })
+
+  it('setStep() updates the current step', () => {
+    const ds = useDatasetsStore()
+    ds.startNewDraft()
+    ds.setStep(2)
+    expect(ds.draft!.step).toBe(2)
+  })
+
+  it('createDataset() POSTs and prepends the new row', async () => {
+    const ds = useDatasetsStore()
+    ds.rows = [WIZARD_ROW]
+    const created: DatasetDto = { ...WIZARD_ROW, id: 99, oid: '99', name: 'New' }
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce(created)
+    const res = await ds.createDataset(STUDY_OID, {
+      name: 'New',
+      description: '',
+      eventDefinitionOids: ['SE_VISIT1'],
+      crfVersionIds: [901],
+      itemIds: [5001],
+      includeFlags: { ...FLAG_DEFAULTS },
+    })
+    expect(res.ok).toBe(true)
+    expect(ds.rows[0].id).toBe(99)
+    expect(apiPost).toHaveBeenCalledWith(
+      `/pages/api/v1/studies/${STUDY_OID}/datasets`,
+      expect.objectContaining({ name: 'New' }),
+    )
+  })
+
+  it('createDataset() surfaces 400 field errors without throwing', async () => {
+    const ds = useDatasetsStore()
+    const err = new ApiError(400, 'Bad', { message: 'Validation failed', errors: [{ field: 'name', message: 'required' }] })
+    ;(apiPost as ReturnType<typeof vi.fn>).mockRejectedValueOnce(err)
+    const res = await ds.createDataset(STUDY_OID, {
+      name: '',
+      description: '',
+      eventDefinitionOids: [],
+      crfVersionIds: [],
+      itemIds: [],
+      includeFlags: { ...FLAG_DEFAULTS },
+    })
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.fieldErrors.name).toBe('required')
+      expect(res.message).toBe('Validation failed')
+    }
+  })
+
+  it('updateDataset() PUTs and replaces the existing row in-place', async () => {
+    const ds = useDatasetsStore()
+    ds.rows = [WIZARD_ROW]
+    const updated: DatasetDto = { ...WIZARD_ROW, name: 'Renamed' }
+    ;(apiPut as ReturnType<typeof vi.fn>).mockResolvedValueOnce(updated)
+    const res = await ds.updateDataset(88, {
+      name: 'Renamed',
+      description: '',
+      eventDefinitionOids: ['SE_VISIT1'],
+      crfVersionIds: [901],
+      itemIds: [5001, 5002],
+      includeFlags: { ...FLAG_DEFAULTS },
+    })
+    expect(res.ok).toBe(true)
+    expect(ds.rows).toHaveLength(1)
+    expect(ds.rows[0].name).toBe('Renamed')
+    expect(apiPut).toHaveBeenCalledWith('/pages/api/v1/datasets/88', expect.any(Object))
+  })
+
+  it('removeDataset() DELETEs and drops the row from the in-memory list', async () => {
+    const ds = useDatasetsStore()
+    ds.rows = [WIZARD_ROW]
+    const removed: DatasetDto = { ...WIZARD_ROW, status: 'removed' }
+    ;(apiDelete as ReturnType<typeof vi.fn>).mockResolvedValueOnce(removed)
+    const res = await ds.removeDataset(88)
+    expect(res.ok).toBe(true)
+    expect(ds.rows).toHaveLength(0)
+    expect(apiDelete).toHaveBeenCalledWith('/pages/api/v1/datasets/88')
+  })
+
+  it('saveDraft() dispatches POST when editingDatasetId is undefined', async () => {
+    const ds = useDatasetsStore()
+    ds.startNewDraft()
+    ds.patchDraft({
+      name: 'X',
+      eventDefinitionOids: ['SE_VISIT1'],
+      crfVersionIds: [901],
+      itemIds: [5001],
+    })
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ...WIZARD_ROW, id: 200, oid: '200', name: 'X' })
+    const res = await ds.saveDraft(STUDY_OID)
+    expect(res.ok).toBe(true)
+    expect(apiPost).toHaveBeenCalled()
+    expect(apiPut).not.toHaveBeenCalled()
+  })
+
+  it('saveDraft() dispatches PUT when editingDatasetId is set', async () => {
+    const ds = useDatasetsStore()
+    ds.startEditDraft(WIZARD_ROW)
+    ;(apiPut as ReturnType<typeof vi.fn>).mockResolvedValueOnce(WIZARD_ROW)
+    const res = await ds.saveDraft(STUDY_OID)
+    expect(res.ok).toBe(true)
+    expect(apiPut).toHaveBeenCalledWith('/pages/api/v1/datasets/88', expect.any(Object))
+    expect(apiPost).not.toHaveBeenCalled()
+  })
+
+  it('saveDraft() reports no-draft when nothing is in flight', async () => {
+    const ds = useDatasetsStore()
+    const res = await ds.saveDraft(STUDY_OID)
+    expect(res.ok).toBe(false)
+    if (!res.ok) expect(res.message).toBe('No active draft')
   })
 })

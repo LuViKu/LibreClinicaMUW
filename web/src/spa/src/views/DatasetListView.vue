@@ -15,6 +15,7 @@
  */
 import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -24,8 +25,37 @@ import type { ExportFormat } from '@/types/export'
 const { t } = useI18n()
 const auth = useAuthStore()
 const datasets = useDatasetsStore()
+const router = useRouter()
 
 const studyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
+const canManage = computed(() => {
+  const role = auth.user?.role
+  return role === 'Administrator' || role === 'Data Manager' || role === 'Monitor'
+})
+
+const removing = ref<number | null>(null)
+const removeError = ref<string | null>(null)
+
+function openWizardNew() {
+  datasets.startNewDraft()
+  router.push({ name: 'dataset-new' })
+}
+
+function openWizardEdit(datasetId: number) {
+  router.push({ name: 'dataset-edit', params: { datasetId: String(datasetId) } })
+}
+
+async function confirmRemove(datasetId: number, name: string) {
+  if (!window.confirm(t('datasetList.confirmRemove', { name }))) return
+  removing.value = datasetId
+  removeError.value = null
+  try {
+    const res = await datasets.removeDataset(datasetId)
+    if (!res.ok) removeError.value = res.message
+  } finally {
+    removing.value = null
+  }
+}
 
 onMounted(() => {
   if (studyOid.value) datasets.load(studyOid.value)
@@ -156,6 +186,15 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
         </div>
         <div class="flex items-center gap-2">
           <button
+            v-if="canManage"
+            type="button"
+            class="px-3 py-1.5 text-xs border border-slate-300 text-slate-700 rounded-md hover:bg-slate-100 font-medium"
+            data-testid="dataset-new-button"
+            @click="openWizardNew"
+          >
+            {{ t('datasetList.newButton') }}
+          </button>
+          <button
             type="button"
             class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="datasets.isQuickOdm || !studyOid"
@@ -167,6 +206,7 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
       </div>
 
       <p v-if="datasets.error" class="mb-4 text-rose-700 text-sm" role="alert">{{ datasets.error }}</p>
+      <p v-if="removeError" class="mb-4 text-rose-700 text-sm" role="alert">{{ removeError }}</p>
       <p v-if="datasets.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
 
       <!-- Empty state. -->
@@ -220,6 +260,27 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
                       @click="toggleExpanded(row.id)"
                     >
                       {{ expanded.has(row.id) ? t('dataExport.hideFiles') : t('dataExport.viewFiles') }}
+                    </button>
+                    <button
+                      v-if="canManage"
+                      type="button"
+                      class="px-2.5 py-1 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      data-testid="dataset-edit-button"
+                      :title="row.hasRun ? t('datasetList.editDisabledHasRun') : ''"
+                      :disabled="Boolean(row.hasRun)"
+                      @click="openWizardEdit(row.id)"
+                    >
+                      {{ t('datasetList.openWizard') }}
+                    </button>
+                    <button
+                      v-if="canManage"
+                      type="button"
+                      class="px-2.5 py-1 text-xs border border-rose-200 rounded-md bg-white hover:bg-rose-50 text-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      data-testid="dataset-remove-button"
+                      :disabled="removing === row.id"
+                      @click="confirmRemove(row.id, row.name)"
+                    >
+                      {{ removing === row.id ? t('common.loading') : t('common.remove') }}
                     </button>
                     <button
                       type="button"
