@@ -35,11 +35,19 @@ import java.util.List;
  *       per-event counts join {@code discrepancy_note} via
  *       {@code dn_item_data_map} with {@code resolution_status_id IN
  *       (1, 2, 3)} and {@code parent_dn_id IS NULL}.</li>
+ *   <li>{@code status} (Phase E.6) — coarse string mapping of
+ *       {@code study_subject.status_id}. The matrix uses this to render
+ *       "Removed" / "Locked" rows differently when the SPA's
+ *       {@code includeRemoved=true} filter is in effect.</li>
+ *   <li>{@code groupAssignments} (Phase E.6) — flattened active
+ *       {@code subject_group_map} rows. Disabled rows are excluded.
+ *       {@code null} when the matrix-side N+1 mitigation defers the
+ *       per-row fetch.</li>
  * </ul>
  *
- * <p>{@code groupLabel} stays {@code null} until the
- * {@code study_group_class} / {@code subject_group_map} workflow is
- * wired (deferred to a later milestone).
+ * <p>{@code groupLabel} stays {@code null} — the free-text column was
+ * never used in production; {@code groupAssignments} is the structured
+ * replacement.
  */
 @Schema(name = "SubjectListItemDto")
 public record SubjectListItemDto(
@@ -60,7 +68,29 @@ public record SubjectListItemDto(
          * surfaces this as an at-a-glance column so investigators can
          * filter to one-eye cohorts without opening each subject.
          */
-        String studyEye
+        String studyEye,
+        /**
+         * Phase E.6 subject-lifecycle — coarse {@code study_subject.status}
+         * surface so the SPA can render "Removed" / "Locked" rows
+         * differently when {@code includeRemoved=true} is in effect.
+         * One of {@code "available" / "removed" / "locked" / "signed" /
+         * "auto-removed"}; null in unreachable edge cases.
+         */
+        String status,
+        /**
+         * Phase E.6 subject-lifecycle — flattened group-class assignments
+         * the subject is enrolled in (Arms / Strata / etc.).
+         *
+         * <p>One snapshot per ACTIVE {@code subject_group_map} row;
+         * disabled assignments are filtered out. {@code null} groupId
+         * means the row exists but the user picked the
+         * "OPTIONAL not-now" path — only valid for OPTIONAL classes.
+         *
+         * <p>May be {@code null} (not just empty) when the list-side
+         * adapter has not loaded group state — the SPA treats null as
+         * "unknown, fetch detail" rather than "empty".
+         */
+        List<GroupAssignmentSnapshot> groupAssignments
 ) {
 
     /**

@@ -148,7 +148,11 @@ public class SubjectsApiController {
     @GetMapping
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(type = "array", implementation = SubjectListItemDto.class)))
-    public ResponseEntity<?> list(HttpSession session) {
+    public ResponseEntity<?> list(
+            @org.springframework.web.bind.annotation.RequestParam(
+                    value = "includeRemoved", required = false, defaultValue = "false")
+            boolean includeRemoved,
+            HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
@@ -180,6 +184,25 @@ public class SubjectsApiController {
             if (chunk != null) rows.addAll(chunk);
         }
 
+        // Phase E.6 subject-lifecycle — when includeRemoved=false (the
+        // SPA's default), strip soft-deleted rows so the matrix matches
+        // the legacy ListStudySubjects JSP behaviour. The DAO returns
+        // every row regardless of status; the visibility filter
+        // upstream cares about study scope, not lifecycle state.
+        // includeRemoved=true keeps DELETED / AUTO_DELETED rows so the
+        // DM / Admin "Show removed" toggle can render them with a
+        // distinct style + Restore button.
+        if (!includeRemoved) {
+            List<StudySubjectBean> filteredRows = new ArrayList<>(rows.size());
+            for (StudySubjectBean ss : rows) {
+                Status st = ss.getStatus();
+                if (st == null || (!Status.DELETED.equals(st) && !Status.AUTO_DELETED.equals(st))) {
+                    filteredRows.add(ss);
+                }
+            }
+            rows = filteredRows;
+        }
+
         // Cache SubjectBean lookups so a study with multiple participations
         // for the same person doesn't re-hit subject table N times.
         Map<Integer, SubjectBean> subjectCache = new HashMap<>();
@@ -193,11 +216,17 @@ public class SubjectsApiController {
         // of one DAO round trip per event.
         Map<Integer, Integer> openQueriesByEvent = loadOpenQueryCountsForStudy(currentStudy.getId());
 
+        // Phase E.6 subject-lifecycle — single-query group-assignment
+        // aggregation per study_subject.id so the matrix cell is filled
+        // in O(1) per row instead of one DAO round trip per subject.
+        Map<Integer, List<GroupAssignmentSnapshot>> groupAssignmentsBySubject =
+                loadGroupAssignmentsForStudy(visibleStudyIds);
+
         List<SubjectListItemDto> out = new ArrayList<>(rows.size());
         for (StudySubjectBean ss : rows) {
             SubjectBean subj = subjectCache.computeIfAbsent(ss.getSubjectId(), subjectDAO::findByPK);
             out.add(toDto(ss, subj, currentStudy, studyEventDAO, studyEventDefinitionDAO,
-                    definitionCache, openQueriesByEvent));
+                    definitionCache, openQueriesByEvent, groupAssignmentsBySubject));
         }
 
         LOG.debug("Subject Matrix adapter served {} rows for study {} (user {})",
@@ -691,6 +720,13 @@ public class SubjectsApiController {
         // No events scheduled yet — they're created via M11 (Schedule Event).
         // No queries either. Reuse the M3 DTO shape so the SPA can drop the
         // new subject straight into `rows` without a refetch.
+        // Phase E.6 subject-lifecycle — load any group assignments
+        // that the create-flow's group-assignment branch may have
+        // written. For freshly-created subjects with no assignments,
+        // this returns an empty list (not null) so the SPA can render
+        // an "unassigned" row consistently.
+        List<GroupAssignmentSnapshot> initialAssignments = loadActiveGroupAssignments(ssb.getId());
+
         SubjectDetailDto dto = new SubjectDetailDto(
                 ssb.getLabel(),
                 blankToNull(ssb.getSecondaryLabel()),
@@ -707,7 +743,9 @@ public class SubjectsApiController {
                 /* locked */ false,
                 /* openQueries */ 0,
                 ssb.getStudyEye(),
-                formatIsoDate(ssb.getScreeningDate())
+                formatIsoDate(ssb.getScreeningDate()),
+                mapStudySubjectStatus(ssb.getStatus()),
+                initialAssignments
         );
 
         LOG.info("Add Subject: created study_subject id={} oid={} label={} (study {}, user {})",
@@ -1799,6 +1837,11 @@ public class SubjectsApiController {
         boolean signed = ss.getStatus() != null && ss.getStatus().equals(Status.SIGNED);
         boolean locked = ss.getStatus() != null && ss.getStatus().equals(Status.LOCKED);
 
+        // Phase E.6 subject-lifecycle — load active subject_group_map
+        // rows. Detail view always populates this (unlike the matrix,
+        // which can defer the per-row fetch via the N+1 mitigation).
+        List<GroupAssignmentSnapshot> groupAssignments = loadActiveGroupAssignments(ss.getId());
+
         return new SubjectDetailDto(
                 ss.getLabel(),
                 secondaryId,
@@ -1815,7 +1858,9 @@ public class SubjectsApiController {
                 locked,
                 subjectOpenQueries,
                 ss.getStudyEye(),
-                formatIsoDate(ss.getScreeningDate())
+                formatIsoDate(ss.getScreeningDate()),
+                mapStudySubjectStatus(ss.getStatus()),
+                groupAssignments
         );
     }
 
@@ -1875,7 +1920,8 @@ public class SubjectsApiController {
                                      StudyEventDAO studyEventDAO,
                                      StudyEventDefinitionDAO studyEventDefinitionDAO,
                                      Map<Integer, StudyEventDefinitionBean> definitionCache,
-                                     Map<Integer, Integer> openQueriesByEvent) {
+                                     Map<Integer, Integer> openQueriesByEvent,
+                                     Map<Integer, List<GroupAssignmentSnapshot>> groupAssignmentsByStudySubjectId) {
         String secondaryId = (ss.getSecondaryLabel() == null || ss.getSecondaryLabel().isBlank())
                 ? null : ss.getSecondaryLabel();
         String gender = mapGender(subj == null ? '\0' : subj.getGender());
@@ -1928,6 +1974,15 @@ public class SubjectsApiController {
         // study_subject row never reports signed regardless of events.
         boolean signed = ss.getStatus() != null && ss.getStatus().equals(Status.SIGNED);
 
+        // Phase E.6 subject-lifecycle — null-safe lookup against the
+        // batched per-study group-assignment map (mitigates N+1).
+        // Empty list when the subject is enrolled but unassigned; null
+        // is reserved for "not loaded" which never happens on this
+        // path (we always pass the map in from list()).
+        List<GroupAssignmentSnapshot> groupAssignments = groupAssignmentsByStudySubjectId == null
+                ? null
+                : groupAssignmentsByStudySubjectId.getOrDefault(ss.getId(), Collections.emptyList());
+
         return new SubjectListItemDto(
                 ss.getLabel(),
                 secondaryId,
@@ -1940,7 +1995,9 @@ public class SubjectsApiController {
                 eventCells,
                 signed,
                 subjectOpenQueries,
-                ss.getStudyEye()
+                ss.getStudyEye(),
+                mapStudySubjectStatus(ss.getStatus()),
+                groupAssignments
         );
     }
 
@@ -2007,6 +2064,132 @@ public class SubjectsApiController {
             LOG.warn("Open-query aggregation failed for study {} — falling back to zeros", studyId, e);
         }
         return counts;
+    }
+
+    /**
+     * Phase E.6 subject-lifecycle — single-shot
+     * {@code subject_group_map} aggregation for an entire study (or a
+     * site-scoped set). Mitigates the matrix N+1 risk (reviewer flag):
+     * issuing one DAO call per {@link StudySubjectBean} would scale
+     * O(N×K) with N subjects × K group classes; the matrix instead
+     * fans out once per {@code visibleStudyIds} entry.
+     *
+     * <p>Only ACTIVE group-class rows are returned — both
+     * {@code subject_group_map.status_id} and the parent
+     * {@code study_group_class.status_id} must be available (status 1).
+     * Disabled / removed group classes don't leak into the SPA's
+     * matrix nor into the audit-trail-driven views; the legacy
+     * {@code ListStudySubjectsServlet} silently filters them too.
+     *
+     * <p>{@code group_id} is null-tolerant — an
+     * {@code OPTIONAL not-now} row carries a NULL {@code study_group_id}
+     * in the legacy schema (LEFT JOIN against {@code study_group}).
+     */
+    private Map<Integer, List<GroupAssignmentSnapshot>> loadGroupAssignmentsForStudy(
+            Set<Integer> studyIds) {
+        Map<Integer, List<GroupAssignmentSnapshot>> out = new HashMap<>();
+        if (studyIds == null || studyIds.isEmpty()) return out;
+
+        // Build a comma list — small N (≤ 10 sites typical), values are
+        // ints so SQL-injection-safe. Avoids prepared-statement param
+        // expansion for variable-length IN lists.
+        StringBuilder ids = new StringBuilder();
+        for (Integer sid : studyIds) {
+            if (sid == null) continue;
+            if (ids.length() > 0) ids.append(',');
+            ids.append(sid.intValue());
+        }
+        if (ids.length() == 0) return out;
+
+        String sql = "SELECT sgm.study_subject_id, sgc.study_group_class_id, sgc.name, "
+                + "       sgm.study_group_id, sg.name AS group_name, sgc.subject_assignment "
+                + "FROM subject_group_map sgm "
+                + "JOIN study_group_class sgc ON sgc.study_group_class_id = sgm.study_group_class_id "
+                + "LEFT JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
+                + "JOIN study_subject ss ON ss.study_subject_id = sgm.study_subject_id "
+                + "WHERE ss.study_id IN (" + ids + ") "
+                + "  AND sgm.status_id = 1 "
+                + "  AND sgc.status_id = 1";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                int studySubjectId = rs.getInt(1);
+                int groupClassId = rs.getInt(2);
+                String groupClassName = rs.getString(3);
+                int rawGroupId = rs.getInt(4);
+                Integer groupId = rs.wasNull() ? null : Integer.valueOf(rawGroupId);
+                String groupName = rs.getString(5);
+                String subjectAssignment = rs.getString(6);
+                out.computeIfAbsent(studySubjectId, k -> new ArrayList<>())
+                   .add(new GroupAssignmentSnapshot(
+                           groupClassId, groupClassName, groupId, groupName, subjectAssignment));
+            }
+        } catch (SQLException e) {
+            LOG.warn("Subject-group-map aggregation failed for studies {} — matrix will show null groupAssignments",
+                    studyIds, e);
+        }
+        return out;
+    }
+
+    /**
+     * Phase E.6 subject-lifecycle — single-subject group-assignment load.
+     *
+     * <p>Used by {@code toDetailDto} and by the create endpoint's
+     * response builder. Filtering rules match
+     * {@link #loadGroupAssignmentsForStudy} byte-for-byte.
+     */
+    private List<GroupAssignmentSnapshot> loadActiveGroupAssignments(int studySubjectId) {
+        List<GroupAssignmentSnapshot> out = new ArrayList<>();
+        if (studySubjectId <= 0) return out;
+        String sql = "SELECT sgc.study_group_class_id, sgc.name, "
+                + "       sgm.study_group_id, sg.name AS group_name, sgc.subject_assignment "
+                + "FROM subject_group_map sgm "
+                + "JOIN study_group_class sgc ON sgc.study_group_class_id = sgm.study_group_class_id "
+                + "LEFT JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
+                + "WHERE sgm.study_subject_id = ? "
+                + "  AND sgm.status_id = 1 "
+                + "  AND sgc.status_id = 1";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int groupClassId = rs.getInt(1);
+                    String groupClassName = rs.getString(2);
+                    int rawGroupId = rs.getInt(3);
+                    Integer groupId = rs.wasNull() ? null : Integer.valueOf(rawGroupId);
+                    String groupName = rs.getString(4);
+                    String subjectAssignment = rs.getString(5);
+                    out.add(new GroupAssignmentSnapshot(
+                            groupClassId, groupClassName, groupId, groupName, subjectAssignment));
+                }
+            }
+        } catch (SQLException e) {
+            LOG.warn("Group-assignment lookup failed for study_subject={} — surfacing empty list",
+                    studySubjectId, e);
+        }
+        return out;
+    }
+
+    /**
+     * Phase E.6 subject-lifecycle — map {@link Status} to the SPA's
+     * coarse string. Mirrors the SPA's {@code SubjectStatus} TS union.
+     * Null Status (defensive) and any code outside the legacy
+     * AVAILABLE/REMOVED/AUTO_DELETED/LOCKED/SIGNED set fall through
+     * to {@code "available"} — the matrix's safest default.
+     */
+    private static String mapStudySubjectStatus(Status status) {
+        if (status == null) return "available";
+        int id = status.getId();
+        return switch (id) {
+            case 1 -> "available";
+            case 5 -> "removed";
+            case 6 -> "locked";
+            case 7 -> "auto-removed";
+            case 8 -> "signed";
+            default -> "available";
+        };
     }
 
     /** Map the single-char DB encoding to the SPA's `Gender` union. */
