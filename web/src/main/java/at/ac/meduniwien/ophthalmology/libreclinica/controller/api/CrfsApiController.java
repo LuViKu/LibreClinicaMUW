@@ -686,6 +686,93 @@ public class CrfsApiController {
     ) {}
 
     /* ----------------------------------------------------------------- */
+    /* POST /api/v1/crfs/{crfOid}/versions:validate-expression           */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 Milestone C — live expression validation.
+     *
+     * <p>Standalone counterpart to {@link CrfJsonValidator#validateExpression}
+     * used by the SPA's expression / show-when editor. The wizard calls
+     * this on every keystroke (debounced) so the operator gets an
+     * inline pass/fail before committing to the calculation.
+     *
+     * <p>Wire shape:
+     * <pre>
+     * POST /api/v1/crfs/{crfOid}/versions:validate-expression
+     * {
+     *   "expression": "AGE + 1",
+     *   "draftItemOids": ["AGE", "WEIGHT"],
+     *   "draftItemDataTypes": {"AGE": "INT", "WEIGHT": "REAL"}
+     * }
+     * </pre>
+     *
+     * <p>Returns:
+     * <ul>
+     *   <li>{@code 200 OK} with
+     *       {@link CrfJsonValidator.ExpressionValidationResult} when the
+     *       JSON shape is well-formed; the body carries
+     *       {@code valid:true} or {@code valid:false} with details.</li>
+     *   <li>{@code 400 Bad Request} when the body itself is missing or
+     *       when {@code expression} is null. (Empty expression is a body
+     *       failure too — the validator catches it.)</li>
+     *   <li>{@code 401} / {@code 403} per the standard write preflight
+     *       (sysadmin / director / coordinator only — the editor is part
+     *       of the build-study surface).</li>
+     * </ul>
+     *
+     * <p>The endpoint never touches the parser, the workbook adapter or
+     * the database. The response is computed entirely from the body and
+     * the in-memory draft scope the SPA supplies — a deliberate choice
+     * so the editor can keep validating expressions even against draft
+     * OIDs that don't exist in the database yet (the wizard's whole
+     * point: the operator is mid-authoring). The {@code crfOid} path
+     * variable serves as scoping context and matches the parent
+     * resource's URL shape but is not loaded.
+     */
+    @PostMapping(value = "/{crfOid}/versions:validate-expression",
+                 consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(
+                         implementation = CrfJsonValidator.ExpressionValidationResult.class)))
+    public ResponseEntity<?> validateExpression(
+            @PathVariable("crfOid") String crfOid,
+            @RequestBody(required = false) ValidateExpressionRequest body,
+            HttpSession session) {
+        ResponseEntity<?> guard = preflightWrite(session);
+        if (guard != null) return guard;
+
+        if (body == null) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Request body is required",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+        }
+        if (body.expression() == null) {
+            // null vs empty: the validator catches empty in-body
+            // (returns valid:false). null body fields are a shape failure
+            // — the SPA is required to send the field even if blank.
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "expression", "expression is required"))));
+        }
+
+        CrfJsonValidator.ExpressionValidationResult result = jsonValidator.validateExpression(
+                body.expression(),
+                body.draftItemOids() == null ? List.of() : body.draftItemOids(),
+                body.draftItemDataTypes() == null ? Map.of() : body.draftItemDataTypes());
+        return ResponseEntity.ok(result);
+    }
+
+    /** Wire shape for the {@code :validate-expression} request. */
+    @Schema(name = "CrfValidateExpressionRequest")
+    public record ValidateExpressionRequest(
+            String expression,
+            List<String> draftItemOids,
+            Map<String, String> draftItemDataTypes
+    ) {}
+
+    /* ----------------------------------------------------------------- */
     /* POST /api/v1/crfs/{crfOid}/versions/{versionOid}/disable           */
     /* ----------------------------------------------------------------- */
 

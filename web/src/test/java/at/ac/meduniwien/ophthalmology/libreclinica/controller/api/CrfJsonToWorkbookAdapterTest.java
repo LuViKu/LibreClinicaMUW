@@ -81,23 +81,58 @@ class CrfJsonToWorkbookAdapterTest {
         }
     }
 
+    /**
+     * Builder helper — keeps the verbose 17-arg {@link
+     * CrfVersionAuthoringRequest.Item} constructor calls compact and
+     * insulates the test suite from M-D / M-E record-shape evolutions.
+     * Defaults match the minimal-fill-out path: blank optional strings,
+     * not required, no response set, no validation, no M-C extensions.
+     */
+    private static CrfVersionAuthoringRequest.Item item(
+            String name, String descriptionLabel, String leftItemText,
+            String units, String rightItemText, String dataType,
+            String defaultValue, boolean required,
+            CrfVersionAuthoringRequest.ResponseSet responseSet,
+            CrfVersionAuthoringRequest.Validation validation) {
+        return new CrfVersionAuthoringRequest.Item(
+                name, "", descriptionLabel, leftItemText, rightItemText, units,
+                dataType, defaultValue, required, responseSet, validation,
+                null, null, null, null, false, null);
+    }
+
+    private static CrfVersionAuthoringRequest.Item simpleItem(
+            String name, String dataType,
+            CrfVersionAuthoringRequest.ResponseSet rs,
+            CrfVersionAuthoringRequest.Validation val) {
+        return item(name, name, "", "", "", dataType, "", false, rs, val);
+    }
+
+    private static CrfVersionAuthoringRequest.Item simpleItem(String name, String dataType) {
+        return simpleItem(name, dataType, null, null);
+    }
+
     /* ----------------------------------------------------------------- */
     /* Sheet topology                                                    */
     /* ----------------------------------------------------------------- */
 
     @Test
-    void synthesisedWorkbookHasFourSheetsInOrder() throws Exception {
-        var item = new CrfVersionAuthoringRequest.Item(
-                "AGE", "", "Age", "", "", "", "INTEGER", "", true, null, null);
+    void synthesisedWorkbookHasFiveSheetsInOrder() throws Exception {
+        // The legacy repeating parser reads wb.getSheetAt(4) for the
+        // version-number row, so the adapter emits an Instructions
+        // sheet at slot 4 in addition to CRF / Sections / Groups /
+        // Items. Pin the order so a future refactor can't silently
+        // misalign with the parser's positional lookup.
+        var item = simpleItem("AGE", "INTEGER");
         var section = new CrfVersionAuthoringRequest.Section("S1", "Sec 1", "", 1, List.of(item));
         var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
 
         HSSFWorkbook wb = synthesize(req);
-        assertEquals(4, wb.getNumberOfSheets());
+        assertEquals(5, wb.getNumberOfSheets());
         assertEquals("CRF", wb.getSheetName(0));
         assertEquals("Sections", wb.getSheetName(1));
         assertEquals("Groups", wb.getSheetName(2));
         assertEquals("Items", wb.getSheetName(3));
+        assertEquals("Instructions", wb.getSheetName(4));
     }
 
     @Test
@@ -106,8 +141,7 @@ class CrfJsonToWorkbookAdapterTest {
         // sheet (see SpreadSheetTableRepeating constructor). Pin that we
         // always emit it — even when the operator hasn't authored any
         // explicit groups.
-        var item = new CrfVersionAuthoringRequest.Item(
-                "X", "", "X", "", "", "", "ST", "", false, null, null);
+        var item = simpleItem("X", "ST");
         var section = new CrfVersionAuthoringRequest.Section("S1", "S", "", 1, List.of(item));
         var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
 
@@ -130,9 +164,8 @@ class CrfJsonToWorkbookAdapterTest {
         // RIGHT_ITEM_TEXT at col 4, so the constructor positions for
         // rightItemText + units differ from the column positions —
         // pin "completed" → rightItemText (col 4) and "yrs" → units (col 3).
-        var item = new CrfVersionAuthoringRequest.Item(
-                "AGE", "", "Age in years", "Years",
-                "completed", "yrs", "INTEGER", "0",
+        var item = item("AGE", "Age in years", "Years",
+                "yrs", "completed", "INTEGER", "0",
                 true, null, null);
         var section = new CrfVersionAuthoringRequest.Section("S1", "Demographics", "", 1, List.of(item));
         var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
@@ -164,8 +197,7 @@ class CrfJsonToWorkbookAdapterTest {
                 List.of(new CrfVersionAuthoringRequest.Option("Yes", "1"),
                         new CrfVersionAuthoringRequest.Option("No", "0")),
                 null);
-        var item = new CrfVersionAuthoringRequest.Item(
-                "SMOKER", "", "Smoker", "", "", "", "ST", "", false, rs, null);
+        var item = simpleItem("SMOKER", "ST", rs, null);
         var section = new CrfVersionAuthoringRequest.Section("S1", "S", "", 1, List.of(item));
         var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
 
@@ -181,7 +213,8 @@ class CrfJsonToWorkbookAdapterTest {
     void validationRegexpWrappedInLegacyClause() throws Exception {
         var val = new CrfVersionAuthoringRequest.Validation("[0-9]+", "Digits only");
         var item = new CrfVersionAuthoringRequest.Item(
-                "PHONE", "", "Phone", "", "", "", "ST", "", false, null, val);
+                "PHONE", "", "Phone", "", "", "", "ST", "", false, null, val,
+                null, null, null, null, false, null);
         var section = new CrfVersionAuthoringRequest.Section("S1", "S", "", 1, List.of(item));
         var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
 
@@ -204,7 +237,8 @@ class CrfJsonToWorkbookAdapterTest {
 
         for (var entry : expected.entrySet()) {
             var item = new CrfVersionAuthoringRequest.Item(
-                    "X_" + entry.getValue(), "", "X", "", "", "", entry.getKey(), "", false, null, null);
+                    "X_" + entry.getValue(), "", "X", "", "", "", entry.getKey(), "", false, null, null,
+                    null, null, null, null, false, null);
             var section = new CrfVersionAuthoringRequest.Section("S1", "S", "", 1, List.of(item));
             var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
             HSSFWorkbook wb = synthesize(req);
@@ -217,8 +251,10 @@ class CrfJsonToWorkbookAdapterTest {
 
     @Test
     void sectionsSheetCarriesEachAuthoredSection() throws Exception {
-        var i1 = new CrfVersionAuthoringRequest.Item("A", "", "A", "", "", "", "ST", "", false, null, null);
-        var i2 = new CrfVersionAuthoringRequest.Item("B", "", "B", "", "", "", "ST", "", false, null, null);
+        var i1 = new CrfVersionAuthoringRequest.Item("A", "", "A", "", "", "", "ST", "", false, null, null,
+                null, null, null, null, false, null);
+        var i2 = new CrfVersionAuthoringRequest.Item("B", "", "B", "", "", "", "ST", "", false, null, null,
+                null, null, null, null, false, null);
         var s1 = new CrfVersionAuthoringRequest.Section("S1", "Sec 1", "Instructions 1", 1, List.of(i1));
         var s2 = new CrfVersionAuthoringRequest.Section("S2", "Sec 2", "", 2, List.of(i2));
         var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(s1, s2));
@@ -234,7 +270,8 @@ class CrfJsonToWorkbookAdapterTest {
     @Test
     void crfSheetCarriesParentCrfName() throws Exception {
         var item = new CrfVersionAuthoringRequest.Item(
-                "AGE", "", "Age", "", "", "", "INTEGER", "", false, null, null);
+                "AGE", "", "Age", "", "", "", "INTEGER", "", false, null, null,
+                null, null, null, null, false, null);
         var section = new CrfVersionAuthoringRequest.Section("S1", "S", "", 1, List.of(item));
         var req = new CrfVersionAuthoringRequest("v2.5", "Demo CRF", "Initial release",
                 List.of(section));
@@ -245,5 +282,134 @@ class CrfJsonToWorkbookAdapterTest {
         assertEquals("v2.5", str(row, 1));
         assertEquals("Demo CRF", str(row, 2));
         assertTrue(str(row, 3).contains("Initial release"));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* M-C — show-when conditional display                                */
+    /* ----------------------------------------------------------------- */
+
+    @Test
+    void showItemRowEmitsHideStatusAndConditionalDisplayTriple() throws Exception {
+        // M-C — when an item carries showItem, the adapter writes
+        // ITEM_DISPLAY_STATUS = "Hide" (col 25), the parentItemOid
+        // (col 9 = PARENT_ITEM) and the SIMPLE_CONDITIONAL_DISPLAY
+        // triple at col 26 (parentOid,parentValue,message).
+        var i1 = new CrfVersionAuthoringRequest.Item(
+                "AGE", "AGE", "Age", "", "", "", "INTEGER", "", false, null, null,
+                null, null, null, null, false, null);
+        var i2 = new CrfVersionAuthoringRequest.Item(
+                "PEDIATRIC_NOTES", "PEDIATRIC_NOTES", "Pediatric notes", "", "", "",
+                "ST", "", false, null, null,
+                "1|Show only for adults", "AGE", null, null, false, null);
+        var section = new CrfVersionAuthoringRequest.Section(
+                "S1", "Demographics", "", 1, List.of(i1, i2));
+        var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
+
+        HSSFWorkbook wb = synthesize(req);
+        HSSFSheet items = sheet(wb, "Items");
+        HSSFRow childRow = items.getRow(2);
+        assertEquals("AGE", str(childRow, 9));                  // PARENT_ITEM
+        assertEquals("Hide", str(childRow, 25));                // ITEM_DISPLAY_STATUS
+        assertEquals("AGE,1,Show only for adults", str(childRow, 26)); // SIMPLE_CONDITIONAL_DISPLAY
+    }
+
+    @Test
+    void itemWithoutShowItemHasBlankDisplayCells() throws Exception {
+        var item = new CrfVersionAuthoringRequest.Item(
+                "AGE", "AGE", "Age", "", "", "", "INTEGER", "", false, null, null,
+                null, null, null, null, false, null);
+        var section = new CrfVersionAuthoringRequest.Section("S1", "S", "", 1, List.of(item));
+        var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
+
+        HSSFWorkbook wb = synthesize(req);
+        HSSFRow row = sheet(wb, "Items").getRow(1);
+        assertEquals("", str(row, 9));   // PARENT_ITEM blank when no showItem
+        assertEquals("", str(row, 25));  // ITEM_DISPLAY_STATUS blank
+        assertEquals("", str(row, 26));  // SIMPLE_CONDITIONAL_DISPLAY blank
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* M-C — calculation response types                                   */
+    /* ----------------------------------------------------------------- */
+
+    @Test
+    void calculationResponseSetCarriesFormulaInCols15And16() throws Exception {
+        // M-C — calculation variants land the formula in
+        // RESPONSE_OPTIONS_TEXT (15) and RESPONSE_VALUES_OR_CALCS (16).
+        var rs = new CrfVersionAuthoringRequest.ResponseSet("calculation", "bmi_calc",
+                List.of(new CrfVersionAuthoringRequest.Option("WEIGHT / (HEIGHT * HEIGHT)",
+                        "WEIGHT / (HEIGHT * HEIGHT)")),
+                null);
+        var item = new CrfVersionAuthoringRequest.Item(
+                "BMI", "BMI", "BMI", "", "", "", "REAL", "", false, rs, null,
+                null, null, null, null, false, null);
+        var section = new CrfVersionAuthoringRequest.Section(
+                "S1", "Vitals", "", 1, List.of(item));
+        var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
+
+        HSSFWorkbook wb = synthesize(req);
+        HSSFRow row = sheet(wb, "Items").getRow(1);
+        assertEquals("calculation", str(row, 13));
+        assertEquals("bmi_calc", str(row, 14));
+        assertEquals("WEIGHT / (HEIGHT * HEIGHT)", str(row, 15));
+        assertEquals("WEIGHT / (HEIGHT * HEIGHT)", str(row, 16));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* M-C — header / subHeader / pageBreak                              */
+    /* ----------------------------------------------------------------- */
+
+    @Test
+    void headerSubHeaderAndPageBreakRowsLandAtCanonicalColumns() throws Exception {
+        var item = new CrfVersionAuthoringRequest.Item(
+                "BP_SYS", "BP_SYS", "Systolic BP", "", "", "mmHg", "INT", "", false,
+                null, null, null, null,
+                "Vital signs", "Cardiovascular", true, null);
+        var section = new CrfVersionAuthoringRequest.Section(
+                "S1", "Vitals", "", 1, List.of(item));
+        var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
+
+        HSSFWorkbook wb = synthesize(req);
+        HSSFRow row = sheet(wb, "Items").getRow(1);
+        assertEquals("Vital signs", str(row, 7));      // HEADER
+        assertEquals("Cardiovascular", str(row, 8));   // SUBHEADER
+        assertEquals("page-break", str(row, 17));      // RESPONSE_LAYOUT — page break
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* M-C — flat repeating item groups                                  */
+    /* ----------------------------------------------------------------- */
+
+    @Test
+    void distinctGroupLabelsLandOnGroupsSheet() throws Exception {
+        var i1 = new CrfVersionAuthoringRequest.Item(
+                "DRUG_NAME", "DRUG_NAME", "Drug", "", "", "", "ST", "", false, null, null,
+                null, null, null, null, false, "MEDS");
+        var i2 = new CrfVersionAuthoringRequest.Item(
+                "DRUG_DOSE", "DRUG_DOSE", "Dose", "", "", "", "REAL", "", false, null, null,
+                null, null, null, null, false, "MEDS");
+        var i3 = new CrfVersionAuthoringRequest.Item(
+                "AE_NAME", "AE_NAME", "AE", "", "", "", "ST", "", false, null, null,
+                null, null, null, null, false, "ADVERSE");
+        var s1 = new CrfVersionAuthoringRequest.Section(
+                "S1", "Meds", "", 1, List.of(i1, i2));
+        var s2 = new CrfVersionAuthoringRequest.Section(
+                "S2", "AEs", "", 2, List.of(i3));
+        var req = new CrfVersionAuthoringRequest("v1.0", "", "", List.of(s1, s2));
+
+        HSSFWorkbook wb = synthesize(req);
+        HSSFSheet groups = sheet(wb, "Groups");
+        // header at row 0; one row per distinct label in first-seen order
+        assertEquals("MEDS", str(groups.getRow(1), 0));
+        assertEquals("grid", str(groups.getRow(1), 1));
+        assertEquals("1", str(groups.getRow(1), 3));
+        assertEquals("40", str(groups.getRow(1), 4));
+        assertEquals("ADVERSE", str(groups.getRow(2), 0));
+        assertEquals("grid", str(groups.getRow(2), 1));
+        // and the items carry the same group label on col 6
+        HSSFSheet items = sheet(wb, "Items");
+        assertEquals("MEDS", str(items.getRow(1), 6));
+        assertEquals("MEDS", str(items.getRow(2), 6));
+        assertEquals("ADVERSE", str(items.getRow(3), 6));
     }
 }
