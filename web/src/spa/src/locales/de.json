@@ -36,6 +36,8 @@
       "sectionLabel": "Arbeitsabläufe Prüfarzt/-ärztin",
       "subjectMatrixDesc": "Standortbezogene Teilnehmerübersicht mit Visiten-Status. Suchen, filtern, neue Visite planen, Teilnehmer signieren.",
       "addSubjectDesc": "Studienteilnehmer/-in aufnehmen. PHI-bewusste Validierung, Geschlechtsauswahl, drei Speichermodi.",
+      "scheduleVisitTitle": "Visite planen",
+      "scheduleVisitDesc": "Nächste Visite für eine/n eingeschlossene/n Teilnehmer/-in planen. Teilnehmer/-in in der Matrix auswählen und Visite + Datum festlegen.",
       "signQueueTitle": "Signatur ausstehend",
       "signQueueDesc": "Teilnehmer mit abgeschlossenen Visiten zur E-Signatur. 21 CFR Part 11 §11.50 Attestierung.",
       "todaysCrfsTitle": "Heutige offene CRFs",
@@ -100,6 +102,7 @@
     "empty": "Keine Teilnehmer für den aktuellen Filter.",
     "openSubject": "Öffnen →",
     "signed": "Signiert",
+    "scheduleHint": "Bitte unten eine/n Teilnehmer/-in auswählen, um die nächste Visite zu planen.",
     "openQueriesTooltip": "{count} offene Rückfrage(n)",
     "ariaSigned": "Teilnehmer {id}, signiert",
     "ariaUnsigned": "Teilnehmer {id}, nicht signiert",
@@ -1144,6 +1147,7 @@
     "identityHeading": "Identität & Einschluss",
     "eventsHeading": "Geplante Visiten",
     "eventsCount": "Visiten",
+    "scheduleEvent": "Visite planen",
     "openQueries": "Offene Rückfragen",
     "openEvent": "CRFs öffnen →",
     "column": {
@@ -1187,5 +1191,26 @@
       }
     },
     "locked": "Gesperrt"
+  },
+  "scheduleEvent": {
+    "title": "Visite planen",
+    "subtitle": "Teilnehmer/-in {id}",
+    "field": {
+      "eventDefinition": "Visite",
+      "dateStarted": "Startdatum",
+      "location": "Ort"
+    },
+    "placeholder": {
+      "eventDefinition": "Visite auswählen…",
+      "location": "Optional"
+    },
+    "submit": "Planen",
+    "empty": "Für diese Studie sind keine Visiten verfügbar.",
+    "error": {
+      "eventDefinitionRequired": "Bitte eine Visite auswählen.",
+      "dateRequired": "Startdatum ist erforderlich.",
+      "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
+      "generic": "Visite konnte nicht geplant werden. Bitte erneut versuchen."
+    }
   }
 }

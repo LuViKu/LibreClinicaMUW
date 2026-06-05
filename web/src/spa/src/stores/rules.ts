@@ -749,6 +749,24 @@ export const useRulesStore = defineStore('rules', () => {
     }
   }
 
+  /**
+   * Phase E.6 — clear every piece of study-scoped state so the rules
+   * view doesn't carry study-A rule_sets / run-log entries into study
+   * B. Called by {@link useAuthStore.pickStudy} before re-bootstrapping.
+   */
+  function reset() {
+    rows.value = []
+    isLoading.value = false
+    error.value = null
+    selected.value = null
+    isLoadingSelected.value = false
+    selectedError.value = null
+    runLog.value = []
+    runLogRuleSetId.value = null
+    isLoadingRunLog.value = false
+    runLogError.value = null
+  }
+
   return {
     rows,
     isLoading,
@@ -778,5 +796,6 @@ export const useRulesStore = defineStore('rules', () => {
     updateRule,
     updateAction,
     validateTarget,
+    reset,
   }
 })

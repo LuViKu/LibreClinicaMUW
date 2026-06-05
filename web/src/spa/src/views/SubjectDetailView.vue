@@ -10,6 +10,7 @@ import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
 import { useEventsStore } from '@/stores/events'
@@ -216,6 +217,30 @@ function canEditEv(status: EventStatus): boolean {
 function canCancelEv(status: EventStatus): boolean {
   const role = auth.user?.role ?? null
   return !!role && canCancelEvent(role, status as StudyEventStatus)
+}
+
+/* ------------------------------------------------------------- */
+/* Phase E.6 — Schedule-event dialog.                              */
+/*                                                                */
+/* Surfaces the long-wired but never-rendered POST /events flow.   */
+/* The button only renders for roles that can plausibly schedule a */
+/* visit (Investigator / CRC / Administrator); other roles see the */
+/* existing per-event edit/cancel actions but no schedule entry    */
+/* point. On success the subject detail is re-fetched so the events */
+/* table reflects the new row without a manual reload.             */
+/* ------------------------------------------------------------- */
+
+const scheduleDialogOpen = ref(false)
+const canScheduleEvent = computed(() => {
+  const role = auth.user?.role ?? null
+  return role === 'Investigator' || role === 'CRC' || role === 'Administrator'
+})
+const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
+
+async function onEventScheduled() {
+  if (subject.value) {
+    await subjects.fetchOne(subject.value.id)
+  }
 }
 
 /* Phase E A3-lock — DM/Admin only; visibility also gated by current
@@ -441,9 +466,23 @@ function dataEntryStageLabel(stage: string | null): string {
             <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
               {{ t('subjectDetail.eventsHeading') }}
             </h2>
-            <span class="text-xs text-slate-500">
-              {{ subject.events.length }} {{ t('subjectDetail.eventsCount') }}
-            </span>
+            <div class="flex items-center gap-3">
+              <button
+                v-if="canScheduleEvent"
+                type="button"
+                class="px-2.5 py-1 text-xs border border-muw-blue-200 rounded-md bg-muw-blue-50 hover:bg-muw-blue-100 text-muw-blue inline-flex items-center gap-1.5"
+                @click="scheduleDialogOpen = true"
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                  <line x1="12" x2="12" y1="5" y2="19" />
+                  <line x1="5" x2="19" y1="12" y2="12" />
+                </svg>
+                {{ t('subjectDetail.scheduleEvent') }}
+              </button>
+              <span class="text-xs text-slate-500">
+                {{ subject.events.length }} {{ t('subjectDetail.eventsCount') }}
+              </span>
+            </div>
           </div>
           <DenseTable :bordered="false">
             <template #header>
@@ -625,5 +664,15 @@ function dataEntryStageLabel(stage: string | null): string {
         </div>
       </template>
     </main>
+
+    <!-- Phase E.6 — Schedule-event dialog (mounted regardless of
+         data-load state so the open binding can stay simple). -->
+    <ScheduleEventDialog
+      v-if="subject && canScheduleEvent"
+      v-model:open="scheduleDialogOpen"
+      :subject-id="subject.id"
+      :study-oid="activeStudyOid"
+      @scheduled="onEventScheduled"
+    />
   </div>
 </template>

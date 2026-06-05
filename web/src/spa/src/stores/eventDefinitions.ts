@@ -177,6 +177,17 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     }
   }
 
+  /**
+   * Phase E.6 — clear every piece of study-scoped state so the SPA
+   * doesn't show study-A event definitions on study B's view. Called
+   * by {@link useAuthStore.pickStudy} before re-bootstrapping.
+   */
+  function reset() {
+    rows.value = []
+    isLoading.value = false
+    error.value = null
+  }
+
   return {
     rows,
     isLoading,
@@ -186,5 +197,6 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     update,
     disable,
     reorder,
+    reset,
   }
 })

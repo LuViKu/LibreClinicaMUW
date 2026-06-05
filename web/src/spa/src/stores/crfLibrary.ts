@@ -259,6 +259,21 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     return e instanceof Error ? e.message : `Unbekannter Fehler beim ${op}.`
   }
 
+  /**
+   * Phase E.6 — clear every piece of study-scoped state. The CRF
+   * library list itself is study-independent in principle (CRFs are
+   * platform-wide assets) — but the per-(event-def) assignments
+   * surface is study-scoped, and any in-flight error / loading flags
+   * may reference a study-A request mid-switch. Wholesale clearing
+   * keeps the post-switch view honest. Called by {@link
+   * useAuthStore.pickStudy} before re-bootstrapping.
+   */
+  function reset() {
+    crfs.value = []
+    isLoading.value = false
+    error.value = null
+  }
+
   return {
     crfs,
     isLoading,
@@ -272,5 +287,6 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     attachCrf,
     updateAssignment,
     removeAssignment,
+    reset,
   }
 })

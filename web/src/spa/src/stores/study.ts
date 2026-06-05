@@ -178,6 +178,18 @@ export const useStudyStore = defineStore('study', () => {
     )
   }
 
+  /**
+   * Phase E.6 — clear the cached build-status snapshot so the SPA
+   * doesn't show study-A progress when navigating into study B's
+   * build view. Called by {@link useAuthStore.pickStudy} before
+   * re-bootstrapping.
+   */
+  function reset() {
+    status.value = null
+    isLoading.value = false
+    error.value = null
+  }
+
   return {
     status,
     isLoading,
@@ -191,5 +203,6 @@ export const useStudyStore = defineStore('study', () => {
     disable,
     restore,
     setStatus,
+    reset,
   }
 })

@@ -397,6 +397,21 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  /**
+   * Phase E.6 — clear every piece of study-scoped state so the
+   * Manage Users view doesn't carry study-A user bindings into study
+   * B. Called by {@link useAuthStore.pickStudy} before re-bootstrapping.
+   */
+  function reset() {
+    rows.value = []
+    isLoading.value = false
+    error.value = null
+    query.value = ''
+    roleFilter.value = 'all'
+    authFilter.value = 'all'
+    onlyActive.value = true
+  }
+
   return {
     rows,
     isLoading,
@@ -420,5 +435,6 @@ export const useUsersStore = defineStore('users', () => {
     grantRole,
     updateRole,
     revokeRole,
+    reset,
   }
 })

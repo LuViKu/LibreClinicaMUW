@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
 import DenseTable from '@/components/DenseTable.vue'
@@ -13,6 +13,16 @@ import type { EventStatus, Subject } from '@/types/subject'
 
 const { t } = useI18n()
 const subjects = useSubjectsStore()
+const route = useRoute()
+
+/**
+ * Phase E.6 — HomeView's "Schedule visit" card routes here with
+ * `?action=schedule`. v1 surfaces a banner "Pick a subject" — the
+ * actual scheduler lives on the subject-detail view. Operator
+ * feedback may upgrade this to an inline dialog launched from the
+ * matrix row, but the banner keeps the scope honest.
+ */
+const isScheduleMode = computed(() => route.query.action === 'schedule')
 
 onMounted(() => {
   if (subjects.rows.length === 0) {
@@ -104,6 +114,23 @@ const ariaSortLabel = (subject: Subject) =>
     </SideRail>
 
     <main class="flex-1 px-8 py-6 max-w-[1200px]">
+      <!-- Phase E.6 — schedule-visit hint from HomeView's
+           "Schedule visit" card. The actual dialog lives on
+           SubjectDetailView; this banner tells the operator to drill
+           in. v1 keeps it deliberately simple — operator feedback can
+           drive an inline-launch flow later. -->
+      <div
+        v-if="isScheduleMode"
+        class="mb-4 rounded-md border border-muw-blue-200 bg-muw-blue-50 px-4 py-3 text-xs text-muw-blue-900 flex items-start gap-2.5"
+        role="status"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" class="mt-0.5 shrink-0" aria-hidden="true">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 16v-4M12 8h.01" />
+        </svg>
+        <p class="leading-relaxed">{{ t('subjectMatrix.scheduleHint') }}</p>
+      </div>
+
       <div class="flex items-end justify-between mb-5">
         <div>
           <div class="text-xs text-slate-500 mb-1">

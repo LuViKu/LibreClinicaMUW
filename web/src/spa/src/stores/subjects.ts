@@ -524,6 +524,29 @@ export const useSubjectsStore = defineStore('subjects', () => {
     }
   }
 
+  /**
+   * Phase E.6 — clear every piece of study-scoped state so the store
+   * doesn't bleed subjects from study A into the matrix after the
+   * user switches to study B. Called by {@link useAuthStore.pickStudy}
+   * before re-bootstrapping. Filters reset too — keeping a "signed
+   * subjects only" filter active across study switches confuses the
+   * empty-state read.
+   */
+  function reset() {
+    rows.value = []
+    isLoading.value = false
+    error.value = null
+    selected.value = null
+    isLoadingSelected.value = false
+    selectedError.value = null
+    preflight.value = null
+    isLoadingPreflight.value = false
+    preflightError.value = null
+    query.value = ''
+    statusFilter.value = 'all'
+    onlyWithQueries.value = false
+  }
+
   return {
     // state
     rows,
@@ -553,6 +576,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
     updateSubject,
     lockSubject,
     unlockSubject,
+    reset,
   }
 })
 

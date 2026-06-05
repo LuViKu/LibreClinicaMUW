@@ -36,6 +36,8 @@
       "sectionLabel": "Investigator workflows",
       "subjectMatrixDesc": "Site-scoped subject list with per-event status. Search, filter, schedule new event, sign subject.",
       "addSubjectDesc": "Enrol a study subject. PHI-aware validation, gender selector, three save modes.",
+      "scheduleVisitTitle": "Schedule a visit",
+      "scheduleVisitDesc": "Plan the next visit for an enrolled subject. Pick the subject in the matrix and choose the event definition + date.",
       "signQueueTitle": "Sign-pending subjects",
       "signQueueDesc": "Subjects with completed events ready for e-signature. 21 CFR Part 11 §11.50 attestation.",
       "todaysCrfsTitle": "Today's pending CRFs",
@@ -100,6 +102,7 @@
     "empty": "No subjects match the current filter.",
     "openSubject": "Open →",
     "signed": "Signed",
+    "scheduleHint": "Pick a subject below to schedule the next visit.",
     "openQueriesTooltip": "{count} open query/queries",
     "ariaSigned": "Subject {id}, signed",
     "ariaUnsigned": "Subject {id}, not signed",
@@ -1144,6 +1147,7 @@
     "identityHeading": "Identity & enrolment",
     "eventsHeading": "Scheduled events",
     "eventsCount": "events",
+    "scheduleEvent": "Schedule event",
     "openQueries": "Open queries",
     "openEvent": "Open CRFs →",
     "column": {
@@ -1187,5 +1191,26 @@
       }
     },
     "locked": "Locked"
+  },
+  "scheduleEvent": {
+    "title": "Schedule event",
+    "subtitle": "Subject {id}",
+    "field": {
+      "eventDefinition": "Event definition",
+      "dateStarted": "Start date",
+      "location": "Location"
+    },
+    "placeholder": {
+      "eventDefinition": "Select an event definition…",
+      "location": "Optional"
+    },
+    "submit": "Schedule",
+    "empty": "No event definitions are available for this study.",
+    "error": {
+      "eventDefinitionRequired": "Select an event definition.",
+      "dateRequired": "Start date is required.",
+      "dateInvalid": "Date must be in YYYY-MM-DD format.",
+      "generic": "Could not schedule the event. Please try again."
+    }
   }
 }

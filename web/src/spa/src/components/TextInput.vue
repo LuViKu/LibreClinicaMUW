@@ -15,7 +15,7 @@ interface Props {
   id: string
   /** Accepts `null` so v-model bindings against nullable form fields don't need to coerce at the call site. */
   modelValue?: string | null
-  type?: 'text' | 'email' | 'password' | 'number' | 'search' | 'tel' | 'url'
+  type?: 'text' | 'email' | 'password' | 'number' | 'search' | 'tel' | 'url' | 'date'
   placeholder?: string
   disabled?: boolean
   readonly?: boolean
