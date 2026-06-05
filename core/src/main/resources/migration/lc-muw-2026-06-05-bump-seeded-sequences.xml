@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 #107 (ophth visit/CRF seed) inserted explicit numeric ids
+        into crf / crf_version / section / response_set / item /
+        item_form_metadata without bumping the underlying sequences. The
+        next nextval() then returned 6 — collision on item_pkey when the
+        CRF authoring wizard tried to persist a new version through
+        NewCRFBean.insertToDB.
+
+        Realign every sequence used by the ophth seed (and the demo
+        seed it follows) to setval(MAX(id) + 1). Idempotent: the SELECT
+        MAX(...) keeps the bump correct even if more rows were already
+        added before the changeset ran.
+    -->
+
+    <changeSet id="lc-muw-2026-06-05-bump-seeded-sequences"
+               author="lukas.kuchernig@meduniwien.ac.at"
+               context="!demo-skip-seq-bump">
+        <sql splitStatements="true" endDelimiter=";">
+            SELECT setval('crf_crf_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(crf_id), 0), 1) FROM crf));
+            SELECT setval('crf_version_crf_version_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(crf_version_id), 0), 1) FROM crf_version));
+            SELECT setval('section_section_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(section_id), 0), 1) FROM section));
+            SELECT setval('response_set_response_set_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(response_set_id), 0), 1) FROM response_set));
+            SELECT setval('item_item_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(item_id), 0), 1) FROM item));
+            SELECT setval('item_form_metadata_item_form_metadata_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(item_form_metadata_id), 0), 1) FROM item_form_metadata));
+            SELECT setval('item_group_item_group_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(item_group_id), 0), 1) FROM item_group));
+            SELECT setval('item_group_metadata_item_group_metadata_id_seq',
+                          (SELECT GREATEST(COALESCE(MAX(item_group_metadata_id), 0), 1) FROM item_group_metadata));
+        </sql>
+        <rollback/>
+    </changeSet>
+
+</databaseChangeLog>

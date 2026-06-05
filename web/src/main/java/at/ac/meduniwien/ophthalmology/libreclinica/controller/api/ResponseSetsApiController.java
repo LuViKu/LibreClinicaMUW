@@ -192,10 +192,19 @@ public class ResponseSetsApiController {
                                                      int limit,
                                                      int activeStudyId) throws SQLException {
         StringBuilder sql = new StringBuilder(512);
+        // `crf_version` has no `study_id`; scope through
+        // event_definition_crf → study_event_definition.study_id so the
+        // "in active study" flag reflects whether any of the response
+        // set's parent CRFs is wired into a SED in this study.
         sql.append("SELECT rs.label, rt.name AS response_type, ")
            .append("       rs.options_text, rs.options_values, ")
            .append("       COUNT(DISTINCT rs.version_id) AS usage_count, ")
-           .append("       BOOL_OR(cv.study_id = ?) AS in_active_study ")
+           .append("       BOOL_OR(EXISTS (")
+           .append("           SELECT 1 FROM event_definition_crf edc ")
+           .append("           JOIN study_event_definition sed ")
+           .append("             ON sed.study_event_definition_id = edc.study_event_definition_id ")
+           .append("           WHERE edc.crf_id = cv.crf_id AND sed.study_id = ? ")
+           .append("       )) AS in_active_study ")
            .append("FROM response_set rs ")
            .append("JOIN response_type rt ON rt.response_type_id = rs.response_type_id ")
            .append("LEFT JOIN crf_version cv ON cv.crf_version_id = rs.version_id ")
