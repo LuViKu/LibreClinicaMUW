@@ -95,6 +95,20 @@ export const useAuditLogStore = defineStore('auditLog', () => {
     }
   }
 
+  /**
+   * Phase E.6 — clear every piece of study-scoped state so the audit
+   * log doesn't blend study-A entries into study B's timeline. Called
+   * by {@link useAuthStore.pickStudy} before re-bootstrapping.
+   */
+  function reset() {
+    events.value = []
+    isLoading.value = false
+    error.value = null
+    actorFilter.value = ''
+    variantFilter.value = 'all'
+    subjectFilter.value = ''
+  }
+
   return {
     events,
     isLoading,
@@ -110,5 +124,6 @@ export const useAuditLogStore = defineStore('auditLog', () => {
     groupedByDate,
     clearFilters,
     load,
+    reset,
   }
 })

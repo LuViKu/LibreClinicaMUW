@@ -156,6 +156,13 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
         :description="t('home.investigator.addSubjectDesc')"
       />
       <LandingCard
+        :to="{ name: 'subject-matrix', query: { action: 'schedule' } }"
+        role-variant="investigator"
+        :role-label="t('home.role.Investigator')"
+        :title="t('home.investigator.scheduleVisitTitle')"
+        :description="t('home.investigator.scheduleVisitDesc')"
+      />
+      <LandingCard
         :to="{ name: 'subject-matrix', query: { filter: 'ready-to-sign' } }"
         role-variant="investigator"
         :role-label="t('home.role.Investigator')"

@@ -205,6 +205,23 @@ export const useNotesStore = defineStore('notes', () => {
     }
   }
 
+  /**
+   * Phase E.6 — clear every piece of study-scoped state so the store
+   * doesn't show study-A discrepancies after the user switches to
+   * study B. Called by {@link useAuthStore.pickStudy} before
+   * re-bootstrapping.
+   */
+  function reset() {
+    rows.value = []
+    isLoading.value = false
+    isSubmitting.value = false
+    error.value = null
+    query.value = ''
+    statusFilter.value = 'open'
+    typeFilter.value = 'all'
+    onlyAssignedToMe.value = false
+  }
+
   return {
     rows,
     isLoading,
@@ -224,5 +241,6 @@ export const useNotesStore = defineStore('notes', () => {
     load,
     add,
     appendThread,
+    reset,
   }
 })

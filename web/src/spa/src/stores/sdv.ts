@@ -220,6 +220,23 @@ export const useSdvStore = defineStore('sdv', () => {
     }
   }
 
+  /**
+   * Phase E.6 — clear every piece of study-scoped state so the SDV
+   * inbox doesn't show study-A rows after switching to study B.
+   * Called by {@link useAuthStore.pickStudy} before re-bootstrapping.
+   */
+  function reset() {
+    rows.value = []
+    isLoading.value = false
+    isVerifying.value = false
+    error.value = null
+    query.value = ''
+    statusFilter.value = 'all'
+    requirementFilter.value = 'all'
+    onlyWithQueries.value = false
+    selected.value = new Set()
+  }
+
   return {
     rows,
     isLoading,
@@ -244,6 +261,7 @@ export const useSdvStore = defineStore('sdv', () => {
     clearFilters,
     verifySelected,
     unverifyRow,
+    reset,
   }
 })
 

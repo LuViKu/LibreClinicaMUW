@@ -213,6 +213,21 @@ export const useEventsStore = defineStore('events', () => {
     }
   }
 
+  /**
+   * Phase E.6 — clear every piece of study-scoped state so the store
+   * doesn't carry events from study A into study B. Called by
+   * {@link useAuthStore.pickStudy} before re-bootstrapping.
+   */
+  function reset() {
+    events.value = []
+    isLoading.value = false
+    isScheduling.value = false
+    error.value = null
+    query.value = ''
+    statusFilter.value = 'all'
+    subjectFilter.value = ''
+  }
+
   return {
     events,
     isLoading,
@@ -231,5 +246,6 @@ export const useEventsStore = defineStore('events', () => {
     schedule,
     updateEvent,
     cancelEvent,
+    reset,
   }
 })

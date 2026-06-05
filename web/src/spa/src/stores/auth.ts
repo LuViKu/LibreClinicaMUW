@@ -5,6 +5,17 @@ import type {
   AuthState, AuthenticatedUser, PasswordChangeFieldError, PasswordChangeRequest,
   ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption,
 } from '@/types/auth'
+import { useSubjectsStore } from './subjects'
+import { useEventsStore } from './events'
+import { useNotesStore } from './notes'
+import { useSdvStore } from './sdv'
+import { useAuditLogStore } from './auditLog'
+import { useRulesStore } from './rules'
+import { useEventDefinitionsStore } from './eventDefinitions'
+import { useCrfLibraryStore } from './crfLibrary'
+import { useSitesStore } from './sites'
+import { useUsersStore } from './users'
+import { useStudyStore } from './study'
 
 /**
  * Thrown by {@link useAuthStore.completeProfile} on a 400 from
@@ -92,14 +103,27 @@ export const useAuthStore = defineStore('auth', () => {
   /**
    * Boot the store on app load. Calls /me; on 401 we know the user is
    * anonymous and the router will redirect to /login.
+   *
+   * <p>Phase E.6 — if bootstrap discovers a different activeStudy
+   * than the one we held locally (e.g. SecureController-driven
+   * server-side bind to the user's stored {@code active_study_id} on
+   * a fresh session), the previously cached study-scoped store state
+   * is wiped via {@link resetStudyScopedStores}. Rare path; covers
+   * the gap between the user's last session and the new one without
+   * leaving stale matrix rows visible.
    */
   async function bootstrap(): Promise<void> {
     isLoading.value = true
     error.value = null
+    const previousActiveOid = user.value?.activeStudy?.oid ?? null
     try {
       const me = await apiGet<AuthenticatedUser>('/pages/api/v1/me')
       user.value = me
       state.value = me.profileComplete ? 'authenticated' : 'profile-incomplete'
+      const nextActiveOid = me.activeStudy?.oid ?? null
+      if (previousActiveOid !== null && previousActiveOid !== nextActiveOid) {
+        resetStudyScopedStores()
+      }
     } catch (e) {
       if (e instanceof ApiError && e.isUnauthorized) {
         user.value = null
@@ -172,10 +196,25 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  /** Bind the active study on the server, then refresh the user. */
+  /**
+   * Bind the active study on the server, then refresh the user.
+   *
+   * <p>Phase E.6 — flips {@code activeStudy} server-side, then
+   * synchronously clears every per-study Pinia store before the
+   * refreshed user lands. Without this step the matrix continues
+   * showing study-A subjects after a switch to study B until the
+   * caller manually re-loads each view's store (none of them do).
+   *
+   * <p>The reset order is: server-mutation → store-wipe → local
+   * user state. Store-wipe before local state means any reactive
+   * watchers triggered by the user change see an empty store + a
+   * pending {@code isLoading} flag rather than a transient stale
+   * blend.
+   */
   async function pickStudy(oid: string): Promise<void> {
     try {
       const refreshed = await apiPost<AuthenticatedUser>('/pages/api/v1/me/activeStudy', { oid })
+      resetStudyScopedStores()
       user.value = refreshed
       state.value = refreshed.profileComplete ? 'authenticated' : 'profile-incomplete'
     } catch (e) {
@@ -184,6 +223,36 @@ export const useAuthStore = defineStore('auth', () => {
         : 'Failed to set active study.'
       throw e
     }
+  }
+
+  /**
+   * Phase E.6 — clear every per-study Pinia store's cached state.
+   *
+   * <p>The store creators are imported at module level, but the actual
+   * instance lookup (`useXyzStore()`) happens inside this function so
+   * Pinia's active-instance resolution is deferred to call time — the
+   * standard pattern for cross-store action coordination (Pinia docs:
+   * "use stores inside actions"). None of the resolved stores imports
+   * the auth store, so there's no cycle.
+   *
+   * <p>Synchronous: each {@code reset()} mutates its store's refs in
+   * place, so by the time this returns every list / selected / filter
+   * piece of state has been cleared. The {@link pickStudy} caller can
+   * then update {@code user.value} with the refreshed study binding
+   * without any chance of a stale-row blend.
+   */
+  function resetStudyScopedStores(): void {
+    useSubjectsStore().reset()
+    useEventsStore().reset()
+    useNotesStore().reset()
+    useSdvStore().reset()
+    useAuditLogStore().reset()
+    useRulesStore().reset()
+    useEventDefinitionsStore().reset()
+    useCrfLibraryStore().reset()
+    useSitesStore().reset()
+    useUsersStore().reset()
+    useStudyStore().reset()
   }
 
   /**

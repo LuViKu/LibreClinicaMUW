@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { ProfileValidationError, useAuthStore } from '../auth'
+import { useSubjectsStore } from '../subjects'
 import { ApiError, ApiNetworkError } from '@/api/client'
 import type { AuthenticatedUser, StudyOption } from '@/types/auth'
+import type { Subject } from '@/types/subject'
 
 /**
  * Phase E.5 B2 — Vitest coverage for the auth store.
@@ -231,6 +233,47 @@ describe('useAuthStore', () => {
       const store = useAuthStore()
       await expect(store.pickStudy('S_NOACCESS')).rejects.toThrow()
       expect(store.error).toContain('Forbidden')
+    })
+
+    /**
+     * Phase E.6 — when the user switches the active study, every
+     * per-study Pinia store must be cleared before the new user
+     * binding lands. Without this step the Subject Matrix continues
+     * showing study-A subjects until each view manually re-loads.
+     *
+     * Sanity-checked against the subjects store specifically (the
+     * pattern is shared by events / notes / sdv / etc. — only one
+     * spec is needed to lock the contract; the others reset() the
+     * same way).
+     */
+    it('clears study-scoped stores before refreshing the user', async () => {
+      const STUDY_A_SUBJECT: Subject = {
+        id: 'M-001', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'F', yearOfBirth: 1962, groupLabel: null, enrolledOn: '2020-10-06',
+        signed: false, openQueries: 2,
+        events: [],
+      }
+      const subjects = useSubjectsStore()
+      subjects.rows = [STUDY_A_SUBJECT]
+      subjects.query = 'M-001'
+      subjects.statusFilter = 'signed'
+      expect(subjects.rows).toHaveLength(1)
+
+      // Capture subjects.rows at the moment apiPost resolves, BEFORE
+      // pickStudy applies the refreshed user. The reset() must have
+      // already cleared the rows by the time the user binding lands.
+      vi.mocked(apiPost).mockImplementationOnce(async () => {
+        return { ...FIXTURE_USER, activeStudy: { id: 2, oid: 'S_OTHER', name: 'Other Study', isSite: false } }
+      })
+
+      const store = useAuthStore()
+      await store.pickStudy('S_OTHER')
+
+      expect(subjects.rows).toEqual([])
+      expect(subjects.query).toBe('')
+      expect(subjects.statusFilter).toBe('all')
+      // And the user is bound to the new study after the reset.
+      expect(store.user?.activeStudy?.oid).toBe('S_OTHER')
     })
   })
 

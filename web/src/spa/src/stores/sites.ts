@@ -134,5 +134,16 @@ export const useSitesStore = defineStore('sites', () => {
     return e instanceof Error ? e.message : `Unbekannter Fehler beim ${op}.`
   }
 
-  return { rows, isLoading, error, load, create, update, disable, restore }
+  /**
+   * Phase E.6 — clear study-scoped state so the sites view doesn't
+   * show study-A sites on study B. Called by {@link
+   * useAuthStore.pickStudy} before re-bootstrapping.
+   */
+  function reset() {
+    rows.value = []
+    isLoading.value = false
+    error.value = null
+  }
+
+  return { rows, isLoading, error, load, create, update, disable, restore, reset }
 })
