@@ -235,6 +235,7 @@ public class UsersApiController {
             }
             if (activeFilter != null && active != activeFilter) continue;
 
+            boolean locked = Boolean.FALSE.equals(ua.getAccountNonLocked());
             StudyUserDto candidate = new StudyUserDto(
                     String.valueOf(ua.getId()),
                     nullToEmpty(ua.getName()),
@@ -244,7 +245,8 @@ public class UsersApiController {
                     siteLabel,
                     auth,
                     lastLogin,
-                    active);
+                    active,
+                    locked);
             StudyUserDto current = bestByUser.get(ua.getId());
             if (current == null || rolePriority(spaRole) > rolePriority(current.role())) {
                 bestByUser.put(ua.getId(), candidate);
@@ -468,7 +470,8 @@ public class UsersApiController {
                 siteLabel,
                 authForUser(persisted),
                 null,
-                true);
+                true,
+                false);
 
         Map<String, Object> response = new HashMap<>();
         response.put("user", dto);
@@ -1405,6 +1408,7 @@ public class UsersApiController {
                 : ua.getLastVisitDate().toInstant().atZone(ZoneOffset.UTC)
                         .truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
         boolean active = ua.getStatus() != null && ua.getStatus().getId() == Status.AVAILABLE.getId();
+        boolean locked = Boolean.FALSE.equals(ua.getAccountNonLocked());
         return new StudyUserDto(
                 String.valueOf(ua.getId()),
                 nullToEmpty(ua.getName()),
@@ -1414,7 +1418,8 @@ public class UsersApiController {
                 siteLabel,
                 authForUser(ua),
                 lastLogin,
-                active);
+                active,
+                locked);
     }
 
     /* ----------------------------------------------------------------- */

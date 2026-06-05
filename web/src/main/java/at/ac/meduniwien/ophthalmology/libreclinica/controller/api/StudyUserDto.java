@@ -31,6 +31,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *                     / lastVisitDate
  * @param lastLoginAt  ISO instant of last_visit_date, null when null
  * @param active       Status == AVAILABLE
+ * @param locked       Phase E.6 unlock-user — true iff
+ *                     {@code user_account.account_non_locked = false}
+ *                     (i.e. login attempts crossed the failed-login
+ *                     threshold and SpringSecurity is refusing the
+ *                     account). Only meaningful for local users; SSO
+ *                     and LDAP users authenticate against the IdP /
+ *                     directory so the SPA hides the Unlock affordance
+ *                     for them.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @Schema(name = "StudyUserDto")
@@ -43,5 +51,6 @@ public record StudyUserDto(
         String siteLabel,
         String auth,
         String lastLoginAt,
-        boolean active
+        boolean active,
+        boolean locked
 ) {}
