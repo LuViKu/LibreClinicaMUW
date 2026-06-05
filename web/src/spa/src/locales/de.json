@@ -377,6 +377,26 @@
       "markComplete": "CRF als abgeschlossen markieren",
       "reopen": "CRF erneut öffnen",
       "reopenConfirm": "Dieses CRF wieder zur Bearbeitung freigeben? Bereits abgezeichnete Daten werden wieder editierbar. Die Aktion wird im Audit-Trail vermerkt."
+    },
+    "group": {
+      "addRow": "Zeile hinzufügen",
+      "deleteRow": "Löschen",
+      "deleteRowConfirm": "Diese Zeile löschen? Bestehende Werte werden aus dem auditierbaren Datensatz entfernt.",
+      "repeatMaxReached": "Maximale Anzahl an Zeilen erreicht.",
+      "empty": "Noch keine Zeilen. Über „Zeile hinzufügen“ einen neuen Eintrag anlegen."
+    },
+    "file": {
+      "dropPrompt": "Datei hier ablegen oder Durchsuchen verwenden.",
+      "browse": "Durchsuchen",
+      "uploading": "Wird hochgeladen…",
+      "remove": "Entfernen",
+      "replace": "Ersetzen",
+      "removeConfirm": "Angehängte Datei entfernen? Das Löschen wird im Audit-Trail vermerkt.",
+      "tooBig": "Datei überschreitet die zulässige Größe.",
+      "badExtension": "Dateityp ist nicht zulässig."
+    },
+    "selectMulti": {
+      "noneSelected": "Keine Auswahl"
     }
   },
   "buildStudy": {

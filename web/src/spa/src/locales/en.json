@@ -377,6 +377,26 @@
       "markComplete": "Mark CRF complete",
       "reopen": "Reopen CRF",
       "reopenConfirm": "Reopen this CRF for editing? Previously signed-off data will be editable again. The action is recorded in the audit trail."
+    },
+    "group": {
+      "addRow": "Add row",
+      "deleteRow": "Delete",
+      "deleteRowConfirm": "Delete this row? Existing values will be removed from the audit-visible record.",
+      "repeatMaxReached": "Maximum number of rows reached.",
+      "empty": "No rows yet. Use \"Add row\" to start a new entry."
+    },
+    "file": {
+      "dropPrompt": "Drop a file here or use Browse.",
+      "browse": "Browse",
+      "uploading": "Uploading…",
+      "remove": "Remove",
+      "replace": "Replace",
+      "removeConfirm": "Remove the attached file? The deletion is recorded in the audit trail.",
+      "tooBig": "File exceeds the configured size limit.",
+      "badExtension": "File type is not in the allowed list."
+    },
+    "selectMulti": {
+      "noneSelected": "None selected"
     }
   },
   "buildStudy": {
