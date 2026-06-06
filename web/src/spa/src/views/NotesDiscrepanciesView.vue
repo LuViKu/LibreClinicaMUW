@@ -7,6 +7,7 @@ import DenseTable from '@/components/DenseTable.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
+import ThreadTimeline from '@/components/discrepancy/ThreadTimeline.vue'
 
 import { useNotesStore } from '@/stores/notes'
 import { useAuthStore } from '@/stores/auth'
@@ -135,6 +136,28 @@ function cardDotClass(tone: 'danger' | 'warning' | 'neutral' | 'data-manager') {
     case 'neutral':      return 'bg-slate-400'
   }
 }
+
+/* ---------------------------------------------------------------- */
+/* Phase E.6 discrepancy-full — row expand + CSV export.            */
+/* ---------------------------------------------------------------- */
+
+const expandedRowId = ref<string | null>(null)
+
+async function toggleExpand(n: DiscrepancyNote): Promise<void> {
+  if (expandedRowId.value === n.id) {
+    expandedRowId.value = null
+    return
+  }
+  expandedRowId.value = n.id
+  // Lazy-load the thread on first expand; cached on subsequent expands.
+  if (!notes.threadCache[n.id]) {
+    await notes.loadThread(n.id)
+  }
+}
+
+function exportHref(): string {
+  return notes.buildExportUrl()
+}
 </script>
 
 <template>
@@ -235,8 +258,23 @@ function cardDotClass(tone: 'danger' | 'warning' | 'neutral' | 'data-manager') {
           {{ t('common.clear') }}
         </button>
 
-        <div class="ml-auto text-slate-500">
-          {{ t('notes.showingCount', { visible: notes.visibleCount, total: notes.totalCount }) }}
+        <div class="ml-auto flex items-center gap-3 text-slate-500">
+          <a
+            :href="exportHref()"
+            class="px-3 py-1.5 text-xs border border-slate-300 rounded-md hover:bg-slate-100 text-slate-700 inline-flex items-center gap-1.5"
+            :download="true"
+            data-testid="notes-export-csv"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            {{ t('notes.actions.export') }}
+          </a>
+          <span>
+            {{ t('notes.showingCount', { visible: notes.visibleCount, total: notes.totalCount }) }}
+          </span>
         </div>
       </div>
 
@@ -271,7 +309,25 @@ function cardDotClass(tone: 'danger' | 'warning' | 'neutral' | 'data-manager') {
             <td class="px-3 py-2 text-slate-600 text-xs">{{ n.assignedTo ?? '—' }}</td>
             <td class="px-3 py-2 text-slate-700 text-right">{{ n.daysOpen || '—' }}</td>
             <td class="px-3 py-2 text-xs">
-              <span v-if="currentRole() && canRespondToNote(currentRole()!, n.status)">
+              <button
+                type="button"
+                class="text-slate-500 hover:text-slate-900 inline-flex items-center"
+                :aria-expanded="expandedRowId === n.id"
+                :aria-label="expandedRowId === n.id
+                  ? t('notes.thread.collapse')
+                  : t('notes.thread.expand')"
+                data-testid="notes-thread-toggle"
+                @click="toggleExpand(n)"
+              >
+                <svg
+                  width="14" height="14" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="1.75" aria-hidden="true"
+                  :class="expandedRowId === n.id ? 'rotate-90 transition-transform' : 'transition-transform'"
+                >
+                  <polyline points="9 6 15 12 9 18" />
+                </svg>
+              </button>
+              <span v-if="currentRole() && canRespondToNote(currentRole()!, n.status)" class="ml-2">
                 <button
                   type="button"
                   class="text-muw-blue underline hover:text-muw-blue-700"
@@ -295,6 +351,14 @@ function cardDotClass(tone: 'danger' | 'warning' | 'neutral' | 'data-manager') {
                   @click="openComposer(n, 'closed')"
                 >{{ t('notes.actions.close') }}</button>
               </span>
+            </td>
+          </tr>
+          <tr v-if="expandedRowId === n.id" class="bg-slate-25">
+            <td :colspan="8" class="px-3 py-1">
+              <ThreadTimeline
+                :entries="notes.threadCache[n.id] ?? []"
+                :is-loading="notes.loadingThreadId === n.id"
+              />
             </td>
           </tr>
           <tr v-if="composer && composer.noteId === n.id" class="bg-slate-50">

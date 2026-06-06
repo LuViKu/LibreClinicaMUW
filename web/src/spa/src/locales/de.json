@@ -311,7 +311,8 @@
     "actions": {
       "respond": "Antworten",
       "resolve": "Als gelöst markieren",
-      "close": "Schließen"
+      "close": "Schließen",
+      "export": "CSV exportieren"
     },
     "composer": {
       "label": {
@@ -323,7 +324,20 @@
       "placeholderClose": "Optional: Schließbemerkung…",
       "submit": "Senden",
       "descriptionRequired": "Eine Antwort ist erforderlich.",
-      "unknownError": "Unbekannter Fehler bei der Zustandsänderung."
+      "unknownError": "Unbekannter Fehler bei der Zustandsänderung.",
+      "type": "Typ",
+      "typeReasonForChangeRoleHint": "„Reason for Change“ ist nur für Datenmanager und Administratoren verfügbar."
+    },
+    "thread": {
+      "title": "Verlauf",
+      "empty": "Noch keine Antworten.",
+      "expand": "Verlauf anzeigen",
+      "collapse": "Verlauf ausblenden",
+      "unknownAuthor": "Unbekannt",
+      "noDescription": "(keine Beschreibung)"
+    },
+    "email": {
+      "subjectAssigned": "Rückfrage zugewiesen"
     }
   },
   "auditLog": {
