@@ -15,6 +15,7 @@ import {
   useCrfAuthoringStore,
   type AuthoringItem,
   type AuthoringPreviewSuccess,
+  type AuthoringSection,
 } from '@/stores/crfAuthoring'
 import {
   OPHTH_PRESET_CATALOG,
@@ -126,6 +127,19 @@ function onAddItem(sectionIndex: number): void {
 }
 
 function onRemoveItem(sectionIndex: number, itemIndex: number): void {
+  store.removeItem(sectionIndex, itemIndex)
+}
+
+/**
+ * Phase E.6 ophth-bilateral wizard layout — remove an item by its uid
+ * (the bilateral grid doesn't carry the flat index that
+ * {@link onRemoveItem} expects, so we resolve the index here).
+ */
+function onRemoveItemByUid(sectionIndex: number, uid: string): void {
+  const section = store.draft.sections[sectionIndex]
+  if (!section) return
+  const itemIndex = section.items.findIndex((it) => it.uid === uid)
+  if (itemIndex < 0) return
   store.removeItem(sectionIndex, itemIndex)
 }
 
@@ -326,6 +340,136 @@ watch(
     }
   },
 )
+
+/**
+ * Phase E.6 — bilateral row grouping for the OPHTH_EXAM section in the
+ * authoring editor.
+ *
+ * <p>Mirrors the runtime {@code groupBilateralItems} helper
+ * ({@code components/bilateral.ts}) but operates on {@link AuthoringItem}
+ * (which uses {@code name}/{@code descriptionLabel} where the runtime
+ * shape uses {@code label}). The output is consumed by the
+ * v-if="section.label === 'OPHTH_EXAM'" branch of the items rendering
+ * block; the row layout puts OD on the LEFT and OS on the RIGHT to
+ * match the clinician-facing convention (see [[reference_ophth_laterality]]).
+ *
+ * <p>Items that don't match the {@code (OD|OS|OU)_<suffix>} prefix
+ * fall through as full-width single-cell rows, so an operator who
+ * manually adds a non-bilateral item to an OPHTH_EXAM section still
+ * sees their item rendered.
+ */
+interface BilateralAuthoringRow {
+  kind: 'bilateral' | 'both-eyes' | 'single'
+  /** Stable key for v-for + the per-row expand toggle. Shared OID suffix or item OID. */
+  key: string
+  /** Human-readable row label, e.g. "BCVA letters". */
+  label: string
+  /** Right eye (renders LEFT in the OPHTH_EXAM grid). null if no OD item for this row. */
+  od: AuthoringItem | null
+  /** Left eye (renders RIGHT in the grid). null if no OS item. */
+  os: AuthoringItem | null
+  /** OU item ("both eyes") spans the entire row width. null for {@code 'bilateral'} rows. */
+  bothEyes: AuthoringItem | null
+  /** For {@code 'single'} rows — the original item that didn't match the OD_/OS_/OU_ prefix. */
+  single: AuthoringItem | null
+}
+
+const EYE_PREFIX_RE = /^(OD|OS|OU)_(.+)$/
+
+function stripWizardEyeMarker(label: string): string {
+  return label
+    .replace(/^\s*(OD|OS|OU)\s*[—\-:_]?\s+/i, '')
+    .replace(/\s*[—\-:(]?\s*(OD|OS|OU)\s*\)?\s*$/i, '')
+    .trim()
+}
+
+function bilateralRowsForSection(section: AuthoringSection): BilateralAuthoringRow[] {
+  const rows: BilateralAuthoringRow[] = []
+  const indexBySuffix = new Map<string, number>()
+  for (const item of section.items) {
+    const m = EYE_PREFIX_RE.exec(item.oid)
+    if (!m) {
+      rows.push({
+        kind: 'single',
+        key: item.uid,
+        label: item.descriptionLabel || item.name || item.oid,
+        od: null,
+        os: null,
+        bothEyes: null,
+        single: item,
+      })
+      continue
+    }
+    const eye = m[1] as 'OD' | 'OS' | 'OU'
+    const suffix = m[2]
+    const existingIdx = indexBySuffix.get(suffix)
+    const labelGuess = stripWizardEyeMarker(item.descriptionLabel || item.name || suffix) || suffix.replace(/_/g, ' ')
+    if (existingIdx === undefined) {
+      if (eye === 'OU') {
+        rows.push({
+          kind: 'both-eyes', key: suffix, label: labelGuess,
+          od: null, os: null, bothEyes: item, single: null,
+        })
+      } else {
+        rows.push({
+          kind: 'bilateral', key: suffix, label: labelGuess,
+          od: eye === 'OD' ? item : null,
+          os: eye === 'OS' ? item : null,
+          bothEyes: null, single: null,
+        })
+      }
+      indexBySuffix.set(suffix, rows.length - 1)
+      continue
+    }
+    const row = rows[existingIdx]!
+    if (row.kind === 'bilateral' && eye === 'OD' && !row.od) row.od = item
+    else if (row.kind === 'bilateral' && eye === 'OS' && !row.os) row.os = item
+    else {
+      // duplicate, mismatched, or OU joining a paired row — render as own row
+      rows.push({
+        kind: 'single', key: item.uid,
+        label: item.descriptionLabel || item.name || item.oid,
+        od: null, os: null, bothEyes: null, single: item,
+      })
+    }
+  }
+  return rows
+}
+
+function isOphthExamSection(section: AuthoringSection): boolean {
+  return section.label.trim().toUpperCase() === 'OPHTH_EXAM'
+}
+
+/**
+ * Bilateral row expansion: each row owns up to four AuthoringItems
+ * (od / os / bothEyes / single). A row counts as expanded if ANY of
+ * its items are expanded; toggling sets all present items to the
+ * opposite of the current row state, so the two ItemEditors in a
+ * bilateral row open + close together.
+ */
+function isBilateralRowExpanded(row: BilateralAuthoringRow): boolean {
+  const candidates: AuthoringItem[] = []
+  if (row.od) candidates.push(row.od)
+  if (row.os) candidates.push(row.os)
+  if (row.bothEyes) candidates.push(row.bothEyes)
+  if (row.single) candidates.push(row.single)
+  return candidates.some((it) => expandedItems.value.has(it.uid))
+}
+
+function onToggleBilateralRow(row: BilateralAuthoringRow): void {
+  const items: AuthoringItem[] = []
+  if (row.od) items.push(row.od)
+  if (row.os) items.push(row.os)
+  if (row.bothEyes) items.push(row.bothEyes)
+  if (row.single) items.push(row.single)
+  const expanded = isBilateralRowExpanded(row)
+  const next = new Set(expandedItems.value)
+  for (const it of items) {
+    if (expanded) next.delete(it.uid)
+    else next.add(it.uid)
+  }
+  expandedItems.value = next
+}
 
 /**
  * Wrapped action handlers — keep the original behaviour but
@@ -583,7 +727,103 @@ function onAddItemAndExpand(sectionIndex: number): void {
                   <p v-if="section.items.length === 0" class="text-xs italic text-slate-500">
                     {{ t('crfLibrary.author.itemsEmpty') }}
                   </p>
+
+                  <!-- OPHTH_EXAM bilateral grid layout: each row shows the OD item
+                       definition on the LEFT and the OS item definition on the RIGHT.
+                       Per-pair chevron toggles both ItemEditors at once. Drag-and-drop
+                       is intentionally skipped here — pairs must stay paired, and the
+                       picker generates a stable catalog-driven order. -->
+                  <div
+                    v-if="isOphthExamSection(section)"
+                    class="space-y-2"
+                    :data-testid="`crf-author-bilateral-grid-${sIdx}`"
+                  >
+                    <!-- Sticky header row: OD (left) | OS (right) -->
+                    <div class="grid grid-cols-[8.5rem_1fr_1fr] gap-2 px-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                      <div></div>
+                      <div>{{ t('ophthPreset.bilateral.headerOd') }}</div>
+                      <div>{{ t('ophthPreset.bilateral.headerOs') }}</div>
+                    </div>
+                    <div
+                      v-for="(row, rIdx) in bilateralRowsForSection(section)"
+                      :key="row.key"
+                      class="rounded-md border border-slate-200 bg-white overflow-hidden"
+                      :data-testid="`crf-author-bilateral-row-${sIdx}-${rIdx}`"
+                    >
+                      <!-- Row header: label + per-pair expand toggle -->
+                      <div class="grid grid-cols-[8.5rem_1fr_1fr] gap-2 items-center px-2 py-1.5 bg-slate-50 border-b border-slate-200">
+                        <button
+                          type="button"
+                          class="flex items-center gap-1.5 text-left"
+                          :aria-expanded="row.od ? isItemExpanded(row.od.uid) : (row.os ? isItemExpanded(row.os.uid) : (row.bothEyes ? isItemExpanded(row.bothEyes.uid) : (row.single ? isItemExpanded(row.single.uid) : false)))"
+                          @click="onToggleBilateralRow(row)"
+                        >
+                          <svg
+                            width="10" height="10" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2"
+                            class="text-slate-500 transition-transform"
+                            :class="{ 'rotate-90': isBilateralRowExpanded(row) }"
+                            aria-hidden="true"
+                          ><polyline points="9 6 15 12 9 18" /></svg>
+                          <span class="text-xs font-medium text-slate-700 truncate">{{ row.label }}</span>
+                        </button>
+                        <span class="text-[10px] font-mono text-slate-500 truncate">
+                          {{ row.od?.oid ?? (row.kind === 'both-eyes' ? row.bothEyes?.oid : '—') }}
+                        </span>
+                        <span class="text-[10px] font-mono text-slate-500 truncate">
+                          {{ row.os?.oid ?? '—' }}
+                        </span>
+                      </div>
+                      <!-- Expanded body: OD editor left, OS editor right -->
+                      <div
+                        v-if="isBilateralRowExpanded(row)"
+                        class="grid grid-cols-2 gap-3 p-3"
+                      >
+                        <div>
+                          <ItemEditor
+                            v-if="row.od"
+                            :item="row.od"
+                            :sections="sectionList"
+                            :available-response-sets="store.responseSetCatalog"
+                            :id-prefix="`crf-author-${sIdx}-od-${row.key}`"
+                            @remove="onRemoveItemByUid(sIdx, row.od.uid)"
+                          />
+                          <div v-else-if="row.kind === 'both-eyes'" class="col-span-2 text-[11px] italic text-slate-400">
+                            {{ t('ophthPreset.bilateral.bothEyesOnly') }}
+                          </div>
+                          <div v-else-if="row.kind === 'single'" class="col-span-2">
+                            <ItemEditor
+                              v-if="row.single"
+                              :item="row.single"
+                              :sections="sectionList"
+                              :available-response-sets="store.responseSetCatalog"
+                              :id-prefix="`crf-author-${sIdx}-single-${row.key}`"
+                              @remove="onRemoveItemByUid(sIdx, row.single.uid)"
+                            />
+                          </div>
+                          <div v-else class="text-[11px] italic text-slate-400">
+                            {{ t('ophthPreset.bilateral.missingOd') }}
+                          </div>
+                        </div>
+                        <div>
+                          <ItemEditor
+                            v-if="row.os"
+                            :item="row.os"
+                            :sections="sectionList"
+                            :available-response-sets="store.responseSetCatalog"
+                            :id-prefix="`crf-author-${sIdx}-os-${row.key}`"
+                            @remove="onRemoveItemByUid(sIdx, row.os.uid)"
+                          />
+                          <div v-else-if="row.kind === 'bilateral'" class="text-[11px] italic text-slate-400">
+                            {{ t('ophthPreset.bilateral.missingOs') }}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <draggable
+                    v-else
                     :model-value="section.items"
                     item-key="uid"
                     handle=".item-drag-handle"

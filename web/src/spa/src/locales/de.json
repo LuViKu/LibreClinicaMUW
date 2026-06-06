@@ -1043,6 +1043,13 @@
   "ophthPreset": {
     "addBilateralExam": "+ Ophthalmologische bilaterale Untersuchung hinzufügen",
     "triggerHint": "Tipp: OPHTH_EXAM (oder OPHTHA_EXAM) eingeben und Shift+Enter drücken, um das ophthalmologische Preset einzufügen.",
+    "bilateral": {
+      "headerOd": "OD (rechtes Auge)",
+      "headerOs": "OS (linkes Auge)",
+      "missingOd": "(kein OD-Item — hinzufügen, um das Paar zu vervollständigen)",
+      "missingOs": "(kein OS-Item — hinzufügen, um das Paar zu vervollständigen)",
+      "bothEyesOnly": "Beide Augen (OU) — gemeinsamer Eintrag."
+    },
     "section": {
       "title": "Ophthalmologische Untersuchung",
       "instructions": "Bilaterale Messungen — OD links, OS rechts (Sicht des Klinikers)."
@@ -1067,9 +1074,10 @@
       "IOP": { "label": "Augeninnendruck" },
       "SPECTRALIS_DONE": { "label": "Spectralis-OCT durchgeführt" },
       "PLEX_ELITE_DONE": { "label": "Plex-Elite-OCT durchgeführt" },
-      "REFRACTION_SPHERE": { "label": "Refraktion Sphäre" },
-      "REFRACTION_CYLINDER": { "label": "Refraktion Zylinder" },
-      "REFRACTION_AXIS": { "label": "Refraktion Achse" },
+      "REFRACTION_SPHERE": { "label": "Refraktion — Sphäre" },
+      "REFRACTION_TORUS": { "label": "Refraktion — Torus" },
+      "REFRACTION_ANGLE": { "label": "Refraktion — Winkel" },
+      "REFRACTION_VISUS": { "label": "Refraktion — Visus" },
       "CCT": { "label": "Zentrale Hornhautdicke" },
       "CRT": { "label": "Zentrale Netzhautdicke" },
       "FUNDUS_PHOTO_DONE": { "label": "Fundusfotografie durchgeführt" },
