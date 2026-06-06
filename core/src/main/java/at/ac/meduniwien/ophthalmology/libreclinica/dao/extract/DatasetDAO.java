@@ -358,9 +358,14 @@ public class DatasetDAO extends AuditableEntityDAO<DatasetBean> {
      * @return
      */
     public DatasetBean findByNameAndStudy(String name, StudyBean study) {
-        String queryName = "findByPK";
+        // Phase E.6 export-tool save bug — the named query was the
+        // single-parameter "findByPK" but two variables were being
+        // bound, tripping a PSQLException at PreparedStatement.setInt(2,…).
+        // The two-parameter "findByNameAndStudy" query exists in
+        // dataset_dao.xml and is what this method is supposed to use.
+        String queryName = "findByNameAndStudy";
         HashMap<Integer, Object> variables = variables(name, study.getId());
-    	return executeFindByPKQuery(queryName, variables);
+        return executeFindByPKQuery(queryName, variables);
     }
 
     /**
