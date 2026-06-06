@@ -162,6 +162,65 @@ async function onDisableVersion(crf: Crf, versionOid: string, versionName: strin
   await lib.disableVersion(crf.oid, versionOid)
 }
 
+/* ----------------------- Version lifecycle ------------------------ */
+// Phase E.6 crf-library — per-version Lock / Unlock / Restore /
+// Hard-remove + Download. All confirm() driven for now; the harmonizer
+// will replace the hard-remove flow with a structured modal that
+// renders the VersionUsageReport on 409.
+
+const isSysadmin = computed(() => auth.user?.role === 'Administrator')
+
+async function onLockVersion(crf: Crf, versionOid: string, versionName: string) {
+  if (!confirm(t('crfLibrary.lockConfirm', { name: crf.name, version: versionName }))) return
+  await lib.lockVersion(crf.oid, versionOid)
+}
+
+async function onUnlockVersion(crf: Crf, versionOid: string, versionName: string) {
+  if (!confirm(t('crfLibrary.unlockConfirm', { name: crf.name, version: versionName }))) return
+  await lib.unlockVersion(crf.oid, versionOid)
+}
+
+async function onRestoreVersion(crf: Crf, versionOid: string, versionName: string) {
+  if (!confirm(t('crfLibrary.restoreConfirm', { name: crf.name, version: versionName }))) return
+  await lib.restoreVersion(crf.oid, versionOid)
+}
+
+const hardRemoveBlocker = ref<{
+  crfName: string
+  report: import('@/types/crfLibrary').VersionUsageReport
+} | null>(null)
+
+async function onHardRemoveVersion(crf: Crf, versionOid: string, versionName: string) {
+  if (!confirm(t('crfLibrary.hardRemoveConfirm', { name: crf.name, version: versionName }))) return
+  const result = await lib.hardRemoveVersion(crf.oid, versionOid)
+  if (result.ok) {
+    // success — list patched in-place.
+    return
+  }
+  if ('blocker' in result) {
+    hardRemoveBlocker.value = { crfName: crf.name, report: result.blocker }
+    return
+  }
+  alert(result.message)
+}
+
+async function onDownloadXls(crf: Crf, versionOid: string) {
+  const result = await lib.downloadVersionXls(crf.oid, versionOid)
+  if (!result.ok) {
+    alert(t('crfLibrary.downloadXlsFailed', { message: result.message }))
+    return
+  }
+  // Trigger browser download via a transient anchor.
+  const url = URL.createObjectURL(result.blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = result.filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 const visibleRows = computed(() =>
   includeRemoved.value ? lib.crfs : lib.crfs.filter((c) => c.status !== 'removed'),
 )
@@ -251,13 +310,40 @@ const visibleRows = computed(() =>
                 <span class="font-mono text-slate-700">{{ v.name }}</span>
                 <span class="text-slate-400">{{ v.oid }}</span>
                 <StatusPill v-if="v.status === 'removed'" variant="neutral">{{ t('crfLibrary.statusRemoved') }}</StatusPill>
+                <StatusPill v-else-if="v.status === 'locked'" variant="neutral">{{ t('crfLibrary.lock') }}</StatusPill>
                 <span v-if="v.description" class="text-slate-500 truncate">{{ v.description }}</span>
                 <span class="ml-auto" />
                 <button
-                  v-if="canManage && v.status !== 'removed'"
-                  class="text-rose-600 hover:underline"
-                  @click="onDisableVersion(crf, v.oid, v.name)"
-                >{{ t('crfLibrary.disable') }}</button>
+                  class="text-muw-blue hover:underline"
+                  @click="onDownloadXls(crf, v.oid)"
+                >{{ t('crfLibrary.downloadXls') }}</button>
+                <template v-if="canManage">
+                  <button
+                    v-if="v.status === 'available'"
+                    class="text-muw-blue hover:underline"
+                    @click="onLockVersion(crf, v.oid, v.name)"
+                  >{{ t('crfLibrary.lock') }}</button>
+                  <button
+                    v-if="v.status === 'locked'"
+                    class="text-muw-blue hover:underline"
+                    @click="onUnlockVersion(crf, v.oid, v.name)"
+                  >{{ t('crfLibrary.unlock') }}</button>
+                  <button
+                    v-if="v.status === 'removed' || v.status === 'auto-removed'"
+                    class="text-muw-blue hover:underline"
+                    @click="onRestoreVersion(crf, v.oid, v.name)"
+                  >{{ t('crfLibrary.restore') }}</button>
+                  <button
+                    v-if="v.status !== 'removed'"
+                    class="text-rose-600 hover:underline"
+                    @click="onDisableVersion(crf, v.oid, v.name)"
+                  >{{ t('crfLibrary.disable') }}</button>
+                  <button
+                    v-if="isSysadmin"
+                    class="text-rose-800 hover:underline"
+                    @click="onHardRemoveVersion(crf, v.oid, v.name)"
+                  >{{ t('crfLibrary.hardRemove') }}</button>
+                </template>
               </li>
             </ul>
           </div>
@@ -352,5 +438,47 @@ const visibleRows = computed(() =>
       :crf-name="authoring.crfName"
       @close="closeAuthoring"
     />
+
+    <!-- Hard-remove blocker modal — renders the 409 VersionUsageReport
+         when a hard-remove can't proceed. Migrate-dialog wiring lives
+         here in the follow-up sub-chunk; for now we surface the report
+         + a remediation hint pointing the operator at the legacy
+         /pages/* paths the LegacyServletRegistry keeps reachable for
+         parallel-run reconciliation. -->
+    <div
+      v-if="hardRemoveBlocker"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/30"
+      @click.self="hardRemoveBlocker = null"
+    >
+      <div class="bg-white rounded-muw max-w-xl w-full p-5 shadow-xl">
+        <h2 class="text-sm font-semibold mb-2 text-rose-800">
+          {{ t('crfLibrary.hardRemoveBlocked', { version: hardRemoveBlocker.report.versionName }) }}
+        </h2>
+        <div v-if="hardRemoveBlocker.report.blockingEventDefinitions.length > 0" class="mb-3 text-xs text-slate-700">
+          <p class="mb-1">{{ t('crfLibrary.hardRemoveBlocker.eventDefs', { count: hardRemoveBlocker.report.blockingEventDefinitions.length }) }}</p>
+          <ul class="list-disc pl-5 space-y-0.5">
+            <li v-for="r in hardRemoveBlocker.report.blockingEventDefinitions" :key="r.sedOid">
+              <span class="font-mono">{{ r.sedOid }}</span> · {{ r.sedName }}
+              <span v-if="r.studyOid" class="text-slate-400">({{ r.studyOid }})</span>
+            </li>
+          </ul>
+        </div>
+        <div v-if="hardRemoveBlocker.report.eventCrfCount > 0" class="mb-3 text-xs text-slate-700">
+          <p>{{ t('crfLibrary.hardRemoveBlocker.eventCrfs', {
+            count: hardRemoveBlocker.report.eventCrfCount,
+            sample: hardRemoveBlocker.report.sampleSubjectLabels.join(', ') || '—',
+          }) }}</p>
+        </div>
+        <p class="text-xs text-slate-500 italic mb-4">
+          {{ t('crfLibrary.hardRemoveBlocker.remediation') }}
+        </p>
+        <div class="flex items-center justify-end gap-2">
+          <button
+            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+            @click="hardRemoveBlocker = null"
+          >{{ t('common.cancel') }}</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
