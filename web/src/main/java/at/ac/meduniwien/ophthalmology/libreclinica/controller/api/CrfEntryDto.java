@@ -30,6 +30,10 @@ import java.util.Map;
  * @param values       saved values keyed by item OID
  * @param status       CRF entry workflow status
  * @param lastSavedAt  ISO-8601 of last successful save, or null
+ * @param dde          Phase E.6 dde — non-null only when the parent
+ *                     event_definition_crf has doubleEntry=true.
+ *                     Tells the SPA which DDE pass to render (blind
+ *                     pass-2 banner vs. normal entry).
  */
 @Schema(name = "CrfEntryDto")
 public record CrfEntryDto(
@@ -39,8 +43,33 @@ public record CrfEntryDto(
         CrfSchemaDto schema,
         Map<String, Object> values,
         String status,
-        String lastSavedAt
+        String lastSavedAt,
+        DdeBlockDto dde
 ) {
+
+    /**
+     * Phase E.6 dde — small marker block embedded into
+     * {@link CrfEntryDto} when the parent event_definition_crf has
+     * {@code double_entry=true}. The SPA reads {@code pass} to choose
+     * the entry view variant:
+     * <ul>
+     *   <li>{@code pass=1} — render the normal CRF Entry form, same
+     *       as today.</li>
+     *   <li>{@code pass=2} — render with the blind-second-pass banner
+     *       and an EMPTY values map; on save delegate to
+     *       {@code POST /dde-commit}.</li>
+     *   <li>{@code pass=reconcile} — redirect to {@code DdeReconcileView}.</li>
+     * </ul>
+     *
+     * @param pass           {@code 1 | 2 | reconcile}
+     * @param idePass1ClerkId numeric user id of the pass-1 clerk (0 when unknown)
+     */
+    @Schema(name = "DdeBlockDto")
+    public record DdeBlockDto(
+            String pass,
+            int idePass1ClerkId
+    ) {}
+
 
     /** Schema of a single CRF version (1:1 with the SPA's {@code CrfSchema}). */
     @Schema(name = "CrfSchemaDto")
