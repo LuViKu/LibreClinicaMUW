@@ -1500,6 +1500,7 @@ export interface components {
             auth?: string;
             lastLoginAt?: string;
             active?: boolean;
+            locked?: boolean;
         };
         RoleAssignmentRequest: {
             studyOid?: string;

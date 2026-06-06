@@ -309,6 +309,53 @@ export const useUsersStore = defineStore('users', () => {
     }
   }
 
+  /**
+   * Phase E.6 unlock-user — clear a locked-out user via
+   * `POST /api/v1/users/{username}/unlock`.
+   *
+   * The backend flips `account_non_locked` back to true, resets
+   * `lock_counter`, and issues a fresh one-time password so the user
+   * can log in once and be force-changed. Returns `{user,
+   * generatedPassword}` with the same shape as {@link restoreUser};
+   * on success replaces the matrix row so the Locked badge clears in
+   * place without a refetch. Mirrors {@link restoreUser}'s
+   * error-handling verbatim — directory-owned credentials surface a
+   * 400, and an already-cleared lock surfaces a 409.
+   */
+  async function unlock(
+    username: string,
+  ): Promise<{ ok: true; user: StudyUser; generatedPassword: string | null } | { ok: false; message?: string }> {
+    try {
+      const res = await apiPost<{ user: StudyUser; generatedPassword: string | null }>(
+        `/pages/api/v1/users/${encodeURIComponent(username)}/unlock`,
+        { sendEmail: false },
+      )
+      const idx = rows.value.findIndex((u) => u.username === username)
+      if (idx >= 0) rows.value[idx] = res.user
+      return { ok: true, user: res.user, generatedPassword: res.generatedPassword }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Entsperren nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        const msg = 'Backend nicht erreichbar — Entsperren fehlgeschlagen. Bitte später erneut versuchen.'
+        error.value = msg
+        return { ok: false, message: msg }
+      }
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        const msg = body?.message ?? `Entsperren fehlgeschlagen (HTTP ${e.status}).`
+        error.value = msg
+        return { ok: false, message: msg }
+      }
+      const msg = e instanceof Error ? e.message : 'Unbekannter Fehler beim Entsperren.'
+      error.value = msg
+      return { ok: false, message: msg }
+    }
+  }
+
   /* ----------------------------------------------------------------- */
   /* Phase E A7.5 — study-user-role assignments                        */
   /* ----------------------------------------------------------------- */
@@ -431,6 +478,7 @@ export const useUsersStore = defineStore('users', () => {
     disableUser,
     restoreUser,
     resetPassword,
+    unlock,
     listUserRoles,
     grantRole,
     updateRole,

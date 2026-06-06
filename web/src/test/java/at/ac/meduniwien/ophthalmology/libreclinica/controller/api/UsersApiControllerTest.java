@@ -501,6 +501,40 @@ class UsersApiControllerTest extends AbstractApiControllerTest {
     }
 
     /* ---------------------------------------------------------------------- */
+    /* POST /api/v1/users/{username}/unlock                                   */
+    /*   (Phase E.6 unlock-user — clear lock + issue fresh OTP)               */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void unlockReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/unlock")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void unlockReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/unlock")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void unlockReturns403WhenNonSysadminAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/users/somebody/unlock")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin only")));
+    }
+
+    /* ---------------------------------------------------------------------- */
     /* GET/POST/PUT/DELETE /api/v1/users/{username}/roles[/{studyId}]         */
     /*   (Phase E A7.5 — role assignments)                                   */
     /* ---------------------------------------------------------------------- */
