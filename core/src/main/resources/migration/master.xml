@@ -38,5 +38,7 @@
   <include  file="migration/lc-muw-2026-06-05-audit-event-type-subject-export.xml"/>
   <include  file="migration/lc-muw-2026-06-05-export-job.xml"/>
   <include  file="migration/lc-muw-2026-06-05-bump-seeded-sequences.xml"/>
+  <include  file="migration/lc-muw-2026-06-06-audit-event-type-audit-log-export.xml"/>
+  <include  file="migration/lc-muw-2026-06-06-audit-event-type-discrepancy-export.xml"/>
 </databaseChangeLog>
 
