@@ -489,4 +489,146 @@ describe('useCrfEntryStore', () => {
     // Vitals required not touched yet.
     expect(store.sectionFilledCounts.S_VITALS.filled).toBe(0)
   })
+
+  /* ---------------------------------------------------------------------- */
+  /* Phase E.6 polish-runtime — show-when runtime                            */
+  /* ---------------------------------------------------------------------- */
+
+  // Helper: a schema with a controller item (I_GROUP) + a dependent
+  // item (I_DEP) that only renders when I_GROUP == 'cohort-A'.
+  function showWhenEntry() {
+    return structuredClone({
+      ...DEMOGRAPHICS_ENTRY,
+      schema: {
+        oid: 'F_SW',
+        name: 'ShowWhen',
+        version: 'v1',
+        sections: [{
+          oid: 'S_SW',
+          title: 'SW',
+          items: [
+            { oid: 'I_GROUP', label: 'Group', dataType: 'string', required: true },
+            {
+              oid: 'I_DEP',
+              label: 'Dep field',
+              dataType: 'string',
+              required: true,
+              showWhen: '{"sourceItemOid":"I_GROUP","comparator":"==","literal":"cohort-A"}',
+            },
+            // Non-required dependent for the ordered-comparator slice.
+            {
+              oid: 'I_HIGH',
+              label: 'High-only',
+              dataType: 'string',
+              required: false,
+              showWhen: '{"sourceItemOid":"I_AGE","comparator":">=","literal":"40"}',
+            },
+            { oid: 'I_AGE', label: 'Age', dataType: 'integer', required: false, min: 0, max: 150 },
+          ],
+        }],
+      },
+      values: {},
+    })
+  }
+
+  it('isItemHidden flips with the source value (== comparator)', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(showWhenEntry())
+    await store.load('EC_SW')
+    // I_GROUP unset → dependent equality vs non-empty literal → hidden.
+    expect(store.isItemHidden('I_DEP')).toBe(true)
+    expect(store.isItemHidden('I_GROUP')).toBe(false)
+
+    store.setValue('I_GROUP', 'cohort-A')
+    expect(store.isItemHidden('I_DEP')).toBe(false)
+
+    store.setValue('I_GROUP', 'cohort-B')
+    expect(store.isItemHidden('I_DEP')).toBe(true)
+  })
+
+  it('preserves the dependent value across hide / show transitions', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(showWhenEntry())
+    await store.load('EC_SW')
+    store.setValue('I_GROUP', 'cohort-A')
+    store.setValue('I_DEP', 'typed by user')
+    expect(store.values.I_DEP).toBe('typed by user')
+
+    // Hide — value moves into hiddenValues, vanishes from values.
+    store.setValue('I_GROUP', 'cohort-B')
+    expect(store.isItemHidden('I_DEP')).toBe(true)
+    expect(store.values.I_DEP).toBeUndefined()
+    expect(store.hiddenValues.I_DEP).toBe('typed by user')
+
+    // Unhide — value restored.
+    store.setValue('I_GROUP', 'cohort-A')
+    expect(store.values.I_DEP).toBe('typed by user')
+    expect(store.hiddenValues.I_DEP).toBeUndefined()
+  })
+
+  it('save() filters hidden items from the wire payload', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(showWhenEntry())
+    await store.load('EC_SW')
+    store.setValue('I_GROUP', 'cohort-A')
+    store.setValue('I_DEP', 'typed by user')
+    // Flip the source: I_DEP becomes hidden + its value moves out of `values`.
+    store.setValue('I_GROUP', 'cohort-B')
+    await store.save()
+
+    expect(apiPost).toHaveBeenCalled()
+    const [, body] = vi.mocked(apiPost).mock.calls[0] as [string, { values: Record<string, unknown> }]
+    expect(body.values).toHaveProperty('I_GROUP', 'cohort-B')
+    expect(body.values).not.toHaveProperty('I_DEP')
+  })
+
+  it('markComplete does NOT block on a hidden required item', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(showWhenEntry())
+    await store.load('EC_SW')
+    // I_GROUP is required; fill it with a value that hides I_DEP.
+    store.setValue('I_GROUP', 'cohort-B')
+    // I_DEP is required AND hidden — required-when-shown means it
+    // doesn't block markComplete.
+    expect(store.isItemHidden('I_DEP')).toBe(true)
+    expect(store.isComplete).toBe(true)
+    await store.markComplete()
+    expect(store.status).toBe('complete')
+    expect(store.error).toBeNull()
+  })
+
+  it('markComplete blocks on a visible required item that is empty', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(showWhenEntry())
+    await store.load('EC_SW')
+    store.setValue('I_GROUP', 'cohort-A')
+    // I_DEP now visible + required + empty
+    expect(store.isItemHidden('I_DEP')).toBe(false)
+    expect(store.isComplete).toBe(false)
+    await store.markComplete()
+    expect(store.status).not.toBe('complete')
+  })
+
+  it('hidden items do not contribute to section badge tallies', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(showWhenEntry())
+    await store.load('EC_SW')
+    // Hide I_DEP — section required count drops to 1 (just I_GROUP).
+    store.setValue('I_GROUP', 'cohort-B')
+    const counts = store.sectionFilledCounts.S_SW
+    expect(counts.required).toBe(1)
+    expect(counts.filled).toBe(1)
+  })
+
+  it('ordered comparator: I_HIGH visible only when I_AGE >= 40', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(showWhenEntry())
+    await store.load('EC_SW')
+    // No I_AGE yet → hidden.
+    expect(store.isItemHidden('I_HIGH')).toBe(true)
+    store.setValue('I_AGE', 25)
+    expect(store.isItemHidden('I_HIGH')).toBe(true)
+    store.setValue('I_AGE', 50)
+    expect(store.isItemHidden('I_HIGH')).toBe(false)
+  })
 })

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { computeItemErrors } from '@/stores/crfEntry'
 import type {
   CrfEntryStatus,
@@ -14,6 +14,10 @@ import type {
   AuthoringResponseType,
   InlineResponseSet,
 } from '@/stores/crfAuthoring'
+import {
+  buildItemIndex,
+  isItemHiddenByRule,
+} from '@/components/showWhen'
 
 /**
  * Phase E.6 — CRF authoring **live preview** store.
@@ -168,6 +172,67 @@ export const useCrfPreviewStore = defineStore('crfPreview', () => {
   const isOpen = ref(false)
   const crfName = ref<string>('')
 
+  /**
+   * Phase E.6 polish-runtime — preview mirror of the runtime store's
+   * value-preservation map. See {@code crfEntry.ts} for the rationale;
+   * the two stores SHARE the show-when evaluator via
+   * {@code @/components/showWhen} so the operator sees identical
+   * hide/show behaviour at authoring time and at runtime.
+   */
+  const hiddenValues = ref<Record<string, unknown>>({})
+  const warnedDanglingSources = ref<Set<string>>(new Set())
+
+  const itemIndex = computed(() => buildItemIndex(schema.value))
+
+  const hiddenItemOids = computed<Set<string>>(() => {
+    const out = new Set<string>()
+    if (!schema.value) return out
+    for (const section of schema.value.sections) {
+      for (const item of section.items) {
+        if (isItemHiddenByRule(item, values.value, itemIndex.value, warnedDanglingSources.value)) {
+          out.add(item.oid)
+        }
+      }
+    }
+    return out
+  })
+
+  function isItemHidden(itemOid: string): boolean {
+    return hiddenItemOids.value.has(itemOid)
+  }
+
+  // Phase E.6 polish-runtime — same watcher pattern as crfEntry.ts.
+  // Mutate `values` in place so the watcher doesn't re-trigger via a
+  // wholesale reassignment (which would otherwise create a synchronous
+  // ping-pong with the {flush:'sync'} watcher).
+  let lastHiddenSnapshot = new Set<string>()
+  watch(
+    hiddenItemOids,
+    (current) => {
+      for (const oid of current) {
+        if (!lastHiddenSnapshot.has(oid)) {
+          const v = values.value[oid]
+          if (v !== undefined) {
+            hiddenValues.value = { ...hiddenValues.value, [oid]: v }
+            delete values.value[oid]
+          }
+        }
+      }
+      for (const oid of lastHiddenSnapshot) {
+        if (!current.has(oid)) {
+          if (Object.prototype.hasOwnProperty.call(hiddenValues.value, oid)) {
+            values.value[oid] = hiddenValues.value[oid]
+            const next = { ...hiddenValues.value }
+            delete next[oid]
+            hiddenValues.value = next
+          }
+        }
+      }
+      lastHiddenSnapshot = new Set(current)
+    },
+    { flush: 'sync' },
+  )
+
   const itemErrors = computed<Record<string, string>>(() => {
     if (!schema.value) return {}
     return computeItemErrors(schema.value, values.value)
@@ -175,9 +240,17 @@ export const useCrfPreviewStore = defineStore('crfPreview', () => {
 
   const isComplete = computed<boolean>(() => {
     if (!schema.value) return false
-    if (Object.keys(itemErrors.value).length > 0) return false
+    // Phase E.6 polish-runtime — required-when-shown: hidden items
+    // never block "complete" status.
+    for (const oid of Object.keys(itemErrors.value)) {
+      if (!hiddenItemOids.value.has(oid)) return false
+    }
     return schema.value.sections.every((s) =>
-      s.items.every((item) => !item.required || hasValue(values.value[item.oid])),
+      s.items.every((item) => {
+        if (!item.required) return true
+        if (hiddenItemOids.value.has(item.oid)) return true
+        return hasValue(values.value[item.oid])
+      }),
     )
   })
 
@@ -196,6 +269,10 @@ export const useCrfPreviewStore = defineStore('crfPreview', () => {
     status.value = 'not-started'
     crfName.value = opts?.crfName?.trim() || resolved.name || ''
     isOpen.value = true
+    // Phase E.6 polish-runtime — reset show-when bookkeeping on fresh load.
+    hiddenValues.value = {}
+    warnedDanglingSources.value = new Set()
+    lastHiddenSnapshot = new Set()
   }
 
   function setValue(itemOid: string, value: unknown): void {
@@ -229,6 +306,8 @@ export const useCrfPreviewStore = defineStore('crfPreview', () => {
   function reset(): void {
     values.value = {}
     status.value = 'not-started'
+    hiddenValues.value = {}
+    lastHiddenSnapshot = new Set()
   }
 
   /** Close the preview overlay + drop the loaded schema. */
@@ -238,6 +317,9 @@ export const useCrfPreviewStore = defineStore('crfPreview', () => {
     values.value = {}
     status.value = 'not-started'
     crfName.value = ''
+    hiddenValues.value = {}
+    warnedDanglingSources.value = new Set()
+    lastHiddenSnapshot = new Set()
   }
 
   /**
@@ -266,6 +348,10 @@ export const useCrfPreviewStore = defineStore('crfPreview', () => {
     crfName,
     itemErrors,
     isComplete,
+    // Phase E.6 polish-runtime — show-when bookkeeping (preview parity).
+    hiddenValues,
+    hiddenItemOids,
+    isItemHidden,
     load,
     setValue,
     save,

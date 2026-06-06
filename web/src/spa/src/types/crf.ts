@@ -39,7 +39,7 @@ export type ItemDataType =
 export type ResponseOption = Required<components['schemas']['ResponseOptionDto']>
 
 export type CrfItem =
-  Omit<Required<components['schemas']['CrfItemDto']>, 'dataType' | 'options' | 'helper' | 'min' | 'max' | 'groupOid'>
+  Omit<Required<components['schemas']['CrfItemDto']>, 'dataType' | 'options' | 'helper' | 'min' | 'max' | 'groupOid' | 'showWhen'>
   & {
     dataType: ItemDataType
     /** Set when the type is `select-one` / `select-multi`. */
@@ -53,6 +53,18 @@ export type CrfItem =
      *  repeating group's row template rather than the top-level
      *  values map. The SPA filters items by groupOid at render time. */
     groupOid?: string | null
+    /**
+     * Phase E.6 polish-runtime — conditional-display predicate.
+     * Two coexisting wire shapes:
+     *  - JSON: `{"sourceItemOid":"...","comparator":"==","literal":"..."}`
+     *    emitted for SPA-authored items.
+     *  - OpenClinica legacy: `"item_OID eq value"` for spreadsheet-uploaded
+     *    items.
+     *
+     * Null/undefined means "always show". The runtime store parses the
+     * payload via {@link evaluateShowWhen}.
+     */
+    showWhen?: string | null
   }
 
 export type CrfSection =

@@ -12,6 +12,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -297,6 +301,13 @@ public class EventCrfsApiController {
             }
         }
 
+        // Phase E.6 polish-runtime — load conditional-display rules for
+        // every item on this CRF version up-front. The map is keyed by
+        // item_id (the entity the SCD table targets via item_form_metadata)
+        // and carries the stringified-JSON `showWhen` the SPA's runtime
+        // parses to drive hide/show. See {@link #loadShowWhenByItemId}.
+        Map<Integer, String> showWhenByItemId = loadShowWhenByItemId(crfv.getId());
+
         List<CrfEntryDto.CrfSectionDto> sectionDtos = new ArrayList<>(sections.size());
         for (SectionBean sb : sections) {
             List<ItemBean> items = itemDAO.findAllBySectionIdOrderedByItemFormMetadataOrdinal(sb.getId());
@@ -312,7 +323,7 @@ public class EventCrfsApiController {
                             .computeIfAbsent(grp.getId(), k -> new ArrayList<>())
                             .add(ib.getOid());
                 }
-                itemDtos.add(buildItemDto(ib, ifm, groupOid));
+                itemDtos.add(buildItemDto(ib, ifm, groupOid, showWhenByItemId.get(ib.getId())));
             }
             sectionDtos.add(new CrfEntryDto.CrfSectionDto(
                     sb.getLabel(),
@@ -485,6 +496,27 @@ public class EventCrfsApiController {
         ItemDataDAO idDAO = new ItemDataDAO(dataSource);
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
 
+        // Phase E.6 polish-runtime — server-side ghost-data guard. Filter
+        // out values for items whose show-when condition evaluates to
+        // false against the payload (the SPA already filters; this is the
+        // defense-in-depth for direct API callers). Hidden items'
+        // values are NOT written to item_data and NO audit entries are
+        // emitted, matching the "ghost data" prevention rationale.
+        //
+        // We filter FIRST so the post-complete RFC pre-check below
+        // doesn't require an RFC for a hidden item — required-when-shown
+        // is the runtime semantics the SPA exposes, and the backend
+        // needs to agree.
+        Map<String, String> showWhenByItemOid = loadShowWhenByItemOid(ecb.getCRFVersionId());
+        Map<String, Object> visibleTopLevelValues = filterByVisibility(
+                body.values(), showWhenByItemOid);
+        int hiddenItemCount = (body.values() == null ? 0 : body.values().size())
+                - visibleTopLevelValues.size();
+        if (hiddenItemCount > 0) {
+            LOG.info("saveItems: dropped {} hidden item value(s) on event_crf {} (show-when=false)",
+                    hiddenItemCount, ecb.getId());
+        }
+
         // Phase E.6 admin-rfc — post-complete edits MUST carry a non-blank
         // reason for every changed item. We do a pre-pass against the
         // existing values so we can fail-fast with `missingReasonItemOids`
@@ -495,7 +527,7 @@ public class EventCrfsApiController {
         Map<String, ItemBean> resolvedItems = new HashMap<>();
         Map<String, ItemDataBean> existingByOid = new HashMap<>();
         if (postComplete) {
-            for (Map.Entry<String, Object> entry : body.values().entrySet()) {
+            for (Map.Entry<String, Object> entry : visibleTopLevelValues.entrySet()) {
                 String itemOid = entry.getKey();
                 String newValue = entry.getValue() == null ? "" : String.valueOf(entry.getValue());
                 ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
@@ -532,7 +564,7 @@ public class EventCrfsApiController {
         int rejected = 0;
         int rfcCreatedCount = 0;
         int groupRowsSaved = 0;
-        Map<String, Object> topLevelValues = body.values() != null ? body.values() : Map.of();
+        Map<String, Object> topLevelValues = visibleTopLevelValues;
         for (Map.Entry<String, Object> entry : topLevelValues.entrySet()) {
             String itemOid = entry.getKey();
             // Phase E.6: route arrays through the select-multi serializer
@@ -1423,7 +1455,7 @@ public class EventCrfsApiController {
      * group's row template instead of the top-level values map.
      */
     private static CrfEntryDto.CrfItemDto buildItemDto(ItemBean item, ItemFormMetadataBean ifm,
-                                                       String groupOid) {
+                                                       String groupOid, String showWhen) {
         String label;
         boolean required = false;
         String helper = null;
@@ -1464,8 +1496,230 @@ public class EventCrfsApiController {
                 helper,
                 /* min */ null,
                 /* max */ null,
-                groupOid
+                groupOid,
+                blankToNull(showWhen, null)
         );
+    }
+
+    /**
+     * Phase E.6 polish-runtime — load conditional-display rules for every
+     * item on a CRF version, encoded into the stringified-JSON wire form
+     * the SPA's runtime expects.
+     *
+     * <p>The legacy schema stores show-when rules in {@code scd_item_metadata}
+     * (one row per controlled item) with three columns:
+     * <ul>
+     *   <li>{@code control_item_name} — OID of the source item;</li>
+     *   <li>{@code option_value} — the literal value that triggers visibility;</li>
+     *   <li>{@code message} — operator-facing hint (ignored on the wire).</li>
+     * </ul>
+     * The legacy comparator is always equality (=), so we emit
+     * {@code "=="} on the wire and leave {@code !=} / {@code &lt;} / etc.
+     * for SPA-authored items that would JSON-encode the comparator
+     * explicitly (mixed wire format — see {@link CrfEntryDto.CrfItemDto}).
+     *
+     * <p>SPA-authored items that already carry a JSON show-when string in
+     * the legacy {@code message} column (i.e. operators who switched to
+     * the structured wizard) are surfaced as-is via a separate code path
+     * once the wizard persists JSON natively; for now the controller
+     * always synthesises the JSON from the legacy triple.
+     *
+     * <p>Best-effort: a missing table or a SQL failure logs at WARN and
+     * returns an empty map — visibility defaults to "always show", which
+     * is the legacy behaviour anyway.
+     *
+     * @return immutable map keyed by item_id; value is the
+     *         stringified-JSON {@code {"sourceItemOid":...,"comparator":"==","literal":...}}
+     */
+    private Map<Integer, String> loadShowWhenByItemId(int crfVersionId) {
+        Map<Integer, String> out = new HashMap<>();
+        final String sql =
+                "SELECT ifm.item_id, scd.control_item_name, scd.option_value " +
+                "FROM scd_item_metadata scd " +
+                "JOIN item_form_metadata ifm " +
+                "  ON ifm.item_form_metadata_id = scd.scd_item_form_metadata_id " +
+                "WHERE ifm.crf_version_id = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, crfVersionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int itemId = rs.getInt(1);
+                    String sourceOid = rs.getString(2);
+                    String literal = rs.getString(3);
+                    if (sourceOid == null || sourceOid.isBlank()) continue;
+                    out.put(itemId, encodeShowWhenJson(sourceOid, "==",
+                            literal == null ? "" : literal));
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.warn("loadShowWhenByItemId: crf_version {} — skipping show-when ({}). "
+                    + "Items will fall back to always-shown.", crfVersionId, ex.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * Encode a (sourceOid, comparator, literal) triple as the JSON
+     * shape the SPA renderer parses. Inline rather than depending on
+     * Jackson — the payload is tiny and escaping is well-defined.
+     */
+    private static String encodeShowWhenJson(String sourceOid, String comparator, String literal) {
+        return "{\"sourceItemOid\":\"" + jsonEscape(sourceOid)
+                + "\",\"comparator\":\"" + jsonEscape(comparator)
+                + "\",\"literal\":\"" + jsonEscape(literal) + "\"}";
+    }
+
+    /**
+     * Phase E.6 polish-runtime — keyed-by-item-OID variant of
+     * {@link #loadShowWhenByItemId} used by the save path so we can
+     * filter the incoming values map directly without resolving each
+     * OID back to an item_id.
+     */
+    private Map<String, String> loadShowWhenByItemOid(int crfVersionId) {
+        Map<String, String> out = new HashMap<>();
+        final String sql =
+                "SELECT i.oid, scd.control_item_name, scd.option_value " +
+                "FROM scd_item_metadata scd " +
+                "JOIN item_form_metadata ifm " +
+                "  ON ifm.item_form_metadata_id = scd.scd_item_form_metadata_id " +
+                "JOIN item i " +
+                "  ON i.item_id = ifm.item_id " +
+                "WHERE ifm.crf_version_id = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, crfVersionId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String oid = rs.getString(1);
+                    String sourceOid = rs.getString(2);
+                    String literal = rs.getString(3);
+                    if (oid == null || oid.isBlank()) continue;
+                    if (sourceOid == null || sourceOid.isBlank()) continue;
+                    out.put(oid, encodeShowWhenJson(sourceOid, "==",
+                            literal == null ? "" : literal));
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.warn("loadShowWhenByItemOid: crf_version {} — falling back to no-filter ({})",
+                    crfVersionId, ex.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * Phase E.6 polish-runtime — strip out items whose show-when rule
+     * resolves to {@code false} given the supplied values. Always-shown
+     * items (no rule, blank rule, dangling source) pass through unchanged.
+     *
+     * <p>The matcher only supports the legacy equality comparator
+     * (string-equal). SPA-authored items with structured comparators
+     * (!=, &lt;, &gt;=, etc.) still surface their JSON on the wire; the
+     * server-side filter conservatively keeps them visible — the SPA's
+     * client-side evaluator is the authority for the non-equality cases.
+     * This matches the "the SPA already filters" rationale: the backend
+     * filter is a guard against malicious or buggy direct API callers,
+     * not the source of truth.
+     */
+    static Map<String, Object> filterByVisibility(Map<String, Object> values,
+                                                  Map<String, String> showWhenByItemOid) {
+        if (values == null || values.isEmpty()) return Map.of();
+        if (showWhenByItemOid == null || showWhenByItemOid.isEmpty()) {
+            return values;
+        }
+        Map<String, Object> out = new LinkedHashMap<>(values.size());
+        for (Map.Entry<String, Object> entry : values.entrySet()) {
+            String oid = entry.getKey();
+            String rule = showWhenByItemOid.get(oid);
+            if (rule == null) {
+                out.put(oid, entry.getValue());
+                continue;
+            }
+            // Parse the legacy JSON triple. If parsing fails (e.g.
+            // operator stored a raw "item_X eq Y" string), default to
+            // visible — the SPA evaluator decides for those.
+            String sourceOid = extractJsonField(rule, "sourceItemOid");
+            String comparator = extractJsonField(rule, "comparator");
+            String literal = extractJsonField(rule, "literal");
+            if (sourceOid == null) {
+                out.put(oid, entry.getValue());
+                continue;
+            }
+            if (!"==".equals(comparator)) {
+                // Non-equality comparators are out of scope for the
+                // server filter (see Javadoc). Keep visible.
+                out.put(oid, entry.getValue());
+                continue;
+            }
+            Object sourceValue = values.get(sourceOid);
+            String sourceStr = sourceValue == null ? "" : String.valueOf(sourceValue);
+            if (sourceStr.equals(literal == null ? "" : literal)) {
+                out.put(oid, entry.getValue());
+            }
+            // else: hidden — drop
+        }
+        return out;
+    }
+
+    /**
+     * Tiny JSON field extractor for the show-when triple. Avoids pulling
+     * in Jackson at this layer; the encoded shape is fixed.
+     *
+     * <p>Returns {@code null} when the field is absent or the input is
+     * not the expected JSON shape — callers fall back to "visible".
+     */
+    static String extractJsonField(String json, String field) {
+        if (json == null) return null;
+        String trimmed = json.trim();
+        if (!trimmed.startsWith("{")) return null;
+        String needle = "\"" + field + "\":\"";
+        int from = trimmed.indexOf(needle);
+        if (from < 0) return null;
+        int valueStart = from + needle.length();
+        // Walk until unescaped closing quote.
+        StringBuilder sb = new StringBuilder();
+        for (int i = valueStart; i < trimmed.length(); i++) {
+            char ch = trimmed.charAt(i);
+            if (ch == '\\' && i + 1 < trimmed.length()) {
+                char next = trimmed.charAt(i + 1);
+                switch (next) {
+                    case '"': sb.append('"'); i++; break;
+                    case '\\': sb.append('\\'); i++; break;
+                    case 'n': sb.append('\n'); i++; break;
+                    case 'r': sb.append('\r'); i++; break;
+                    case 't': sb.append('\t'); i++; break;
+                    default: sb.append(ch); break;
+                }
+                continue;
+            }
+            if (ch == '"') return sb.toString();
+            sb.append(ch);
+        }
+        return null;
+    }
+
+    /** Minimal JSON string escape — covers the legal characters in OIDs +
+     *  values without pulling in Jackson at this layer. */
+    private static String jsonEscape(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder(s.length() + 4);
+        for (int i = 0; i < s.length(); i++) {
+            char ch = s.charAt(i);
+            switch (ch) {
+                case '"': sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:
+                    if (ch < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) ch));
+                    } else {
+                        sb.append(ch);
+                    }
+            }
+        }
+        return sb.toString();
     }
 
     /** Resolve an item's SPA dataType when emitting values. Skip the

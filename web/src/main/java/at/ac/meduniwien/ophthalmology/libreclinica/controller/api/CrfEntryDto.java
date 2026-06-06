@@ -129,10 +129,27 @@ public record CrfEntryDto(
      * should render it inside the matching {@link CrfItemGroupDto}'s
      * row template rather than as a top-level value.
      *
+     * <p>Phase E.6 polish-runtime — {@code showWhen} carries the
+     * conditional-display predicate as a stringified payload. Two wire
+     * shapes coexist:
+     * <ul>
+     *   <li><b>JSON</b> for SPA-authored items:
+     *       {@code {"sourceItemOid":"...","comparator":"==","literal":"..."}}.
+     *       The SPA renderer parses when the string begins with
+     *       {@code "{"} and uses the structured comparator/literal.</li>
+     *   <li><b>OpenClinica syntax</b> for legacy spreadsheet-uploaded
+     *       items: {@code "item_OID eq value"}. The renderer recognises
+     *       this form via the absence of a leading brace and applies
+     *       the equality semantics directly.</li>
+     * </ul>
+     * Null means "always show". Both shapes are sent as-is on the wire
+     * so the SPA does not need a backend round-trip to determine which
+     * branch applies.
+     *
      * <p>Optional fields ({@code options}, {@code helper}, {@code min},
-     * {@code max}, {@code groupOid}) are {@code null} when absent;
-     * Jackson serialises them as {@code null} or omits them per the
-     * SPA contract (the SPA tolerates both).
+     * {@code max}, {@code groupOid}, {@code showWhen}) are {@code null}
+     * when absent; Jackson serialises them as {@code null} or omits
+     * them per the SPA contract (the SPA tolerates both).
      */
     @Schema(name = "CrfItemDto")
     public record CrfItemDto(
@@ -144,7 +161,8 @@ public record CrfEntryDto(
             String helper,
             Double min,
             Double max,
-            String groupOid
+            String groupOid,
+            String showWhen
     ) {}
 
     /** Single allowed option for {@code select-one} / {@code select-multi}. */
