@@ -725,41 +725,12 @@ public class DiscrepancyApiController {
         return ResponseEntity.ok(hydrated);
     }
 
-    /**
-     * Phase E.6 {@code discrepancy-full} — CSV export mirroring the
-     * legacy {@code DiscrepancyNoteOutputServlet} format. Honours the
-     * same {@code status} / {@code subjectId} / {@code assignedTo}
-     * filters as {@code list()} so users can export what they're
-     * currently viewing.
-     */
-    @GetMapping(value = "/export.csv", produces = "text/csv")
-    public ResponseEntity<?> exportCsv(
-            @RequestParam(value = "status", required = false) String statusFilter,
-            @RequestParam(value = "subjectId", required = false) String subjectIdFilter,
-            @RequestParam(value = "assignedTo", required = false) String assignedToFilter,
-            HttpSession session) {
-
-        ResponseEntity<?> listResponse = list(statusFilter, subjectIdFilter, assignedToFilter, session);
-        if (!listResponse.getStatusCode().is2xxSuccessful()) {
-            return listResponse;
-        }
-        @SuppressWarnings("unchecked")
-        List<DiscrepancyNoteDto> rows = (List<DiscrepancyNoteDto>) listResponse.getBody();
-        if (rows == null) rows = List.of();
-
-        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
-        String studyOid = currentStudy != null ? currentStudy.getOid() : "study";
-        String isoDate = LocalDate.now().format(DateTimeFormatter.ISO_LOCAL_DATE);
-        String filename = DiscrepancyExportCsv.filenameFor(studyOid, isoDate);
-
-        String csv = DiscrepancyExportCsv.render(rows);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.parseMediaType("text/csv;charset=UTF-8"));
-        headers.add(HttpHeaders.CONTENT_DISPOSITION,
-                "attachment; filename=\"" + filename + "\"");
-        return new ResponseEntity<>(csv, headers, 200);
-    }
+    /* Phase E.6 harmonize — the discrepancy-full cluster's exportCsv
+     * (using DiscrepancyExportCsv.render + filenameFor) was superseded
+     * by the audit-discrepancy-export cluster's version at the top of
+     * this controller, which adds shared filter row collection +
+     * audit_log_event_type 56 emission. DiscrepancyExportCsv stays
+     * around for the unit tests (RFC 4180 quoting + filename helpers). */
 
     /** Project a single bean (parent or child) to a thread-entry DTO. */
     private DiscrepancyThreadEntryDto toThreadEntry(DiscrepancyNoteBean n) {
