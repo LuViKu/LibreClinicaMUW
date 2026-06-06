@@ -123,7 +123,15 @@ function goToStep(step: Step): void {
 }
 
 function onAddItem(sectionIndex: number): void {
-  store.addItem(sectionIndex)
+  const section = store.draft.sections[sectionIndex]
+  if (section?.bilateral) {
+    // Bilateral mode: append a paired OD/OS row (two items) so the
+    // operator sees one new row spanning both eye columns rather than
+    // an OD-only orphan.
+    store.addBilateralPair(sectionIndex)
+  } else {
+    store.addItem(sectionIndex)
+  }
 }
 
 function onRemoveItem(sectionIndex: number, itemIndex: number): void {
@@ -359,7 +367,7 @@ watch(
  * sees their item rendered.
  */
 interface BilateralAuthoringRow {
-  kind: 'bilateral' | 'both-eyes' | 'single'
+  kind: 'bilateral' | 'both-eyes' | 'single' | 'compound-bilateral'
   /** Stable key for v-for + the per-row expand toggle. Shared OID suffix or item OID. */
   key: string
   /** Human-readable row label, e.g. "BCVA letters". */
@@ -372,6 +380,43 @@ interface BilateralAuthoringRow {
   bothEyes: AuthoringItem | null
   /** For {@code 'single'} rows — the original item that didn't match the OD_/OS_/OU_ prefix. */
   single: AuthoringItem | null
+  /**
+   * For {@code 'compound-bilateral'} rows — the sub-fields (e.g. Sphere,
+   * Torus, Angle, Visus for refraction). Each sub-field has OD + OS slots
+   * + a compact label for the in-row preview.
+   */
+  subFields?: Array<{
+    subKey: string
+    compactLabel: string
+    od: AuthoringItem | null
+    os: AuthoringItem | null
+  }>
+}
+
+const WIZARD_COMPOUND_REGISTRY: Record<
+  string,
+  { mainLabel: string; compactBySubKey: Record<string, string> }
+> = {
+  REFRACTION: {
+    mainLabel: 'Refraction',
+    compactBySubKey: {
+      SPHERE: 'Sph',
+      TORUS: 'Tor',
+      CYLINDER: 'Tor',
+      ANGLE: 'Ang',
+      AXIS: 'Ang',
+      VISUS: 'Vis',
+    },
+  },
+}
+
+function parseWizardCompoundSuffix(suffix: string): { prefix: string; subKey: string } | null {
+  for (const prefix of Object.keys(WIZARD_COMPOUND_REGISTRY)) {
+    if (suffix.startsWith(`${prefix}_`)) {
+      return { prefix, subKey: suffix.slice(prefix.length + 1) }
+    }
+  }
+  return null
 }
 
 const EYE_PREFIX_RE = /^(OD|OS|OU)_(.+)$/
@@ -386,6 +431,7 @@ function stripWizardEyeMarker(label: string): string {
 function bilateralRowsForSection(section: AuthoringSection): BilateralAuthoringRow[] {
   const rows: BilateralAuthoringRow[] = []
   const indexBySuffix = new Map<string, number>()
+  const indexByCompound = new Map<string, number>()
   for (const item of section.items) {
     const m = EYE_PREFIX_RE.exec(item.oid)
     if (!m) {
@@ -402,6 +448,42 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralAuthoringR
     }
     const eye = m[1] as 'OD' | 'OS' | 'OU'
     const suffix = m[2]
+    const compound = parseWizardCompoundSuffix(suffix)
+    if (compound && eye !== 'OU') {
+      const compoundIdx = indexByCompound.get(compound.prefix)
+      const meta = WIZARD_COMPOUND_REGISTRY[compound.prefix]!
+      const compactLabel = meta.compactBySubKey[compound.subKey] ?? compound.subKey
+      if (compoundIdx === undefined) {
+        rows.push({
+          kind: 'compound-bilateral',
+          key: compound.prefix,
+          label: meta.mainLabel,
+          od: null, os: null, bothEyes: null, single: null,
+          subFields: [{
+            subKey: compound.subKey,
+            compactLabel,
+            od: eye === 'OD' ? item : null,
+            os: eye === 'OS' ? item : null,
+          }],
+        })
+        indexByCompound.set(compound.prefix, rows.length - 1)
+      } else {
+        const row = rows[compoundIdx]!
+        const existingSub = row.subFields!.find((s) => s.subKey === compound.subKey)
+        if (existingSub) {
+          if (eye === 'OD' && !existingSub.od) existingSub.od = item
+          else if (eye === 'OS' && !existingSub.os) existingSub.os = item
+        } else {
+          row.subFields!.push({
+            subKey: compound.subKey,
+            compactLabel,
+            od: eye === 'OD' ? item : null,
+            os: eye === 'OS' ? item : null,
+          })
+        }
+      }
+      continue
+    }
     const existingIdx = indexBySuffix.get(suffix)
     const labelGuess = stripWizardEyeMarker(item.descriptionLabel || item.name || suffix) || suffix.replace(/_/g, ' ')
     if (existingIdx === undefined) {
@@ -436,8 +518,17 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralAuthoringR
   return rows
 }
 
-function isOphthExamSection(section: AuthoringSection): boolean {
-  return section.label.trim().toUpperCase() === 'OPHTH_EXAM'
+/**
+ * Phase E.6 ophth-bilateral — replaced the previous label-sniffing
+ * helper with an explicit toggle. A section is rendered in the
+ * OD-LEFT / OS-RIGHT grid IFF its {@code bilateral} flag is true.
+ * The flag is wizard-only metadata (stripped from {@code buildPayload});
+ * the runtime renderer keys off the {@code OD_} / {@code OS_} OID
+ * prefixes on each item, so the wizard toggle is a presentation hint,
+ * not a contract change.
+ */
+function isBilateralSection(section: AuthoringSection): boolean {
+  return Boolean(section.bilateral)
 }
 
 /**
@@ -447,21 +538,27 @@ function isOphthExamSection(section: AuthoringSection): boolean {
  * opposite of the current row state, so the two ItemEditors in a
  * bilateral row open + close together.
  */
-function isBilateralRowExpanded(row: BilateralAuthoringRow): boolean {
-  const candidates: AuthoringItem[] = []
-  if (row.od) candidates.push(row.od)
-  if (row.os) candidates.push(row.os)
-  if (row.bothEyes) candidates.push(row.bothEyes)
-  if (row.single) candidates.push(row.single)
-  return candidates.some((it) => expandedItems.value.has(it.uid))
-}
-
-function onToggleBilateralRow(row: BilateralAuthoringRow): void {
+function collectBilateralRowItems(row: BilateralAuthoringRow): AuthoringItem[] {
   const items: AuthoringItem[] = []
   if (row.od) items.push(row.od)
   if (row.os) items.push(row.os)
   if (row.bothEyes) items.push(row.bothEyes)
   if (row.single) items.push(row.single)
+  if (row.subFields) {
+    for (const sub of row.subFields) {
+      if (sub.od) items.push(sub.od)
+      if (sub.os) items.push(sub.os)
+    }
+  }
+  return items
+}
+
+function isBilateralRowExpanded(row: BilateralAuthoringRow): boolean {
+  return collectBilateralRowItems(row).some((it) => expandedItems.value.has(it.uid))
+}
+
+function onToggleBilateralRow(row: BilateralAuthoringRow): void {
+  const items = collectBilateralRowItems(row)
   const expanded = isBilateralRowExpanded(row)
   const next = new Set(expandedItems.value)
   for (const it of items) {
@@ -710,6 +807,27 @@ function onAddItemAndExpand(sectionIndex: number): void {
                       v-model="section.instructions"
                     />
                   </div>
+                  <!-- Phase E.6 ophth-bilateral — explicit per-section toggle.
+                       When on, the items list renders as the 3-column OD-LEFT /
+                       OS-RIGHT grid with compound-row collapse for refraction
+                       quartets; when off, the items render as a flat
+                       draggable list. The flag is wizard-only metadata
+                       (stripped from buildPayload). -->
+                  <div class="col-span-2">
+                    <label class="inline-flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        class="rounded border-slate-300 text-muw-blue focus:ring-muw-blue"
+                        :checked="Boolean(section.bilateral)"
+                        :data-testid="`crf-author-bilateral-toggle-${sIdx}`"
+                        @change="store.setSectionBilateral(sIdx, ($event.target as HTMLInputElement).checked)"
+                      />
+                      <span>{{ t('crfLibrary.author.bilateralToggle') }}</span>
+                    </label>
+                    <p class="mt-1 ml-6 text-[10px] text-slate-400">
+                      {{ t('crfLibrary.author.bilateralToggleHint') }}
+                    </p>
+                  </div>
                 </div>
 
                 <div class="mt-4">
@@ -734,7 +852,7 @@ function onAddItemAndExpand(sectionIndex: number): void {
                        is intentionally skipped here — pairs must stay paired, and the
                        picker generates a stable catalog-driven order. -->
                   <div
-                    v-if="isOphthExamSection(section)"
+                    v-if="isBilateralSection(section)"
                     class="space-y-2"
                     :data-testid="`crf-author-bilateral-grid-${sIdx}`"
                   >
@@ -755,7 +873,7 @@ function onAddItemAndExpand(sectionIndex: number): void {
                         <button
                           type="button"
                           class="flex items-center gap-1.5 text-left"
-                          :aria-expanded="row.od ? isItemExpanded(row.od.uid) : (row.os ? isItemExpanded(row.os.uid) : (row.bothEyes ? isItemExpanded(row.bothEyes.uid) : (row.single ? isItemExpanded(row.single.uid) : false)))"
+                          :aria-expanded="isBilateralRowExpanded(row)"
                           @click="onToggleBilateralRow(row)"
                         >
                           <svg
@@ -767,16 +885,23 @@ function onAddItemAndExpand(sectionIndex: number): void {
                           ><polyline points="9 6 15 12 9 18" /></svg>
                           <span class="text-xs font-medium text-slate-700 truncate">{{ row.label }}</span>
                         </button>
-                        <span class="text-[10px] font-mono text-slate-500 truncate">
-                          {{ row.od?.oid ?? (row.kind === 'both-eyes' ? row.bothEyes?.oid : '—') }}
-                        </span>
-                        <span class="text-[10px] font-mono text-slate-500 truncate">
-                          {{ row.os?.oid ?? '—' }}
-                        </span>
+                        <template v-if="row.kind === 'compound-bilateral'">
+                          <span class="col-span-2 text-[10px] text-slate-500 truncate">
+                            {{ row.subFields?.map((s) => s.compactLabel).join(' · ') }}
+                          </span>
+                        </template>
+                        <template v-else>
+                          <span class="text-[10px] font-mono text-slate-500 truncate">
+                            {{ row.od?.oid ?? (row.kind === 'both-eyes' ? row.bothEyes?.oid : '—') }}
+                          </span>
+                          <span class="text-[10px] font-mono text-slate-500 truncate">
+                            {{ row.os?.oid ?? '—' }}
+                          </span>
+                        </template>
                       </div>
                       <!-- Expanded body: OD editor left, OS editor right -->
                       <div
-                        v-if="isBilateralRowExpanded(row)"
+                        v-if="isBilateralRowExpanded(row) && row.kind !== 'compound-bilateral'"
                         class="grid grid-cols-2 gap-3 p-3"
                       >
                         <div>
@@ -816,6 +941,54 @@ function onAddItemAndExpand(sectionIndex: number): void {
                           />
                           <div v-else-if="row.kind === 'bilateral'" class="text-[11px] italic text-slate-400">
                             {{ t('ophthPreset.bilateral.missingOs') }}
+                          </div>
+                        </div>
+                      </div>
+                      <!-- Expanded body for compound-bilateral rows
+                           (e.g. refraction): one nested OD|OS pair per
+                           sub-field, stacked vertically with a compact
+                           sub-label on the left. -->
+                      <div
+                        v-else-if="isBilateralRowExpanded(row) && row.kind === 'compound-bilateral'"
+                        class="space-y-3 p-3"
+                        :data-testid="`crf-author-compound-body-${sIdx}-${rIdx}`"
+                      >
+                        <div
+                          v-for="(sub, subIdx) in row.subFields ?? []"
+                          :key="sub.subKey"
+                          class="rounded border border-slate-200 bg-slate-50/60 p-2"
+                          :data-testid="`crf-author-compound-sub-${sIdx}-${rIdx}-${subIdx}`"
+                        >
+                          <div class="mb-2 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
+                            {{ sub.compactLabel }}
+                          </div>
+                          <div class="grid grid-cols-2 gap-3">
+                            <div>
+                              <ItemEditor
+                                v-if="sub.od"
+                                :item="sub.od"
+                                :sections="sectionList"
+                                :available-response-sets="store.responseSetCatalog"
+                                :id-prefix="`crf-author-${sIdx}-od-${row.key}-${sub.subKey}`"
+                                @remove="onRemoveItemByUid(sIdx, sub.od.uid)"
+                              />
+                              <div v-else class="text-[11px] italic text-slate-400">
+                                {{ t('ophthPreset.bilateral.missingOd') }}
+                              </div>
+                            </div>
+                            <div>
+                              <ItemEditor
+                                v-if="sub.os"
+                                :item="sub.os"
+                                :sections="sectionList"
+                                :available-response-sets="store.responseSetCatalog"
+                                :id-prefix="`crf-author-${sIdx}-os-${row.key}-${sub.subKey}`"
+                                @remove="onRemoveItemByUid(sIdx, sub.os.uid)"
+                              />
+                              <div v-else class="text-[11px] italic text-slate-400">
+                                {{ t('ophthPreset.bilateral.missingOs') }}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </div>

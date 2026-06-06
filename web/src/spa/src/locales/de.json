@@ -913,6 +913,8 @@
       "itemsHeading": "Items",
       "itemsEmpty": "Noch keine Items — mindestens eines erforderlich.",
       "addItem": "+ Item hinzufügen",
+      "bilateralToggle": "Bilaterales Layout (OD/OS)",
+      "bilateralToggleHint": "Items mit OD-Präfix erscheinen LINKS, OS-Items RECHTS (Sicht der/des Behandelnden). „+ Item hinzufügen“ legt ein OD/OS-Paar an.",
       "itemName": "Item-Name",
       "descriptionLabel": "Beschreibungs-Label",
       "leftItemText": "Linker Item-Text",
