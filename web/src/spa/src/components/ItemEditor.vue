@@ -6,9 +6,11 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import HelperText from '@/components/HelperText.vue'
+import ErrorText from '@/components/ErrorText.vue'
 import ResponseSetPicker from '@/components/ResponseSetPicker.vue'
 
 import {
+  allowedResponseTypesForDataType,
   dataTypeIsBoolean,
   responseTypeRequiresOptions,
   useCrfAuthoringStore,
@@ -18,6 +20,7 @@ import {
   type AuthoringResponseType,
   type AuthoringSection,
   type ResponseSetCatalogEntry,
+  type ShowWhenComparator,
 } from '@/stores/crfAuthoring'
 
 /**
@@ -33,6 +36,19 @@ import {
  * carry a finite option list (radio, single-/multi-select, checkbox).
  * For text / textarea / file responses the picker is hidden and the
  * store synthesises an implicit open-text response set at submit.
+ *
+ * <p>Phase E.6 polish-authoring batch adds two features on top:
+ * <ul>
+ *   <li><b>Datentyp → Antworttyp restriction matrix</b> — the
+ *       response-type dropdown is filtered to the entries returned by
+ *       {@link allowedResponseTypesForDataType}. On data-type change
+ *       the current response type is reset to the first allowed entry
+ *       if it falls outside the new set.</li>
+ *   <li><b>Per-item show-when rule editor</b> — single-condition
+ *       conditional visibility. Source item picker lists only items
+ *       declared BEFORE this one (so evaluation order can't break);
+ *       comparator + literal value complete the rule.</li>
+ * </ul>
  */
 
 interface Props {
@@ -76,15 +92,28 @@ const dataTypeOptions: Array<{ value: AuthoringDataType; labelKey: string }> = [
   { value: 'BL', labelKey: 'crfAuthoring.dataType.BL' },
 ]
 
-const responseTypeOptions: Array<{ value: AuthoringResponseType; labelKey: string }> = [
-  { value: 'text', labelKey: 'crfAuthoring.responseType.text' },
-  { value: 'textarea', labelKey: 'crfAuthoring.responseType.textarea' },
-  { value: 'radio', labelKey: 'crfAuthoring.responseType.radio' },
-  { value: 'single-select', labelKey: 'crfAuthoring.responseType.single-select' },
-  { value: 'multi-select', labelKey: 'crfAuthoring.responseType.multi-select' },
-  { value: 'checkbox', labelKey: 'crfAuthoring.responseType.checkbox' },
-  { value: 'file', labelKey: 'crfAuthoring.responseType.file' },
-]
+const responseTypeLabelKeys: Record<AuthoringResponseType, string> = {
+  text: 'crfAuthoring.responseType.text',
+  textarea: 'crfAuthoring.responseType.textarea',
+  radio: 'crfAuthoring.responseType.radio',
+  'single-select': 'crfAuthoring.responseType.single-select',
+  'multi-select': 'crfAuthoring.responseType.multi-select',
+  checkbox: 'crfAuthoring.responseType.checkbox',
+  file: 'crfAuthoring.responseType.file',
+}
+
+/**
+ * Response-type dropdown options — derived from the data-type matrix
+ * (see {@link allowedResponseTypesForDataType}). BL keeps the dropdown
+ * disabled at {@code single-select}; the matrix returns the same
+ * singleton.
+ */
+const responseTypeOptions = computed<Array<{ value: AuthoringResponseType; labelKey: string }>>(() => {
+  return allowedResponseTypesForDataType(props.item.dataType).map((value) => ({
+    value,
+    labelKey: responseTypeLabelKeys[value],
+  }))
+})
 
 /**
  * Auto-suggest the OID from the item name as long as the operator
@@ -152,6 +181,12 @@ watch(
  * unless it would now require options against an empty inline set — in
  * which case we fall back to {@code text} so the picker doesn't
  * re-open with a half-bound state.
+ *
+ * <p>For non-BL transitions: enforce the Datentyp → Antworttyp matrix.
+ * If the current response type falls outside the new allowed set,
+ * snap to the first allowed entry. Mirrors how the dropdown filters
+ * its visible options — without the reset the operator would see a
+ * dropdown that no longer contains the selected value.
  */
 watch(
   () => props.item.dataType,
@@ -160,11 +195,21 @@ watch(
     if (next === 'BL') {
       props.item.responseType = 'single-select'
       props.item.responseSet = null
-    } else if (prev === 'BL') {
+      return
+    }
+    if (prev === 'BL') {
       // Coming back from BL — pick a safe open-text default. The
       // operator can re-pick a richer response type from the dropdown.
       props.item.responseType = 'text'
       props.item.responseSet = null
+      return
+    }
+    // Non-BL transition — reconcile against the new matrix entry.
+    const allowed = allowedResponseTypesForDataType(next)
+    if (!allowed.includes(props.item.responseType)) {
+      // Snap to the first allowed entry. The responseType watcher
+      // takes care of clearing or seeding the response set as needed.
+      props.item.responseType = allowed[0] ?? 'text'
     }
   },
 )
@@ -172,6 +217,178 @@ watch(
 function onResponseSetUpdate(next: AuthoringResponseSet): void {
   props.item.responseSet = next
 }
+
+/* ---------------- Show-when rule editor ---------------- */
+
+/**
+ * Conditional-visibility toggle state. Mirrors {@code item.showWhen
+ * != null} so the operator can flip the rule on/off without losing
+ * partial input — we seed an empty rule on toggle-on and clear it on
+ * toggle-off.
+ */
+const showWhenEnabled = computed<boolean>({
+  get: () => props.item.showWhen != null,
+  set: (next) => {
+    if (next) {
+      if (props.item.showWhen == null) {
+        props.item.showWhen = {
+          sourceItemOid: '',
+          comparator: '==',
+          literal: '',
+        }
+      }
+    } else {
+      props.item.showWhen = undefined
+    }
+  },
+})
+
+/**
+ * Source-item picker candidates. Lists every item across all sections
+ * that is declared BEFORE the current item in canonical order — this
+ * is the "no forward reference" constraint that lets the runtime
+ * renderer evaluate rules in a single pass.
+ *
+ * <p>Each entry exposes the section title + the item's name / OID /
+ * data type chip so the operator can disambiguate items with the same
+ * label across sections.
+ */
+interface SourceCandidate {
+  sectionTitle: string
+  sectionIndex: number
+  itemOid: string
+  itemName: string
+  itemDataType: AuthoringDataType
+  itemResponseSet: AuthoringItem['responseSet']
+}
+
+const sourceCandidates = computed<SourceCandidate[]>(() => {
+  const out: SourceCandidate[] = []
+  outer: for (let sIdx = 0; sIdx < props.sections.length; sIdx++) {
+    const section = props.sections[sIdx]!
+    for (const candidate of section.items) {
+      if (candidate === props.item) {
+        // Reached self — every subsequent item is a forward reference
+        // and disallowed.
+        break outer
+      }
+      const oid = candidate.oid.trim()
+      // Skip half-authored items without an OID — they can't be
+      // referenced.
+      if (oid === '') continue
+      out.push({
+        sectionTitle: section.title.trim() || section.label.trim() || `#${sIdx + 1}`,
+        sectionIndex: sIdx,
+        itemOid: oid,
+        itemName: candidate.name.trim() || oid,
+        itemDataType: candidate.dataType,
+        itemResponseSet: candidate.responseSet,
+      })
+    }
+  }
+  return out
+})
+
+const selectedSourceCandidate = computed<SourceCandidate | null>(() => {
+  const oid = props.item.showWhen?.sourceItemOid
+  if (!oid) return null
+  return sourceCandidates.value.find((c) => c.itemOid === oid) ?? null
+})
+
+const comparatorOptions: Array<{ value: ShowWhenComparator; labelKey: string; helperKey: string }> = [
+  { value: '==', labelKey: 'crfAuthoring.showWhen.comparator.eq', helperKey: 'crfAuthoring.showWhen.comparator.eqHelper' },
+  { value: '!=', labelKey: 'crfAuthoring.showWhen.comparator.ne', helperKey: 'crfAuthoring.showWhen.comparator.neHelper' },
+  { value: '>', labelKey: 'crfAuthoring.showWhen.comparator.gt', helperKey: 'crfAuthoring.showWhen.comparator.gtHelper' },
+  { value: '<', labelKey: 'crfAuthoring.showWhen.comparator.lt', helperKey: 'crfAuthoring.showWhen.comparator.ltHelper' },
+  { value: '>=', labelKey: 'crfAuthoring.showWhen.comparator.gte', helperKey: 'crfAuthoring.showWhen.comparator.gteHelper' },
+  { value: '<=', labelKey: 'crfAuthoring.showWhen.comparator.lte', helperKey: 'crfAuthoring.showWhen.comparator.lteHelper' },
+]
+
+const comparatorHelperText = computed<string>(() => {
+  const c = props.item.showWhen?.comparator ?? '=='
+  const entry = comparatorOptions.find((opt) => opt.value === c)
+  return entry ? t(entry.helperKey) : ''
+})
+
+/**
+ * Literal-value validation. Returns an i18n key when the literal is
+ * incompatible with the source item's data type; null when valid or
+ * when no source item is selected (the missing-source case is its own
+ * error).
+ */
+const literalValidationKey = computed<string | null>(() => {
+  if (!showWhenEnabled.value) return null
+  const rule = props.item.showWhen
+  if (rule == null) return null
+  const literal = rule.literal.trim()
+  if (literal === '') return 'crfAuthoring.showWhen.errors.literalRequired'
+  const src = selectedSourceCandidate.value
+  if (src == null) return null  // source-required error covers this case
+  switch (src.itemDataType) {
+    case 'INT': {
+      if (!/^-?\d+$/.test(literal)) return 'crfAuthoring.showWhen.errors.literalNotInt'
+      return null
+    }
+    case 'REAL': {
+      if (!/^-?\d+(\.\d+)?$/.test(literal)) return 'crfAuthoring.showWhen.errors.literalNotReal'
+      return null
+    }
+    case 'BL': {
+      if (!/^(true|false|0|1)$/i.test(literal)) return 'crfAuthoring.showWhen.errors.literalNotBool'
+      return null
+    }
+    default:
+      return null
+  }
+})
+
+const sourceValidationKey = computed<string | null>(() => {
+  if (!showWhenEnabled.value) return null
+  const rule = props.item.showWhen
+  if (rule == null) return null
+  if (rule.sourceItemOid.trim() === '') return 'crfAuthoring.showWhen.errors.sourceRequired'
+  // Operator picked an OID but the item is no longer in the candidate
+  // list (e.g. moved after this one, or deleted) — surface a clear
+  // error so the rule can't silently break.
+  if (selectedSourceCandidate.value == null) return 'crfAuthoring.showWhen.errors.sourceMissing'
+  return null
+})
+
+/**
+ * Options for the literal input — shape depends on the source item's
+ * data type / response set. For BL we surface a two-option dropdown;
+ * for option-bearing response types we offer the option list directly.
+ */
+interface LiteralOption {
+  value: string
+  label: string
+}
+
+const literalOptions = computed<LiteralOption[] | null>(() => {
+  const src = selectedSourceCandidate.value
+  if (src == null) return null
+  if (src.itemDataType === 'BL') {
+    return [
+      { value: '1', label: t('crfAuthoring.showWhen.literal.true') },
+      { value: '0', label: t('crfAuthoring.showWhen.literal.false') },
+    ]
+  }
+  const rs = src.itemResponseSet
+  if (rs && 'options' in rs && Array.isArray(rs.options) && rs.options.length > 0) {
+    return rs.options
+      .filter((opt) => opt.value.trim() !== '' || opt.text.trim() !== '')
+      .map((opt) => ({ value: opt.value, label: opt.text || opt.value }))
+  }
+  return null
+})
+
+const literalInputMode = computed<'select' | 'numeric' | 'text'>(() => {
+  if (literalOptions.value && literalOptions.value.length > 0) return 'select'
+  const src = selectedSourceCandidate.value
+  if (src == null) return 'text'
+  if (src.itemDataType === 'INT' || src.itemDataType === 'REAL') return 'numeric'
+  return 'text'
+})
 </script>
 
 <template>
@@ -264,6 +481,9 @@ function onResponseSetUpdate(next: AuthoringResponseSet): void {
           </option>
         </SelectInput>
         <HelperText v-if="isBoolean">{{ t('crfAuthoring.dataType.BLHelper') }}</HelperText>
+        <HelperText v-else>
+          {{ t('crfAuthoring.responseType.matrixHelper', { dataType: t(`crfAuthoring.dataType.${props.item.dataType}`) }) }}
+        </HelperText>
       </div>
       <div class="col-span-2">
         <FieldLabel :for="`${idPrefix}-defaultValue`">
@@ -340,6 +560,105 @@ function onResponseSetUpdate(next: AuthoringResponseSet): void {
       <p class="text-[11px] text-slate-500 leading-snug">
         {{ t('crfAuthoring.dataType.BLHelper') }}
       </p>
+    </div>
+
+    <!-- Show-when rule editor (per-item conditional visibility). -->
+    <div
+      class="border-t border-slate-200 pt-3 space-y-3"
+      :data-testid="`${idPrefix}-show-when`"
+    >
+      <label class="inline-flex items-center gap-2 text-xs text-slate-700">
+        <input
+          type="checkbox"
+          v-model="showWhenEnabled"
+          :data-testid="`${idPrefix}-show-when-toggle`"
+        />
+        <span class="font-medium">{{ t('crfAuthoring.showWhen.toggle') }}</span>
+      </label>
+      <p v-if="!showWhenEnabled" class="text-[11px] text-slate-500 leading-snug">
+        {{ t('crfAuthoring.showWhen.toggleHint') }}
+      </p>
+
+      <div
+        v-if="showWhenEnabled && props.item.showWhen"
+        class="rounded-md border border-slate-200 bg-white p-3 space-y-3"
+        :data-testid="`${idPrefix}-show-when-rule`"
+      >
+        <div>
+          <FieldLabel :for="`${idPrefix}-show-when-source`" required>
+            {{ t('crfAuthoring.showWhen.sourceLabel') }}
+          </FieldLabel>
+          <SelectInput
+            :id="`${idPrefix}-show-when-source`"
+            v-model="props.item.showWhen.sourceItemOid"
+            :error="sourceValidationKey != null"
+          >
+            <option value="">{{ t('crfAuthoring.showWhen.sourcePlaceholder') }}</option>
+            <option
+              v-for="cand in sourceCandidates"
+              :key="`${cand.sectionIndex}-${cand.itemOid}`"
+              :value="cand.itemOid"
+            >
+              {{ cand.sectionTitle }} · {{ cand.itemName }} ({{ cand.itemDataType }})
+            </option>
+          </SelectInput>
+          <HelperText v-if="sourceCandidates.length === 0">
+            {{ t('crfAuthoring.showWhen.noEarlierItems') }}
+          </HelperText>
+          <HelperText v-else>
+            {{ t('crfAuthoring.showWhen.sourceHelper') }}
+          </HelperText>
+          <ErrorText v-if="sourceValidationKey">{{ t(sourceValidationKey) }}</ErrorText>
+        </div>
+
+        <div>
+          <FieldLabel :for="`${idPrefix}-show-when-comparator`" required>
+            {{ t('crfAuthoring.showWhen.comparatorLabel') }}
+          </FieldLabel>
+          <SelectInput
+            :id="`${idPrefix}-show-when-comparator`"
+            v-model="props.item.showWhen.comparator"
+          >
+            <option v-for="opt in comparatorOptions" :key="opt.value" :value="opt.value">
+              {{ t(opt.labelKey) }}
+            </option>
+          </SelectInput>
+          <HelperText>{{ comparatorHelperText }}</HelperText>
+        </div>
+
+        <div>
+          <FieldLabel :for="`${idPrefix}-show-when-literal`" required>
+            {{ t('crfAuthoring.showWhen.literalLabel') }}
+          </FieldLabel>
+          <SelectInput
+            v-if="literalInputMode === 'select' && literalOptions"
+            :id="`${idPrefix}-show-when-literal`"
+            v-model="props.item.showWhen.literal"
+            :error="literalValidationKey != null"
+          >
+            <option value="">{{ t('crfAuthoring.showWhen.literalPlaceholder') }}</option>
+            <option v-for="opt in literalOptions" :key="opt.value" :value="opt.value">
+              {{ opt.label }} ({{ opt.value }})
+            </option>
+          </SelectInput>
+          <TextInput
+            v-else-if="literalInputMode === 'numeric'"
+            :id="`${idPrefix}-show-when-literal`"
+            v-model="props.item.showWhen.literal"
+            inputmode="decimal"
+            :error="literalValidationKey != null"
+            placeholder="0"
+          />
+          <TextInput
+            v-else
+            :id="`${idPrefix}-show-when-literal`"
+            v-model="props.item.showWhen.literal"
+            :error="literalValidationKey != null"
+          />
+          <HelperText>{{ t('crfAuthoring.showWhen.literalHelper') }}</HelperText>
+          <ErrorText v-if="literalValidationKey">{{ t(literalValidationKey) }}</ErrorText>
+        </div>
+      </div>
     </div>
 
     <div class="text-right">

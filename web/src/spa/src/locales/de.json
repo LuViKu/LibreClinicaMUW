@@ -959,7 +959,46 @@
       "single-select": "Einfachauswahl-Liste",
       "multi-select": "Mehrfachauswahl-Liste",
       "checkbox": "Checkbox-Gruppe",
-      "file": "Datei-Upload"
+      "file": "Datei-Upload",
+      "matrixHelper": "Antworttypen passend zum Datentyp {dataType}."
+    },
+    "showWhen": {
+      "toggle": "Dieses Item bedingt anzeigen",
+      "toggleHint": "Wenn aktiviert, wird dieses Item nur angezeigt, wenn der Wert eines anderen Items zur Regel passt.",
+      "sourceLabel": "Quell-Item",
+      "sourcePlaceholder": "Item auswählen …",
+      "sourceHelper": "Nur Items, die vor diesem deklariert sind, stehen zur Auswahl, damit die Auswertungsreihenfolge linear bleibt.",
+      "noEarlierItems": "Keine früheren Items verfügbar. Fügen Sie ein Item vor diesem ein, um es als Quelle zu nutzen.",
+      "comparatorLabel": "Vergleichsoperator",
+      "literalLabel": "Wert zum Vergleich",
+      "literalPlaceholder": "Wert auswählen …",
+      "literalHelper": "Wird zur Laufzeit mit dem gespeicherten Wert des Quell-Items verglichen.",
+      "literal": {
+        "true": "Wahr (Ja)",
+        "false": "Falsch (Nein)"
+      },
+      "comparator": {
+        "eq": "= (gleich)",
+        "eqHelper": "Anzeigen, wenn der Wert des Quell-Items dem Literal entspricht.",
+        "ne": "≠ (ungleich)",
+        "neHelper": "Anzeigen, wenn der Wert des Quell-Items nicht dem Literal entspricht.",
+        "gt": "> (größer als)",
+        "gtHelper": "Anzeigen, wenn der Wert des Quell-Items größer als das Literal ist (numerischer Vergleich).",
+        "lt": "< (kleiner als)",
+        "ltHelper": "Anzeigen, wenn der Wert des Quell-Items kleiner als das Literal ist (numerischer Vergleich).",
+        "gte": "≥ (größer oder gleich)",
+        "gteHelper": "Anzeigen, wenn der Wert des Quell-Items größer oder gleich dem Literal ist.",
+        "lte": "≤ (kleiner oder gleich)",
+        "lteHelper": "Anzeigen, wenn der Wert des Quell-Items kleiner oder gleich dem Literal ist."
+      },
+      "errors": {
+        "sourceRequired": "Wählen Sie das Quell-Item aus, auf das sich die Regel bezieht.",
+        "sourceMissing": "Das gewählte Quell-Item ist nicht mehr verfügbar — bitte ein anderes Item wählen.",
+        "literalRequired": "Geben Sie den Vergleichswert ein.",
+        "literalNotInt": "Ganzzahl erwartet (z. B. 42).",
+        "literalNotReal": "Zahl erwartet (z. B. 3,14).",
+        "literalNotBool": "Erwartet werden „true“, „false“, 1 oder 0."
+      }
     },
     "item": {
       "name": "Item-Name",

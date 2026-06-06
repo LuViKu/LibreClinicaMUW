@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import {
+  allowedResponseTypesForDataType,
   dataTypeIsBoolean,
+  hasShowWhen,
   responseTypeRequiresOptions,
   useCrfAuthoringStore,
 } from '../crfAuthoring'
@@ -548,6 +550,118 @@ describe('useCrfAuthoringStore', () => {
       expect(store.draft.versionName).toBe('')
       expect(store.draft.sections).toHaveLength(1)
       expect(store.error).toBeNull()
+    })
+  })
+
+  describe('allowedResponseTypesForDataType (matrix)', () => {
+    it('ST permits text + textarea + the option-bearing entries', () => {
+      const allowed = allowedResponseTypesForDataType('ST')
+      expect(allowed).toEqual(['text', 'textarea', 'radio', 'single-select', 'multi-select', 'checkbox'])
+    })
+
+    it('INT permits text + Likert-style discrete options', () => {
+      const allowed = allowedResponseTypesForDataType('INT')
+      expect(allowed).toEqual(['text', 'radio', 'single-select'])
+      expect(allowed).not.toContain('textarea')
+      expect(allowed).not.toContain('file')
+    })
+
+    it('REAL is restricted to the numeric text bucket', () => {
+      const allowed = allowedResponseTypesForDataType('REAL')
+      expect(allowed).toEqual(['text'])
+    })
+
+    it('DATE collapses to text (no date-specific response type yet)', () => {
+      expect(allowedResponseTypesForDataType('DATE')).toEqual(['text'])
+    })
+
+    it('PDATE collapses to text (no partial-date response type yet)', () => {
+      expect(allowedResponseTypesForDataType('PDATE')).toEqual(['text'])
+    })
+
+    it('FILE is restricted to file', () => {
+      expect(allowedResponseTypesForDataType('FILE')).toEqual(['file'])
+    })
+
+    it('BL hardwires single-select (Yes/No)', () => {
+      expect(allowedResponseTypesForDataType('BL')).toEqual(['single-select'])
+    })
+  })
+
+  describe('hasShowWhen', () => {
+    it('returns false when showWhen is absent', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0)
+      const item = store.draft.sections[0]!.items[0]!
+      expect(hasShowWhen(item)).toBe(false)
+    })
+
+    it('returns false when sourceItemOid is blank', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { showWhen: { sourceItemOid: '   ', comparator: '==', literal: '1' } })
+      const item = store.draft.sections[0]!.items[0]!
+      expect(hasShowWhen(item)).toBe(false)
+    })
+
+    it('returns true when the rule has a non-blank source', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { showWhen: { sourceItemOid: 'SPECTRALIS_DONE', comparator: '==', literal: '1' } })
+      const item = store.draft.sections[0]!.items[0]!
+      expect(hasShowWhen(item)).toBe(true)
+    })
+  })
+
+  describe('buildPayload — show-when', () => {
+    it('includes showWhen on the wire when the rule is set', () => {
+      const store = useCrfAuthoringStore()
+      store.setVersionName('v1.0')
+      store.addItem(0, {
+        name: 'SPECTRALIS_DONE',
+        descriptionLabel: 'Spectralis done',
+        dataType: 'BL',
+      })
+      store.addItem(0, {
+        name: 'SPECTRALIS_DATE',
+        descriptionLabel: 'Spectralis date',
+        dataType: 'DATE',
+        showWhen: {
+          sourceItemOid: 'SPECTRALIS_DONE',
+          comparator: '==',
+          literal: '1',
+        },
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ showWhen?: Record<string, unknown> }> }>
+      }
+      const items = payload.sections[0]!.items
+      expect(items[0]!.showWhen).toBeUndefined()
+      expect(items[1]!.showWhen).toEqual({
+        sourceItemOid: 'SPECTRALIS_DONE',
+        comparator: '==',
+        literal: '1',
+      })
+    })
+
+    it('omits showWhen when undefined', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { name: 'AGE', descriptionLabel: 'Age', dataType: 'INT' })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ showWhen?: unknown }> }>
+      }
+      expect('showWhen' in payload.sections[0]!.items[0]!).toBe(false)
+    })
+
+    it('omits showWhen when sourceItemOid is blank (incomplete rule)', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        name: 'X',
+        descriptionLabel: 'X',
+        showWhen: { sourceItemOid: '', comparator: '==', literal: '1' },
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ showWhen?: unknown }> }>
+      }
+      expect('showWhen' in payload.sections[0]!.items[0]!).toBe(false)
     })
   })
 })
