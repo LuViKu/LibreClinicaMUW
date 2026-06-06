@@ -472,7 +472,11 @@ function dataEntryStageLabel(stage: string | null): string {
         </section>
 
         <!-- Events / casebook -->
-        <section class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5">
+        <!-- Phase E.6 polish — `#events` anchor target for post-
+             markComplete navigation from CrfEntryView. The natural
+             first-fold of subject-detail is the demographics card,
+             so the hash makes the events panel jump into view. -->
+        <section id="events" class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5">
           <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
               {{ t('subjectDetail.eventsHeading') }}

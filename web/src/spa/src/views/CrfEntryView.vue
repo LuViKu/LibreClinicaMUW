@@ -234,7 +234,22 @@ function onSave() {
 async function onMarkComplete() {
   await store.markComplete()
   if (store.status === 'complete') {
-    router.push({ name: 'subject-matrix' })
+    // Phase E.6 polish — after marking complete, return the operator
+    // to the casebook view for the subject they were entering, with
+    // the events panel scrolled into view. Falls back to the subject
+    // matrix when the entry happens to have no subjectId (shouldn't
+    // happen in practice, but the guard keeps the post-complete UX
+    // from dead-ending).
+    const subjectId = store.entry?.subjectId
+    if (subjectId) {
+      router.push({
+        name: 'subject-detail',
+        params: { subjectId },
+        hash: '#events',
+      })
+    } else {
+      router.push({ name: 'subject-matrix' })
+    }
   }
 }
 

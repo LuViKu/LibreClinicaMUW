@@ -17,6 +17,14 @@ import { useAuthStore } from '@/stores/auth'
  */
 const router = createRouter({
   history: createWebHistory('/LibreClinica/app/'),
+  // Phase E.6 polish — honour the in-route hash so navigations from
+  // CrfEntryView post-completion (#events) land on the correct panel
+  // of subject-detail instead of the page top.
+  scrollBehavior(to, _from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.hash) return { el: to.hash, behavior: 'smooth' }
+    return { top: 0 }
+  },
   routes: [
     {
       path: '/',

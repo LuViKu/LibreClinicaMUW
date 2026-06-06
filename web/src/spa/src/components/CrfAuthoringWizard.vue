@@ -245,6 +245,93 @@ function confirmOphthPicker(): void {
 function onOpenLivePreview(): void {
   previewStore.load(store.draft, { crfName: props.crfName })
 }
+
+/**
+ * Phase E.6 polish — expand/collapse state for sections + items in
+ * the Sections step.
+ *
+ * <p>Operators were getting overwhelmed by the fully-expanded editor
+ * tree, especially during reorder; a 10-item section produced 10
+ * tall ItemEditor blocks and the drag handles were spread across
+ * pages of scroll. The new collapse model:
+ *
+ * <ul>
+ *   <li>Sections default to collapsed; items default to collapsed.</li>
+ *   <li>A freshly added section / item is auto-expanded so the
+ *       operator can type into the fields immediately.</li>
+ *   <li>Clicking the chevron toggles. State is component-local
+ *       (Set&lt;string&gt; keyed off the stable {@code uid}); we don't
+ *       persist across reloads because the wizard's draft is itself
+ *       a session-scoped Pinia store.</li>
+ *   <li>On {@code reset} (a fresh wizard open) we clear the sets so
+ *       the next session starts from a clean baseline.</li>
+ * </ul>
+ *
+ * <p>Drag-and-drop still works on collapsed rows — the drag handle
+ * is on the header, not the body, so the operator can reorder
+ * without expanding anything.
+ */
+const expandedSections = ref<Set<string>>(new Set())
+const expandedItems = ref<Set<string>>(new Set())
+
+function isSectionExpanded(uid: string): boolean {
+  return expandedSections.value.has(uid)
+}
+function isItemExpanded(uid: string): boolean {
+  return expandedItems.value.has(uid)
+}
+function toggleSection(uid: string): void {
+  const next = new Set(expandedSections.value)
+  if (next.has(uid)) next.delete(uid)
+  else next.add(uid)
+  expandedSections.value = next
+}
+function toggleItem(uid: string): void {
+  const next = new Set(expandedItems.value)
+  if (next.has(uid)) next.delete(uid)
+  else next.add(uid)
+  expandedItems.value = next
+}
+
+/** Reset expansion sets whenever the wizard opens — see {@link store.reset}. */
+watch(
+  () => props.open,
+  (next) => {
+    if (next) {
+      expandedSections.value = new Set()
+      expandedItems.value = new Set()
+    }
+  },
+)
+
+/**
+ * Wrapped action handlers — keep the original behaviour but
+ * auto-expand the new section / item so the operator sees fields
+ * immediately. The section auto-expand also makes the newly-added
+ * item's chevron actually visible.
+ */
+function onAddSectionAndExpand(): void {
+  onAddSection()
+  // The store appends to the end of draft.sections, so reach back
+  // and grab the new uid.
+  const last = store.draft.sections[store.draft.sections.length - 1]
+  if (last) {
+    expandedSections.value = new Set([...expandedSections.value, last.uid])
+  }
+}
+function onAddItemAndExpand(sectionIndex: number): void {
+  onAddItem(sectionIndex)
+  const section = store.draft.sections[sectionIndex]
+  if (section) {
+    // Make sure the section is visible so the new item's chevron
+    // isn't hidden behind a collapsed parent.
+    expandedSections.value = new Set([...expandedSections.value, section.uid])
+    const last = section.items[section.items.length - 1]
+    if (last) {
+      expandedItems.value = new Set([...expandedItems.value, last.uid])
+    }
+  }
+}
 </script>
 
 <template>
@@ -301,9 +388,6 @@ function onOpenLivePreview(): void {
             </button>
           </li>
         </ul>
-        <div class="mt-4 rounded-md border border-amber-200 bg-amber-50 p-2 text-[11px] text-amber-900 leading-snug">
-          {{ t('crfLibrary.author.scopeNote') }}
-        </div>
       </nav>
 
       <!-- Main panel -->
@@ -356,7 +440,7 @@ function onOpenLivePreview(): void {
                 type="button"
                 class="text-xs text-muw-blue hover:underline"
                 data-testid="crf-author-add-section"
-                @click="onAddSection"
+                @click="onAddSectionAndExpand"
               >{{ t('crfLibrary.author.addSection') }}</button>
             </div>
           </div>
@@ -371,10 +455,14 @@ function onOpenLivePreview(): void {
           >
             <template #item="{ element: section, index: sIdx }">
               <div
-                class="rounded-md border border-slate-200 bg-white p-3"
+                class="rounded-md border border-slate-200 bg-white"
                 :data-testid="`crf-author-section-${sIdx}`"
               >
-                <div class="flex items-start justify-between gap-2 mb-2">
+                <!-- Phase E.6 polish — section header with chevron
+                     toggle. Drag handle stays here so reorder works
+                     on collapsed rows. Body below is v-show'd off
+                     the per-uid expansion set. -->
+                <div class="flex items-center gap-2 px-3 py-2 border-b border-slate-200" :class="{ 'border-b-0': !isSectionExpanded(section.uid) }">
                   <button
                     type="button"
                     class="section-drag-handle inline-flex items-center text-[11px] text-slate-400 hover:text-slate-600 cursor-grab"
@@ -390,6 +478,34 @@ function onOpenLivePreview(): void {
                     </svg>
                   </button>
                   <button
+                    type="button"
+                    class="flex items-center gap-2 flex-1 min-w-0 text-left"
+                    :aria-expanded="isSectionExpanded(section.uid)"
+                    :aria-controls="`crf-author-section-body-${sIdx}`"
+                    :data-testid="`crf-author-section-toggle-${sIdx}`"
+                    @click="toggleSection(section.uid)"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      class="text-slate-500 transition-transform"
+                      :class="{ 'rotate-90': isSectionExpanded(section.uid) }"
+                      aria-hidden="true"
+                    >
+                      <polyline points="9 6 15 12 9 18" />
+                    </svg>
+                    <span class="text-xs font-medium text-slate-800 truncate">
+                      {{ section.title.trim() || section.label.trim() || t('crfLibrary.author.sectionUntitled') }}
+                    </span>
+                    <span class="text-[10px] text-slate-500">
+                      {{ t('crfLibrary.author.sectionItemCount', { n: section.items.length }) }}
+                    </span>
+                  </button>
+                  <button
                     v-if="sectionList.length > 1"
                     type="button"
                     class="text-[11px] text-rose-600 hover:underline"
@@ -397,6 +513,11 @@ function onOpenLivePreview(): void {
                   >{{ t('common.remove') }}</button>
                 </div>
 
+                <div
+                  v-show="isSectionExpanded(section.uid)"
+                  :id="`crf-author-section-body-${sIdx}`"
+                  class="p-3 transition-all"
+                >
                 <div class="grid grid-cols-2 gap-3">
                   <div>
                     <FieldLabel :for="`crf-author-slabel-${sIdx}`" required>
@@ -436,7 +557,7 @@ function onOpenLivePreview(): void {
                       type="button"
                       class="text-xs text-muw-blue hover:underline"
                       :data-testid="`crf-author-add-item-${sIdx}`"
-                      @click="onAddItem(sIdx)"
+                      @click="onAddItemAndExpand(sIdx)"
                     >{{ t('crfLibrary.author.addItem') }}</button>
                   </div>
                   <p v-if="section.items.length === 0" class="text-xs italic text-slate-500">
@@ -452,32 +573,78 @@ function onOpenLivePreview(): void {
                     @update:model-value="(next: typeof section.items) => onItemsReorder(sIdx, next)"
                   >
                     <template #item="{ element: item, index: iIdx }">
-                      <div class="relative">
-                        <button
-                          type="button"
-                          class="item-drag-handle absolute left-1 top-2 text-[11px] text-slate-400 hover:text-slate-600 cursor-grab"
-                          :aria-label="t('crfLibrary.author.dragItem')"
+                      <div
+                        class="rounded-md border border-slate-200 bg-white overflow-hidden"
+                        :data-testid="`crf-author-item-wrapper-${sIdx}-${iIdx}`"
+                      >
+                        <!-- Phase E.6 polish — item header w/ drag
+                             handle + chevron + name + datatype chip.
+                             Header stays visible when collapsed so
+                             reorder works without expanding rows. -->
+                        <div class="flex items-center gap-2 px-2 py-1.5 bg-slate-50 border-b border-slate-200" :class="{ 'border-b-0': !isItemExpanded(item.uid) }">
+                          <button
+                            type="button"
+                            class="item-drag-handle inline-flex items-center text-[11px] text-slate-400 hover:text-slate-600 cursor-grab"
+                            :aria-label="t('crfLibrary.author.dragItem')"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                              <circle cx="9" cy="6" r="1.2" fill="currentColor" />
+                              <circle cx="15" cy="6" r="1.2" fill="currentColor" />
+                              <circle cx="9" cy="12" r="1.2" fill="currentColor" />
+                              <circle cx="15" cy="12" r="1.2" fill="currentColor" />
+                              <circle cx="9" cy="18" r="1.2" fill="currentColor" />
+                              <circle cx="15" cy="18" r="1.2" fill="currentColor" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            class="flex items-center gap-2 flex-1 min-w-0 text-left"
+                            :aria-expanded="isItemExpanded(item.uid)"
+                            :aria-controls="`crf-author-item-body-${sIdx}-${iIdx}`"
+                            :data-testid="`crf-author-item-toggle-${sIdx}-${iIdx}`"
+                            @click="toggleItem(item.uid)"
+                          >
+                            <svg
+                              width="10"
+                              height="10"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              stroke-width="2"
+                              class="text-slate-500 transition-transform"
+                              :class="{ 'rotate-90': isItemExpanded(item.uid) }"
+                              aria-hidden="true"
+                            >
+                              <polyline points="9 6 15 12 9 18" />
+                            </svg>
+                            <span class="text-xs font-medium text-slate-700 truncate">
+                              {{ item.name.trim() || t('crfLibrary.author.itemUnnamed') }}
+                            </span>
+                            <span class="text-[10px] px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-500 font-mono">
+                              {{ item.dataType }}
+                            </span>
+                            <span v-if="item.required" class="text-[10px] text-rose-600">*</span>
+                          </button>
+                        </div>
+                        <div
+                          v-show="isItemExpanded(item.uid)"
+                          :id="`crf-author-item-body-${sIdx}-${iIdx}`"
+                          class="transition-all"
+                          :data-testid="`crf-author-item-body-${sIdx}-${iIdx}`"
                         >
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
-                            <circle cx="9" cy="6" r="1.2" fill="currentColor" />
-                            <circle cx="15" cy="6" r="1.2" fill="currentColor" />
-                            <circle cx="9" cy="12" r="1.2" fill="currentColor" />
-                            <circle cx="15" cy="12" r="1.2" fill="currentColor" />
-                            <circle cx="9" cy="18" r="1.2" fill="currentColor" />
-                            <circle cx="15" cy="18" r="1.2" fill="currentColor" />
-                          </svg>
-                        </button>
-                        <ItemEditor
-                          :item="item"
-                          :sections="sectionList"
-                          :available-response-sets="store.responseSetCatalog"
-                          :id-prefix="`crf-author-${sIdx}-${iIdx}`"
-                          @remove="onRemoveItem(sIdx, iIdx)"
-                        />
+                          <ItemEditor
+                            :item="item"
+                            :sections="sectionList"
+                            :available-response-sets="store.responseSetCatalog"
+                            :id-prefix="`crf-author-${sIdx}-${iIdx}`"
+                            @remove="onRemoveItem(sIdx, iIdx)"
+                          />
+                        </div>
                       </div>
                     </template>
                   </draggable>
                 </div>
+                </div><!-- /section body -->
               </div>
             </template>
           </draggable>
