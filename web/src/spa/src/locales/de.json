@@ -453,6 +453,20 @@
       "openThread": "Diskussionsthread öffnen",
       "statusNew": "{count} offen",
       "statusResolved": "{count} erledigt"
+    },
+    "bilateral": {
+      "headerItem": "Merkmal",
+      "headerOd": "OD (rechtes Auge)",
+      "headerOs": "OS (linkes Auge)",
+      "odOnlyTell": "nur OD",
+      "osOnlyTell": "nur OS",
+      "bothEyesTell": "Beide Augen",
+      "odMissing": "—",
+      "osMissing": "—"
+    },
+    "boolean": {
+      "yes": "Ja",
+      "no": "Nein"
     }
   },
   "dde": {

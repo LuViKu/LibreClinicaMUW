@@ -19,17 +19,14 @@ import { useRoute, useRouter } from 'vue-router'
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
-import TextInput from '@/components/TextInput.vue'
-import SelectInput from '@/components/SelectInput.vue'
-import HelperText from '@/components/HelperText.vue'
-import ErrorText from '@/components/ErrorText.vue'
 import ReasonForChangeModal from '@/components/ReasonForChangeModal.vue'
-import CheckboxArrayInput from '@/components/CheckboxArrayInput.vue'
-import FileUploadInput from '@/components/FileUploadInput.vue'
 import RepeatingGroupSection from '@/components/RepeatingGroupSection.vue'
 import SectionBadge from '@/components/SectionBadge.vue'
 import ConcurrentEditBanner from '@/components/ConcurrentEditBanner.vue'
 import ItemNoteIndicator from '@/components/ItemNoteIndicator.vue'
+import CrfItemWidget from '@/components/CrfItemWidget.vue'
+import BilateralItemGroup from '@/components/BilateralItemGroup.vue'
+import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 
 import { useCrfEntryStore } from '@/stores/crfEntry'
 import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
@@ -120,6 +117,21 @@ function topLevelItems(items: CrfItem[]): CrfItem[] {
   return items.filter((it) => !it.groupOid)
 }
 
+/**
+ * Phase E.6 ophth-bilateral — group section items into bilateral rows
+ * before render. Items whose OID matches the {@code OD_…} / {@code OS_…}
+ * / {@code OU_…} convention collapse into a 3-column row keyed off the
+ * shared OID suffix; everything else renders as a one-column single row
+ * (preserving the existing layout for non-ophthalmology CRFs).
+ */
+function rowsForSection(items: CrfItem[]): BilateralRow[] {
+  return groupBilateralItems(topLevelItems(items))
+}
+
+function hasBilateralRow(rows: BilateralRow[]): boolean {
+  return rows.some((r) => r.kind === 'bilateral' || r.kind === 'both-eyes')
+}
+
 /** Lookup table the {@code RepeatingGroupSection} consumes. */
 const itemsByOid = computed<Record<string, CrfItem>>(() => {
   const out: Record<string, CrfItem> = {}
@@ -131,22 +143,6 @@ const itemsByOid = computed<Record<string, CrfItem>>(() => {
   return out
 })
 
-/** Currently-stored FileRef for a file-typed item (top-level row only). */
-function fileRefFor(itemOid: string): { filename: string; bytes: number } | null {
-  const v = store.values[itemOid]
-  if (v && typeof v === 'object' && 'filename' in v && 'bytes' in v) {
-    return v as { filename: string; bytes: number }
-  }
-  return null
-}
-
-/** Per-item busy flag — drives the FileUploadInput's spinner. */
-function isFileBusy(_itemOid: string): boolean {
-  // Coarse-grained: any save-in-flight greys all file widgets. A
-  // per-item busy map can replace this in a follow-up if needed.
-  return store.isSaving
-}
-
 async function onUploadFile(itemOid: string, file: File): Promise<void> {
   await store.uploadFile(itemOid, file)
 }
@@ -154,20 +150,6 @@ async function onUploadFile(itemOid: string, file: File): Promise<void> {
 async function onClearFile(itemOid: string): Promise<void> {
   if (!confirm(t('crfEntry.file.removeConfirm'))) return
   await store.deleteFile(itemOid)
-}
-
-function inputBindings(item: CrfItem) {
-  // The store carries item values as `unknown` (each item declares its own
-  // dataType separately), but the form primitives expect `string | null`.
-  // The cast is safe because text-binding inputs only flow through here;
-  // numeric inputs are bound directly in the template.
-  const raw = store.values[item.oid]
-  return {
-    id: `item-${item.oid}`,
-    modelValue: (raw == null ? '' : String(raw)) as string,
-    error: showError(item) != null,
-    'onUpdate:modelValue': (v: string) => store.setValue(item.oid, v),
-  }
 }
 
 /* -------------------------------------------------------------------- */
@@ -412,91 +394,106 @@ function onItemNoteOpen(_noteIds: string[]) {
             {{ section.instructions }}
           </p>
 
+          <!-- Phase E.6 ophth-bilateral: 3-column header row shown only
+               when the section contains at least one bilateral or
+               OU row. Renders inside the section so non-ophthalmology
+               sections stay a one-column form. OD on the LEFT, OS on
+               the RIGHT — clinician-facing convention. -->
+          <div
+            v-if="hasBilateralRow(rowsForSection(section.items))"
+            class="grid grid-cols-[1fr_1fr_1fr] gap-3 pb-2 mb-2 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500 font-semibold"
+            role="row"
+            data-testid="bilateral-header"
+          >
+            <div data-bilateral-header="label">{{ t('crfEntry.bilateral.headerItem') }}</div>
+            <div data-bilateral-header="OD" class="text-muw-blue">{{ t('crfEntry.bilateral.headerOd') }}</div>
+            <div data-bilateral-header="OS" class="text-muw-blue">{{ t('crfEntry.bilateral.headerOs') }}</div>
+          </div>
+
           <div class="space-y-4">
-            <div v-for="item in topLevelItems(section.items)" :key="item.oid">
-              <FieldLabel :for="`item-${item.oid}`" :required="item.required">
-                {{ item.label }}
-                <ItemNoteIndicator
-                  v-if="advanced.noteSummaryByItemOid[item.oid]"
-                  :summary="advanced.noteSummaryByItemOid[item.oid]"
-                  @open="onItemNoteOpen"
-                />
-              </FieldLabel>
-
-              <template v-if="item.dataType === 'select-one' && item.options">
-                <SelectInput v-bind="inputBindings(item)">
-                  <option :value="undefined">— {{ t('common.search') }} —</option>
-                  <option v-for="opt in item.options" :key="opt.code" :value="opt.code">{{ opt.label }}</option>
-                </SelectInput>
-              </template>
-
-              <template v-else-if="item.dataType === 'select-multi' && item.options">
-                <CheckboxArrayInput
-                  :id-prefix="`item-${item.oid}`"
-                  :model-value="(store.values[item.oid] as string[] | null | undefined) ?? []"
-                  :options="item.options"
-                  :error="showError(item) != null"
+            <template v-for="row in rowsForSection(section.items)">
+              <!-- Single (non-bilateral) row — original one-column layout. -->
+              <div v-if="row.kind === 'single'" :key="`single-${row.item.oid}`">
+                <FieldLabel :for="`item-${row.item.oid}`" :required="row.item.required">
+                  {{ row.item.label }}
+                  <ItemNoteIndicator
+                    v-if="advanced.noteSummaryByItemOid[row.item.oid]"
+                    :summary="advanced.noteSummaryByItemOid[row.item.oid]"
+                    @open="onItemNoteOpen"
+                  />
+                </FieldLabel>
+                <CrfItemWidget
+                  :item="row.item"
+                  :model-value="store.values[row.item.oid]"
+                  :error-message="showError(row.item)"
                   :disabled="isReadOnly"
-                  @update:model-value="(v: string[]) => store.setValue(item.oid, v)"
+                  :file-busy="store.isSaving"
+                  :max-file-bytes="store.entry?.maxFileBytes ?? 0"
+                  :file-extensions="store.entry?.fileExtensions ?? ''"
+                  :suppress-label="true"
+                  @update:model-value="(v: unknown) => store.setValue(row.item.oid, v)"
+                  @upload-file="(f: File) => onUploadFile(row.item.oid, f)"
+                  @clear-file="() => onClearFile(row.item.oid)"
                 />
-              </template>
+              </div>
 
-              <template v-else-if="item.dataType === 'file'">
-                <FileUploadInput
-                  :id-prefix="`item-${item.oid}`"
-                  :model-value="fileRefFor(item.oid)"
-                  :max-bytes="store.entry?.maxFileBytes ?? 0"
-                  :allowed-extensions="store.entry?.fileExtensions ?? ''"
-                  :drop-prompt-label="t('crfEntry.file.dropPrompt')"
-                  :browse-label="t('crfEntry.file.browse')"
-                  :uploading-label="t('crfEntry.file.uploading')"
-                  :remove-label="t('crfEntry.file.remove')"
-                  :replace-label="t('crfEntry.file.replace')"
-                  :too-big-message="t('crfEntry.file.tooBig')"
-                  :bad-extension-message="t('crfEntry.file.badExtension')"
-                  :busy="isFileBusy(item.oid)"
-                  :disabled="isReadOnly"
-                  :error="showError(item) != null"
-                  @upload="(f: File) => onUploadFile(item.oid, f)"
-                  @clear="onClearFile(item.oid)"
-                />
-              </template>
+              <!-- Bilateral OD/OS row — 3-column. OD on LEFT, OS on RIGHT. -->
+              <BilateralItemGroup
+                v-else-if="row.kind === 'bilateral'"
+                :key="`bilateral-${row.key}`"
+                :row="row"
+              >
+                <template #widget="{ item, side }">
+                  <ItemNoteIndicator
+                    v-if="advanced.noteSummaryByItemOid[item.oid]"
+                    :summary="advanced.noteSummaryByItemOid[item.oid]"
+                    @open="onItemNoteOpen"
+                  />
+                  <CrfItemWidget
+                    :item="item"
+                    :model-value="store.values[item.oid]"
+                    :error-message="showError(item)"
+                    :disabled="isReadOnly"
+                    :file-busy="store.isSaving"
+                    :max-file-bytes="store.entry?.maxFileBytes ?? 0"
+                    :file-extensions="store.entry?.fileExtensions ?? ''"
+                    :suppress-label="true"
+                    :data-bilateral-side="side"
+                    @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
+                    @upload-file="(f: File) => onUploadFile(item.oid, f)"
+                    @clear-file="() => onClearFile(item.oid)"
+                  />
+                </template>
+              </BilateralItemGroup>
 
-              <template v-else-if="item.dataType === 'integer' || item.dataType === 'real'">
-                <input
-                  v-bind="{
-                    id: `item-${item.oid}`,
-                    value: store.values[item.oid] ?? '',
-                    'aria-invalid': showError(item) != null || undefined,
-                  }"
-                  type="number"
-                  :min="item.min"
-                  :max="item.max"
-                  :step="item.dataType === 'integer' ? 1 : 0.1"
-                  class="w-full px-3 py-2 border rounded-md focus:outline-none transition-colors muw-focus"
-                  :class="showError(item)
-                    ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
-                    : 'border-slate-300 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100'"
-                  @input="store.setValue(item.oid, ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
-                />
-              </template>
-
-              <template v-else-if="item.dataType === 'date'">
-                <TextInput
-                  v-bind="inputBindings(item)"
-                  type="text"
-                  placeholder="YYYY-MM-DD"
-                  inputmode="numeric"
-                />
-              </template>
-
-              <template v-else>
-                <TextInput v-bind="inputBindings(item)" type="text" />
-              </template>
-
-              <HelperText v-if="item.helper">{{ item.helper }}</HelperText>
-              <ErrorText v-if="showError(item)">{{ showError(item) }}</ErrorText>
-            </div>
+              <!-- OU (both eyes) row — single widget spans both eye columns. -->
+              <BilateralItemGroup
+                v-else-if="row.kind === 'both-eyes'"
+                :key="`bothEyes-${row.key}`"
+                :row="row"
+              >
+                <template #widget="{ item }">
+                  <ItemNoteIndicator
+                    v-if="advanced.noteSummaryByItemOid[item.oid]"
+                    :summary="advanced.noteSummaryByItemOid[item.oid]"
+                    @open="onItemNoteOpen"
+                  />
+                  <CrfItemWidget
+                    :item="item"
+                    :model-value="store.values[item.oid]"
+                    :error-message="showError(item)"
+                    :disabled="isReadOnly"
+                    :file-busy="store.isSaving"
+                    :max-file-bytes="store.entry?.maxFileBytes ?? 0"
+                    :file-extensions="store.entry?.fileExtensions ?? ''"
+                    :suppress-label="true"
+                    @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
+                    @upload-file="(f: File) => onUploadFile(item.oid, f)"
+                    @clear-file="() => onClearFile(item.oid)"
+                  />
+                </template>
+              </BilateralItemGroup>
+            </template>
           </div>
         </section>
 
