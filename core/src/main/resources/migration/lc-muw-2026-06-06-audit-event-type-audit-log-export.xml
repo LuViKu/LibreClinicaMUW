@@ -1,0 +1,52 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 (2026-06-06): audit_log_event_type row for the
+        new /api/v1/audit/export.xlsx endpoint. AuditApiController
+        emits one row per successful export so the GxP audit trail
+        records who downloaded the audit log itself + which filters
+        were active.
+
+        Allocates id 54 alongside the other Phase E.5/E.6 admin-bucket
+        siblings (50 user_account_profile_updated, 51 study_identity_updated,
+        52 dataset_exported, 53 subject_data_exported).
+        AuditApiController.variantForType maps 54 into the "admin"
+        bucket so the new rows surface under the existing Admin
+        filter; the SPA's StudyAuditLogView shows them in the
+        usual timeline.
+
+        Why a new type vs. piggy-backing on 52/53:
+        - 52 (dataset_exported) tracks data egress of subject CRFs.
+        - 53 (subject_data_exported) tracks per-subject exports.
+        - 54 (audit_log_exported) tracks egress of the audit trail
+          itself — a meta-audit event. Sponsors / inspectors care
+          about this distinct from data exports because it shows
+          who reviewed compliance history.
+    -->
+    <changeSet id="2026-06-06-audit-event-type-audit-log-export"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 55;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the row AuditApiController.emitExportAudit emits
+            via a direct INSERT into audit_log_event when the
+            /api/v1/audit/export.xlsx endpoint serves a download.
+        </comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="55"/>
+            <column name="name" value="audit_log_exported"/>
+            <column name="display_name" value="Audit log exported"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

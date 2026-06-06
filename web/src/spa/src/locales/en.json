@@ -312,7 +312,13 @@
       "respond": "Respond",
       "resolve": "Mark resolved",
       "close": "Close",
-      "export": "Export CSV"
+      "export": "Export CSV",
+      "exportCsv": "Export CSV",
+      "exportForSubject": "Export CSV (this subject)",
+      "exporting": "Exporting…"
+    },
+    "error": {
+      "exportFailed": "Discrepancy export failed"
     },
     "composer": {
       "label": {
@@ -367,6 +373,13 @@
       "data": "Data entry",
       "query": "Query",
       "subject-group-change": "Group change"
+    },
+    "actions": {
+      "exportXlsx": "Export XLSX",
+      "exporting": "Exporting…"
+    },
+    "error": {
+      "exportFailed": "Audit log export failed"
     }
   },
   "crfEntry": {

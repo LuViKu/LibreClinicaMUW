@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
+import { apiDownload } from '@/api/download'
 import type { AuditEvent, AuditEventVariant } from '@/types/audit'
 
 /**
@@ -22,7 +23,9 @@ import type { AuditEvent, AuditEventVariant } from '@/types/audit'
 export const useAuditLogStore = defineStore('auditLog', () => {
   const events = ref<AuditEvent[]>([])
   const isLoading = ref(false)
+  const isExporting = ref(false)
   const error = ref<string | null>(null)
+  const exportError = ref<string | null>(null)
 
   const actorFilter = ref<string>('') // empty = all
   const variantFilter = ref<'all' | AuditEventVariant>('all')
@@ -96,6 +99,54 @@ export const useAuditLogStore = defineStore('auditLog', () => {
   }
 
   /**
+   * Phase E.6 — sponsor / inspector XLSX hand-off of the audit log.
+   *
+   * Forwards the same filters the SPA is showing on screen as query
+   * params so the workbook row count matches the visible list exactly.
+   * The backend additionally emits an audit_log_event row (type 54)
+   * recording who pulled the export and which filters were active.
+   *
+   * Failures are surfaced via the local `exportError` ref so the view
+   * can render an inline toast without clobbering the main `error`
+   * state used for the list-load failure mode.
+   */
+  async function exportXlsx(): Promise<void> {
+    isExporting.value = true
+    exportError.value = null
+    try {
+      const params = new URLSearchParams()
+      if (actorFilter.value) params.set('actor', actorFilter.value)
+      if (variantFilter.value !== 'all') params.set('variant', variantFilter.value)
+      if (subjectFilter.value) params.set('subjectId', subjectFilter.value)
+      const qs = params.toString()
+      const path = qs
+        ? `/pages/api/v1/audit/export.xlsx?${qs}`
+        : '/pages/api/v1/audit/export.xlsx'
+      // Fallback filename when the server doesn't set Content-Disposition
+      // (defensive — production backend always does).
+      const today = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+      await apiDownload(path, `audit_${today}.xlsx`)
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        exportError.value =
+          'Backend nicht erreichbar — Audit-Log-Export konnte nicht gestartet werden.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        exportError.value =
+          body?.message ?? `Audit-Log-Export fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        exportError.value =
+          e instanceof Error ? e.message : 'Unbekannter Fehler beim Audit-Log-Export.'
+      }
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  /**
    * Phase E.6 — clear every piece of study-scoped state so the audit
    * log doesn't blend study-A entries into study B's timeline. Called
    * by {@link useAuthStore.pickStudy} before re-bootstrapping.
@@ -103,7 +154,9 @@ export const useAuditLogStore = defineStore('auditLog', () => {
   function reset() {
     events.value = []
     isLoading.value = false
+    isExporting.value = false
     error.value = null
+    exportError.value = null
     actorFilter.value = ''
     variantFilter.value = 'all'
     subjectFilter.value = ''
@@ -112,7 +165,9 @@ export const useAuditLogStore = defineStore('auditLog', () => {
   return {
     events,
     isLoading,
+    isExporting,
     error,
+    exportError,
     actorFilter,
     variantFilter,
     subjectFilter,
@@ -124,6 +179,7 @@ export const useAuditLogStore = defineStore('auditLog', () => {
     groupedByDate,
     clearFilters,
     load,
+    exportXlsx,
     reset,
   }
 })

@@ -64,6 +64,53 @@ class AuditApiControllerTest extends AbstractApiControllerTest {
     }
 
     /* ---------------------------------------------------------------------- */
+    /* Phase E.6 — GET /api/v1/audit/export.xlsx                              */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void exportXlsxReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/audit/export.xlsx")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void exportXlsxReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/audit/export.xlsx")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void safeOidStripsPathTraversalCharsFromFilenameSlug() {
+        // Defence-in-depth: the StudyOID feeds the export filename;
+        // a malicious / fat-fingered OID should still produce a
+        // legal local filename — alphanumerics + dash + underscore only.
+        assertEquals("S_DEMO_1", AuditApiController.safeOid("S_DEMO_1"));
+        assertEquals("study", AuditApiController.safeOid(""));
+        assertEquals("study", AuditApiController.safeOid(null));
+        assertEquals("_etc_passwd", AuditApiController.safeOid("/etc/passwd"));
+        assertEquals("a__b", AuditApiController.safeOid("a/.b"));
+    }
+
+    @Test
+    void describeFiltersPacksTheFilterSetIntoAuditTrailColumn() {
+        // Without filters → just the row count.
+        assertEquals("rows=0",
+                AuditApiController.describeFilters(null, null, null, 0));
+        // Full filter set → a parseable key=value string.
+        String s = AuditApiController.describeFilters(
+                "monitor_demo", "admin", "M-001", 42);
+        assertTrue(s.contains("rows=42"), s);
+        assertTrue(s.contains("actor=monitor_demo"), s);
+        assertTrue(s.contains("variant=admin"), s);
+        assertTrue(s.contains("subjectId=M-001"), s);
+    }
+
+    /* ---------------------------------------------------------------------- */
     /* A5 — value-prettification helpers                                      */
     /* ---------------------------------------------------------------------- */
 

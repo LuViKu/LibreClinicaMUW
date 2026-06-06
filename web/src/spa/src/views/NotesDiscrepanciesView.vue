@@ -155,9 +155,9 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
   }
 }
 
-function exportHref(): string {
-  return notes.buildExportUrl()
-}
+// Phase E.6 harmonize — exportHref() superseded by notes.exportCsv() action
+// (fetch+blob via apiDownload); buildExportUrl is kept on the store for
+// callers that prefer a plain href.
 </script>
 
 <template>
@@ -259,24 +259,29 @@ function exportHref(): string {
         </button>
 
         <div class="ml-auto flex items-center gap-3 text-slate-500">
-          <a
-            :href="exportHref()"
-            class="px-3 py-1.5 text-xs border border-slate-300 rounded-md hover:bg-slate-100 text-slate-700 inline-flex items-center gap-1.5"
-            :download="true"
+          <span>{{ t('notes.showingCount', { visible: notes.visibleCount, total: notes.totalCount }) }}</span>
+          <button
+            type="button"
+            class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+            :disabled="notes.isExporting || notes.visibleCount === 0"
             data-testid="notes-export-csv"
+            @click="notes.exportCsv()"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
-            {{ t('notes.actions.export') }}
-          </a>
-          <span>
-            {{ t('notes.showingCount', { visible: notes.visibleCount, total: notes.totalCount }) }}
-          </span>
+            {{ notes.isExporting ? t('notes.actions.exporting') : t('notes.actions.exportCsv') }}
+          </button>
         </div>
       </div>
+
+      <p
+        v-if="notes.exportError"
+        class="text-rose-700 text-xs mb-3"
+        role="alert"
+      >{{ t('notes.error.exportFailed') }} — {{ notes.exportError }}</p>
 
       <DenseTable>
         <template #header>

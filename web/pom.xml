@@ -318,6 +318,16 @@
 			<groupId>org.apache.poi</groupId>
 			<artifactId>poi</artifactId>
 		</dependency>
+		<!--
+			Phase E.6 (2026-06-06): poi-ooxml ships XSSF (XLSX) +
+			SXSSF (streamed XLSX). The new audit-export endpoint
+			emits .xlsx for sponsor / inspector hand-offs;
+			XlsxWorkbookBuilder uses XSSFWorkbook directly.
+		-->
+		<dependency>
+			<groupId>org.apache.poi</groupId>
+			<artifactId>poi-ooxml</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>net.sourceforge.jexcelapi</groupId>
 			<artifactId>jxl</artifactId>
