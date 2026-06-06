@@ -895,8 +895,7 @@
     "authorManually": "Manuell anlegen",
     "author": {
       "heading": "Neue Version von »{name}« anlegen",
-      "subheading": "Phase E.6 Milestone A — vertikaler Slice (eine Sektion, zwei-drei Items, TEXT-Antwort).",
-      "scopeNote": "Milestone-A-Umfang: ST / INTEGER / BL Items mit einem einzigen TEXT-Antwortset. Show-when, Berechnungen, mehrsprachige Bezeichnungen und wiederverwendbare Antwortsets folgen in Milestone B/C/D.",
+      "subheading": "CRF-Definition erstellen",
       "rail": {
         "metadata": "1 · Metadaten",
         "sections": "2 · Sektionen",
@@ -929,6 +928,9 @@
       "addSection": "+ Sektion hinzufügen",
       "dragSection": "Sektion durch Ziehen umsortieren",
       "dragItem": "Item durch Ziehen umsortieren",
+      "sectionUntitled": "Unbenannte Sektion",
+      "sectionItemCount": "{n} Item(s)",
+      "itemUnnamed": "Unbenanntes Item",
       "review": {
         "heading": "Überprüfen und absenden",
         "intro": "Beim Absenden synthetisiert der Server eine XLS-Tabelle aus diesem Entwurf und schickt sie durch den bestehenden CRF-Parser. Die resultierende Version ist semantisch identisch mit einer per XLS-Upload erzeugten.",
@@ -966,8 +968,8 @@
       "oid": "Item-OID",
       "oidHelper": "Wird aus dem Item-Namen vorgeschlagen; überschreibbar bei Bedarf.",
       "descriptionLabel": "Beschreibungs-Label",
-      "leftItemText": "Linker Item-Text",
-      "rightItemText": "Rechter Item-Text",
+      "leftItemText": "Beschriftung über Eingabe",
+      "rightItemText": "Erläuterung unter Eingabe",
       "units": "Einheit",
       "dataType": "Datentyp",
       "responseType": "Antworttyp",

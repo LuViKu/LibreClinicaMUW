@@ -895,8 +895,7 @@
     "authorManually": "Manually author",
     "author": {
       "heading": "Author new version of \"{name}\"",
-      "subheading": "Phase E.6 Milestone A — vertical slice (one section, two-three items, TEXT response).",
-      "scopeNote": "Milestone A scope: ST / INTEGER / BL items with a single TEXT response set. Show-when, calculations, multi-language labels and reusable response sets land in Milestones B/C/D.",
+      "subheading": "Create CRF definition",
       "rail": {
         "metadata": "1 · Metadata",
         "sections": "2 · Sections",
@@ -929,6 +928,9 @@
       "addSection": "+ Add section",
       "dragSection": "Drag to reorder section",
       "dragItem": "Drag to reorder item",
+      "sectionUntitled": "Untitled section",
+      "sectionItemCount": "{n} item(s)",
+      "itemUnnamed": "Unnamed item",
       "review": {
         "heading": "Review and submit",
         "intro": "On submit the server synthesises an XLS workbook from this draft and runs it through the legacy CRF parser. The resulting version is semantically identical to one uploaded via the upload-version flow.",
@@ -966,8 +968,8 @@
       "oid": "Item OID",
       "oidHelper": "Auto-suggested from the item name; override if you need a specific identifier.",
       "descriptionLabel": "Description label",
-      "leftItemText": "Left item text",
-      "rightItemText": "Right item text",
+      "leftItemText": "Label",
+      "rightItemText": "Helper text",
       "units": "Units",
       "dataType": "Data type",
       "responseType": "Response type",
