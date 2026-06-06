@@ -1043,6 +1043,13 @@
   "ophthPreset": {
     "addBilateralExam": "+ Add Ophthalmology bilateral examination",
     "triggerHint": "Tip: type OPHTH_EXAM (or OPHTHA_EXAM) and press Shift+Enter to insert the ophthalmology preset.",
+    "bilateral": {
+      "headerOd": "OD (right eye)",
+      "headerOs": "OS (left eye)",
+      "missingOd": "(no OD item — add one to complete the pair)",
+      "missingOs": "(no OS item — add one to complete the pair)",
+      "bothEyesOnly": "Both eyes (OU) — single combined entry."
+    },
     "section": {
       "title": "Ophthalmology examination",
       "instructions": "Bilateral measurements — OD on the left, OS on the right (clinician's perspective)."
@@ -1067,9 +1074,10 @@
       "IOP": { "label": "Intraocular pressure" },
       "SPECTRALIS_DONE": { "label": "Spectralis OCT done" },
       "PLEX_ELITE_DONE": { "label": "Plex Elite OCT done" },
-      "REFRACTION_SPHERE": { "label": "Refraction sphere" },
-      "REFRACTION_CYLINDER": { "label": "Refraction cylinder" },
-      "REFRACTION_AXIS": { "label": "Refraction axis" },
+      "REFRACTION_SPHERE": { "label": "Refraction — Sphere" },
+      "REFRACTION_TORUS": { "label": "Refraction — Torus" },
+      "REFRACTION_ANGLE": { "label": "Refraction — Angle" },
+      "REFRACTION_VISUS": { "label": "Refraction — Visus" },
       "CCT": { "label": "Central corneal thickness" },
       "CRT": { "label": "Central retinal thickness" },
       "FUNDUS_PHOTO_DONE": { "label": "Fundus photograph done" },

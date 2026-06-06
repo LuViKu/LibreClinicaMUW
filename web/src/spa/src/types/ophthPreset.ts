@@ -118,6 +118,11 @@ export const OPHTH_PRESET_CATALOG: ReadonlyArray<OphthPresetEntry> = [
     unit: '',
     defaultBilateral: true,
   },
+  // Refraction quartet. MUW Ophthalmology nomenclature:
+  // Sphere (D) / Torus (cylinder, D) / Angle (axis, °) / Visus
+  // (refraction-corrected visual acuity, decimal 0-2). Operators
+  // typically grab all four together; they're kept as four flat
+  // catalog entries so single-eye partial refractions still work.
   {
     key: 'REFRACTION_SPHERE',
     labelKey: 'ophthPreset.entry.REFRACTION_SPHERE.label',
@@ -127,19 +132,27 @@ export const OPHTH_PRESET_CATALOG: ReadonlyArray<OphthPresetEntry> = [
     defaultBilateral: true,
   },
   {
-    key: 'REFRACTION_CYLINDER',
-    labelKey: 'ophthPreset.entry.REFRACTION_CYLINDER.label',
+    key: 'REFRACTION_TORUS',
+    labelKey: 'ophthPreset.entry.REFRACTION_TORUS.label',
     dataType: 'REAL',
     range: { min: -10, max: 10 },
     unit: 'D',
     defaultBilateral: true,
   },
   {
-    key: 'REFRACTION_AXIS',
-    labelKey: 'ophthPreset.entry.REFRACTION_AXIS.label',
+    key: 'REFRACTION_ANGLE',
+    labelKey: 'ophthPreset.entry.REFRACTION_ANGLE.label',
     dataType: 'INT',
     range: { min: 0, max: 180 },
     unit: '°',
+    defaultBilateral: true,
+  },
+  {
+    key: 'REFRACTION_VISUS',
+    labelKey: 'ophthPreset.entry.REFRACTION_VISUS.label',
+    dataType: 'REAL',
+    range: { min: 0, max: 2 },
+    unit: '',
     defaultBilateral: true,
   },
   {
