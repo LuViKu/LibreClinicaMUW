@@ -250,7 +250,16 @@ public class ItemDAO extends AuditableEntityDAO<ItemBean> {
     }
 
     public ArrayList<Integer> findAllVersionsByItemId(int itemId) {
-    	HashMap<Integer, Object> variables = new HashMap<>();
+        // Phase E.6 export-tool save bug — the result-row processor
+        // reads typesExpected to know how to coerce each column. Without
+        // this reset the DAO inherits whatever typesExpected was left
+        // over from the previous call (or, on a fresh DAO instance, an
+        // empty list) and trips "The given column index '1' is not
+        // within the allowed range of [1,0]." The SQL returns one INT
+        // column (crf_version_id).
+        this.unsetTypeExpected();
+        this.setTypeExpected(1, TypeNames.INT);
+        HashMap<Integer, Object> variables = new HashMap<>();
         variables.put(1, itemId);
         String sql = digester.getQuery("findAllVersionsByItemId");
         ArrayList<HashMap<String, Object>> alist = this.select(sql, variables, true);
