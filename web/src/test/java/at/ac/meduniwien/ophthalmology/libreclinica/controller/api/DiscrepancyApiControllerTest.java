@@ -282,20 +282,9 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
                         .value(containsString("No active study")));
     }
 
-    @Test
-    void exportCsvReturns401WhenAnonymous() throws Exception {
-        mockMvcWith().perform(get("/api/v1/discrepancies/export.csv")
-                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void exportCsvReturns400WhenNoActiveStudy() throws Exception {
-        mockMvcWith().perform(get("/api/v1/discrepancies/export.csv")
-                .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSessionWithoutStudy(1, "root")))
-                .andExpect(status().isBadRequest());
-    }
+    /* (duplicate exportCsv 401/400 guards dropped by harmonizer —
+     *  identical tests live at the top of the file from the
+     *  audit-discrepancy-export cluster) */
 
     /* ---------------------------------------------------------------------- */
     /* NoteTransitionMatrix — Phase E.6 type helpers                          */
