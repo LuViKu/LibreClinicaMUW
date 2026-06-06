@@ -35,6 +35,11 @@ const canManage = computed(() => {
   const role = auth.user?.role
   return role === 'Administrator' || role === 'Data Manager'
 })
+// Phase E.6 — lock + unlock are sysadmin-only on the backend (matches
+// the legacy UnlockEventDefinitionServlet mayProceed guard). Gating the
+// buttons client-side avoids surfacing them to roles that would only
+// see a 403 on click.
+const canLifecycle = computed(() => auth.user?.role === 'Administrator')
 
 onMounted(() => { if (studyOid.value) eventDefs.load(studyOid.value) })
 
@@ -144,7 +149,27 @@ async function onDisable(row: EventDefinition) {
   await eventDefs.disable(studyOid.value, row.oid)
 }
 
+// Phase E.6 — restore / lock / unlock. Each prompts before firing so
+// the operator can't trigger a destructive cascade with a misclick.
+const showRemoved = ref(false)
+async function onRestore(row: EventDefinition) {
+  if (!studyOid.value) return
+  if (!confirm(t('eventDefinitions.restoreConfirm', { name: row.name }))) return
+  await eventDefs.restore(studyOid.value, row.oid)
+}
+async function onLock(row: EventDefinition) {
+  if (!studyOid.value) return
+  if (!confirm(t('eventDefinitions.lockConfirm', { name: row.name }))) return
+  await eventDefs.lock(studyOid.value, row.oid)
+}
+async function onUnlock(row: EventDefinition) {
+  if (!studyOid.value) return
+  if (!confirm(t('eventDefinitions.unlockConfirm', { name: row.name }))) return
+  await eventDefs.unlock(studyOid.value, row.oid)
+}
+
 const activeRows = computed(() => eventDefs.rows.filter((r) => r.status !== 'removed'))
+const removedRows = computed(() => eventDefs.rows.filter((r) => r.status === 'removed'))
 
 async function moveUp(idx: number) {
   if (!studyOid.value || idx <= 0) return
@@ -262,11 +287,63 @@ function openAssignments(row: EventDefinition) {
                 <button class="text-rose-600 hover:underline" @click="onDisable(row)">
                   {{ t('eventDefinitions.disable') }}
                 </button>
+                <template v-if="canLifecycle">
+                  <span class="text-slate-300">·</span>
+                  <button
+                    v-if="row.status !== 'locked'"
+                    class="text-amber-700 hover:underline"
+                    @click="onLock(row)"
+                  >{{ t('eventDefinitions.lock') }}</button>
+                  <button
+                    v-else
+                    class="text-emerald-700 hover:underline"
+                    @click="onUnlock(row)"
+                  >{{ t('eventDefinitions.unlock') }}</button>
+                </template>
               </div>
             </td>
           </tr>
         </tbody>
       </table>
+
+      <!-- Phase E.6 — removed event definitions, surfaced behind a toggle so
+           the main list stays focused on the operator's active workflow. -->
+      <div v-if="canManage" class="mt-6">
+        <button
+          class="text-xs text-slate-500 hover:text-muw-blue underline"
+          @click="showRemoved = !showRemoved"
+        >
+          {{ showRemoved ? t('eventDefinitions.hideRemoved') : t('eventDefinitions.showRemoved') }}
+          ({{ removedRows.length }})
+        </button>
+        <table
+          v-if="showRemoved && removedRows.length > 0"
+          class="mt-3 w-full text-sm border-collapse opacity-70"
+        >
+          <thead>
+            <tr class="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+              <th class="px-3 py-2">{{ t('eventDefinitions.column.name') }}</th>
+              <th class="px-3 py-2">{{ t('eventDefinitions.column.type') }}</th>
+              <th class="px-3 py-2 text-right">{{ t('eventDefinitions.column.actions') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in removedRows" :key="row.oid" class="border-b border-slate-100">
+              <td class="px-3 py-2 text-slate-700">
+                <span class="line-through">{{ row.name }}</span>
+              </td>
+              <td class="px-3 py-2">
+                <StatusPill variant="neutral">{{ t(`eventDefinitions.type.${row.type}`) }}</StatusPill>
+              </td>
+              <td class="px-3 py-2 text-right text-xs">
+                <button class="text-emerald-700 hover:underline" @click="onRestore(row)">
+                  {{ t('eventDefinitions.restore') }}
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <!-- Inline create form -->
       <div v-if="createOpen" class="mt-6 rounded-md border border-slate-200 bg-white p-4">
