@@ -295,12 +295,84 @@ function validationFor(entry: OphthPresetEntry, translate: Translator): { regexp
 }
 
 /**
+ * BL preset entries that semantically mean "imaging modality performed?".
+ * For these entries the generator emits a follow-up "reason if not done"
+ * text item per eye, gated by a show-when rule on the parent boolean.
+ * Operators can delete the reason items in the wizard if a particular
+ * study doesn't need them.
+ */
+const IMAGING_BL_KEYS: ReadonlySet<string> = new Set([
+  'SPECTRALIS_DONE',
+  'PLEX_ELITE_DONE',
+  'FUNDUS_PHOTO_DONE',
+  'VISUAL_FIELD_DONE',
+  'OCT_A_DONE',
+])
+
+/**
+ * Build the OD or OS follow-up "reason if not done" item for an imaging
+ * BL entry. The follow-up is a text field that's only shown at runtime
+ * when the parent boolean was answered "No" (literal {@code '0'}) — the
+ * runtime renderer keeps hidden values in client state but does NOT
+ * persist them, so toggling Yes after typing a reason cleanly suppresses
+ * the reason from the submission (Phase E.6 show-when spec).
+ *
+ * <p>Item OID convention: {@code OD_<KEY>_REASON} / {@code OS_<KEY>_REASON}.
+ * The {@code _REASON} suffix makes the bilateral grid group OD/OS
+ * follow-ups into their own row (the grid pairs by exact OID suffix).
+ */
+function buildImagingReasonFollowup(
+  entry: OphthPresetEntry,
+  eye: 'OD' | 'OS',
+  translate: Translator,
+): Omit<AuthoringItem, 'uid'> {
+  const parentLabel = translate(entry.labelKey)
+  const reasonSuffix = translate('ophthPreset.entry.reasonIfNotDone')
+  const oidParent = `${eye}_${entry.key}`
+  const oidReason = `${eye}_${entry.key}_REASON`
+  const oidPair = `${eye === 'OD' ? 'OS' : 'OD'}_${entry.key}_REASON`
+  return {
+    name: oidReason,
+    oid: oidReason,
+    descriptionLabel: `${parentLabel} — ${reasonSuffix}`,
+    leftItemText: eye,
+    rightItemText: '',
+    units: '',
+    dataType: 'ST',
+    responseType: 'text',
+    defaultValue: '',
+    required: false,
+    responseSet: null,
+    validation: { regexp: '', errorMessage: '' },
+    laterality: eye,
+    bilateralPair: oidPair,
+    showWhen: {
+      sourceItemOid: oidParent,
+      comparator: '==',
+      literal: '0',
+    },
+  }
+}
+
+/**
  * Generate one paired (OD, OS) item tuple for a single catalog entry.
  *
  * <p>OD is emitted first so the wire-side ordering matches the
  * face-to-face renderer convention (OD on the LEFT). The
  * {@code bilateralPair} cross-link lets the renderer find the
  * opposite-eye sibling without a separate index.
+ *
+ * <p>For imaging BL entries (see {@link IMAGING_BL_KEYS}) the generator
+ * additionally emits an OD + OS "reason if not done" text follow-up
+ * gated by a show-when rule on the parent boolean. The result is
+ * {@code [OD_DONE, OS_DONE, OD_REASON, OS_REASON]} so the bilateral
+ * grid renders the imaging done? row first and the reason row directly
+ * below it.
+ *
+ * <p>BL items render as the canonical Yes(1)/No(0) selector at runtime
+ * via the BL-specific branch of {@code buildResponseSetPayload} — the
+ * preset doesn't override {@code responseType} for BL, the data type
+ * does the work.
  *
  * <p>The {@code uid} field is left empty — callers (the store) inject
  * a stable uid via the same {@code nextUid()} helper used by manual
@@ -327,11 +399,6 @@ export function generateBilateralPair(
     rightItemText: '',
     units,
     dataType: entry.dataType,
-    // All preset items default to a single-line text response — the
-    // operator can flip BL items to a radio Yes/No via the per-item
-    // editor after generation. Keeping the response type uniform here
-    // avoids surfacing the response-set picker for unedited BL rows
-    // and keeps the implicit open-text branch in {@link buildResponseSetPayload}.
     responseType: 'text',
     defaultValue: '',
     required: false,
@@ -348,8 +415,6 @@ export function generateBilateralPair(
     rightItemText: '',
     units,
     dataType: entry.dataType,
-    // All preset items default to a single-line text response — see the
-    // note on the OD item above.
     responseType: 'text',
     defaultValue: '',
     required: false,
@@ -357,6 +422,14 @@ export function generateBilateralPair(
     validation,
     laterality: 'OS',
     bilateralPair: oidOd,
+  }
+  if (entry.dataType === 'BL' && IMAGING_BL_KEYS.has(entry.key)) {
+    return [
+      odItem,
+      osItem,
+      buildImagingReasonFollowup(entry, 'OD', translate),
+      buildImagingReasonFollowup(entry, 'OS', translate),
+    ]
   }
   return [odItem, osItem]
 }

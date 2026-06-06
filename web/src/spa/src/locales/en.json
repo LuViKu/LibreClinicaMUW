@@ -1086,7 +1086,8 @@
       "VISUAL_FIELD_DONE": { "label": "Visual field done" },
       "OCT_A_DONE": { "label": "OCT angiography done" },
       "ACD": { "label": "Anterior chamber depth" },
-      "AXIAL_LENGTH": { "label": "Axial length" }
+      "AXIAL_LENGTH": { "label": "Axial length" },
+      "reasonIfNotDone": "Reason (if not done)"
     }
   },
   "crfPreview": {
