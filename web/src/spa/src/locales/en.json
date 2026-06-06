@@ -453,6 +453,20 @@
       "openThread": "Open discussion thread",
       "statusNew": "{count} open",
       "statusResolved": "{count} resolved"
+    },
+    "bilateral": {
+      "headerItem": "Item",
+      "headerOd": "OD (right eye)",
+      "headerOs": "OS (left eye)",
+      "odOnlyTell": "OD only",
+      "osOnlyTell": "OS only",
+      "bothEyesTell": "Both eyes",
+      "odMissing": "—",
+      "osMissing": "—"
+    },
+    "boolean": {
+      "yes": "Yes",
+      "no": "No"
     }
   },
   "dde": {
@@ -932,7 +946,11 @@
       "REAL": "Real number (REAL)",
       "DATE": "Date (DATE)",
       "PDATE": "Partial date (PDATE)",
-      "FILE": "File attachment (FILE)"
+      "FILE": "File attachment (FILE)",
+      "BL": "Boolean (BL)",
+      "BLHelper": "Boolean items render as a single checkbox (Yes = 1 / No = 0). The response set is fixed, so the options picker is hidden.",
+      "BLPreviewHeading": "Preview",
+      "BLPlaceholder": "Boolean item"
     },
     "responseType": {
       "text": "Single-line text",
@@ -979,6 +997,63 @@
       "button": "Validate (preview)",
       "success": "Looks good — {sections} section(s), {items} item(s).",
       "errorsTitle": "The preview rejected the draft:"
+    }
+  },
+  "ophthPreset": {
+    "addBilateralExam": "+ Add Ophthalmology bilateral examination",
+    "section": {
+      "title": "Ophthalmology examination",
+      "instructions": "Bilateral measurements — OD on the left, OS on the right (clinician's perspective)."
+    },
+    "picker": {
+      "heading": "Ophthalmology bilateral examination",
+      "subheading": "Pick measurements to add as paired OD / OS items in an OPHTH_EXAM section.",
+      "selectAll": "Select all",
+      "clearAll": "Clear",
+      "selectedCount": "{count} selected",
+      "range": "{min} – {max}",
+      "confirm": "Generate items ({count})",
+      "lateralityHint": "Each selection becomes two items: OD (right eye, renders on the left) and OS (left eye, renders on the right). Operators can rename or remove individual items after generation."
+    },
+    "validation": {
+      "intRange": "Expected an integer between {min} and {max}.",
+      "realRange": "Expected a number between {min} and {max}."
+    },
+    "entry": {
+      "BCVA_LETTERS": { "label": "BCVA letters" },
+      "BCVA_SNELLEN": { "label": "BCVA Snellen" },
+      "IOP": { "label": "Intraocular pressure" },
+      "SPECTRALIS_DONE": { "label": "Spectralis OCT done" },
+      "PLEX_ELITE_DONE": { "label": "Plex Elite OCT done" },
+      "REFRACTION_SPHERE": { "label": "Refraction sphere" },
+      "REFRACTION_CYLINDER": { "label": "Refraction cylinder" },
+      "REFRACTION_AXIS": { "label": "Refraction axis" },
+      "CCT": { "label": "Central corneal thickness" },
+      "CRT": { "label": "Central retinal thickness" },
+      "FUNDUS_PHOTO_DONE": { "label": "Fundus photograph done" },
+      "VISUAL_FIELD_DONE": { "label": "Visual field done" },
+      "OCT_A_DONE": { "label": "OCT angiography done" },
+      "ACD": { "label": "Anterior chamber depth" },
+      "AXIAL_LENGTH": { "label": "Axial length" }
+    }
+  },
+  "crfPreview": {
+    "openButton": "Live preview",
+    "heading": "Preview · {crfName}",
+    "modeTell": "Preview mode",
+    "banner": "Preview mode — no data is persisted.",
+    "action": {
+      "close": "Close preview",
+      "fillSampleData": "Fill sample data",
+      "reset": "Reset",
+      "saveStub": "Save (no-op)",
+      "markCompleteStub": "Mark complete (no-op)"
+    },
+    "boolean": {
+      "true": "Yes"
+    },
+    "file": {
+      "stub": "File upload is disabled in preview mode."
     }
   },
   "assignCrfs": {
