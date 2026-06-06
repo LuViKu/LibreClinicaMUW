@@ -70,6 +70,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: unknown]
   'upload-file': [file: File]
   'clear-file': []
+  'report-validation': [payload: { itemOid: string; errorMessage: string }]
 }>()
 
 const { t } = useI18n()
@@ -207,6 +208,16 @@ function fileRef(): { filename: string; bytes: number } | null {
     </template>
 
     <HelperText v-if="item.helper">{{ item.helper }}</HelperText>
-    <ErrorText v-if="errorMessage">{{ errorMessage }}</ErrorText>
+    <ErrorText v-if="errorMessage">
+      {{ errorMessage }}
+      <button
+        type="button"
+        class="ml-2 inline-flex items-center text-[11px] text-muw-blue underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-muw-blue"
+        :data-testid="`crf-item-report-validation-${item.oid}`"
+        @click="$emit('report-validation', { itemOid: item.oid, errorMessage: errorMessage as string })"
+      >
+        {{ t('crfEntry.itemNote.reportValidation') }}
+      </button>
+    </ErrorText>
   </div>
 </template>
