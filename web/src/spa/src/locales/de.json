@@ -1037,6 +1037,25 @@
       "AXIAL_LENGTH": { "label": "Achsenlänge" }
     }
   },
+  "crfPreview": {
+    "openButton": "Live-Vorschau",
+    "heading": "Vorschau · {crfName}",
+    "modeTell": "Vorschau-Modus",
+    "banner": "Vorschau-Modus — es werden keine Daten gespeichert.",
+    "action": {
+      "close": "Vorschau schließen",
+      "fillSampleData": "Beispieldaten ausfüllen",
+      "reset": "Zurücksetzen",
+      "saveStub": "Speichern (ohne Wirkung)",
+      "markCompleteStub": "Als abgeschlossen markieren (ohne Wirkung)"
+    },
+    "boolean": {
+      "true": "Ja"
+    },
+    "file": {
+      "stub": "Datei-Upload ist im Vorschau-Modus deaktiviert."
+    }
+  },
   "assignCrfs": {
     "title": "CRF-Zuweisungen verwalten",
     "attachedHeading": "Zugewiesene CRFs",
