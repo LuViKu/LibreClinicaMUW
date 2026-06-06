@@ -391,14 +391,19 @@ public class DdeService {
 
     /**
      * Description format we use to round-trip both pass values
-     * through {@code discrepancy_note.description}.
+     * through {@code discrepancy_note.description}. {@code public}
+     * so unit tests in sibling packages can pin the format without
+     * reflection.
      */
-    static String formatDdeMismatchDescription(String ideValue, String ddeValue) {
+    public static String formatDdeMismatchDescription(String ideValue, String ddeValue) {
         return "DDE mismatch — IDE='" + safe(ideValue) + "' DDE='" + safe(ddeValue) + "'";
     }
 
-    /** Parse the description we wrote on commit. Returns {ideValue, ddeValue}. */
-    static String[] parseDdeMismatchDescription(String description) {
+    /**
+     * Parse the description we wrote on commit. Returns {ideValue, ddeValue}.
+     * {@code public} for unit testability.
+     */
+    public static String[] parseDdeMismatchDescription(String description) {
         if (description == null) return new String[]{"", ""};
         int ideStart = description.indexOf("IDE='");
         int ddeStart = description.indexOf("DDE='");
