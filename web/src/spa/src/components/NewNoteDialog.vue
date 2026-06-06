@@ -138,7 +138,7 @@ async function submit(): Promise<void> {
     :open="props.open"
     labelled-by="new-note-dialog-title"
     panel-class="max-w-lg"
-    @update:open="(v: boolean) => emit('update:open', v)"
+    @update:open="(v) => emit('update:open', v)"
     @close="close"
   >
     <template #header>

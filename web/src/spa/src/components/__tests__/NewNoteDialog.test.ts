@@ -41,7 +41,7 @@ vi.mock('@/components/UserAutocomplete.vue', () => ({
     props: ['id', 'modelValue'],
     emits: ['update:modelValue'],
     template:
-      '<input :id="id" data-testid="user-autocomplete" :value="modelValue" @input="$emit(\'update:modelValue\', ($event.target as HTMLInputElement).value)" />',
+      '<input :id="id" data-testid="user-autocomplete" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
 }))
 
