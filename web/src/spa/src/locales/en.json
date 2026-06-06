@@ -452,7 +452,45 @@
     "itemNote": {
       "openThread": "Open discussion thread",
       "statusNew": "{count} open",
-      "statusResolved": "{count} resolved"
+      "statusResolved": "{count} resolved",
+      "createNew": "+ Query",
+      "reportValidation": "→ Report as validation issue"
+    },
+    "userAutocomplete": {
+      "placeholder": "Search user by name, username, or email…",
+      "noMatches": "No matches"
+    },
+    "noteDialog": {
+      "heading": "New query on {itemLabel}",
+      "description": "Description",
+      "descriptionPlaceholder": "Describe the discrepancy or question…",
+      "type": "Type",
+      "typeOption": {
+        "query": "Query",
+        "failedValidation": "Failed validation",
+        "annotation": "Annotation",
+        "reasonForChange": "Reason for change"
+      },
+      "assignTo": "Assign to (optional)",
+      "submit": "Create query",
+      "cancel": "Cancel",
+      "errorRequired": "Description is required",
+      "errorTooLong": "Description must be 4000 characters or fewer"
+    },
+    "threadDialog": {
+      "heading": "Discussion on {itemLabel}",
+      "respond": "Respond",
+      "propose": "Propose resolution",
+      "close": "Close",
+      "responsePlaceholder": "Add your response…",
+      "statusNew": "New",
+      "statusUpdated": "Updated",
+      "statusResolutionProposed": "Resolution proposed",
+      "statusClosed": "Closed",
+      "statusNotApplicable": "Not applicable",
+      "empty": "No messages yet.",
+      "loadError": "Could not load thread.",
+      "submitError": "Could not save change."
     },
     "bilateral": {
       "headerItem": "Item",

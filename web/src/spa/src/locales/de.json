@@ -452,7 +452,45 @@
     "itemNote": {
       "openThread": "Diskussionsthread öffnen",
       "statusNew": "{count} offen",
-      "statusResolved": "{count} erledigt"
+      "statusResolved": "{count} erledigt",
+      "createNew": "+ Frage",
+      "reportValidation": "→ Als Validierungsproblem melden"
+    },
+    "userAutocomplete": {
+      "placeholder": "Person nach Name, Benutzername oder E-Mail suchen…",
+      "noMatches": "Keine Treffer"
+    },
+    "noteDialog": {
+      "heading": "Neue Frage zu {itemLabel}",
+      "description": "Beschreibung",
+      "descriptionPlaceholder": "Beschreiben Sie die Diskrepanz oder Rückfrage…",
+      "type": "Typ",
+      "typeOption": {
+        "query": "Rückfrage",
+        "failedValidation": "Fehlgeschlagene Validierung",
+        "annotation": "Anmerkung",
+        "reasonForChange": "Änderungsgrund"
+      },
+      "assignTo": "Zuweisen an (optional)",
+      "submit": "Frage anlegen",
+      "cancel": "Abbrechen",
+      "errorRequired": "Beschreibung ist erforderlich",
+      "errorTooLong": "Die Beschreibung darf maximal 4000 Zeichen umfassen"
+    },
+    "threadDialog": {
+      "heading": "Diskussion zu {itemLabel}",
+      "respond": "Antworten",
+      "propose": "Lösung vorschlagen",
+      "close": "Schließen",
+      "responsePlaceholder": "Antwort eingeben…",
+      "statusNew": "Neu",
+      "statusUpdated": "Aktualisiert",
+      "statusResolutionProposed": "Lösungsvorschlag",
+      "statusClosed": "Geschlossen",
+      "statusNotApplicable": "Nicht anwendbar",
+      "empty": "Noch keine Nachrichten.",
+      "loadError": "Diskussion konnte nicht geladen werden.",
+      "submitError": "Änderung konnte nicht gespeichert werden."
     },
     "bilateral": {
       "headerItem": "Merkmal",
