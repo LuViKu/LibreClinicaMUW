@@ -98,6 +98,27 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
     }
 
     /* ---------------------------------------------------------------------- */
+    /* GET /api/v1/discrepancies/export.csv (Phase E.6)                       */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void exportCsvReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/discrepancies/export.csv")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void exportCsvReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/discrepancies/export.csv")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    /* ---------------------------------------------------------------------- */
     /* POST /api/v1/discrepancies/{parentId}/thread (Phase E A1)              */
     /* ---------------------------------------------------------------------- */
 
