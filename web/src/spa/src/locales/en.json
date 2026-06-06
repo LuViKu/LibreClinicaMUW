@@ -453,6 +453,20 @@
       "openThread": "Open discussion thread",
       "statusNew": "{count} open",
       "statusResolved": "{count} resolved"
+    },
+    "bilateral": {
+      "headerItem": "Item",
+      "headerOd": "OD (right eye)",
+      "headerOs": "OS (left eye)",
+      "odOnlyTell": "OD only",
+      "osOnlyTell": "OS only",
+      "bothEyesTell": "Both eyes",
+      "odMissing": "—",
+      "osMissing": "—"
+    },
+    "boolean": {
+      "yes": "Yes",
+      "no": "No"
     }
   },
   "dde": {
