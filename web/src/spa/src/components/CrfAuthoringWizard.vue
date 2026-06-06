@@ -163,6 +163,37 @@ function onItemsReorder(sectionIndex: number, reordered: AuthoringItem[]): void 
   store.reorderItems(sectionIndex, reordered)
 }
 
+/**
+ * Flatten a {@link BilateralAuthoringRow} array back to a linear
+ * {@link AuthoringItem} list, preserving the order rows appear in the grid.
+ * Within each row OD comes before OS so that {@link bilateralRowsForSection}
+ * (which establishes row position from first-seen item per suffix) reconstructs
+ * the same row order on the next render.
+ */
+function flattenBilateralRows(rows: BilateralAuthoringRow[]): AuthoringItem[] {
+  const out: AuthoringItem[] = []
+  for (const row of rows) {
+    if (row.kind === 'compound-bilateral') {
+      for (const sub of row.subFields ?? []) {
+        if (sub.od) out.push(sub.od)
+        if (sub.os) out.push(sub.os)
+      }
+    } else if (row.kind === 'bilateral') {
+      if (row.od) out.push(row.od)
+      if (row.os) out.push(row.os)
+    } else if (row.kind === 'both-eyes') {
+      if (row.bothEyes) out.push(row.bothEyes)
+    } else if (row.kind === 'single') {
+      if (row.single) out.push(row.single)
+    }
+  }
+  return out
+}
+
+function onBilateralRowsReorder(sectionIndex: number, rows: BilateralAuthoringRow[]): void {
+  store.reorderItems(sectionIndex, flattenBilateralRows(rows))
+}
+
 async function onPreview(): Promise<void> {
   if (store.isPreviewing) return
   previewSummary.value = null
@@ -848,9 +879,10 @@ function onAddItemAndExpand(sectionIndex: number): void {
 
                   <!-- OPHTH_EXAM bilateral grid layout: each row shows the OD item
                        definition on the LEFT and the OS item definition on the RIGHT.
-                       Per-pair chevron toggles both ItemEditors at once. Drag-and-drop
-                       is intentionally skipped here — pairs must stay paired, and the
-                       picker generates a stable catalog-driven order. -->
+                       Per-pair chevron toggles both ItemEditors at once. Row-level
+                       drag-reorder is allowed via the leading grip handle; OD/OS
+                       items inside a row stay paired (they move as one unit because
+                       reorder happens at the row, not the item, level). -->
                   <div
                     v-if="isBilateralSection(section)"
                     class="space-y-2"
@@ -862,29 +894,54 @@ function onAddItemAndExpand(sectionIndex: number): void {
                       <div>{{ t('ophthPreset.bilateral.headerOd') }}</div>
                       <div>{{ t('ophthPreset.bilateral.headerOs') }}</div>
                     </div>
+                    <draggable
+                      :model-value="bilateralRowsForSection(section)"
+                      item-key="key"
+                      handle=".bilateral-row-drag-handle"
+                      ghost-class="opacity-50"
+                      class="space-y-2"
+                      :data-testid="`crf-author-bilateral-dragroot-${sIdx}`"
+                      @update:model-value="(next: BilateralAuthoringRow[]) => onBilateralRowsReorder(sIdx, next)"
+                    >
+                      <template #item="{ element: row, index: rIdx }">
                     <div
-                      v-for="(row, rIdx) in bilateralRowsForSection(section)"
                       :key="row.key"
                       class="rounded-md border border-slate-200 bg-white overflow-hidden"
                       :data-testid="`crf-author-bilateral-row-${sIdx}-${rIdx}`"
                     >
-                      <!-- Row header: label + per-pair expand toggle -->
+                      <!-- Row header: drag handle + label + per-pair expand toggle -->
                       <div class="grid grid-cols-[8.5rem_1fr_1fr] gap-2 items-center px-2 py-1.5 bg-slate-50 border-b border-slate-200">
-                        <button
-                          type="button"
-                          class="flex items-center gap-1.5 text-left"
-                          :aria-expanded="isBilateralRowExpanded(row)"
-                          @click="onToggleBilateralRow(row)"
-                        >
-                          <svg
-                            width="10" height="10" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2"
-                            class="text-slate-500 transition-transform"
-                            :class="{ 'rotate-90': isBilateralRowExpanded(row) }"
-                            aria-hidden="true"
-                          ><polyline points="9 6 15 12 9 18" /></svg>
-                          <span class="text-xs font-medium text-slate-700 truncate">{{ row.label }}</span>
-                        </button>
+                        <div class="flex items-center gap-1">
+                          <button
+                            type="button"
+                            class="bilateral-row-drag-handle inline-flex items-center text-[11px] text-slate-400 hover:text-slate-600 cursor-grab"
+                            :aria-label="t('crfLibrary.author.dragItem')"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+                              <circle cx="9" cy="6" r="1.2" fill="currentColor" />
+                              <circle cx="15" cy="6" r="1.2" fill="currentColor" />
+                              <circle cx="9" cy="12" r="1.2" fill="currentColor" />
+                              <circle cx="15" cy="12" r="1.2" fill="currentColor" />
+                              <circle cx="9" cy="18" r="1.2" fill="currentColor" />
+                              <circle cx="15" cy="18" r="1.2" fill="currentColor" />
+                            </svg>
+                          </button>
+                          <button
+                            type="button"
+                            class="flex items-center gap-1.5 text-left"
+                            :aria-expanded="isBilateralRowExpanded(row)"
+                            @click="onToggleBilateralRow(row)"
+                          >
+                            <svg
+                              width="10" height="10" viewBox="0 0 24 24" fill="none"
+                              stroke="currentColor" stroke-width="2"
+                              class="text-slate-500 transition-transform"
+                              :class="{ 'rotate-90': isBilateralRowExpanded(row) }"
+                              aria-hidden="true"
+                            ><polyline points="9 6 15 12 9 18" /></svg>
+                            <span class="text-xs font-medium text-slate-700 truncate">{{ row.label }}</span>
+                          </button>
+                        </div>
                         <template v-if="row.kind === 'compound-bilateral'">
                           <span class="col-span-2 text-[10px] text-slate-500 truncate">
                             {{ row.subFields?.map((s) => s.compactLabel).join(' · ') }}
@@ -993,6 +1050,8 @@ function onAddItemAndExpand(sectionIndex: number): void {
                         </div>
                       </div>
                     </div>
+                      </template>
+                    </draggable>
                   </div>
 
                   <draggable
