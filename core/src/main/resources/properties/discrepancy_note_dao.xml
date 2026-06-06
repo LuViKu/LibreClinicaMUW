@@ -915,6 +915,25 @@
     </query>
 
     <query>
+        <!-- Phase E.6 admin-rfc — locate the most-recent REASON_FOR_CHANGE
+             parent note (type_id = 4, parent_dn_id IS NULL) attached to a
+             given item_data row. The Reason-For-Change writer threads
+             follow-up RFCs as children of this parent so the discrepancy
+             history view shows one DN tree per item per saved value. -->
+        <name>findLatestRfcParentForItemData</name>
+        <sql>
+            SELECT dn.discrepancy_note_id
+            FROM discrepancy_note dn, dn_item_data_map didm
+            WHERE didm.item_data_id = ?
+              AND dn.discrepancy_note_id = didm.discrepancy_note_id
+              AND dn.discrepancy_note_type_id = 4
+              AND dn.parent_dn_id IS NULL
+            ORDER BY dn.date_created DESC, dn.discrepancy_note_id DESC
+            LIMIT 1
+        </sql>
+    </query>
+
+    <query>
         <name>findParentNotesOnlyByItemData</name>
         <sql>
             SELECT dn.*

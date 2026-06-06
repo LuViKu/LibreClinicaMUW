@@ -104,6 +104,47 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
     }
 
     /* ---------------------------------------------------------------------- */
+    /* Phase E.6 admin-rfc — body-shape extensions                            */
+    /* ---------------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 admin-rfc — the request body now optionally carries a
+     * `reasons` map. The controller must still 400 on missing values
+     * even when `reasons` is present (the reasons-only body is a no-op).
+     */
+    @Test
+    void saveItemsReturns400OnMissingValuesEvenWhenReasonsPresent() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/items")
+                .contentType("application/json")
+                .content("{\"reasons\":{\"I_HEIGHT_CM\":\"correction\"}}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Missing 'values'")));
+    }
+
+    /**
+     * Phase E.6 admin-rfc — verify the body parses both `values` and
+     * `reasons`. The DB layer is mocked so the request goes through the
+     * pre-pass + bubbles a 500 (NPE from mockDataSource.getConnection()),
+     * but the request is accepted past the body-validation guard. This
+     * documents that the SaveItemsRequest record accepts the new shape;
+     * the happy-path semantics are covered by ReasonForChangeWriterTest.
+     */
+    @Test
+    void saveItemsAcceptsReasonsFieldInBody() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/items")
+                .contentType("application/json")
+                .content("{\"values\":{\"I_HEIGHT_CM\":172},\"reasons\":{\"I_HEIGHT_CM\":\"correction\"}}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+
+    /* ---------------------------------------------------------------------- */
     /* POST /api/v1/eventCrfs/{id}/markComplete                               */
     /* ---------------------------------------------------------------------- */
 

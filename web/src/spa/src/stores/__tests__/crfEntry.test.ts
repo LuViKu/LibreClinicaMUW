@@ -253,4 +253,95 @@ describe('useCrfEntryStore', () => {
     expect(store.error).toBe('event_crf 1 is locked or signed')
     expect(store.entry?.status).toBe('complete')
   })
+
+  /* ---------------------------------------------------------------- */
+  /* Phase E.6 admin-rfc — Reason-For-Change capture on save           */
+  /* ---------------------------------------------------------------- */
+
+  it('stageReason records trimmed reasons + clears prompt for the staged oid', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_HEIGHT_CM', 174)
+    // Simulate the backend re-arming for one OID.
+    store.missingReasonItemOids = ['I_HEIGHT_CM']
+    store.stageReason('I_HEIGHT_CM', '  re-keyed from corrected source  ')
+    expect(store.pendingReasons.I_HEIGHT_CM).toBe('re-keyed from corrected source')
+    expect(store.missingReasonItemOids).not.toContain('I_HEIGHT_CM')
+    // Empty input drops the staged entry.
+    store.stageReason('I_HEIGHT_CM', '   ')
+    expect(store.pendingReasons.I_HEIGHT_CM).toBeUndefined()
+  })
+
+  it('save omits reasons when the entry is pre-complete', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    // Default fixture is not post-complete; entry.requiresReasonForChange undefined.
+    store.setValue('I_HEIGHT_CM', 172)
+    await store.save()
+    expect(apiPost).toHaveBeenCalledTimes(1)
+    const [, body] = vi.mocked(apiPost).mock.calls[0]
+    expect(body).toHaveProperty('values')
+    expect(body).not.toHaveProperty('reasons')
+  })
+
+  it('save sends reasons + clears staged reasons on success when post-complete', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_HEIGHT_CM', 172)
+    store.stageReason('I_HEIGHT_CM', 'corrected source document')
+    await store.save()
+    expect(apiPost).toHaveBeenCalledTimes(1)
+    const [, body] = vi.mocked(apiPost).mock.calls[0]
+    expect((body as { reasons?: Record<string, string> }).reasons).toEqual({
+      I_HEIGHT_CM: 'corrected source document',
+    })
+    expect(store.pendingReasons).toEqual({})
+    expect(store.missingReasonItemOids).toEqual([])
+  })
+
+  it('save short-circuits + arms the modal when dirty oids lack reasons', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_HEIGHT_CM', 172)
+    store.setValue('I_WEIGHT_KG', 71.3)
+    // No reasons staged → save() shouldn't POST.
+    await store.save()
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(store.missingReasonItemOids.sort()).toEqual(['I_HEIGHT_CM', 'I_WEIGHT_KG'])
+  })
+
+  it('save re-arms the modal on backend 400 missingReasonItemOids', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_HEIGHT_CM', 172)
+    store.stageReason('I_HEIGHT_CM', 'too short — backend rejects')
+    const { ApiError } = await import('@/api/client')
+    ;(apiPost as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new ApiError(400, 'Bad Request', {
+        message: 'reason text too short',
+        missingReasonItemOids: ['I_HEIGHT_CM'],
+      }),
+    )
+    await store.save()
+    expect(store.missingReasonItemOids).toEqual(['I_HEIGHT_CM'])
+    // The offending oid's staged reason should be cleared so the modal re-asks.
+    expect(store.pendingReasons.I_HEIGHT_CM).toBeUndefined()
+    expect(store.error).toBe('reason text too short')
+  })
+
+  it('dismissReasonModal clears missing oids but preserves staged reasons', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_HEIGHT_CM', 172)
+    store.missingReasonItemOids = ['I_HEIGHT_CM']
+    store.stageReason('I_HEIGHT_CM', 'will retry later')
+    store.dismissReasonModal()
+    expect(store.missingReasonItemOids).toEqual([])
+    expect(store.pendingReasons.I_HEIGHT_CM).toBe('will retry later')
+  })
 })
