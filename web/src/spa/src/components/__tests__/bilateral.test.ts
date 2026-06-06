@@ -186,4 +186,73 @@ describe('groupBilateralItems', () => {
     }
     expect(rows[1].kind === 'bilateral' && rows[1].key).toBe('IOP')
   })
+
+  it('groups REFRACTION_* items into one compound-bilateral row', () => {
+    // 8 items: OD/OS × Sphere/Torus/Angle/Visus. They collapse into ONE
+    // 'compound-bilateral' row with 4 sub-fields, regardless of input
+    // order. Each sub-field has the OD + OS pair.
+    const rows = groupBilateralItems([
+      mkItem('OD_REFRACTION_SPHERE', 'Refraction Sphere', 'real'),
+      mkItem('OS_REFRACTION_SPHERE', 'Refraction Sphere', 'real'),
+      mkItem('OD_REFRACTION_TORUS',  'Refraction Torus',  'real'),
+      mkItem('OS_REFRACTION_TORUS',  'Refraction Torus',  'real'),
+      mkItem('OD_REFRACTION_ANGLE',  'Refraction Angle',  'integer'),
+      mkItem('OS_REFRACTION_ANGLE',  'Refraction Angle',  'integer'),
+      mkItem('OD_REFRACTION_VISUS',  'Refraction Visus',  'real'),
+      mkItem('OS_REFRACTION_VISUS',  'Refraction Visus',  'real'),
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].kind).toBe('compound-bilateral')
+    if (rows[0].kind === 'compound-bilateral') {
+      expect(rows[0].key).toBe('REFRACTION')
+      expect(rows[0].label).toBe('Refraction')
+      expect(rows[0].subFields).toHaveLength(4)
+      expect(rows[0].subFields.map((s) => s.subKey)).toEqual([
+        'SPHERE', 'TORUS', 'ANGLE', 'VISUS',
+      ])
+      expect(rows[0].subFields.map((s) => s.compactLabel)).toEqual([
+        'Sph', 'Tor', 'Ang', 'Vis',
+      ])
+      for (const sub of rows[0].subFields) {
+        expect(sub.od?.oid).toBe(`OD_REFRACTION_${sub.subKey}`)
+        expect(sub.os?.oid).toBe(`OS_REFRACTION_${sub.subKey}`)
+      }
+    }
+  })
+
+  it('groups REFRACTION items even when interleaved with non-compound bilateral pairs', () => {
+    const rows = groupBilateralItems([
+      mkItem('OD_BCVA_LETTERS',      'BCVA letters', 'integer'),
+      mkItem('OD_REFRACTION_SPHERE', 'Sphere',       'real'),
+      mkItem('OS_BCVA_LETTERS',      'BCVA letters', 'integer'),
+      mkItem('OS_REFRACTION_SPHERE', 'Sphere',       'real'),
+      mkItem('OD_IOP',               'IOP',          'integer'),
+      mkItem('OD_REFRACTION_TORUS',  'Torus',        'real'),
+      mkItem('OS_IOP',               'IOP',          'integer'),
+      mkItem('OS_REFRACTION_TORUS',  'Torus',        'real'),
+    ])
+    expect(rows).toHaveLength(3)  // BCVA, REFRACTION (single compound), IOP
+    expect(rows[0].kind).toBe('bilateral')
+    expect(rows[1].kind).toBe('compound-bilateral')
+    expect(rows[2].kind).toBe('bilateral')
+    if (rows[1].kind === 'compound-bilateral') {
+      expect(rows[1].subFields).toHaveLength(2)
+      expect(rows[1].subFields.map((s) => s.subKey)).toEqual(['SPHERE', 'TORUS'])
+    }
+  })
+
+  it('legacy REFRACTION_CYLINDER/AXIS keys map to Tor/Ang compact labels for back-compat', () => {
+    const rows = groupBilateralItems([
+      mkItem('OD_REFRACTION_CYLINDER', 'Refraction cylinder', 'real'),
+      mkItem('OS_REFRACTION_CYLINDER', 'Refraction cylinder', 'real'),
+      mkItem('OD_REFRACTION_AXIS',     'Refraction axis',     'integer'),
+      mkItem('OS_REFRACTION_AXIS',     'Refraction axis',     'integer'),
+    ])
+    expect(rows).toHaveLength(1)
+    if (rows[0].kind === 'compound-bilateral') {
+      // Old data with CYLINDER/AXIS suffixes maps to the same compact slots
+      // as TORUS/ANGLE so historical CRFs render in the same compound row.
+      expect(rows[0].subFields.map((s) => s.compactLabel)).toEqual(['Tor', 'Ang'])
+    }
+  })
 })

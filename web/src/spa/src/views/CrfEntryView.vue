@@ -138,6 +138,14 @@ function rowsForSection(items: CrfItem[]): BilateralRow[] {
 function isRowEntirelyHidden(row: BilateralRow): boolean {
   if (row.kind === 'single') return store.isItemHidden(row.item.oid)
   if (row.kind === 'both-eyes') return store.isItemHidden(row.item.oid)
+  if (row.kind === 'compound-bilateral') {
+    // Compound — only hide the row when EVERY sub-item (across both eyes) is hidden.
+    return row.subFields.every((sub) => {
+      const od = !sub.od || store.isItemHidden(sub.od.oid)
+      const os = !sub.os || store.isItemHidden(sub.os.oid)
+      return od && os
+    })
+  }
   // bilateral — both OD and OS must be hidden (or absent) for the row to vanish.
   const odHidden = !row.od || store.isItemHidden(row.od.oid)
   const osHidden = !row.os || store.isItemHidden(row.os.oid)
@@ -145,7 +153,9 @@ function isRowEntirelyHidden(row: BilateralRow): boolean {
 }
 
 function hasBilateralRow(rows: BilateralRow[]): boolean {
-  return rows.some((r) => r.kind === 'bilateral' || r.kind === 'both-eyes')
+  return rows.some(
+    (r) => r.kind === 'bilateral' || r.kind === 'both-eyes' || r.kind === 'compound-bilateral',
+  )
 }
 
 /** Lookup table the {@code RepeatingGroupSection} consumes. */
@@ -519,6 +529,32 @@ function onItemNoteOpen(_noteIds: string[]) {
                     :summary="advanced.noteSummaryByItemOid[item.oid]"
                     @open="onItemNoteOpen"
                   />
+                  <CrfItemWidget
+                    :item="item"
+                    :model-value="store.values[item.oid]"
+                    :error-message="showError(item)"
+                    :disabled="isReadOnly"
+                    :file-busy="store.isSaving"
+                    :max-file-bytes="store.entry?.maxFileBytes ?? 0"
+                    :file-extensions="store.entry?.fileExtensions ?? ''"
+                    :suppress-label="true"
+                    @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
+                    @upload-file="(f: File) => onUploadFile(item.oid, f)"
+                    @clear-file="() => onClearFile(item.oid)"
+                  />
+                </template>
+              </BilateralItemGroup>
+
+              <!-- Compound-bilateral row — refraction et al. Each sub-input
+                   still binds to its own OD_/OS_ item; BilateralItemGroup
+                   renders them inline (Sph Tor Ang Vis on one line per
+                   eye, matching paper refraction forms). -->
+              <BilateralItemGroup
+                v-else-if="row.kind === 'compound-bilateral'"
+                :key="`compound-${row.key}`"
+                :row="row"
+              >
+                <template #widget="{ item }">
                   <CrfItemWidget
                     :item="item"
                     :model-value="store.values[item.oid]"
