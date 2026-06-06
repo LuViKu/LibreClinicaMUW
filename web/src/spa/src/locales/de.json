@@ -1175,7 +1175,7 @@
     },
     "locked": {
       "badge": "Gesperrt",
-      "tooltip": "Konto durch zu viele fehlgeschlagene Anmeldeversuche gesperrt. Über die Aktion „Entsperren" wieder freigeben."
+      "tooltip": "Konto durch zu viele fehlgeschlagene Anmeldeversuche gesperrt. Über die Aktion „Entsperren“ wieder freigeben."
     },
     "resetPassword": {
       "action": "Passwort zurücksetzen",
