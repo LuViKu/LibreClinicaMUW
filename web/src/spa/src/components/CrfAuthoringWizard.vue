@@ -15,6 +15,10 @@ import {
   type AuthoringItem,
   type AuthoringPreviewSuccess,
 } from '@/stores/crfAuthoring'
+import {
+  OPHTH_PRESET_CATALOG,
+  generateOphthSectionItems,
+} from '@/types/ophthPreset'
 
 /**
  * Phase E.6 Milestone B — manual eCRF authoring wizard.
@@ -166,6 +170,60 @@ function onCancel(): void {
   emit('update:open', false)
   emit('close')
 }
+
+/**
+ * Ophthalmology bilateral preset picker — wired from the Sections step.
+ *
+ * <p>Opens a modal listing every entry in {@link OPHTH_PRESET_CATALOG}
+ * with a checkbox. On confirm, the generator produces paired OD / OS
+ * items and the store appends a new {@code OPHTH_EXAM} section to the
+ * draft. The picker resets on each open so prior selections don't
+ * survive cancel.
+ */
+const ophthPickerOpen = ref(false)
+const ophthSelection = ref<Set<string>>(new Set())
+
+function openOphthPicker(): void {
+  ophthSelection.value = new Set()
+  ophthPickerOpen.value = true
+}
+
+function closeOphthPicker(): void {
+  ophthPickerOpen.value = false
+}
+
+function toggleOphthEntry(key: string): void {
+  const next = new Set(ophthSelection.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  ophthSelection.value = next
+}
+
+function selectAllOphth(): void {
+  ophthSelection.value = new Set(OPHTH_PRESET_CATALOG.map((e) => e.key))
+}
+
+function clearAllOphth(): void {
+  ophthSelection.value = new Set()
+}
+
+const ophthSelectedCount = computed(() => ophthSelection.value.size)
+
+function confirmOphthPicker(): void {
+  if (ophthSelection.value.size === 0) return
+  // Preserve catalog order — the picker keys are checkbox-driven so a
+  // {@code Set} loses the natural ordering; iterate the catalog instead.
+  const ordered = OPHTH_PRESET_CATALOG
+    .map((e) => e.key)
+    .filter((k) => ophthSelection.value.has(k))
+  const items = generateOphthSectionItems(ordered, (key) => t(key))
+  store.addOphthPresetSection({
+    items,
+    title: t('ophthPreset.section.title'),
+    instructions: t('ophthPreset.section.instructions'),
+  })
+  closeOphthPicker()
+}
 </script>
 
 <template>
@@ -266,12 +324,20 @@ function onCancel(): void {
         <div v-if="currentStep === 'sections'" class="space-y-5">
           <div class="flex items-center justify-between">
             <h3 class="text-sm font-semibold">{{ t('crfLibrary.author.sections.heading') }}</h3>
-            <button
-              type="button"
-              class="text-xs text-muw-blue hover:underline"
-              data-testid="crf-author-add-section"
-              @click="onAddSection"
-            >{{ t('crfLibrary.author.addSection') }}</button>
+            <div class="flex items-center gap-3">
+              <button
+                type="button"
+                class="text-xs text-muw-blue hover:underline"
+                data-testid="crf-author-add-ophth-preset"
+                @click="openOphthPicker"
+              >{{ t('ophthPreset.addBilateralExam') }}</button>
+              <button
+                type="button"
+                class="text-xs text-muw-blue hover:underline"
+                data-testid="crf-author-add-section"
+                @click="onAddSection"
+              >{{ t('crfLibrary.author.addSection') }}</button>
+            </div>
           </div>
 
           <draggable
@@ -494,6 +560,100 @@ function onCancel(): void {
           :disabled="!canSubmit || store.isSubmitting"
           @click="onSubmit"
         >{{ store.isSubmitting ? t('common.saving') : t('crfLibrary.author.submit') }}</button>
+      </div>
+    </template>
+  </Modal>
+
+  <!-- Ophthalmology bilateral preset picker -->
+  <Modal
+    :open="ophthPickerOpen"
+    labelled-by="ophth-preset-heading"
+    panel-class="max-w-2xl"
+    @update:open="(v) => (ophthPickerOpen = v)"
+    @close="closeOphthPicker"
+  >
+    <template #header>
+      <div>
+        <h2 id="ophth-preset-heading" class="text-base font-semibold tracking-tight">
+          {{ t('ophthPreset.picker.heading') }}
+        </h2>
+        <p class="text-[11px] text-slate-500 mt-0.5">
+          {{ t('ophthPreset.picker.subheading') }}
+        </p>
+      </div>
+    </template>
+
+    <div class="space-y-3">
+      <div class="flex items-center justify-between text-[11px]">
+        <span class="text-slate-500">
+          {{ t('ophthPreset.picker.selectedCount', { count: ophthSelectedCount }) }}
+        </span>
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            class="text-muw-blue hover:underline"
+            data-testid="ophth-preset-select-all"
+            @click="selectAllOphth"
+          >{{ t('ophthPreset.picker.selectAll') }}</button>
+          <button
+            type="button"
+            class="text-slate-600 hover:underline"
+            data-testid="ophth-preset-clear-all"
+            @click="clearAllOphth"
+          >{{ t('ophthPreset.picker.clearAll') }}</button>
+        </div>
+      </div>
+
+      <ul
+        class="max-h-96 overflow-y-auto rounded-md border border-slate-200 divide-y divide-slate-100"
+        data-testid="ophth-preset-list"
+      >
+        <li
+          v-for="entry in OPHTH_PRESET_CATALOG"
+          :key="entry.key"
+          class="flex items-start gap-3 px-3 py-2 hover:bg-slate-50"
+        >
+          <input
+            :id="`ophth-preset-${entry.key}`"
+            type="checkbox"
+            class="mt-0.5"
+            :checked="ophthSelection.has(entry.key)"
+            :data-testid="`ophth-preset-checkbox-${entry.key}`"
+            @change="toggleOphthEntry(entry.key)"
+          />
+          <label :for="`ophth-preset-${entry.key}`" class="flex-1 text-xs cursor-pointer">
+            <div class="font-medium text-slate-800">
+              {{ t(entry.labelKey) }}
+            </div>
+            <div class="text-[11px] text-slate-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+              <span class="font-mono">{{ entry.dataType }}</span>
+              <span v-if="entry.range">
+                {{ t('ophthPreset.picker.range', { min: entry.range.min, max: entry.range.max }) }}
+              </span>
+              <span v-if="entry.unit">{{ entry.unit }}</span>
+            </div>
+          </label>
+        </li>
+      </ul>
+
+      <p class="text-[11px] text-slate-500 leading-snug">
+        {{ t('ophthPreset.picker.lateralityHint') }}
+      </p>
+    </div>
+
+    <template #footer>
+      <div />
+      <div class="flex items-center gap-2">
+        <button
+          class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+          @click="closeOphthPicker"
+        >{{ t('common.cancel') }}</button>
+        <button
+          class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
+          :disabled="ophthSelectedCount === 0"
+          data-testid="ophth-preset-confirm"
+          @click="confirmOphthPicker"
+        >{{ t('ophthPreset.picker.confirm', { count: ophthSelectedCount }) }}</button>
       </div>
     </template>
   </Modal>

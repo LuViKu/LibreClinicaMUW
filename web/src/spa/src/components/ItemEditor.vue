@@ -70,6 +70,9 @@ const dataTypeOptions: Array<{ value: AuthoringDataType; labelKey: string }> = [
   { value: 'DATE', labelKey: 'crfAuthoring.dataType.DATE' },
   { value: 'PDATE', labelKey: 'crfAuthoring.dataType.PDATE' },
   { value: 'FILE', labelKey: 'crfAuthoring.dataType.FILE' },
+  // BL re-entered the taxonomy alongside the Phase E.6 Ophthalmology
+  // bilateral preset (see {@code ophthPreset.ts}); the backend adapter
+  // accepts BL via the same code path used by the XLS uploader.
   { value: 'BL', labelKey: 'crfAuthoring.dataType.BL' },
 ]
 

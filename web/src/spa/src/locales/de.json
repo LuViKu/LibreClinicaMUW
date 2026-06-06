@@ -999,6 +999,44 @@
       "errorsTitle": "Die Vorschau hat den Entwurf abgelehnt:"
     }
   },
+  "ophthPreset": {
+    "addBilateralExam": "+ Ophthalmologische bilaterale Untersuchung hinzufügen",
+    "section": {
+      "title": "Ophthalmologische Untersuchung",
+      "instructions": "Bilaterale Messungen — OD links, OS rechts (Sicht des Klinikers)."
+    },
+    "picker": {
+      "heading": "Ophthalmologische bilaterale Untersuchung",
+      "subheading": "Messungen auswählen, die als gepaarte OD/OS-Items in eine OPHTH_EXAM-Sektion eingefügt werden.",
+      "selectAll": "Alle auswählen",
+      "clearAll": "Auswahl löschen",
+      "selectedCount": "{count} ausgewählt",
+      "range": "{min} – {max}",
+      "confirm": "Items generieren ({count})",
+      "lateralityHint": "Jede Auswahl ergibt zwei Items: OD (rechtes Auge, wird links angezeigt) und OS (linkes Auge, wird rechts angezeigt). Einzelne Items können nach der Generierung umbenannt oder entfernt werden."
+    },
+    "validation": {
+      "intRange": "Ganzzahl zwischen {min} und {max} erwartet.",
+      "realRange": "Zahl zwischen {min} und {max} erwartet."
+    },
+    "entry": {
+      "BCVA_LETTERS": { "label": "BCVA Buchstaben" },
+      "BCVA_SNELLEN": { "label": "BCVA Snellen" },
+      "IOP": { "label": "Augeninnendruck" },
+      "SPECTRALIS_DONE": { "label": "Spectralis-OCT durchgeführt" },
+      "PLEX_ELITE_DONE": { "label": "Plex-Elite-OCT durchgeführt" },
+      "REFRACTION_SPHERE": { "label": "Refraktion Sphäre" },
+      "REFRACTION_CYLINDER": { "label": "Refraktion Zylinder" },
+      "REFRACTION_AXIS": { "label": "Refraktion Achse" },
+      "CCT": { "label": "Zentrale Hornhautdicke" },
+      "CRT": { "label": "Zentrale Netzhautdicke" },
+      "FUNDUS_PHOTO_DONE": { "label": "Fundusfotografie durchgeführt" },
+      "VISUAL_FIELD_DONE": { "label": "Gesichtsfeld durchgeführt" },
+      "OCT_A_DONE": { "label": "OCT-Angiographie durchgeführt" },
+      "ACD": { "label": "Vorderkammertiefe" },
+      "AXIAL_LENGTH": { "label": "Achsenlänge" }
+    }
+  },
   "assignCrfs": {
     "title": "CRF-Zuweisungen verwalten",
     "attachedHeading": "Zugewiesene CRFs",
