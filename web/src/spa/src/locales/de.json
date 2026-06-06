@@ -311,7 +311,13 @@
     "actions": {
       "respond": "Antworten",
       "resolve": "Als gelöst markieren",
-      "close": "Schließen"
+      "close": "Schließen",
+      "exportCsv": "CSV exportieren",
+      "exportForSubject": "CSV exportieren (Teilnehmer)",
+      "exporting": "Wird exportiert…"
+    },
+    "error": {
+      "exportFailed": "Discrepancy-Export fehlgeschlagen"
     },
     "composer": {
       "label": {
@@ -353,6 +359,13 @@
       "data": "Datenerfassung",
       "query": "Rückfrage",
       "subject-group-change": "Gruppenwechsel"
+    },
+    "actions": {
+      "exportXlsx": "XLSX exportieren",
+      "exporting": "Wird exportiert…"
+    },
+    "error": {
+      "exportFailed": "Audit-Log-Export fehlgeschlagen"
     }
   },
   "crfEntry": {

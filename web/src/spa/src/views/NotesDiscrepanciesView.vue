@@ -235,10 +235,24 @@ function cardDotClass(tone: 'danger' | 'warning' | 'neutral' | 'data-manager') {
           {{ t('common.clear') }}
         </button>
 
-        <div class="ml-auto text-slate-500">
-          {{ t('notes.showingCount', { visible: notes.visibleCount, total: notes.totalCount }) }}
+        <div class="ml-auto flex items-center gap-3 text-slate-500">
+          <span>{{ t('notes.showingCount', { visible: notes.visibleCount, total: notes.totalCount }) }}</span>
+          <button
+            type="button"
+            class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            :disabled="notes.isExporting || notes.visibleCount === 0"
+            @click="notes.exportCsv()"
+          >
+            {{ notes.isExporting ? t('notes.actions.exporting') : t('notes.actions.exportCsv') }}
+          </button>
         </div>
       </div>
+
+      <p
+        v-if="notes.exportError"
+        class="text-rose-700 text-xs mb-3"
+        role="alert"
+      >{{ t('notes.error.exportFailed') }} — {{ notes.exportError }}</p>
 
       <DenseTable>
         <template #header>

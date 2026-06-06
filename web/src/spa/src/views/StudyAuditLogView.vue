@@ -151,10 +151,24 @@ function hasExpandable(ev: AuditEvent): boolean {
           {{ t('common.clear') }}
         </button>
 
-        <div class="ml-auto text-slate-500">
-          {{ t('auditLog.showingCount', { visible: store.visibleCount, total: store.totalCount }) }}
+        <div class="ml-auto flex items-center gap-3 text-slate-500">
+          <span>{{ t('auditLog.showingCount', { visible: store.visibleCount, total: store.totalCount }) }}</span>
+          <button
+            type="button"
+            class="px-3 py-2 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-60 disabled:cursor-not-allowed"
+            :disabled="store.isExporting || store.visibleCount === 0"
+            @click="store.exportXlsx()"
+          >
+            {{ store.isExporting ? t('auditLog.actions.exporting') : t('auditLog.actions.exportXlsx') }}
+          </button>
         </div>
       </div>
+
+      <p
+        v-if="store.exportError"
+        class="text-rose-700 text-xs mb-3"
+        role="alert"
+      >{{ t('auditLog.error.exportFailed') }} — {{ store.exportError }}</p>
 
       <p v-if="store.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
       <p v-else-if="store.error" class="text-rose-700">{{ store.error }}</p>
