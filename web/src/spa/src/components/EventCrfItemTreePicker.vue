@@ -125,33 +125,53 @@ function eventIsChecked(e: EventTreeNode): boolean {
 }
 
 /**
- * Indeterminate iff the event itself isn't selected but at least one
- * descendant CRF / version / item is. Gives the operator a visual cue
- * that toggling the event will also bring in the descendant selections.
+ * Events are visually independent from items — there is no
+ * "indeterminate" event state. Deriving indeterminate from
+ * {@link crfIsChecked} would re-introduce the shared-CRF bleed
+ * (clicking V4 makes V3 look half-checked because V3 uses the same
+ * Ophthalmology Visit form). Item / version state lives independently
+ * in the descendant rows; the operator sees event-set membership at
+ * the event level and item-set membership in the descendants.
  */
-function eventIsIndeterminate(e: EventTreeNode): boolean {
-  if (eventSet.value.has(e.eventOid)) return false
-  return e.crfs.some((c) => crfIsChecked(c) || crfIsIndeterminate(c))
+function eventIsIndeterminate(_e: EventTreeNode): boolean {
+  return false
 }
 
 /* ============================================================== */
 /* Toggle handlers                                                */
 /* ============================================================== */
 
-function toggleItem(_e: EventTreeNode, _c: EventTreeCrfNode, v: EventTreeVersionNode, itemId: number) {
+/**
+ * When the operator clicks a CRF, version, or item under an event, they
+ * implicitly want that event included in the export — otherwise the
+ * descendant pick contributes nothing. This helper is a positive-intent
+ * shortcut: the event auto-joins {@link eventSet} on any descendant
+ * selection. The mirror is NOT true: removing an item doesn't drop the
+ * event from scope (the operator may want to swap items but keep the
+ * event in scope).
+ */
+function ensureEventInScope(e: EventTreeNode) {
+  if (eventSet.value.has(e.eventOid)) return
+  const next = new Set(eventSet.value)
+  next.add(e.eventOid)
+  emitEvents(next)
+}
+
+function toggleItem(e: EventTreeNode, _c: EventTreeCrfNode, v: EventTreeVersionNode, itemId: number) {
   const items = new Set(itemSet.value)
-  if (items.has(itemId)) items.delete(itemId)
-  else items.add(itemId)
+  const isAdding = !items.has(itemId)
+  if (isAdding) items.add(itemId)
+  else items.delete(itemId)
   emitItems(items)
 
   // Version membership follows item membership (a version with any
-  // selected item is selected). Events are an INDEPENDENT dimension —
-  // see {@link eventIsChecked}'s rationale; the operator picks events
-  // via the event-level checkbox.
+  // selected item is selected).
   syncVersionFromItems(v, items)
+
+  if (isAdding) ensureEventInScope(e)
 }
 
-function toggleVersion(_e: EventTreeNode, _c: EventTreeCrfNode, v: EventTreeVersionNode, checked: boolean) {
+function toggleVersion(e: EventTreeNode, _c: EventTreeCrfNode, v: EventTreeVersionNode, checked: boolean) {
   const items = new Set(itemSet.value)
   for (const item of v.items) {
     if (checked) items.add(item.itemId)
@@ -159,9 +179,11 @@ function toggleVersion(_e: EventTreeNode, _c: EventTreeCrfNode, v: EventTreeVers
   }
   emitItems(items)
   syncVersionFromItems(v, items)
+
+  if (checked) ensureEventInScope(e)
 }
 
-function toggleCrf(_e: EventTreeNode, c: EventTreeCrfNode, checked: boolean) {
+function toggleCrf(e: EventTreeNode, c: EventTreeCrfNode, checked: boolean) {
   const items = new Set(itemSet.value)
   for (const v of c.versions) {
     for (const item of v.items) {
@@ -179,6 +201,8 @@ function toggleCrf(_e: EventTreeNode, c: EventTreeCrfNode, checked: boolean) {
     else versions.delete(v.versionId)
   }
   emitVersions(versions)
+
+  if (checked) ensureEventInScope(e)
 }
 
 /**

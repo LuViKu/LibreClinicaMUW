@@ -261,6 +261,109 @@ describe('EventCrfItemTreePicker', () => {
     expect(wrapper.emitted('update:versionIds') ?? []).toHaveLength(0)
   })
 
+  it('checking a CRF auto-adds its parent event to the eventOids set (positive-intent autopick)', async () => {
+    const wrapper = mountPicker()
+    const crfCheckbox = wrapper
+      .findAll('input[type="checkbox"]')
+      .find((i) => i.attributes('aria-label') === 'Toggle Vital signs')
+    expect(crfCheckbox).toBeTruthy()
+    await crfCheckbox!.setValue(true)
+
+    const eventEmits = wrapper.emitted('update:eventOids') ?? []
+    expect(eventEmits.length).toBeGreaterThan(0)
+    const latestEvents = eventEmits[eventEmits.length - 1]![0] as string[]
+    expect(latestEvents).toContain('SE_BASELINE')
+  })
+
+  it('checking an item auto-adds its parent event to the eventOids set', async () => {
+    const wrapper = mountPicker()
+    // Expand the CRF + version rows so the item checkbox is rendered.
+    const crfBtn = wrapper
+      .findAll('button[aria-expanded]')
+      .find((b) => b.attributes('aria-label')?.includes('Vital signs'))
+    if (crfBtn) await crfBtn.trigger('click')
+    const versionBtn = wrapper
+      .findAll('button[aria-expanded]')
+      .find((b) => b.attributes('aria-label')?.includes('Vitals v1'))
+    if (versionBtn) await versionBtn.trigger('click')
+
+    const itemCheckbox = wrapper
+      .findAll('input[type="checkbox"]')
+      .find((i) => i.attributes('aria-label') === 'Toggle Heart rate')
+    expect(itemCheckbox).toBeTruthy()
+    await itemCheckbox!.setValue(true)
+
+    const eventEmits = wrapper.emitted('update:eventOids') ?? []
+    expect(eventEmits.length).toBeGreaterThan(0)
+    const latestEvents = eventEmits[eventEmits.length - 1]![0] as string[]
+    expect(latestEvents).toContain('SE_BASELINE')
+  })
+
+  it('an event sharing a CRF with a selected sibling stays fully unchecked, never indeterminate', () => {
+    // V3 NOT in eventSet, V4 IS in eventSet; both reuse the same
+    // Ophthalmology Visit form (same item ids). The indeterminate-on-
+    // shared-items derivation was the regression the operator reported
+    // — V3 must render fully unchecked.
+    const SHARED_TREE: EventTreeNode[] = [
+      {
+        eventOid: 'SE_V3',
+        eventName: 'V3 Day 90',
+        eventOrdinal: 3,
+        repeating: false,
+        crfs: [
+          {
+            crfOid: 'F_OPHTH_VISIT',
+            crfName: 'Ophthalmology Visit',
+            versions: [
+              {
+                versionId: 700,
+                versionOid: 'F_OPHTH_V1',
+                versionName: 'Ophth v1',
+                items: [{ itemId: 800, oid: 'I_BCVA', name: 'BCVA', dataType: 'number' }],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        eventOid: 'SE_V4',
+        eventName: 'V4 Repeat',
+        eventOrdinal: 4,
+        repeating: false,
+        crfs: [
+          {
+            crfOid: 'F_OPHTH_VISIT',
+            crfName: 'Ophthalmology Visit',
+            versions: [
+              {
+                versionId: 700,
+                versionOid: 'F_OPHTH_V1',
+                versionName: 'Ophth v1',
+                items: [{ itemId: 800, oid: 'I_BCVA', name: 'BCVA', dataType: 'number' }],
+              },
+            ],
+          },
+        ],
+      },
+    ]
+    const wrapper = mount(EventCrfItemTreePicker, {
+      global: { plugins: [i18n] },
+      props: {
+        tree: SHARED_TREE,
+        eventOids: ['SE_V4'],
+        versionIds: [700],
+        itemIds: [800],
+      },
+    })
+    const v3 = wrapper
+      .findAll('input[type="checkbox"]')
+      .find((i) => i.attributes('aria-label') === 'Toggle V3 Day 90')
+    expect(v3?.element).toBeInstanceOf(HTMLInputElement)
+    const el = v3!.element as HTMLInputElement
+    expect(el.checked).toBe(false)
+    expect(el.indeterminate).toBe(false)
+  })
+
   it('renders an empty-state when the tree is empty', () => {
     const wrapper = mount(EventCrfItemTreePicker, {
       global: { plugins: [i18n] },
