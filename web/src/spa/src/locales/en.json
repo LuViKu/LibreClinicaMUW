@@ -981,6 +981,25 @@
       "errorsTitle": "The preview rejected the draft:"
     }
   },
+  "crfPreview": {
+    "openButton": "Live preview",
+    "heading": "Preview · {crfName}",
+    "modeTell": "Preview mode",
+    "banner": "Preview mode — no data is persisted.",
+    "action": {
+      "close": "Close preview",
+      "fillSampleData": "Fill sample data",
+      "reset": "Reset",
+      "saveStub": "Save (no-op)",
+      "markCompleteStub": "Mark complete (no-op)"
+    },
+    "boolean": {
+      "true": "Yes"
+    },
+    "file": {
+      "stub": "File upload is disabled in preview mode."
+    }
+  },
   "assignCrfs": {
     "title": "Manage CRF assignments",
     "attachedHeading": "Attached CRFs",

@@ -9,12 +9,14 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import ItemEditor from '@/components/ItemEditor.vue'
+import PreviewCrfEntryView from '@/views/PreviewCrfEntryView.vue'
 
 import {
   useCrfAuthoringStore,
   type AuthoringItem,
   type AuthoringPreviewSuccess,
 } from '@/stores/crfAuthoring'
+import { useCrfPreviewStore } from '@/stores/crfPreview'
 
 /**
  * Phase E.6 Milestone B — manual eCRF authoring wizard.
@@ -46,6 +48,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const store = useCrfAuthoringStore()
+const previewStore = useCrfPreviewStore()
 
 type Step = 'metadata' | 'sections' | 'review'
 const currentStep = ref<Step>('metadata')
@@ -64,6 +67,10 @@ watch(
   (next) => {
     if (next) {
       store.reset()
+      // Phase E.6 — drop any lingering live-preview overlay from a
+      // previous wizard session so re-opening the wizard never
+      // resurrects a stale preview.
+      previewStore.close()
       currentStep.value = 'metadata'
       formError.value = null
       submitParseErrors.value = []
@@ -165,6 +172,20 @@ async function onSubmit(): Promise<void> {
 function onCancel(): void {
   emit('update:open', false)
   emit('close')
+}
+
+/**
+ * Phase E.6 — capture the live draft + mount the in-memory
+ * {@link PreviewCrfEntryView} as an overlay so the operator can try
+ * out the CRF without committing anything.
+ *
+ * <p>Available from every wizard step (the Review step's button is
+ * the canonical entry point; future steps can wire to the same
+ * handler). The preview is in-memory: closing the overlay drops the
+ * preview values and leaves the authoring draft untouched.
+ */
+function onOpenLivePreview(): void {
+  previewStore.load(store.draft, { crfName: props.crfName })
 }
 </script>
 
@@ -422,7 +443,7 @@ function onCancel(): void {
           </dl>
 
           <!-- Preview button + summary / errors -->
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
             <button
               type="button"
               class="px-3 py-1.5 text-xs border border-slate-300 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-50"
@@ -430,6 +451,16 @@ function onCancel(): void {
               data-testid="crf-author-preview"
               @click="onPreview"
             >{{ store.isPreviewing ? t('common.saving') : t('crfAuthoring.preview.button') }}</button>
+            <!-- Phase E.6 — Live preview: opens the in-memory entry
+                 view as an overlay so the operator can test the CRF
+                 draft as if entering data, without persistence. -->
+            <button
+              type="button"
+              class="px-3 py-1.5 text-xs border border-muw-blue text-muw-blue rounded-md bg-white hover:bg-muw-blue/10 disabled:opacity-50"
+              :disabled="!canSubmit"
+              data-testid="crf-author-live-preview"
+              @click="onOpenLivePreview"
+            >{{ t('crfPreview.openButton') }}</button>
             <StatusPill v-if="previewSummary" variant="success">
               {{ t('crfAuthoring.preview.success', {
                 sections: previewSummary.sectionCount,
@@ -497,4 +528,10 @@ function onCancel(): void {
       </div>
     </template>
   </Modal>
+
+  <!-- Phase E.6 — Live preview overlay. Mounted as a sibling of the
+       Modal so its z-50 stacking sits cleanly on top of the wizard.
+       The overlay reads from useCrfPreviewStore; closing the overlay
+       calls store.close() and leaves the wizard draft untouched. -->
+  <PreviewCrfEntryView as-overlay />
 </template>
