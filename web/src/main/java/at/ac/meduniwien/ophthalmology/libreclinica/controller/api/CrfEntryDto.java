@@ -40,6 +40,11 @@ import java.util.Map;
  * subsequent edit needs an RFC note; the SPA uses this to gate the
  * {@code ReasonForChangeModal}.
  *
+ * <p>Phase E.6 ({@code dde}) added {@code dde} — non-null only when
+ * the parent event_definition_crf has {@code double_entry=true}; the
+ * SPA reads {@code DdeBlockDto.pass} to switch between the normal,
+ * blind-pass-2, or reconcile entry variant.
+ *
  * @param eventCrfOid             numeric event_crf_id as a string (the SPA
  *                                treats it as opaque)
  * @param subjectId               StudySubject.label (e.g. "M-001")
@@ -52,6 +57,7 @@ import java.util.Map;
  * @param status                  CRF entry workflow status
  * @param lastSavedAt             ISO-8601 of last successful save, or null
  * @param requiresReasonForChange Phase E.6 admin-rfc — true post date_completed
+ * @param dde                     Phase E.6 dde — DDE pass marker (or null)
  */
 @Schema(name = "CrfEntryDto")
 public record CrfEntryDto(
@@ -65,8 +71,33 @@ public record CrfEntryDto(
         String fileExtensions,
         String status,
         String lastSavedAt,
-        boolean requiresReasonForChange
+        boolean requiresReasonForChange,
+        DdeBlockDto dde
 ) {
+
+    /**
+     * Phase E.6 dde — small marker block embedded into
+     * {@link CrfEntryDto} when the parent event_definition_crf has
+     * {@code double_entry=true}. The SPA reads {@code pass} to choose
+     * the entry view variant:
+     * <ul>
+     *   <li>{@code pass=1} — render the normal CRF Entry form, same
+     *       as today.</li>
+     *   <li>{@code pass=2} — render with the blind-second-pass banner
+     *       and an EMPTY values map; on save delegate to
+     *       {@code POST /dde-commit}.</li>
+     *   <li>{@code pass=reconcile} — redirect to {@code DdeReconcileView}.</li>
+     * </ul>
+     *
+     * @param pass           {@code 1 | 2 | reconcile}
+     * @param idePass1ClerkId numeric user id of the pass-1 clerk (0 when unknown)
+     */
+    @Schema(name = "DdeBlockDto")
+    public record DdeBlockDto(
+            String pass,
+            int idePass1ClerkId
+    ) {}
+
 
     /** Schema of a single CRF version (1:1 with the SPA's {@code CrfSchema}). */
     @Schema(name = "CrfSchemaDto")

@@ -40,5 +40,6 @@
   <include  file="migration/lc-muw-2026-06-05-bump-seeded-sequences.xml"/>
   <include  file="migration/lc-muw-2026-06-05-audit-event-type-study-parameters.xml"/>
   <include  file="migration/lc-muw-2026-06-06-crf-file-attachment-index.xml"/>
+  <include  file="migration/lc-muw-2026-06-08-dde-index.xml"/>
 </databaseChangeLog>
 

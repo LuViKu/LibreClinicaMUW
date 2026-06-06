@@ -111,6 +111,7 @@ const DEMOGRAPHICS_ENTRY: CrfEntry = {
   groups: [],
   maxFileBytes: 52_428_800,
   fileExtensions: 'pdf,jpg,jpeg,png,tif,tiff',
+  dde: null,
 }
 
 describe('useCrfEntryStore', () => {

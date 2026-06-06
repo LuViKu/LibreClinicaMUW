@@ -23,6 +23,7 @@
  */
 
 import type { components } from './api'
+import type { DdeBlock } from './dde'
 
 export type ItemDataType =
   | 'string'
@@ -116,7 +117,7 @@ export type CrfFileMetadata = {
 }
 
 export type CrfEntry =
-  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt' | 'groups' | 'maxFileBytes' | 'fileExtensions' | 'requiresReasonForChange'>
+  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt' | 'groups' | 'maxFileBytes' | 'fileExtensions' | 'requiresReasonForChange' | 'dde'>
   & {
     schema: CrfSchema
     values: CrfValues
@@ -136,6 +137,12 @@ export type CrfEntry =
      * {@code missingReasonItemOids}.
      */
     requiresReasonForChange: boolean
+    /**
+     * Phase E.6 dde — non-null only when the parent
+     * event_definition_crf has double_entry=true. The view picks the
+     * blind-second-pass banner / reconcile-redirect from this field.
+     */
+    dde: DdeBlock | null
   }
 
 /**

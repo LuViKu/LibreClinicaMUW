@@ -427,6 +427,46 @@
       "noneSelected": "None selected"
     }
   },
+  "dde": {
+    "banner": {
+      "blindSecondPass": "Blind second pass — enter the values from the paper original. The first-pass values are not visible to you."
+    },
+    "commit": {
+      "button": "Commit second pass",
+      "inProgress": "Committing pass 2 …"
+    },
+    "reconcile": {
+      "title": "DDE reconciliation",
+      "subjectLabel": "Subject {subject} · {crf}",
+      "headerItem": "Item",
+      "headerIde": "Pass 1 (IDE)",
+      "headerDde": "Pass 2 (DDE)",
+      "headerWinner": "Resolution",
+      "winner": {
+        "ide": "Use Pass 1",
+        "dde": "Use Pass 2",
+        "manual": "Enter a different value"
+      },
+      "reasonForChange": {
+        "label": "Reason for change",
+        "placeholder": "Required — short justification recorded in the audit trail"
+      },
+      "save": "Apply resolution",
+      "saving": "Saving …",
+      "doneToast": "Reconciliation complete — CRF marked DDE-complete.",
+      "openCount": "{count} item still needs reconciliation | {count} items still need reconciliation"
+    },
+    "matrix": {
+      "badge": "DDE conflict",
+      "menuItem": "Reconcile DDE"
+    },
+    "errors": {
+      "sameClerk": "You entered Pass 1 — a different clerk must perform Pass 2.",
+      "notDdeEnabled": "This CRF is not enabled for double data entry.",
+      "noLongerOpen": "This conflict is no longer open (someone else may have resolved it).",
+      "missingReason": "Reason for change is required."
+    }
+  },
   "buildStudy": {
     "title": "Build Study",
     "subTrail": "{study} {version} · setup tracker",

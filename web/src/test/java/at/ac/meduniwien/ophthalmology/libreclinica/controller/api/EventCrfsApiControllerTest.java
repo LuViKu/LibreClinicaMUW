@@ -222,6 +222,184 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
                 CrfReopenAuthorization.roleMayReopen(2));
     }
 
+    /* ---------------------------------------------------------------------- */
+    /* Phase E.6 dde — GET /api/v1/eventCrfs/{id}/dde-pass                    */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void getDdePassReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/dde-pass")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getDdePassReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/dde-pass")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Phase E.6 dde — POST /api/v1/eventCrfs/{id}/dde-commit                 */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void commitDdePass2Returns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/dde-commit")
+                .contentType("application/json")
+                .content("{\"values\":{}}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void commitDdePass2Returns400OnMissingValues() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/dde-commit")
+                .contentType("application/json")
+                .content("{}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Missing 'values'")));
+    }
+
+    @Test
+    void commitDdePass2Returns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/dde-commit")
+                .contentType("application/json")
+                .content("{\"values\":{}}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Phase E.6 dde — GET /api/v1/eventCrfs/{id}/dde-conflicts               */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void getDdeConflictsReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/dde-conflicts")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getDdeConflictsReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/dde-conflicts")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void getDdeConflictsReturns403WhenRoleMayNotReconcile() throws Exception {
+        // No userRole bound on the session → roleMayReconcile returns
+        // false; the controller returns 403 before any DAO touch.
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/dde-conflicts")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "monitor", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit DDE reconciliation")));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Phase E.6 dde — POST /api/v1/eventCrfs/{id}/dde-conflicts/{oid}/resolve */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void resolveDdeConflictReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/dde-conflicts/I_FOO/resolve")
+                .contentType("application/json")
+                .content("{\"winner\":\"ide\",\"reasonForChange\":\"r\"}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void resolveDdeConflictReturns400OnMissingWinner() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/dde-conflicts/I_FOO/resolve")
+                .contentType("application/json")
+                .content("{\"reasonForChange\":\"r\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(1, "dm", 1, "S_DEFAULTS1", "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR, 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("Missing")));
+    }
+
+    @Test
+    void resolveDdeConflictReturns400OnInvalidWinner() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/dde-conflicts/I_FOO/resolve")
+                .contentType("application/json")
+                .content("{\"winner\":\"bogus\",\"reasonForChange\":\"r\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(1, "dm", 1, "S_DEFAULTS1", "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR, 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("winner must be one of")));
+    }
+
+    @Test
+    void resolveDdeConflictReturns400OnManualWithoutValue() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/dde-conflicts/I_FOO/resolve")
+                .contentType("application/json")
+                .content("{\"winner\":\"manual\",\"reasonForChange\":\"r\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(1, "dm", 1, "S_DEFAULTS1", "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR, 1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("winner=manual requires")));
+    }
+
+    @Test
+    void resolveDdeConflictReturns403WhenRoleMayNotReconcile() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/dde-conflicts/I_FOO/resolve")
+                .contentType("application/json")
+                .content("{\"winner\":\"ide\",\"reasonForChange\":\"r\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "monitor", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit DDE reconciliation")));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Phase E.6 dde — DdeService description round-trip unit tests          */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void ddeService_describesAndParsesMismatchRoundTrip() {
+        String desc = at.ac.meduniwien.ophthalmology.libreclinica.controller.api.service.dde
+                .DdeService.formatDdeMismatchDescription("42", "43");
+        org.junit.jupiter.api.Assertions.assertTrue(desc.contains("IDE='42'"));
+        org.junit.jupiter.api.Assertions.assertTrue(desc.contains("DDE='43'"));
+        String[] parsed = at.ac.meduniwien.ophthalmology.libreclinica.controller.api.service.dde
+                .DdeService.parseDdeMismatchDescription(desc);
+        org.junit.jupiter.api.Assertions.assertEquals("42", parsed[0]);
+        org.junit.jupiter.api.Assertions.assertEquals("43", parsed[1]);
+    }
+
+    @Test
+    void ddeService_parseToleratesGarbage() {
+        String[] parsed = at.ac.meduniwien.ophthalmology.libreclinica.controller.api.service.dde
+                .DdeService.parseDdeMismatchDescription("not a valid format");
+        org.junit.jupiter.api.Assertions.assertEquals("", parsed[0]);
+        org.junit.jupiter.api.Assertions.assertEquals("", parsed[1]);
+    }
+
     @Test
     void crfReopenAuth_ForbiddenRoles() {
         // MONITOR (6) — monitors verify, don't edit

@@ -385,19 +385,28 @@ public class EventCrfsApiController {
         // post-complete entries. SIGNED / LOCKED rows still 409 on save
         // (legacy unlock path), so we don't need a third state here.
         boolean requiresRfc = ecb.getDateCompleted() != null;
+        // Phase E.6 dde — embed the DDE marker block when the parent
+        // event_definition_crf has double_entry=true. {@code dde} stays
+        // null for single-pass studies so legacy single-entry flows
+        // pay zero cost.
+        CrfEntryDto.DdeBlockDto ddeBlock = resolveDdeBlock(ecb, currentUser);
 
         CrfEntryDto dto = new CrfEntryDto(
                 String.valueOf(ecb.getId()),
                 ss.getLabel(),
                 eventLabel,
                 schema,
-                values,
+                // Server-side blinding: pass-2 callers see an empty
+                // values map so they cannot copy the IDE entry.
+                ddeBlock != null && "2".equals(ddeBlock.pass())
+                        ? new LinkedHashMap<>() : values,
                 groupDtos,
                 fileMaxBytes(),
                 fileExtensionsAllowlist(),
                 status,
                 lastSavedAt,
-                requiresRfc
+                requiresRfc,
+                ddeBlock
         );
 
         LOG.debug("CRF Entry adapter served event_crf {} (subject {} / event {}) for study {} (user {})",
@@ -883,7 +892,14 @@ public class EventCrfsApiController {
      * roll back the user-facing save — losing an audit row is annoying
      * but losing the data is worse.
      */
-    private static void writeAuditEvent(AuditEventDAO dao, UserAccountBean user,
+    // Phase E.6 dde — promoted from `private` to `public static` so
+    // {@code controller.api.service.dde.DdeService} (sub-package) can
+    // emit the same packed-actionMessage audit rows when committing
+    // pass-2 and resolving conflicts. Java doesn't model package
+    // hierarchy so package-private isn't visible across sub-packages;
+    // public is the minimum that compiles. Stable API for sibling
+    // services going forward.
+    public static void writeAuditEvent(AuditEventDAO dao, UserAccountBean user,
                                         StudyBean study, StudySubjectBean ss,
                                         String actionMessage, String auditTable,
                                         int entityId, String columnName,
@@ -1735,5 +1751,336 @@ public class EventCrfsApiController {
         eventCrfDAO.update(ecb);
 
         return ResponseEntity.noContent().build();
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Phase E.6 dde — blind double-data-entry endpoints + helpers.       */
+    /*                                                                    */
+    /* Four endpoints:                                                    */
+    /*   GET  /api/v1/eventCrfs/{id}/dde-pass                             */
+    /*   POST /api/v1/eventCrfs/{id}/dde-commit                           */
+    /*   GET  /api/v1/eventCrfs/{id}/dde-conflicts                        */
+    /*   POST /api/v1/eventCrfs/{id}/dde-conflicts/{itemOid}/resolve      */
+    /*                                                                    */
+    /* The heavy lifting (diff, FAILEDVAL spawn, markCompleteDDE wire)    */
+    /* lives in {@link service.dde.DdeService} so the controller stays    */
+    /* a thin session-guard + parameter-binding layer.                    */
+    /* ------------------------------------------------------------------ */
+
+    @GetMapping("/{id:[0-9]+}/dde-pass")
+    public ResponseEntity<?> getDdePass(@PathVariable("id") int eventCrfId,
+                                        HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+        EventCRFDAO ddeEventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = ddeEventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ddeSsDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ddeSsDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+
+        if (!isDoubleEntryEnabled(ecb)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "event_crf " + eventCrfId + " is not DDE-enabled"));
+        }
+
+        CrfEntryDto.DdeBlockDto block = resolveDdeBlock(ecb, currentUser);
+        if (block == null) {
+            // double_entry=true on the EDC but the workflow is already
+            // settled (clean DDE complete, no mismatches). Tell the SPA.
+            return ResponseEntity.ok(new DdePassDto(
+                    String.valueOf(ecb.getId()), "done",
+                    ecb.getOwnerId(), 0));
+        }
+        // Same-clerk gate: pass-2 requires a different clerk than the
+        // pass-1 owner. We compare against the EventCRF.owner_id.
+        if ("2".equals(block.pass())
+                && block.idePass1ClerkId() > 0
+                && block.idePass1ClerkId() == currentUser.getId()) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "You entered Pass 1 — a different clerk must perform Pass 2"));
+        }
+        int mismatchCount = "reconcile".equals(block.pass())
+                ? countOpenFailedValForEventCrf(ecb.getId())
+                : 0;
+        return ResponseEntity.ok(new DdePassDto(
+                String.valueOf(ecb.getId()),
+                block.pass(),
+                block.idePass1ClerkId(),
+                mismatchCount));
+    }
+
+    @PostMapping("/{id:[0-9]+}/dde-commit")
+    public ResponseEntity<?> commitDdePass2(@PathVariable("id") int eventCrfId,
+                                            @RequestBody DdeCommitRequest body,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+        if (body == null || body.values() == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Missing 'values' in request body"));
+        }
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        if (!isDoubleEntryEnabled(ecb)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "event_crf " + eventCrfId + " is not DDE-enabled"));
+        }
+        if (ecb.getDateCompleted() == null) {
+            // Pass 1 not yet complete — commit makes no sense.
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Pass 1 (IDE) is not yet complete — cannot commit Pass 2"));
+        }
+        if (ecb.getOwnerId() > 0 && ecb.getOwnerId() == currentUser.getId()) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "You entered Pass 1 — a different clerk must perform Pass 2"));
+        }
+        // Delegate to DdeService for the diff + spawn + commit work.
+        try {
+            DdeCommitResponse resp = ddeService().commitPass2(
+                    ecb, ss, currentStudy, currentUser, body.values());
+            return ResponseEntity.ok(resp);
+        } catch (Exception svcEx) {
+            LOG.error("DDE commit failed for event_crf {} (user {})",
+                    eventCrfId, currentUser.getName(), svcEx);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "DDE commit failed: " + svcEx.getMessage()));
+        }
+    }
+
+    @GetMapping("/{id:[0-9]+}/dde-conflicts")
+    public ResponseEntity<?> getDdeConflicts(@PathVariable("id") int eventCrfId,
+                                             HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!roleMayReconcile(role)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Your role does not permit DDE reconciliation"));
+        }
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        try {
+            DdeConflictsDto dto = ddeService().listConflicts(ecb, ss);
+            return ResponseEntity.ok(dto);
+        } catch (Exception svcEx) {
+            LOG.error("DDE conflict listing failed for event_crf {}", eventCrfId, svcEx);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "DDE conflicts listing failed: " + svcEx.getMessage()));
+        }
+    }
+
+    @PostMapping("/{id:[0-9]+}/dde-conflicts/{itemOid}/resolve")
+    public ResponseEntity<?> resolveDdeConflict(@PathVariable("id") int eventCrfId,
+                                                @PathVariable("itemOid") String itemOid,
+                                                @RequestBody DdeReconcileRequest body,
+                                                HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!roleMayReconcile(role)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Your role does not permit DDE reconciliation"));
+        }
+        if (body == null
+                || body.winner() == null
+                || body.reasonForChange() == null
+                || body.reasonForChange().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Missing 'winner' or 'reasonForChange'"));
+        }
+        String w = body.winner();
+        if (!"ide".equals(w) && !"dde".equals(w) && !"manual".equals(w)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "winner must be one of: ide, dde, manual"));
+        }
+        if ("manual".equals(w) && (body.value() == null)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "winner=manual requires a 'value'"));
+        }
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        try {
+            String uri = ddeService().resolveConflict(
+                    ecb, ss, currentStudy, currentUser, itemOid, body);
+            // Reviewer flag: 204 + Location is unusual REST. Use
+            // 303 See Other so the SPA can follow naturally OR
+            // 200 + body. We pick 200 + URI body — easier for the
+            // SPA fetch lifecycle than handling a redirect.
+            return ResponseEntity.ok(Map.of("nextItem", uri == null ? "" : uri));
+        } catch (IllegalArgumentException badArg) {
+            return ResponseEntity.badRequest().body(Map.of("message", badArg.getMessage()));
+        } catch (IllegalStateException badState) {
+            return ResponseEntity.status(409).body(Map.of("message", badState.getMessage()));
+        } catch (Exception svcEx) {
+            LOG.error("DDE resolve failed for event_crf {} item {}",
+                    eventCrfId, itemOid, svcEx);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "DDE resolve failed: " + svcEx.getMessage()));
+        }
+    }
+
+    /* ------------------- DDE shared helpers ------------------- */
+
+    /**
+     * Resolve the DDE block for an EventCRF or {@code null} when
+     * the parent EDC has {@code double_entry=false}. Heuristics:
+     * <ul>
+     *   <li>{@code date_completed=null} ⇒ pass=1</li>
+     *   <li>{@code date_completed!=null, date_validate_completed=null}
+     *       ⇒ pass=2 (blind)</li>
+     *   <li>{@code both set, FAILEDVAL count > 0} ⇒ pass=reconcile</li>
+     *   <li>{@code both set, no open FAILEDVAL} ⇒ null (DDE done)</li>
+     * </ul>
+     */
+    CrfEntryDto.DdeBlockDto resolveDdeBlock(EventCRFBean ecb, UserAccountBean caller) {
+        try {
+            if (!isDoubleEntryEnabled(ecb)) return null;
+            int idePass1ClerkId = ecb.getOwnerId();
+            if (ecb.getDateCompleted() == null) {
+                return new CrfEntryDto.DdeBlockDto("1", idePass1ClerkId);
+            }
+            if (ecb.getDateValidateCompleted() == null) {
+                return new CrfEntryDto.DdeBlockDto("2", idePass1ClerkId);
+            }
+            int mismatches = countOpenFailedValForEventCrf(ecb.getId());
+            if (mismatches > 0) {
+                return new CrfEntryDto.DdeBlockDto("reconcile", idePass1ClerkId);
+            }
+            return null;
+        } catch (Exception e) {
+            LOG.warn("DDE block resolution failed for event_crf {} ({}); returning null",
+                    ecb.getId(), e.getMessage());
+            return null;
+        }
+    }
+
+    /** True when the parent event_definition_crf has double_entry=true. */
+    private boolean isDoubleEntryEnabled(EventCRFBean ecb) {
+        try {
+            StudyEventDAO seDAO = new StudyEventDAO(dataSource);
+            StudyEventBean ev = (StudyEventBean) seDAO.findByPK(ecb.getStudyEventId());
+            if (ev == null || ev.getId() == 0) return false;
+            CRFVersionDAO cvDAO = new CRFVersionDAO(dataSource);
+            CRFVersionBean cv = (CRFVersionBean) cvDAO.findByPK(ecb.getCRFVersionId());
+            if (cv == null || cv.getId() == 0) return false;
+            EventDefinitionCRFDAO edcDAO = new EventDefinitionCRFDAO(dataSource);
+            @SuppressWarnings("unchecked")
+            List<EventDefinitionCRFBean> edcs =
+                    edcDAO.findAllParentsByEventDefinitionId(ev.getStudyEventDefinitionId());
+            if (edcs == null) return false;
+            for (EventDefinitionCRFBean edc : edcs) {
+                if (edc != null && edc.getCrfId() == cv.getCrfId()) {
+                    return edc.isDoubleEntry();
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            LOG.warn("isDoubleEntryEnabled lookup failed for event_crf {} ({})",
+                    ecb.getId(), e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Count the open FAILEDVAL discrepancy_note rows for any
+     * item_data row belonging to this EventCRF. Delegates the actual
+     * row hunt to {@link at.ac.meduniwien.ophthalmology.libreclinica.controller.api.service.dde.DdeService}
+     * so the SQL stays in one place.
+     */
+    private int countOpenFailedValForEventCrf(int eventCrfId) {
+        try {
+            return ddeService().countOpenFailedVal(eventCrfId);
+        } catch (Exception e) {
+            LOG.warn("FAILEDVAL count failed for event_crf {} ({}); returning 0",
+                    eventCrfId, e.getMessage());
+            return 0;
+        }
+    }
+
+    /** Lazy DdeService — avoids a constructor-injection refactor for now. */
+    private at.ac.meduniwien.ophthalmology.libreclinica.controller.api.service.dde.DdeService ddeService() {
+        return new at.ac.meduniwien.ophthalmology.libreclinica.controller.api.service.dde.DdeService(dataSource);
+    }
+
+    /**
+     * DM (3), Admin (1), Investigator (4) — the GCP-recognised
+     * adjudicators. CRC (2) can data-enter but the institutional
+     * convention is that the data manager owns reconciliation.
+     */
+    private static boolean roleMayReconcile(StudyUserRoleBean role) {
+        if (role == null || role.getRole() == null) return false;
+        int id = role.getRole().getId();
+        return id == 1 || id == 3 || id == 4;
     }
 }

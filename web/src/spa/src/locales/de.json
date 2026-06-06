@@ -427,6 +427,46 @@
       "noneSelected": "Keine Auswahl"
     }
   },
+  "dde": {
+    "banner": {
+      "blindSecondPass": "Blinde Zweiteingabe — bitte die Werte aus dem Papier­original eingeben. Die Werte der Ersteingabe sind für Sie nicht sichtbar."
+    },
+    "commit": {
+      "button": "Zweiteingabe festschreiben",
+      "inProgress": "Zweiteingabe wird festgeschrieben …"
+    },
+    "reconcile": {
+      "title": "DDE-Abgleich",
+      "subjectLabel": "Patient {subject} · {crf}",
+      "headerItem": "Item",
+      "headerIde": "Eingabe 1 (IDE)",
+      "headerDde": "Eingabe 2 (DDE)",
+      "headerWinner": "Auflösung",
+      "winner": {
+        "ide": "Eingabe 1 verwenden",
+        "dde": "Eingabe 2 verwenden",
+        "manual": "Anderen Wert eintragen"
+      },
+      "reasonForChange": {
+        "label": "Änderungsbegründung",
+        "placeholder": "Pflichtfeld — kurze Begründung, wird im Audit-Trail vermerkt"
+      },
+      "save": "Auflösung anwenden",
+      "saving": "Wird gespeichert …",
+      "doneToast": "Abgleich abgeschlossen — CRF auf DDE-fertig gesetzt.",
+      "openCount": "Noch {count} Item zu klären | Noch {count} Items zu klären"
+    },
+    "matrix": {
+      "badge": "DDE-Konflikt",
+      "menuItem": "DDE abgleichen"
+    },
+    "errors": {
+      "sameClerk": "Sie haben die Ersteingabe durchgeführt — die Zweiteingabe muss ein anderer Bearbeiter erfassen.",
+      "notDdeEnabled": "Für dieses CRF ist keine Zweiteingabe konfiguriert.",
+      "noLongerOpen": "Dieser Konflikt ist nicht mehr offen (vermutlich bereits von jemand anderem aufgelöst).",
+      "missingReason": "Änderungsbegründung ist erforderlich."
+    }
+  },
   "buildStudy": {
     "title": "Studienaufbau",
     "subTrail": "{study} {version} · Aufbau-Tracker",
