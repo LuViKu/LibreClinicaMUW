@@ -5,15 +5,17 @@ import { ApiError, ApiNetworkError } from '@/api/client'
 import type { StudyUser } from '@/types/user'
 
 /**
- * Phase E.6 unlock-user — Vitest coverage for the users store
- * `unlock()` action.
+ * Phase E.6 — Vitest coverage for the users store.
  *
- * Strategy mirrors {@link ../__tests__/auth.test.ts}: vi.mock the
- * `@/api/client` module so each test wires only the apiPost return it
- * needs. The store's other actions already get covered via
- * ManageUsersView component tests; this file is the first net-new
- * unit-test spec for {@link useUsersStore} and scopes itself to
- * unlock-user per playbook §3.1 sequencing.
+ * This file combines two cohorts the harmonizer merged from sibling
+ * branches:
+ *
+ *   - {@link useUsersStore.unlock}        (unlock-user cluster)
+ *   - {@link useUsersStore.resetPassword} (auth-admin cluster)
+ *
+ * Strategy: vi.mock the `@/api/client` module so each test wires only
+ * the apiPost return it needs. Both cohorts share the same mock seam
+ * and identical `apiPost` import.
  */
 vi.mock('@/api/client', async () => {
   const actual = await vi.importActual<typeof import('@/api/client')>('@/api/client')
@@ -156,6 +158,93 @@ describe('useUsersStore.unlock', () => {
     const result = await store.unlock('bob')
 
     expect(result.ok).toBe(false)
+    expect(store.error).toContain('Backend nicht erreichbar')
+  })
+})
+
+describe('useUsersStore.resetPassword', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(apiPost).mockReset()
+  })
+
+  it('resolves to {ok:true, generatedPassword} on a 200 happy-path response', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ generatedPassword: 'tmp-Pw#42' })
+    const store = useUsersStore()
+
+    const result = await store.resetPassword('physician')
+
+    expect(apiPost).toHaveBeenCalledWith(
+      '/pages/api/v1/users/physician/resetPassword',
+      { sendEmail: false },
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.generatedPassword).toBe('tmp-Pw#42')
+    }
+    expect(store.error).toBeNull()
+  })
+
+  it('encodes the username path segment so directory-style usernames round-trip', async () => {
+    vi.mocked(apiPost).mockResolvedValueOnce({ generatedPassword: null })
+    const store = useUsersStore()
+    await store.resetPassword('ad/user&name')
+    expect(apiPost).toHaveBeenCalledWith(
+      '/pages/api/v1/users/ad%2Fuser%26name/resetPassword',
+      { sendEmail: false },
+    )
+  })
+
+  it('resolves to {ok:false, message} on a 400 directory-owned response (SSO / LDAP)', async () => {
+    const body = {
+      message:
+        "User 'sso-user' is authenticated via the identity provider — "
+        + 'password resets must go through that workflow',
+    }
+    vi.mocked(apiPost).mockRejectedValueOnce(new ApiError(400, 'Bad Request', body))
+    const store = useUsersStore()
+
+    const result = await store.resetPassword('sso-user')
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toContain('identity provider')
+    }
+    expect(store.error).toContain('identity provider')
+  })
+
+  it('re-throws the ApiError on 401 anonymous so the router auth-guard runs', async () => {
+    vi.mocked(apiPost).mockRejectedValueOnce(
+      new ApiError(401, 'Unauthorized', { message: 'Not authenticated' }),
+    )
+    const store = useUsersStore()
+
+    await expect(store.resetPassword('physician')).rejects.toBeInstanceOf(ApiError)
+    expect(store.error).toContain('Not authenticated')
+  })
+
+  it('re-throws the ApiError on 403 non-sysadmin so the router auth-guard runs', async () => {
+    vi.mocked(apiPost).mockRejectedValueOnce(
+      new ApiError(403, 'Forbidden', {
+        message: 'Your role does not permit user administration — sysadmin only',
+      }),
+    )
+    const store = useUsersStore()
+
+    await expect(store.resetPassword('physician')).rejects.toBeInstanceOf(ApiError)
+    expect(store.error).toContain('sysadmin only')
+  })
+
+  it('resolves to {ok:false, message} with a German fallback on network failure', async () => {
+    vi.mocked(apiPost).mockRejectedValueOnce(new ApiNetworkError('refused', undefined))
+    const store = useUsersStore()
+
+    const result = await store.resetPassword('physician')
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toContain('Backend nicht erreichbar')
+    }
     expect(store.error).toContain('Backend nicht erreichbar')
   })
 })
