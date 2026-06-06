@@ -311,7 +311,8 @@
     "actions": {
       "respond": "Respond",
       "resolve": "Mark resolved",
-      "close": "Close"
+      "close": "Close",
+      "export": "Export CSV"
     },
     "composer": {
       "label": {
@@ -323,7 +324,20 @@
       "placeholderClose": "Optional: closing comment…",
       "submit": "Send",
       "descriptionRequired": "A reply is required.",
-      "unknownError": "Unknown error while changing status."
+      "unknownError": "Unknown error while changing status.",
+      "type": "Type",
+      "typeReasonForChangeRoleHint": "Reason for change is available to Data Managers and Administrators only."
+    },
+    "thread": {
+      "title": "Thread",
+      "empty": "No replies yet.",
+      "expand": "Show thread",
+      "collapse": "Hide thread",
+      "unknownAuthor": "Unknown",
+      "noDescription": "(no description)"
+    },
+    "email": {
+      "subjectAssigned": "Discrepancy assigned"
     }
   },
   "auditLog": {

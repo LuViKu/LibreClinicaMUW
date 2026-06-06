@@ -10,6 +10,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.util.Set;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 
@@ -148,6 +149,45 @@ final class NoteTransitionMatrix {
             case "not-applicable" -> ResolutionStatus.NOT_APPLICABLE.getId();
             default -> 0;
         };
+    }
+
+    /**
+     * Phase E.6 {@code discrepancy-full} — map a SPA-side type string
+     * to the legacy {@link DiscrepancyNoteType} id. Returns 0 for
+     * unknown names so callers can short-circuit to a 400.
+     *
+     * <p>The SPA's four type literals map 1:1 to the DB ids:
+     * <ul>
+     *   <li>{@code failed-validation} → 1 ({@link DiscrepancyNoteType#FAILEDVAL})</li>
+     *   <li>{@code annotation} → 2 ({@link DiscrepancyNoteType#ANNOTATION})</li>
+     *   <li>{@code query} → 3 ({@link DiscrepancyNoteType#QUERY})</li>
+     *   <li>{@code reason-for-change} → 4
+     *       ({@link DiscrepancyNoteType#REASON_FOR_CHANGE})</li>
+     * </ul>
+     */
+    static int typeIdForSpaName(String name) {
+        if (name == null) return 0;
+        return switch (name) {
+            case "failed-validation" -> DiscrepancyNoteType.FAILEDVAL.getId();
+            case "annotation" -> DiscrepancyNoteType.ANNOTATION.getId();
+            case "query" -> DiscrepancyNoteType.QUERY.getId();
+            case "reason-for-change" -> DiscrepancyNoteType.REASON_FOR_CHANGE.getId();
+            default -> 0;
+        };
+    }
+
+    /**
+     * Phase E.6 {@code discrepancy-full} — RFC notes ({@code type=4})
+     * are gated to Data Manager + Administrator per the legacy
+     * permission model (an Investigator can author a query but not an
+     * authoritative "reason for change" record).
+     */
+    static boolean canCreateType(int typeId, int roleId) {
+        if (typeId == DiscrepancyNoteType.REASON_FOR_CHANGE.getId()) {
+            return rolesDmAdmin(roleId);
+        }
+        // query / failed-validation / annotation: any USER role.
+        return anyUserRole(roleId);
     }
 
     /* --------------------------------------------------------------- */

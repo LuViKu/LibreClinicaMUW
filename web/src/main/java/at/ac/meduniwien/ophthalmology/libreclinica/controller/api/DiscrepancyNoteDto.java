@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
@@ -16,6 +18,15 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *
  * <p>Mirrors the Vue SPA's {@code DiscrepancyNote} TS interface in
  * {@code web/src/spa/src/types/note.ts} byte-for-byte.
+ *
+ * <p>Phase E.6 {@code discrepancy-full}: extended with the {@code thread}
+ * field — a sibling endpoint
+ * ({@code GET /api/v1/discrepancies/{parentId}/thread}) populates it
+ * with the parent + every child note in insertion order so the SPA can
+ * draw the legacy thread panel without a per-row drilldown. The list
+ * endpoint continues to return {@code thread=[]} for backwards
+ * compatibility; the SPA only populates this field when the user
+ * expands a row.
  *
  * @param id              discrepancy_note_id as a string
  * @param type            one of: {@code query | failed-validation |
@@ -35,6 +46,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param lastActivityAt  ISO-8601 of the most recent thread entry; for
  *                        parent-level notes without a thread this is
  *                        the {@code date_created} timestamp
+ * @param thread          ordered child notes (Phase E.6); empty list
+ *                        when caller hit the list endpoint or no
+ *                        children exist
  */
 @Schema(name = "DiscrepancyNoteDto")
 public record DiscrepancyNoteDto(
@@ -46,5 +60,21 @@ public record DiscrepancyNoteDto(
         String description,
         String assignedTo,
         int daysOpen,
-        String lastActivityAt
-) {}
+        String lastActivityAt,
+        List<DiscrepancyThreadEntryDto> thread
+) {
+    /** Convenience constructor — defaults {@code thread} to an empty list. */
+    public DiscrepancyNoteDto(
+            String id,
+            String type,
+            String status,
+            String subjectId,
+            String itemOid,
+            String description,
+            String assignedTo,
+            int daysOpen,
+            String lastActivityAt) {
+        this(id, type, status, subjectId, itemOid, description,
+                assignedTo, daysOpen, lastActivityAt, List.of());
+    }
+}

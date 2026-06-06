@@ -227,6 +227,100 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
                 NoteTransitionMatrix.check(2, 2, 6));
     }
 
+    /* ---------------------------------------------------------------------- */
+    /* Phase E.6 discrepancy-full — type field + thread + export.csv          */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void addReturns400OnUnknownType() throws Exception {
+        mockMvcWith().perform(post("/api/v1/discrepancies")
+                .contentType("application/json")
+                .content("{\"subjectId\":\"M-001\",\"itemOid\":\"I_AGE\","
+                        + "\"description\":\"d\",\"type\":\"banana\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Unknown type")));
+    }
+
+    @Test
+    void getThreadReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/discrepancies/1/thread")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void getThreadReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/discrepancies/1/thread")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void exportCsvReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/discrepancies/export.csv")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void exportCsvReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/discrepancies/export.csv")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest());
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* NoteTransitionMatrix — Phase E.6 type helpers                          */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void typeIdForSpaName_RoundTrips() {
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                NoteTransitionMatrix.typeIdForSpaName("failed-validation"));
+        org.junit.jupiter.api.Assertions.assertEquals(2,
+                NoteTransitionMatrix.typeIdForSpaName("annotation"));
+        org.junit.jupiter.api.Assertions.assertEquals(3,
+                NoteTransitionMatrix.typeIdForSpaName("query"));
+        org.junit.jupiter.api.Assertions.assertEquals(4,
+                NoteTransitionMatrix.typeIdForSpaName("reason-for-change"));
+        org.junit.jupiter.api.Assertions.assertEquals(0,
+                NoteTransitionMatrix.typeIdForSpaName("banana"));
+        org.junit.jupiter.api.Assertions.assertEquals(0,
+                NoteTransitionMatrix.typeIdForSpaName(null));
+    }
+
+    @Test
+    void canCreateType_RfcRestrictedToDmAndAdmin() {
+        // type=4 (RFC) only for Admin(1) / Director(3).
+        org.junit.jupiter.api.Assertions.assertTrue(
+                NoteTransitionMatrix.canCreateType(4, 1)); // Admin
+        org.junit.jupiter.api.Assertions.assertTrue(
+                NoteTransitionMatrix.canCreateType(4, 3)); // Study Director (DM)
+        org.junit.jupiter.api.Assertions.assertFalse(
+                NoteTransitionMatrix.canCreateType(4, 4)); // Investigator
+        org.junit.jupiter.api.Assertions.assertFalse(
+                NoteTransitionMatrix.canCreateType(4, 6)); // Monitor
+    }
+
+    @Test
+    void canCreateType_NonRfcTypesAllowAnyUserRole() {
+        // QUERY(3) allowed for everyone with a USER role.
+        org.junit.jupiter.api.Assertions.assertTrue(
+                NoteTransitionMatrix.canCreateType(3, 4)); // Investigator
+        org.junit.jupiter.api.Assertions.assertTrue(
+                NoteTransitionMatrix.canCreateType(3, 6)); // Monitor
+        // Role 0 (no role) is rejected.
+        org.junit.jupiter.api.Assertions.assertFalse(
+                NoteTransitionMatrix.canCreateType(3, 0));
+    }
+
     @Test
     void transitionMatrix_StatusIdForSpaName_RoundTrips() {
         org.junit.jupiter.api.Assertions.assertEquals(1,

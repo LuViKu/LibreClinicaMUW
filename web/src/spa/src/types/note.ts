@@ -30,13 +30,33 @@ export type NoteStatus =
   | 'closed'
   | 'not-applicable'
 
+/**
+ * Phase E.6 {@code discrepancy-full} — single thread-entry shape.
+ * Mirrors the backend's {@link DiscrepancyThreadEntryDto}.
+ */
+export interface ThreadEntry {
+  id: string
+  status: NoteStatus
+  description: string
+  /** Username of the note owner; empty string when owner was deleted. */
+  author: string
+  /** ISO-8601 of date_created. */
+  createdAt: string
+}
+
 export type DiscrepancyNote =
-  Omit<Required<components['schemas']['DiscrepancyNoteDto']>, 'type' | 'status' | 'assignedTo'>
+  Omit<Required<components['schemas']['DiscrepancyNoteDto']>,
+    'type' | 'status' | 'assignedTo' | 'thread'>
   & {
     type: NoteType
     status: NoteStatus
     /** Assigned user id, or null when nobody is assigned. */
     assignedTo: string | null
+    /**
+     * Parent + child thread entries. Empty when the row came from the
+     * list endpoint; populated after a successful {@code loadThread}.
+     */
+    thread: ThreadEntry[]
   }
 
 /* ------------------------------------------------------------------ */
@@ -85,4 +105,18 @@ export function canCloseNote(role: UserRole, status: NoteStatus): boolean {
     (role === 'Monitor' || role === 'Data Manager' || role === 'Administrator') &&
     status === 'resolution-proposed'
   )
+}
+
+/**
+ * Phase E.6 {@code discrepancy-full} — role gate for the type field on
+ * the NEW parent-note dialog. Mirrors
+ * {@code NoteTransitionMatrix.canCreateType} on the backend so the
+ * SPA can hide the {@code reason-for-change} option for non-DM/Admin
+ * roles before they 403.
+ */
+export function canCreateNoteType(role: UserRole, type: NoteType): boolean {
+  if (type === 'reason-for-change') {
+    return role === 'Data Manager' || role === 'Administrator'
+  }
+  return true
 }
