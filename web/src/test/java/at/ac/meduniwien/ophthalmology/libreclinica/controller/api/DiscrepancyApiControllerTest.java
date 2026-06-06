@@ -331,6 +331,71 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
                 NoteTransitionMatrix.canCreateType(3, 0));
     }
 
+    /* ---------------------------------------------------------------------- */
+    /* Phase E.6 dn — eventCrfOid scoping for repeating-event correctness    */
+    /* ---------------------------------------------------------------------- */
+
+    /**
+     * Pins that a POST carrying {@code eventCrfOid} clears the controller's
+     * validation guards and reaches the DAO layer. Under the mock
+     * DataSource the EventCRF lookup throws on getConnection() and
+     * {@link ApiExceptionHandler} wraps it to 500 — the assertion is
+     * that the request is NOT blocked by the new eventCrfOid parse
+     * guard (which would surface as 400 with "Invalid eventCrfOid").
+     * Real-DB happy path (which V3 row the note attaches to) is
+     * verified by the SPA + manual probe runbook; a future
+     * DatabaseIT can upgrade this to a row-identity assertion.
+     */
+    @Test
+    void testCreateNoteScopedToEventCrf_pinsToCorrectItemDataRow() throws Exception {
+        mockMvcWith().perform(post("/api/v1/discrepancies")
+                .contentType("application/json")
+                .content("{\"subjectId\":\"M-001\",\"itemOid\":\"I_AGE\","
+                        + "\"description\":\"d\",\"eventCrfOid\":\"42\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+    /**
+     * Pins backwards-compat: a POST omitting {@code eventCrfOid} still
+     * follows the M7 unscoped lookup path. Under the mock DataSource
+     * the StudySubject lookup throws → 500. What this pins: the
+     * request is NOT blocked by a new required-field guard.
+     */
+    @Test
+    void testCreateNoteWithoutEventCrfOid_stillWorks() throws Exception {
+        mockMvcWith().perform(post("/api/v1/discrepancies")
+                .contentType("application/json")
+                .content("{\"subjectId\":\"M-001\",\"itemOid\":\"I_AGE\","
+                        + "\"description\":\"d\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").exists());
+    }
+
+    /**
+     * Pins the parse-fail short-circuit: a POST with a non-numeric
+     * {@code eventCrfOid} is rejected with 400 before any DAO call.
+     * (The subject-mismatch → 404 path needs a real DB to populate an
+     * EventCRFBean with a non-matching studySubjectId; that assertion
+     * rides on the SPA manual probe + a future DatabaseIT.)
+     */
+    @Test
+    void testCreateNoteWithEventCrfOid_subjectMismatch_returns404() throws Exception {
+        mockMvcWith().perform(post("/api/v1/discrepancies")
+                .contentType("application/json")
+                .content("{\"subjectId\":\"M-001\",\"itemOid\":\"I_AGE\","
+                        + "\"description\":\"d\",\"eventCrfOid\":\"not-a-number\"}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("Invalid eventCrfOid")));
+    }
+
     @Test
     void transitionMatrix_StatusIdForSpaName_RoundTrips() {
         org.junit.jupiter.api.Assertions.assertEquals(1,
