@@ -23,6 +23,56 @@ import type { components } from './api'
 export type Gender = 'F' | 'M' | 'O' | 'U'
 
 /**
+ * Phase E.6 subject-lifecycle — coarse mapping of
+ * `study_subject.status_id`. Mirrors the backend's
+ * `mapStudySubjectStatus` helper byte-for-byte.
+ *
+ *   - 'available'    — normal active row
+ *   - 'removed'      — soft-deleted (DM/Admin "Show removed" toggle)
+ *   - 'auto-removed' — child cascaded from a removed parent
+ *   - 'locked'       — frozen for downstream edits
+ *   - 'signed'       — investigator e-signature applied
+ */
+export type SubjectStatus =
+  | 'available'
+  | 'removed'
+  | 'auto-removed'
+  | 'locked'
+  | 'signed'
+
+/**
+ * Phase E.6 subject-lifecycle — one entry per active
+ * subject_group_map row carried by both the matrix list and the
+ * detail endpoint. groupId may be null on OPTIONAL "not-now"
+ * branches; subjectAssignment mirrors the parent group class's
+ * REQUIRED / OPTIONAL marker so the SPA can render the affordance.
+ *
+ * Hand-typed (not derived from `components['schemas']`) because the
+ * openapi regen happens out-of-band — the type lives here so the
+ * SPA store + view code compile against the new shape immediately.
+ */
+export interface GroupAssignmentSnapshot {
+  groupClassId: number
+  groupClassName: string
+  groupId: number | null
+  groupName: string | null
+  subjectAssignment: 'REQUIRED' | 'OPTIONAL'
+}
+
+/**
+ * Phase E.6 subject-lifecycle — payload for the PUT
+ * `/api/v1/subjects/{oid}/groups` endpoint and the optional
+ * `groupAssignments` field on the AddSubject body. The backend
+ * reconciles inserts + soft-deletes + group switches in one call;
+ * the SPA always sends the desired final state, never deltas.
+ */
+export interface GroupAssignmentInput {
+  groupClassId: number
+  /** Null expresses the OPTIONAL "not-now" branch. */
+  groupId: number | null
+}
+
+/**
  * Phase E.6 Tier 1 — ophthalmology study-eye scope.
  *
  * Mirrors the backend `study_subject.study_eye` column. `null` is the
@@ -60,6 +110,21 @@ export type Subject =
      * one-eye cohorts at a glance.
      */
     studyEye: StudyEye | null
+    /**
+     * Phase E.6 subject-lifecycle — coarse study_subject status used
+     * to render Removed / Locked rows distinctly when the DM/Admin
+     * "Show removed" toggle is on. Optional because the openapi
+     * regen may not yet carry the field; the store falls back to
+     * 'available' when null.
+     */
+    status?: SubjectStatus | null
+    /**
+     * Phase E.6 subject-lifecycle — flattened active subject_group_map
+     * rows. Null is the "not loaded" signal (matrix-side N+1
+     * mitigation may defer the fetch) — the view code treats null
+     * as "navigate to detail for the picker".
+     */
+    groupAssignments?: GroupAssignmentSnapshot[] | null
   }
 
 /* ------------------------------------------------------------------ */
@@ -154,6 +219,20 @@ export type SubjectDetail =
      * Null when not recorded or no separate screening visit was run.
      */
     screeningDate: string | null
+    /**
+     * Phase E.6 subject-lifecycle — coarse study_subject status.
+     * Optional because the openapi regen may not yet carry the
+     * field; views fall back to the existing signed / locked
+     * booleans when null.
+     */
+    status?: SubjectStatus | null
+    /**
+     * Phase E.6 subject-lifecycle — flattened active
+     * subject_group_map rows. Always non-null on the detail
+     * endpoint (the matrix-side N+1 mitigation only applies to
+     * list endpoints).
+     */
+    groupAssignments?: GroupAssignmentSnapshot[]
   }
 
 /**
