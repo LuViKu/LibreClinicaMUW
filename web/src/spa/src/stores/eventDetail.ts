@@ -132,6 +132,53 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
     }
   }
 
+  /**
+   * Phase E.6 restore-quickwins — restore a soft-deleted event_crf.
+   * Backend (`POST /api/v1/eventCrfs/{id}/restore`) flips AUTO_DELETED
+   * → AVAILABLE and cascades AUTO_DELETED item_data back to AVAILABLE.
+   *
+   * <p>Refetches the event detail on success so the cards re-render
+   * with the new status. Returns true on success, false on a handled
+   * server error (the caller renders an inline toast); throws when
+   * the session is invalid so the router-level auth guard can pick
+   * it up.
+   */
+  const restoreCrfError = ref<string | null>(null)
+  const isRestoringCrf = ref(false)
+
+  async function restoreCrf(eventCrfId: number | string): Promise<boolean> {
+    isRestoringCrf.value = true
+    restoreCrfError.value = null
+    try {
+      await apiPost<void>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(String(eventCrfId))}/restore`,
+        {},
+      )
+      // Refetch so the CRF card flips from "removed" to the resumed
+      // status without the caller needing to know which slot to
+      // patch in place.
+      if (event.value?.id) {
+        await load(event.value.id)
+      }
+      return true
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.isUnauthorized) throw e
+        const body = e.body as { message?: string } | null
+        restoreCrfError.value = body?.message ?? `HTTP ${e.status}`
+        return false
+      }
+      if (e instanceof ApiNetworkError) {
+        restoreCrfError.value = 'network'
+        return false
+      }
+      restoreCrfError.value = e instanceof Error ? e.message : 'Unknown error'
+      return false
+    } finally {
+      isRestoringCrf.value = false
+    }
+  }
+
   function reset(): void {
     event.value = null
     isLoading.value = false
@@ -141,6 +188,8 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
     network.value = false
     startCrfError.value = null
     isStartingCrf.value = false
+    restoreCrfError.value = null
+    isRestoringCrf.value = false
   }
 
   return {
@@ -152,8 +201,11 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
     network,
     startCrfError,
     isStartingCrf,
+    restoreCrfError,
+    isRestoringCrf,
     load,
     startCrf,
+    restoreCrf,
     reset,
   }
 })

@@ -878,6 +878,118 @@ public class EventCrfsApiController {
     }
 
     /**
+     * Phase E.6 restore-quickwins — restore a soft-deleted event_crf.
+     * Inverse of the legacy {@code RemoveEventCRFServlet} +
+     * {@code RestoreEventCRFServlet}: flips the event_crf status from
+     * {@link Status#AUTO_DELETED} (or {@link Status#DELETED}) back to
+     * {@link Status#AVAILABLE}, and cascades any AUTO_DELETED item_data
+     * rows back to AVAILABLE.
+     *
+     * <p>Guards (order matters):
+     * <ol>
+     *   <li>{@code 401} — no authenticated user.</li>
+     *   <li>{@code 400} — no active study bound.</li>
+     *   <li>{@code 404} — no event_crf with that id.</li>
+     *   <li>{@code 403} — event_crf belongs to a study the caller's
+     *       site-visibility set excludes.</li>
+     *   <li>{@code 403} — caller's role does not permit restore
+     *       (DM/Admin only — same gate as remove).</li>
+     *   <li>{@code 409} — event_crf is not currently removed.</li>
+     *   <li>{@code 409} — parent study_event is currently DELETED;
+     *       legacy {@code RestoreEventCRFServlet} blocks the per-CRF
+     *       restore in that case (restore the event first).</li>
+     * </ol>
+     *
+     * <p>Returns 204 on success — the SPA refetches the event-detail
+     * view to pick up the new row state.
+     */
+    @PostMapping("/{id:[0-9]+}/restore")
+    public ResponseEntity<?> restore(@PathVariable("id") int eventCrfId,
+                                     HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = ecDao.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!EventCrfRestoreAuthorization.roleMayRestore(currentUser, roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit restoring event_crf rows"));
+        }
+        // Mirror the legacy 409 path on a removed parent subject.
+        if (ss.getStatus() != null
+                && (ss.getStatus().equals(Status.DELETED)
+                        || ss.getStatus().equals(Status.AUTO_DELETED))) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " cannot be restored — "
+                            + "study subject is removed (restore subject first)"));
+        }
+        if (ecb.getStatus() == null
+                || !(ecb.getStatus().equals(Status.AUTO_DELETED)
+                        || ecb.getStatus().equals(Status.DELETED))) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is not currently removed"));
+        }
+        // Parent guard — legacy RestoreEventCRFServlet refuses if the
+        // owning study_event is itself DELETED.
+        StudyEventDAO seDAO = new StudyEventDAO(dataSource);
+        StudyEventBean ev = (StudyEventBean) seDAO.findByPK(ecb.getStudyEventId());
+        if (ev != null && ev.getStatus() != null && ev.getStatus().equals(Status.DELETED)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " cannot be restored — "
+                            + "study_event is removed (restore the event first)"));
+        }
+
+        ecb.setStatus(Status.AVAILABLE);
+        ecb.setUpdater(currentUser);
+        ecb.setUpdatedDate(new Date());
+        ecDao.update(ecb);
+
+        // Cascade AUTO_DELETED item_data rows back to AVAILABLE. Hard
+        // DELETED rows stay put (legacy semantics — they're operator
+        // delete, not parent cascade).
+        ItemDataDAO idDao = new ItemDataDAO(dataSource);
+        java.util.ArrayList<ItemDataBean> items = idDao.findAllByEventCRFId(ecb.getId());
+        for (ItemDataBean it : items) {
+            if (it.getStatus() == null || !it.getStatus().equals(Status.AUTO_DELETED)) continue;
+            it.setStatus(Status.AVAILABLE);
+            it.setUpdater(currentUser);
+            it.setUpdatedDate(new Date());
+            idDao.update(it);
+        }
+
+        AuditEventDAO auditDao = new AuditEventDAO(dataSource);
+        writeAuditEvent(auditDao, currentUser, currentStudy, ss,
+                "event_crf_restore", "event_crf", ecb.getId(),
+                "status_id", "AUTO_DELETED", "AVAILABLE");
+
+        LOG.info("event_crf restore: id={} subject={} by user={} role={}",
+                ecb.getId(), ss.getLabel(), currentUser.getName(), roleId);
+        return ResponseEntity.noContent().build();
+    }
+
+    /**
      * Single audit-event row capturing the change. The legacy
      * {@link AuditEventDAO#create} only persists the {@code audit_table /
      * user_id / entity_id / reason_for_change / action_message} columns

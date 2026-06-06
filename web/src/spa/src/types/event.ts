@@ -95,6 +95,13 @@ export type EventCrfRowStatus =
   | 'completed'
   | 'stopped'
   | 'signed'
+  /**
+   * Phase E.6 restore-quickwins — soft-deleted via
+   * {@code DELETE /api/v1/eventCrfs/{id}} (AUTO_DELETED in the DB).
+   * The EventDetailView surfaces a Restore action for this state;
+   * the row's data is preserved server-side.
+   */
+  | 'removed'
 
 /** One row of {@link EventDetailDto.crfs}. */
 export interface EventCrfRowDto {

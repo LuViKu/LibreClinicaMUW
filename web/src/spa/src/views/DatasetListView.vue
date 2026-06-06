@@ -35,6 +35,46 @@ const canManage = computed(() => {
 
 const removing = ref<number | null>(null)
 const removeError = ref<string | null>(null)
+const restoring = ref<number | null>(null)
+const restoreError = ref<string | null>(null)
+
+/**
+ * Phase E.6 restore-quickwins — flip the Show-removed toggle and
+ * reload the list. The toggle is a v-model proxy onto the store's
+ * showRemoved state so other views (e.g., a future search bar) can
+ * read the same value.
+ */
+const showRemoved = computed<boolean>({
+  get: () => datasets.showRemoved,
+  set: (next: boolean) => {
+    datasets.showRemoved = next
+    if (studyOid.value) datasets.load(studyOid.value)
+  },
+})
+
+async function confirmRestore(datasetId: number, name: string) {
+  if (!window.confirm(t('datasetList.confirmRestore', { name }))) return
+  restoring.value = datasetId
+  restoreError.value = null
+  try {
+    const res = await datasets.restoreDataset(datasetId)
+    if (!res.ok) restoreError.value = res.message
+  } finally {
+    restoring.value = null
+  }
+}
+
+/**
+ * True when the dataset is currently soft-deleted. The backend
+ * surfaces the status as the legacy enum name; "removed" / "deleted"
+ * cover the two equivalents (event_crf/dataset path uses DELETED,
+ * subject path uses 'removed'). The list endpoint only returns the
+ * status when ?includeRemoved=true, so guard against undefined.
+ */
+function isRemoved(row: { status?: string | null }): boolean {
+  const s = (row.status ?? '').toLowerCase()
+  return s === 'removed' || s === 'deleted'
+}
 
 function openWizardNew() {
   datasets.startNewDraft()
@@ -185,6 +225,18 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
           <p class="text-xs text-slate-500 mt-1 max-w-2xl leading-relaxed">{{ t('dataExport.intro') }}</p>
         </div>
         <div class="flex items-center gap-2">
+          <label
+            v-if="canManage"
+            class="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none mr-1"
+          >
+            <input
+              type="checkbox"
+              v-model="showRemoved"
+              class="accent-muw-blue"
+              data-testid="dataset-show-removed-toggle"
+            />
+            {{ t('datasetList.showRemoved') }}
+          </label>
           <button
             v-if="canManage"
             type="button"
@@ -207,6 +259,7 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
 
       <p v-if="datasets.error" class="mb-4 text-rose-700 text-sm" role="alert">{{ datasets.error }}</p>
       <p v-if="removeError" class="mb-4 text-rose-700 text-sm" role="alert">{{ removeError }}</p>
+      <p v-if="restoreError" class="mb-4 text-rose-700 text-sm" role="alert">{{ restoreError }}</p>
       <p v-if="datasets.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
 
       <!-- Empty state. -->
@@ -273,7 +326,7 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
                       {{ t('datasetList.openWizard') }}
                     </button>
                     <button
-                      v-if="canManage"
+                      v-if="canManage && !isRemoved(row)"
                       type="button"
                       class="px-2.5 py-1 text-xs border border-rose-200 rounded-md bg-white hover:bg-rose-50 text-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
                       data-testid="dataset-remove-button"
@@ -281,6 +334,16 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
                       @click="confirmRemove(row.id, row.name)"
                     >
                       {{ removing === row.id ? t('common.loading') : t('common.remove') }}
+                    </button>
+                    <button
+                      v-if="canManage && isRemoved(row)"
+                      type="button"
+                      class="px-2.5 py-1 text-xs border border-emerald-200 rounded-md bg-white hover:bg-emerald-50 text-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      data-testid="dataset-restore-button"
+                      :disabled="restoring === row.id"
+                      @click="confirmRestore(row.id, row.name)"
+                    >
+                      {{ restoring === row.id ? t('common.loading') : t('datasetList.restore') }}
                     </button>
                     <button
                       type="button"

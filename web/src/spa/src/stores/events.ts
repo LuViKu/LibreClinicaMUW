@@ -29,6 +29,12 @@ export const useEventsStore = defineStore('events', () => {
   const query = ref('')
   const statusFilter = ref<'all' | StudyEventStatus>('all')
   const subjectFilter = ref<string>('') // empty = all
+  /**
+   * Phase E.6 restore-quickwins — when true, `load()` requests
+   * `?includeRemoved=true` and the schedule view can surface
+   * soft-deleted (`removed`) events with the Restore action.
+   */
+  const showRemoved = ref(false)
 
   const filtered = computed<StudyEvent[]>(() => {
     const q = query.value.trim().toLowerCase()
@@ -78,7 +84,10 @@ export const useEventsStore = defineStore('events', () => {
     isLoading.value = true
     error.value = null
     try {
-      events.value = await apiGet<StudyEvent[]>('/pages/api/v1/events')
+      const path = showRemoved.value
+        ? '/pages/api/v1/events?includeRemoved=true'
+        : '/pages/api/v1/events'
+      events.value = await apiGet<StudyEvent[]>(path)
     } catch (e) {
       events.value = []
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
@@ -214,6 +223,45 @@ export const useEventsStore = defineStore('events', () => {
   }
 
   /**
+   * Phase E.6 restore-quickwins — restore a soft-deleted study event.
+   * Backend (`POST /api/v1/events/{id}/restore`) flips DELETED →
+   * AVAILABLE and cascades AUTO_DELETED event_crfs + item_data back
+   * to AVAILABLE. Returns the restored {@link StudyEvent} so the
+   * row's status flips in place — no full reload needed.
+   *
+   * <p>Role-gated to DM / Admin only. Investigators must escalate.
+   */
+  async function restoreEvent(eventId: string): Promise<boolean> {
+    try {
+      const restored = await apiPost<StudyEvent>(
+        `/pages/api/v1/events/${encodeURIComponent(eventId)}/restore`,
+        {},
+      )
+      // Replace the in-memory row so the SPA reflects the new status
+      // without a full reload. If the schedule view is filtering out
+      // removed events the freshly-restored row stays visible.
+      events.value = events.value.map((e) => (e.id === eventId ? restored : e))
+      return true
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Wiederherstellen nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Wiederherstellen fehlgeschlagen. Bitte später erneut versuchen.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Wiederherstellen fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        error.value = e instanceof Error ? e.message : 'Unbekannter Fehler beim Wiederherstellen.'
+      }
+      return false
+    }
+  }
+
+  /**
    * Phase E.6 — clear every piece of study-scoped state so the store
    * doesn't carry events from study A into study B. Called by
    * {@link useAuthStore.pickStudy} before re-bootstrapping.
@@ -226,6 +274,7 @@ export const useEventsStore = defineStore('events', () => {
     query.value = ''
     statusFilter.value = 'all'
     subjectFilter.value = ''
+    showRemoved.value = false
   }
 
   return {
@@ -236,6 +285,7 @@ export const useEventsStore = defineStore('events', () => {
     query,
     statusFilter,
     subjectFilter,
+    showRemoved,
     filtered,
     totalCount,
     visibleCount,
@@ -246,6 +296,7 @@ export const useEventsStore = defineStore('events', () => {
     schedule,
     updateEvent,
     cancelEvent,
+    restoreEvent,
     reset,
   }
 })
