@@ -932,7 +932,11 @@
       "REAL": "Reelle Zahl (REAL)",
       "DATE": "Datum (DATE)",
       "PDATE": "Teildatum (PDATE)",
-      "FILE": "Dateianhang (FILE)"
+      "FILE": "Dateianhang (FILE)",
+      "BL": "Boolean (BL)",
+      "BLHelper": "Boolean-Items werden als einzelne Checkbox dargestellt (Ja = 1 / Nein = 0). Das Antwortset ist fest vorgegeben, daher wird die Optionen-Auswahl ausgeblendet.",
+      "BLPreviewHeading": "Vorschau",
+      "BLPlaceholder": "Boolean-Item"
     },
     "responseType": {
       "text": "Einzeiliger Text",

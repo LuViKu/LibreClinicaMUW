@@ -9,6 +9,7 @@ import HelperText from '@/components/HelperText.vue'
 import ResponseSetPicker from '@/components/ResponseSetPicker.vue'
 
 import {
+  dataTypeIsBoolean,
   responseTypeRequiresOptions,
   useCrfAuthoringStore,
   type AuthoringDataType,
@@ -54,8 +55,12 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const store = useCrfAuthoringStore()
 
+const isBoolean = computed<boolean>(() => dataTypeIsBoolean(props.item.dataType))
+
 const showResponseSetPicker = computed<boolean>(() =>
-  responseTypeRequiresOptions(props.item.responseType),
+  // BL items use a fixed Yes/No option list synthesised at submit; the
+  // picker would just confuse operators, so we hide it entirely.
+  !isBoolean.value && responseTypeRequiresOptions(props.item.responseType),
 )
 
 const dataTypeOptions: Array<{ value: AuthoringDataType; labelKey: string }> = [
@@ -65,6 +70,7 @@ const dataTypeOptions: Array<{ value: AuthoringDataType; labelKey: string }> = [
   { value: 'DATE', labelKey: 'crfAuthoring.dataType.DATE' },
   { value: 'PDATE', labelKey: 'crfAuthoring.dataType.PDATE' },
   { value: 'FILE', labelKey: 'crfAuthoring.dataType.FILE' },
+  { value: 'BL', labelKey: 'crfAuthoring.dataType.BL' },
 ]
 
 const responseTypeOptions: Array<{ value: AuthoringResponseType; labelKey: string }> = [
@@ -107,6 +113,12 @@ function onOidInput(value: string): void {
 watch(
   () => props.item.responseType,
   (next) => {
+    if (isBoolean.value) {
+      // BL pins the response set to the synthesised Yes/No — never
+      // let an inline set linger on the item.
+      props.item.responseSet = null
+      return
+    }
     if (responseTypeRequiresOptions(next)) {
       if (props.item.responseSet == null || ('ref' in props.item.responseSet)) {
         // Seed an empty inline set so the picker has something to
@@ -124,6 +136,31 @@ watch(
       }
     } else {
       // Open-text branch — the store handles the implicit label.
+      props.item.responseSet = null
+    }
+  },
+)
+
+/**
+ * BL locks the response type to {@code single-select} (the synthesised
+ * workbook emits a fixed Yes/No option list, which the parser only
+ * accepts under one of the option-bearing response types). Flipping
+ * away from BL leaves the operator's previous responseType selection
+ * unless it would now require options against an empty inline set — in
+ * which case we fall back to {@code text} so the picker doesn't
+ * re-open with a half-bound state.
+ */
+watch(
+  () => props.item.dataType,
+  (next, prev) => {
+    if (next === prev) return
+    if (next === 'BL') {
+      props.item.responseType = 'single-select'
+      props.item.responseSet = null
+    } else if (prev === 'BL') {
+      // Coming back from BL — pick a safe open-text default. The
+      // operator can re-pick a richer response type from the dropdown.
+      props.item.responseType = 'text'
       props.item.responseSet = null
     }
   },
@@ -217,11 +254,13 @@ function onResponseSetUpdate(next: AuthoringResponseSet): void {
         <SelectInput
           :id="`${idPrefix}-responseType`"
           v-model="props.item.responseType"
+          :disabled="isBoolean"
         >
           <option v-for="opt in responseTypeOptions" :key="opt.value" :value="opt.value">
             {{ t(opt.labelKey) }}
           </option>
         </SelectInput>
+        <HelperText v-if="isBoolean">{{ t('crfAuthoring.dataType.BLHelper') }}</HelperText>
       </div>
       <div class="col-span-2">
         <FieldLabel :for="`${idPrefix}-defaultValue`">
@@ -276,6 +315,28 @@ function onResponseSetUpdate(next: AuthoringResponseSet): void {
         :available="props.availableResponseSets"
         @update:model-value="onResponseSetUpdate"
       />
+    </div>
+
+    <!-- BL preview — fixed Yes/No, no picker. -->
+    <div
+      v-if="isBoolean"
+      class="border-t border-slate-200 pt-3 space-y-1"
+      :data-testid="`${idPrefix}-bl-preview`"
+    >
+      <div class="text-[11px] font-medium text-slate-500 uppercase tracking-wide">
+        {{ t('crfAuthoring.dataType.BLPreviewHeading') }}
+      </div>
+      <label class="inline-flex items-center gap-2 text-xs text-slate-700">
+        <input
+          type="checkbox"
+          disabled
+          :data-testid="`${idPrefix}-bl-checkbox`"
+        />
+        <span>{{ props.item.leftItemText.trim() || props.item.descriptionLabel.trim() || t('crfAuthoring.dataType.BLPlaceholder') }}</span>
+      </label>
+      <p class="text-[11px] text-slate-500 leading-snug">
+        {{ t('crfAuthoring.dataType.BLHelper') }}
+      </p>
     </div>
 
     <div class="text-right">

@@ -932,7 +932,11 @@
       "REAL": "Real number (REAL)",
       "DATE": "Date (DATE)",
       "PDATE": "Partial date (PDATE)",
-      "FILE": "File attachment (FILE)"
+      "FILE": "File attachment (FILE)",
+      "BL": "Boolean (BL)",
+      "BLHelper": "Boolean items render as a single checkbox (Yes = 1 / No = 0). The response set is fixed, so the options picker is hidden.",
+      "BLPreviewHeading": "Preview",
+      "BLPlaceholder": "Boolean item"
     },
     "responseType": {
       "text": "Single-line text",

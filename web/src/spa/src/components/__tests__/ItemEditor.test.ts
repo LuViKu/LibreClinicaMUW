@@ -113,6 +113,73 @@ describe('ItemEditor — Milestone B', () => {
     wrapper.unmount()
   })
 
+  describe('BL (boolean) data type', () => {
+    it('renders the BL preview block + hides the response-set picker', async () => {
+      const item = makeItem({
+        name: 'CONSENT',
+        descriptionLabel: 'Consent on file',
+        dataType: 'BL',
+      })
+      const wrapper = mountEditor(item)
+      await nextTick()
+
+      // BL is a fixed yes/no — the picker is hidden regardless of
+      // responseType (the watcher already locked it to single-select).
+      expect(wrapper.find('[data-testid="test-picker-host"]').exists()).toBe(false)
+      // The preview block is shown with a disabled checkbox.
+      const preview = wrapper.find('[data-testid="test-bl-preview"]')
+      expect(preview.exists()).toBe(true)
+      const cb = wrapper.find<HTMLInputElement>('[data-testid="test-bl-checkbox"]')
+      expect(cb.exists()).toBe(true)
+      expect(cb.element.disabled).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('locks the responseType select to single-select while BL is selected', async () => {
+      const item = makeItem({ dataType: 'ST', responseType: 'radio' })
+      const wrapper = mountEditor(item)
+      await nextTick()
+
+      // Flip to BL via the v-modeled select.
+      item.dataType = 'BL'
+      await nextTick()
+
+      expect(item.responseType).toBe('single-select')
+      // Picker is hidden once the dataType watcher runs.
+      expect(wrapper.find('[data-testid="test-picker-host"]').exists()).toBe(false)
+      // The responseType <select> is rendered as disabled.
+      const respSelect = wrapper.find<HTMLSelectElement>('#test-responseType')
+      expect(respSelect.element.disabled).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('restores a safe open-text default when flipping away from BL', async () => {
+      const item = makeItem({ dataType: 'BL', responseType: 'single-select' })
+      const wrapper = mountEditor(item)
+      await nextTick()
+      expect(wrapper.find('[data-testid="test-bl-preview"]').exists()).toBe(true)
+
+      item.dataType = 'INT'
+      await nextTick()
+
+      // Flipping away from BL clears the synthesised lock and falls
+      // back to plain text so the operator can re-pick a richer
+      // responseType from the dropdown.
+      expect(item.responseType).toBe('text')
+      expect(item.responseSet).toBeNull()
+      expect(wrapper.find('[data-testid="test-bl-preview"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('BL appears in the data-type dropdown', async () => {
+      const item = makeItem()
+      const wrapper = mountEditor(item)
+      await nextTick()
+      const opts = wrapper.findAll('#test-dataType option').map((o) => o.attributes('value'))
+      expect(opts).toContain('BL')
+    })
+  })
+
   it('auto-suggests the OID from the name until the operator overrides', async () => {
     const item = makeItem()
     const wrapper = mountEditor(item)
