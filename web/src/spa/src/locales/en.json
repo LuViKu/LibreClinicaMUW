@@ -1080,7 +1080,11 @@
       "heading": "Upload CDISC ODM 1.3 XML",
       "description": "Subject / event / CRF / item must already be defined in the study.",
       "cta": "Choose a file or drag-and-drop",
-      "hint": "Accepted: .xml · maximum 50 MB"
+      "hint": "Accepted: .xml · maximum 50 MB",
+      "uploading": "Uploading and validating the XML…",
+      "errorXsd": "The file is not a valid CDISC ODM 1.3 XML payload.",
+      "errorWrongStudy": "The file's studyOID does not match the active study — switch study first or re-export from the source.",
+      "errorFileType": "Only .xml CRF data files are accepted."
     },
     "map": {
       "heading": "Detected counts",
@@ -1102,6 +1106,10 @@
       "reasonHint": "{count} overwrites require a Reason for Change note. Recorded against every overwritten item in the audit log.",
       "reasonPlaceholder": "e.g. Site sent corrected ODM after on-site source-data reconciliation.",
       "cta": "Continue to Commit",
+      "noRows": "The uploaded XML did not contain any item-data rows.",
+      "loadingMoreRows": "Showing {shown} of {total} rows. Scroll to fetch more.",
+      "issuesHeading": "Validation findings",
+      "overwriteModeHeading": "Overwrite policy",
       "column": {
         "status": "Status",
         "subject": "Subject",
@@ -1116,11 +1124,23 @@
         "error": "Error"
       }
     },
+    "overwriteMode": {
+      "replace": "Replace existing values (requires reason for change)",
+      "skip": "Skip rows that would overwrite existing values"
+    },
     "commit": {
       "workingHeading": "Committing…",
       "workingDetail": "Writing rows + audit-trail entries.",
       "successHeading": "Import complete",
-      "successDetail": "{ready} new + {overwrite} overwritten · {error} skipped."
+      "successDetail": "{ready} new + {overwrite} overwritten · {error} skipped.",
+      "rowsInserted": "Rows inserted",
+      "rowsOverwritten": "Rows overwritten",
+      "rowsSkipped": "Rows skipped",
+      "discrepancyNotes": "Discrepancy notes",
+      "tokenExpired": "Preview expired",
+      "reupload": "Re-upload the XML",
+      "startOver": "Start over",
+      "failedHeading": "Commit failed"
     }
   },
   "signSubject": {
