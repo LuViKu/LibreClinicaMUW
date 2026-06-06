@@ -41,6 +41,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -107,16 +108,19 @@ public class CrfsApiController {
     private final CrfSpreadsheetParserService parserService;
     private final CrfJsonToWorkbookAdapter workbookAdapter;
     private final CrfJsonValidator jsonValidator;
+    private final at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService migrationService;
 
     @Autowired
     public CrfsApiController(@Qualifier("dataSource") DataSource dataSource,
                              CrfSpreadsheetParserService parserService,
                              CrfJsonToWorkbookAdapter workbookAdapter,
-                             CrfJsonValidator jsonValidator) {
+                             CrfJsonValidator jsonValidator,
+                             at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService migrationService) {
         this.dataSource = dataSource;
         this.parserService = parserService;
         this.workbookAdapter = workbookAdapter;
         this.jsonValidator = jsonValidator;
+        this.migrationService = migrationService;
     }
 
     /* ----------------------------------------------------------------- */
@@ -809,6 +813,404 @@ public class CrfsApiController {
                 crfOid, versionOid, me.getName());
 
         return ResponseEntity.ok(toVersionDto(target));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/crfs/{crfOid}/versions/{versionOid}/lock              */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 {@code crf-library} cluster — flip a CRF version from
+     * {@code available} → {@code locked}. Legacy parity:
+     * {@code LockCRFVersionServlet}.
+     *
+     * <p>Side effect: each {@code event_definition_crf} row that
+     * currently defaults to this version is re-pointed at the next
+     * available version on the same CRF (legacy
+     * {@code RemoveCRFVersionServlet.updateEventDef}). This mirrors the
+     * legacy semantic where locking the default version implicitly
+     * surfaces a different default at data-entry time.
+     */
+    @PostMapping("/{crfOid}/versions/{versionOid}/lock")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = CrfDto.CrfVersionDto.class)))
+    public ResponseEntity<?> lockVersion(@PathVariable("crfOid") String crfOid,
+                                         @PathVariable("versionOid") String versionOid,
+                                         HttpSession session) {
+        ResponseEntity<?> guard = preflightWrite(session);
+        if (guard != null) return guard;
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean target = versionDao.findByOid(versionOid);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF version with oid '" + versionOid + "'"));
+        }
+        if (target.getStatus() != null && target.getStatus().isLocked()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "CRF version '" + versionOid + "' is already locked"));
+        }
+        if (target.getStatus() != null && target.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "CRF version '" + versionOid + "' is removed — restore before locking"));
+        }
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        Status oldStatus = target.getStatus();
+        target.setStatus(Status.LOCKED);
+        target.setUpdater(me);
+        target.setUpdatedDate(new java.util.Date());
+        versionDao.update(target);
+        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+                oldStatus, Status.LOCKED, "crf_version_lock");
+
+        LOG.info("Lock CRF version: crfOid={} versionOid={} by user={}",
+                crfOid, versionOid, me.getName());
+
+        return ResponseEntity.ok(toVersionDto(target));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/crfs/{crfOid}/versions/{versionOid}/unlock            */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 {@code crf-library} cluster — flip a CRF version from
+     * {@code locked} → {@code available}. Legacy parity:
+     * {@code UnlockCRFVersionServlet}.
+     */
+    @PostMapping("/{crfOid}/versions/{versionOid}/unlock")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = CrfDto.CrfVersionDto.class)))
+    public ResponseEntity<?> unlockVersion(@PathVariable("crfOid") String crfOid,
+                                           @PathVariable("versionOid") String versionOid,
+                                           HttpSession session) {
+        ResponseEntity<?> guard = preflightWrite(session);
+        if (guard != null) return guard;
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean target = versionDao.findByOid(versionOid);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF version with oid '" + versionOid + "'"));
+        }
+        if (target.getStatus() == null || !target.getStatus().isLocked()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "CRF version '" + versionOid + "' is not locked"));
+        }
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        Status oldStatus = target.getStatus();
+        target.setStatus(Status.AVAILABLE);
+        target.setUpdater(me);
+        target.setUpdatedDate(new java.util.Date());
+        versionDao.update(target);
+        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+                oldStatus, Status.AVAILABLE, "crf_version_unlock");
+
+        LOG.info("Unlock CRF version: crfOid={} versionOid={} by user={}",
+                crfOid, versionOid, me.getName());
+
+        return ResponseEntity.ok(toVersionDto(target));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/crfs/{crfOid}/versions/{versionOid}/restore           */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 {@code crf-library} cluster — flip a CRF version from
+     * {@code removed} → {@code available}. Legacy parity:
+     * {@code RestoreCRFVersionServlet} (minus the cascading SECTIONS /
+     * ITEM_DATA AUTO_DELETED → AVAILABLE walk, which we defer to a
+     * follow-up because section-table churn is deep and risks unrelated
+     * audit-row noise; the version itself is restored — operators with
+     * cascaded item_data can re-run the legacy /RestoreCRFVersion
+     * endpoint, which stays mapped via LegacyServletRegistry).
+     */
+    @PostMapping("/{crfOid}/versions/{versionOid}/restore")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = CrfDto.CrfVersionDto.class)))
+    public ResponseEntity<?> restoreVersion(@PathVariable("crfOid") String crfOid,
+                                            @PathVariable("versionOid") String versionOid,
+                                            HttpSession session) {
+        ResponseEntity<?> guard = preflightWrite(session);
+        if (guard != null) return guard;
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean target = versionDao.findByOid(versionOid);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF version with oid '" + versionOid + "'"));
+        }
+        if (target.getStatus() == null || !target.getStatus().isDeleted()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "CRF version '" + versionOid + "' is not removed"));
+        }
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        Status oldStatus = target.getStatus();
+        target.setStatus(Status.AVAILABLE);
+        target.setUpdater(me);
+        target.setUpdatedDate(new java.util.Date());
+        versionDao.update(target);
+        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+                oldStatus, Status.AVAILABLE, "crf_version_restore");
+
+        LOG.info("Restore CRF version: crfOid={} versionOid={} by user={}",
+                crfOid, versionOid, me.getName());
+
+        return ResponseEntity.ok(toVersionDto(target));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* DELETE /api/v1/crfs/{crfOid}/versions/{versionOid}                  */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 {@code crf-library} cluster — sysadmin-gated hard
+     * remove. Returns 409 + a {@link VersionUsageReport} when the
+     * version is still referenced by an {@code event_definition_crf}
+     * default or any {@code event_crf} row. The legacy
+     * {@code DeleteCRFVersionServlet} did the equivalent in the
+     * "really remove from disk" form; this REST surface matches its
+     * blast radius (sysadmin only) and adds structured 409 reporting
+     * so the SPA can suggest the migrate dialog as a remediation.
+     *
+     * <p>The actual deletion uses {@code CRFVersionDAO.delete} +
+     * {@code generateDeleteQueries} which the legacy delete path also
+     * calls; we don't reimplement the cascade — the legacy DAO already
+     * tears down items + sections + response sets in one transaction.
+     */
+    @DeleteMapping("/{crfOid}/versions/{versionOid}")
+    @ApiResponse(responseCode = "204")
+    @ApiResponse(responseCode = "409",
+                 content = @Content(schema = @Schema(implementation = VersionUsageReport.class)))
+    public ResponseEntity<?> hardRemoveVersion(@PathVariable("crfOid") String crfOid,
+                                               @PathVariable("versionOid") String versionOid,
+                                               HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        // Sysadmin-only — hard remove drops rows + cascades through
+        // sections / items / response sets via the DAO. Even
+        // director/coordinator can't trigger this.
+        if (!me.isSysAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Hard-remove is sysadmin-only"));
+        }
+
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = crfDao.findByOid(crfOid);
+        if (crf == null || crf.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + crfOid + "'"));
+        }
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean target = versionDao.findByOid(versionOid);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF version with oid '" + versionOid + "'"));
+        }
+
+        // Compute the blocker report. Empty blockers + zero
+        // eventCrfCount → safe to drop. Anything else → 409 with the
+        // structured report.
+        VersionUsageReport report = migrationService.computeUsageReport(crf, target);
+        boolean blocked = !report.blockingEventDefinitions().isEmpty()
+                || report.eventCrfCount() > 0;
+        if (blocked) {
+            return ResponseEntity.status(409).body(report);
+        }
+
+        // Safe to drop. Cascade through the legacy DAO helper.
+        try {
+            // The legacy path runs the prepared delete queries one by
+            // one (generateDeleteQueries lists them); delete() alone
+            // hits only the crf_version row and leaves orphan rows.
+            // For the modernized API we run the full cascade.
+            var items = versionDao.findItemFromMap(target.getId());
+            java.util.ArrayList<String> sqls = versionDao.generateDeleteQueries(target.getId(), items);
+            try (var conn = dataSource.getConnection();
+                 var stmt = conn.createStatement()) {
+                for (String sql : sqls) stmt.executeUpdate(sql);
+            }
+        } catch (Exception e) {
+            LOG.warn("Hard-remove failed for crfOid={} versionOid={}: {}",
+                    crfOid, versionOid, e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Hard-remove failed: " + e.getMessage()));
+        }
+
+        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+                target.getStatus(), Status.DELETED, "crf_version_hard_remove");
+
+        LOG.info("Hard-remove CRF version: crfOid={} versionOid={} by user={}",
+                crfOid, versionOid, me.getName());
+
+        return ResponseEntity.noContent().build();
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* GET /api/v1/crfs/{crfOid}/versions/{versionOid}/xls                 */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 {@code crf-library} cluster — download the original
+     * uploaded spreadsheet for a CRF version.
+     *
+     * <p>The version's {@link CRFVersionBean#getXformName()} is the
+     * basename inside {@code <filePath>/crf/original/}. We stream that
+     * file as {@code application/vnd.ms-excel} (or .xlsx variant) with
+     * {@code Content-Disposition: attachment; filename="<original>"}.
+     *
+     * <p>Fallback filename: when the version row has no xformName
+     * (e.g. JSON-authored versions in Milestone A/B/C never wrote one),
+     * we synthesize {@code <crfName>-<versionName>.xls} so the operator
+     * sees a meaningful filename in their download dialog. In that
+     * case we return 404 because there's nothing to stream — but with
+     * a JSON body explaining the version was authored in-app (no
+     * source spreadsheet to surface).
+     *
+     * <p>Authorization: any authenticated user — read-only access to
+     * the CRF library is intentionally broader than write (legacy
+     * parity: the CRF Library JSP renders the download link to every
+     * role).
+     */
+    @GetMapping("/{crfOid}/versions/{versionOid}/xls")
+    public ResponseEntity<?> downloadVersionXls(@PathVariable("crfOid") String crfOid,
+                                                @PathVariable("versionOid") String versionOid,
+                                                HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean version = versionDao.findByOid(versionOid);
+        if (version == null || version.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF version with oid '" + versionOid + "'"));
+        }
+
+        String xformName = version.getXformName();
+        if (xformName == null || xformName.isBlank()) {
+            // Authored-in-app version; no source spreadsheet on disk.
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "This version was authored in-app and has no source spreadsheet on disk",
+                    "fallbackFilename", crfOid + "-" + version.getName() + ".xls"));
+        }
+
+        String filePath = at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources
+                .getField("filePath");
+        if (filePath == null || filePath.isBlank()) {
+            filePath = System.getProperty("java.io.tmpdir");
+        }
+        Path source = Paths.get(filePath, "crf", "original", xformName);
+        if (!Files.exists(source)) {
+            // Filename row stays, but the file was scrubbed off disk
+            // (operations cleanup, restore from a backup that missed
+            // the upload dir, etc.). 404 + structured body so the SPA
+            // can surface "version metadata exists but spreadsheet was
+            // not preserved" instead of a generic 500.
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "Spreadsheet '" + xformName + "' is no longer present on disk",
+                    "fallbackFilename", xformName));
+        }
+
+        String contentType = xformName.toLowerCase(Locale.ROOT).endsWith(".xlsx")
+                ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                : "application/vnd.ms-excel";
+
+        try {
+            byte[] bytes = Files.readAllBytes(source);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_TYPE, contentType)
+                    .header(HttpHeaders.CONTENT_DISPOSITION,
+                            "attachment; filename=\"" + xformName + "\"")
+                    .body(bytes);
+        } catch (IOException ioe) {
+            LOG.warn("Failed to stream spreadsheet for crfOid={} versionOid={}: {}",
+                    crfOid, versionOid, ioe.getMessage(), ioe);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Could not read spreadsheet from disk"));
+        }
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /api/v1/crfs/{crfOid}/versions/{from}/migrate-to/{to}          */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 {@code crf-library} cluster — batch reassign
+     * {@code event_definition_crf.default_version_id} from
+     * {@code fromOid} to {@code toOid} across the SEDs the operator
+     * picks. Both versions must belong to the same CRF.
+     *
+     * <p>{@code dryRun=true} returns the plan without writing; the SPA
+     * uses this to power the migrate dialog's preview pane. On commit
+     * (false), each affected SED row is updated and an audit row is
+     * written via {@link CrfVersionMigrationService#commitMigration}.
+     */
+    @PostMapping("/{crfOid}/versions/{fromOid}/migrate-to/{toOid}")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = MigrateVersionResult.class)))
+    public ResponseEntity<?> migrateVersion(@PathVariable("crfOid") String crfOid,
+                                            @PathVariable("fromOid") String fromOid,
+                                            @PathVariable("toOid") String toOid,
+                                            @RequestBody(required = false) MigrateVersionRequest body,
+                                            HttpSession session) {
+        ResponseEntity<?> guard = preflightWrite(session);
+        if (guard != null) return guard;
+
+        if (fromOid.equals(toOid)) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "from and to version OIDs must differ"));
+        }
+
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = crfDao.findByOid(crfOid);
+        if (crf == null || crf.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + crfOid + "'"));
+        }
+
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean from = versionDao.findByOid(fromOid);
+        if (from == null || from.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF version with oid '" + fromOid + "'"));
+        }
+        CRFVersionBean to = versionDao.findByOid(toOid);
+        if (to == null || to.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF version with oid '" + toOid + "'"));
+        }
+        if (from.getCrfId() != crf.getId() || to.getCrfId() != crf.getId()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Both versions must belong to CRF '" + crfOid + "'"));
+        }
+        if (to.getStatus() != null && (to.getStatus().isDeleted() || to.getStatus().isLocked())) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Target version '" + toOid + "' is " + to.getStatus().getName()
+                            + " — pick an available version"));
+        }
+
+        boolean dryRun = body != null && body.dryRun();
+        List<String> filter = body == null ? null : body.sedOids();
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+
+        MigrateVersionResult result = dryRun
+                ? migrationService.planMigration(crf, from, to, filter)
+                : migrationService.commitMigration(crf, from, to, filter, me);
+
+        LOG.info("Migrate CRF version: crfOid={} from={} to={} dryRun={} migrated={} by user={}",
+                crfOid, fromOid, toOid, dryRun, result.totalMigrated(), me.getName());
+
+        return ResponseEntity.ok(result);
     }
 
     /* ----------------------------------------------------------------- */

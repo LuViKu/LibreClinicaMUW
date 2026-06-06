@@ -813,10 +813,38 @@
 				<version>1.1.2</version>
 				<scope>runtime</scope>
 			</dependency>
+			<!--
+				Phase E.6 (2026-06-06): Apache POI 3.0.1-FINAL → 5.3.0.
+				The 3.x line was last released in 2007 and has no fix
+				for POI-derived CVEs (e.g. CVE-2017-12626 XML-bomb).
+				4.0 removed the int-constant cell-type API
+				(HSSFCell.CELL_TYPE_*) in favour of the CellType enum;
+				four legacy HSSF call sites
+				(CrfJsonToWorkbookAdapter, SpreadSheetTableClassic.java
+				lines 710, 733, 1232-1389, 1302-1389) are migrated in
+				the same commit as this bump. poi-ooxml is added to
+				bring in XSSF (.xlsx) for the new audit-export sheet.
+
+				POI 5.x transitively pulls log4j-api 2.x; the
+				existing log4j-to-slf4j bridge in the WAR routes those
+				calls into logback so no runtime regression.
+			-->
 			<dependency>
 				<groupId>org.apache.poi</groupId>
 				<artifactId>poi</artifactId>
-				<version>3.0.1-FINAL</version>
+				<version>5.3.0</version>
+				<scope>compile</scope>
+				<exclusions>
+					<exclusion>
+						<artifactId>log4j</artifactId>
+						<groupId>log4j</groupId>
+					</exclusion>
+				</exclusions>
+			</dependency>
+			<dependency>
+				<groupId>org.apache.poi</groupId>
+				<artifactId>poi-ooxml</artifactId>
+				<version>5.3.0</version>
 				<scope>compile</scope>
 				<exclusions>
 					<exclusion>

@@ -148,7 +148,11 @@ public class SubjectsApiController {
     @GetMapping
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(type = "array", implementation = SubjectListItemDto.class)))
-    public ResponseEntity<?> list(HttpSession session) {
+    public ResponseEntity<?> list(
+            @org.springframework.web.bind.annotation.RequestParam(
+                    value = "includeRemoved", required = false, defaultValue = "false")
+            boolean includeRemoved,
+            HttpSession session) {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
@@ -180,6 +184,25 @@ public class SubjectsApiController {
             if (chunk != null) rows.addAll(chunk);
         }
 
+        // Phase E.6 subject-lifecycle — when includeRemoved=false (the
+        // SPA's default), strip soft-deleted rows so the matrix matches
+        // the legacy ListStudySubjects JSP behaviour. The DAO returns
+        // every row regardless of status; the visibility filter
+        // upstream cares about study scope, not lifecycle state.
+        // includeRemoved=true keeps DELETED / AUTO_DELETED rows so the
+        // DM / Admin "Show removed" toggle can render them with a
+        // distinct style + Restore button.
+        if (!includeRemoved) {
+            List<StudySubjectBean> filteredRows = new ArrayList<>(rows.size());
+            for (StudySubjectBean ss : rows) {
+                Status st = ss.getStatus();
+                if (st == null || (!Status.DELETED.equals(st) && !Status.AUTO_DELETED.equals(st))) {
+                    filteredRows.add(ss);
+                }
+            }
+            rows = filteredRows;
+        }
+
         // Cache SubjectBean lookups so a study with multiple participations
         // for the same person doesn't re-hit subject table N times.
         Map<Integer, SubjectBean> subjectCache = new HashMap<>();
@@ -193,11 +216,17 @@ public class SubjectsApiController {
         // of one DAO round trip per event.
         Map<Integer, Integer> openQueriesByEvent = loadOpenQueryCountsForStudy(currentStudy.getId());
 
+        // Phase E.6 subject-lifecycle — single-query group-assignment
+        // aggregation per study_subject.id so the matrix cell is filled
+        // in O(1) per row instead of one DAO round trip per subject.
+        Map<Integer, List<GroupAssignmentSnapshot>> groupAssignmentsBySubject =
+                loadGroupAssignmentsForStudy(visibleStudyIds);
+
         List<SubjectListItemDto> out = new ArrayList<>(rows.size());
         for (StudySubjectBean ss : rows) {
             SubjectBean subj = subjectCache.computeIfAbsent(ss.getSubjectId(), subjectDAO::findByPK);
             out.add(toDto(ss, subj, currentStudy, studyEventDAO, studyEventDefinitionDAO,
-                    definitionCache, openQueriesByEvent));
+                    definitionCache, openQueriesByEvent, groupAssignmentsBySubject));
         }
 
         LOG.debug("Subject Matrix adapter served {} rows for study {} (user {})",
@@ -628,6 +657,40 @@ public class SubjectsApiController {
         List<ValidationErrorBody.FieldError> errors =
                 validateAddSubject(body, currentStudy, studySubjectDAO);
 
+        // Phase E.6 subject-lifecycle — Person-ID re-enrol validation +
+        // group-assignment validation gate fold into the same errors
+        // list so the SPA renders one consolidated error envelope.
+        SubjectGroupAssignmentService groupService =
+                new SubjectGroupAssignmentService(dataSource);
+        SubjectBean existingByPersonId = null;
+        String personId = body.personId() == null ? null : body.personId().trim();
+        if (personId != null && !personId.isEmpty()) {
+            SubjectDAO subjectDAO = new SubjectDAO(dataSource);
+            existingByPersonId = subjectDAO.findByUniqueIdentifier(personId);
+            if (existingByPersonId != null && existingByPersonId.getId() != 0) {
+                // 409-style conflict surfaced as a validation error so the
+                // SPA can flag the field directly: re-enrolling the same
+                // person in the same study is a hard refusal (one
+                // study_subject row per person per study).
+                List<StudySubjectBean> peers = studySubjectDAO.findAllBySubjectId(existingByPersonId.getId());
+                if (peers != null) {
+                    for (StudySubjectBean peer : peers) {
+                        if (peer.getStudyId() == currentStudy.getId()) {
+                            errors.add(new ValidationErrorBody.FieldError(
+                                    "personId",
+                                    "Person-ID '" + personId
+                                            + "' is already enrolled in this study"));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        if (body.groupAssignments() != null) {
+            errors.addAll(groupService.validate(currentStudy, body.groupAssignments()));
+        }
+
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
@@ -643,13 +706,24 @@ public class SubjectsApiController {
         boolean dobCollected = body.yearOfBirth() != null;
         java.sql.Date enrolledOn = java.sql.Date.valueOf(LocalDate.parse(body.enrolledOn()));
 
+        // Phase E.6 subject-lifecycle — Person-ID re-enrol branch.
+        // Reuse an existing subject_id rather than inserting a new
+        // subject row. The SPA flagged "Reusing existing record" in
+        // the AddSubject form when this matched.
         int newSubjectId;
-        try {
-            newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId());
-        } catch (SQLException e) {
-            LOG.error("Failed to insert subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to create subject — see server log."));
+        if (existingByPersonId != null && existingByPersonId.getId() != 0) {
+            newSubjectId = existingByPersonId.getId();
+            LOG.info("Person-ID re-enrol: reusing subject_id={} for personId={} study={}",
+                    newSubjectId, personId, currentStudy.getOid());
+        } else {
+            try {
+                newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId(),
+                        personId == null || personId.isEmpty() ? null : personId);
+            } catch (SQLException e) {
+                LOG.error("Failed to insert subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
+                return ResponseEntity.status(500).body(Map.of("message",
+                        "Failed to create subject — see server log."));
+            }
         }
 
         // ----- Persist study_subject row via DAO (reuse OID generator) -----
@@ -687,10 +761,32 @@ public class SubjectsApiController {
                     "Failed to enrol subject — no PK returned."));
         }
 
+        // Phase E.6 subject-lifecycle — apply the SPA's group-assignment
+        // picks. Validation already ran above, so this only enforces
+        // the reconciliation algorithm. Failures roll the audit log
+        // forward without rolling the study_subject row back — matches
+        // legacy semantics where each insert is its own connection.
+        if (body.groupAssignments() != null && !body.groupAssignments().isEmpty()) {
+            try {
+                groupService.reconcile(ssb.getId(), currentUser, body.groupAssignments(),
+                        new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO(dataSource));
+            } catch (RuntimeException e) {
+                LOG.error("Initial group assignment failed for study_subject={} oid={} (subject enrolled but unassigned)",
+                        ssb.getId(), ssb.getOid(), e);
+            }
+        }
+
         // ----- Build the response DTO -----
         // No events scheduled yet — they're created via M11 (Schedule Event).
         // No queries either. Reuse the M3 DTO shape so the SPA can drop the
         // new subject straight into `rows` without a refetch.
+        // Phase E.6 subject-lifecycle — load any group assignments
+        // that the create-flow's group-assignment branch may have
+        // written. For freshly-created subjects with no assignments,
+        // this returns an empty list (not null) so the SPA can render
+        // an "unassigned" row consistently.
+        List<GroupAssignmentSnapshot> initialAssignments = loadActiveGroupAssignments(ssb.getId());
+
         SubjectDetailDto dto = new SubjectDetailDto(
                 ssb.getLabel(),
                 blankToNull(ssb.getSecondaryLabel()),
@@ -707,7 +803,9 @@ public class SubjectsApiController {
                 /* locked */ false,
                 /* openQueries */ 0,
                 ssb.getStudyEye(),
-                formatIsoDate(ssb.getScreeningDate())
+                formatIsoDate(ssb.getScreeningDate()),
+                mapStudySubjectStatus(ssb.getStatus()),
+                initialAssignments
         );
 
         LOG.info("Add Subject: created study_subject id={} oid={} label={} (study {}, user {})",
@@ -1285,6 +1383,132 @@ public class SubjectsApiController {
     }
 
     /**
+     * Phase E.6 subject-lifecycle — replace a subject's full
+     * {@code subject_group_map} state.
+     *
+     * <p>Accepts the desired final assignment list. The service
+     * reconciles inserts + soft-deletes + group switches in a single
+     * call, returning the refreshed subject detail (the SPA replaces
+     * its in-memory copy on success).
+     *
+     * <p>Authorization mirrors {@link SubjectEditAuthorization}:
+     * Investigator, CRC, Data Manager, Administrator may write;
+     * Monitor / RA / RA2 are refused with 403. Locked or signed
+     * subjects are refused with 409 — group assignment changes
+     * during a signed window would invalidate the e-signature.
+     *
+     * <p>404 on unknown OID; 403 on the subject belonging to a study
+     * outside the user's grant tree; 400 on validation failure (per-
+     * assignment field errors via {@link ValidationErrorBody}).
+     */
+    @PutMapping("/{studySubjectOid}/groups")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = SubjectDetailDto.class)))
+    public ResponseEntity<?> replaceGroups(@PathVariable("studySubjectOid") String studySubjectOid,
+                                           @RequestBody(required = false) UpdateSubjectGroupsRequest body,
+                                           HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!SubjectEditAuthorization.roleMayEdit(roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit editing subject group assignments"));
+        }
+
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
+        if (ss == null || ss.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Subject with OID '" + studySubjectOid + "' not found."));
+        }
+
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visible.contains(Integer.valueOf(ss.getStudyId()))) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Subject belongs to a study outside your grant tree"));
+        }
+
+        if (ss.getStatus() != null && Status.SIGNED.equals(ss.getStatus())) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Subject is signed — un-sign before changing group assignments"));
+        }
+        if (ss.getStatus() != null && Status.LOCKED.equals(ss.getStatus())) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Subject is locked — unlock before changing group assignments"));
+        }
+        if (ss.getStatus() != null
+                && (Status.DELETED.equals(ss.getStatus())
+                    || Status.AUTO_DELETED.equals(ss.getStatus()))) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Subject is removed — restore before changing group assignments"));
+        }
+
+        // Look up the actual study the subject lives in (not the
+        // session-bound study, which can be the top-level parent in a
+        // multi-site setup). Group classes live at the top level only,
+        // so we walk up if needed via StudyDAO.
+        StudyBean assignmentStudy = currentStudy;
+        if (currentStudy.getParentStudyId() != 0
+                || currentStudy.getId() != ss.getStudyId()) {
+            StudyBean ssStudy = new StudyDAO(dataSource).findByPK(ss.getStudyId());
+            if (ssStudy != null && ssStudy.getId() != 0) {
+                if (ssStudy.getParentStudyId() != 0) {
+                    StudyBean parent = new StudyDAO(dataSource).findByPK(ssStudy.getParentStudyId());
+                    if (parent != null && parent.getId() != 0) assignmentStudy = parent;
+                } else {
+                    assignmentStudy = ssStudy;
+                }
+            }
+        }
+
+        SubjectGroupAssignmentService service = new SubjectGroupAssignmentService(dataSource);
+        List<UpdateSubjectGroupsRequest.Assignment> desired = (body == null) ? null : body.assignments();
+        List<ValidationErrorBody.FieldError> errors = service.validate(assignmentStudy, desired);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+
+        int touched;
+        try {
+            touched = service.reconcile(ss.getId(), currentUser, desired,
+                    new at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO(dataSource));
+        } catch (RuntimeException e) {
+            LOG.error("Group-assignment reconcile failed for ss={} oid={} by user={}",
+                    ss.getId(), studySubjectOid, currentUser.getName(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Group assignment update failed — see server log."));
+        }
+
+        LOG.info("Group assignments updated for subject {} (study_subject_id={}): "
+                        + "{} row(s) touched by user {}",
+                studySubjectOid, ss.getId(), touched, currentUser.getName());
+
+        // Refresh detail for the response. Reload the subject so the
+        // status / refreshed audit columns are up to date.
+        StudySubjectBean refreshed = studySubjectDAO.findByPK(ss.getId());
+        SubjectBean subj = new SubjectDAO(dataSource).findByPK(refreshed.getSubjectId());
+        StudyEventDAO studyEventDAO = new StudyEventDAO(dataSource);
+        StudyEventDefinitionDAO studyEventDefinitionDAO = new StudyEventDefinitionDAO(dataSource);
+        EventCRFDAO eventCRFDAO = new EventCRFDAO(dataSource);
+        Map<Integer, StudyEventDefinitionBean> defCache = new HashMap<>();
+        Map<Integer, Integer> openQueriesByEvent = loadOpenQueryCountsForStudy(refreshed.getStudyId());
+        SubjectDetailDto dto = toDetailDto(refreshed, subj, currentStudy, studyEventDAO,
+                studyEventDefinitionDAO, eventCRFDAO, defCache, openQueriesByEvent);
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
      * Shared body for remove / restore / lock / unlock. The
      * transitions are structurally identical — flip the parent
      * status, optionally cascade the child rows — only the status
@@ -1677,7 +1901,8 @@ public class SubjectsApiController {
      * auto-incremented PK, matching the {@code SubjectDAO.create}
      * convention of {@code getLatestPK} after the insert.
      */
-    private int insertSubjectRow(char gender, java.sql.Date dob, boolean dobCollected, int ownerId)
+    private int insertSubjectRow(char gender, java.sql.Date dob, boolean dobCollected, int ownerId,
+                                 String personId)
             throws SQLException {
         String sql = "INSERT INTO subject (status_id, date_of_birth, gender, unique_identifier, "
                 + "owner_id, date_created, dob_collected) "
@@ -1691,7 +1916,15 @@ public class SubjectsApiController {
                 ps.setDate(2, dob);
             }
             ps.setString(3, String.valueOf(gender));
-            ps.setNull(4, Types.VARCHAR); // unique_identifier nullable, not used by M4
+            // Phase E.6 subject-lifecycle — Person-ID stored in
+            // subject.unique_identifier when provided. The legacy
+            // FindSubjectsServlet keys re-enrol lookups off this
+            // column.
+            if (personId == null || personId.isEmpty()) {
+                ps.setNull(4, Types.VARCHAR);
+            } else {
+                ps.setString(4, personId);
+            }
             ps.setInt(5, ownerId);
             ps.setBoolean(6, dobCollected);
             ps.executeUpdate();
@@ -1710,13 +1943,32 @@ public class SubjectsApiController {
      * <p>Fields mirror the SPA's {@code AddSubjectInput} TS interface
      * minus {@code siteOid} / {@code siteLabel} which are derived
      * server-side from the active study. {@code groupLabel} is
-     * accepted but ignored in M4 — its plumbing arrives in a later
-     * compliance slice.
+     * accepted but ignored — {@code groupAssignments} is the structured
+     * replacement.
      *
      * <p>Phase E.6 Tier 1: {@code studyEye} + {@code screeningDate}
      * persist the ophthalmology-domain extension. Both optional;
      * {@code studyEye} must be one of {@code "OD" / "OS" / "OU"} when
      * present (validated in {@link #validateAddSubject}).
+     *
+     * <p>Phase E.6 subject-lifecycle: {@code personId} and
+     * {@code groupAssignments} are optional.
+     * <ul>
+     *   <li>{@code personId} — the {@code subject.unique_identifier}
+     *       value. When present and a matching subject exists in the
+     *       study tree, the new study_subject row reuses the existing
+     *       subject_id (Person-ID re-enrol branch — one human, multiple
+     *       study participations). When absent or unmatched, a fresh
+     *       subject row is created.</li>
+     *   <li>{@code groupAssignments} — desired
+     *       {@code subject_group_map} state for the new subject. Same
+     *       shape as the PUT body; validation runs against the study's
+     *       active group classes; REQUIRED classes must be covered.</li>
+     * </ul>
+     *
+     * <p>Spring's JSON binding deserializes by field name (not
+     * position), so adding fields at the end is back-compat with
+     * existing SPA call sites that omit them.
      */
     public record AddSubjectRequest(
             String id,
@@ -1726,7 +1978,9 @@ public class SubjectsApiController {
             String enrolledOn,
             String groupLabel,
             String studyEye,
-            String screeningDate
+            String screeningDate,
+            String personId,
+            List<UpdateSubjectGroupsRequest.Assignment> groupAssignments
     ) {}
 
     /**
@@ -1799,6 +2053,11 @@ public class SubjectsApiController {
         boolean signed = ss.getStatus() != null && ss.getStatus().equals(Status.SIGNED);
         boolean locked = ss.getStatus() != null && ss.getStatus().equals(Status.LOCKED);
 
+        // Phase E.6 subject-lifecycle — load active subject_group_map
+        // rows. Detail view always populates this (unlike the matrix,
+        // which can defer the per-row fetch via the N+1 mitigation).
+        List<GroupAssignmentSnapshot> groupAssignments = loadActiveGroupAssignments(ss.getId());
+
         return new SubjectDetailDto(
                 ss.getLabel(),
                 secondaryId,
@@ -1815,7 +2074,9 @@ public class SubjectsApiController {
                 locked,
                 subjectOpenQueries,
                 ss.getStudyEye(),
-                formatIsoDate(ss.getScreeningDate())
+                formatIsoDate(ss.getScreeningDate()),
+                mapStudySubjectStatus(ss.getStatus()),
+                groupAssignments
         );
     }
 
@@ -1875,7 +2136,8 @@ public class SubjectsApiController {
                                      StudyEventDAO studyEventDAO,
                                      StudyEventDefinitionDAO studyEventDefinitionDAO,
                                      Map<Integer, StudyEventDefinitionBean> definitionCache,
-                                     Map<Integer, Integer> openQueriesByEvent) {
+                                     Map<Integer, Integer> openQueriesByEvent,
+                                     Map<Integer, List<GroupAssignmentSnapshot>> groupAssignmentsByStudySubjectId) {
         String secondaryId = (ss.getSecondaryLabel() == null || ss.getSecondaryLabel().isBlank())
                 ? null : ss.getSecondaryLabel();
         String gender = mapGender(subj == null ? '\0' : subj.getGender());
@@ -1928,6 +2190,15 @@ public class SubjectsApiController {
         // study_subject row never reports signed regardless of events.
         boolean signed = ss.getStatus() != null && ss.getStatus().equals(Status.SIGNED);
 
+        // Phase E.6 subject-lifecycle — null-safe lookup against the
+        // batched per-study group-assignment map (mitigates N+1).
+        // Empty list when the subject is enrolled but unassigned; null
+        // is reserved for "not loaded" which never happens on this
+        // path (we always pass the map in from list()).
+        List<GroupAssignmentSnapshot> groupAssignments = groupAssignmentsByStudySubjectId == null
+                ? null
+                : groupAssignmentsByStudySubjectId.getOrDefault(ss.getId(), Collections.emptyList());
+
         return new SubjectListItemDto(
                 ss.getLabel(),
                 secondaryId,
@@ -1940,7 +2211,9 @@ public class SubjectsApiController {
                 eventCells,
                 signed,
                 subjectOpenQueries,
-                ss.getStudyEye()
+                ss.getStudyEye(),
+                mapStudySubjectStatus(ss.getStatus()),
+                groupAssignments
         );
     }
 
@@ -2007,6 +2280,132 @@ public class SubjectsApiController {
             LOG.warn("Open-query aggregation failed for study {} — falling back to zeros", studyId, e);
         }
         return counts;
+    }
+
+    /**
+     * Phase E.6 subject-lifecycle — single-shot
+     * {@code subject_group_map} aggregation for an entire study (or a
+     * site-scoped set). Mitigates the matrix N+1 risk (reviewer flag):
+     * issuing one DAO call per {@link StudySubjectBean} would scale
+     * O(N×K) with N subjects × K group classes; the matrix instead
+     * fans out once per {@code visibleStudyIds} entry.
+     *
+     * <p>Only ACTIVE group-class rows are returned — both
+     * {@code subject_group_map.status_id} and the parent
+     * {@code study_group_class.status_id} must be available (status 1).
+     * Disabled / removed group classes don't leak into the SPA's
+     * matrix nor into the audit-trail-driven views; the legacy
+     * {@code ListStudySubjectsServlet} silently filters them too.
+     *
+     * <p>{@code group_id} is null-tolerant — an
+     * {@code OPTIONAL not-now} row carries a NULL {@code study_group_id}
+     * in the legacy schema (LEFT JOIN against {@code study_group}).
+     */
+    private Map<Integer, List<GroupAssignmentSnapshot>> loadGroupAssignmentsForStudy(
+            Set<Integer> studyIds) {
+        Map<Integer, List<GroupAssignmentSnapshot>> out = new HashMap<>();
+        if (studyIds == null || studyIds.isEmpty()) return out;
+
+        // Build a comma list — small N (≤ 10 sites typical), values are
+        // ints so SQL-injection-safe. Avoids prepared-statement param
+        // expansion for variable-length IN lists.
+        StringBuilder ids = new StringBuilder();
+        for (Integer sid : studyIds) {
+            if (sid == null) continue;
+            if (ids.length() > 0) ids.append(',');
+            ids.append(sid.intValue());
+        }
+        if (ids.length() == 0) return out;
+
+        String sql = "SELECT sgm.study_subject_id, sgc.study_group_class_id, sgc.name, "
+                + "       sgm.study_group_id, sg.name AS group_name, sgc.subject_assignment "
+                + "FROM subject_group_map sgm "
+                + "JOIN study_group_class sgc ON sgc.study_group_class_id = sgm.study_group_class_id "
+                + "LEFT JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
+                + "JOIN study_subject ss ON ss.study_subject_id = sgm.study_subject_id "
+                + "WHERE ss.study_id IN (" + ids + ") "
+                + "  AND sgm.status_id = 1 "
+                + "  AND sgc.status_id = 1";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                int studySubjectId = rs.getInt(1);
+                int groupClassId = rs.getInt(2);
+                String groupClassName = rs.getString(3);
+                int rawGroupId = rs.getInt(4);
+                Integer groupId = rs.wasNull() ? null : Integer.valueOf(rawGroupId);
+                String groupName = rs.getString(5);
+                String subjectAssignment = rs.getString(6);
+                out.computeIfAbsent(studySubjectId, k -> new ArrayList<>())
+                   .add(new GroupAssignmentSnapshot(
+                           groupClassId, groupClassName, groupId, groupName, subjectAssignment));
+            }
+        } catch (SQLException e) {
+            LOG.warn("Subject-group-map aggregation failed for studies {} — matrix will show null groupAssignments",
+                    studyIds, e);
+        }
+        return out;
+    }
+
+    /**
+     * Phase E.6 subject-lifecycle — single-subject group-assignment load.
+     *
+     * <p>Used by {@code toDetailDto} and by the create endpoint's
+     * response builder. Filtering rules match
+     * {@link #loadGroupAssignmentsForStudy} byte-for-byte.
+     */
+    private List<GroupAssignmentSnapshot> loadActiveGroupAssignments(int studySubjectId) {
+        List<GroupAssignmentSnapshot> out = new ArrayList<>();
+        if (studySubjectId <= 0) return out;
+        String sql = "SELECT sgc.study_group_class_id, sgc.name, "
+                + "       sgm.study_group_id, sg.name AS group_name, sgc.subject_assignment "
+                + "FROM subject_group_map sgm "
+                + "JOIN study_group_class sgc ON sgc.study_group_class_id = sgm.study_group_class_id "
+                + "LEFT JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
+                + "WHERE sgm.study_subject_id = ? "
+                + "  AND sgm.status_id = 1 "
+                + "  AND sgc.status_id = 1";
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int groupClassId = rs.getInt(1);
+                    String groupClassName = rs.getString(2);
+                    int rawGroupId = rs.getInt(3);
+                    Integer groupId = rs.wasNull() ? null : Integer.valueOf(rawGroupId);
+                    String groupName = rs.getString(4);
+                    String subjectAssignment = rs.getString(5);
+                    out.add(new GroupAssignmentSnapshot(
+                            groupClassId, groupClassName, groupId, groupName, subjectAssignment));
+                }
+            }
+        } catch (SQLException e) {
+            LOG.warn("Group-assignment lookup failed for study_subject={} — surfacing empty list",
+                    studySubjectId, e);
+        }
+        return out;
+    }
+
+    /**
+     * Phase E.6 subject-lifecycle — map {@link Status} to the SPA's
+     * coarse string. Mirrors the SPA's {@code SubjectStatus} TS union.
+     * Null Status (defensive) and any code outside the legacy
+     * AVAILABLE/REMOVED/AUTO_DELETED/LOCKED/SIGNED set fall through
+     * to {@code "available"} — the matrix's safest default.
+     */
+    private static String mapStudySubjectStatus(Status status) {
+        if (status == null) return "available";
+        int id = status.getId();
+        return switch (id) {
+            case 1 -> "available";
+            case 5 -> "removed";
+            case 6 -> "locked";
+            case 7 -> "auto-removed";
+            case 8 -> "signed";
+            default -> "available";
+        };
     }
 
     /** Map the single-char DB encoding to the SPA's `Gender` union. */

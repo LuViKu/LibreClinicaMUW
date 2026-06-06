@@ -311,7 +311,14 @@
     "actions": {
       "respond": "Respond",
       "resolve": "Mark resolved",
-      "close": "Close"
+      "close": "Close",
+      "export": "Export CSV",
+      "exportCsv": "Export CSV",
+      "exportForSubject": "Export CSV (this subject)",
+      "exporting": "Exporting…"
+    },
+    "error": {
+      "exportFailed": "Discrepancy export failed"
     },
     "composer": {
       "label": {
@@ -323,7 +330,20 @@
       "placeholderClose": "Optional: closing comment…",
       "submit": "Send",
       "descriptionRequired": "A reply is required.",
-      "unknownError": "Unknown error while changing status."
+      "unknownError": "Unknown error while changing status.",
+      "type": "Type",
+      "typeReasonForChangeRoleHint": "Reason for change is available to Data Managers and Administrators only."
+    },
+    "thread": {
+      "title": "Thread",
+      "empty": "No replies yet.",
+      "expand": "Show thread",
+      "collapse": "Hide thread",
+      "unknownAuthor": "Unknown",
+      "noDescription": "(no description)"
+    },
+    "email": {
+      "subjectAssigned": "Discrepancy assigned"
     }
   },
   "auditLog": {
@@ -353,6 +373,13 @@
       "data": "Data entry",
       "query": "Query",
       "subject-group-change": "Group change"
+    },
+    "actions": {
+      "exportXlsx": "Export XLSX",
+      "exporting": "Exporting…"
+    },
+    "error": {
+      "exportFailed": "Audit log export failed"
     }
   },
   "crfEntry": {
@@ -377,6 +404,94 @@
       "markComplete": "Mark CRF complete",
       "reopen": "Reopen CRF",
       "reopenConfirm": "Reopen this CRF for editing? Previously signed-off data will be editable again. The action is recorded in the audit trail."
+    },
+    "rfc": {
+      "modalTitle": "Reason for change required",
+      "headerTell": "This CRF was previously marked complete. Edits require a documented reason.",
+      "prompt": "Please document the reason for changing {count} item(s):|Please document the reason for changing {count} item(s):",
+      "placeholder": "e.g. Lab value re-keyed from corrected source document.",
+      "confirm": "Confirm reasons",
+      "cancel": "Cancel",
+      "capturedChip": "Reason captured",
+      "missingForItem": "A reason is required for this change.",
+      "fromTo": {
+        "from": "From",
+        "to": "To"
+      }
+    },
+    "group": {
+      "addRow": "Add row",
+      "deleteRow": "Delete",
+      "deleteRowConfirm": "Delete this row? Existing values will be removed from the audit-visible record.",
+      "repeatMaxReached": "Maximum number of rows reached.",
+      "empty": "No rows yet. Use \"Add row\" to start a new entry."
+    },
+    "file": {
+      "dropPrompt": "Drop a file here or use Browse.",
+      "browse": "Browse",
+      "uploading": "Uploading…",
+      "remove": "Remove",
+      "replace": "Replace",
+      "removeConfirm": "Remove the attached file? The deletion is recorded in the audit trail.",
+      "tooBig": "File exceeds the configured size limit.",
+      "badExtension": "File type is not in the allowed list."
+    },
+    "selectMulti": {
+      "noneSelected": "None selected"
+    },
+    "sectionBadge": {
+      "requiredFilled": "{filled} of {required} required items filled",
+      "errors": "{count} validation error(s)",
+      "openQueries": "{count} open query(ies)"
+    },
+    "concurrentEdit": {
+      "bannerTitle": "Another user is editing this CRF",
+      "lastSeen": "active at {at}"
+    },
+    "itemNote": {
+      "openThread": "Open discussion thread",
+      "statusNew": "{count} open",
+      "statusResolved": "{count} resolved"
+    }
+  },
+  "dde": {
+    "banner": {
+      "blindSecondPass": "Blind second pass — enter the values from the paper original. The first-pass values are not visible to you."
+    },
+    "commit": {
+      "button": "Commit second pass",
+      "inProgress": "Committing pass 2 …"
+    },
+    "reconcile": {
+      "title": "DDE reconciliation",
+      "subjectLabel": "Subject {subject} · {crf}",
+      "headerItem": "Item",
+      "headerIde": "Pass 1 (IDE)",
+      "headerDde": "Pass 2 (DDE)",
+      "headerWinner": "Resolution",
+      "winner": {
+        "ide": "Use Pass 1",
+        "dde": "Use Pass 2",
+        "manual": "Enter a different value"
+      },
+      "reasonForChange": {
+        "label": "Reason for change",
+        "placeholder": "Required — short justification recorded in the audit trail"
+      },
+      "save": "Apply resolution",
+      "saving": "Saving …",
+      "doneToast": "Reconciliation complete — CRF marked DDE-complete.",
+      "openCount": "{count} item still needs reconciliation | {count} items still need reconciliation"
+    },
+    "matrix": {
+      "badge": "DDE conflict",
+      "menuItem": "Reconcile DDE"
+    },
+    "errors": {
+      "sameClerk": "You entered Pass 1 — a different clerk must perform Pass 2.",
+      "notDdeEnabled": "This CRF is not enabled for double data entry.",
+      "noLongerOpen": "This conflict is no longer open (someone else may have resolved it).",
+      "missingReason": "Reason for change is required."
     }
   },
   "buildStudy": {
@@ -393,6 +508,7 @@
     "adminOnly": "Administrator only",
     "createAction": "New study",
     "editAction": "Edit identity",
+    "parametersAction": "Parameters",
     "statusAction": "Change status…",
     "statusTarget": {
       "AVAILABLE": "Available",
@@ -535,7 +651,14 @@
       "disableRule": "Disable rule",
       "restoreRule": "Restore rule",
       "editRule": "Edit rule",
-      "editAction": "Edit"
+      "editAction": "Edit",
+      "dryRun": "Dry-run",
+      "exportXml": "Download XML"
+    },
+    "dryRun": {
+      "heading": "Dry-run preview",
+      "empty": "No actions would fire under the current data.",
+      "subjects": "{count} subject(s)"
     },
     "edit": {
       "title": "Edit rule"
@@ -720,6 +843,40 @@
     "disableConfirm": "Remove CRF \"{name}\"? Active assignments stay intact for audit but new data entry is blocked. The action is recorded in the audit trail.",
     "disableVersionConfirm": "Remove version \"{version}\" of \"{name}\"? Subjects currently entering data against this version are unaffected; new data entry will use the remaining versions.",
     "empty": "No CRFs in the library yet.",
+    "lock": "Lock",
+    "lockConfirm": "Lock version \"{version}\" of \"{name}\"? Subjects entering data are unaffected; the version becomes read-only and event definitions that defaulted to it surface the next available version.",
+    "unlock": "Unlock",
+    "unlockConfirm": "Unlock version \"{version}\" of \"{name}\"? Writes resume for this version.",
+    "restore": "Restore",
+    "restoreConfirm": "Restore version \"{version}\" of \"{name}\"? The version becomes available again. Run the legacy /RestoreCRFVersion path if you need the section + item_data cascade.",
+    "hardRemove": "Hard remove",
+    "hardRemoveConfirm": "Permanently delete version \"{version}\" of \"{name}\"? This drops the row and every associated item / section / response set. Sysadmin only. The action cannot be undone.",
+    "hardRemoveBlocked": "Cannot hard-remove version \"{version}\" — still referenced:",
+    "hardRemoveBlocker": {
+      "eventDefs": "{count} event definition(s) default to this version:",
+      "eventCrfs": "{count} event-CRF row(s) carry data against this version (sample: {sample}).",
+      "remediation": "Run the Migrate dialog to reassign defaults to another version, then retry."
+    },
+    "downloadXls": "Download .xls",
+    "downloadXlsFailed": "Download failed: {message}",
+    "migrate": {
+      "action": "Reassign defaults",
+      "dialogHeading": "Reassign event-def defaults from \"{from}\" to \"{to}\"",
+      "dryRunHeading": "Dry-run preview — no rows will be written",
+      "commitHeading": "Commit migration",
+      "preview": "Preview",
+      "commit": "Commit",
+      "noSeds": "No event definitions currently default to \"{from}\" — nothing to migrate.",
+      "sedColumn": "Event Definition",
+      "studyColumn": "Study",
+      "migratedColumn": "Status",
+      "migratedYes": "Will migrate",
+      "migratedNo": "Skipped",
+      "skipReason": "{reason}",
+      "summary": "Migrating {count} of {total} event definition(s).",
+      "committed": "Migrated {count} event definition(s).",
+      "failed": "Migration failed: {message}"
+    },
     "authorManually": "Manually author",
     "author": {
       "heading": "Author new version of \"{name}\"",
@@ -875,6 +1032,14 @@
     "repeatingLabel": "Repeating event (can occur multiple times per subject)",
     "disable": "Remove",
     "disableConfirm": "Remove event \"{name}\"? Existing CRFs scheduled against it remain in the audit trail but become inaccessible. The action is recorded in the audit trail.",
+    "restore": "Restore",
+    "restoreConfirm": "Restore event \"{name}\"? Auto-removed CRFs and item data flip back to available; rows that were explicitly removed stay removed. The action is recorded in the audit trail.",
+    "lock": "Lock",
+    "lockConfirm": "Lock event \"{name}\"? Active CRFs, event-CRFs, and item data on every subject flip to locked — data entry is blocked until unlock. The action is recorded in the audit trail.",
+    "unlock": "Unlock",
+    "unlockConfirm": "Unlock event \"{name}\"? Locked CRFs and item data flip back to available on every subject. The action is recorded in the audit trail.",
+    "showRemoved": "Show removed",
+    "hideRemoved": "Hide removed",
     "manageCrfs": "CRFs",
     "moveUp": "Move up",
     "moveDown": "Move down",
@@ -999,10 +1164,17 @@
     "lifecycle": {
       "disable": "Disable",
       "restore": "Re-enable",
+      "unlock": "Unlock",
       "disableConfirm": "Disable user {username}? They will be unable to log in. Their study-role bindings are soft-deleted alongside; re-enabling restores them. The action is recorded in the audit trail.",
       "restoreConfirm": "Re-enable user {username}? A new one-time password is generated; they must change it on first login. The action is recorded in the audit trail.",
+      "unlockConfirm": "Unlock user {username}? The account lock is cleared, the failed-login counter is reset, and a new one-time password is generated; they must change it on first login. The action is recorded in the audit trail.",
       "restoredIntro": "User {username} is re-enabled. Share the one-time password via a secure channel.",
+      "unlockedIntro": "User {username} is unlocked. Share the one-time password via a secure channel.",
       "restoredNoPassword": "The credential is owned by the directory or identity provider — no local password was generated. Tell the user they may log in with their existing credentials."
+    },
+    "locked": {
+      "badge": "Locked",
+      "tooltip": "Account locked by too many failed login attempts. Use Unlock to restore access."
     },
     "resetPassword": {
       "action": "Reset password",
@@ -1038,7 +1210,11 @@
       "heading": "Upload CDISC ODM 1.3 XML",
       "description": "Subject / event / CRF / item must already be defined in the study.",
       "cta": "Choose a file or drag-and-drop",
-      "hint": "Accepted: .xml · maximum 50 MB"
+      "hint": "Accepted: .xml · maximum 50 MB",
+      "uploading": "Uploading and validating the XML…",
+      "errorXsd": "The file is not a valid CDISC ODM 1.3 XML payload.",
+      "errorWrongStudy": "The file's studyOID does not match the active study — switch study first or re-export from the source.",
+      "errorFileType": "Only .xml CRF data files are accepted."
     },
     "map": {
       "heading": "Detected counts",
@@ -1060,6 +1236,10 @@
       "reasonHint": "{count} overwrites require a Reason for Change note. Recorded against every overwritten item in the audit log.",
       "reasonPlaceholder": "e.g. Site sent corrected ODM after on-site source-data reconciliation.",
       "cta": "Continue to Commit",
+      "noRows": "The uploaded XML did not contain any item-data rows.",
+      "loadingMoreRows": "Showing {shown} of {total} rows. Scroll to fetch more.",
+      "issuesHeading": "Validation findings",
+      "overwriteModeHeading": "Overwrite policy",
       "column": {
         "status": "Status",
         "subject": "Subject",
@@ -1074,11 +1254,23 @@
         "error": "Error"
       }
     },
+    "overwriteMode": {
+      "replace": "Replace existing values (requires reason for change)",
+      "skip": "Skip rows that would overwrite existing values"
+    },
     "commit": {
       "workingHeading": "Committing…",
       "workingDetail": "Writing rows + audit-trail entries.",
       "successHeading": "Import complete",
-      "successDetail": "{ready} new + {overwrite} overwritten · {error} skipped."
+      "successDetail": "{ready} new + {overwrite} overwritten · {error} skipped.",
+      "rowsInserted": "Rows inserted",
+      "rowsOverwritten": "Rows overwritten",
+      "rowsSkipped": "Rows skipped",
+      "discrepancyNotes": "Discrepancy notes",
+      "tokenExpired": "Preview expired",
+      "reupload": "Re-upload the XML",
+      "startOver": "Start over",
+      "failedHeading": "Commit failed"
     }
   },
   "signSubject": {
@@ -1212,6 +1404,67 @@
     "binding": "Binding…",
     "signOut": "Sign out"
   },
+  "studyParameters": {
+    "title": "Study parameters",
+    "intro": "Configure how this study handles subject identifiers, data discrepancies, interviewer/date prefills, and optional modules. Changes are audited per handle.",
+    "saved": "Parameters updated.",
+    "save": "Save parameters",
+    "sections": {
+      "subjectId": "Subject identification",
+      "discrepancy": "Discrepancy management",
+      "interviewer": "Interviewer & interview-date defaults",
+      "modules": "Optional modules"
+    },
+    "fields": {
+      "subjectIdGeneration": "Subject ID generation",
+      "subjectIdPrefixSuffix": "Allow site-specific prefix/suffix",
+      "subjectPersonIdRequired": "Person ID requirement",
+      "personIdShownOnCRF": "Show Person ID on CRF header",
+      "collectDob": "Collect date of birth",
+      "genderRequired": "Gender required",
+      "eventLocationRequired": "Event location requirement",
+      "discrepancyManagement": "Discrepancy notes enabled",
+      "interviewerNameRequired": "Interviewer name requirement",
+      "interviewerNameDefault": "Interviewer name default",
+      "interviewerNameEditable": "Interviewer name editable",
+      "interviewDateRequired": "Interview date requirement",
+      "interviewDateDefault": "Interview date default",
+      "interviewDateEditable": "Interview date editable",
+      "secondaryLabelViewable": "Secondary label viewable",
+      "adminForcedReasonForChange": "Force reason-for-change after completion",
+      "participantPortal": "Participant portal",
+      "randomization": "Randomization"
+    },
+    "enums": {
+      "subjectIdGeneration": {
+        "manual": "Manual",
+        "auto non-editable": "Auto (non-editable)",
+        "auto editable": "Auto (editable)"
+      },
+      "collectDob": {
+        "1": "Full date of birth",
+        "2": "Year only",
+        "3": "Not collected"
+      },
+      "required": {
+        "required": "Required",
+        "optional": "Optional",
+        "not_used": "Not used"
+      },
+      "bool": {
+        "true": "Yes",
+        "false": "No"
+      },
+      "blankPrepopulated": {
+        "blank": "Blank",
+        "pre-populated": "Pre-populated"
+      },
+      "enabledDisabled": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      }
+    }
+  },
   "subjectDetail": {
     "subTrail": "subject detail",
     "notSigned": "Not signed",
@@ -1276,7 +1529,12 @@
       "data-entry-started": "In progress",
       "completed": "Completed",
       "stopped": "Stopped",
-      "signed": "Signed"
+      "signed": "Signed",
+      "removed": "Removed"
+    },
+    "crf": {
+      "restore": "Restore CRF",
+      "restoreFailed": "Could not restore CRF — please retry."
     },
     "table": {
       "crfName": "CRF",
@@ -1364,7 +1622,10 @@
     "openWizard": "Open in wizard",
     "openReadOnly": "View",
     "editDisabledHasRun": "This dataset has been executed and is locked from structural edits. Duplicate it to compose a new variant.",
-    "hasRunBadge": "{n} run(s)"
+    "hasRunBadge": "{n} run(s)",
+    "showRemoved": "Show removed",
+    "restore": "Restore",
+    "confirmRestore": "Restore dataset '{name}'? This brings it back into the list so it can be re-run."
   },
   "createDataset": {
     "eyebrow": "Data export",

@@ -101,6 +101,70 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
   }
 
   /**
+   * Phase E.6 — restore a removed event definition (cascades back
+   * AUTO_DELETED child event_crf / item_data rows). Backend returns
+   * the rehydrated DTO so the in-memory list can swap in place; if the
+   * SED was filtered out of an "active-only" load the row gets pushed
+   * onto the end so the view re-renders it.
+   */
+  async function restore(studyOid: string, sedOid: string): Promise<boolean> {
+    try {
+      const updated = await apiPost<EventDefinition>(
+        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/event-definitions/${encodeURIComponent(sedOid)}/restore`,
+        {},
+      )
+      const idx = rows.value.findIndex((r) => r.oid === sedOid)
+      if (idx >= 0) {
+        rows.value[idx] = updated
+      } else {
+        rows.value = [...rows.value, updated]
+      }
+      return true
+    } catch (e) {
+      handleNonValidationError(e, 'restore')
+      return false
+    }
+  }
+
+  /**
+   * Phase E.6 — lock an event definition (sysadmin only on the
+   * backend). Cascades AVAILABLE -> LOCKED across child rows.
+   */
+  async function lock(studyOid: string, sedOid: string): Promise<boolean> {
+    try {
+      const updated = await apiPost<EventDefinition>(
+        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/event-definitions/${encodeURIComponent(sedOid)}/lock`,
+        {},
+      )
+      const idx = rows.value.findIndex((r) => r.oid === sedOid)
+      if (idx >= 0) rows.value[idx] = updated
+      return true
+    } catch (e) {
+      handleNonValidationError(e, 'lock')
+      return false
+    }
+  }
+
+  /**
+   * Phase E.6 — unlock a LOCKED event definition (sysadmin only on
+   * the backend). Cascades blanket AVAILABLE across child rows.
+   */
+  async function unlock(studyOid: string, sedOid: string): Promise<boolean> {
+    try {
+      const updated = await apiPost<EventDefinition>(
+        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/event-definitions/${encodeURIComponent(sedOid)}/unlock`,
+        {},
+      )
+      const idx = rows.value.findIndex((r) => r.oid === sedOid)
+      if (idx >= 0) rows.value[idx] = updated
+      return true
+    } catch (e) {
+      handleNonValidationError(e, 'unlock')
+      return false
+    }
+  }
+
+  /**
    * Reorder bulk-updates ordinals. The view passes the new ordering
    * as an explicit list of OIDs — the backend re-emits the full list
    * with refreshed ordinals so the store can swap state atomically.
@@ -196,6 +260,9 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     create,
     update,
     disable,
+    restore,
+    lock,
+    unlock,
     reorder,
     reset,
   }

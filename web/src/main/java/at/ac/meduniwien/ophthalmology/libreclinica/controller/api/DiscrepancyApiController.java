@@ -8,7 +8,15 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -18,6 +26,8 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.export.CsvWriter;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
@@ -37,11 +47,14 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.discrepancy.DiscrepancyEmailNotifier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -54,6 +67,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 /**
  * Phase E.4 M7 — Notes &amp; Discrepancies adapter.
@@ -102,14 +118,35 @@ public class DiscrepancyApiController {
 
     private static final Logger LOG = LoggerFactory.getLogger(DiscrepancyApiController.class);
 
+    /**
+     * Phase E.6 — audit-log event-type id for discrepancy-list CSV
+     * exports. Seeded by Liquibase
+     * {@code lc-muw-2026-06-06-audit-event-type-discrepancy-export.xml}.
+     * Maps to the "admin" variant in {@code AuditApiController.variantForType}.
+     */
+    static final int AUDIT_TYPE_DISCREPANCY_LOG_EXPORTED = 56;
+
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
+    private final DiscrepancyEmailNotifier emailNotifier;
 
     @Autowired
     public DiscrepancyApiController(@Qualifier("dataSource") DataSource dataSource,
-                                    SiteVisibilityFilter siteVisibilityFilter) {
+                                    SiteVisibilityFilter siteVisibilityFilter,
+                                    DiscrepancyEmailNotifier emailNotifier) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
+        this.emailNotifier = emailNotifier;
+    }
+
+    /**
+     * Phase E.6 test-friendly constructor — Phase E.5 MockMvc IT scaffold
+     * doesn't have a configured {@link DiscrepancyEmailNotifier} bean.
+     * The notifier is optional; null disables email side-effects.
+     */
+    public DiscrepancyApiController(DataSource dataSource,
+                                    SiteVisibilityFilter siteVisibilityFilter) {
+        this(dataSource, siteVisibilityFilter, null);
     }
 
     @GetMapping
@@ -130,6 +167,107 @@ public class DiscrepancyApiController {
             return ResponseEntity.badRequest().body(Map.of("message",
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        return ResponseEntity.ok(collectFilteredRows(ub, currentStudy, currentRole,
+                statusFilter, subjectIdFilter, assignedToFilter));
+    }
+
+    /**
+     * Phase E.6 — CSV hand-off of the discrepancy list. Mirrors the
+     * same filter set as {@link #list} so sponsor / inspector
+     * downloads match the on-screen row count. Emits one
+     * {@code audit_log_event} row (type 56) per successful download
+     * so the GxP audit trail records who took the egress + which
+     * filters were active.
+     *
+     * <p>Output is UTF-8 with a BOM preamble + CRLF line endings + RFC 4180
+     * quoting — see {@link CsvWriter} for the byte-level contract.
+     *
+     * <p>Filename: {@code discrepancies_&lt;studyOid&gt;[_&lt;subject&gt;]_&lt;yyyyMMdd&gt;.csv}.
+     * The optional subject segment is added when the request was scoped to
+     * a single subject so a sponsor reviewing several per-subject hand-offs
+     * can keep them apart on disk.
+     */
+    @GetMapping("/export.csv")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(mediaType = "text/csv"))
+    public ResponseEntity<?> exportCsv(
+            @RequestParam(value = "status", required = false) String statusFilter,
+            @RequestParam(value = "subjectId", required = false) String subjectIdFilter,
+            @RequestParam(value = "assignedTo", required = false) String assignedToFilter,
+            HttpSession session) {
+
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+
+        List<DiscrepancyNoteDto> rows = collectFilteredRows(ub, currentStudy, currentRole,
+                statusFilter, subjectIdFilter, assignedToFilter);
+
+        byte[] csv;
+        try {
+            ByteArrayOutputStream buf = new ByteArrayOutputStream();
+            try (CsvWriter w = new CsvWriter(buf)) {
+                w.writeHeader();
+                w.writeRow("ID", "Type", "Status", "Subject", "Item OID",
+                        "Description", "Assigned to", "Days open", "Last activity (UTC)");
+                for (DiscrepancyNoteDto r : rows) {
+                    w.writeRow(
+                            nz(r.id()),
+                            nz(r.type()),
+                            nz(r.status()),
+                            nz(r.subjectId()),
+                            nz(r.itemOid()),
+                            nz(r.description()),
+                            nz(r.assignedTo()),
+                            String.valueOf(r.daysOpen()),
+                            nz(r.lastActivityAt()));
+                }
+            }
+            csv = buf.toByteArray();
+        } catch (IOException e) {
+            LOG.error("Failed to render discrepancy-export CSV for study_id={}",
+                    currentStudy.getId(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to render discrepancy-export CSV: " + e.getMessage()));
+        }
+
+        String filterSummary = describeFilters(statusFilter, subjectIdFilter, assignedToFilter, rows.size());
+        emitExportAudit(ub.getId(), currentStudy, AUDIT_TYPE_DISCREPANCY_LOG_EXPORTED, filterSummary);
+
+        StringBuilder filename = new StringBuilder("discrepancies_")
+                .append(safeOid(currentStudy.getOid()));
+        if (subjectIdFilter != null && !subjectIdFilter.isBlank()) {
+            filename.append('_').append(safeOid(subjectIdFilter));
+        }
+        filename.append('_')
+                .append(LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.BASIC_ISO_DATE))
+                .append(".csv");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv; charset=utf-8"));
+        headers.setContentDispositionFormData("attachment", filename.toString());
+        headers.setContentLength(csv.length);
+        return new ResponseEntity<>(csv, headers, 200);
+    }
+
+    /**
+     * Shared row collection — used by both {@link #list} and
+     * {@link #exportCsv}. Walks the SiteVisibilityFilter visible-study
+     * set, joins the entity_id chain (item_data → event_crf →
+     * study_subject), then applies the status / subject / assignedTo
+     * filters server-side so the CSV row count matches the SPA list.
+     */
+    private List<DiscrepancyNoteDto> collectFilteredRows(
+            UserAccountBean ub, StudyBean currentStudy, StudyUserRoleBean currentRole,
+            String statusFilter, String subjectIdFilter, String assignedToFilter) {
 
         DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
         // Without fetchMapping the DAO doesn't follow the per-entity-type
@@ -142,7 +280,6 @@ public class DiscrepancyApiController {
         // merge. For a top-level Admin/Director this is the
         // unchanged behaviour (single hit on the parent); a Monitor
         // with site-only grants ends up with site-only results.
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
                 ub, currentStudy, currentRole);
         ArrayList<DiscrepancyNoteBean> notes = new ArrayList<>();
@@ -230,7 +367,7 @@ public class DiscrepancyApiController {
                     lastActivityAt));
         }
 
-        return ResponseEntity.ok(out);
+        return out;
     }
 
     @PostMapping
@@ -294,9 +431,25 @@ public class DiscrepancyApiController {
                     "No item_data row for subject '" + body.subjectId() + "' and item '" + body.itemOid() + "'"));
         }
 
+        // Phase E.6 — type field. Defaults to QUERY when null/blank for
+        // M7 backwards-compat. RFC is gated to DM/Admin.
+        String typeName = (body.type() == null || body.type().isBlank()) ? "query" : body.type();
+        int typeId = NoteTransitionMatrix.typeIdForSpaName(typeName);
+        if (typeId == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Unknown type '" + typeName + "' — expected one of: "
+                            + "query | failed-validation | annotation | reason-for-change"));
+        }
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!NoteTransitionMatrix.canCreateType(typeId, roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit creating notes of type '" + typeName + "'"));
+        }
+
         DiscrepancyNoteBean note = new DiscrepancyNoteBean();
         note.setDescription(body.description().trim());
-        note.setDiscrepancyNoteTypeId(DiscrepancyNoteType.QUERY.getId());
+        note.setDiscrepancyNoteTypeId(typeId);
         note.setResolutionStatusId(ResolutionStatus.OPEN.getId());
         note.setStudyId(currentStudy.getId());
         note.setEntityType("itemData");
@@ -313,8 +466,14 @@ public class DiscrepancyApiController {
         DiscrepancyNoteBean saved = dnDao.create(note);
         dnDao.createMapping(saved);
 
-        LOG.info("Created discrepancy_note id={} type=query subject={} item={} by user={}",
-                saved.getId(), body.subjectId(), body.itemOid(), ub.getName());
+        LOG.info("Created discrepancy_note id={} type={} subject={} item={} by user={}",
+                saved.getId(), typeName, body.subjectId(), body.itemOid(), ub.getName());
+
+        // Phase E.6 — email notification on create (when an assignee is set).
+        if (emailNotifier != null && assignedUserId != null && assignedUserId > 0) {
+            UserAccountBean assignee = new UserAccountDAO(dataSource).findByPK(assignedUserId);
+            emailNotifier.notifyCreated(saved, assignee, currentStudy);
+        }
 
         DiscrepancyNoteDto dto = new DiscrepancyNoteDto(
                 String.valueOf(saved.getId()),
@@ -428,6 +587,8 @@ public class DiscrepancyApiController {
 
         // Resolve optional reassignment before mutating the parent.
         Integer assignedUserId = resolveAssignee(body.assignedTo());
+        int previousStatusId = parent.getResolutionStatusId();
+        int previousAssignedUserId = parent.getAssignedUserId();
 
         // Insert the child note. parent_dn_id is set via the bean's
         // setParentDnId(). entity_type / entity_id / column are
@@ -467,11 +628,123 @@ public class DiscrepancyApiController {
         LOG.info("Appended thread entry to discrepancy_note id={} status={} by user={} role={}",
                 parent.getId(), body.newStatus(), ub.getName(), roleId);
 
+        // Phase E.6 — fire emails on state change + reassignment. Use the
+        // parent's study (not the session's currentStudy — may differ for
+        // a Monitor with multi-site grants).
+        if (emailNotifier != null) {
+            StudyBean parentStudy = (parent.getStudyId() == currentStudy.getId())
+                    ? currentStudy
+                    : (StudyBean) new StudyDAO(dataSource).findByPK(parent.getStudyId());
+            // State change: notify the current (post-reassignment) assignee.
+            int effectiveAssigneeId = (assignedUserId != null && assignedUserId > 0)
+                    ? assignedUserId : previousAssignedUserId;
+            if (effectiveAssigneeId > 0 && previousStatusId != newStatusId) {
+                UserAccountBean assignee = new UserAccountDAO(dataSource).findByPK(effectiveAssigneeId);
+                emailNotifier.notifyStateChanged(parent, assignee,
+                        statusToSpa(previousStatusId), statusToSpa(newStatusId), parentStudy);
+            }
+            // Reassignment: notify the new assignee distinctly when changed.
+            if (assignedUserId != null && assignedUserId > 0
+                    && assignedUserId != previousAssignedUserId) {
+                UserAccountBean newAssignee = new UserAccountDAO(dataSource).findByPK(assignedUserId);
+                emailNotifier.notifyReassigned(parent, newAssignee, parentStudy);
+            }
+        }
+
         // Refresh + project the updated parent. Use the same DAO with
         // fetchMapping=true (already set) to repopulate entity-walk
         // fields, then project to the SPA wire shape.
         DiscrepancyNoteBean refreshed = (DiscrepancyNoteBean) dnDao.findByPK(parent.getId());
         return ResponseEntity.ok(projectParentDto(refreshed));
+    }
+
+    /**
+     * Phase E.6 {@code discrepancy-full} — return a parent note with
+     * its full child thread (parent + every child in insertion order).
+     *
+     * <p>Authorization: same as {@code appendThread} — session-bound
+     * authenticated user, active study, parent must be in the
+     * caller's visible study set.
+     */
+    @GetMapping("/{parentId}/thread")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = DiscrepancyNoteDto.class)))
+    public ResponseEntity<?> getThread(@PathVariable("parentId") long parentId,
+                                       HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+
+        DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
+        dnDao.setFetchMapping(true);
+        DiscrepancyNoteBean parent = (DiscrepancyNoteBean) dnDao.findByPK((int) parentId);
+        if (parent == null || parent.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No discrepancy_note with id " + parentId));
+        }
+
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(parent.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Parent note " + parentId + " is not in your visible study set"));
+        }
+
+        DiscrepancyNoteDto parentDto = projectParentDto(parent);
+
+        // The parent itself is the first thread entry; children follow
+        // in insertion order (DAO returns by primary key ASC).
+        List<DiscrepancyThreadEntryDto> entries = new ArrayList<>();
+        entries.add(toThreadEntry(parent));
+        ArrayList<DiscrepancyNoteBean> children = dnDao.findAllByParent(parent);
+        if (children != null) {
+            for (DiscrepancyNoteBean c : children) {
+                entries.add(toThreadEntry(c));
+            }
+        }
+
+        // Re-project with the populated thread field.
+        DiscrepancyNoteDto hydrated = new DiscrepancyNoteDto(
+                parentDto.id(),
+                parentDto.type(),
+                parentDto.status(),
+                parentDto.subjectId(),
+                parentDto.itemOid(),
+                parentDto.description(),
+                parentDto.assignedTo(),
+                parentDto.daysOpen(),
+                parentDto.lastActivityAt(),
+                entries);
+        return ResponseEntity.ok(hydrated);
+    }
+
+    /* Phase E.6 harmonize — the discrepancy-full cluster's exportCsv
+     * (using DiscrepancyExportCsv.render + filenameFor) was superseded
+     * by the audit-discrepancy-export cluster's version at the top of
+     * this controller, which adds shared filter row collection +
+     * audit_log_event_type 56 emission. DiscrepancyExportCsv stays
+     * around for the unit tests (RFC 4180 quoting + filename helpers). */
+
+    /** Project a single bean (parent or child) to a thread-entry DTO. */
+    private DiscrepancyThreadEntryDto toThreadEntry(DiscrepancyNoteBean n) {
+        String author = (n.getOwner() != null && n.getOwner().getId() > 0)
+                ? n.getOwner().getName() : "";
+        String createdAt = n.getCreatedDate() != null
+                ? n.getCreatedDate().toInstant().truncatedTo(ChronoUnit.SECONDS).toString()
+                : "";
+        return new DiscrepancyThreadEntryDto(
+                String.valueOf(n.getId()),
+                statusToSpa(n.getResolutionStatusId()),
+                nullToEmpty(n.getDescription()),
+                author,
+                createdAt);
     }
 
     /* ----------------------------------------------------------------- */
@@ -594,11 +867,92 @@ public class DiscrepancyApiController {
         return s == null ? "" : s;
     }
 
-    /** Body of POST /pages/api/v1/discrepancies — "Add Query" form. */
+    /* ------------------------------------------------------------------ */
+    /* Export helpers                                                     */
+    /* ------------------------------------------------------------------ */
+
+    /** Null-safe coalesce for {@link CsvWriter} cell input. */
+    static String nz(String s) {
+        return s == null ? "" : s;
+    }
+
+    /**
+     * Render the safe StudyOID / subject slug for the export filename —
+     * alphanumerics + dash + underscore only so the filename is portable
+     * across the Windows / macOS / Linux clients sponsors typically use.
+     */
+    static String safeOid(String oid) {
+        if (oid == null || oid.isBlank()) return "study";
+        StringBuilder sb = new StringBuilder(oid.length());
+        for (int i = 0; i < oid.length(); i++) {
+            char c = oid.charAt(i);
+            if (Character.isLetterOrDigit(c) || c == '-' || c == '_') {
+                sb.append(c);
+            } else {
+                sb.append('_');
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Build a one-line filter summary stored in {@code audit_log_event.new_value}
+     * so the audit-trail row records what the operator selected when they
+     * pulled the export (matches the SPA filter chip set).
+     */
+    static String describeFilters(String status, String subjectId, String assignedTo, int rowCount) {
+        StringBuilder sb = new StringBuilder("rows=").append(rowCount);
+        if (status != null && !status.isBlank()) sb.append(" status=").append(status);
+        if (subjectId != null && !subjectId.isBlank()) sb.append(" subjectId=").append(subjectId);
+        if (assignedTo != null && !assignedTo.isBlank()) sb.append(" assignedTo=").append(assignedTo);
+        return sb.toString();
+    }
+
+    /**
+     * Phase E.6 — best-effort INSERT into {@code audit_log_event} so the
+     * GxP audit trail captures the egress event. Mirrors
+     * {@code AuditApiController.emitExportAudit} — failures log at WARN
+     * but never roll back the rendered download.
+     */
+    private void emitExportAudit(int userId, StudyBean study, int typeId, String filterSummary) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?)")) {
+            ps.setInt(1, typeId);
+            ps.setInt(2, userId);
+            ps.setInt(3, study.getId());
+            ps.setString(4, study.getOid() == null ? "" : study.getOid());
+            ps.setString(5, "");
+            ps.setString(6, filterSummary == null ? "" : filterSummary);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Failed to write discrepancy-export audit row for study_id={} type={}: {}",
+                    study.getId(), typeId, e.getMessage());
+        }
+    }
+
+    /**
+     * Body of POST /pages/api/v1/discrepancies — "Add Query" form.
+     *
+     * <p>Phase E.6 {@code discrepancy-full}: added optional {@code type}
+     * field. Accepts the four SPA-side type strings; defaults to
+     * {@code "query"} when null/blank to preserve the M7 baseline
+     * behaviour. {@code "reason-for-change"} is gated to DM/Admin per
+     * {@link NoteTransitionMatrix#canCreateType(int, int)}.
+     */
     public record AddQueryRequest(
             String subjectId,
             String itemOid,
             String description,
-            String assignedTo
-    ) {}
+            String assignedTo,
+            String type
+    ) {
+        /** Backwards-compat ctor — defaults type to "query". */
+        public AddQueryRequest(String subjectId, String itemOid,
+                               String description, String assignedTo) {
+            this(subjectId, itemOid, description, assignedTo, "query");
+        }
+    }
 }

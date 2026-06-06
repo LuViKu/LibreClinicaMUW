@@ -311,7 +311,14 @@
     "actions": {
       "respond": "Antworten",
       "resolve": "Als gelöst markieren",
-      "close": "Schließen"
+      "close": "Schließen",
+      "export": "CSV exportieren",
+      "exportCsv": "CSV exportieren",
+      "exportForSubject": "CSV exportieren (Teilnehmer)",
+      "exporting": "Wird exportiert…"
+    },
+    "error": {
+      "exportFailed": "Discrepancy-Export fehlgeschlagen"
     },
     "composer": {
       "label": {
@@ -323,7 +330,20 @@
       "placeholderClose": "Optional: Schließbemerkung…",
       "submit": "Senden",
       "descriptionRequired": "Eine Antwort ist erforderlich.",
-      "unknownError": "Unbekannter Fehler bei der Zustandsänderung."
+      "unknownError": "Unbekannter Fehler bei der Zustandsänderung.",
+      "type": "Typ",
+      "typeReasonForChangeRoleHint": "„Reason for Change“ ist nur für Datenmanager und Administratoren verfügbar."
+    },
+    "thread": {
+      "title": "Verlauf",
+      "empty": "Noch keine Antworten.",
+      "expand": "Verlauf anzeigen",
+      "collapse": "Verlauf ausblenden",
+      "unknownAuthor": "Unbekannt",
+      "noDescription": "(keine Beschreibung)"
+    },
+    "email": {
+      "subjectAssigned": "Rückfrage zugewiesen"
     }
   },
   "auditLog": {
@@ -353,6 +373,13 @@
       "data": "Datenerfassung",
       "query": "Rückfrage",
       "subject-group-change": "Gruppenwechsel"
+    },
+    "actions": {
+      "exportXlsx": "XLSX exportieren",
+      "exporting": "Wird exportiert…"
+    },
+    "error": {
+      "exportFailed": "Audit-Log-Export fehlgeschlagen"
     }
   },
   "crfEntry": {
@@ -377,6 +404,94 @@
       "markComplete": "CRF als abgeschlossen markieren",
       "reopen": "CRF erneut öffnen",
       "reopenConfirm": "Dieses CRF wieder zur Bearbeitung freigeben? Bereits abgezeichnete Daten werden wieder editierbar. Die Aktion wird im Audit-Trail vermerkt."
+    },
+    "rfc": {
+      "modalTitle": "Begründung der Änderung erforderlich",
+      "headerTell": "Dieses CRF war bereits abgeschlossen. Änderungen erfordern eine dokumentierte Begründung.",
+      "prompt": "Bitte begründen Sie die Änderung an {count} Feld.|Bitte begründen Sie die Änderungen an {count} Feldern.",
+      "placeholder": "z. B. Laborwert anhand korrigiertem Quelldokument neu erfasst.",
+      "confirm": "Begründungen bestätigen",
+      "cancel": "Abbrechen",
+      "capturedChip": "Begründung erfasst",
+      "missingForItem": "Für diese Änderung ist eine Begründung erforderlich.",
+      "fromTo": {
+        "from": "Vorher",
+        "to": "Nachher"
+      }
+    },
+    "group": {
+      "addRow": "Zeile hinzufügen",
+      "deleteRow": "Löschen",
+      "deleteRowConfirm": "Diese Zeile löschen? Bestehende Werte werden aus dem auditierbaren Datensatz entfernt.",
+      "repeatMaxReached": "Maximale Anzahl an Zeilen erreicht.",
+      "empty": "Noch keine Zeilen. Über „Zeile hinzufügen“ einen neuen Eintrag anlegen."
+    },
+    "file": {
+      "dropPrompt": "Datei hier ablegen oder Durchsuchen verwenden.",
+      "browse": "Durchsuchen",
+      "uploading": "Wird hochgeladen…",
+      "remove": "Entfernen",
+      "replace": "Ersetzen",
+      "removeConfirm": "Angehängte Datei entfernen? Das Löschen wird im Audit-Trail vermerkt.",
+      "tooBig": "Datei überschreitet die zulässige Größe.",
+      "badExtension": "Dateityp ist nicht zulässig."
+    },
+    "selectMulti": {
+      "noneSelected": "Keine Auswahl"
+    },
+    "sectionBadge": {
+      "requiredFilled": "{filled} von {required} Pflichtfeldern ausgefüllt",
+      "errors": "{count} Validierungsfehler",
+      "openQueries": "{count} offene Rückfrage(n)"
+    },
+    "concurrentEdit": {
+      "bannerTitle": "Ein anderer Benutzer bearbeitet dieses CRF",
+      "lastSeen": "aktiv um {at}"
+    },
+    "itemNote": {
+      "openThread": "Diskussionsthread öffnen",
+      "statusNew": "{count} offen",
+      "statusResolved": "{count} erledigt"
+    }
+  },
+  "dde": {
+    "banner": {
+      "blindSecondPass": "Blinde Zweiteingabe — bitte die Werte aus dem Papier­original eingeben. Die Werte der Ersteingabe sind für Sie nicht sichtbar."
+    },
+    "commit": {
+      "button": "Zweiteingabe festschreiben",
+      "inProgress": "Zweiteingabe wird festgeschrieben …"
+    },
+    "reconcile": {
+      "title": "DDE-Abgleich",
+      "subjectLabel": "Patient {subject} · {crf}",
+      "headerItem": "Item",
+      "headerIde": "Eingabe 1 (IDE)",
+      "headerDde": "Eingabe 2 (DDE)",
+      "headerWinner": "Auflösung",
+      "winner": {
+        "ide": "Eingabe 1 verwenden",
+        "dde": "Eingabe 2 verwenden",
+        "manual": "Anderen Wert eintragen"
+      },
+      "reasonForChange": {
+        "label": "Änderungsbegründung",
+        "placeholder": "Pflichtfeld — kurze Begründung, wird im Audit-Trail vermerkt"
+      },
+      "save": "Auflösung anwenden",
+      "saving": "Wird gespeichert …",
+      "doneToast": "Abgleich abgeschlossen — CRF auf DDE-fertig gesetzt.",
+      "openCount": "Noch {count} Item zu klären | Noch {count} Items zu klären"
+    },
+    "matrix": {
+      "badge": "DDE-Konflikt",
+      "menuItem": "DDE abgleichen"
+    },
+    "errors": {
+      "sameClerk": "Sie haben die Ersteingabe durchgeführt — die Zweiteingabe muss ein anderer Bearbeiter erfassen.",
+      "notDdeEnabled": "Für dieses CRF ist keine Zweiteingabe konfiguriert.",
+      "noLongerOpen": "Dieser Konflikt ist nicht mehr offen (vermutlich bereits von jemand anderem aufgelöst).",
+      "missingReason": "Änderungsbegründung ist erforderlich."
     }
   },
   "buildStudy": {
@@ -393,6 +508,7 @@
     "adminOnly": "Nur Administrator",
     "createAction": "Neue Studie",
     "editAction": "Identität bearbeiten",
+    "parametersAction": "Parameter",
     "statusAction": "Status ändern…",
     "statusTarget": {
       "AVAILABLE": "Verfügbar",
@@ -535,7 +651,14 @@
       "disableRule": "Regel deaktivieren",
       "restoreRule": "Regel wiederherstellen",
       "editRule": "Regel bearbeiten",
-      "editAction": "Bearbeiten"
+      "editAction": "Bearbeiten",
+      "dryRun": "Probelauf",
+      "exportXml": "XML herunterladen"
+    },
+    "dryRun": {
+      "heading": "Probelauf-Vorschau",
+      "empty": "Mit den aktuellen Daten würden keine Aktionen ausgelöst.",
+      "subjects": "{count} Subjekt(e)"
     },
     "edit": {
       "title": "Regel bearbeiten"
@@ -720,6 +843,40 @@
     "disableConfirm": "CRF »{name}« entfernen? Bestehende Zuweisungen bleiben für den Audit Trail erhalten, neue Dateneingabe wird gesperrt. Die Aktion wird im Audit Trail dokumentiert.",
     "disableVersionConfirm": "Version »{version}« von »{name}« entfernen? Laufende Dateneingaben in dieser Version bleiben unverändert; neue Dateneingaben verwenden die verbleibenden Versionen.",
     "empty": "Noch keine CRFs in der Bibliothek.",
+    "lock": "Sperren",
+    "lockConfirm": "Version »{version}« von »{name}« sperren? Laufende Dateneingaben bleiben unverändert; die Version wird schreibgeschützt und Event-Definitionen, die sie als Standard nutzten, zeigen die nächste verfügbare Version.",
+    "unlock": "Entsperren",
+    "unlockConfirm": "Version »{version}« von »{name}« entsperren? Schreibvorgänge sind wieder möglich.",
+    "restore": "Wiederherstellen",
+    "restoreConfirm": "Version »{version}« von »{name}« wiederherstellen? Die Version wird wieder verfügbar. Für Section- und Item-Daten-Kaskade ggf. den Legacy-Pfad /RestoreCRFVersion verwenden.",
+    "hardRemove": "Endgültig löschen",
+    "hardRemoveConfirm": "Version »{version}« von »{name}« endgültig löschen? Diese Aktion entfernt die Zeile sowie alle zugehörigen Items / Sektionen / Antwortsets. Nur für Systemadministratoren. Die Aktion kann nicht rückgängig gemacht werden.",
+    "hardRemoveBlocked": "Endgültiges Löschen der Version »{version}« nicht möglich — es bestehen noch Referenzen:",
+    "hardRemoveBlocker": {
+      "eventDefs": "{count} Event-Definition(en) verwenden diese Version als Standard:",
+      "eventCrfs": "{count} Event-CRF-Zeile(n) enthalten Daten zu dieser Version (Stichprobe: {sample}).",
+      "remediation": "Standardversionen über den Migrationsdialog neu zuweisen und dann erneut versuchen."
+    },
+    "downloadXls": ".xls herunterladen",
+    "downloadXlsFailed": "Download fehlgeschlagen: {message}",
+    "migrate": {
+      "action": "Standardversion neu zuweisen",
+      "dialogHeading": "Event-Def-Standardversion von »{from}« auf »{to}« umstellen",
+      "dryRunHeading": "Vorschau (Dry-Run) — es werden keine Zeilen geschrieben",
+      "commitHeading": "Migration übernehmen",
+      "preview": "Vorschau",
+      "commit": "Übernehmen",
+      "noSeds": "Aktuell hat keine Event-Definition »{from}« als Standardversion — nichts zu migrieren.",
+      "sedColumn": "Event-Definition",
+      "studyColumn": "Studie",
+      "migratedColumn": "Status",
+      "migratedYes": "wird migriert",
+      "migratedNo": "übersprungen",
+      "skipReason": "{reason}",
+      "summary": "{count} von {total} Event-Definition(en) werden migriert.",
+      "committed": "{count} Event-Definition(en) migriert.",
+      "failed": "Migration fehlgeschlagen: {message}"
+    },
     "authorManually": "Manuell anlegen",
     "author": {
       "heading": "Neue Version von »{name}« anlegen",
@@ -875,6 +1032,14 @@
     "repeatingLabel": "Wiederholbare Visite (mehrfach pro Teilnehmer/in möglich)",
     "disable": "Entfernen",
     "disableConfirm": "Visite »{name}« entfernen? Bereits erfasste CRFs bleiben im Audit Trail dokumentiert, sind aber nicht mehr erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
+    "restore": "Wiederherstellen",
+    "restoreConfirm": "Visite »{name}« wiederherstellen? Automatisch entfernte CRFs und Item-Daten werden reaktiviert; manuell entfernte Zeilen bleiben entfernt. Die Aktion wird im Audit Trail dokumentiert.",
+    "lock": "Sperren",
+    "lockConfirm": "Visite »{name}« sperren? Aktive CRFs, Event-CRFs und Item-Daten bei allen Teilnehmer/innen werden gesperrt – Dateneingabe ist bis zur Entsperrung blockiert. Die Aktion wird im Audit Trail dokumentiert.",
+    "unlock": "Entsperren",
+    "unlockConfirm": "Visite »{name}« entsperren? Gesperrte CRFs und Item-Daten werden bei allen Teilnehmer/innen reaktiviert. Die Aktion wird im Audit Trail dokumentiert.",
+    "showRemoved": "Entfernte einblenden",
+    "hideRemoved": "Entfernte ausblenden",
     "manageCrfs": "CRFs",
     "moveUp": "Nach oben",
     "moveDown": "Nach unten",
@@ -999,10 +1164,17 @@
     "lifecycle": {
       "disable": "Deaktivieren",
       "restore": "Reaktivieren",
+      "unlock": "Entsperren",
       "disableConfirm": "Nutzer/in {username} deaktivieren? Die Anmeldung wird gesperrt; Rollenzuweisungen werden mit-deaktiviert (Soft-Delete). Reaktivieren stellt sie wieder her. Die Aktion wird im Audit Trail dokumentiert.",
       "restoreConfirm": "Nutzer/in {username} reaktivieren? Ein neues Einmal-Passwort wird erzeugt; beim ersten Login muss es geändert werden. Die Aktion wird im Audit Trail dokumentiert.",
+      "unlockConfirm": "Nutzer/in {username} entsperren? Der Konto-Lock wird aufgehoben, der Fehlversuchs-Zähler zurückgesetzt und ein neues Einmal-Passwort erzeugt; beim ersten Login muss es geändert werden. Die Aktion wird im Audit Trail dokumentiert.",
       "restoredIntro": "Nutzer/in {username} wurde reaktiviert. Übergeben Sie das Einmal-Passwort über einen sicheren Kanal.",
+      "unlockedIntro": "Nutzer/in {username} wurde entsperrt. Übergeben Sie das Einmal-Passwort über einen sicheren Kanal.",
       "restoredNoPassword": "Die Anmeldedaten verwaltet das Verzeichnis bzw. der Identity Provider — kein lokales Passwort wurde erzeugt. Bitte informieren Sie die Person, dass sie mit den bestehenden Anmeldedaten arbeiten kann."
+    },
+    "locked": {
+      "badge": "Gesperrt",
+      "tooltip": "Konto durch zu viele fehlgeschlagene Anmeldeversuche gesperrt. Über die Aktion „Entsperren" wieder freigeben."
     },
     "resetPassword": {
       "action": "Passwort zurücksetzen",
@@ -1038,7 +1210,11 @@
       "heading": "CDISC ODM 1.3 XML hochladen",
       "description": "Teilnehmer / Visite / CRF / Item müssen bereits in der Studie definiert sein.",
       "cta": "Datei wählen oder per Drag-and-Drop ablegen",
-      "hint": "Akzeptiert: .xml · maximal 50 MB"
+      "hint": "Akzeptiert: .xml · maximal 50 MB",
+      "uploading": "Lade hoch und validiere die XML…",
+      "errorXsd": "Die Datei ist keine gültige CDISC ODM 1.3 XML.",
+      "errorWrongStudy": "Die studyOID der Datei stimmt nicht mit der aktiven Studie überein — Studie wechseln oder Quelle neu exportieren.",
+      "errorFileType": "Es werden nur .xml-CRF-Datendateien akzeptiert."
     },
     "map": {
       "heading": "Erkannte Mengen",
@@ -1060,6 +1236,10 @@
       "reasonHint": "{count} Überschreibungen erfordern einen Änderungsgrund. Wird im Audit Trail bei jedem überschriebenen Item dokumentiert.",
       "reasonPlaceholder": "z. B. Standort hat korrigierte ODM nach Vor-Ort-Quelldatenabgleich gesendet.",
       "cta": "Weiter zum Commit",
+      "noRows": "Die hochgeladene XML enthielt keine Item-Datenzeilen.",
+      "loadingMoreRows": "{shown} von {total} Zeilen angezeigt. Scrollen, um weitere zu laden.",
+      "issuesHeading": "Validierungsbefunde",
+      "overwriteModeHeading": "Überschreibungs-Strategie",
       "column": {
         "status": "Status",
         "subject": "Teilnehmer",
@@ -1074,11 +1254,23 @@
         "error": "Fehler"
       }
     },
+    "overwriteMode": {
+      "replace": "Vorhandene Werte überschreiben (Änderungsgrund erforderlich)",
+      "skip": "Zeilen überspringen, die vorhandene Werte überschreiben würden"
+    },
     "commit": {
       "workingHeading": "Commit läuft…",
       "workingDetail": "Zeilen und Audit-Trail-Einträge werden geschrieben.",
       "successHeading": "Import abgeschlossen",
-      "successDetail": "{ready} neu + {overwrite} überschrieben · {error} übersprungen."
+      "successDetail": "{ready} neu + {overwrite} überschrieben · {error} übersprungen.",
+      "rowsInserted": "Zeilen eingefügt",
+      "rowsOverwritten": "Zeilen überschrieben",
+      "rowsSkipped": "Zeilen übersprungen",
+      "discrepancyNotes": "Diskrepanz-Notizen",
+      "tokenExpired": "Vorschau abgelaufen",
+      "reupload": "XML neu hochladen",
+      "startOver": "Neu beginnen",
+      "failedHeading": "Commit fehlgeschlagen"
     }
   },
   "signSubject": {
@@ -1212,6 +1404,67 @@
     "binding": "Wird gebunden…",
     "signOut": "Abmelden"
   },
+  "studyParameters": {
+    "title": "Studienparameter",
+    "intro": "Konfigurieren Sie, wie diese Studie Probanden-IDs, Datenabweichungen, Interviewer-/Datums-Vorbelegungen und optionale Module behandelt. Änderungen werden pro Parameter auditiert.",
+    "saved": "Parameter aktualisiert.",
+    "save": "Parameter speichern",
+    "sections": {
+      "subjectId": "Probandenidentifikation",
+      "discrepancy": "Abweichungsmanagement",
+      "interviewer": "Interviewer- & Interviewdatums-Vorgaben",
+      "modules": "Optionale Module"
+    },
+    "fields": {
+      "subjectIdGeneration": "Generierung der Probanden-ID",
+      "subjectIdPrefixSuffix": "Standort-Präfix/-Suffix erlauben",
+      "subjectPersonIdRequired": "Pflicht für Personen-ID",
+      "personIdShownOnCRF": "Personen-ID auf CRF-Kopf anzeigen",
+      "collectDob": "Geburtsdatum erfassen",
+      "genderRequired": "Geschlecht erforderlich",
+      "eventLocationRequired": "Pflicht für Veranstaltungsort",
+      "discrepancyManagement": "Abweichungs-Notizen aktiv",
+      "interviewerNameRequired": "Pflicht für Interviewer-Name",
+      "interviewerNameDefault": "Vorbelegung Interviewer-Name",
+      "interviewerNameEditable": "Interviewer-Name editierbar",
+      "interviewDateRequired": "Pflicht für Interviewdatum",
+      "interviewDateDefault": "Vorbelegung Interviewdatum",
+      "interviewDateEditable": "Interviewdatum editierbar",
+      "secondaryLabelViewable": "Sekundäres Label sichtbar",
+      "adminForcedReasonForChange": "Begründung nach Abschluss erzwingen",
+      "participantPortal": "Teilnehmerportal",
+      "randomization": "Randomisierung"
+    },
+    "enums": {
+      "subjectIdGeneration": {
+        "manual": "Manuell",
+        "auto non-editable": "Automatisch (nicht editierbar)",
+        "auto editable": "Automatisch (editierbar)"
+      },
+      "collectDob": {
+        "1": "Vollständiges Geburtsdatum",
+        "2": "Nur Jahr",
+        "3": "Nicht erfasst"
+      },
+      "required": {
+        "required": "Erforderlich",
+        "optional": "Optional",
+        "not_used": "Nicht verwendet"
+      },
+      "bool": {
+        "true": "Ja",
+        "false": "Nein"
+      },
+      "blankPrepopulated": {
+        "blank": "Leer",
+        "pre-populated": "Vorbelegt"
+      },
+      "enabledDisabled": {
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert"
+      }
+    }
+  },
   "subjectDetail": {
     "subTrail": "Probandendetail",
     "notSigned": "Nicht signiert",
@@ -1276,7 +1529,12 @@
       "data-entry-started": "In Bearbeitung",
       "completed": "Abgeschlossen",
       "stopped": "Abgebrochen",
-      "signed": "Signiert"
+      "signed": "Signiert",
+      "removed": "Entfernt"
+    },
+    "crf": {
+      "restore": "CRF wiederherstellen",
+      "restoreFailed": "CRF konnte nicht wiederhergestellt werden — bitte erneut versuchen."
     },
     "table": {
       "crfName": "CRF",
@@ -1364,7 +1622,10 @@
     "openWizard": "Im Assistenten öffnen",
     "openReadOnly": "Anzeigen",
     "editDisabledHasRun": "Dieses Dataset wurde bereits exportiert und ist gegen strukturelle Änderungen gesperrt. Duplizieren Sie es, um eine neue Variante zu erstellen.",
-    "hasRunBadge": "{n} Lauf(e)"
+    "hasRunBadge": "{n} Lauf(e)",
+    "showRemoved": "Entfernte anzeigen",
+    "restore": "Wiederherstellen",
+    "confirmRestore": "Dataset „{name}“ wiederherstellen? Damit erscheint es wieder in der Liste und kann erneut ausgeführt werden."
   },
   "createDataset": {
     "eyebrow": "Datenexport",

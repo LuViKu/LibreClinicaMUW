@@ -614,8 +614,10 @@ public class CrfJsonToWorkbookAdapter {
     }
 
     private static void setNumericCell(HSSFRow row, int col, double value) {
+        // Phase E.6 (POI 5.3.0): setCellValue(double) implicitly
+        // configures CellType.NUMERIC; the explicit setCellType call
+        // legacy POI 3.x required has been removed from the public API.
         HSSFCell cell = row.createCell((short) col);
-        cell.setCellType(HSSFCell.CELL_TYPE_NUMERIC);
         cell.setCellValue(value);
     }
 

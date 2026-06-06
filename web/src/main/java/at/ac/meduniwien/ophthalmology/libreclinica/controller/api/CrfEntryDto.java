@@ -22,14 +22,42 @@ import java.util.Map;
  * {@code schema} is render-driven — the SPA does not call any
  * additional metadata endpoints after this one.
  *
- * @param eventCrfOid  numeric event_crf_id as a string (the SPA
- *                     treats it as opaque)
- * @param subjectId    StudySubject.label (e.g. "M-001")
- * @param eventLabel   friendly event name (e.g. "V1 Inclusion")
- * @param schema       CRF version + sections + items
- * @param values       saved values keyed by item OID
- * @param status       CRF entry workflow status
- * @param lastSavedAt  ISO-8601 of last successful save, or null
+ * <p>Phase E.6 ({@code crf-data-types}, 2026-06-05) extended the
+ * payload with two top-level fields:
+ * <ul>
+ *   <li>{@code groups} — one {@link CrfItemGroupDto} per repeating
+ *       item group on the form. Carries the saved rows (an ordered
+ *       list of value maps) and the group's {@code repeatMax} so the
+ *       SPA can grey out the "add row" button once the cap is hit.</li>
+ *   <li>{@code maxFileBytes} / {@code fileExtensions} — file-upload
+ *       guardrails sourced from {@code crf.file.*} datainfo properties.
+ *       The SPA shows the cap in the dropzone helper and pre-validates
+ *       client-side before the multipart POST.</li>
+ * </ul>
+ *
+ * <p>Phase E.6 ({@code admin-rfc}) added {@code requiresReasonForChange}
+ * — when true, the CRF is past {@code date_completed} and every
+ * subsequent edit needs an RFC note; the SPA uses this to gate the
+ * {@code ReasonForChangeModal}.
+ *
+ * <p>Phase E.6 ({@code dde}) added {@code dde} — non-null only when
+ * the parent event_definition_crf has {@code double_entry=true}; the
+ * SPA reads {@code DdeBlockDto.pass} to switch between the normal,
+ * blind-pass-2, or reconcile entry variant.
+ *
+ * @param eventCrfOid             numeric event_crf_id as a string (the SPA
+ *                                treats it as opaque)
+ * @param subjectId               StudySubject.label (e.g. "M-001")
+ * @param eventLabel              friendly event name (e.g. "V1 Inclusion")
+ * @param schema                  CRF version + sections + items
+ * @param values                  saved values keyed by item OID (single-row only)
+ * @param groups                  repeating item groups + saved rows (E.6)
+ * @param maxFileBytes            server-side cap on per-file uploads (E.6)
+ * @param fileExtensions          comma-joined allowlist for upload items (E.6)
+ * @param status                  CRF entry workflow status
+ * @param lastSavedAt             ISO-8601 of last successful save, or null
+ * @param requiresReasonForChange Phase E.6 admin-rfc — true post date_completed
+ * @param dde                     Phase E.6 dde — DDE pass marker (or null)
  */
 @Schema(name = "CrfEntryDto")
 public record CrfEntryDto(
@@ -38,9 +66,38 @@ public record CrfEntryDto(
         String eventLabel,
         CrfSchemaDto schema,
         Map<String, Object> values,
+        List<CrfItemGroupDto> groups,
+        Long maxFileBytes,
+        String fileExtensions,
         String status,
-        String lastSavedAt
+        String lastSavedAt,
+        boolean requiresReasonForChange,
+        DdeBlockDto dde
 ) {
+
+    /**
+     * Phase E.6 dde — small marker block embedded into
+     * {@link CrfEntryDto} when the parent event_definition_crf has
+     * {@code double_entry=true}. The SPA reads {@code pass} to choose
+     * the entry view variant:
+     * <ul>
+     *   <li>{@code pass=1} — render the normal CRF Entry form, same
+     *       as today.</li>
+     *   <li>{@code pass=2} — render with the blind-second-pass banner
+     *       and an EMPTY values map; on save delegate to
+     *       {@code POST /dde-commit}.</li>
+     *   <li>{@code pass=reconcile} — redirect to {@code DdeReconcileView}.</li>
+     * </ul>
+     *
+     * @param pass           {@code 1 | 2 | reconcile}
+     * @param idePass1ClerkId numeric user id of the pass-1 clerk (0 when unknown)
+     */
+    @Schema(name = "DdeBlockDto")
+    public record DdeBlockDto(
+            String pass,
+            int idePass1ClerkId
+    ) {}
+
 
     /** Schema of a single CRF version (1:1 with the SPA's {@code CrfSchema}). */
     @Schema(name = "CrfSchemaDto")
@@ -63,13 +120,19 @@ public record CrfEntryDto(
     /**
      * Single item (1:1 with the SPA's {@code CrfItem}). {@code dataType}
      * is one of: {@code string | integer | real | date | partial-date |
-     * select-one | select-multi | boolean}. {@code options} is populated
-     * only for {@code select-one} / {@code select-multi}.
+     * select-one | select-multi | boolean | file}. {@code options} is
+     * populated only for {@code select-one} / {@code select-multi}.
+     *
+     * <p>Phase E.6: the {@code file} data type is new; renders as a
+     * dropzone widget in the SPA. The {@code groupOid} field, when set,
+     * indicates the item belongs to a repeating group and the SPA
+     * should render it inside the matching {@link CrfItemGroupDto}'s
+     * row template rather than as a top-level value.
      *
      * <p>Optional fields ({@code options}, {@code helper}, {@code min},
-     * {@code max}) are {@code null} when absent; Jackson serialises them
-     * as {@code null} or omits them per the SPA contract (the SPA
-     * tolerates both).
+     * {@code max}, {@code groupOid}) are {@code null} when absent;
+     * Jackson serialises them as {@code null} or omits them per the
+     * SPA contract (the SPA tolerates both).
      */
     @Schema(name = "CrfItemDto")
     public record CrfItemDto(
@@ -80,7 +143,8 @@ public record CrfEntryDto(
             List<ResponseOptionDto> options,
             String helper,
             Double min,
-            Double max
+            Double max,
+            String groupOid
     ) {}
 
     /** Single allowed option for {@code select-one} / {@code select-multi}. */
@@ -88,5 +152,35 @@ public record CrfEntryDto(
     public record ResponseOptionDto(
             String code,
             String label
+    ) {}
+
+    /**
+     * A repeating item group (Phase E.6). {@code rows} is the
+     * ordered list of saved rows; each row is keyed by item OID
+     * just like the top-level {@code values} map. {@code repeatMax}
+     * is the cap from {@code item_group_metadata}; the SPA disables
+     * "Add row" once {@code rows.size() >= repeatMax}.
+     *
+     * <p>{@code itemOids} is the list of item OIDs that belong to
+     * this group, in display order. The SPA uses it to build the
+     * row's input grid without re-querying the schema.
+     */
+    @Schema(name = "CrfItemGroupDto")
+    public record CrfItemGroupDto(
+            String oid,
+            String label,
+            int repeatMax,
+            List<String> itemOids,
+            List<CrfGroupRowDto> rows
+    ) {}
+
+    /**
+     * A single saved row inside a repeating item group. {@code ordinal}
+     * is 1-based and matches {@code item_data.ordinal}.
+     */
+    @Schema(name = "CrfGroupRowDto")
+    public record CrfGroupRowDto(
+            int ordinal,
+            Map<String, Object> values
     ) {}
 }

@@ -33,6 +33,25 @@
         <servlet-name>pages</servlet-name>
         <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
         <load-on-startup>2</load-on-startup>
+        <!--
+          Phase E.6 (2026-06-06): enable Servlet 6 multipart parsing on the
+          pages DispatcherServlet. WebMvcConfig registers a
+          StandardServletMultipartResolver which delegates to the
+          container's multipart machinery — without this entry the
+          Tomcat connector ignores multipart bodies and @RequestPart
+          arrives as null on the CRF file-upload endpoint.
+
+          Caps are intentionally generous (200 MiB request/file, 0 KB
+          threshold so everything streams to a temp file): per-item
+          enforcement lives in CrfFileStorageService.checkSize() so
+          we can return 413 with a structured error code instead of
+          letting Tomcat reject the request with a bare 500.
+        -->
+        <multipart-config>
+            <max-file-size>209715200</max-file-size>
+            <max-request-size>209715200</max-request-size>
+            <file-size-threshold>0</file-size-threshold>
+        </multipart-config>
     </servlet>
 
     <servlet-mapping>

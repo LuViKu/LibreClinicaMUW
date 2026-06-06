@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
-import type { DiscrepancyNote, NoteStatus, NoteType } from '@/types/note'
+import { apiDownload } from '@/api/download'
+import type { DiscrepancyNote, NoteStatus, NoteType, ThreadEntry } from '@/types/note'
 
 /**
  * Phase E.6 + E.4 M7 — Discrepancy-notes store.
@@ -25,7 +26,9 @@ export const useNotesStore = defineStore('notes', () => {
   const rows = ref<DiscrepancyNote[]>([])
   const isLoading = ref(false)
   const isSubmitting = ref(false)
+  const isExporting = ref(false)
   const error = ref<string | null>(null)
+  const exportError = ref<string | null>(null)
 
   const query = ref('')
   const statusFilter = ref<'open' | 'all' | NoteStatus>('open') // open = anything but closed/N-A
@@ -111,6 +114,13 @@ export const useNotesStore = defineStore('notes', () => {
     itemOid: string
     description: string
     assignedTo?: string | null
+    /**
+     * Phase E.6 — discrepancy type. Defaults to 'query' to preserve M7
+     * call-site behaviour. The backend role-gates 'reason-for-change'
+     * to DM/Admin; SPA-side guards in {@code canCreateNoteType} hide
+     * the option for non-permitted roles before the request fires.
+     */
+    type?: NoteType
   }): Promise<DiscrepancyNote | null> {
     isSubmitting.value = true
     error.value = null
@@ -120,6 +130,7 @@ export const useNotesStore = defineStore('notes', () => {
         itemOid: input.itemOid,
         description: input.description,
         assignedTo: input.assignedTo ?? null,
+        type: input.type ?? 'query',
       })
       rows.value = [created, ...rows.value]
       return created
@@ -206,6 +217,144 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   /**
+   * Phase E.6 {@code discrepancy-full} — fetch the full thread (parent
+   * + every child in insertion order) for a parent note. The result
+   * is cached per parentId so re-expanding a row is instant.
+   *
+   * <p>Returns the hydrated parent note (with its {@code thread} field
+   * populated) so the view can render the timeline component inline.
+   * Returns null on error; the per-row UI shows the store's error
+   * banner.
+   */
+  const threadCache = ref<Record<string, ThreadEntry[]>>({})
+  const loadingThreadId = ref<string | null>(null)
+
+  async function loadThread(parentId: string): Promise<DiscrepancyNote | null> {
+    if (threadCache.value[parentId]) {
+      const cached = rows.value.find((n) => n.id === parentId)
+      if (cached) return { ...cached, thread: threadCache.value[parentId] }
+    }
+    loadingThreadId.value = parentId
+    error.value = null
+    try {
+      const hydrated = await apiGet<DiscrepancyNote>(
+        `/pages/api/v1/discrepancies/${parentId}/thread`,
+      )
+      threadCache.value = { ...threadCache.value, [parentId]: hydrated.thread ?? [] }
+      // Refresh the in-memory row so reactive bindings see the new
+      // status / lastActivityAt drawn from the hydrated payload.
+      const idx = rows.value.findIndex((n) => n.id === parentId)
+      if (idx >= 0) {
+        rows.value = [
+          ...rows.value.slice(0, idx),
+          hydrated,
+          ...rows.value.slice(idx + 1),
+        ]
+      }
+      return hydrated
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        error.value =
+          'Backend nicht erreichbar — Thread kann nicht geladen werden.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Fehler beim Laden des Threads (HTTP ${e.status}).`
+      } else {
+        error.value =
+          e instanceof Error ? e.message : 'Unbekannter Fehler beim Laden des Threads.'
+      }
+      return null
+    } finally {
+      loadingThreadId.value = null
+    }
+  }
+
+  /**
+   * Phase E.6 — sponsor / inspector CSV hand-off of the discrepancy
+   * list. Forwards the same status / subject / assignedTo filters the
+   * SPA is showing so the file row count matches the visible list. The
+   * backend emits an audit_log_event row (type 56) per successful
+   * download.
+   *
+   * When called with `{ subjectId }` the filename includes the slug so
+   * multiple per-subject hand-offs don't collide on disk.
+   */
+  async function exportCsv(opts: { subjectId?: string } = {}): Promise<void> {
+    isExporting.value = true
+    exportError.value = null
+    try {
+      const params = new URLSearchParams()
+      // Status filter mapping — backend understands the single SPA
+      // status names, not the synthetic 'open' / 'all' aggregations.
+      if (
+        statusFilter.value !== 'open' &&
+        statusFilter.value !== 'all'
+      ) {
+        params.set('status', statusFilter.value)
+      }
+      const subjectId = opts.subjectId ?? ''
+      if (subjectId) params.set('subjectId', subjectId)
+      if (onlyAssignedToMe.value && me.value) params.set('assignedTo', me.value)
+      const qs = params.toString()
+      const path = qs
+        ? `/pages/api/v1/discrepancies/export.csv?${qs}`
+        : '/pages/api/v1/discrepancies/export.csv'
+      const today = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+      const fallback = subjectId
+        ? `discrepancies_${subjectId}_${today}.csv`
+        : `discrepancies_${today}.csv`
+      await apiDownload(path, fallback)
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        exportError.value =
+          'Backend nicht erreichbar — Discrepancy-Export konnte nicht gestartet werden.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        exportError.value =
+          body?.message ?? `Discrepancy-Export fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        exportError.value =
+          e instanceof Error ? e.message : 'Unbekannter Fehler beim Discrepancy-Export.'
+      }
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  /**
+   * Phase E.6 {@code discrepancy-full} — build the absolute URL the
+   * browser should hit for the CSV export. Honours the current filter
+   * state so users get exactly what they're viewing.
+   *
+   * <p>Returns an `<a href="…" download>` target rather than a
+   * fetch-and-download blob so the browser's native download UI (with
+   * progress + virus-scan hooks) is in charge.
+   */
+  function buildExportUrl(): string {
+    const params = new URLSearchParams()
+    // Server-side filter narrowing — the list endpoint also accepts
+    // these so re-hydration with the same params produces an
+    // identical row set.
+    if (statusFilter.value !== 'all' && statusFilter.value !== 'open') {
+      params.set('status', statusFilter.value)
+    }
+    // 'open' has no server-side equivalent; the server returns
+    // everything and we filter client-side. The CSV will be wider
+    // than what's visible — this is a documented trade-off; users
+    // can switch to a concrete status to narrow.
+    let url = '/pages/api/v1/discrepancies/export.csv'
+    const qs = params.toString()
+    if (qs) url += `?${qs}`
+    return url
+  }
+
+  /**
    * Phase E.6 — clear every piece of study-scoped state so the store
    * doesn't show study-A discrepancies after the user switches to
    * study B. Called by {@link useAuthStore.pickStudy} before
@@ -215,18 +364,24 @@ export const useNotesStore = defineStore('notes', () => {
     rows.value = []
     isLoading.value = false
     isSubmitting.value = false
+    isExporting.value = false
     error.value = null
+    exportError.value = null
     query.value = ''
     statusFilter.value = 'open'
     typeFilter.value = 'all'
     onlyAssignedToMe.value = false
+    threadCache.value = {}
+    loadingThreadId.value = null
   }
 
   return {
     rows,
     isLoading,
     isSubmitting,
+    isExporting,
     error,
+    exportError,
     query,
     statusFilter,
     typeFilter,
@@ -237,10 +392,15 @@ export const useNotesStore = defineStore('notes', () => {
     visibleCount,
     openCount,
     openTypeTotals,
+    threadCache,
+    loadingThreadId,
     clearFilters,
     load,
     add,
     appendThread,
+    loadThread,
+    buildExportUrl,
+    exportCsv,
     reset,
   }
 })

@@ -8,6 +8,7 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -37,6 +38,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.domain.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetRuleBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RulesPostImportContainer;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.ActionType;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.DiscrepancyNoteActionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.action.EmailActionBean;
@@ -59,11 +61,14 @@ import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvi
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleSetBasedViewContainer;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.rule.expression.ExpressionService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -140,6 +145,7 @@ public class RulesApiController {
     private final RuleActionRunLogDao ruleActionRunLogDao;
     private final RuleDao ruleDao;
     private final RuleSetService ruleSetService;
+    private final OdmJaxbContext odmJaxbContext;
 
     @Autowired
     public RulesApiController(@Qualifier("dataSource") DataSource dataSource,
@@ -147,13 +153,15 @@ public class RulesApiController {
                               RuleSetRuleDao ruleSetRuleDao,
                               RuleActionRunLogDao ruleActionRunLogDao,
                               RuleDao ruleDao,
-                              @Qualifier("ruleSetService") RuleSetService ruleSetService) {
+                              @Qualifier("ruleSetService") RuleSetService ruleSetService,
+                              @Qualifier("odmJaxbContext") OdmJaxbContext odmJaxbContext) {
         this.dataSource = dataSource;
         this.ruleSetDao = ruleSetDao;
         this.ruleSetRuleDao = ruleSetRuleDao;
         this.ruleActionRunLogDao = ruleActionRunLogDao;
         this.ruleDao = ruleDao;
         this.ruleSetService = ruleSetService;
+        this.odmJaxbContext = odmJaxbContext;
     }
 
     /* ----------------------------------------------------------------- */
@@ -600,6 +608,123 @@ public class RulesApiController {
                 rs.getId(),
                 rs.getOriginalTarget() == null ? null : rs.getOriginalTarget().getValue(),
                 results));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* GET /api/v1/rule-sets/export                                        */
+    /*   (Phase E.6 restore-quickwins — XML export of selected             */
+    /*    rule_set_rule rows, round-trippable through the import path)    */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Stream a {@code RulesPostImportContainer} XML for the requested
+     * {@code rule_set_rule} ids. The output is the same shape the
+     * import path consumes, so operators can pull a set on one
+     * deployment + push it to another.
+     *
+     * <p>Mirrors {@code DownloadRuleSetXmlServlet} but skips the
+     * legacy temp-file dance — the playbook reviewer flag flagged
+     * {@code SQLInitServlet.getField("filePath")} as a recurrent
+     * flake source. Instead, marshal to an in-memory buffer and hand
+     * it back as the body. Rule-set exports are small (rule_set_rule
+     * rows + rule definitions; the bulk is XML scaffolding, not
+     * data), so a buffered marshal is fine.
+     *
+     * <p>Authorization: sysadmin OR study director/coordinator on the
+     * active study, matching the legacy {@code mayProceed}.
+     *
+     * <p>Query parameters:
+     * <ul>
+     *   <li>{@code ruleSetRuleIds} — comma-separated list of
+     *       {@code rule_set_rule.id} values. An empty/blank value
+     *       returns an empty container (matches legacy behaviour).
+     *   </li>
+     * </ul>
+     *
+     * <p>Status codes:
+     * <ul>
+     *   <li>{@code 200} — XML body, {@code application/xml}, with a
+     *       {@code Content-Disposition: attachment} header so
+     *       browsers offer a download.</li>
+     *   <li>{@code 400} — malformed {@code ruleSetRuleIds} (non-int
+     *       token).</li>
+     *   <li>{@code 403} — caller's role does not permit rule export.</li>
+     *   <li>{@code 404} — one of the supplied ids does not resolve to
+     *       a {@code rule_set_rule} on the active study (prevents
+     *       cross-study leakage).</li>
+     * </ul>
+     */
+    @GetMapping("/export")
+    @Transactional(readOnly = true)
+    @ApiResponse(responseCode = "200",
+                 content = @Content(mediaType = MediaType.APPLICATION_XML_VALUE))
+    public ResponseEntity<?> exportXml(@RequestParam(value = "ruleSetRuleIds", required = false,
+                                                    defaultValue = "") String ruleSetRuleIds,
+                                       HttpSession session) {
+        ResponseEntity<?> guard = preflight(session);
+        if (guard != null) return guard;
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean study = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit rule_set XML export"));
+        }
+
+        List<RuleSetRuleBean> ruleSetRules = new ArrayList<>();
+        if (ruleSetRuleIds != null && !ruleSetRuleIds.isBlank()) {
+            for (String token : ruleSetRuleIds.split(",")) {
+                String trimmed = token.trim();
+                if (trimmed.isEmpty()) continue;
+                int id;
+                try {
+                    id = Integer.parseInt(trimmed);
+                } catch (NumberFormatException nfe) {
+                    return ResponseEntity.badRequest().body(Map.of("message",
+                            "Malformed ruleSetRuleIds — '" + trimmed
+                                    + "' is not an integer"));
+                }
+                RuleSetRuleBean rsr = ruleSetRuleDao.findById(id);
+                if (rsr == null || rsr.getId() == null || rsr.getId() == 0) {
+                    return ResponseEntity.status(404).body(Map.of("message",
+                            "No rule_set_rule with id " + id));
+                }
+                // Prevent cross-study leakage — the rule_set_rule
+                // must belong to a rule_set on the active study.
+                if (rsr.getRuleSetBean() != null
+                        && rsr.getRuleSetBean().getStudyId() != null
+                        && rsr.getRuleSetBean().getStudyId().intValue() != study.getId()) {
+                    return ResponseEntity.status(404).body(Map.of("message",
+                            "No rule_set_rule with id " + id
+                                    + " in study '" + study.getOid() + "'"));
+                }
+                ruleSetRules.add(rsr);
+            }
+        }
+
+        RulesPostImportContainer rpic = new RulesPostImportContainer();
+        if (!ruleSetRules.isEmpty()) {
+            rpic.populate(ruleSetRules);
+        }
+
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try {
+            odmJaxbContext.marshalRulesExport(rpic, buffer);
+        } catch (RuntimeException re) {
+            LOG.warn("Failed to marshal rule_set export (ids={})", ruleSetRuleIds, re);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to marshal rule_set export XML"));
+        }
+
+        String filename = "rules" + study.getOid() + "-"
+                + System.currentTimeMillis() + ".xml";
+        LOG.info("Rule-set XML export: ids={} study={} requested by {} → {} bytes",
+                ruleSetRuleIds, study.getOid(), me.getName(), buffer.size());
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_XML)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + filename + "\"")
+                .body(buffer.toByteArray());
     }
 
     /* ----------------------------------------------------------------- */

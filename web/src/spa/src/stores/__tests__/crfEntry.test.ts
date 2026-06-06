@@ -12,11 +12,12 @@ vi.mock('@/api/client', async () => {
     ...actual,
     apiGet: vi.fn(),
     apiPost: vi.fn(),
+    apiDelete: vi.fn(),
   }
 })
 
 // eslint-disable-next-line import/first
-import { apiGet, apiPost } from '@/api/client'
+import { apiDelete, apiGet, apiPost } from '@/api/client'
 
 const SIMPLE_SCHEMA: CrfSchema = {
   oid: 'F_T',
@@ -106,6 +107,11 @@ const DEMOGRAPHICS_ENTRY: CrfEntry = {
   values: {},
   status: 'not-started',
   lastSavedAt: null,
+  // Phase E.6 fields default to empty so legacy assertions stay valid.
+  groups: [],
+  maxFileBytes: 52_428_800,
+  fileExtensions: 'pdf,jpg,jpeg,png,tif,tiff',
+  dde: null,
 }
 
 describe('useCrfEntryStore', () => {
@@ -113,6 +119,7 @@ describe('useCrfEntryStore', () => {
     setActivePinia(createPinia())
     vi.mocked(apiGet).mockReset()
     vi.mocked(apiPost).mockReset()
+    vi.mocked(apiDelete).mockReset()
     // Each load() call gets a fresh deep clone — Pinia stores reuse the
     // reactive proxy and we don't want one test's setValue() to leak into
     // the next test's mocked response.
@@ -252,5 +259,234 @@ describe('useCrfEntryStore', () => {
     await store.reopen()
     expect(store.error).toBe('event_crf 1 is locked or signed')
     expect(store.entry?.status).toBe('complete')
+  })
+
+  /* ---------------------------------------------------------------- */
+  /* Phase E.6 admin-rfc — Reason-For-Change capture on save           */
+  /* ---------------------------------------------------------------- */
+
+  it('stageReason records trimmed reasons + clears prompt for the staged oid', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_HEIGHT_CM', 174)
+    // Simulate the backend re-arming for one OID.
+    store.missingReasonItemOids = ['I_HEIGHT_CM']
+    store.stageReason('I_HEIGHT_CM', '  re-keyed from corrected source  ')
+    expect(store.pendingReasons.I_HEIGHT_CM).toBe('re-keyed from corrected source')
+    expect(store.missingReasonItemOids).not.toContain('I_HEIGHT_CM')
+    // Empty input drops the staged entry.
+    store.stageReason('I_HEIGHT_CM', '   ')
+    expect(store.pendingReasons.I_HEIGHT_CM).toBeUndefined()
+  })
+
+  it('save omits reasons when the entry is pre-complete', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    // Default fixture is not post-complete; entry.requiresReasonForChange undefined.
+    store.setValue('I_HEIGHT_CM', 172)
+    await store.save()
+    expect(apiPost).toHaveBeenCalledTimes(1)
+    const [, body] = vi.mocked(apiPost).mock.calls[0]
+    expect(body).toHaveProperty('values')
+    expect(body).not.toHaveProperty('reasons')
+  })
+
+  it('save sends reasons + clears staged reasons on success when post-complete', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_HEIGHT_CM', 172)
+    store.stageReason('I_HEIGHT_CM', 'corrected source document')
+    await store.save()
+    expect(apiPost).toHaveBeenCalledTimes(1)
+    const [, body] = vi.mocked(apiPost).mock.calls[0]
+    expect((body as { reasons?: Record<string, string> }).reasons).toEqual({
+      I_HEIGHT_CM: 'corrected source document',
+    })
+    expect(store.pendingReasons).toEqual({})
+    expect(store.missingReasonItemOids).toEqual([])
+  })
+
+  it('save short-circuits + arms the modal when dirty oids lack reasons', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_HEIGHT_CM', 172)
+    store.setValue('I_WEIGHT_KG', 71.3)
+    // No reasons staged → save() shouldn't POST.
+    await store.save()
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(store.missingReasonItemOids.sort()).toEqual(['I_HEIGHT_CM', 'I_WEIGHT_KG'])
+  })
+
+  it('save re-arms the modal on backend 400 missingReasonItemOids', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_HEIGHT_CM', 172)
+    store.stageReason('I_HEIGHT_CM', 'too short — backend rejects')
+    const { ApiError } = await import('@/api/client')
+    ;(apiPost as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new ApiError(400, 'Bad Request', {
+        message: 'reason text too short',
+        missingReasonItemOids: ['I_HEIGHT_CM'],
+      }),
+    )
+    await store.save()
+    expect(store.missingReasonItemOids).toEqual(['I_HEIGHT_CM'])
+    // The offending oid's staged reason should be cleared so the modal re-asks.
+    expect(store.pendingReasons.I_HEIGHT_CM).toBeUndefined()
+    expect(store.error).toBe('reason text too short')
+  })
+
+  it('dismissReasonModal clears missing oids but preserves staged reasons', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    if (store.entry) store.entry.requiresReasonForChange = true
+    store.setValue('I_HEIGHT_CM', 172)
+    store.missingReasonItemOids = ['I_HEIGHT_CM']
+    store.stageReason('I_HEIGHT_CM', 'will retry later')
+    store.dismissReasonModal()
+    expect(store.missingReasonItemOids).toEqual([])
+    expect(store.pendingReasons.I_HEIGHT_CM).toBe('will retry later')
+  })
+
+  /* ---------------------------------------------------------------- */
+  /* Phase E.6 — repeating groups + select-multi + file               */
+  /* ---------------------------------------------------------------- */
+
+  it('setValueInRow appends a new row when the ordinal is unseen', async () => {
+    const store = useCrfEntryStore()
+    // Mock GET to return an entry with one repeating group.
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 4,
+          itemOids: ['I_EYE', 'I_IOP'], rows: [],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    store.setValueInRow('G_EYE_FINDINGS', 1, 'I_EYE', 'OD')
+    const g = store.groups.find((gr) => gr.oid === 'G_EYE_FINDINGS')!
+    expect(g.rows).toHaveLength(1)
+    expect(g.rows[0].values.I_EYE).toBe('OD')
+    expect(store.pendingChanges).toBe(true)
+  })
+
+  it('addGroupRow POSTs + appends the returned row', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 4,
+          itemOids: ['I_EYE'], rows: [{ ordinal: 1, values: { I_EYE: 'OD' } }],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      groupOid: 'G_EYE_FINDINGS', rowOrdinal: 2, values: {},
+    })
+    const newRow = await store.addGroupRow('G_EYE_FINDINGS')
+    expect(apiPost).toHaveBeenCalledWith(
+      '/pages/api/v1/eventCrfs/EC_M001_V1_DEMO/groups/G_EYE_FINDINGS/rows',
+      {},
+    )
+    expect(newRow).toEqual({ ordinal: 2, values: {} })
+    expect(store.groups.find((g) => g.oid === 'G_EYE_FINDINGS')!.rows).toHaveLength(2)
+  })
+
+  it('addGroupRow surfaces REPEAT_MAX_REACHED via the i18n key when backend 409s', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 4,
+          itemOids: ['I_EYE'], rows: [{ ordinal: 1, values: {} }],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    const { ApiError } = await import('@/api/client')
+    ;(apiPost as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new ApiError(409, 'Conflict', { code: 'REPEAT_MAX_REACHED', message: 'cap' }),
+    )
+    const row = await store.addGroupRow('G_EYE_FINDINGS')
+    expect(row).toBeNull()
+    expect(store.error).toBe('crfEntry.group.repeatMaxReached')
+  })
+
+  it('addGroupRow refuses locally when rows already meet repeatMax', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 1,
+          itemOids: ['I_EYE'], rows: [{ ordinal: 1, values: {} }],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    const row = await store.addGroupRow('G_EYE_FINDINGS')
+    expect(row).toBeNull()
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(store.error).toBe('crfEntry.group.repeatMaxReached')
+  })
+
+  it('deleteGroupRow DELETEs + drops the row on success', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 4,
+          itemOids: ['I_EYE'],
+          rows: [
+            { ordinal: 1, values: { I_EYE: 'OD' } },
+            { ordinal: 2, values: { I_EYE: 'OS' } },
+          ],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    const { apiDelete } = await import('@/api/client')
+    const apiDeleteMock = vi.mocked(apiDelete) as ReturnType<typeof vi.fn>
+    apiDeleteMock.mockResolvedValueOnce(undefined)
+    const ok = await store.deleteGroupRow('G_EYE_FINDINGS', 2)
+    expect(ok).toBe(true)
+    const g = store.groups.find((gr) => gr.oid === 'G_EYE_FINDINGS')!
+    expect(g.rows.map((r) => r.ordinal)).toEqual([1])
+  })
+
+  /* ---------------------------------------------------------------------- */
+  /* Phase E.6 crf-entry-advanced — sectionFilledCounts getter              */
+  /* ---------------------------------------------------------------------- */
+
+  it('sectionFilledCounts reports zero filled when no values entered', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    const s = store.sectionFilledCounts
+    expect(s.S_IDENT.required).toBe(2)
+    expect(s.S_IDENT.filled).toBe(0)
+    expect(s.S_VITALS.required).toBe(2)
+    expect(s.S_VITALS.filled).toBe(0)
+    // Required-missing yields errors counted client-side.
+    expect(s.S_IDENT.errors).toBeGreaterThan(0)
+  })
+
+  it('sectionFilledCounts increments filled as required items get typed', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    store.setValue('I_CONSENT_DATE', '2026-05-01')
+    store.setValue('I_CONSENT_SIGNED', 'Y')
+    expect(store.sectionFilledCounts.S_IDENT.filled).toBe(2)
+    // Vitals required not touched yet.
+    expect(store.sectionFilledCounts.S_VITALS.filled).toBe(0)
   })
 })

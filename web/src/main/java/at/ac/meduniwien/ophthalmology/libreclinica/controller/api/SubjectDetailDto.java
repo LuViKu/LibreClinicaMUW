@@ -81,7 +81,24 @@ public record SubjectDetailDto(
          * {@code YYYY-MM-DD}. {@code null} when not recorded.
          * Persisted in {@code study_subject.screening_date}.
          */
-        String screeningDate
+        String screeningDate,
+        /**
+         * Phase E.6 subject-lifecycle — coarse status name. Mirrors
+         * {@link SubjectListItemDto#status()} on the matrix; one of
+         * {@code "available" / "removed" / "locked" / "signed" /
+         * "auto-removed"}. The SPA prefers this string over the older
+         * {@code signed} / {@code locked} booleans because it can carry
+         * the "removed" branch in a single field; the legacy booleans
+         * are kept for back-compat.
+         */
+        String status,
+        /**
+         * Phase E.6 subject-lifecycle — flattened active
+         * {@code subject_group_map} rows. Detail-view always populates
+         * this (unlike the matrix shape, which may carry null pending
+         * the N+1 mitigation decision).
+         */
+        java.util.List<GroupAssignmentSnapshot> groupAssignments
 ) {
 
     /**

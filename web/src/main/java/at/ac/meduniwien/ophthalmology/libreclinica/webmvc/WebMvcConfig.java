@@ -23,6 +23,8 @@ import org.springframework.http.converter.StringHttpMessageConverter;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.http.converter.xml.MarshallingHttpMessageConverter;
 import org.springframework.oxm.jaxb.Jaxb2Marshaller;
+import org.springframework.web.multipart.MultipartResolver;
+import org.springframework.web.multipart.support.StandardServletMultipartResolver;
 import org.springframework.web.servlet.handler.BeanNameUrlHandlerMapping;
 import org.springframework.web.servlet.mvc.SimpleControllerHandlerAdapter;
 import org.springframework.web.servlet.mvc.UrlFilenameViewController;
@@ -262,6 +264,30 @@ public class WebMvcConfig {
         // factorService for the login JSP EL evaluation.
         mapping.setInterceptors(ssoConfigInterceptor);
         return mapping;
+    }
+
+    /**
+     * Phase E.6 (2026-06-06): multipart resolver for the CRF file-upload
+     * endpoint. The legacy applicationContext-web-beans.xml does NOT
+     * register one; the {@code pages} DispatcherServlet's child context
+     * therefore had no {@code multipartResolver} bean, so any
+     * {@code MultipartFile} parameter on a Spring MVC method would arrive
+     * as {@code null}.
+     * <p>
+     * The bean name MUST be {@code multipartResolver} -- DispatcherServlet
+     * looks the resolver up by the exact bean name during init (see
+     * {@code DispatcherServlet#MULTIPART_RESOLVER_BEAN_NAME}).
+     * <p>
+     * {@link StandardServletMultipartResolver} delegates to the Servlet
+     * 6 multipart API. The CRF file-upload controller adjusts its size
+     * cap via the {@code crf.file.maxBytes} property (server-side
+     * enforcement); the dispatcher's default max-request-size is left
+     * unbounded here because the controller short-circuits oversize
+     * uploads with a 413 before reading the body.
+     */
+    @Bean
+    public MultipartResolver multipartResolver() {
+        return new StandardServletMultipartResolver();
     }
 
     @Bean

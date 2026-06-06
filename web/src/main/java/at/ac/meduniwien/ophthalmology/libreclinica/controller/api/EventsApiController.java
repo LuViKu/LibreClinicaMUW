@@ -209,15 +209,20 @@ public class EventsApiController {
         orderedEdcs.sort((a, b) -> Integer.compare(a.getOrdinal(), b.getOrdinal()));
 
         // Map crf_version_id -> matching event_crf for fast lookup.
+        //
+        // Phase E.6 restore-quickwins: surface AUTO_DELETED rows so the
+        // Restore action can render against them. Hard-DELETED rows
+        // (operator-issued, distinct from the parent-cascade
+        // AUTO_DELETED) stay hidden; restore is only the inverse of
+        // RemoveEventCRFServlet's soft-delete (status flip), not a
+        // resurrection from a hard delete.
         Map<Integer, EventCRFBean> existingByVersion = new HashMap<>();
         ArrayList<EventCRFBean> existing = ecDao.findAllByStudyEvent(ev);
         if (existing != null) {
             for (EventCRFBean ec : existing) {
                 if (ec == null || ec.getId() == 0) continue;
-                // Skip soft-deleted CRFs — UI shouldn't surface them.
                 if (ec.getStatus() != null
-                        && (ec.getStatus().equals(Status.DELETED)
-                                || ec.getStatus().equals(Status.AUTO_DELETED))) continue;
+                        && ec.getStatus().equals(Status.DELETED)) continue;
                 existingByVersion.put(ec.getCRFVersionId(), ec);
             }
         }
@@ -238,14 +243,15 @@ public class EventsApiController {
             // referencing a non-default version of the same CRF
             // (operators can swap versions per row in the legacy
             // EnterDataForStudyEvent flow — we still want to surface
-            // started entries here).
+            // started entries here). Restore-quickwins keeps the
+            // AUTO_DELETED branch reachable so the restore button can
+            // render on parent-cascade-removed rows.
             EventCRFBean ec = (cv != null) ? existingByVersion.get(cv.getId()) : null;
             if (ec == null && existing != null) {
                 for (EventCRFBean candidate : existing) {
                     if (candidate == null || candidate.getId() == 0) continue;
                     if (candidate.getStatus() != null
-                            && (candidate.getStatus().equals(Status.DELETED)
-                                    || candidate.getStatus().equals(Status.AUTO_DELETED))) continue;
+                            && candidate.getStatus().equals(Status.DELETED)) continue;
                     CRFVersionBean cvCand = (CRFVersionBean) crfvDao.findByPK(candidate.getCRFVersionId());
                     if (cvCand != null && cvCand.getCrfId() == edc.getCrfId()) {
                         ec = candidate;
@@ -515,6 +521,8 @@ public class EventsApiController {
             @RequestParam(value = "subjectId", required = false) String subjectIdFilter,
             @RequestParam(value = "status", required = false) String statusFilter,
             @RequestParam(value = "eventDefinitionOid", required = false) String defOidFilter,
+            @RequestParam(value = "includeRemoved", required = false, defaultValue = "false")
+                boolean includeRemoved,
             HttpSession session) {
 
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
@@ -565,10 +573,19 @@ public class EventsApiController {
                         id -> (StudyEventDefinitionBean) sedDao.findByPK(id));
                 if (def == null || def.getId() == 0) continue;
 
+                // Phase E.6 restore-quickwins: skip soft-deleted events
+                // by default; the SPA opts in via ?includeRemoved=true
+                // when the schedule view's "Show removed" toggle is on.
+                boolean isRemoved = ev.getStatus() != null
+                        && ev.getStatus().equals(Status.DELETED);
+                if (isRemoved && !includeRemoved) continue;
+
                 if (defOidFilter != null && !defOidFilter.isBlank()
                         && !defOidFilter.equalsIgnoreCase(def.getOid())) continue;
 
-                String status = statusForSubjectEventStatus(ev.getSubjectEventStatus());
+                String status = isRemoved
+                        ? "removed"
+                        : statusForSubjectEventStatus(ev.getSubjectEventStatus());
                 if (statusFilter != null && !statusFilter.isBlank()
                         && !statusFilter.equalsIgnoreCase(status)) continue;
 
@@ -1010,6 +1027,137 @@ public class EventsApiController {
         return ResponseEntity.noContent().build();
     }
 
+    /**
+     * Phase E.6 restore-quickwins — inverse of {@link #cancel}. Restores
+     * a previously soft-deleted study event: parent flips back to
+     * {@link Status#AVAILABLE}; nested {@code event_crf} +
+     * {@code item_data} rows currently in {@link Status#AUTO_DELETED}
+     * cascade back to {@link Status#AVAILABLE}.
+     *
+     * <p>Mirrors {@code RestoreStudyEventServlet} (the post-confirm
+     * branch) but expressed as a single REST endpoint — the SPA renders
+     * its own confirm dialog and trusts the click.
+     *
+     * <p>Guards (order matters):
+     * <ol>
+     *   <li>{@code 401} — no authenticated user.</li>
+     *   <li>{@code 400} — no active study bound.</li>
+     *   <li>{@code 403} — caller's role is not DM/Admin (same gate as
+     *       {@link #cancel}; restore is the inverse half).</li>
+     *   <li>{@code 404} — no study_event with that id.</li>
+     *   <li>{@code 403} — event's subject lives outside the visible
+     *       study set.</li>
+     *   <li>{@code 409} — event is not currently DELETED (idempotent
+     *       restore would be wrong here — caller likely has stale UI
+     *       state and should refetch).</li>
+     *   <li>{@code 409} — study_subject is removed; legacy
+     *       {@code RestoreStudyEventServlet} blocks the restore in that
+     *       case ("study_subject_has_been_deleted") and the SPA
+     *       surfaces the same error.</li>
+     * </ol>
+     *
+     * <p>Returns the restored {@link StudyEventDto} so the SPA can
+     * splice it back into the events store without a list refetch.
+     */
+    @PostMapping("/{id:[0-9]+}/restore")
+    public ResponseEntity<?> restore(@PathVariable("id") int eventId,
+                                     HttpSession session) {
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound to the session."));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        if (!EventEditAuthorization.roleMayCancel(roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit restoring study events"));
+        }
+
+        StudyEventDAO seDao = new StudyEventDAO(dataSource);
+        StudyEventBean ev = (StudyEventBean) seDao.findByPK(eventId);
+        if (ev == null || ev.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study_event with id " + eventId));
+        }
+
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ev.getStudySubjectId());
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                ub, currentStudy, currentRole);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "study_event " + eventId + " belongs to a different study"));
+        }
+        if (ev.getStatus() == null || !ev.getStatus().equals(Status.DELETED)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "study_event " + eventId + " is not currently removed"));
+        }
+        // Mirror RestoreStudyEventServlet's parent-state check — a
+        // removed subject blocks the event restore so the matrix
+        // doesn't end up with live events under a dead parent.
+        if (ss.getStatus() != null
+                && (ss.getStatus().equals(Status.DELETED)
+                        || ss.getStatus().equals(Status.AUTO_DELETED))) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "study_event " + eventId + " cannot be restored — "
+                            + "study subject is removed (restore subject first)"));
+        }
+
+        ev.setStatus(Status.AVAILABLE);
+        ev.setUpdater(ub);
+        ev.setUpdatedDate(new java.util.Date());
+        seDao.update(ev);
+
+        // Cascade AUTO_DELETED children back to AVAILABLE. Hard-DELETED
+        // children stay put — that's the operator-issued delete, not
+        // the parent cascade.
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        ItemDataDAO idDao = new ItemDataDAO(dataSource);
+        java.util.ArrayList<EventCRFBean> ecs = ecDao.findAllByStudyEvent(ev);
+        for (EventCRFBean ec : ecs) {
+            if (ec.getStatus() == null || !ec.getStatus().equals(Status.AUTO_DELETED)) continue;
+            ec.setStatus(Status.AVAILABLE);
+            ec.setUpdater(ub);
+            ec.setUpdatedDate(new java.util.Date());
+            ecDao.update(ec);
+
+            java.util.ArrayList<ItemDataBean> items = idDao.findAllByEventCRFId(ec.getId());
+            for (ItemDataBean it : items) {
+                if (it.getStatus() == null || !it.getStatus().equals(Status.AUTO_DELETED)) continue;
+                it.setStatus(Status.AVAILABLE);
+                it.setUpdater(ub);
+                it.setUpdatedDate(new java.util.Date());
+                idDao.update(it);
+            }
+        }
+
+        LOG.info("Study event restore: id={} subject={} by user={} role={}",
+                ev.getId(), ss.getLabel(), ub.getName(), roleId);
+
+        StudyEventBean refreshed = (StudyEventBean) seDao.findByPK(eventId);
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean def =
+                (StudyEventDefinitionBean) sedDao.findByPK(refreshed.getStudyEventDefinitionId());
+        StudyEventDto dto = new StudyEventDto(
+                String.valueOf(refreshed.getId()),
+                ss.getLabel(),
+                def == null ? "" : def.getOid(),
+                def == null ? "" : def.getName(),
+                refreshed.getSampleOrdinal(),
+                refreshed.getDateStarted() == null ? null : ISO_DATE.format(refreshed.getDateStarted()),
+                refreshed.getDateEnded() == null ? null : ISO_DATE.format(refreshed.getDateEnded()),
+                blankToNull(refreshed.getLocation()),
+                statusForSubjectEventStatus(refreshed.getSubjectEventStatus()),
+                def != null && def.isRepeating());
+        return ResponseEntity.ok(dto);
+    }
+
     private static void writeEventFieldAudit(AuditEventDAO dao,
                                              UserAccountBean ub,
                                              StudyBean study,
@@ -1082,6 +1230,14 @@ public class EventsApiController {
      */
     private static String statusForEventCrf(EventCRFBean ec) {
         if (ec == null || ec.getId() == 0) return "not-started";
+        // Phase E.6 restore-quickwins: a parent-cascaded soft-delete
+        // (AUTO_DELETED) leaves the event_crf row present in the
+        // EventDetail surface so the Restore action can render against
+        // it. We surface a dedicated 'removed' status so the SPA can
+        // distinguish "restorable" from "in progress".
+        if (ec.getStatus() != null && ec.getStatus().equals(Status.AUTO_DELETED)) {
+            return "removed";
+        }
         if (ec.getStatus() != null && ec.getStatus().equals(Status.UNAVAILABLE)) {
             return "signed";
         }

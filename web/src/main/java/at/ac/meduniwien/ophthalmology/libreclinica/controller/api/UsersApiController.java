@@ -235,6 +235,7 @@ public class UsersApiController {
             }
             if (activeFilter != null && active != activeFilter) continue;
 
+            boolean locked = Boolean.FALSE.equals(ua.getAccountNonLocked());
             StudyUserDto candidate = new StudyUserDto(
                     String.valueOf(ua.getId()),
                     nullToEmpty(ua.getName()),
@@ -244,7 +245,8 @@ public class UsersApiController {
                     siteLabel,
                     auth,
                     lastLogin,
-                    active);
+                    active,
+                    locked);
             StudyUserDto current = bestByUser.get(ua.getId());
             if (current == null || rolePriority(spaRole) > rolePriority(current.role())) {
                 bestByUser.put(ua.getId(), candidate);
@@ -468,7 +470,8 @@ public class UsersApiController {
                 siteLabel,
                 authForUser(persisted),
                 null,
-                true);
+                true,
+                false);
 
         Map<String, Object> response = new HashMap<>();
         response.put("user", dto);
@@ -1138,6 +1141,126 @@ public class UsersApiController {
     }
 
     /* ----------------------------------------------------------------- */
+    /* POST /api/v1/users/{username}/unlock                               */
+    /*   (Phase E.6 unlock-user — clear lock + issue fresh OTP)           */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Request body for the unlock endpoint.
+     *
+     * <p>Shape mirrors {@link ResetPasswordRequest}: the cleartext
+     * one-time password rides back in the response when
+     * {@code sendEmail != true} so the admin can hand it off manually
+     * until the MailService extraction lands.
+     */
+    @Schema(name = "UnlockUserRequest")
+    public record UnlockUserRequest(Boolean sendEmail) {}
+
+    /**
+     * Clear a locked-out user's account: flip
+     * {@code account_non_locked} back to {@code true}, reset
+     * {@code lock_counter} to 0, and issue a fresh one-time password
+     * so the user can log in once and be force-changed.
+     *
+     * <p>Mirrors {@code ResetUserAccountServlet:46–104} (legacy admin
+     * surface) — except the legacy servlet's audit row is replaced
+     * with a typed {@code audit_log_event} row keyed on
+     * {@code account_non_locked} so the audit trail is queryable per
+     * column (DR-009).
+     *
+     * <p>Sysadmin-only (preflightLifecycle). Refuses 400 for
+     * directory-owned credentials (SSO + LDAP) — the IdP / directory
+     * owns the credential, so resetting it here would create a
+     * phantom local password. Refuses 409 if the account is not
+     * currently locked — the admin needs a clear signal that the
+     * lock was already cleared (race with another admin or self-
+     * unlock via successful login).
+     *
+     * <p>Status codes: {@code 200} on success (returns
+     * {@code {user: StudyUserDto, generatedPassword: String|null}}),
+     * {@code 400} no active study OR SSO/LDAP, {@code 401}
+     * unauthenticated, {@code 403} non-sysadmin, {@code 404} unknown
+     * username, {@code 409} not currently locked.
+     */
+    @PostMapping("/{username}/unlock")
+    @ApiResponse(responseCode = "200")
+    public ResponseEntity<?> unlock(@PathVariable("username") String username,
+                                    @RequestBody(required = false) UnlockUserRequest body,
+                                    HttpSession session) {
+        ResponseEntity<?> guard = preflightLifecycle(session, username);
+        if (guard != null) return guard;
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        UserAccountDAO userDao = new UserAccountDAO(dataSource);
+        UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No user with username '" + username + "'"));
+        }
+        if (isDirectoryOwnedCredential(target)) {
+            String provider = target.getExternalIdProvider();
+            String which = (provider != null && !provider.isBlank())
+                    ? "the identity provider"
+                    : "the directory";
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "User '" + username + "' is authenticated via " + which
+                            + " — lock state is owned by that workflow"));
+        }
+        // 409 when not currently locked. account_non_locked may be
+        // {@code null} on legacy rows that predate the column default
+        // — treat null as "not locked" (the loginAdvice path defaults
+        // to true), per parity with SpringSecurity's check.
+        if (!Boolean.FALSE.equals(target.getAccountNonLocked())) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "User '" + username + "' is not currently locked"));
+        }
+
+        String generatedPassword = securityManager.genPassword();
+        String hash = securityManager.encryptPassword(generatedPassword,
+                target.getRunWebservices());
+        target.setPasswd(hash);
+        target.setPasswdTimestamp(null);
+        target.setAccountNonLocked(Boolean.TRUE);
+        target.setLockCounter(0);
+        target.setUpdater(me);
+        target.setUpdatedDate(new java.util.Date());
+        userDao.update(target);
+
+        // Audit row: keyed on account_non_locked (the column the admin
+        // flipped) — NOT a literal copy of the resetPassword audit
+        // block. Reviewer flag from §4: columnName + value swap, not
+        // a "passwd" copy. We emit a single row for the lock-state
+        // change; the OTP rotation is implicit (no audit_log_event row
+        // for passwd values, ever — same redaction policy as
+        // resetPassword).
+        try {
+            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(me.getId());
+            ae.setAuditTable("user_account");
+            ae.setEntityId(target.getId());
+            ae.setColumnName("account_non_locked");
+            ae.setOldValue("false");
+            ae.setNewValue("true");
+            ae.setActionMessage("unlock by admin " + me.getName()
+                    + " for user " + target.getName());
+            auditDAO.create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for unlock username={} (continuing): {}",
+                    username, e.getMessage());
+        }
+
+        LOG.info("Unlock user: username={} by admin={}", username, me.getName());
+
+        boolean returnPassword = body == null || !Boolean.TRUE.equals(body.sendEmail());
+        Map<String, Object> response = new HashMap<>();
+        response.put("user", projectToStudyUserDto(target, currentStudy));
+        response.put("generatedPassword", returnPassword ? generatedPassword : null);
+        return ResponseEntity.ok(response);
+    }
+
+    /* ----------------------------------------------------------------- */
     /* PUT /api/v1/users/{username}  (Phase E A7.2 — edit profile)       */
     /* ----------------------------------------------------------------- */
 
@@ -1405,6 +1528,7 @@ public class UsersApiController {
                 : ua.getLastVisitDate().toInstant().atZone(ZoneOffset.UTC)
                         .truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
         boolean active = ua.getStatus() != null && ua.getStatus().getId() == Status.AVAILABLE.getId();
+        boolean locked = Boolean.FALSE.equals(ua.getAccountNonLocked());
         return new StudyUserDto(
                 String.valueOf(ua.getId()),
                 nullToEmpty(ua.getName()),
@@ -1414,7 +1538,8 @@ public class UsersApiController {
                 siteLabel,
                 authForUser(ua),
                 lastLogin,
-                active);
+                active,
+                locked);
     }
 
     /* ----------------------------------------------------------------- */

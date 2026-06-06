@@ -8,15 +8,17 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.io.IOException;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,8 @@ import java.util.Set;
 
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.export.XlsxWorkbookBuilder;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
@@ -42,6 +46,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -172,6 +178,15 @@ public class AuditApiController {
         this.siteVisibilityFilter = siteVisibilityFilter;
     }
 
+    /**
+     * Audit-log event-type ids written by the export endpoints. Both
+     * map to the "admin" variant via {@link #variantForType}; the
+     * Liquibase changesets that seed the rows are
+     * {@code lc-muw-2026-06-06-audit-event-type-audit-log-export.xml}
+     * and {@code lc-muw-2026-06-06-audit-event-type-discrepancy-export.xml}.
+     */
+    static final int AUDIT_TYPE_AUDIT_LOG_EXPORTED = 55;
+
     @GetMapping
     @ApiResponse(responseCode = "200",
                  content = @Content(schema = @Schema(type = "array", implementation = AuditEventDto.class)))
@@ -191,6 +206,115 @@ public class AuditApiController {
                     "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
         }
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        try {
+            return ResponseEntity.ok(
+                    collectFilteredRows(ub, currentStudy, currentRole,
+                            actorFilter, variantFilter, subjectIdFilter));
+        } catch (SQLException e) {
+            LOG.error("Failed to load audit-log rows for study_id={}", currentStudy.getId(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load audit log: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Phase E.6 — XLSX hand-off of the audit log. Mirrors the same
+     * filter set as {@link #list} so sponsor / inspector downloads
+     * match the on-screen row count exactly. Emits one
+     * {@code audit_log_event} row (type 55) per successful download
+     * so the GxP audit trail records who took the egress + which
+     * filters were active.
+     *
+     * <p>Failures during the audit-emission INSERT log at WARN but
+     * never roll back the download — matches the
+     * {@link SubjectExportApiController#emitExportAudit} pattern:
+     * losing one audit row is annoying, refusing to ship the
+     * already-rendered workbook is worse.
+     */
+    @GetMapping("/export.xlsx")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(mediaType = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+    public ResponseEntity<?> exportXlsx(
+            @RequestParam(value = "actor", required = false) String actorFilter,
+            @RequestParam(value = "variant", required = false) String variantFilter,
+            @RequestParam(value = "subjectId", required = false) String subjectIdFilter,
+            HttpSession session) {
+
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound — call POST /pages/api/v1/me/activeStudy first"));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+
+        List<AuditEventDto> rows;
+        try {
+            rows = collectFilteredRows(ub, currentStudy, currentRole,
+                    actorFilter, variantFilter, subjectIdFilter);
+        } catch (SQLException e) {
+            LOG.error("Failed to load audit-log rows for study_id={} during export",
+                    currentStudy.getId(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load audit log for export: " + e.getMessage()));
+        }
+
+        byte[] xlsx;
+        try (XlsxWorkbookBuilder b = new XlsxWorkbookBuilder("Audit log")) {
+            b.writeHeader("When (UTC)", "Actor", "Variant", "Title",
+                    "Subject", "Scope", "Details", "Before", "After", "Reason");
+            for (AuditEventDto r : rows) {
+                b.writeRow(
+                        nz(r.occurredAt()),
+                        nz(r.actor()),
+                        nz(r.variant()),
+                        nz(r.title()),
+                        nz(r.subjectId()),
+                        nz(r.scope()),
+                        nz(r.details()),
+                        nz(r.before()),
+                        nz(r.after()),
+                        nz(r.reason()));
+            }
+            b.autoSize();
+            xlsx = b.toByteArray();
+        } catch (IOException e) {
+            LOG.error("Failed to render audit-export workbook for study_id={}",
+                    currentStudy.getId(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to render audit-export workbook: " + e.getMessage()));
+        }
+
+        String filterSummary = describeFilters(actorFilter, variantFilter, subjectIdFilter, rows.size());
+        emitExportAudit(ub.getId(), currentStudy, AUDIT_TYPE_AUDIT_LOG_EXPORTED, filterSummary);
+
+        String filename = "audit_" + safeOid(currentStudy.getOid()) + "_"
+                + LocalDate.now(ZoneOffset.UTC).format(DateTimeFormatter.BASIC_ISO_DATE)
+                + ".xlsx";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"));
+        headers.setContentDispositionFormData("attachment", filename);
+        headers.setContentLength(xlsx.length);
+        return new ResponseEntity<>(xlsx, headers, 200);
+    }
+
+    /**
+     * Shared row collection — used by both {@link #list} and
+     * {@link #exportXlsx}. Pulls the SQL pass through the per-site
+     * visibility filter, hydrates the per-row subject / scope
+     * lookups, and applies the actor / variant / subject filters
+     * server-side. The returned list is newest-first.
+     */
+    private List<AuditEventDto> collectFilteredRows(
+            UserAccountBean ub, StudyBean currentStudy, StudyUserRoleBean currentRole,
+            String actorFilter, String variantFilter, String subjectIdFilter)
+            throws SQLException {
+
         int studyId = currentStudy.getId();
 
         // A4 — per-site visibility. The audit SQL embeds the visible
@@ -323,13 +447,9 @@ public class AuditApiController {
                             blankToNull(reason)));
                 }
             }
-        } catch (SQLException e) {
-            LOG.error("Failed to load audit-log rows for study_id={}", studyId, e);
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to load audit log: " + e.getMessage()));
         }
 
-        return ResponseEntity.ok(out);
+        return out;
     }
 
     /* ----------------------------------------------------------------- */
@@ -351,13 +471,17 @@ public class AuditApiController {
             // subject_group_map trigger).
             case 28, 29 -> "subject-group-change";
             // Subject / study-subject / EDC lifecycle, plus user-profile
-            // (50, Phase E.5 follow-up), study-identity (51, Phase E.6)
-            // and dataset-export (52, Phase E.6 — data egress: SPA
-            // dataset download + retention GC) edits — all administrative
-            // actions surface under the existing "Admin" filter rather
-            // than the data-stream bucket so operators reviewing the
-            // audit trail can pivot by intent.
-            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51, 52 -> "admin";
+            // (50, Phase E.5 follow-up), study-identity (51, Phase E.6),
+            // dataset-export (52), subject-data-export (53),
+            // study-parameters (54, Phase E.6 study-params — per-handle
+            // audit fan-out from PUT /studies/{oid}/parameters),
+            // audit-log-export (55, Phase E.6 — XLSX hand-off of the
+            // audit trail) and discrepancy-log-export (56, Phase E.6 —
+            // CSV hand-off of the discrepancy list) edits — all
+            // administrative actions surface under the existing "Admin"
+            // filter rather than the data-stream bucket so operators
+            // reviewing the audit trail can pivot by intent.
+            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51, 52, 53, 54, 55, 56 -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,
@@ -536,5 +660,82 @@ public class AuditApiController {
             case "8" -> "Signed";
             default -> null;
         };
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Export helpers                                                     */
+    /* ------------------------------------------------------------------ */
+
+    /** Null-safe coalesce for {@link XlsxWorkbookBuilder} string cells. */
+    static String nz(String s) {
+        return s == null ? "" : s;
+    }
+
+    /**
+     * Render the safe StudyOID slug used in the export filename — alphanumerics
+     * + dash + underscore only so the filename is portable across the
+     * Windows / macOS / Linux clients sponsors typically use.
+     */
+    static String safeOid(String oid) {
+        if (oid == null || oid.isBlank()) return "study";
+        StringBuilder sb = new StringBuilder(oid.length());
+        for (int i = 0; i < oid.length(); i++) {
+            char c = oid.charAt(i);
+            if (Character.isLetterOrDigit(c) || c == '-' || c == '_') {
+                sb.append(c);
+            } else {
+                sb.append('_');
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Build a one-line filter summary stored in {@code audit_log_event.new_value}
+     * so the audit-trail row records what the operator selected when they
+     * pulled the export (matches the SPA filter chip set).
+     */
+    static String describeFilters(String actor, String variant, String subjectId, int rowCount) {
+        StringBuilder sb = new StringBuilder("rows=").append(rowCount);
+        if (actor != null && !actor.isBlank()) sb.append(" actor=").append(actor);
+        if (variant != null && !variant.isBlank()) sb.append(" variant=").append(variant);
+        if (subjectId != null && !subjectId.isBlank()) sb.append(" subjectId=").append(subjectId);
+        return sb.toString();
+    }
+
+    /**
+     * Phase E.6 — best-effort INSERT into {@code audit_log_event} so the
+     * GxP audit trail captures the egress event. Mirrors
+     * {@code SubjectExportApiController.emitExportAudit} — failures log at
+     * WARN but never roll back the already-rendered download.
+     *
+     * <p>Row shape:
+     * <ul>
+     *   <li>{@code audit_table = 'study'}, {@code entity_id = study.id} so
+     *       the {@link #STUDY_SCOPED_AUDIT_SQL_TEMPLATE} study-branch joins
+     *       it back to the active study with no extra plumbing.</li>
+     *   <li>{@code entity_name} carries the study OID for at-a-glance
+     *       context in the SPA timeline.</li>
+     *   <li>{@code new_value} carries the filter summary from
+     *       {@link #describeFilters}.</li>
+     * </ul>
+     */
+    private void emitExportAudit(int userId, StudyBean study, int typeId, String filterSummary) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?)")) {
+            ps.setInt(1, typeId);
+            ps.setInt(2, userId);
+            ps.setInt(3, study.getId());
+            ps.setString(4, study.getOid() == null ? "" : study.getOid());
+            ps.setString(5, "");
+            ps.setString(6, filterSummary == null ? "" : filterSummary);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Failed to write audit-export audit row for study_id={} type={}: {}",
+                    study.getId(), typeId, e.getMessage());
+        }
     }
 }

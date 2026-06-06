@@ -23,6 +23,7 @@
  */
 
 import type { components } from './api'
+import type { DdeBlock } from './dde'
 
 export type ItemDataType =
   | 'string'
@@ -33,11 +34,12 @@ export type ItemDataType =
   | 'select-one'
   | 'select-multi'
   | 'boolean'
+  | 'file'
 
 export type ResponseOption = Required<components['schemas']['ResponseOptionDto']>
 
 export type CrfItem =
-  Omit<Required<components['schemas']['CrfItemDto']>, 'dataType' | 'options' | 'helper' | 'min' | 'max'>
+  Omit<Required<components['schemas']['CrfItemDto']>, 'dataType' | 'options' | 'helper' | 'min' | 'max' | 'groupOid'>
   & {
     dataType: ItemDataType
     /** Set when the type is `select-one` / `select-multi`. */
@@ -47,6 +49,10 @@ export type CrfItem =
     /** Inclusive numeric range when applicable. */
     min?: number
     max?: number
+    /** Phase E.6: when set, the item lives inside the matching
+     *  repeating group's row template rather than the top-level
+     *  values map. The SPA filters items by groupOid at render time. */
+    groupOid?: string | null
   }
 
 export type CrfSection =
@@ -74,15 +80,99 @@ export type CrfEntryStatus =
   | 'complete'
   | 'locked'
 
+/**
+ * Phase E.6 — a saved row inside a repeating item group. `ordinal` is
+ * 1-based and matches `item_data.ordinal`; `values` is keyed by item OID
+ * just like the top-level {@link CrfValues} map.
+ */
+export type CrfGroupRow = {
+  ordinal: number
+  values: CrfValues
+}
+
+/**
+ * Phase E.6 — a repeating item group. The SPA renders one
+ * {@code RepeatingGroupSection} per entry; each row binds its values
+ * via the store's {@code setValueInRow} action.
+ */
+export type CrfItemGroup = {
+  oid: string
+  label: string
+  repeatMax: number
+  /** Item OIDs that belong to this group, in display order. */
+  itemOids: string[]
+  rows: CrfGroupRow[]
+}
+
+/**
+ * Phase E.6 — server-supplied file-upload metadata + caps. Surfaced
+ * directly inside the {@link CrfEntry} so the dropzone widget can show
+ * the cap in its helper text and pre-validate before the multipart POST.
+ */
+export type CrfFileMetadata = {
+  /** Max bytes per upload; server enforces, SPA pre-checks. */
+  maxFileBytes: number
+  /** Comma-joined extension allowlist (e.g. "pdf,jpg,jpeg,png"). */
+  fileExtensions: string
+}
+
 export type CrfEntry =
-  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt'>
+  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt' | 'groups' | 'maxFileBytes' | 'fileExtensions' | 'requiresReasonForChange' | 'dde'>
   & {
     schema: CrfSchema
     values: CrfValues
     status: CrfEntryStatus
     /** ISO-8601 instant of the last successful save. */
     lastSavedAt: string | null
+    /** Phase E.6: repeating item groups + their saved rows. */
+    groups: CrfItemGroup[]
+    /** Phase E.6: server-side caps mirrored into the SPA. */
+    maxFileBytes: number
+    fileExtensions: string
+    /**
+     * Phase E.6 admin-rfc — true when the CRF is past
+     * {@code date_completed} so subsequent edits require an RFC note.
+     * The view uses this to gate the {@code ReasonForChangeModal}; the
+     * store re-arms the modal whenever the backend returns 400 with
+     * {@code missingReasonItemOids}.
+     */
+    requiresReasonForChange: boolean
+    /**
+     * Phase E.6 dde — non-null only when the parent
+     * event_definition_crf has double_entry=true. The view picks the
+     * blind-second-pass banner / reconcile-redirect from this field.
+     */
+    dde: DdeBlock | null
   }
+
+/**
+ * Phase E.6 — POST /pages/api/v1/eventCrfs/{id}/items body.
+ * Mirrors the Java {@code SaveItemsRequest} record byte-for-byte.
+ * Carries (a) RFC reasons (admin-rfc cluster) and (b) repeating-group
+ * rows (crf-data-types cluster) alongside top-level values.
+ */
+export interface SaveItemsRequest {
+  values: CrfValues
+  /** Item OID → reason text. Required for every changed item once the CRF is complete. */
+  reasons?: Record<string, string>
+  /** Phase E.6 — per-row payloads for repeating item groups. */
+  groups?: Array<{
+    groupOid: string
+    rowOrdinal: number
+    values: Record<string, unknown>
+  }>
+}
+
+/**
+ * Phase E.6 admin-rfc — POST /items 400 body when the controller
+ * rejects a post-complete save without enough reason coverage. The
+ * SPA reads {@code missingReasonItemOids} to re-arm the modal
+ * scoped to just the offending oids.
+ */
+export interface MissingReasonsError {
+  message: string
+  missingReasonItemOids: string[]
+}
 
 /* ------------------------------------------------------------------ */
 /* Phase E A5 — CRF reopen role-aware helper.                         */
@@ -105,4 +195,58 @@ export function canReopenCrf(role: UserRole, status: CrfEntryStatus): boolean {
     role === 'Data Manager' ||
     role === 'Administrator'
   )
+}
+
+/* ------------------------------------------------------------------ */
+/* Phase E.6 crf-entry-advanced — TOC badges, concurrent-edit probe,  */
+/*                                 per-item notes roll-up.            */
+/*                                                                    */
+/* Shapes mirror the new backend records:                             */
+/*   SectionStatusDto                                                 */
+/*   EventCrfLockProbeDto                                             */
+/*   EventCrfNotesRollupDto + nested ItemNoteSummary                  */
+/* ------------------------------------------------------------------ */
+
+/** Per-section TOC roll-up. Driven by GET …/section-status. */
+export interface SectionStatus {
+  sectionOid: string
+  title: string
+  requiredCount: number
+  filledCount: number
+  errorCount: number
+  openQueries: number
+}
+
+/** Soft-lock probe shape. Driven by GET …/lock-status and POST …/heartbeat. */
+export interface LockProbe {
+  eventCrfOid: string
+  /** True iff the freshest editor IS the calling session — no banner. */
+  sameUser: boolean
+  /** Username of the freshest editor; null on cold probe. */
+  lastEditorName: string | null
+  /** ISO-8601 instant of the freshest probe; null on cold probe. */
+  lastSeenAt: string | null
+  /** Server-side presence TTL in seconds. SPA should heartbeat at < TTL/2. */
+  ttlSeconds: number
+}
+
+/** Per-item summary inside the rollup. */
+export interface ItemNoteSummary {
+  totalCount: number
+  openCount: number
+  /** 'open' if any note is open; otherwise 'resolved'. */
+  status: 'open' | 'resolved'
+  /** Latest-activity instant across all notes on this item. */
+  lastActivityAt: string | null
+  /** Note ids attached to this item — drives the popover lazy fetch. */
+  noteIds: string[]
+}
+
+/** Driven by GET …/notes. */
+export interface NotesRollup {
+  eventCrfOid: string
+  totalCount: number
+  openCount: number
+  /** Item OID → summary. Items without notes are absent. */
+  byItemOid: Record<string, ItemNoteSummary>
 }

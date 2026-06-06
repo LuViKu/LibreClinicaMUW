@@ -1,0 +1,56 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 dde (2026-06-08): partial index on item_data to make
+        the DDE diff scan cheap.
+
+        The DDE pass-2 commit hits item_data for every key/value the
+        clerk re-keyed. Without an index PostgreSQL falls back to a seq
+        scan on item_data (which on the MUW prod set is ~2.4M rows after
+        a single trial's worth of CRFs). The natural lookup is by
+        (event_crf_id, item_id) — already covered by the implicit FK
+        indexes — but the existing FK index doesn't filter out
+        removed/locked rows. DDE diff only reads AVAILABLE rows
+        (status_id = 1) so a partial index on those rows is materially
+        smaller.
+
+        Reviewer flag (FIXED): the original playbook draft proposed
+        `WHERE status_id IN (5, 6)` (REMOVED/LOCKED) — semantically
+        backwards. DDE compares the live AVAILABLE values. Filter on
+        status_id = 1 (AVAILABLE) is the correct semantics.
+    -->
+    <changeSet id="2026-06-08-dde-item-data-available-idx"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*)
+                FROM pg_indexes
+                WHERE schemaname = current_schema()
+                  AND indexname = 'item_data_event_crf_available_idx';
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Partial index on item_data (event_crf_id, item_id) restricted to
+            AVAILABLE rows — the only rows DDE pass-2 diff reads. Speeds up
+            both the pass-2 commit diff and the reconcile-view conflict
+            listing without bloating index size with removed/locked rows.
+        </comment>
+        <sql>
+            CREATE INDEX IF NOT EXISTS item_data_event_crf_available_idx
+                ON item_data (event_crf_id, item_id)
+                WHERE status_id = 1
+        </sql>
+        <rollback>
+            <sql>
+                DROP INDEX IF EXISTS item_data_event_crf_available_idx
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

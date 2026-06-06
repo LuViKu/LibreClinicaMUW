@@ -159,6 +159,15 @@ function iconFor(id: StudyBuildTaskId): string {
             >
               {{ t('buildStudy.editAction') }}
             </RouterLink>
+            <!-- Phase E.6 study-params — parameters affordance, same auth
+                 gate as edit (Administrator). -->
+            <RouterLink
+              v-if="activeStudyOid"
+              :to="`/studies/${activeStudyOid}/parameters`"
+              class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+            >
+              {{ t('buildStudy.parametersAction') }}
+            </RouterLink>
             <RouterLink
               to="/studies/new"
               class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium"

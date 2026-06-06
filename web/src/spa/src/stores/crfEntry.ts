@@ -1,13 +1,19 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { apiDelete, apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { apiUpload } from '@/api/upload'
 import type {
   CrfEntry,
   CrfEntryStatus,
+  CrfGroupRow,
   CrfItem,
+  CrfItemGroup,
   CrfSchema,
   CrfValues,
+  MissingReasonsError,
+  SaveItemsRequest,
 } from '@/types/crf'
+import { useDdeStore } from '@/stores/dde'
 
 /**
  * Phase E.5.3 + E.4 M5 — CRF Entry store.
@@ -37,14 +43,85 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
   const error = ref<string | null>(null)
   const pendingChanges = ref(false)
 
+  /**
+   * Phase E.6 admin-rfc — staged reason-for-change text per dirty item.
+   * Populated by {@link stageReason} when the user submits the
+   * {@code ReasonForChangeModal}; sent alongside `values` on `save()`
+   * when the backing entry is `requiresReasonForChange`.
+   *
+   * Cleared on successful save; partially re-armed when the backend
+   * returns a 400 with `missingReasonItemOids` (we drop the served
+   * oids' staged reasons so the modal asks again for just those).
+   */
+  const pendingReasons = ref<Record<string, string>>({})
+
+  /**
+   * Phase E.6 admin-rfc — item OIDs the modal should currently solicit
+   * reasons for. The view watches this; non-empty means open the modal
+   * with one prompt per oid.
+   */
+  const missingReasonItemOids = ref<string[]>([])
+
   const schema = computed<CrfSchema | null>(() => entry.value?.schema ?? null)
   const values = computed<CrfValues>(() => entry.value?.values ?? {})
   const status = computed<CrfEntryStatus>(() => entry.value?.status ?? 'not-started')
+  const groups = computed<CrfItemGroup[]>(() => entry.value?.groups ?? [])
+
+  /** Phase E.6 — per-group, per-row dirty values awaiting flush in save(). */
+  const dirtyGroupRows = ref<
+    Map<string, Map<number, Map<string, unknown>>>
+  >(new Map())
+
+  /** True when the backing entry needs an RFC for every edit (post-complete). */
+  const requiresReasonForChange = computed<boolean>(
+    () => entry.value?.requiresReasonForChange === true,
+  )
+
+  /**
+   * Phase E.6 — dirty item OIDs (set via setValue since the last save).
+   * The modal prompts for one reason per dirty oid; the view also reads
+   * this so Save stays disabled while any dirty oid lacks a staged
+   * reason on a post-complete entry.
+   */
+  const dirtyItemOids = ref<Set<string>>(new Set())
+
+  /** OIDs that need a reason before Save can fire (post-complete only). */
+  const itemsAwaitingReason = computed<string[]>(() => {
+    if (!requiresReasonForChange.value) return []
+    return Array.from(dirtyItemOids.value).filter(
+      (oid) => !pendingReasons.value[oid] || pendingReasons.value[oid].trim().length === 0,
+    )
+  })
 
   /** Item oids whose validation currently fails (used by the section badge). */
   const itemErrors = computed<Record<string, string>>(() => {
     if (!entry.value) return {}
     return computeItemErrors(entry.value.schema, entry.value.values)
+  })
+
+  /**
+   * Phase E.6 crf-entry-advanced — per-section { required, filled, errors }
+   * tallies derived from the currently-loaded entry. The TOC SideRail
+   * badge component composes this with the backend's openQueries count
+   * from `crfEntryAdvanced.sectionStatuses`; this getter keeps the
+   * client-side view honest for items the user typed but hasn't yet
+   * saved (the server-side counts only see persisted values).
+   */
+  const sectionFilledCounts = computed<Record<string, { required: number; filled: number; errors: number }>>(() => {
+    const out: Record<string, { required: number; filled: number; errors: number }> = {}
+    if (!entry.value) return out
+    for (const section of entry.value.schema.sections) {
+      let required = 0
+      let filled = 0
+      let errors = 0
+      for (const item of section.items) {
+        if (item.required) required++
+        if (item.required && hasValue(entry.value.values[item.oid])) filled++
+        if (itemErrors.value[item.oid] != null) errors++
+      }
+      out[section.oid] = { required, filled, errors }
+    }
+    return out
   })
 
   const isComplete = computed<boolean>(() => {
@@ -60,6 +137,9 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     error.value = null
     pendingChanges.value = false
     entry.value = null
+    pendingReasons.value = {}
+    missingReasonItemOids.value = []
+    dirtyItemOids.value = new Set()
     try {
       entry.value = await apiGet<CrfEntry>(
         `/pages/api/v1/eventCrfs/${encodeURIComponent(eventCrfOid)}`,
@@ -89,6 +169,239 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     entry.value.values[itemOid] = value
     pendingChanges.value = true
     if (entry.value.status === 'not-started') entry.value.status = 'in-progress'
+    // Phase E.6 admin-rfc — track dirty oids so the modal knows which
+    // items still need a reason before Save can fire.
+    if (entry.value.requiresReasonForChange) {
+      dirtyItemOids.value = new Set([...dirtyItemOids.value, itemOid])
+    }
+  }
+
+  /**
+   * Phase E.6 admin-rfc — record a reason for one item OID. Called by
+   * the {@code ReasonForChangeModal} per prompt. Trims whitespace; an
+   * empty reason removes the staged entry so the modal will re-ask.
+   */
+  function stageReason(itemOid: string, reason: string): void {
+    const trimmed = reason.trim()
+    if (trimmed.length === 0) {
+      const { [itemOid]: _drop, ...rest } = pendingReasons.value
+      pendingReasons.value = rest
+      return
+    }
+    pendingReasons.value = { ...pendingReasons.value, [itemOid]: trimmed }
+    // Drop this oid from the missing list so the modal can dismiss
+    // once every prompt has been answered.
+    missingReasonItemOids.value = missingReasonItemOids.value.filter((o) => o !== itemOid)
+  }
+
+  /**
+   * Phase E.6 admin-rfc — explicit modal-dismiss helper. Clears the
+   * `missingReasonItemOids` ref so the view's `v-model:open` flips back
+   * to closed; pending reasons stay staged for the next save attempt.
+   */
+  function dismissReasonModal(): void {
+    missingReasonItemOids.value = []
+  }
+
+  /**
+   * Phase E.6 — write the value for an item inside a repeating group's
+   * row. Mirrors {@link setValue} but routes the write into the matching
+   * {@link CrfGroupRow#values}; the row is also tracked in
+   * {@code dirtyGroupRows} so {@link save} flushes it to the backend.
+   */
+  function setValueInRow(
+    groupOid: string,
+    rowOrdinal: number,
+    itemOid: string,
+    value: unknown,
+  ): void {
+    if (!entry.value) return
+    const group = entry.value.groups.find((g) => g.oid === groupOid)
+    if (!group) return
+    let row = group.rows.find((r) => r.ordinal === rowOrdinal)
+    if (!row) {
+      row = { ordinal: rowOrdinal, values: {} }
+      group.rows.push(row)
+      group.rows.sort((a, b) => a.ordinal - b.ordinal)
+    }
+    row.values[itemOid] = value
+    let byOrd = dirtyGroupRows.value.get(groupOid)
+    if (!byOrd) {
+      byOrd = new Map()
+      dirtyGroupRows.value.set(groupOid, byOrd)
+    }
+    let byItem = byOrd.get(rowOrdinal)
+    if (!byItem) {
+      byItem = new Map()
+      byOrd.set(rowOrdinal, byItem)
+    }
+    byItem.set(itemOid, value)
+    pendingChanges.value = true
+    if (entry.value.status === 'not-started') entry.value.status = 'in-progress'
+  }
+
+  /**
+   * Phase E.6 — POST a new row into a repeating group. Backend
+   * allocates the next ordinal and returns it; the SPA appends a
+   * fresh blank row to the in-memory group so the user can start
+   * typing into it immediately. Rejects when {@code repeatMax} is
+   * already reached (backend returns 409 + REPEAT_MAX_REACHED).
+   */
+  async function addGroupRow(groupOid: string): Promise<CrfGroupRow | null> {
+    if (!entry.value) return null
+    const target = entry.value
+    const group = target.groups.find((g) => g.oid === groupOid)
+    if (!group) {
+      error.value = `Unknown repeating group: ${groupOid}`
+      return null
+    }
+    if (group.rows.length >= group.repeatMax) {
+      // The view should grey out the button already, but guard anyway.
+      error.value = `crfEntry.group.repeatMaxReached`
+      return null
+    }
+    isSaving.value = true
+    error.value = null
+    try {
+      const res = await apiPost<AddGroupRowResponse>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}` +
+          `/groups/${encodeURIComponent(groupOid)}/rows`,
+        {},
+      )
+      const newRow: CrfGroupRow = { ordinal: res.rowOrdinal, values: res.values ?? {} }
+      group.rows.push(newRow)
+      group.rows.sort((a, b) => a.ordinal - b.ordinal)
+      return newRow
+    } catch (e) {
+      handleApiError(e, 'Hinzufügen einer Zeile')
+      return null
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  /**
+   * Phase E.6 — DELETE a row from a repeating group. The backend
+   * soft-deletes every {@code item_data} row at the matching ordinal;
+   * the SPA drops the row from the in-memory group on success.
+   */
+  async function deleteGroupRow(
+    groupOid: string,
+    rowOrdinal: number,
+  ): Promise<boolean> {
+    if (!entry.value) return false
+    const target = entry.value
+    const group = target.groups.find((g) => g.oid === groupOid)
+    if (!group) return false
+    isSaving.value = true
+    error.value = null
+    try {
+      await apiDelete<void>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}` +
+          `/groups/${encodeURIComponent(groupOid)}/rows/${rowOrdinal}`,
+      )
+      group.rows = group.rows.filter((r) => r.ordinal !== rowOrdinal)
+      const byOrd = dirtyGroupRows.value.get(groupOid)
+      byOrd?.delete(rowOrdinal)
+      return true
+    } catch (e) {
+      handleApiError(e, 'Löschen der Zeile')
+      return false
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  /**
+   * Phase E.6 — upload a file for a file-typed item. POSTs the file
+   * via multipart/form-data; the backend stores the bytes under
+   * {@code attached_file_location} and writes the resolved path
+   * into {@code item_data.value}. The SPA pre-validates the size
+   * + extension against the cap surfaced in {@link CrfEntry}.
+   */
+  async function uploadFile(
+    itemOid: string,
+    file: File,
+    rowOrdinal = 1,
+  ): Promise<boolean> {
+    if (!entry.value) return false
+    const target = entry.value
+    // Client-side pre-check; backend enforces too.
+    if (target.maxFileBytes > 0 && file.size > target.maxFileBytes) {
+      error.value = 'crfEntry.file.tooBig'
+      return false
+    }
+    if (target.fileExtensions) {
+      const ext = (file.name.split('.').pop() ?? '').toLowerCase()
+      const allowed = target.fileExtensions.split(',').map((s) => s.trim().toLowerCase())
+      if (ext && !allowed.includes(ext)) {
+        error.value = 'crfEntry.file.badExtension'
+        return false
+      }
+    }
+    isSaving.value = true
+    error.value = null
+    try {
+      const res = await apiUpload<FileUploadResponse>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}` +
+          `/items/${encodeURIComponent(itemOid)}/file`,
+        file,
+        { rowOrdinal: String(rowOrdinal) },
+      )
+      const fileRef = {
+        filename: res.filename,
+        bytes: res.bytes,
+        contentType: res.contentType,
+        storedPath: res.storedPath,
+        rowOrdinal: res.rowOrdinal ?? rowOrdinal,
+      }
+      if (rowOrdinal === 1) {
+        target.values[itemOid] = fileRef
+      } else {
+        for (const g of target.groups) {
+          const row = g.rows.find((r) => r.ordinal === rowOrdinal)
+          if (row && g.itemOids.includes(itemOid)) {
+            row.values[itemOid] = fileRef
+            break
+          }
+        }
+      }
+      target.lastSavedAt = res.lastSavedAt ?? new Date().toISOString()
+      return true
+    } catch (e) {
+      handleApiError(e, 'Hochladen der Datei')
+      return false
+    } finally {
+      isSaving.value = false
+    }
+  }
+
+  /** Phase E.6 — DELETE an uploaded file for a file-typed item. */
+  async function deleteFile(itemOid: string, rowOrdinal = 1): Promise<boolean> {
+    if (!entry.value) return false
+    const target = entry.value
+    isSaving.value = true
+    error.value = null
+    try {
+      await apiDelete<void>(
+        `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}` +
+          `/items/${encodeURIComponent(itemOid)}/file?rowOrdinal=${rowOrdinal}`,
+      )
+      if (rowOrdinal === 1) {
+        delete target.values[itemOid]
+      } else {
+        for (const g of target.groups) {
+          const row = g.rows.find((r) => r.ordinal === rowOrdinal)
+          if (row) delete row.values[itemOid]
+        }
+      }
+      return true
+    } catch (e) {
+      handleApiError(e, 'Löschen der Datei')
+      return false
+    } finally {
+      isSaving.value = false
+    }
   }
 
   async function save(): Promise<void> {
@@ -96,19 +409,100 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     const target = entry.value
     isSaving.value = true
     error.value = null
+    // Phase E.6 admin-rfc — short-circuit if the entry is post-complete
+    // and any dirty item is missing a staged reason. The view shouldn't
+    // call save() in this state (the button is gated), but the guard
+    // makes the contract explicit + simplifies tests.
+    if (requiresReasonForChange.value && itemsAwaitingReason.value.length > 0) {
+      missingReasonItemOids.value = [...itemsAwaitingReason.value]
+      isSaving.value = false
+      return
+    }
+    // Build the request body. Pre-complete edits omit `reasons`; the
+    // backend treats null + missing identically.
+    const body: SaveItemsRequest = requiresReasonForChange.value
+      ? { values: target.values, reasons: { ...pendingReasons.value } }
+      : { values: target.values }
     try {
+      // Phase E.6 dde — when this is a blind pass-2 entry, the save
+      // semantics are different: we POST to /dde-commit which runs
+      // the diff against pass-1 instead of upserting item_data.
+      if (target.dde && target.dde.pass === '2') {
+        const ddeStore = useDdeStore()
+        const ddeResp = await ddeStore.commitPass2(target.eventCrfOid, target.values)
+        if (!ddeResp) {
+          // ddeStore.error carries the user-facing message
+          error.value = ddeStore.error ?? error.value
+          return
+        }
+        target.lastSavedAt = ddeResp.lastSavedAt
+        // status flips on the backend (dde-complete / dde-conflicts);
+        // we don't map those onto the existing CrfEntryStatus literal
+        // union — leaving the status as-is and letting the view read
+        // entry.dde to decide is simpler than fighting the type union.
+        pendingChanges.value = false
+        return
+      }
+      // Phase E.6 — bundle dirty repeating-group row writes with the
+      // top-level values payload so the backend gets a single saveItems
+      // call. The backend response carries groupRowsSaved which we
+      // surface for the optional Toast.
+      const groupsPayload: Array<{
+        groupOid: string
+        rowOrdinal: number
+        values: Record<string, unknown>
+      }> = []
+      for (const [groupOid, byOrd] of dirtyGroupRows.value.entries()) {
+        for (const [rowOrdinal, byItem] of byOrd.entries()) {
+          const vals: Record<string, unknown> = {}
+          byItem.forEach((v, k) => {
+            vals[k] = v
+          })
+          groupsPayload.push({ groupOid, rowOrdinal, values: vals })
+        }
+      }
+      // Phase E.6 — combine RFC reasons (admin-rfc) with repeating-group
+      // rows (crf-data-types) in a single saveItems payload.
+      const payload: SaveItemsRequest = { ...body, groups: groupsPayload }
       const response = await apiPost<SaveItemsResponse>(
         `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}/items`,
-        { values: target.values },
+        payload,
       )
       target.lastSavedAt = response.lastSavedAt ?? new Date().toISOString()
       if (response.status === 'in-progress' && target.status === 'not-started') {
         target.status = 'in-progress'
       }
+      dirtyGroupRows.value.clear()
       pendingChanges.value = false
+      // Save committed — drop staged reasons + clear dirty oid tracker.
+      pendingReasons.value = {}
+      missingReasonItemOids.value = []
+      dirtyItemOids.value = new Set()
     } catch (e) {
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
         throw e
+      }
+      // Phase E.6 admin-rfc — 400 with `missingReasonItemOids` re-arms
+      // the modal scoped to the offending oids so the operator can
+      // supply the reasons + retry without losing typed values.
+      if (e instanceof ApiError && e.status === 400) {
+        const body = e.body as MissingReasonsError | { message?: string } | null
+        const oids = (body as MissingReasonsError | null)?.missingReasonItemOids
+        if (Array.isArray(oids) && oids.length > 0) {
+          missingReasonItemOids.value = [...oids]
+          // Drop the offending oids' staged reasons so the modal
+          // re-prompts (the backend won't trust a reason we already
+          // sent + it rejected as missing).
+          const next = { ...pendingReasons.value }
+          for (const oid of oids) delete next[oid]
+          pendingReasons.value = next
+          error.value = (body as { message?: string } | null)?.message
+            ?? 'Bitte Begründung für die markierten Felder eintragen.'
+          return
+        }
+        const errBody = e.body as { message?: string } | null
+        error.value = errBody?.message ?? `Speichern fehlgeschlagen (HTTP ${e.status}).`
+        return
       }
       if (e instanceof ApiNetworkError) {
         error.value =
@@ -121,6 +515,27 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
       }
     } finally {
       isSaving.value = false
+    }
+  }
+
+  /** Phase E.6 — shared error handler for the new mutating actions. */
+  function handleApiError(e: unknown, op: string): void {
+    if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+      const body = e.body as { message?: string } | null
+      error.value = body?.message ?? `${op} verweigert (HTTP ${e.status}).`
+      return
+    }
+    if (e instanceof ApiNetworkError) {
+      error.value = `Backend nicht erreichbar — ${op} fehlgeschlagen.`
+    } else if (e instanceof ApiError) {
+      const body = e.body as { message?: string; code?: string } | null
+      if (body?.code === 'REPEAT_MAX_REACHED') {
+        error.value = 'crfEntry.group.repeatMaxReached'
+      } else {
+        error.value = body?.message ?? `${op} fehlgeschlagen (HTTP ${e.status}).`
+      }
+    } else {
+      error.value = e instanceof Error ? e.message : `Unbekannter Fehler — ${op}.`
     }
   }
 
@@ -222,13 +637,28 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     schema,
     values,
     status,
+    groups,
     itemErrors,
+    sectionFilledCounts,
     isComplete,
+    // Phase E.6 admin-rfc — RFC capture surface.
+    pendingReasons,
+    missingReasonItemOids,
+    dirtyItemOids,
+    requiresReasonForChange,
+    itemsAwaitingReason,
     load,
     setValue,
+    setValueInRow,
+    addGroupRow,
+    deleteGroupRow,
+    uploadFile,
+    deleteFile,
     save,
     markComplete,
     reopen,
+    stageReason,
+    dismissReasonModal,
   }
 })
 
@@ -311,13 +741,35 @@ function validateItem(item: CrfItem, raw: unknown): string | null {
 /* POST /pages/api/v1/eventCrfs/{id}/items  + POST .../markComplete (M6).      */
 /* -------------------------------------------------------------------------- */
 
-/** Wire shape of the POST /items endpoint response (M6). */
+/** Wire shape of the POST /items endpoint response (M6 + E.6). */
 interface SaveItemsResponse {
   eventCrfOid: string
   savedItemCount: number
   rejectedItemCount: number
+  /** Phase E.6 admin-rfc — count of `discrepancy_note` rows written. */
+  rfcCreatedCount?: number
+  /** Phase E.6 — count of repeating-group item writes that landed. */
+  groupRowsSaved?: number
   lastSavedAt: string | null
   status: CrfEntryStatus
+}
+
+/** Phase E.6 — wire shape of POST /eventCrfs/{id}/groups/{groupOid}/rows. */
+interface AddGroupRowResponse {
+  groupOid: string
+  rowOrdinal: number
+  values?: Record<string, unknown>
+}
+
+/** Phase E.6 — wire shape of POST /eventCrfs/{id}/items/{itemOid}/file. */
+interface FileUploadResponse {
+  itemOid: string
+  rowOrdinal?: number
+  filename: string
+  bytes: number
+  contentType: string | null
+  storedPath: string
+  lastSavedAt: string | null
 }
 
 /** Wire shape of the POST /markComplete endpoint response (M6). */

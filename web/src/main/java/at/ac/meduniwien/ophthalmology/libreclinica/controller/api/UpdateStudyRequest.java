@@ -26,8 +26,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *   <li>{@code status} — covered by A8.5
  *       ({@code POST /studies/{oid}/status})</li>
  *   <li>{@code parameters} (study_parameter_value rows) — covered by
- *       a dedicated parameter-edit endpoint in the A8.1 follow-up
- *       (out of scope this slice)</li>
+ *       {@link StudyParametersApiController}
+ *       ({@code PUT /api/v1/studies/{oid}/parameters}, Phase E.6
+ *       study-params)</li>
  * </ul>
  */
 @Schema(name = "UpdateStudyRequest")

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -9,6 +9,11 @@ import { useRoute, useRouter } from 'vue-router'
  * `meta.readOnly = true`. In read-only mode every input is disabled,
  * the save + mark-complete buttons disappear, and the page header
  * shows a "Read-only — Monitor view" tell.
+ *
+ * Phase E.6 crf-entry-advanced (2026-06-05): SideRail badges +
+ * concurrent-edit banner + per-item note indicators. Composed via
+ * the {@link useCrfEntryAdvancedStore} so the existing
+ * {@link useCrfEntryStore} stays focused on item entry.
  */
 
 import SideRail from '@/components/SideRail.vue'
@@ -18,8 +23,16 @@ import TextInput from '@/components/TextInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import ReasonForChangeModal from '@/components/ReasonForChangeModal.vue'
+import CheckboxArrayInput from '@/components/CheckboxArrayInput.vue'
+import FileUploadInput from '@/components/FileUploadInput.vue'
+import RepeatingGroupSection from '@/components/RepeatingGroupSection.vue'
+import SectionBadge from '@/components/SectionBadge.vue'
+import ConcurrentEditBanner from '@/components/ConcurrentEditBanner.vue'
+import ItemNoteIndicator from '@/components/ItemNoteIndicator.vue'
 
 import { useCrfEntryStore } from '@/stores/crfEntry'
+import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
@@ -28,6 +41,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useCrfEntryStore()
+const advanced = useCrfEntryAdvancedStore()
 const auth = useAuthStore()
 
 const eventCrfOid = computed(() => String(route.params.eventCrfOid))
@@ -43,8 +57,37 @@ const readOnlyLabel = computed(() => isLocked.value
   ? t('crfEntry.lockedTell')
   : t('crfEntry.readOnlyTell'))
 
-onMounted(() => store.load(eventCrfOid.value))
-watch(eventCrfOid, (oid) => { void store.load(oid) })
+onMounted(() => {
+  void store.load(eventCrfOid.value)
+  void advanced.loadAll(eventCrfOid.value)
+  // Soft-lock heartbeat: do NOT start when the view is read-only
+  // (Monitor view + signed/locked CRFs) — those sessions aren't
+  // editing and don't need to claim presence.
+  if (!isReadOnly.value) {
+    advanced.startHeartbeat(eventCrfOid.value)
+  }
+})
+
+watch(eventCrfOid, (oid) => {
+  void store.load(oid)
+  void advanced.loadAll(oid)
+  advanced.stopHeartbeat()
+  if (!isReadOnly.value) {
+    advanced.startHeartbeat(oid)
+  }
+})
+
+onUnmounted(() => advanced.stopHeartbeat())
+
+// Phase E.6 dde — redirect to the reconcile view when the backend
+// reports pass=reconcile. We watch on store.entry rather than the
+// route so a re-load that flips pass=2 → pass=reconcile (e.g. after
+// the DDE clerk's commit) also redirects.
+watch(() => store.entry?.dde?.pass, (pass) => {
+  if (pass === 'reconcile' && store.entry) {
+    router.push({ name: 'dde-reconcile', params: { eventCrfOid: store.entry.eventCrfOid } })
+  }
+})
 
 function statusVariant(s: CrfEntryStatus): 'success' | 'info' | 'warning' | 'neutral' {
   switch (s) {
@@ -68,6 +111,51 @@ function showError(item: CrfItem): string | null {
   return store.itemErrors[item.oid] ?? null
 }
 
+/**
+ * Phase E.6 — items belonging to a repeating group are rendered inside
+ * the group's row template, not the top-level section. Filter them out
+ * here so the section loop only sees the top-level items.
+ */
+function topLevelItems(items: CrfItem[]): CrfItem[] {
+  return items.filter((it) => !it.groupOid)
+}
+
+/** Lookup table the {@code RepeatingGroupSection} consumes. */
+const itemsByOid = computed<Record<string, CrfItem>>(() => {
+  const out: Record<string, CrfItem> = {}
+  for (const section of store.schema?.sections ?? []) {
+    for (const item of section.items) {
+      out[item.oid] = item
+    }
+  }
+  return out
+})
+
+/** Currently-stored FileRef for a file-typed item (top-level row only). */
+function fileRefFor(itemOid: string): { filename: string; bytes: number } | null {
+  const v = store.values[itemOid]
+  if (v && typeof v === 'object' && 'filename' in v && 'bytes' in v) {
+    return v as { filename: string; bytes: number }
+  }
+  return null
+}
+
+/** Per-item busy flag — drives the FileUploadInput's spinner. */
+function isFileBusy(_itemOid: string): boolean {
+  // Coarse-grained: any save-in-flight greys all file widgets. A
+  // per-item busy map can replace this in a follow-up if needed.
+  return store.isSaving
+}
+
+async function onUploadFile(itemOid: string, file: File): Promise<void> {
+  await store.uploadFile(itemOid, file)
+}
+
+async function onClearFile(itemOid: string): Promise<void> {
+  if (!confirm(t('crfEntry.file.removeConfirm'))) return
+  await store.deleteFile(itemOid)
+}
+
 function inputBindings(item: CrfItem) {
   // The store carries item values as `unknown` (each item declares its own
   // dataType separately), but the form primitives expect `string | null`.
@@ -82,7 +170,85 @@ function inputBindings(item: CrfItem) {
   }
 }
 
-async function onSave() { await store.save() }
+/* -------------------------------------------------------------------- */
+/* Phase E.6 admin-rfc — Reason-For-Change modal wiring.                 */
+/*                                                                       */
+/* The store flips `missingReasonItemOids` when (a) the operator clicks  */
+/* Save on a post-complete entry with dirty oids missing reasons, or (b) */
+/* the backend returns 400 with `missingReasonItemOids` body. Both       */
+/* paths converge here: when the list is non-empty, the modal opens     */
+/* with one prompt per oid + the from→to value tell so the operator     */
+/* can write a defensible reason without leaving the form.              */
+/* -------------------------------------------------------------------- */
+
+import { ref, watchEffect } from 'vue'
+
+interface RfcPrompt {
+  oid: string
+  label: string
+  currentValue?: string
+  originalValue?: string
+}
+
+const rfcModalOpen = ref(false)
+
+watchEffect(() => {
+  rfcModalOpen.value = store.missingReasonItemOids.length > 0
+})
+
+function labelFor(oid: string): string {
+  if (!store.schema) return oid
+  for (const section of store.schema.sections) {
+    for (const item of section.items) {
+      if (item.oid === oid) return item.label
+    }
+  }
+  return oid
+}
+
+const rfcPrompts = computed<RfcPrompt[]>(() => {
+  if (!store.entry) return []
+  return store.missingReasonItemOids.map((oid) => {
+    const raw = store.values[oid]
+    return {
+      oid,
+      label: labelFor(oid),
+      currentValue: raw == null ? '' : String(raw),
+      // We don't keep the pre-edit value in the store today; the from
+      // column stays blank for now. M10 audit-log will populate it from
+      // the existing item_data row server-side.
+    }
+  })
+})
+
+function onRfcConfirm(reasons: Record<string, string>): void {
+  for (const [oid, reason] of Object.entries(reasons)) {
+    store.stageReason(oid, reason)
+  }
+  // Retry the save now that every dirty oid has a reason; the store's
+  // own guard re-checks before POSTing.
+  void store.save()
+}
+
+function onRfcCancel(): void {
+  store.dismissReasonModal()
+}
+
+const saveBlockedByRfc = computed(
+  () => store.requiresReasonForChange && store.itemsAwaitingReason.length > 0,
+)
+
+function onSave() {
+  // If the operator clicks Save on a post-complete entry without
+  // every reason staged, route through the modal rather than firing
+  // a save that the backend will 400. The store's guard does the
+  // same — this just shortens the round-trip.
+  if (saveBlockedByRfc.value) {
+    store.missingReasonItemOids = [...store.itemsAwaitingReason]
+    return
+  }
+  void store.save()
+}
 async function onMarkComplete() {
   await store.markComplete()
   if (store.status === 'complete') {
@@ -107,6 +273,33 @@ const canReopen = computed(() => {
   if (!role || !store.entry) return false
   return canReopenCrf(role, store.entry.status)
 })
+
+/**
+ * Phase E.6 — merge the server-side {@link SectionStatus} (required
+ * + filled + openQueries) with the client-side derived
+ * {@link sectionFilledCounts} so badges reflect typed-but-unsaved
+ * edits immediately. The server's filled count is authoritative
+ * for persisted state, so we max() the two so unsaved typing
+ * upgrades the badge ahead of the next save.
+ */
+function badgeFor(sectionOid: string): { required: number; filled: number; errors: number; openQueries: number } {
+  const server = advanced.sectionStatusByOid[sectionOid]
+  const client = store.sectionFilledCounts[sectionOid] ?? { required: 0, filled: 0, errors: 0 }
+  const required = server?.requiredCount ?? client.required
+  const filled = Math.max(server?.filledCount ?? 0, client.filled)
+  const errors = client.errors
+  const openQueries = server?.openQueries ?? 0
+  return { required, filled, errors, openQueries }
+}
+
+/** Click handler stub for the item-note indicator — wires to the
+ *  popover thread view in the next slice. For now navigate to the
+ *  filtered notes list pinned to this CRF. */
+function onItemNoteOpen(_noteIds: string[]) {
+  // Defer: open NotesDiscrepanciesView with these note ids
+  // pre-selected. Tracked in the deferred list for harmonization.
+  router.push({ name: 'notes-discrepancies' })
+}
 </script>
 
 <template>
@@ -131,9 +324,15 @@ const canReopen = computed(() => {
           v-for="section in store.schema.sections"
           :key="section.oid"
           :href="`#${section.oid}`"
-          class="block px-2.5 py-1.5 rounded-md text-slate-600 hover:bg-white text-xs"
+          class="flex items-center justify-between px-2.5 py-1.5 rounded-md text-slate-600 hover:bg-white text-xs"
         >
-          {{ section.title }}
+          <span class="truncate">{{ section.title }}</span>
+          <SectionBadge
+            :required-count="badgeFor(section.oid).required"
+            :filled-count="badgeFor(section.oid).filled"
+            :error-count="badgeFor(section.oid).errors"
+            :open-queries="badgeFor(section.oid).openQueries"
+          />
         </a>
       </nav>
     </SideRail>
@@ -173,6 +372,26 @@ const canReopen = computed(() => {
         {{ t('crfEntry.lockedBanner') }}
       </div>
 
+      <!-- Phase E.6 dde — blind-second-pass banner. Rendered only when
+           the backend included a non-null `dde` block on CrfEntryDto
+           AND its pass === '2'. The fieldset below stays editable
+           because pass-2 IS an editable entry — the IDE values are
+           server-side-blinded (values map empty) so the clerk re-keys
+           from the paper original. The reconcile flow handles
+           pass=reconcile via a router-level redirect at mount time
+           (see watchEffect below). -->
+      <div
+        v-if="store.entry && store.entry.dde && store.entry.dde.pass === '2'"
+        class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900 mb-4"
+        role="status"
+      >
+        {{ t('dde.banner.blindSecondPass') }}
+      </div>
+
+      <!-- Phase E.6 crf-entry-advanced: soft-lock concurrent-editor
+           warning. Renders when another session's heartbeat is active. -->
+      <ConcurrentEditBanner v-if="!isReadOnly" :probe="advanced.lockProbe" />
+
       <form
         v-if="store.entry && !store.isLoading"
         class="space-y-6"
@@ -194,9 +413,14 @@ const canReopen = computed(() => {
           </p>
 
           <div class="space-y-4">
-            <div v-for="item in section.items" :key="item.oid">
+            <div v-for="item in topLevelItems(section.items)" :key="item.oid">
               <FieldLabel :for="`item-${item.oid}`" :required="item.required">
                 {{ item.label }}
+                <ItemNoteIndicator
+                  v-if="advanced.noteSummaryByItemOid[item.oid]"
+                  :summary="advanced.noteSummaryByItemOid[item.oid]"
+                  @open="onItemNoteOpen"
+                />
               </FieldLabel>
 
               <template v-if="item.dataType === 'select-one' && item.options">
@@ -204,6 +428,38 @@ const canReopen = computed(() => {
                   <option :value="undefined">— {{ t('common.search') }} —</option>
                   <option v-for="opt in item.options" :key="opt.code" :value="opt.code">{{ opt.label }}</option>
                 </SelectInput>
+              </template>
+
+              <template v-else-if="item.dataType === 'select-multi' && item.options">
+                <CheckboxArrayInput
+                  :id-prefix="`item-${item.oid}`"
+                  :model-value="(store.values[item.oid] as string[] | null | undefined) ?? []"
+                  :options="item.options"
+                  :error="showError(item) != null"
+                  :disabled="isReadOnly"
+                  @update:model-value="(v: string[]) => store.setValue(item.oid, v)"
+                />
+              </template>
+
+              <template v-else-if="item.dataType === 'file'">
+                <FileUploadInput
+                  :id-prefix="`item-${item.oid}`"
+                  :model-value="fileRefFor(item.oid)"
+                  :max-bytes="store.entry?.maxFileBytes ?? 0"
+                  :allowed-extensions="store.entry?.fileExtensions ?? ''"
+                  :drop-prompt-label="t('crfEntry.file.dropPrompt')"
+                  :browse-label="t('crfEntry.file.browse')"
+                  :uploading-label="t('crfEntry.file.uploading')"
+                  :remove-label="t('crfEntry.file.remove')"
+                  :replace-label="t('crfEntry.file.replace')"
+                  :too-big-message="t('crfEntry.file.tooBig')"
+                  :bad-extension-message="t('crfEntry.file.badExtension')"
+                  :busy="isFileBusy(item.oid)"
+                  :disabled="isReadOnly"
+                  :error="showError(item) != null"
+                  @upload="(f: File) => onUploadFile(item.oid, f)"
+                  @clear="onClearFile(item.oid)"
+                />
               </template>
 
               <template v-else-if="item.dataType === 'integer' || item.dataType === 'real'">
@@ -243,6 +499,27 @@ const canReopen = computed(() => {
             </div>
           </div>
         </section>
+
+        <!-- Phase E.6: repeating item groups. Each group is rendered as
+             a standalone section with its own row table; per-cell
+             writes flow through store.setValueInRow so the dirty map
+             gets the right shape. -->
+        <RepeatingGroupSection
+          v-for="group in store.groups"
+          :key="group.oid"
+          :group="group"
+          :items-by-oid="itemsByOid"
+          :disabled="isReadOnly"
+          :busy="store.isSaving"
+          :add-row-label="t('crfEntry.group.addRow')"
+          :delete-row-label="t('crfEntry.group.deleteRow')"
+          :delete-row-confirm="t('crfEntry.group.deleteRowConfirm')"
+          :repeat-max-reached-label="t('crfEntry.group.repeatMaxReached')"
+          :empty-label="t('crfEntry.group.empty')"
+          @add-row="() => store.addGroupRow(group.oid)"
+          @delete-row="(ord: number) => store.deleteGroupRow(group.oid, ord)"
+          @set-value="(payload: { rowOrdinal: number; itemOid: string; value: unknown }) => store.setValueInRow(group.oid, payload.rowOrdinal, payload.itemOid, payload.value)"
+        />
 
         <!-- Top-level error (e.g. markComplete refused) -->
         <div

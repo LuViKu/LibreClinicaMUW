@@ -47,7 +47,8 @@ class RulesApiControllerTest extends AbstractApiControllerTest {
                 Mockito.mock(RuleSetRuleDao.class),
                 Mockito.mock(RuleActionRunLogDao.class),
                 Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleDao.class),
-                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetService.class)));
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.rule.RuleSetService.class),
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext.class)));
     }
 
     @Test
