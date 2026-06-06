@@ -889,7 +889,7 @@ function onAddItemAndExpand(sectionIndex: number): void {
                     :data-testid="`crf-author-bilateral-grid-${sIdx}`"
                   >
                     <!-- Sticky header row: OD (left) | OS (right) -->
-                    <div class="grid grid-cols-[8.5rem_1fr_1fr] gap-2 px-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                    <div class="grid grid-cols-[14rem_1fr_1fr] gap-2 px-2 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
                       <div></div>
                       <div>{{ t('ophthPreset.bilateral.headerOd') }}</div>
                       <div>{{ t('ophthPreset.bilateral.headerOs') }}</div>
@@ -910,8 +910,8 @@ function onAddItemAndExpand(sectionIndex: number): void {
                       :data-testid="`crf-author-bilateral-row-${sIdx}-${rIdx}`"
                     >
                       <!-- Row header: drag handle + label + per-pair expand toggle -->
-                      <div class="grid grid-cols-[8.5rem_1fr_1fr] gap-2 items-center px-2 py-1.5 bg-slate-50 border-b border-slate-200">
-                        <div class="flex items-center gap-1">
+                      <div class="grid grid-cols-[14rem_1fr_1fr] gap-2 items-center px-2 py-1.5 bg-slate-50 border-b border-slate-200">
+                        <div class="flex items-center gap-1 min-w-0">
                           <button
                             type="button"
                             class="bilateral-row-drag-handle inline-flex items-center text-[11px] text-slate-400 hover:text-slate-600 cursor-grab"
@@ -928,7 +928,7 @@ function onAddItemAndExpand(sectionIndex: number): void {
                           </button>
                           <button
                             type="button"
-                            class="flex items-center gap-1.5 text-left"
+                            class="flex items-center gap-1.5 text-left min-w-0"
                             :aria-expanded="isBilateralRowExpanded(row)"
                             @click="onToggleBilateralRow(row)"
                           >
