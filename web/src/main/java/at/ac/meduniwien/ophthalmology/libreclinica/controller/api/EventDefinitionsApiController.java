@@ -24,14 +24,20 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.SourceDataVerification;
 
 import org.slf4j.Logger;
@@ -422,6 +428,327 @@ public class EventDefinitionsApiController {
                 sedOid, studyOid, me.getName());
 
         return ResponseEntity.ok(toDto(target));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /{sedOid}/restore                                            */
+    /*   Phase E.6 — restore a removed (DELETED) event definition and    */
+    /*   cascade-restore AUTO_DELETED child rows. Mirrors the legacy     */
+    /*   RestoreEventDefinitionServlet (managestudy package).            */
+    /* ----------------------------------------------------------------- */
+
+    @PostMapping("/{sedOid}/restore")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventDefinitionDto.class)))
+    public ResponseEntity<?> restore(@PathVariable("studyOid") String studyOid,
+                                     @PathVariable("sedOid") String sedOid,
+                                     HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean target = sedDao.findByOidAndStudy(sedOid, study.getId(), 0);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event definition with oid '" + sedOid + "' in study '" + studyOid + "'"));
+        }
+        // Legacy parity (RestoreEventDefinitionServlet:106): only DELETED
+        // (removed) event definitions are restorable. AUTO_DELETED is a
+        // cascade-state owned by the parent's removal, not a top-level
+        // restorable state.
+        if (target.getStatus() == null || target.getStatus() != Status.DELETED) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Event definition '" + sedOid + "' is not in a removed state — cannot restore"));
+        }
+
+        Status oldStatus = target.getStatus();
+        java.util.Date now = new java.util.Date();
+        target.setStatus(Status.AVAILABLE);
+        target.setUpdater(me);
+        target.setUpdatedDate(now);
+        sedDao.update(target);
+
+        // Cascade restore: only AUTO_DELETED children flip back. Rows
+        // that were explicitly REMOVED by an operator stay removed —
+        // matches RestoreEventDefinitionServlet:130/154/163.
+        int restoredEdcCount = 0;
+        int restoredEventCount = 0;
+        int restoredEventCrfCount = 0;
+        int restoredItemDataCount = 0;
+        EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
+        StudyEventDAO eventDao = new StudyEventDAO(dataSource);
+        EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
+        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
+
+        ArrayList<EventDefinitionCRFBean> edcs = edcDao.findAllByDefinition(target.getId());
+        for (EventDefinitionCRFBean edc : edcs) {
+            if (edc.getStatus() != null && edc.getStatus().equals(Status.AUTO_DELETED)) {
+                edc.setStatus(Status.AVAILABLE);
+                edc.setUpdater(me);
+                edc.setUpdatedDate(now);
+                edcDao.update(edc);
+                restoredEdcCount++;
+            }
+        }
+
+        ArrayList<StudyEventBean> events = eventDao.findAllByDefinition(target.getId());
+        for (StudyEventBean event : events) {
+            if (event.getStatus() != null && event.getStatus().equals(Status.AUTO_DELETED)) {
+                event.setStatus(Status.AVAILABLE);
+                event.setUpdater(me);
+                event.setUpdatedDate(now);
+                eventDao.update(event);
+                restoredEventCount++;
+
+                ArrayList<EventCRFBean> eventCrfs = eventCrfDao.findAllByStudyEvent(event);
+                for (EventCRFBean eventCrf : eventCrfs) {
+                    if (eventCrf.getStatus() != null && eventCrf.getStatus().equals(Status.AUTO_DELETED)) {
+                        eventCrf.setStatus(Status.AVAILABLE);
+                        eventCrf.setUpdater(me);
+                        eventCrf.setUpdatedDate(now);
+                        eventCrfDao.update(eventCrf);
+                        restoredEventCrfCount++;
+
+                        ArrayList<ItemDataBean> itemDatas = itemDataDao.findAllByEventCRFId(eventCrf.getId());
+                        for (ItemDataBean item : itemDatas) {
+                            if (item.getStatus() != null && item.getStatus().equals(Status.AUTO_DELETED)) {
+                                item.setStatus(Status.AVAILABLE);
+                                item.setUpdater(me);
+                                item.setUpdatedDate(now);
+                                itemDataDao.update(item);
+                                restoredItemDataCount++;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        writeLifecycleAudit(me, study, target, oldStatus, Status.AVAILABLE,
+                "study_event_definition_restore");
+
+        LOG.info("Restore event definition: oid={} study={} by admin={} (edc={} ev={} eventCrf={} item={})",
+                sedOid, studyOid, me.getName(),
+                restoredEdcCount, restoredEventCount, restoredEventCrfCount, restoredItemDataCount);
+
+        return ResponseEntity.ok(toDto(target));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /{sedOid}/lock                                               */
+    /*   Phase E.6 — lock an event definition (sysadmin only). Cascades  */
+    /*   LOCKED into child event_definition_crf + study_event +          */
+    /*   event_crf + item_data rows. Mirrors the legacy LOCKED-status    */
+    /*   handling in StudyEventDefinitionServlet patterns; LibreClinica  */
+    /*   never shipped a dedicated LockStudyEventDefinitionServlet (the  */
+    /*   SED-lock action lived inside list-rendering controllers).       */
+    /* ----------------------------------------------------------------- */
+
+    @PostMapping("/{sedOid}/lock")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventDefinitionDto.class)))
+    public ResponseEntity<?> lock(@PathVariable("studyOid") String studyOid,
+                                  @PathVariable("sedOid") String sedOid,
+                                  HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (!me.isSysAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Only system administrators may lock or unlock event definitions"));
+        }
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean target = sedDao.findByOidAndStudy(sedOid, study.getId(), 0);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event definition with oid '" + sedOid + "' in study '" + studyOid + "'"));
+        }
+        if (target.getStatus() == null
+                || target.getStatus().isDeleted()
+                || target.getStatus().isLocked()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Event definition '" + sedOid + "' is in state '"
+                            + (target.getStatus() == null ? "?" : target.getStatus().getName())
+                            + "' — cannot lock"));
+        }
+
+        Status oldStatus = target.getStatus();
+        int affected = cascadeStatus(target, Status.LOCKED, me, /* onlyFlipAvailable */ true);
+
+        writeLifecycleAudit(me, study, target, oldStatus, Status.LOCKED,
+                "study_event_definition_lock");
+
+        LOG.info("Lock event definition: oid={} study={} by admin={} (child rows touched={})",
+                sedOid, studyOid, me.getName(), affected);
+
+        return ResponseEntity.ok(toDto(target));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* POST /{sedOid}/unlock                                             */
+    /*   Phase E.6 — unlock a LOCKED event definition (sysadmin only).   */
+    /*   Mirrors UnlockEventDefinitionServlet's blanket AVAILABLE flip   */
+    /*   across all children regardless of prior state.                  */
+    /* ----------------------------------------------------------------- */
+
+    @PostMapping("/{sedOid}/unlock")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = EventDefinitionDto.class)))
+    public ResponseEntity<?> unlock(@PathVariable("studyOid") String studyOid,
+                                    @PathVariable("sedOid") String sedOid,
+                                    HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (!me.isSysAdmin()) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Only system administrators may lock or unlock event definitions"));
+        }
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean target = sedDao.findByOidAndStudy(sedOid, study.getId(), 0);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event definition with oid '" + sedOid + "' in study '" + studyOid + "'"));
+        }
+        if (target.getStatus() == null || !target.getStatus().isLocked()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "Event definition '" + sedOid + "' is not locked — cannot unlock"));
+        }
+
+        Status oldStatus = target.getStatus();
+        int affected = cascadeStatus(target, Status.AVAILABLE, me, /* onlyFlipAvailable */ false);
+
+        writeLifecycleAudit(me, study, target, oldStatus, Status.AVAILABLE,
+                "study_event_definition_unlock");
+
+        LOG.info("Unlock event definition: oid={} study={} by admin={} (child rows touched={})",
+                sedOid, studyOid, me.getName(), affected);
+
+        return ResponseEntity.ok(toDto(target));
+    }
+
+    /**
+     * Apply {@code newStatus} to the event definition itself plus its
+     * cascade of {@code event_definition_crf}, {@code study_event},
+     * {@code event_crf}, and {@code item_data} children.
+     *
+     * <p>When {@code onlyFlipAvailable} is true (lock cascade) only
+     * AVAILABLE child rows are touched — removed / auto-removed / locked
+     * children are left in place to preserve forensic history. When
+     * false (unlock cascade) every child row is flipped to AVAILABLE to
+     * mirror the legacy {@code UnlockEventDefinitionServlet} blanket
+     * restore semantics.
+     *
+     * @return number of child rows that were updated.
+     */
+    private int cascadeStatus(StudyEventDefinitionBean target,
+                              Status newStatus,
+                              UserAccountBean me,
+                              boolean onlyFlipAvailable) {
+        java.util.Date now = new java.util.Date();
+        target.setStatus(newStatus);
+        target.setUpdater(me);
+        target.setUpdatedDate(now);
+        new StudyEventDefinitionDAO(dataSource).update(target);
+
+        int touched = 0;
+        EventDefinitionCRFDAO edcDao = new EventDefinitionCRFDAO(dataSource);
+        StudyEventDAO eventDao = new StudyEventDAO(dataSource);
+        EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
+        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
+
+        ArrayList<EventDefinitionCRFBean> edcs = edcDao.findAllByDefinition(target.getId());
+        for (EventDefinitionCRFBean edc : edcs) {
+            if (!shouldFlip(edc.getStatus(), onlyFlipAvailable)) continue;
+            edc.setStatus(newStatus);
+            edc.setUpdater(me);
+            edc.setUpdatedDate(now);
+            edcDao.update(edc);
+            touched++;
+        }
+
+        ArrayList<StudyEventBean> events = eventDao.findAllByDefinition(target.getId());
+        for (StudyEventBean event : events) {
+            if (!shouldFlip(event.getStatus(), onlyFlipAvailable)) continue;
+            event.setStatus(newStatus);
+            event.setUpdater(me);
+            event.setUpdatedDate(now);
+            eventDao.update(event);
+            touched++;
+
+            ArrayList<EventCRFBean> eventCrfs = eventCrfDao.findAllByStudyEvent(event);
+            for (EventCRFBean eventCrf : eventCrfs) {
+                if (!shouldFlip(eventCrf.getStatus(), onlyFlipAvailable)) continue;
+                eventCrf.setStatus(newStatus);
+                eventCrf.setUpdater(me);
+                eventCrf.setUpdatedDate(now);
+                eventCrfDao.update(eventCrf);
+                touched++;
+
+                ArrayList<ItemDataBean> itemDatas = itemDataDao.findAllByEventCRFId(eventCrf.getId());
+                for (ItemDataBean item : itemDatas) {
+                    if (!shouldFlip(item.getStatus(), onlyFlipAvailable)) continue;
+                    item.setStatus(newStatus);
+                    item.setUpdater(me);
+                    item.setUpdatedDate(now);
+                    itemDataDao.update(item);
+                    touched++;
+                }
+            }
+        }
+        return touched;
+    }
+
+    private static boolean shouldFlip(Status current, boolean onlyFlipAvailable) {
+        if (current == null) return false;
+        if (current.isDeleted()) return false; // removed / auto-removed: never touch
+        if (onlyFlipAvailable) {
+            return current.equals(Status.AVAILABLE);
+        }
+        return true;
+    }
+
+    /**
+     * Write a single lifecycle audit row capturing the SED status flip.
+     * Per-child rows are intentionally NOT emitted — the legacy servlets
+     * write zero child-level audit rows for restore / lock / unlock,
+     * and the SPA's audit-log view groups by parent entity. If review
+     * demands per-row coverage, lift this to a future revision via the
+     * existing {@code writeEventDefFieldAudit} helper.
+     */
+    private void writeLifecycleAudit(UserAccountBean editor,
+                                     StudyBean study,
+                                     StudyEventDefinitionBean target,
+                                     Status oldStatus,
+                                     Status newStatus,
+                                     String actionPrefix) {
+        try {
+            AuditEventBean ae = new AuditEventBean();
+            ae.setUserId(editor.getId());
+            ae.setStudyId(study.getId());
+            ae.setStudyName(study.getName() == null ? "" : study.getName());
+            ae.setAuditTable("study_event_definition");
+            ae.setEntityId(target.getId());
+            ae.setColumnName("status_id");
+            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getId()));
+            ae.setNewValue(newStatus == null ? "" : String.valueOf(newStatus.getId()));
+            ae.setActionMessage(actionPrefix + ": " + (target.getOid() == null ? "?" : target.getOid())
+                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
+                    + " → " + (newStatus == null ? "?" : newStatus.getName()) + ") by " + editor.getName());
+            new AuditEventDAO(dataSource).create(ae);
+        } catch (Exception e) {
+            LOG.warn("Audit write failed for {} oid={} (continuing): {}",
+                    actionPrefix, target.getOid(), e.getMessage());
+        }
     }
 
     /* ----------------------------------------------------------------- */
