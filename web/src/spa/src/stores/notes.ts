@@ -112,6 +112,16 @@ export const useNotesStore = defineStore('notes', () => {
   async function add(input: {
     subjectId: string
     itemOid: string
+    /**
+     * Phase E.6 DN — opaque event_crf identifier from the SPA route
+     * (e.g. {@code /subjects/:subjectId/events/:eventCrfOid/crf/:itemOid}).
+     * Required for the backend to pin the note to the correct event
+     * ordinal in repeating events; when absent the backend falls back
+     * to its unscoped item-data lookup (the M7 behaviour, which
+     * collapses repeating-event ordinals to whichever item_data row
+     * was hydrated first).
+     */
+    eventCrfOid?: string
     description: string
     assignedTo?: string | null
     /**
@@ -128,6 +138,7 @@ export const useNotesStore = defineStore('notes', () => {
       const created = await apiPost<DiscrepancyNote>('/pages/api/v1/discrepancies', {
         subjectId: input.subjectId,
         itemOid: input.itemOid,
+        eventCrfOid: input.eventCrfOid ?? null,
         description: input.description,
         assignedTo: input.assignedTo ?? null,
         type: input.type ?? 'query',

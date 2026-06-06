@@ -146,3 +146,70 @@ describe('useNotesStore.appendThread', () => {
     expect(notes.isSubmitting).toBe(false)
   })
 })
+
+/**
+ * Phase E.6 DN — `add` (createNote) action must forward the optional
+ * eventCrfOid so the backend can pin the note to the correct repeating
+ * event ordinal. When the caller omits it the field is sent as `null`
+ * and the backend falls back to its unscoped item-data lookup (M7
+ * behaviour).
+ */
+describe('useNotesStore.add — eventCrfOid forwarding', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+  })
+
+  const CREATED: DiscrepancyNote = {
+    id: '101',
+    type: 'query',
+    status: 'new',
+    subjectId: 'M-001',
+    itemOid: 'I_AGE',
+    description: 'Please confirm',
+    assignedTo: null,
+    daysOpen: 0,
+    lastActivityAt: '2026-06-06T10:00:00Z',
+  }
+
+  it('forwards eventCrfOid in the POST body when supplied', async () => {
+    const notes = useNotesStore()
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce(CREATED)
+
+    await notes.add({
+      subjectId: 'M-001',
+      itemOid: 'I_AGE',
+      eventCrfOid: 'EC-7',
+      description: 'Please confirm',
+    })
+
+    expect(apiPost).toHaveBeenCalledWith('/pages/api/v1/discrepancies', {
+      subjectId: 'M-001',
+      itemOid: 'I_AGE',
+      eventCrfOid: 'EC-7',
+      description: 'Please confirm',
+      assignedTo: null,
+      type: 'query',
+    })
+  })
+
+  it('sends eventCrfOid as null when the caller omits it', async () => {
+    const notes = useNotesStore()
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce(CREATED)
+
+    await notes.add({
+      subjectId: 'M-001',
+      itemOid: 'I_AGE',
+      description: 'Please confirm',
+    })
+
+    expect(apiPost).toHaveBeenCalledWith('/pages/api/v1/discrepancies', {
+      subjectId: 'M-001',
+      itemOid: 'I_AGE',
+      eventCrfOid: null,
+      description: 'Please confirm',
+      assignedTo: null,
+      type: 'query',
+    })
+  })
+})
