@@ -26,6 +26,8 @@ import ConcurrentEditBanner from '@/components/ConcurrentEditBanner.vue'
 import ItemNoteIndicator from '@/components/ItemNoteIndicator.vue'
 import CrfItemWidget from '@/components/CrfItemWidget.vue'
 import BilateralItemGroup from '@/components/BilateralItemGroup.vue'
+import NewNoteDialog from '@/components/NewNoteDialog.vue'
+import NoteThreadDialog from '@/components/NoteThreadDialog.vue'
 import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 
 import { useCrfEntryStore } from '@/stores/crfEntry'
@@ -33,6 +35,7 @@ import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
+import type { NoteType, DiscrepancyNote } from '@/types/note'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -315,13 +318,109 @@ function badgeFor(sectionOid: string): { required: number; filled: number; error
   return { required, filled, errors, openQueries }
 }
 
-/** Click handler stub for the item-note indicator — wires to the
- *  popover thread view in the next slice. For now navigate to the
- *  filtered notes list pinned to this CRF. */
-function onItemNoteOpen(_noteIds: string[]) {
-  // Defer: open NotesDiscrepanciesView with these note ids
-  // pre-selected. Tracked in the deferred list for harmonization.
-  router.push({ name: 'notes-discrepancies' })
+/* -------------------------------------------------------------------- */
+/* Phase E.6 dn — discrepancy-note dialogs.                              */
+/*                                                                       */
+/* Two singletons mounted at the bottom of the template:                 */
+/*   - NewNoteDialog       (operator clicks "+ Frage" on a fresh item    */
+/*                          OR a validation error bubbles up via         */
+/*                          report-validation prefill).                  */
+/*   - NoteThreadDialog    (operator clicks the existing-note indicator) */
+/* -------------------------------------------------------------------- */
+
+interface NewNoteDialogState {
+  open: boolean
+  itemOid: string
+  itemLabel: string
+  prefill: { type?: NoteType; description?: string } | null
+}
+
+interface ThreadDialogState {
+  open: boolean
+  parentNoteIds: string[]
+  itemOid: string
+  itemLabel: string
+}
+
+const newNoteDialogState = ref<NewNoteDialogState | null>(null)
+const threadDialogState = ref<ThreadDialogState | null>(null)
+
+function itemLabel(item: CrfItem): string {
+  return item.label || item.oid
+}
+
+function labelByOid(oid: string): string {
+  if (!store.schema) return oid
+  for (const section of store.schema.sections) {
+    for (const item of section.items) {
+      if (item.oid === oid) return itemLabel(item)
+    }
+  }
+  return oid
+}
+
+/** Resolve the item OID a given note belongs to via the rollup. */
+function itemOidForNoteIds(noteIds: string[]): string {
+  const rollup = advanced.notesRollup?.byItemOid ?? {}
+  for (const [oid, summary] of Object.entries(rollup)) {
+    if (summary.noteIds.some((id) => noteIds.includes(id))) return oid
+  }
+  return ''
+}
+
+function onItemNoteCreate(oid: string, label: string) {
+  newNoteDialogState.value = {
+    open: true,
+    itemOid: oid,
+    itemLabel: label,
+    prefill: null,
+  }
+}
+
+function onItemNoteOpen(noteIds: string[]) {
+  const oid = itemOidForNoteIds(noteIds)
+  threadDialogState.value = {
+    open: true,
+    parentNoteIds: noteIds,
+    itemOid: oid,
+    itemLabel: labelByOid(oid),
+  }
+}
+
+/**
+ * Wired to every CrfItemWidget callsite. A9 emits this from the
+ * widget when a client-side validation error fires; the operator
+ * gets a pre-filled failed-validation note draft so they don't have
+ * to retype the message.
+ */
+function onReportValidation(payload: { itemOid: string; errorMessage: string }) {
+  newNoteDialogState.value = {
+    open: true,
+    itemOid: payload.itemOid,
+    itemLabel: labelByOid(payload.itemOid),
+    prefill: { type: 'failed-validation', description: payload.errorMessage },
+  }
+}
+
+function onNewNoteCreated(note: DiscrepancyNote) {
+  if (advanced.notesRollup) {
+    advanced.notesRollup.byItemOid[note.itemOid] = {
+      status: 'open',
+      openCount: 1,
+      totalCount: 1,
+      noteIds: [note.id],
+      lastActivityAt: null,
+    }
+  }
+  newNoteDialogState.value = null
+}
+
+function onThreadUpdated(_parentId: string) {
+  // TODO(phase-e.6.dn deferred slice): re-fetch a per-item indicator
+  // summary instead of relying on a full page reload. The advanced
+  // store does not yet expose a per-item refresh hook; for now the
+  // chip stays as-is until the next loadAll().
+  threadDialogState.value = null
 }
 </script>
 
@@ -462,9 +561,9 @@ function onItemNoteOpen(_noteIds: string[]) {
                 <FieldLabel :for="`item-${row.item.oid}`" :required="row.item.required">
                   {{ row.item.label }}
                   <ItemNoteIndicator
-                    v-if="advanced.noteSummaryByItemOid[row.item.oid]"
-                    :summary="advanced.noteSummaryByItemOid[row.item.oid]"
+                    :summary="advanced.noteSummaryByItemOid[row.item.oid] ?? null"
                     @open="onItemNoteOpen"
+                    @create="onItemNoteCreate(row.item.oid, itemLabel(row.item))"
                   />
                 </FieldLabel>
                 <CrfItemWidget
@@ -479,6 +578,7 @@ function onItemNoteOpen(_noteIds: string[]) {
                   @update:model-value="(v: unknown) => store.setValue(row.item.oid, v)"
                   @upload-file="(f: File) => onUploadFile(row.item.oid, f)"
                   @clear-file="() => onClearFile(row.item.oid)"
+                  @report-validation="onReportValidation"
                 />
               </div>
 
@@ -496,9 +596,9 @@ function onItemNoteOpen(_noteIds: string[]) {
               >
                 <template #widget="{ item, side }">
                   <ItemNoteIndicator
-                    v-if="advanced.noteSummaryByItemOid[item.oid]"
-                    :summary="advanced.noteSummaryByItemOid[item.oid]"
+                    :summary="advanced.noteSummaryByItemOid[item.oid] ?? null"
                     @open="onItemNoteOpen"
+                    @create="onItemNoteCreate(item.oid, itemLabel(item))"
                   />
                   <CrfItemWidget
                     :item="item"
@@ -513,6 +613,7 @@ function onItemNoteOpen(_noteIds: string[]) {
                     @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
                     @upload-file="(f: File) => onUploadFile(item.oid, f)"
                     @clear-file="() => onClearFile(item.oid)"
+                    @report-validation="onReportValidation"
                   />
                 </template>
               </BilateralItemGroup>
@@ -525,9 +626,9 @@ function onItemNoteOpen(_noteIds: string[]) {
               >
                 <template #widget="{ item }">
                   <ItemNoteIndicator
-                    v-if="advanced.noteSummaryByItemOid[item.oid]"
-                    :summary="advanced.noteSummaryByItemOid[item.oid]"
+                    :summary="advanced.noteSummaryByItemOid[item.oid] ?? null"
                     @open="onItemNoteOpen"
+                    @create="onItemNoteCreate(item.oid, itemLabel(item))"
                   />
                   <CrfItemWidget
                     :item="item"
@@ -541,6 +642,7 @@ function onItemNoteOpen(_noteIds: string[]) {
                     @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
                     @upload-file="(f: File) => onUploadFile(item.oid, f)"
                     @clear-file="() => onClearFile(item.oid)"
+                    @report-validation="onReportValidation"
                   />
                 </template>
               </BilateralItemGroup>
@@ -567,6 +669,7 @@ function onItemNoteOpen(_noteIds: string[]) {
                     @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
                     @upload-file="(f: File) => onUploadFile(item.oid, f)"
                     @clear-file="() => onClearFile(item.oid)"
+                    @report-validation="onReportValidation"
                   />
                 </template>
               </BilateralItemGroup>
@@ -658,5 +761,25 @@ function onItemNoteOpen(_noteIds: string[]) {
         </div>
       </form>
     </main>
+
+    <NewNoteDialog
+      v-if="newNoteDialogState"
+      :subject-id="store.entry?.subjectId ?? ''"
+      :item-oid="newNoteDialogState.itemOid"
+      :event-crf-oid="store.entry?.eventCrfOid ?? ''"
+      :item-label="newNoteDialogState.itemLabel"
+      :prefill="newNoteDialogState.prefill"
+      @close="newNoteDialogState = null"
+      @created="onNewNoteCreated"
+    />
+    <NoteThreadDialog
+      v-if="threadDialogState"
+      :parent-note-ids="threadDialogState.parentNoteIds"
+      :subject-id="store.entry?.subjectId ?? ''"
+      :item-oid="threadDialogState.itemOid"
+      :item-label="threadDialogState.itemLabel"
+      @close="threadDialogState = null"
+      @updated="onThreadUpdated"
+    />
   </div>
 </template>
