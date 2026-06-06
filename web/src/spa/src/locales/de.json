@@ -1042,6 +1042,7 @@
   },
   "ophthPreset": {
     "addBilateralExam": "+ Ophthalmologische bilaterale Untersuchung hinzufügen",
+    "triggerHint": "Tipp: OPHTH_EXAM (oder OPHTHA_EXAM) eingeben und Shift+Enter drücken, um das ophthalmologische Preset einzufügen.",
     "section": {
       "title": "Ophthalmologische Untersuchung",
       "instructions": "Bilaterale Messungen — OD links, OS rechts (Sicht des Klinikers)."

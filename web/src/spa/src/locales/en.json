@@ -1042,6 +1042,7 @@
   },
   "ophthPreset": {
     "addBilateralExam": "+ Add Ophthalmology bilateral examination",
+    "triggerHint": "Tip: type OPHTH_EXAM (or OPHTHA_EXAM) and press Shift+Enter to insert the ophthalmology preset.",
     "section": {
       "title": "Ophthalmology examination",
       "instructions": "Bilateral measurements — OD on the left, OS on the right (clinician's perspective)."

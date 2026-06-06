@@ -270,4 +270,38 @@ describe('useCrfAuthoringStore.addOphthPresetSection', () => {
       expect(item.oid).toMatch(/^O[DS]_/)
     }
   })
+
+  it('replaces an existing section in place when replaceAtIndex is set', () => {
+    // The magic-label hotkey path (OPHTH_EXAM / OPHTHA_EXAM + Shift+Enter)
+    // overwrites the trigger section instead of appending, so the operator
+    // doesn't end up with an empty trigger row alongside the generated one.
+    setActivePinia(createPinia())
+    const store = useCrfAuthoringStore()
+    store.addSection()  // index 1 — the "trigger" section
+    const triggerUid = store.draft.sections[1]!.uid
+    store.draft.sections[1]!.label = 'OPHTHA_EXAM'
+    store.draft.sections[1]!.title = 'will be overwritten'
+
+    const items = generateOphthSectionItems(['IOP'], idT)
+    store.addOphthPresetSection({ items, replaceAtIndex: 1 })
+
+    expect(store.draft.sections).toHaveLength(2)
+    const replaced = store.draft.sections[1]!
+    expect(replaced.uid).toBe(triggerUid)  // same row, just filled in
+    expect(replaced.label).toBe('OPHTH_EXAM')
+    expect(replaced.title).toBe('Ophthalmology examination')
+    expect(replaced.items.map((it) => it.oid)).toEqual(['OD_IOP', 'OS_IOP'])
+  })
+
+  it('falls back to append when replaceAtIndex points at a stale index', () => {
+    setActivePinia(createPinia())
+    const store = useCrfAuthoringStore()
+    const items = generateOphthSectionItems(['IOP'], idT)
+    store.addOphthPresetSection({ items, replaceAtIndex: 99 })
+
+    // Stale index → fall through to append (preserves data integrity).
+    expect(store.draft.sections).toHaveLength(2)
+    expect(store.draft.sections[1]!.items.map((it) => it.oid))
+      .toEqual(['OD_IOP', 'OS_IOP'])
+  })
 })
