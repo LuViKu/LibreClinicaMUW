@@ -43,6 +43,17 @@ const router = createRouter({
       meta: { title: 'CRF Entry', role: 'Investigator' as const },
     },
     {
+      // Phase E.6 dde — reconcile view; DM / Admin / Investigator only.
+      // Backend guards (403 when role.id is not in {1, 3, 4}) are the
+      // authoritative gate; the meta.role here gives the SPA's nav
+      // guard a chance to early-redirect for clarity.
+      path: '/event-crfs/:eventCrfOid/dde-reconcile',
+      name: 'dde-reconcile',
+      component: () => import('@/views/DdeReconcileView.vue'),
+      meta: { title: 'DDE Reconciliation',
+              role: ['Data Manager', 'Administrator', 'Investigator'] as const },
+    },
+    {
       path: '/sdv',
       name: 'sdv',
       component: () => import('@/views/SdvView.vue'),
