@@ -7,6 +7,9 @@ import type {
   CrfVersion,
   EventCrfAssignment,
   EventCrfAssignmentInput,
+  MigrateVersionRequest,
+  MigrateVersionResult,
+  VersionUsageReport,
 } from '@/types/crfLibrary'
 
 /**
@@ -135,6 +138,165 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
         parseErrors: [],
         message: e instanceof Error ? e.message : 'Unknown error',
       }
+    }
+  }
+
+  /* ------------------------- Version lifecycle ----------------------- */
+  // Phase E.6 crf-library — lock/unlock/restore are atomic status flips
+  // that return the updated CrfVersion row. We mutate the in-memory CRF
+  // row inline so the view re-renders without an extra round-trip; on
+  // error the store's `error` ref is populated for the toast surface.
+
+  async function patchVersionInPlace(crfOid: string, updated: CrfVersion): Promise<void> {
+    const idx = crfs.value.findIndex((c) => c.oid === crfOid)
+    if (idx < 0) return
+    const versions = crfs.value[idx]!.versions.map((v) => (v.oid === updated.oid ? updated : v))
+    crfs.value[idx] = { ...crfs.value[idx]!, versions }
+  }
+
+  async function lockVersion(crfOid: string, versionOid: string): Promise<boolean> {
+    try {
+      const updated = await apiPost<CrfVersion>(
+        `/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions/${encodeURIComponent(versionOid)}/lock`,
+        {},
+      )
+      await patchVersionInPlace(crfOid, updated)
+      return true
+    } catch (e) {
+      error.value = humanError(e, 'lock-version')
+      return false
+    }
+  }
+
+  async function unlockVersion(crfOid: string, versionOid: string): Promise<boolean> {
+    try {
+      const updated = await apiPost<CrfVersion>(
+        `/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions/${encodeURIComponent(versionOid)}/unlock`,
+        {},
+      )
+      await patchVersionInPlace(crfOid, updated)
+      return true
+    } catch (e) {
+      error.value = humanError(e, 'unlock-version')
+      return false
+    }
+  }
+
+  async function restoreVersion(crfOid: string, versionOid: string): Promise<boolean> {
+    try {
+      const updated = await apiPost<CrfVersion>(
+        `/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions/${encodeURIComponent(versionOid)}/restore`,
+        {},
+      )
+      await patchVersionInPlace(crfOid, updated)
+      return true
+    } catch (e) {
+      error.value = humanError(e, 'restore-version')
+      return false
+    }
+  }
+
+  /**
+   * Phase E.6 crf-library — sysadmin-only hard remove. Returns one of:
+   * - `{ ok: true }` — the row was deleted (204 no content). The local
+   *   CRF row's versions list is patched to drop the removed entry.
+   * - `{ ok: false, blocker }` — the row is referenced; the blocker
+   *   carries the VersionUsageReport the SPA renders in the dialog.
+   * - `{ ok: false, message }` — any other failure (auth, network, 500).
+   *
+   * Importantly: 409 + the structured report is NOT a thrown error path
+   * — the SPA treats it as a normal "no action taken" outcome and shows
+   * the blocker list. Only 401/403/5xx escalate through ApiError /
+   * humanError.
+   */
+  type HardRemoveResult =
+    | { ok: true }
+    | { ok: false; blocker: VersionUsageReport }
+    | { ok: false; message: string }
+
+  async function hardRemoveVersion(crfOid: string, versionOid: string): Promise<HardRemoveResult> {
+    try {
+      await apiDelete(`/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions/${encodeURIComponent(versionOid)}`)
+      // Drop from local state on success.
+      const idx = crfs.value.findIndex((c) => c.oid === crfOid)
+      if (idx >= 0) {
+        const versions = crfs.value[idx]!.versions.filter((v) => v.oid !== versionOid)
+        crfs.value[idx] = { ...crfs.value[idx]!, versions }
+      }
+      return { ok: true }
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) {
+        const blocker = e.body as VersionUsageReport
+        return { ok: false, blocker }
+      }
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        error.value = humanError(e, 'hard-remove-version')
+        throw e
+      }
+      return { ok: false, message: humanError(e, 'hard-remove-version') }
+    }
+  }
+
+  /**
+   * Phase E.6 crf-library — XLS download. Returns a `Blob` + the
+   * filename the SPA should suggest (falls back to a synthesized name
+   * when the Content-Disposition header is absent — older nginx
+   * configurations sometimes strip it).
+   *
+   * The caller is responsible for triggering the browser download
+   * (we don't auto-anchor here because the store stays UI-agnostic).
+   */
+  async function downloadVersionXls(
+    crfOid: string,
+    versionOid: string,
+  ): Promise<{ ok: true; blob: Blob; filename: string } | { ok: false; message: string }> {
+    try {
+      const res = await fetch(
+        `/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions/${encodeURIComponent(versionOid)}/xls`,
+        { credentials: 'include' },
+      )
+      if (!res.ok) {
+        // 404 carries a structured body with a fallbackFilename hint;
+        // surface the message verbatim so the operator knows whether it
+        // was authored-in-app or scrubbed off disk.
+        let body: { message?: string } = {}
+        try { body = await res.json() } catch { /* not JSON */ }
+        return { ok: false, message: body.message ?? `Download fehlgeschlagen (HTTP ${res.status}).` }
+      }
+      const blob = await res.blob()
+      const cd = res.headers.get('content-disposition') ?? ''
+      const match = /filename\s*=\s*"?([^"]+)"?/i.exec(cd)
+      const filename = match?.[1] ?? `${crfOid}-${versionOid}.xls`
+      return { ok: true, blob, filename }
+    } catch (e) {
+      return { ok: false, message: e instanceof Error ? e.message : 'Download fehlgeschlagen.' }
+    }
+  }
+
+  /**
+   * Phase E.6 crf-library — batch v.A → v.B migration. Same call shape
+   * for dry-run + commit; the caller flips `body.dryRun` to switch
+   * modes. Returns the structured result for the SPA preview pane (or
+   * the audit-noted commit confirmation).
+   */
+  async function migrateVersion(
+    crfOid: string,
+    fromOid: string,
+    toOid: string,
+    body: MigrateVersionRequest,
+  ): Promise<{ ok: true; result: MigrateVersionResult } | { ok: false; message: string }> {
+    try {
+      const result = await apiPost<MigrateVersionResult>(
+        `/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions/${encodeURIComponent(fromOid)}/migrate-to/${encodeURIComponent(toOid)}`,
+        body,
+      )
+      return { ok: true, result }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        error.value = humanError(e, 'migrate-version')
+        throw e
+      }
+      return { ok: false, message: humanError(e, 'migrate-version') }
     }
   }
 
@@ -283,6 +445,12 @@ export const useCrfLibraryStore = defineStore('crfLibrary', () => {
     disableCrf,
     uploadVersion,
     disableVersion,
+    lockVersion,
+    unlockVersion,
+    restoreVersion,
+    hardRemoveVersion,
+    downloadVersionXls,
+    migrateVersion,
     listAssignments,
     attachCrf,
     updateAssignment,

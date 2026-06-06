@@ -33,7 +33,8 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
         return mockMvcFor(new CrfsApiController(mockDataSource(),
                 Mockito.mock(CrfSpreadsheetParserService.class),
                 new CrfJsonToWorkbookAdapter(),
-                new CrfJsonValidator()));
+                new CrfJsonValidator(),
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.CrfVersionMigrationService.class)));
     }
 
     @Test
@@ -578,5 +579,132 @@ class CrfsApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.valid").value(false))
                 .andExpect(jsonPath("$.errorMessage").value(containsString("WEIGHT")));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Phase E.6 crf-library — lock/unlock/restore guards                 */
+    /* ----------------------------------------------------------------- */
+
+    @org.junit.jupiter.api.Test
+    void lockVersionReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1/lock")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @org.junit.jupiter.api.Test
+    void lockVersionReturns403WhenInvestigatorAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1/lock")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("does not permit managing CRFs")));
+    }
+
+    @org.junit.jupiter.api.Test
+    void unlockVersionReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1/unlock")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @org.junit.jupiter.api.Test
+    void restoreVersionReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1/restore")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @org.junit.jupiter.api.Test
+    void restoreVersionReturns403WhenInvestigatorAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1/restore")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden());
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Phase E.6 crf-library — hard-remove sysadmin gate                   */
+    /* ----------------------------------------------------------------- */
+
+    @org.junit.jupiter.api.Test
+    void hardRemoveReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @org.junit.jupiter.api.Test
+    void hardRemoveReturns403WhenDirectorAttempts() throws Exception {
+        // Lock/unlock/restore/migrate accept director — hard-remove
+        // does NOT. The director session should be 403'd by the
+        // sysadmin re-check INSIDE the endpoint (not the shared
+        // preflight which would let them through).
+        mockMvcWith().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .delete("/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "director", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR, 1)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("sysadmin-only")));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Phase E.6 crf-library — xls download auth                            */
+    /* ----------------------------------------------------------------- */
+
+    @org.junit.jupiter.api.Test
+    void downloadXlsReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/crfs/F_DEMOS/versions/F_DEMOS_V1/xls")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Phase E.6 crf-library — migrate endpoint                             */
+    /* ----------------------------------------------------------------- */
+
+    @org.junit.jupiter.api.Test
+    void migrateReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions/V1/migrate-to/V2")
+                .contentType("application/json")
+                .content("{\"dryRun\":true}")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @org.junit.jupiter.api.Test
+    void migrateReturns403WhenInvestigatorAttempts() throws Exception {
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions/V1/migrate-to/V2")
+                .contentType("application/json")
+                .content("{\"dryRun\":true}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                                "Default Study",
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
+                .andExpect(status().isForbidden());
+    }
+
+    @org.junit.jupiter.api.Test
+    void migrateReturns400WhenFromAndToMatch() throws Exception {
+        // Caught BEFORE DAO touches — short-circuits with no auth-state
+        // dependency. The endpoint never tries to load V1 (which would
+        // NPE on the mock DataSource); it rejects the path shape.
+        mockMvcWith().perform(post("/api/v1/crfs/F_DEMOS/versions/V1/migrate-to/V1")
+                .contentType("application/json")
+                .content("{\"dryRun\":true}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("must differ")));
     }
 }
