@@ -2475,6 +2475,16 @@ export interface components {
             min?: number;
             /** Format: double */
             max?: number;
+            /** OID of the repeating group this item belongs to, if any. */
+            groupOid?: string | null;
+            /**
+             * Phase E.6 polish-runtime — conditional-display rule.
+             * Two wire shapes coexist:
+             *  - JSON {"sourceItemOid":"...","comparator":"==","literal":"..."}
+             *  - OpenClinica legacy "item_OID eq value" string.
+             * Null means always show.
+             */
+            showWhen?: string | null;
         };
         CrfSchemaDto: {
             oid?: string;
