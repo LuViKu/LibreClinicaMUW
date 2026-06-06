@@ -98,6 +98,35 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
     }
 
     /* ---------------------------------------------------------------------- */
+    /* POST /restore + /lock + /unlock                                        */
+    /*   Phase E.6 — session guards. Happy-path cascade behavior + 409        */
+    /*   precondition guards (DELETED-required for restore, LOCKED-required   */
+    /*   for unlock, sysadmin-only for lock/unlock) require a real DataSource */
+    /*   and ride on the Testcontainers IT slice.                             */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void restoreReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/studies/S_DEFAULTS1/event-definitions/SE_V1/restore")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void lockReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/studies/S_DEFAULTS1/event-definitions/SE_V1/lock")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void unlockReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/studies/S_DEFAULTS1/event-definitions/SE_V1/unlock")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    /* ---------------------------------------------------------------------- */
     /* Shape validation (CreateEventDefinitionRequest)                        */
     /* ---------------------------------------------------------------------- */
 
