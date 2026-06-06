@@ -425,7 +425,35 @@ public class DiscrepancyApiController {
                     "No item with oid '" + body.itemOid() + "'"));
         }
 
-        ItemDataBean target = locateItemData(items, ss.getId());
+        // Phase E.6 dn — when the SPA pins an event_crf, scope the
+        // item_data lookup to that row so repeating events (same OID
+        // across V3 + V4 + V5 …) attach the note to the chosen visit
+        // and not the latest-inserted sibling.
+        Integer scopedEventCrfId = null;
+        if (body.eventCrfOid() != null && !body.eventCrfOid().isBlank()) {
+            int parsedId;
+            try {
+                parsedId = Integer.parseInt(body.eventCrfOid().trim());
+            } catch (NumberFormatException nfe) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Invalid eventCrfOid '" + body.eventCrfOid() + "'"));
+            }
+            EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+            EventCRFBean ec = (EventCRFBean) ecDao.findByPK(parsedId);
+            if (ec == null || ec.getId() == 0) {
+                return ResponseEntity.status(404).body(Map.of("message",
+                        "No event_crf with id '" + body.eventCrfOid() + "'"));
+            }
+            if (ec.getStudySubjectId() != ss.getId()) {
+                return ResponseEntity.status(404).body(Map.of("message",
+                        "event_crf does not belong to subject '" + body.subjectId() + "'"));
+            }
+            scopedEventCrfId = parsedId;
+        }
+
+        ItemDataBean target = (scopedEventCrfId == null)
+                ? locateItemData(items, ss.getId())
+                : locateItemData(items, ss.getId(), scopedEventCrfId);
         if (target == null || target.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No item_data row for subject '" + body.subjectId() + "' and item '" + body.itemOid() + "'"));
@@ -828,6 +856,29 @@ public class DiscrepancyApiController {
         return best;
     }
 
+    /**
+     * Phase E.6 dn — event-CRF-scoped variant. When the SPA carries the
+     * caller's chosen event_crf id (repeating events surface multiple
+     * rows for the same item OID — V3 + V4 + V5 …), bypass the
+     * walk-every-event_crf loop and pin the lookup to the exact row.
+     * When {@code eventCrfId} is null the unscoped helper is used
+     * (legacy notes-list "+ Add query" path stays on M7 behaviour).
+     */
+    private ItemDataBean locateItemData(List<ItemBean> candidates, int studySubjectId,
+                                        Integer eventCrfId) {
+        if (eventCrfId == null || eventCrfId <= 0) {
+            return locateItemData(candidates, studySubjectId);
+        }
+        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
+        for (ItemBean it : candidates) {
+            ItemDataBean idb = itemDataDao.findByItemIdAndEventCRFId(it.getId(), eventCrfId);
+            if (idb != null && idb.getId() > 0) {
+                return idb;
+            }
+        }
+        return null;
+    }
+
     private Integer resolveAssignee(String username) {
         if (username == null || username.isBlank()) return null;
         UserAccountDAO udao = new UserAccountDAO(dataSource);
@@ -947,12 +998,20 @@ public class DiscrepancyApiController {
             String itemOid,
             String description,
             String assignedTo,
-            String type
+            String type,
+            String eventCrfOid
     ) {
         /** Backwards-compat ctor — defaults type to "query". */
         public AddQueryRequest(String subjectId, String itemOid,
                                String description, String assignedTo) {
-            this(subjectId, itemOid, description, assignedTo, "query");
+            this(subjectId, itemOid, description, assignedTo, "query", null);
+        }
+
+        /** Phase E.6 discrepancy-full ctor — preserves the 5-arg shape. */
+        public AddQueryRequest(String subjectId, String itemOid,
+                               String description, String assignedTo,
+                               String type) {
+            this(subjectId, itemOid, description, assignedTo, type, null);
         }
     }
 }
