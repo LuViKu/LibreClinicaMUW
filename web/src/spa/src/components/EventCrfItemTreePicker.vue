@@ -111,42 +111,57 @@ function crfIsIndeterminate(c: EventTreeCrfNode): boolean {
   return any && !all
 }
 
+/**
+ * Event-level check state. Reads from {@link eventSet} directly rather
+ * than deriving from item-set membership, because OpenClinica
+ * event_definition_crf is many-to-many: the same CRF version can be
+ * assigned to multiple study events. An item-derived check would mark
+ * every event sharing the items as checked the moment the operator
+ * clicked one of them (Phase E.6 export-tool bug — "selecting V1 also
+ * checked V4 because both reuse the OPHTH_EXAM form").
+ */
 function eventIsChecked(e: EventTreeNode): boolean {
-  return e.crfs.length > 0 && e.crfs.every(crfIsChecked)
+  return eventSet.value.has(e.eventOid)
 }
+
+/**
+ * Indeterminate iff the event itself isn't selected but at least one
+ * descendant CRF / version / item is. Gives the operator a visual cue
+ * that toggling the event will also bring in the descendant selections.
+ */
 function eventIsIndeterminate(e: EventTreeNode): boolean {
-  const any = e.crfs.some((c) => crfIsChecked(c) || crfIsIndeterminate(c))
-  const all = e.crfs.every(crfIsChecked)
-  return any && !all
+  if (eventSet.value.has(e.eventOid)) return false
+  return e.crfs.some((c) => crfIsChecked(c) || crfIsIndeterminate(c))
 }
 
 /* ============================================================== */
 /* Toggle handlers                                                */
 /* ============================================================== */
 
-function toggleItem(e: EventTreeNode, _c: EventTreeCrfNode, v: EventTreeVersionNode, itemId: number) {
+function toggleItem(_e: EventTreeNode, _c: EventTreeCrfNode, v: EventTreeVersionNode, itemId: number) {
   const items = new Set(itemSet.value)
   if (items.has(itemId)) items.delete(itemId)
   else items.add(itemId)
   emitItems(items)
 
-  // Derive version + event membership from items (a version with any
-  // selected item is selected; an event with any selected child is
-  // selected).
-  syncDerived(e, v, items)
+  // Version membership follows item membership (a version with any
+  // selected item is selected). Events are an INDEPENDENT dimension —
+  // see {@link eventIsChecked}'s rationale; the operator picks events
+  // via the event-level checkbox.
+  syncVersionFromItems(v, items)
 }
 
-function toggleVersion(e: EventTreeNode, _c: EventTreeCrfNode, v: EventTreeVersionNode, checked: boolean) {
+function toggleVersion(_e: EventTreeNode, _c: EventTreeCrfNode, v: EventTreeVersionNode, checked: boolean) {
   const items = new Set(itemSet.value)
   for (const item of v.items) {
     if (checked) items.add(item.itemId)
     else items.delete(item.itemId)
   }
   emitItems(items)
-  syncDerived(e, v, items)
+  syncVersionFromItems(v, items)
 }
 
-function toggleCrf(e: EventTreeNode, c: EventTreeCrfNode, checked: boolean) {
+function toggleCrf(_e: EventTreeNode, c: EventTreeCrfNode, checked: boolean) {
   const items = new Set(itemSet.value)
   for (const v of c.versions) {
     for (const item of v.items) {
@@ -156,7 +171,7 @@ function toggleCrf(e: EventTreeNode, c: EventTreeCrfNode, checked: boolean) {
   }
   emitItems(items)
 
-  // Versions selection follows: each version with any selected item.
+  // Versions follow: each version with any selected item.
   const versions = new Set(versionSet.value)
   for (const v of c.versions) {
     const any = v.items.some((i) => items.has(i.itemId))
@@ -164,50 +179,48 @@ function toggleCrf(e: EventTreeNode, c: EventTreeCrfNode, checked: boolean) {
     else versions.delete(v.versionId)
   }
   emitVersions(versions)
-
-  syncEventFromItems(e, items)
 }
 
+/**
+ * Event-level toggle. The event checkbox is the source of truth for
+ * {@link eventSet}; checking it brings the event OID into the export
+ * scope, and (as a convenience) also cascade-adds every descendant
+ * version + item so the operator doesn't have to drill in for a
+ * "give me everything from this visit" pick. Unchecking removes only
+ * the event from {@link eventSet}; descendant items + versions stay so
+ * the operator can swap events without re-picking the form contents
+ * they care about (which are likely shared across visits in
+ * longitudinal studies).
+ */
 function toggleEvent(e: EventTreeNode, checked: boolean) {
+  const events = new Set(eventSet.value)
+  if (checked) events.add(e.eventOid)
+  else events.delete(e.eventOid)
+  emitEvents(events)
+
+  if (!checked) return
+
+  // Convenience cascade on positive selection only.
   const items = new Set(itemSet.value)
   const versions = new Set(versionSet.value)
   for (const c of e.crfs) {
     for (const v of c.versions) {
-      if (checked) versions.add(v.versionId)
-      else versions.delete(v.versionId)
+      versions.add(v.versionId)
       for (const item of v.items) {
-        if (checked) items.add(item.itemId)
-        else items.delete(item.itemId)
+        items.add(item.itemId)
       }
     }
   }
   emitItems(items)
   emitVersions(versions)
-
-  const events = new Set(eventSet.value)
-  if (checked) events.add(e.eventOid)
-  else events.delete(e.eventOid)
-  emitEvents(events)
 }
 
-function syncDerived(e: EventTreeNode, v: EventTreeVersionNode, items: Set<number>) {
+function syncVersionFromItems(v: EventTreeVersionNode, items: Set<number>) {
   const versions = new Set(versionSet.value)
   const versionHasAny = v.items.some((i) => items.has(i.itemId))
   if (versionHasAny) versions.add(v.versionId)
   else versions.delete(v.versionId)
   emitVersions(versions)
-
-  syncEventFromItems(e, items)
-}
-
-function syncEventFromItems(e: EventTreeNode, items: Set<number>) {
-  const events = new Set(eventSet.value)
-  const eventHasAny = e.crfs.some((c) =>
-    c.versions.some((v2) => v2.items.some((i) => items.has(i.itemId))),
-  )
-  if (eventHasAny) events.add(e.eventOid)
-  else events.delete(e.eventOid)
-  emitEvents(events)
 }
 
 /* ============================================================== */

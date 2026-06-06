@@ -163,6 +163,104 @@ describe('EventCrfItemTreePicker', () => {
     expect(itemEmits[itemEmits.length - 1]![0]).toEqual([100])
   })
 
+  it('selecting one event does not visually check sibling events that share the same items (Phase E.6 export-tool fix)', () => {
+    // OpenClinica's event_definition_crf is many-to-many: the same CRF
+    // can be assigned to multiple study events, so two events can share
+    // the same version + item ids. The old derivation marked every
+    // sibling event as checked the moment any one of them was selected;
+    // the fix reads eventSet directly.
+    const SHARED_TREE: EventTreeNode[] = [
+      {
+        eventOid: 'SE_V1',
+        eventName: 'V1 Baseline',
+        eventOrdinal: 1,
+        repeating: false,
+        crfs: [
+          {
+            crfOid: 'F_SHARED',
+            crfName: 'Shared exam form',
+            versions: [
+              {
+                versionId: 99,
+                versionOid: 'F_SHARED_V1',
+                versionName: 'Shared v1',
+                items: [
+                  { itemId: 500, oid: 'I_BCVA', name: 'BCVA', dataType: 'number' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      {
+        eventOid: 'SE_V4',
+        eventName: 'V4 Repeat',
+        eventOrdinal: 4,
+        repeating: false,
+        crfs: [
+          {
+            crfOid: 'F_SHARED',
+            crfName: 'Shared exam form',
+            versions: [
+              {
+                // Same version + same items as V1 — the export bug
+                // pre-fix was the item-derived check flagging V4 as
+                // selected the instant V1 got picked.
+                versionId: 99,
+                versionOid: 'F_SHARED_V1',
+                versionName: 'Shared v1',
+                items: [
+                  { itemId: 500, oid: 'I_BCVA', name: 'BCVA', dataType: 'number' },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ]
+    const wrapper = mount(EventCrfItemTreePicker, {
+      global: { plugins: [i18n] },
+      props: {
+        tree: SHARED_TREE,
+        // V1 is the only event explicitly in the eventOids set. The
+        // item set carries the shared item id so the wizard payload
+        // gets it from V1; V4 is NOT in scope.
+        eventOids: ['SE_V1'],
+        versionIds: [99],
+        itemIds: [500],
+      },
+    })
+    const v1Checkbox = wrapper
+      .findAll('input[type="checkbox"]')
+      .find((i) => i.attributes('aria-label') === 'Toggle V1 Baseline')
+    const v4Checkbox = wrapper
+      .findAll('input[type="checkbox"]')
+      .find((i) => i.attributes('aria-label') === 'Toggle V4 Repeat')
+    expect(v1Checkbox?.element).toBeInstanceOf(HTMLInputElement)
+    expect((v1Checkbox!.element as HTMLInputElement).checked).toBe(true)
+    expect(v4Checkbox?.element).toBeInstanceOf(HTMLInputElement)
+    expect((v4Checkbox!.element as HTMLInputElement).checked).toBe(false)
+  })
+
+  it('unchecking an event removes ONLY the event oid (descendant items + versions stay so the operator can swap events)', async () => {
+    const wrapper = mountPicker({
+      eventOids: ['SE_BASELINE'],
+      versionIds: [10, 20],
+      itemIds: [100, 101, 200],
+    })
+    const eventCheckbox = wrapper
+      .findAll('input[type="checkbox"]')
+      .find((i) => i.attributes('aria-label') === 'Toggle Baseline visit')
+    await eventCheckbox!.setValue(false)
+
+    const eventEmits = wrapper.emitted('update:eventOids') ?? []
+    expect(eventEmits.length).toBeGreaterThan(0)
+    expect(eventEmits[eventEmits.length - 1]![0]).toEqual([])
+    // No item / version emits — descendant selections preserved.
+    expect(wrapper.emitted('update:itemIds') ?? []).toHaveLength(0)
+    expect(wrapper.emitted('update:versionIds') ?? []).toHaveLength(0)
+  })
+
   it('renders an empty-state when the tree is empty', () => {
     const wrapper = mount(EventCrfItemTreePicker, {
       global: { plugins: [i18n] },

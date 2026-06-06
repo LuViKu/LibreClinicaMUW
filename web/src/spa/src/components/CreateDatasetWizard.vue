@@ -66,12 +66,13 @@ onMounted(async () => {
     return
   }
 
-  // Load the tree exactly once per session — re-loading on every
-  // wizard entry would penalise the operator iterating through draft
-  // names.
-  if (datasets.eventTree.length === 0) {
-    await datasets.loadEventTree(studyOid)
-  }
+  // Reload the tree on every wizard entry. The cost is one denormalised
+  // event/CRF/version/item fetch per mount; the benefit is that a
+  // freshly-created visit or CRF version (added between wizard
+  // sessions via the Build Study flow) is visible immediately. Phase
+  // E.6 export-tool bug — operators couldn't see newly created visits
+  // until they hard-reloaded the page.
+  await datasets.loadEventTree(studyOid)
 
   if (props.editId) {
     // Hydrate from the existing dataset.
