@@ -92,6 +92,7 @@
     "back": "Zurück",
     "next": "Weiter",
     "remove": "Entfernen",
+    "removing": "Wird entfernt…",
     "search": "Suche",
     "filter": "Filter",
     "clear": "Zurücksetzen",
@@ -1644,6 +1645,8 @@
     "flagsTitle": "Inklusionsflags",
     "filtersTitle": "Filter",
     "filtersBlurb": "Exportierte Zeilen nach Studienteilnehmer, Eventstatus oder Item-Wert eingrenzen.",
+    "filtersPlaceholderTitle": "Filter folgen in Phase 3.",
+    "filtersPlaceholderBlurb": "Das Phase-3-Ticket ergänzt Studienteilnehmer-Filter, Eventstatus-Filter und per-Item-Wertfilter. Bis dahin exportiert das Dataset alle Zeilen, die zum Scope aus Schritt 1 passen.",
     "reviewTitle": "Prüfen",
     "reviewBlurb": "Definition vor dem Speichern prüfen. Sie können jederzeit über den Stepper zu einem früheren Schritt zurückkehren.",
     "steps": {
