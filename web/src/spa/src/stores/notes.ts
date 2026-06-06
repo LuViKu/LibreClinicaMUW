@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import { apiDownload } from '@/api/download'
 import type { DiscrepancyNote, NoteStatus, NoteType } from '@/types/note'
 
 /**
@@ -25,7 +26,9 @@ export const useNotesStore = defineStore('notes', () => {
   const rows = ref<DiscrepancyNote[]>([])
   const isLoading = ref(false)
   const isSubmitting = ref(false)
+  const isExporting = ref(false)
   const error = ref<string | null>(null)
+  const exportError = ref<string | null>(null)
 
   const query = ref('')
   const statusFilter = ref<'open' | 'all' | NoteStatus>('open') // open = anything but closed/N-A
@@ -206,6 +209,61 @@ export const useNotesStore = defineStore('notes', () => {
   }
 
   /**
+   * Phase E.6 — sponsor / inspector CSV hand-off of the discrepancy
+   * list. Forwards the same status / subject / assignedTo filters the
+   * SPA is showing so the file row count matches the visible list. The
+   * backend emits an audit_log_event row (type 55) per successful
+   * download.
+   *
+   * When called with `{ subjectId }` the filename includes the slug so
+   * multiple per-subject hand-offs don't collide on disk.
+   */
+  async function exportCsv(opts: { subjectId?: string } = {}): Promise<void> {
+    isExporting.value = true
+    exportError.value = null
+    try {
+      const params = new URLSearchParams()
+      // Status filter mapping — backend understands the single SPA
+      // status names, not the synthetic 'open' / 'all' aggregations.
+      if (
+        statusFilter.value !== 'open' &&
+        statusFilter.value !== 'all'
+      ) {
+        params.set('status', statusFilter.value)
+      }
+      const subjectId = opts.subjectId ?? ''
+      if (subjectId) params.set('subjectId', subjectId)
+      if (onlyAssignedToMe.value && me.value) params.set('assignedTo', me.value)
+      const qs = params.toString()
+      const path = qs
+        ? `/pages/api/v1/discrepancies/export.csv?${qs}`
+        : '/pages/api/v1/discrepancies/export.csv'
+      const today = new Date().toISOString().slice(0, 10).replaceAll('-', '')
+      const fallback = subjectId
+        ? `discrepancies_${subjectId}_${today}.csv`
+        : `discrepancies_${today}.csv`
+      await apiDownload(path, fallback)
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        throw e
+      }
+      if (e instanceof ApiNetworkError) {
+        exportError.value =
+          'Backend nicht erreichbar — Discrepancy-Export konnte nicht gestartet werden.'
+      } else if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        exportError.value =
+          body?.message ?? `Discrepancy-Export fehlgeschlagen (HTTP ${e.status}).`
+      } else {
+        exportError.value =
+          e instanceof Error ? e.message : 'Unbekannter Fehler beim Discrepancy-Export.'
+      }
+    } finally {
+      isExporting.value = false
+    }
+  }
+
+  /**
    * Phase E.6 — clear every piece of study-scoped state so the store
    * doesn't show study-A discrepancies after the user switches to
    * study B. Called by {@link useAuthStore.pickStudy} before
@@ -215,7 +273,9 @@ export const useNotesStore = defineStore('notes', () => {
     rows.value = []
     isLoading.value = false
     isSubmitting.value = false
+    isExporting.value = false
     error.value = null
+    exportError.value = null
     query.value = ''
     statusFilter.value = 'open'
     typeFilter.value = 'all'
@@ -226,7 +286,9 @@ export const useNotesStore = defineStore('notes', () => {
     rows,
     isLoading,
     isSubmitting,
+    isExporting,
     error,
+    exportError,
     query,
     statusFilter,
     typeFilter,
@@ -241,6 +303,7 @@ export const useNotesStore = defineStore('notes', () => {
     load,
     add,
     appendThread,
+    exportCsv,
     reset,
   }
 })
