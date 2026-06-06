@@ -12,11 +12,12 @@ vi.mock('@/api/client', async () => {
     ...actual,
     apiGet: vi.fn(),
     apiPost: vi.fn(),
+    apiDelete: vi.fn(),
   }
 })
 
 // eslint-disable-next-line import/first
-import { apiGet, apiPost } from '@/api/client'
+import { apiDelete, apiGet, apiPost } from '@/api/client'
 
 const SIMPLE_SCHEMA: CrfSchema = {
   oid: 'F_T',
@@ -106,6 +107,10 @@ const DEMOGRAPHICS_ENTRY: CrfEntry = {
   values: {},
   status: 'not-started',
   lastSavedAt: null,
+  // Phase E.6 fields default to empty so legacy assertions stay valid.
+  groups: [],
+  maxFileBytes: 52_428_800,
+  fileExtensions: 'pdf,jpg,jpeg,png,tif,tiff',
 }
 
 describe('useCrfEntryStore', () => {
@@ -113,6 +118,7 @@ describe('useCrfEntryStore', () => {
     setActivePinia(createPinia())
     vi.mocked(apiGet).mockReset()
     vi.mocked(apiPost).mockReset()
+    vi.mocked(apiDelete).mockReset()
     // Each load() call gets a fresh deep clone — Pinia stores reuse the
     // reactive proxy and we don't want one test's setValue() to leak into
     // the next test's mocked response.
@@ -343,5 +349,117 @@ describe('useCrfEntryStore', () => {
     store.dismissReasonModal()
     expect(store.missingReasonItemOids).toEqual([])
     expect(store.pendingReasons.I_HEIGHT_CM).toBe('will retry later')
+  })
+
+  /* ---------------------------------------------------------------- */
+  /* Phase E.6 — repeating groups + select-multi + file               */
+  /* ---------------------------------------------------------------- */
+
+  it('setValueInRow appends a new row when the ordinal is unseen', async () => {
+    const store = useCrfEntryStore()
+    // Mock GET to return an entry with one repeating group.
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 4,
+          itemOids: ['I_EYE', 'I_IOP'], rows: [],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    store.setValueInRow('G_EYE_FINDINGS', 1, 'I_EYE', 'OD')
+    const g = store.groups.find((gr) => gr.oid === 'G_EYE_FINDINGS')!
+    expect(g.rows).toHaveLength(1)
+    expect(g.rows[0].values.I_EYE).toBe('OD')
+    expect(store.pendingChanges).toBe(true)
+  })
+
+  it('addGroupRow POSTs + appends the returned row', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 4,
+          itemOids: ['I_EYE'], rows: [{ ordinal: 1, values: { I_EYE: 'OD' } }],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    ;(apiPost as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+      groupOid: 'G_EYE_FINDINGS', rowOrdinal: 2, values: {},
+    })
+    const newRow = await store.addGroupRow('G_EYE_FINDINGS')
+    expect(apiPost).toHaveBeenCalledWith(
+      '/pages/api/v1/eventCrfs/EC_M001_V1_DEMO/groups/G_EYE_FINDINGS/rows',
+      {},
+    )
+    expect(newRow).toEqual({ ordinal: 2, values: {} })
+    expect(store.groups.find((g) => g.oid === 'G_EYE_FINDINGS')!.rows).toHaveLength(2)
+  })
+
+  it('addGroupRow surfaces REPEAT_MAX_REACHED via the i18n key when backend 409s', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 4,
+          itemOids: ['I_EYE'], rows: [{ ordinal: 1, values: {} }],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    const { ApiError } = await import('@/api/client')
+    ;(apiPost as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+      new ApiError(409, 'Conflict', { code: 'REPEAT_MAX_REACHED', message: 'cap' }),
+    )
+    const row = await store.addGroupRow('G_EYE_FINDINGS')
+    expect(row).toBeNull()
+    expect(store.error).toBe('crfEntry.group.repeatMaxReached')
+  })
+
+  it('addGroupRow refuses locally when rows already meet repeatMax', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 1,
+          itemOids: ['I_EYE'], rows: [{ ordinal: 1, values: {} }],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    const row = await store.addGroupRow('G_EYE_FINDINGS')
+    expect(row).toBeNull()
+    expect(apiPost).not.toHaveBeenCalled()
+    expect(store.error).toBe('crfEntry.group.repeatMaxReached')
+  })
+
+  it('deleteGroupRow DELETEs + drops the row on success', async () => {
+    const store = useCrfEntryStore()
+    vi.mocked(apiGet).mockResolvedValueOnce(
+      structuredClone({
+        ...DEMOGRAPHICS_ENTRY,
+        groups: [{
+          oid: 'G_EYE_FINDINGS', label: 'Per-eye findings', repeatMax: 4,
+          itemOids: ['I_EYE'],
+          rows: [
+            { ordinal: 1, values: { I_EYE: 'OD' } },
+            { ordinal: 2, values: { I_EYE: 'OS' } },
+          ],
+        }],
+      }),
+    )
+    await store.load('EC_M001_V1_DEMO')
+    const { apiDelete } = await import('@/api/client')
+    const apiDeleteMock = vi.mocked(apiDelete) as ReturnType<typeof vi.fn>
+    apiDeleteMock.mockResolvedValueOnce(undefined)
+    const ok = await store.deleteGroupRow('G_EYE_FINDINGS', 2)
+    expect(ok).toBe(true)
+    const g = store.groups.find((gr) => gr.oid === 'G_EYE_FINDINGS')!
+    expect(g.rows.map((r) => r.ordinal)).toEqual([1])
   })
 })

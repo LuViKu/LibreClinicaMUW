@@ -8,6 +8,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -41,6 +45,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemGroupBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemGroupMetadataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseOptionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseSetBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
@@ -57,6 +63,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemGroupMetadataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SectionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
@@ -70,6 +78,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -135,12 +150,15 @@ public class EventCrfsApiController {
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
+    private final CrfFileStorageService fileStorageService;
 
     @Autowired
     public EventCrfsApiController(@Qualifier("dataSource") DataSource dataSource,
-                                  SiteVisibilityFilter siteVisibilityFilter) {
+                                  SiteVisibilityFilter siteVisibilityFilter,
+                                  CrfFileStorageService fileStorageService) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
+        this.fileStorageService = fileStorageService;
     }
 
     @GetMapping("/{id:[0-9]+}")
@@ -231,13 +249,60 @@ public class EventCrfsApiController {
             ifmByItemId.put(ifm.getItemId(), ifm);
         }
 
+        // Phase E.6: resolve item → group + group metadata so we can
+        // mark items in repeating groups and emit the groups[] payload.
+        // Non-repeating groups (the "ungrouped" buckets) intentionally
+        // leave their items' groupOid null — the SPA keeps rendering
+        // them in the top-level values map.
+        ItemGroupDAO igDAO = new ItemGroupDAO(dataSource);
+        ItemGroupMetadataDAO igmDAO = new ItemGroupMetadataDAO(dataSource);
+        Map<Integer, ItemGroupBean> groupByItemId = new HashMap<>();
+        Map<Integer, ItemGroupBean> repeatingGroupsByItemGroupId = new LinkedHashMap<>();
+        Map<Integer, ItemGroupMetadataBean> metaByItemGroupId = new HashMap<>();
+        Map<Integer, List<String>> itemOidsByItemGroupId = new LinkedHashMap<>();
+        for (ItemFormMetadataBean ifm : allIfms) {
+            ItemGroupBean grp;
+            try {
+                grp = igDAO.findGroupByItemIdCrfVersionId(ifm.getItemId(), crfv.getId());
+            } catch (Exception e) {
+                continue;
+            }
+            if (grp == null || grp.getId() == 0) continue;
+            groupByItemId.put(ifm.getItemId(), grp);
+            ItemGroupMetadataBean grpMeta = metaByItemGroupId.get(grp.getId());
+            if (grpMeta == null) {
+                try {
+                    ArrayList<ItemGroupMetadataBean> metas =
+                            igmDAO.findMetaByGroupAndCrfVersion(grp.getId(), crfv.getId());
+                    if (metas != null && !metas.isEmpty()) {
+                        grpMeta = metas.get(0);
+                        metaByItemGroupId.put(grp.getId(), grpMeta);
+                    }
+                } catch (Exception e) {
+                    // Best-effort — fall through; item stays ungrouped.
+                }
+            }
+            if (grpMeta != null && grpMeta.isRepeatingGroup()) {
+                repeatingGroupsByItemGroupId.put(grp.getId(), grp);
+            }
+        }
+
         List<CrfEntryDto.CrfSectionDto> sectionDtos = new ArrayList<>(sections.size());
         for (SectionBean sb : sections) {
             List<ItemBean> items = itemDAO.findAllBySectionIdOrderedByItemFormMetadataOrdinal(sb.getId());
             List<CrfEntryDto.CrfItemDto> itemDtos = new ArrayList<>(items.size());
             for (ItemBean ib : items) {
                 ItemFormMetadataBean ifm = ifmByItemId.get(ib.getId());
-                itemDtos.add(buildItemDto(ib, ifm));
+                ItemGroupBean grp = groupByItemId.get(ib.getId());
+                String groupOid = null;
+                if (grp != null && repeatingGroupsByItemGroupId.containsKey(grp.getId())
+                        && grp.getOid() != null) {
+                    groupOid = grp.getOid();
+                    itemOidsByItemGroupId
+                            .computeIfAbsent(grp.getId(), k -> new ArrayList<>())
+                            .add(ib.getOid());
+                }
+                itemDtos.add(buildItemDto(ib, ifm, groupOid));
             }
             sectionDtos.add(new CrfEntryDto.CrfSectionDto(
                     sb.getLabel(),
@@ -247,17 +312,61 @@ public class EventCrfsApiController {
             ));
         }
 
-        // Saved values keyed by item OID.
+        // Saved values keyed by item OID. Repeating-group rows are
+        // routed into the groups[] payload below; here we only keep
+        // single-row items so the SPA's top-level values map stays
+        // legible.
         ItemDataDAO idDAO = new ItemDataDAO(dataSource);
         List<ItemDataBean> dataRows = new ArrayList<>();
         for (SectionBean sb : sections) {
             dataRows.addAll(idDAO.findAllBySectionIdAndEventCRFId(sb.getId(), ecb.getId()));
         }
         Map<String, Object> values = new LinkedHashMap<>();
+        // groupId → ordinal → (itemOid → value)
+        Map<Integer, Map<Integer, Map<String, Object>>> groupRowValues = new LinkedHashMap<>();
         for (ItemDataBean idb : dataRows) {
             ItemBean ib = (ItemBean) itemDAO.findByPK(idb.getItemId());
             if (ib == null || ib.getOid() == null) continue;
-            values.put(ib.getOid(), idb.getValue());
+            ItemGroupBean grp = groupByItemId.get(ib.getId());
+            boolean repeating = grp != null && repeatingGroupsByItemGroupId.containsKey(grp.getId());
+            if (repeating) {
+                int ordinal = Math.max(1, idb.getOrdinal());
+                groupRowValues
+                        .computeIfAbsent(grp.getId(), k -> new LinkedHashMap<>())
+                        .computeIfAbsent(ordinal, k -> new LinkedHashMap<>())
+                        .put(ib.getOid(), parseStoredValue(idb.getValue(), findDataType(ib, ifmByItemId)));
+            } else {
+                values.put(ib.getOid(), parseStoredValue(idb.getValue(), findDataType(ib, ifmByItemId)));
+            }
+        }
+
+        // Build the groups[] payload: one CrfItemGroupDto per repeating
+        // group declared on the CRF version, with ordered rows by ordinal.
+        List<CrfEntryDto.CrfItemGroupDto> groupDtos = new ArrayList<>();
+        for (Map.Entry<Integer, ItemGroupBean> grpEntry : repeatingGroupsByItemGroupId.entrySet()) {
+            ItemGroupBean grp = grpEntry.getValue();
+            ItemGroupMetadataBean grpMeta = metaByItemGroupId.get(grp.getId());
+            int repeatMax = (grpMeta != null && grpMeta.getRepeatMax() != null && grpMeta.getRepeatMax() > 0)
+                    ? grpMeta.getRepeatMax()
+                    : 40; // upstream default per item_group_metadata seeds
+            String label = (grpMeta != null && grpMeta.getHeader() != null && !grpMeta.getHeader().isBlank())
+                    ? grpMeta.getHeader()
+                    : (grp.getName() != null ? grp.getName() : grp.getOid());
+            List<String> itemOids = itemOidsByItemGroupId.getOrDefault(
+                    grp.getId(), new ArrayList<>());
+            Map<Integer, Map<String, Object>> rowsByOrd = groupRowValues.getOrDefault(
+                    grp.getId(), new LinkedHashMap<>());
+            List<CrfEntryDto.CrfGroupRowDto> rows = new ArrayList<>(rowsByOrd.size());
+            rowsByOrd.entrySet().stream()
+                    .sorted(Map.Entry.comparingByKey())
+                    .forEach(e -> rows.add(new CrfEntryDto.CrfGroupRowDto(e.getKey(), e.getValue())));
+            groupDtos.add(new CrfEntryDto.CrfItemGroupDto(
+                    grp.getOid() != null ? grp.getOid() : ("GRP_" + grp.getId()),
+                    label,
+                    repeatMax,
+                    itemOids,
+                    rows
+            ));
         }
 
         String status = computeStatus(ecb, !dataRows.isEmpty());
@@ -283,6 +392,9 @@ public class EventCrfsApiController {
                 eventLabel,
                 schema,
                 values,
+                groupDtos,
+                fileMaxBytes(),
+                fileExtensionsAllowlist(),
                 status,
                 lastSavedAt,
                 requiresRfc
@@ -323,8 +435,11 @@ public class EventCrfsApiController {
                     "message", "No active study bound to the session — POST /pages/api/v1/me/activeStudy first."
             ));
         }
-        if (body == null || body.values() == null) {
-            return ResponseEntity.badRequest().body(Map.of("message", "Missing 'values' in request body"));
+        if (body == null
+                || ((body.values() == null || body.values().isEmpty())
+                        && (body.groups() == null || body.groups().isEmpty()))) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Empty request body — supply 'values' and/or 'groups'."));
         }
 
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
@@ -397,9 +512,13 @@ public class EventCrfsApiController {
         int saved = 0;
         int rejected = 0;
         int rfcCreatedCount = 0;
-        for (Map.Entry<String, Object> entry : body.values().entrySet()) {
+        int groupRowsSaved = 0;
+        Map<String, Object> topLevelValues = body.values() != null ? body.values() : Map.of();
+        for (Map.Entry<String, Object> entry : topLevelValues.entrySet()) {
             String itemOid = entry.getKey();
-            String newValue = entry.getValue() == null ? "" : String.valueOf(entry.getValue());
+            // Phase E.6: route arrays through the select-multi serializer
+            // so the persisted column stays as a comma-joined string.
+            String newValue = serialiseValueForStorage(entry.getValue());
 
             ItemBean item = resolvedItems.get(itemOid);
             if (item == null) {
@@ -478,6 +597,64 @@ public class EventCrfsApiController {
             saved++;
         }
 
+        // Phase E.6: per-row save into repeating item groups. Each
+        // GroupRowSavePayload carries a (groupOid, rowOrdinal, values)
+        // tuple; the controller fans the values out into per-item
+        // upserts against item_data with the matching ordinal. The
+        // ordinal is taken at face value from the client; the
+        // create-row endpoint is the authoritative ordinal allocator
+        // and the SPA always re-fetches after a row create so the
+        // client and server agree on the ordinal range.
+        if (body.groups() != null) {
+            for (SaveItemsRequest.GroupRowSavePayload row : body.groups()) {
+                if (row == null || row.values() == null) continue;
+                int ordinal = Math.max(1, row.rowOrdinal());
+                for (Map.Entry<String, Object> rowVal : row.values().entrySet()) {
+                    String itemOid = rowVal.getKey();
+                    String newValue = serialiseValueForStorage(rowVal.getValue());
+                    ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+                    if (candidates == null || candidates.isEmpty()) {
+                        rejected++;
+                        continue;
+                    }
+                    ItemBean item = candidates.get(0);
+                    ItemDataBean existing = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
+                            item.getId(), ecb.getId(), ordinal);
+                    String oldValue = "";
+                    boolean isCreate;
+                    if (existing != null && existing.getId() > 0) {
+                        oldValue = existing.getValue() == null ? "" : existing.getValue();
+                        if (oldValue.equals(newValue)) { groupRowsSaved++; continue; }
+                        existing.setValue(newValue);
+                        existing.setUpdater(currentUser);
+                        existing.setUpdaterId(currentUser.getId());
+                        existing.setStatus(Status.AVAILABLE);
+                        existing.setOldStatus(Status.AVAILABLE);
+                        idDAO.update(existing);
+                        isCreate = false;
+                    } else {
+                        ItemDataBean idb = new ItemDataBean();
+                        idb.setEventCRFId(ecb.getId());
+                        idb.setItemId(item.getId());
+                        idb.setValue(newValue);
+                        idb.setOrdinal(ordinal);
+                        idb.setOwnerId(currentUser.getId());
+                        idb.setOwner(currentUser);
+                        idb.setStatus(Status.AVAILABLE);
+                        idb.setOldStatus(Status.AVAILABLE);
+                        idb.setDeleted(false);
+                        idDAO.create(idb);
+                        isCreate = true;
+                    }
+                    writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                            isCreate ? "item_data_create" : "item_data_update",
+                            "item_data", existing != null ? existing.getId() : 0,
+                            itemOid + "[" + ordinal + "]", oldValue, newValue);
+                    groupRowsSaved++;
+                }
+            }
+        }
+
         // Touch the EventCRF so {date_updated} reflects the save —
         // drives the SPA's lastSavedAt header.
         ecb.setUpdater(currentUser);
@@ -489,11 +666,12 @@ public class EventCrfsApiController {
         out.put("savedItemCount", saved);
         out.put("rejectedItemCount", rejected);
         out.put("rfcCreatedCount", rfcCreatedCount);
+        out.put("groupRowsSaved", groupRowsSaved);
         out.put("lastSavedAt", formatIsoInstant(latestUpdate(eventCrfDAO.findByPK(ecb.getId()))));
-        out.put("status", computeStatus(ecb, /* re-check after touch */ saved > 0));
+        out.put("status", computeStatus(ecb, /* re-check after touch */ saved > 0 || groupRowsSaved > 0));
 
-        LOG.info("CRF save: event_crf {} got {} items (rejected {}, rfc {}); user {} study {}",
-                ecb.getId(), saved, rejected, rfcCreatedCount, currentUser.getName(), currentStudy.getOid());
+        LOG.info("CRF save: event_crf {} got {} items + {} group-rows (rejected {}, rfc {}); user {} study {}",
+                ecb.getId(), saved, groupRowsSaved, rejected, rfcCreatedCount, currentUser.getName(), currentStudy.getOid());
 
         return ResponseEntity.ok(out);
     }
@@ -738,16 +916,24 @@ public class EventCrfsApiController {
         }
     }
 
-    /* Phase E.6 admin-rfc — SaveItemsRequest promoted to its own file
-     * ({@link SaveItemsRequest}). The promoted record carries the
-     * {@code reasons} map needed for Reason-For-Change capture. */
+    /* Phase E.6 — SaveItemsRequest promoted to a top-level DTO
+     * ({@link SaveItemsRequest}). Carries the {@code reasons} map for
+     * Reason-For-Change capture (admin-rfc cluster) plus the
+     * {@code groups} payload for repeating-group rows (crf-data-types
+     * cluster). See SaveItemsRequest.java (reviewer flag in the build
+     * playbook). */
 
     /**
      * Build a single item DTO. The {@code dataType} mapping prefers the
      * response-type (select/checkbox/radio) over the item's storage
      * type, because the SPA picks the input widget from {@code dataType}.
+     *
+     * <p>Phase E.6: the optional {@code groupOid} arg tags items that
+     * belong to a repeating item group; the SPA routes those into the
+     * group's row template instead of the top-level values map.
      */
-    private static CrfEntryDto.CrfItemDto buildItemDto(ItemBean item, ItemFormMetadataBean ifm) {
+    private static CrfEntryDto.CrfItemDto buildItemDto(ItemBean item, ItemFormMetadataBean ifm,
+                                                       String groupOid) {
         String label;
         boolean required = false;
         String helper = null;
@@ -787,8 +973,68 @@ public class EventCrfsApiController {
                 options,
                 helper,
                 /* min */ null,
-                /* max */ null
+                /* max */ null,
+                groupOid
         );
+    }
+
+    /** Resolve an item's SPA dataType when emitting values. Skip the
+     *  groupOid lookup — only the response-type / storage-type mapping
+     *  matters for the value's wire shape. */
+    private static String findDataType(ItemBean item, Map<Integer, ItemFormMetadataBean> ifmByItemId) {
+        ItemFormMetadataBean ifm = ifmByItemId.get(item.getId());
+        ResponseType rt = null;
+        if (ifm != null && ifm.getResponseSet() != null) {
+            rt = ResponseType.get(ifm.getResponseSet().getResponseTypeId());
+        }
+        return mapDataType(rt, item.getItemDataTypeId());
+    }
+
+    /**
+     * Phase E.6: parse the persisted {@code item_data.value} into the
+     * shape the SPA expects on the wire. The DB stores a single string;
+     * select-multi values are comma-joined (the legacy CRF Data Entry
+     * convention). All other data types are passed through as-is —
+     * Jackson serialises them as JSON strings and the SPA's per-item
+     * input bindings cast back to the expected primitive.
+     */
+    private static Object parseStoredValue(String stored, String dataType) {
+        if (stored == null) return "";
+        if (!"select-multi".equals(dataType)) return stored;
+        if (stored.isBlank()) return new ArrayList<String>();
+        // Comma-joined per the legacy DataEntryServlet convention.
+        // Tokens are trimmed; empty tokens are dropped so a trailing
+        // comma doesn't round-trip as a phantom empty option.
+        String[] parts = stored.split(",");
+        List<String> out = new ArrayList<>(parts.length);
+        for (String p : parts) {
+            String trimmed = p.trim();
+            if (!trimmed.isEmpty()) out.add(trimmed);
+        }
+        return out;
+    }
+
+    /**
+     * Phase E.6: invert {@link #parseStoredValue} for the saveItems path.
+     * Arrays land as comma-joined strings so the legacy item_data column
+     * keeps its existing format and the audit-log diff stays legible.
+     */
+    private static String serialiseValueForStorage(Object value) {
+        if (value == null) return "";
+        if (value instanceof List<?> list) {
+            StringBuilder sb = new StringBuilder();
+            boolean first = true;
+            for (Object o : list) {
+                if (o == null) continue;
+                String token = String.valueOf(o).trim();
+                if (token.isEmpty()) continue;
+                if (!first) sb.append(',');
+                sb.append(token);
+                first = false;
+            }
+            return sb.toString();
+        }
+        return String.valueOf(value);
     }
 
     /**
@@ -885,6 +1131,226 @@ public class EventCrfsApiController {
     }
 
     /* ------------------------------------------------------------------ */
+    /* Phase E.6 — file-upload caps sourced from datainfo.properties.      */
+    /*                                                                    */
+    /* The SPA caches these in the CrfEntryDto payload so the dropzone    */
+    /* can show the cap in its helper text + pre-validate before the      */
+    /* multipart POST. The server still enforces them; the SPA copy is    */
+    /* a UX nicety.                                                       */
+    /*                                                                    */
+    /* Keys (added to docker/config/datainfo.properties):                 */
+    /*   crf.file.maxBytes      default 50 MiB                            */
+    /*   crf.file.extensions    default "pdf,jpg,jpeg,png,tif,tiff"       */
+    /* ------------------------------------------------------------------ */
+
+    static final long DEFAULT_CRF_FILE_MAX_BYTES = 52_428_800L; // 50 MiB
+    static final String DEFAULT_CRF_FILE_EXTENSIONS = "pdf,jpg,jpeg,png,tif,tiff";
+
+    private static long fileMaxBytes() {
+        try {
+            String raw = at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources
+                    .getField("crf.file.maxBytes");
+            if (raw == null || raw.isBlank()) return DEFAULT_CRF_FILE_MAX_BYTES;
+            long parsed = Long.parseLong(raw.trim());
+            return parsed > 0 ? parsed : DEFAULT_CRF_FILE_MAX_BYTES;
+        } catch (Exception e) {
+            return DEFAULT_CRF_FILE_MAX_BYTES;
+        }
+    }
+
+    private static String fileExtensionsAllowlist() {
+        try {
+            String raw = at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources
+                    .getField("crf.file.extensions");
+            if (raw == null || raw.isBlank()) return DEFAULT_CRF_FILE_EXTENSIONS;
+            return raw.trim();
+        } catch (Exception e) {
+            return DEFAULT_CRF_FILE_EXTENSIONS;
+        }
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Phase E.6 — repeating item group row create + delete endpoints.    */
+    /*                                                                    */
+    /* The SPA shows an "Add row" button per repeating group and a small  */
+    /* trash icon on each row. The endpoints fan out to per-item upserts  */
+    /* with the matching ordinal, just like saveItems does — the only    */
+    /* difference is that create allocates the next ordinal and delete   */
+    /* nukes every item_data row with that (event_crf, group, ordinal)   */
+    /* tuple. Both write audit events for the M10 audit log view.        */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * Allocate a new row inside a repeating item group. The response
+     * carries the newly-allocated ordinal so the SPA can hydrate its
+     * row template without re-fetching the whole CRF.
+     *
+     * <p>Returns 409 if the group's {@code repeatMax} is already met.
+     */
+    @PostMapping("/{id:[0-9]+}/groups/{groupOid}/rows")
+    public ResponseEntity<?> addGroupRow(@PathVariable("id") int eventCrfId,
+                                         @PathVariable("groupOid") String groupOid,
+                                         HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is locked — cannot add rows"));
+        }
+
+        ItemGroupDAO igDAO = new ItemGroupDAO(dataSource);
+        ItemGroupBean grp = igDAO.findByOid(groupOid);
+        if (grp == null || grp.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No item_group with oid " + groupOid));
+        }
+
+        ItemGroupMetadataDAO igmDAO = new ItemGroupMetadataDAO(dataSource);
+        ArrayList<ItemGroupMetadataBean> metas =
+                igmDAO.findMetaByGroupAndCrfVersion(grp.getId(), ecb.getCRFVersionId());
+        if (metas == null || metas.isEmpty() || !metas.get(0).isRepeatingGroup()) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "item_group " + groupOid + " is not a repeating group"));
+        }
+        ItemGroupMetadataBean grpMeta = metas.get(0);
+        int repeatMax = (grpMeta.getRepeatMax() != null && grpMeta.getRepeatMax() > 0)
+                ? grpMeta.getRepeatMax() : 40;
+
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        int maxOrd = idDAO.getMaxOrdinalForGroupByGroupOID(groupOid, ecb.getId());
+        int nextOrd = Math.max(0, maxOrd) + 1;
+        if (nextOrd > repeatMax) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Repeating group at repeatMax (" + repeatMax + ")",
+                    "code", "REPEAT_MAX_REACHED"));
+        }
+
+        // Write audit row for the create. We deliberately do NOT
+        // pre-seed item_data with empty values — the next saveItems
+        // call will insert them when the user types. This keeps the
+        // DB free of orphan empty rows when a user clicks Add then
+        // cancels via deleteGroupRow.
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                "item_group_row_create", "item_data", ecb.getId(),
+                groupOid + "[ordinal]", "", String.valueOf(nextOrd));
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("groupOid", groupOid);
+        out.put("rowOrdinal", nextOrd);
+        out.put("values", new LinkedHashMap<>());
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Delete every item_data row tied to (event_crf, item_group, ordinal).
+     * The SPA calls this when the user clicks the row's trash icon.
+     */
+    @org.springframework.web.bind.annotation.DeleteMapping("/{id:[0-9]+}/groups/{groupOid}/rows/{ordinal:[0-9]+}")
+    public ResponseEntity<?> deleteGroupRow(@PathVariable("id") int eventCrfId,
+                                            @PathVariable("groupOid") String groupOid,
+                                            @PathVariable("ordinal") int ordinal,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is locked — cannot delete rows"));
+        }
+
+        ItemGroupDAO igDAO = new ItemGroupDAO(dataSource);
+        ItemGroupBean grp = igDAO.findByOid(groupOid);
+        if (grp == null || grp.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No item_group with oid " + groupOid));
+        }
+
+        // Walk every item in the group; soft-delete each item_data row at
+        // the matching ordinal. We rely on Status.DELETED rather than a
+        // hard DELETE so the audit trail survives and partial saves
+        // remain recoverable through the legacy admin path.
+        ItemFormMetadataDAO ifmDAO = new ItemFormMetadataDAO(dataSource);
+        List<ItemFormMetadataBean> ifms;
+        try {
+            ifms = ifmDAO.findAllByCRFVersionId(ecb.getCRFVersionId());
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Schema load failed: " + e.getMessage()));
+        }
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        int deleted = 0;
+        for (ItemFormMetadataBean ifm : ifms) {
+            ItemGroupBean itemGrp;
+            try {
+                itemGrp = igDAO.findGroupByItemIdCrfVersionId(ifm.getItemId(), ecb.getCRFVersionId());
+            } catch (Exception e) { continue; }
+            if (itemGrp == null || itemGrp.getId() != grp.getId()) continue;
+            ItemDataBean idb = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
+                    ifm.getItemId(), ecb.getId(), ordinal);
+            if (idb == null || idb.getId() == 0) continue;
+            String oldValue = idb.getValue() == null ? "" : idb.getValue();
+            idb.setStatus(Status.DELETED);
+            idb.setUpdater(currentUser);
+            idb.setUpdaterId(currentUser.getId());
+            idDAO.update(idb);
+            ItemBean ib = (ItemBean) itemDAO.findByPK(ifm.getItemId());
+            String itemOid = ib != null ? ib.getOid() : "";
+            writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                    "item_group_row_delete", "item_data", idb.getId(),
+                    itemOid + "[" + ordinal + "]", oldValue, "");
+            deleted++;
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "groupOid", groupOid,
+                "rowOrdinal", ordinal,
+                "itemDataRowsDeleted", deleted
+        ));
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Phase E.6 — study_event status cascade after CRF mark/reopen.       */
     /*                                                                    */
     /* Operators saw "Abgeschlossen" on every CRF row and a parent visit  */
@@ -974,5 +1440,300 @@ public class EventCrfsApiController {
             if (!found) return false;
         }
         return true;
+    }
+
+    /* ================================================================== */
+    /* Phase E.6 PR (b) -- file-upload item endpoints.                    */
+    /*                                                                    */
+    /* The SPA's FileUploadInput widget hits three endpoints:             */
+    /*                                                                    */
+    /*   POST   /eventCrfs/{id}/items/{itemOid}/file    (multipart)       */
+    /*          -> CrfFileUploadResponseDto                               */
+    /*   GET    /eventCrfs/{id}/items/{itemOid}/file?rowOrdinal=N         */
+    /*          -> application/octet-stream                               */
+    /*   DELETE /eventCrfs/{id}/items/{itemOid}/file?rowOrdinal=N -> 204  */
+    /*                                                                    */
+    /* The legacy storage convention (absolute path string written into   */
+    /* item_data.value) is preserved -- the SPA renders the filename      */
+    /* component back from the stored ref, the audit trail keeps the      */
+    /* path, and the legacy /pages/UploadFileServlet read-back keeps      */
+    /* working for backwards compatibility.                               */
+    /* ================================================================== */
+
+    @PostMapping(path = "/{id:[0-9]+}/items/{itemOid}/file",
+                 consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+                 produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> uploadItemFile(@PathVariable("id") int eventCrfId,
+                                            @PathVariable("itemOid") String itemOid,
+                                            @RequestPart("file") MultipartFile file,
+                                            @RequestParam(value = "rowOrdinal", defaultValue = "1") int rowOrdinal,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "file part is required"));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is locked -- cannot upload files"));
+        }
+
+        // Size + extension gates before reading the stream.
+        if (!fileStorageService.checkSize(file)) {
+            return ResponseEntity.status(413).body(Map.of(
+                    "message", "File exceeds cap of " + fileStorageService.maxBytes() + " bytes",
+                    "code", "FILE_TOO_LARGE"));
+        }
+        if (fileStorageService.isPotentiallyExecutable(file)
+                || !fileStorageService.checkExtension(file)) {
+            return ResponseEntity.status(415).body(Map.of(
+                    "message", "File extension is not in the allowlist: "
+                            + fileStorageService.allowedExtensionsCsv(),
+                    "code", "FILE_BAD_EXTENSION"));
+        }
+
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+        if (candidates == null || candidates.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No item with oid " + itemOid));
+        }
+        ItemBean item = candidates.get(0);
+
+        // Build the on-disk write path. crfOid + crfVersionOid let the
+        // legacy admin tools recover an uploaded file even after the
+        // item_data row is soft-deleted.
+        CRFVersionDAO cvDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean cv = (CRFVersionBean) cvDao.findByPK(ecb.getCRFVersionId());
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = cv != null ? (CRFBean) crfDao.findByPK(cv.getCrfId()) : null;
+        String crfOid = crf != null && crf.getOid() != null ? crf.getOid() : "CRF" + (crf == null ? 0 : crf.getId());
+        String crfVersionOid = cv != null && cv.getOid() != null ? cv.getOid() : "CV" + (cv == null ? 0 : cv.getId());
+
+        Path target;
+        try {
+            target = fileStorageService.store(crfOid, crfVersionOid, file);
+        } catch (IOException ioEx) {
+            LOG.error("Failed to persist upload for event_crf {} item {}: {}",
+                    eventCrfId, itemOid, ioEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to persist file: " + ioEx.getMessage()));
+        }
+        String absolutePath = target.toString();
+        String storedFilename = target.getFileName().toString();
+
+        // Upsert the item_data row with the absolute path as the value.
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        int ordinal = Math.max(1, rowOrdinal);
+        ItemDataBean existing = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
+                item.getId(), ecb.getId(), ordinal);
+        String oldValue = "";
+        boolean isCreate;
+        if (existing != null && existing.getId() > 0) {
+            oldValue = existing.getValue() == null ? "" : existing.getValue();
+            // Best-effort: drop the previous on-disk blob so we don't
+            // accumulate dead bytes on the filesystem when a user
+            // replaces an uploaded file.
+            if (!oldValue.isBlank() && !oldValue.equals(absolutePath)) {
+                fileStorageService.delete(oldValue);
+            }
+            existing.setValue(absolutePath);
+            existing.setUpdater(currentUser);
+            existing.setUpdaterId(currentUser.getId());
+            existing.setStatus(Status.AVAILABLE);
+            existing.setOldStatus(Status.AVAILABLE);
+            idDAO.update(existing);
+            isCreate = false;
+        } else {
+            ItemDataBean idb = new ItemDataBean();
+            idb.setEventCRFId(ecb.getId());
+            idb.setItemId(item.getId());
+            idb.setValue(absolutePath);
+            idb.setOrdinal(ordinal);
+            idb.setOwnerId(currentUser.getId());
+            idb.setOwner(currentUser);
+            idb.setStatus(Status.AVAILABLE);
+            idb.setOldStatus(Status.AVAILABLE);
+            idb.setDeleted(false);
+            idDAO.create(idb);
+            existing = idb;
+            isCreate = true;
+        }
+
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                isCreate ? "item_data_file_upload" : "item_data_file_replace",
+                "item_data", existing.getId(),
+                itemOid + "[" + ordinal + "]", oldValue, absolutePath);
+
+        // Touch the EventCRF so {date_updated} reflects the upload.
+        ecb.setUpdater(currentUser);
+        ecb.setUpdatedDate(new Date());
+        eventCrfDAO.update(ecb);
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("itemOid", itemOid);
+        out.put("rowOrdinal", ordinal);
+        out.put("filename", storedFilename);
+        out.put("bytes", file.getSize());
+        out.put("contentType", file.getContentType());
+        out.put("storedPath", absolutePath);
+        out.put("lastSavedAt", Instant.now().toString());
+        return ResponseEntity.ok(out);
+    }
+
+    @org.springframework.web.bind.annotation.GetMapping(
+            path = "/{id:[0-9]+}/items/{itemOid}/file")
+    public ResponseEntity<?> downloadItemFile(@PathVariable("id") int eventCrfId,
+                                              @PathVariable("itemOid") String itemOid,
+                                              @RequestParam(value = "rowOrdinal", defaultValue = "1") int rowOrdinal,
+                                              HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+        if (candidates == null || candidates.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No item with oid " + itemOid));
+        }
+        ItemBean item = candidates.get(0);
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        ItemDataBean idb = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
+                item.getId(), ecb.getId(), Math.max(1, rowOrdinal));
+        if (idb == null || idb.getId() == 0
+                || idb.getValue() == null || idb.getValue().isBlank()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No file attached for item " + itemOid));
+        }
+        String absolutePath = idb.getValue();
+        Path target = Paths.get(absolutePath).toAbsolutePath().normalize();
+        Path root = fileStorageService.baseDir().toAbsolutePath().normalize();
+        if (!target.startsWith(root) || !Files.isReadable(target)) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "Attached file no longer accessible"));
+        }
+        String filename = target.getFileName().toString();
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+        headers.setContentDisposition(
+                org.springframework.http.ContentDisposition.attachment()
+                        .filename(filename).build());
+        return ResponseEntity.ok().headers(headers).body(new FileSystemResource(target));
+    }
+
+    @org.springframework.web.bind.annotation.DeleteMapping(
+            path = "/{id:[0-9]+}/items/{itemOid}/file")
+    public ResponseEntity<?> deleteItemFile(@PathVariable("id") int eventCrfId,
+                                            @PathVariable("itemOid") String itemOid,
+                                            @RequestParam(value = "rowOrdinal", defaultValue = "1") int rowOrdinal,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "No active study bound."));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudyUserRoleBean role = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(currentUser, currentStudy, role);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+        if (ecb.getStatus() == Status.SIGNED || ecb.getStatus() == Status.LOCKED) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "event_crf " + eventCrfId + " is locked -- cannot delete files"));
+        }
+
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ArrayList<ItemBean> candidates = itemDAO.findByOid(itemOid);
+        if (candidates == null || candidates.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No item with oid " + itemOid));
+        }
+        ItemBean item = candidates.get(0);
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        ItemDataBean idb = idDAO.findByItemIdAndEventCRFIdAndOrdinal(
+                item.getId(), ecb.getId(), Math.max(1, rowOrdinal));
+        if (idb == null || idb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No file attached for item " + itemOid));
+        }
+        String oldValue = idb.getValue() == null ? "" : idb.getValue();
+        // Drop the on-disk blob first; if that fails the value stays
+        // pointing at a now-missing path -- safer than the inverse
+        // (orphan bytes after a DB success).
+        if (!oldValue.isBlank()) fileStorageService.delete(oldValue);
+
+        idb.setValue("");
+        idb.setStatus(Status.DELETED);
+        idb.setUpdater(currentUser);
+        idb.setUpdaterId(currentUser.getId());
+        idDAO.update(idb);
+
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                "item_data_file_delete", "item_data", idb.getId(),
+                itemOid + "[" + Math.max(1, rowOrdinal) + "]", oldValue, "");
+
+        // Touch the EventCRF so {date_updated} reflects the delete.
+        ecb.setUpdater(currentUser);
+        ecb.setUpdatedDate(new Date());
+        eventCrfDAO.update(ecb);
+
+        return ResponseEntity.noContent().build();
     }
 }
