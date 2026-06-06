@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { useCrfAuthoringStore } from '../crfAuthoring'
+import {
+  dataTypeIsBoolean,
+  responseTypeRequiresOptions,
+  useCrfAuthoringStore,
+} from '../crfAuthoring'
 import { ApiError, ApiNetworkError } from '@/api/client'
 import type { CrfVersion } from '@/types/crfLibrary'
 
@@ -388,6 +392,150 @@ describe('useCrfAuthoringStore', () => {
       expect(created).not.toBeNull()
       expect(store.responseSetCatalog).toHaveLength(1)
       expect(store.responseSetCatalog[0]!.label).toBe('snellen')
+    })
+  })
+
+  describe('BL (boolean) data type', () => {
+    it('dataTypeIsBoolean discriminates BL from the other tokens', () => {
+      expect(dataTypeIsBoolean('BL')).toBe(true)
+      expect(dataTypeIsBoolean('ST')).toBe(false)
+      expect(dataTypeIsBoolean('INT')).toBe(false)
+      expect(dataTypeIsBoolean('REAL')).toBe(false)
+      expect(dataTypeIsBoolean('DATE')).toBe(false)
+      expect(dataTypeIsBoolean('PDATE')).toBe(false)
+      expect(dataTypeIsBoolean('FILE')).toBe(false)
+    })
+
+    it('round-trips dataType=BL through setItemField + buildPayload', () => {
+      const store = useCrfAuthoringStore()
+      store.setVersionName('v1.0')
+      store.addItem(0)
+      store.setItemField(0, 0, 'name', 'HAS_CONSENT')
+      store.setItemField(0, 0, 'descriptionLabel', 'Consent on file')
+      store.setItemField(0, 0, 'dataType', 'BL')
+      expect(store.draft.sections[0]!.items[0]!.dataType).toBe('BL')
+
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{
+          dataType: string
+          responseSet?: { type?: string; label?: string; options?: Array<{ text: string; value: string }> }
+        }> }>
+      }
+      const item = payload.sections[0]!.items[0]!
+      expect(item.dataType).toBe('BL')
+    })
+
+    it('synthesises a fixed Yes/No response set regardless of operator input', () => {
+      const store = useCrfAuthoringStore()
+      // Seed an operator-authored inline set with junk options — the BL
+      // branch must overwrite it on the wire so the parser sees the
+      // canonical Yes/No pair.
+      store.addItem(0, {
+        name: 'PREGNANT',
+        descriptionLabel: 'Pregnant at baseline',
+        dataType: 'BL',
+        responseSet: {
+          type: 'radio',
+          label: 'junk',
+          options: [{ text: 'A', value: 'a' }, { text: 'B', value: 'b' }],
+        },
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{
+          responseSet?: { type?: string; label?: string; options?: Array<{ text: string; value: string }> }
+        }> }>
+      }
+      const rs = payload.sections[0]!.items[0]!.responseSet!
+      expect(rs.type).toBe('single-select')
+      expect(rs.options).toEqual([
+        { text: 'Yes', value: '1' },
+        { text: 'No', value: '0' },
+      ])
+      // Label derived from item name when present.
+      expect(rs.label).toBe('pregnant_yes_no')
+    })
+
+    it('falls back to generic label when item name is blank', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        descriptionLabel: 'Yes-or-no?',
+        dataType: 'BL',
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ responseSet?: { label?: string } }> }>
+      }
+      expect(payload.sections[0]!.items[0]!.responseSet!.label).toBe('yes_no')
+    })
+
+    it('keeps dataType=BL even when responseSet is null on the draft', () => {
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        name: 'IS_SMOKER',
+        descriptionLabel: 'Smoker?',
+        dataType: 'BL',
+        responseSet: null,
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{
+          dataType: string
+          responseSet?: { type?: string; options?: Array<{ value: string }> }
+        }> }>
+      }
+      const item = payload.sections[0]!.items[0]!
+      expect(item.dataType).toBe('BL')
+      expect(item.responseSet!.type).toBe('single-select')
+      expect(item.responseSet!.options!.map((o) => o.value)).toEqual(['1', '0'])
+    })
+
+    it('BL response set has options — does not collapse to open-text branch', () => {
+      // Guard against a regression where responseTypeRequiresOptions is
+      // consulted before the dataType=BL branch.
+      const store = useCrfAuthoringStore()
+      store.addItem(0, {
+        name: 'FLAG',
+        descriptionLabel: 'Flag',
+        dataType: 'BL',
+        responseType: 'text',  // open-text — should be ignored for BL
+        responseSet: null,
+      })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{ responseSet?: { type?: string; options?: unknown[] } }> }>
+      }
+      const rs = payload.sections[0]!.items[0]!.responseSet!
+      expect(rs.type).toBe('single-select')
+      expect(rs.options).toHaveLength(2)
+    })
+
+    it('non-BL items remain unaffected by the BL synthesis branch', () => {
+      // Sanity check — the BL helper does not leak Yes/No options onto a
+      // text item authored alongside it.
+      const store = useCrfAuthoringStore()
+      store.addItem(0, { name: 'AGE', descriptionLabel: 'Age', dataType: 'INT' })
+      store.addItem(0, { name: 'FLAG', descriptionLabel: 'Flag', dataType: 'BL' })
+      const payload = store.buildPayload() as {
+        sections: Array<{ items: Array<{
+          dataType: string
+          responseSet?: { type?: string; options?: Array<{ value: string }> }
+        }> }>
+      }
+      const [intItem, blItem] = payload.sections[0]!.items
+      expect(intItem!.dataType).toBe('INT')
+      // INT was authored without an explicit response set — store
+      // synthesises the implicit open-text branch (type=text, no options).
+      expect(intItem!.responseSet!.type).toBe('text')
+      expect(intItem!.responseSet!.options).toBeUndefined()
+      expect(blItem!.dataType).toBe('BL')
+      expect(blItem!.responseSet!.type).toBe('single-select')
+    })
+
+    it('responseTypeRequiresOptions still returns true for option-bearing types', () => {
+      // Smoke check the export — BL bypasses this helper but the
+      // helper itself is unchanged.
+      expect(responseTypeRequiresOptions('radio')).toBe(true)
+      expect(responseTypeRequiresOptions('single-select')).toBe(true)
+      expect(responseTypeRequiresOptions('multi-select')).toBe(true)
+      expect(responseTypeRequiresOptions('checkbox')).toBe(true)
+      expect(responseTypeRequiresOptions('text')).toBe(false)
     })
   })
 
