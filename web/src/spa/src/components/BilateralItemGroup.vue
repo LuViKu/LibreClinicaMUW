@@ -52,6 +52,17 @@ const { t } = useI18n()
 
 const isBilateral = computed(() => props.row.kind === 'bilateral')
 const isBothEyes = computed(() => props.row.kind === 'both-eyes')
+const isCompound = computed(() => props.row.kind === 'compound-bilateral')
+
+/**
+ * For compound-bilateral rows, expose the sub-fields ordered for inline
+ * rendering. Each entry has the compact label (e.g. "Sph") plus the OD
+ * and OS sub-items the parent's #widget slot will render in each
+ * eye cell.
+ */
+const compoundSubFields = computed(() =>
+  props.row.kind === 'compound-bilateral' ? props.row.subFields : [],
+)
 
 const od = computed<CrfItem | null>(() =>
   props.row.kind === 'bilateral' && !props.hiddenOd ? props.row.od : null,
@@ -72,6 +83,9 @@ const required = computed<boolean>(() => {
     return Boolean(props.row.od?.required || props.row.os?.required)
   }
   if (props.row.kind === 'both-eyes') return props.row.item.required
+  if (props.row.kind === 'compound-bilateral') {
+    return props.row.subFields.some((s) => Boolean(s.od?.required || s.os?.required))
+  }
   return props.row.item.required
 })
 
@@ -104,6 +118,54 @@ const osOnly = computed(() => isBilateral.value && !od.value && os.value)
     <template v-if="isBothEyes && bothEyesItem">
       <div data-bilateral-cell="OU" class="bilateral-cell">
         <slot name="widget" :item="bothEyesItem" side="OU" />
+      </div>
+    </template>
+
+    <!-- Compound-bilateral row: multiple sub-fields rendered inline in
+         each eye cell. Refraction is the canonical example — operators
+         see "Sph Tor Ang Vis" on one line per eye, matching paper
+         refraction forms. Each sub-input still binds to its own
+         OD_/OS_ item in the data model. -->
+    <template v-else-if="isCompound">
+      <div data-bilateral-cell="OD" class="bilateral-cell">
+        <div
+          class="grid gap-2"
+          :style="{ gridTemplateColumns: `repeat(${compoundSubFields.length}, minmax(0, 1fr))` }"
+        >
+          <div
+            v-for="sub in compoundSubFields"
+            :key="`od-${sub.subKey}`"
+            class="space-y-1"
+          >
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+              {{ sub.compactLabel }}
+            </div>
+            <template v-if="sub.od">
+              <slot name="widget" :item="sub.od" side="OD" />
+            </template>
+            <div v-else class="text-[10px] text-slate-400 italic px-1">—</div>
+          </div>
+        </div>
+      </div>
+      <div data-bilateral-cell="OS" class="bilateral-cell">
+        <div
+          class="grid gap-2"
+          :style="{ gridTemplateColumns: `repeat(${compoundSubFields.length}, minmax(0, 1fr))` }"
+        >
+          <div
+            v-for="sub in compoundSubFields"
+            :key="`os-${sub.subKey}`"
+            class="space-y-1"
+          >
+            <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+              {{ sub.compactLabel }}
+            </div>
+            <template v-if="sub.os">
+              <slot name="widget" :item="sub.os" side="OS" />
+            </template>
+            <div v-else class="text-[10px] text-slate-400 italic px-1">—</div>
+          </div>
+        </div>
       </div>
     </template>
 
