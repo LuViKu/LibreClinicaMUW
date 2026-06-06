@@ -46,6 +46,16 @@ const readOnlyLabel = computed(() => isLocked.value
 onMounted(() => store.load(eventCrfOid.value))
 watch(eventCrfOid, (oid) => { void store.load(oid) })
 
+// Phase E.6 dde — redirect to the reconcile view when the backend
+// reports pass=reconcile. We watch on store.entry rather than the
+// route so a re-load that flips pass=2 → pass=reconcile (e.g. after
+// the DDE clerk's commit) also redirects.
+watch(() => store.entry?.dde?.pass, (pass) => {
+  if (pass === 'reconcile' && store.entry) {
+    router.push({ name: 'dde-reconcile', params: { eventCrfOid: store.entry.eventCrfOid } })
+  }
+})
+
 function statusVariant(s: CrfEntryStatus): 'success' | 'info' | 'warning' | 'neutral' {
   switch (s) {
     case 'complete':
@@ -171,6 +181,22 @@ const canReopen = computed(() => {
         role="status"
       >
         {{ t('crfEntry.lockedBanner') }}
+      </div>
+
+      <!-- Phase E.6 dde — blind-second-pass banner. Rendered only when
+           the backend included a non-null `dde` block on CrfEntryDto
+           AND its pass === '2'. The fieldset below stays editable
+           because pass-2 IS an editable entry — the IDE values are
+           server-side-blinded (values map empty) so the clerk re-keys
+           from the paper original. The reconcile flow handles
+           pass=reconcile via a router-level redirect at mount time
+           (see watchEffect below). -->
+      <div
+        v-if="store.entry && store.entry.dde && store.entry.dde.pass === '2'"
+        class="rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900 mb-4"
+        role="status"
+      >
+        {{ t('dde.banner.blindSecondPass') }}
       </div>
 
       <form
