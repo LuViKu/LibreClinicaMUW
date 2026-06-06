@@ -11,8 +11,11 @@ import type { CrfVersion } from '@/types/crfLibrary'
  * non-formula taxonomy:
  *
  * <ul>
- *   <li>Data types {@code ST, INT, REAL, DATE, PDATE, FILE} matching
- *       the backend {@code CrfVersionAuthoringRequest.Item.dataType}.</li>
+ *   <li>Data types {@code ST, INT, REAL, DATE, PDATE, FILE, BL} matching
+ *       the backend {@code CrfVersionAuthoringRequest.Item.dataType}.
+ *       {@code BL} (boolean) was restored from Milestone A in Phase E.6
+ *       once the wizard taxonomy was reconciled with the legacy
+ *       {@code item.data_type=11} branch the XLS uploader still emits.</li>
  *   <li>Response types {@code text, textarea, radio, single-select,
  *       multi-select, checkbox, file} (canonical names per
  *       {@link at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResponseType}).</li>
@@ -32,10 +35,15 @@ import type { CrfVersion } from '@/types/crfLibrary'
 /**
  * Authoring data type — matches the canonical names accepted by
  * {@code CrfJsonValidator.ALLOWED_DATA_TYPES}. The legacy {@code INTEGER}
- * alias still works on the wire but the SPA writes the canonical
- * {@code INT} form per the Milestone B contract.
+ * and {@code BOOLEAN} aliases still work on the wire but the SPA writes
+ * the canonical short forms ({@code INT}, {@code BL}) per the
+ * Milestone B contract.
+ *
+ * <p>{@code BL} (boolean) is a fixed yes/no — the wizard skips the
+ * response-set picker for it and the runtime renders it as a checkbox
+ * (legacy {@code item.data_type=11}).
  */
-export type AuthoringDataType = 'ST' | 'INT' | 'REAL' | 'DATE' | 'PDATE' | 'FILE'
+export type AuthoringDataType = 'ST' | 'INT' | 'REAL' | 'DATE' | 'PDATE' | 'FILE' | 'BL'
 
 /**
  * Authoring response type — canonical names per the backend
@@ -167,6 +175,16 @@ const OPTION_RESPONSE_TYPES = new Set<AuthoringResponseType>([
 
 export function responseTypeRequiresOptions(t: AuthoringResponseType): boolean {
   return OPTION_RESPONSE_TYPES.has(t)
+}
+
+/**
+ * BL (boolean) is a fixed yes/no — the wizard locks the response type
+ * to {@code checkbox} and hides the response-set picker (the synthesised
+ * workbook emits the canonical yes/no option list, matching what the
+ * legacy XLS uploader does for {@code DATA_TYPE=BL}).
+ */
+export function dataTypeIsBoolean(t: AuthoringDataType): boolean {
+  return t === 'BL'
 }
 
 function emptyValidation(): AuthoringValidation {
@@ -357,6 +375,21 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   }
 
   function buildResponseSetPayload(it: AuthoringItem): Record<string, unknown> | null {
+    // BL (boolean) — synthesise the canonical Yes/No option list and a
+    // {@code single-select} response type. The wizard hides the picker
+    // for BL (the dataType locks the response shape), so we cannot rely
+    // on operator-authored options here; mirror what the legacy XLS
+    // uploader emits when {@code DATA_TYPE=BL}.
+    if (it.dataType === 'BL') {
+      return {
+        type: 'single-select',
+        label: implicitBooleanLabel(it),
+        options: [
+          { text: 'Yes', value: '1' },
+          { text: 'No', value: '0' },
+        ],
+      }
+    }
     // Open-text responses (text / textarea / file) don't need an explicit
     // response-set on the wire — the synthesised workbook treats the
     // dataType + the absence of options as the open-text branch.
@@ -377,6 +410,15 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
         .map((opt) => ({ text: opt.text.trim(), value: opt.value.trim() }))
         .filter((opt) => opt.text !== '' || opt.value !== ''),
     }
+  }
+
+  function implicitBooleanLabel(it: AuthoringItem): string {
+    // Stable per-item label so the parser sees a unique response_set.label
+    // (the label uniqueness gate is per-CRF). We derive from the item
+    // name when present, falling back to a generic token so the workbook
+    // is well-formed even pre-name-entry.
+    if (it.name.trim() !== '') return it.name.trim().toLowerCase() + '_yes_no'
+    return 'yes_no'
   }
 
   function implicitOpenLabel(it: AuthoringItem): string {
