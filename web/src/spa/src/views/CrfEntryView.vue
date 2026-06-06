@@ -123,9 +123,25 @@ function topLevelItems(items: CrfItem[]): CrfItem[] {
  * / {@code OU_…} convention collapse into a 3-column row keyed off the
  * shared OID suffix; everything else renders as a one-column single row
  * (preserving the existing layout for non-ophthalmology CRFs).
+ *
+ * <p>Phase E.6 polish-runtime — rows that are entirely hidden by
+ * show-when are dropped here so the section template never tries to
+ * render them. For bilateral rows we drop the row when BOTH OD and OS
+ * are hidden; when only one eye is hidden, we collapse to a
+ * single-eye fallback (handled inside {@link BilateralItemGroup}).
  */
 function rowsForSection(items: CrfItem[]): BilateralRow[] {
-  return groupBilateralItems(topLevelItems(items))
+  const rows = groupBilateralItems(topLevelItems(items))
+  return rows.filter((row) => !isRowEntirelyHidden(row))
+}
+
+function isRowEntirelyHidden(row: BilateralRow): boolean {
+  if (row.kind === 'single') return store.isItemHidden(row.item.oid)
+  if (row.kind === 'both-eyes') return store.isItemHidden(row.item.oid)
+  // bilateral — both OD and OS must be hidden (or absent) for the row to vanish.
+  const odHidden = !row.od || store.isItemHidden(row.od.oid)
+  const osHidden = !row.os || store.isItemHidden(row.os.oid)
+  return odHidden && osHidden
 }
 
 function hasBilateralRow(rows: BilateralRow[]): boolean {
@@ -410,6 +426,10 @@ function onItemNoteOpen(_noteIds: string[]) {
             <div data-bilateral-header="OS" class="text-muw-blue">{{ t('crfEntry.bilateral.headerOs') }}</div>
           </div>
 
+          <!-- Phase E.6 polish-runtime — rows hidden by show-when are
+               already filtered out by {@link rowsForSection}. Vue's
+               keyed v-for is responsible for the DOM diff; CSS adds a
+               gentle opacity transition (see .showwhen-row below). -->
           <div class="space-y-4">
             <template v-for="row in rowsForSection(section.items)">
               <!-- Single (non-bilateral) row — original one-column layout. -->
@@ -437,11 +457,17 @@ function onItemNoteOpen(_noteIds: string[]) {
                 />
               </div>
 
-              <!-- Bilateral OD/OS row — 3-column. OD on LEFT, OS on RIGHT. -->
+              <!-- Bilateral OD/OS row — 3-column. OD on LEFT, OS on RIGHT.
+                   Phase E.6 polish-runtime — per-eye hide. If one eye is
+                   hidden the bilateral group still renders the row but
+                   collapses the hidden eye into its empty "OD missing"
+                   tell, keeping the table grid stable. -->
               <BilateralItemGroup
                 v-else-if="row.kind === 'bilateral'"
                 :key="`bilateral-${row.key}`"
                 :row="row"
+                :hidden-od="row.od ? store.isItemHidden(row.od.oid) : false"
+                :hidden-os="row.os ? store.isItemHidden(row.os.oid) : false"
               >
                 <template #widget="{ item, side }">
                   <ItemNoteIndicator

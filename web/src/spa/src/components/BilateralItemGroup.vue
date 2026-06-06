@@ -33,6 +33,18 @@ import type { CrfItem } from '@/types/crf'
 
 interface Props {
   row: BilateralRow
+  /**
+   * Phase E.6 polish-runtime — per-eye hide flags driven by show-when.
+   * Optional; when set, the corresponding eye renders the same "missing"
+   * tell that the bilateral component already shows for un-paired
+   * authoring (single OD, single OS) — the operator sees the row but
+   * the value isn't editable while the show-when source disagrees.
+   * When BOTH eyes are hidden the parent {@code rowsForSection} already
+   * dropped the row from the render list, so this branch handles the
+   * "one eye hidden, one eye visible" partial case.
+   */
+  hiddenOd?: boolean
+  hiddenOs?: boolean
 }
 
 const props = defineProps<Props>()
@@ -42,10 +54,10 @@ const isBilateral = computed(() => props.row.kind === 'bilateral')
 const isBothEyes = computed(() => props.row.kind === 'both-eyes')
 
 const od = computed<CrfItem | null>(() =>
-  props.row.kind === 'bilateral' ? props.row.od : null,
+  props.row.kind === 'bilateral' && !props.hiddenOd ? props.row.od : null,
 )
 const os = computed<CrfItem | null>(() =>
-  props.row.kind === 'bilateral' ? props.row.os : null,
+  props.row.kind === 'bilateral' && !props.hiddenOs ? props.row.os : null,
 )
 const bothEyesItem = computed<CrfItem | null>(() =>
   props.row.kind === 'both-eyes' ? props.row.item : null,

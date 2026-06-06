@@ -120,6 +120,47 @@ describe('BilateralItemGroup — layout', () => {
     expect(cells[0].find('.widget-stub').exists()).toBe(false)
   })
 
+  /* Phase E.6 polish-runtime — per-eye hide via show-when. */
+  it('collapses the OD column to the missing-data fallback when hiddenOd=true', () => {
+    const row: BilateralRow = {
+      kind: 'bilateral',
+      key: 'BCVA',
+      label: 'BCVA',
+      od: mkItem('OD_BCVA', 'OD BCVA', 'integer'),
+      os: mkItem('OS_BCVA', 'OS BCVA', 'integer'),
+    }
+    const wrapper = mount(BilateralItemGroup, {
+      global: { plugins: [mkI18n()] },
+      props: { row, hiddenOd: true },
+      slots: { widget: '<span class="widget-stub"></span>' },
+    })
+    const cells = wrapper.findAll('[data-bilateral-cell]')
+    expect(cells[0].attributes('data-bilateral-cell')).toBe('OD')
+    // OD cell has no widget rendered — it's collapsed.
+    expect(cells[0].find('.widget-stub').exists()).toBe(false)
+    // OS cell still renders the widget.
+    expect(cells[1].attributes('data-bilateral-cell')).toBe('OS')
+    expect(cells[1].find('.widget-stub').exists()).toBe(true)
+  })
+
+  it('collapses the OS column when hiddenOs=true', () => {
+    const row: BilateralRow = {
+      kind: 'bilateral',
+      key: 'BCVA',
+      label: 'BCVA',
+      od: mkItem('OD_BCVA', 'OD BCVA', 'integer'),
+      os: mkItem('OS_BCVA', 'OS BCVA', 'integer'),
+    }
+    const wrapper = mount(BilateralItemGroup, {
+      global: { plugins: [mkI18n()] },
+      props: { row, hiddenOs: true },
+      slots: { widget: '<span class="widget-stub"></span>' },
+    })
+    const cells = wrapper.findAll('[data-bilateral-cell]')
+    expect(cells[0].find('.widget-stub').exists()).toBe(true)
+    expect(cells[1].find('.widget-stub').exists()).toBe(false)
+  })
+
   it('renders an OU row as a single both-eyes cell that spans both eye columns', () => {
     const item = mkItem('OU_VISION_DESCRIPTION', 'Vision — bilateral narrative', 'string')
     const row: BilateralRow = {
