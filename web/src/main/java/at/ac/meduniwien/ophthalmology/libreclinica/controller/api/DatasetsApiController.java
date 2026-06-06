@@ -1133,6 +1133,15 @@ public class DatasetsApiController {
         toCreate.setOwnerId(pf.me.getId());
         toCreate.setCreatedDate(new Date());
         toCreate.setNumRuns(0);
+        // ODM metadata columns are non-null TEXT in the schema; the
+        // legacy CreateDatasetServlet stores empty strings when no ODM
+        // export is being prepared. The DAO binds these via setObject
+        // and a null trips the type-inference path with
+        // "No type found for this null object at order:23".
+        toCreate.setODMMetaDataVersionName("");
+        toCreate.setODMMetaDataVersionOid("");
+        toCreate.setODMPriorStudyOid("");
+        toCreate.setODMPriorMetaDataVersionOid("");
 
         // Resolve OIDs → IDs against the active study to prevent
         // cross-study leakage. validateWizardShape already verified
