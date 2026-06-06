@@ -23,6 +23,7 @@
  */
 
 import type { components } from './api'
+import type { DdeBlock } from './dde'
 
 export type ItemDataType =
   | 'string'
@@ -75,13 +76,19 @@ export type CrfEntryStatus =
   | 'locked'
 
 export type CrfEntry =
-  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt'>
+  Omit<Required<components['schemas']['CrfEntryDto']>, 'schema' | 'values' | 'status' | 'lastSavedAt' | 'dde'>
   & {
     schema: CrfSchema
     values: CrfValues
     status: CrfEntryStatus
     /** ISO-8601 instant of the last successful save. */
     lastSavedAt: string | null
+    /**
+     * Phase E.6 dde — non-null only when the parent
+     * event_definition_crf has double_entry=true. The view picks the
+     * blind-second-pass banner / reconcile-redirect from this field.
+     */
+    dde: DdeBlock | null
   }
 
 /* ------------------------------------------------------------------ */

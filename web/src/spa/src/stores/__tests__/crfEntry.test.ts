@@ -106,6 +106,7 @@ const DEMOGRAPHICS_ENTRY: CrfEntry = {
   values: {},
   status: 'not-started',
   lastSavedAt: null,
+  dde: null,
 }
 
 describe('useCrfEntryStore', () => {

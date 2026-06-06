@@ -8,6 +8,7 @@ import type {
   CrfSchema,
   CrfValues,
 } from '@/types/crf'
+import { useDdeStore } from '@/stores/dde'
 
 /**
  * Phase E.5.3 + E.4 M5 — CRF Entry store.
@@ -97,6 +98,25 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     isSaving.value = true
     error.value = null
     try {
+      // Phase E.6 dde — when this is a blind pass-2 entry, the save
+      // semantics are different: we POST to /dde-commit which runs
+      // the diff against pass-1 instead of upserting item_data.
+      if (target.dde && target.dde.pass === '2') {
+        const ddeStore = useDdeStore()
+        const ddeResp = await ddeStore.commitPass2(target.eventCrfOid, target.values)
+        if (!ddeResp) {
+          // ddeStore.error carries the user-facing message
+          error.value = ddeStore.error ?? error.value
+          return
+        }
+        target.lastSavedAt = ddeResp.lastSavedAt
+        // status flips on the backend (dde-complete / dde-conflicts);
+        // we don't map those onto the existing CrfEntryStatus literal
+        // union — leaving the status as-is and letting the view read
+        // entry.dde to decide is simpler than fighting the type union.
+        pendingChanges.value = false
+        return
+      }
       const response = await apiPost<SaveItemsResponse>(
         `/pages/api/v1/eventCrfs/${encodeURIComponent(target.eventCrfOid)}/items`,
         { values: target.values },
