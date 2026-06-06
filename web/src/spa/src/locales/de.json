@@ -393,6 +393,7 @@
     "adminOnly": "Nur Administrator",
     "createAction": "Neue Studie",
     "editAction": "Identität bearbeiten",
+    "parametersAction": "Parameter",
     "statusAction": "Status ändern…",
     "statusTarget": {
       "AVAILABLE": "Verfügbar",
@@ -1218,6 +1219,67 @@
     "siteBadge": "Standort",
     "binding": "Wird gebunden…",
     "signOut": "Abmelden"
+  },
+  "studyParameters": {
+    "title": "Studienparameter",
+    "intro": "Konfigurieren Sie, wie diese Studie Probanden-IDs, Datenabweichungen, Interviewer-/Datums-Vorbelegungen und optionale Module behandelt. Änderungen werden pro Parameter auditiert.",
+    "saved": "Parameter aktualisiert.",
+    "save": "Parameter speichern",
+    "sections": {
+      "subjectId": "Probandenidentifikation",
+      "discrepancy": "Abweichungsmanagement",
+      "interviewer": "Interviewer- & Interviewdatums-Vorgaben",
+      "modules": "Optionale Module"
+    },
+    "fields": {
+      "subjectIdGeneration": "Generierung der Probanden-ID",
+      "subjectIdPrefixSuffix": "Standort-Präfix/-Suffix erlauben",
+      "subjectPersonIdRequired": "Pflicht für Personen-ID",
+      "personIdShownOnCRF": "Personen-ID auf CRF-Kopf anzeigen",
+      "collectDob": "Geburtsdatum erfassen",
+      "genderRequired": "Geschlecht erforderlich",
+      "eventLocationRequired": "Pflicht für Veranstaltungsort",
+      "discrepancyManagement": "Abweichungs-Notizen aktiv",
+      "interviewerNameRequired": "Pflicht für Interviewer-Name",
+      "interviewerNameDefault": "Vorbelegung Interviewer-Name",
+      "interviewerNameEditable": "Interviewer-Name editierbar",
+      "interviewDateRequired": "Pflicht für Interviewdatum",
+      "interviewDateDefault": "Vorbelegung Interviewdatum",
+      "interviewDateEditable": "Interviewdatum editierbar",
+      "secondaryLabelViewable": "Sekundäres Label sichtbar",
+      "adminForcedReasonForChange": "Begründung nach Abschluss erzwingen",
+      "participantPortal": "Teilnehmerportal",
+      "randomization": "Randomisierung"
+    },
+    "enums": {
+      "subjectIdGeneration": {
+        "manual": "Manuell",
+        "auto non-editable": "Automatisch (nicht editierbar)",
+        "auto editable": "Automatisch (editierbar)"
+      },
+      "collectDob": {
+        "1": "Vollständiges Geburtsdatum",
+        "2": "Nur Jahr",
+        "3": "Nicht erfasst"
+      },
+      "required": {
+        "required": "Erforderlich",
+        "optional": "Optional",
+        "not_used": "Nicht verwendet"
+      },
+      "bool": {
+        "true": "Ja",
+        "false": "Nein"
+      },
+      "blankPrepopulated": {
+        "blank": "Leer",
+        "pre-populated": "Vorbelegt"
+      },
+      "enabledDisabled": {
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert"
+      }
+    }
   },
   "subjectDetail": {
     "subTrail": "Probandendetail",

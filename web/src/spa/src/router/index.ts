@@ -87,6 +87,13 @@ const router = createRouter({
       component: () => import('@/views/StudyIdentityEditView.vue'),
       meta: { title: 'Edit Study', role: 'Administrator' as const },
     },
+    /* Phase E.6 study-params — per-study parameter settings panel. */
+    {
+      path: '/studies/:oid/parameters',
+      name: 'study-parameters',
+      component: () => import('@/views/StudyParametersEditView.vue'),
+      meta: { title: 'Study Parameters', role: 'Administrator' as const },
+    },
     /* Phase E A8.2 — Event-definition CRUD for the active study. */
     {
       path: '/event-definitions',
