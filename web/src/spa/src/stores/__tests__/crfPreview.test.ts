@@ -361,4 +361,79 @@ describe('draftToPreviewSchema()', () => {
     ])
     expect(schema.sections[0]!.items[1]!.dataType).toBe('select-multi')
   })
+
+  /* -------------------------------------------------------------------- */
+  /* Phase E.6 polish-runtime — preview-parity tests for show-when.        */
+  /*                                                                       */
+  /* The preview store shares the same {@link buildItemIndex} +            */
+  /* {@link isItemHiddenByRule} evaluator the runtime store uses, so       */
+  /* these tests pin the same semantics on the preview path.               */
+  /* -------------------------------------------------------------------- */
+
+  it('preview: isItemHidden flips with the source value', () => {
+    const store = useCrfPreviewStore()
+    const schema: CrfSchema = {
+      oid: 'F_SW', name: 'SW', version: 'v1',
+      sections: [{
+        oid: 'S_SW', title: 'SW', items: [
+          { oid: 'I_GROUP', label: 'Group', dataType: 'string', required: false },
+          {
+            oid: 'I_DEP', label: 'Dep', dataType: 'string', required: false,
+            showWhen: '{"sourceItemOid":"I_GROUP","comparator":"==","literal":"cohort-A"}',
+          },
+        ],
+      }],
+    }
+    store.load(schema)
+    expect(store.isItemHidden('I_DEP')).toBe(true)
+    store.setValue('I_GROUP', 'cohort-A')
+    expect(store.isItemHidden('I_DEP')).toBe(false)
+    store.setValue('I_GROUP', 'cohort-B')
+    expect(store.isItemHidden('I_DEP')).toBe(true)
+  })
+
+  it('preview: hide → show preserves the typed value', () => {
+    const store = useCrfPreviewStore()
+    const schema: CrfSchema = {
+      oid: 'F_SW', name: 'SW', version: 'v1',
+      sections: [{
+        oid: 'S_SW', title: 'SW', items: [
+          { oid: 'I_GROUP', label: 'Group', dataType: 'string', required: false },
+          {
+            oid: 'I_DEP', label: 'Dep', dataType: 'string', required: false,
+            showWhen: '{"sourceItemOid":"I_GROUP","comparator":"==","literal":"cohort-A"}',
+          },
+        ],
+      }],
+    }
+    store.load(schema)
+    store.setValue('I_GROUP', 'cohort-A')
+    store.setValue('I_DEP', 'preserved')
+    store.setValue('I_GROUP', 'cohort-B')
+    expect(store.values.I_DEP).toBeUndefined()
+    expect(store.hiddenValues.I_DEP).toBe('preserved')
+    store.setValue('I_GROUP', 'cohort-A')
+    expect(store.values.I_DEP).toBe('preserved')
+  })
+
+  it('preview: markComplete is not blocked by hidden required item', () => {
+    const store = useCrfPreviewStore()
+    const schema: CrfSchema = {
+      oid: 'F_SW', name: 'SW', version: 'v1',
+      sections: [{
+        oid: 'S_SW', title: 'SW', items: [
+          { oid: 'I_GROUP', label: 'Group', dataType: 'string', required: true },
+          {
+            oid: 'I_DEP', label: 'Dep', dataType: 'string', required: true,
+            showWhen: '{"sourceItemOid":"I_GROUP","comparator":"==","literal":"cohort-A"}',
+          },
+        ],
+      }],
+    }
+    store.load(schema)
+    store.setValue('I_GROUP', 'cohort-B')
+    // I_DEP is hidden — should not block completion.
+    expect(store.isItemHidden('I_DEP')).toBe(true)
+    expect(store.isComplete).toBe(true)
+  })
 })

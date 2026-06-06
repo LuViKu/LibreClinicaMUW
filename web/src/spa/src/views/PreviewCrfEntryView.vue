@@ -197,7 +197,11 @@ const rootClass = computed(() =>
           </p>
 
           <div class="space-y-4">
-            <div v-for="item in section.items" :key="item.oid">
+            <!-- Phase E.6 polish-runtime — skip items currently hidden
+                 by show-when. The preview store evaluates the same rule
+                 the runtime store uses (shared evaluator in
+                 components/showWhen.ts). -->
+            <div v-for="item in section.items.filter((it) => !store.isItemHidden(it.oid))" :key="item.oid">
               <FieldLabel :for="`preview-item-${item.oid}`" :required="item.required">
                 {{ item.label }}
               </FieldLabel>

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { apiDelete, apiGet, apiPost, ApiError, ApiNetworkError } from '@/api/client'
 import { apiUpload } from '@/api/upload'
 import type {
@@ -14,6 +14,10 @@ import type {
   SaveItemsRequest,
 } from '@/types/crf'
 import { useDdeStore } from '@/stores/dde'
+import {
+  buildItemIndex,
+  isItemHiddenByRule,
+} from '@/components/showWhen'
 
 /**
  * Phase E.5.3 + E.4 M5 — CRF Entry store.
@@ -72,6 +76,100 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     Map<string, Map<number, Map<string, unknown>>>
   >(new Map())
 
+  /**
+   * Phase E.6 polish-runtime — value-preservation map for items currently
+   * hidden by show-when. When an item becomes hidden we MOVE its value
+   * here instead of dropping it on the floor; when it becomes visible
+   * again we restore it. This is necessary because the source-item
+   * value flip is often transient (the operator toggles a select then
+   * toggles back) and the user expects their typed values to come back.
+   *
+   * <p>Separate from {@link values} so the wire payload + validation
+   * never see hidden values: only the dependent value lives here, the
+   * source item's value stays in {@link values}.
+   */
+  const hiddenValues = ref<Record<string, unknown>>({})
+
+  /**
+   * Phase E.6 polish-runtime — show-when warning de-dupe. Persists for
+   * the lifetime of the loaded entry so we don't spam the console with
+   * the same "dangling source OID" warning on every re-evaluation.
+   */
+  const warnedDanglingSources = ref<Set<string>>(new Set())
+
+  /**
+   * Phase E.6 polish-runtime — per-OID hidden flag, computed against
+   * the current {@link values} map. Cheap to read repeatedly because
+   * the underlying schema index is rebuilt only when the schema flips.
+   *
+   * <p>Returns {@code false} when there is no rule, when the rule can't
+   * be parsed, or when the source item is dangling (per the
+   * "fail open" rule in {@link isItemHiddenByRule}).
+   */
+  const itemIndex = computed(() => buildItemIndex(schema.value))
+
+  const hiddenItemOids = computed<Set<string>>(() => {
+    const out = new Set<string>()
+    if (!entry.value) return out
+    for (const section of entry.value.schema.sections) {
+      for (const item of section.items) {
+        if (isItemHiddenByRule(item, entry.value.values, itemIndex.value, warnedDanglingSources.value)) {
+          out.add(item.oid)
+        }
+      }
+    }
+    return out
+  })
+
+  function isItemHidden(itemOid: string): boolean {
+    return hiddenItemOids.value.has(itemOid)
+  }
+
+  /**
+   * Watch hidden-flag transitions so we can move values into / out of
+   * {@link hiddenValues} as the operator changes the source value.
+   *
+   * <p>The watcher fires AFTER a {@link setValue} commits to
+   * {@code values}; we reconcile in a single sweep:
+   * <ul>
+   *   <li>Items newly hidden — move {@code values[oid]} → {@code hiddenValues[oid]}.</li>
+   *   <li>Items newly visible — move {@code hiddenValues[oid]} → {@code values[oid]}.</li>
+   * </ul>
+   *
+   * <p>Skips the move when there's no value to relocate — keeps the
+   * watcher idempotent.
+   */
+  let lastHiddenSnapshot = new Set<string>()
+  watch(
+    hiddenItemOids,
+    (current) => {
+      if (!entry.value) return
+      // Items that flipped to hidden — stash + delete from values.
+      for (const oid of current) {
+        if (!lastHiddenSnapshot.has(oid)) {
+          const v = entry.value.values[oid]
+          if (v !== undefined) {
+            hiddenValues.value = { ...hiddenValues.value, [oid]: v }
+            delete entry.value.values[oid]
+          }
+        }
+      }
+      // Items that flipped back to visible — restore the stashed value.
+      for (const oid of lastHiddenSnapshot) {
+        if (!current.has(oid)) {
+          if (Object.prototype.hasOwnProperty.call(hiddenValues.value, oid)) {
+            entry.value.values[oid] = hiddenValues.value[oid]
+            const next = { ...hiddenValues.value }
+            delete next[oid]
+            hiddenValues.value = next
+          }
+        }
+      }
+      lastHiddenSnapshot = new Set(current)
+    },
+    { flush: 'sync' },
+  )
+
   /** True when the backing entry needs an RFC for every edit (post-complete). */
   const requiresReasonForChange = computed<boolean>(
     () => entry.value?.requiresReasonForChange === true,
@@ -115,6 +213,10 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
       let filled = 0
       let errors = 0
       for (const item of section.items) {
+        // Phase E.6 polish-runtime — hidden items don't contribute to
+        // the required / filled / error tallies. Their value sits in
+        // `hiddenValues` and is restored if the source flips back.
+        if (hiddenItemOids.value.has(item.oid)) continue
         if (item.required) required++
         if (item.required && hasValue(entry.value.values[item.oid])) filled++
         if (itemErrors.value[item.oid] != null) errors++
@@ -126,9 +228,18 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
 
   const isComplete = computed<boolean>(() => {
     if (!entry.value) return false
-    if (Object.keys(itemErrors.value).length > 0) return false
+    // Phase E.6 polish-runtime — required-when-shown: required items
+    // that are currently hidden by show-when don't block completion.
+    // The validator's `itemErrors` is filtered the same way below.
+    for (const oid of Object.keys(itemErrors.value)) {
+      if (!hiddenItemOids.value.has(oid)) return false
+    }
     return entry.value.schema.sections.every((s) =>
-      s.items.every((item) => !item.required || hasValue(entry.value!.values[item.oid])),
+      s.items.every((item) => {
+        if (!item.required) return true
+        if (hiddenItemOids.value.has(item.oid)) return true
+        return hasValue(entry.value!.values[item.oid])
+      }),
     )
   })
 
@@ -140,6 +251,13 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     pendingReasons.value = {}
     missingReasonItemOids.value = []
     dirtyItemOids.value = new Set()
+    // Phase E.6 polish-runtime — clear show-when bookkeeping for a fresh
+    // load. The watcher's snapshot reflects "no items hidden" at this
+    // point; the first computation against the freshly-loaded values
+    // will seed it correctly.
+    hiddenValues.value = {}
+    warnedDanglingSources.value = new Set()
+    lastHiddenSnapshot = new Set()
     try {
       entry.value = await apiGet<CrfEntry>(
         `/pages/api/v1/eventCrfs/${encodeURIComponent(eventCrfOid)}`,
@@ -418,18 +536,28 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
       isSaving.value = false
       return
     }
+    // Phase E.6 polish-runtime — defensive filter of currently-hidden
+    // items from the wire payload. The hidden-flip watcher already
+    // moves values into {@link hiddenValues} so {@code target.values}
+    // *should* be hidden-free, but the filter keeps the contract
+    // explicit + insulates the save call from any synchronisation
+    // skew (e.g. a test that mutates values directly).
+    const visibleValues: CrfValues = {}
+    for (const [oid, v] of Object.entries(target.values)) {
+      if (!hiddenItemOids.value.has(oid)) visibleValues[oid] = v
+    }
     // Build the request body. Pre-complete edits omit `reasons`; the
     // backend treats null + missing identically.
     const body: SaveItemsRequest = requiresReasonForChange.value
-      ? { values: target.values, reasons: { ...pendingReasons.value } }
-      : { values: target.values }
+      ? { values: visibleValues, reasons: { ...pendingReasons.value } }
+      : { values: visibleValues }
     try {
       // Phase E.6 dde — when this is a blind pass-2 entry, the save
       // semantics are different: we POST to /dde-commit which runs
       // the diff against pass-1 instead of upserting item_data.
       if (target.dde && target.dde.pass === '2') {
         const ddeStore = useDdeStore()
-        const ddeResp = await ddeStore.commitPass2(target.eventCrfOid, target.values)
+        const ddeResp = await ddeStore.commitPass2(target.eventCrfOid, visibleValues)
         if (!ddeResp) {
           // ddeStore.error carries the user-facing message
           error.value = ddeStore.error ?? error.value
@@ -647,6 +775,10 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     dirtyItemOids,
     requiresReasonForChange,
     itemsAwaitingReason,
+    // Phase E.6 polish-runtime — show-when bookkeeping.
+    hiddenValues,
+    hiddenItemOids,
+    isItemHidden,
     load,
     setValue,
     setValueInRow,

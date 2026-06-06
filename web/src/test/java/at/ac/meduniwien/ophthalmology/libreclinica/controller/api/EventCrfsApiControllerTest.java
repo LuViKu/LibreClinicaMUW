@@ -119,6 +119,10 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
      */
     @Test
     void saveItemsReturns400OnMissingValuesEvenWhenReasonsPresent() throws Exception {
+        // Phase E.6 admin-rfc — body that has `reasons` but no `values`
+        // and no `groups` is rejected via the empty-body branch (the
+        // controller's saveItems guard fires before it inspects the
+        // reasons map).
         mockMvcWith().perform(post("/api/v1/eventCrfs/1/items")
                 .contentType("application/json")
                 .content("{\"reasons\":{\"I_HEIGHT_CM\":\"correction\"}}")
@@ -126,7 +130,7 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
                         authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
-                        .value(containsString("Missing 'values'")));
+                        .value(containsString("'values'")));
     }
 
     /**
@@ -483,5 +487,118 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
         // INVALID / no role (0)
         org.junit.jupiter.api.Assertions.assertFalse(
                 CrfReopenAuthorization.roleMayReopen(0));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Phase E.6 polish-runtime — show-when filter unit slice                 */
+    /* ---------------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 polish-runtime — {@code filterByVisibility} is the
+     * ghost-data guard the {@code saveItems} controller uses to drop
+     * values whose show-when condition resolves false. The DB-level
+     * MockMvc IT covering the wired-up GET/POST surface lives behind
+     * Testcontainers (real {@code scd_item_metadata} rows); these pure
+     * unit tests pin the static filter's contract so a refactor can't
+     * silently break the guard.
+     */
+    @Test
+    void filterByVisibility_keepsValueWhenRuleSatisfied() {
+        java.util.Map<String, Object> values = new java.util.LinkedHashMap<>();
+        values.put("I_GROUP", "cohort-A");
+        values.put("I_DEP", "typed");
+
+        java.util.Map<String, String> rules = new java.util.HashMap<>();
+        rules.put("I_DEP",
+                "{\"sourceItemOid\":\"I_GROUP\",\"comparator\":\"==\",\"literal\":\"cohort-A\"}");
+
+        java.util.Map<String, Object> out = EventCrfsApiController.filterByVisibility(values, rules);
+        org.junit.jupiter.api.Assertions.assertEquals(2, out.size());
+        org.junit.jupiter.api.Assertions.assertEquals("typed", out.get("I_DEP"));
+    }
+
+    @Test
+    void filterByVisibility_dropsValueWhenRuleFails() {
+        java.util.Map<String, Object> values = new java.util.LinkedHashMap<>();
+        values.put("I_GROUP", "cohort-B");
+        values.put("I_DEP", "typed");
+
+        java.util.Map<String, String> rules = new java.util.HashMap<>();
+        rules.put("I_DEP",
+                "{\"sourceItemOid\":\"I_GROUP\",\"comparator\":\"==\",\"literal\":\"cohort-A\"}");
+
+        java.util.Map<String, Object> out = EventCrfsApiController.filterByVisibility(values, rules);
+        // I_GROUP kept (no rule), I_DEP dropped (rule false).
+        org.junit.jupiter.api.Assertions.assertEquals(1, out.size());
+        org.junit.jupiter.api.Assertions.assertEquals("cohort-B", out.get("I_GROUP"));
+        org.junit.jupiter.api.Assertions.assertFalse(out.containsKey("I_DEP"));
+    }
+
+    @Test
+    void filterByVisibility_keepsValueWhenRulesMapEmpty() {
+        java.util.Map<String, Object> values = new java.util.LinkedHashMap<>();
+        values.put("I_NAME", "Müller");
+        java.util.Map<String, Object> out = EventCrfsApiController.filterByVisibility(
+                values, java.util.Map.of());
+        org.junit.jupiter.api.Assertions.assertEquals(1, out.size());
+        org.junit.jupiter.api.Assertions.assertEquals("Müller", out.get("I_NAME"));
+    }
+
+    @Test
+    void filterByVisibility_keepsValueWhenNonEqualityComparator() {
+        // The server-side filter conservatively keeps non-equality
+        // comparators visible — the SPA evaluator is the authority for
+        // >, <, >=, <= (see the javadoc).
+        java.util.Map<String, Object> values = new java.util.LinkedHashMap<>();
+        values.put("I_AGE", 25);
+        values.put("I_DEP", "typed");
+
+        java.util.Map<String, String> rules = new java.util.HashMap<>();
+        rules.put("I_DEP",
+                "{\"sourceItemOid\":\"I_AGE\",\"comparator\":\">=\",\"literal\":\"40\"}");
+
+        java.util.Map<String, Object> out = EventCrfsApiController.filterByVisibility(values, rules);
+        org.junit.jupiter.api.Assertions.assertEquals(2, out.size());
+        org.junit.jupiter.api.Assertions.assertEquals("typed", out.get("I_DEP"));
+    }
+
+    @Test
+    void filterByVisibility_keepsValueWhenRuleIsNotJson() {
+        // Legacy "item_X eq Y" strings can't be parsed by the server
+        // filter — it falls back to visible (the SPA evaluator handles
+        // legacy strings; this is defense-in-depth, not the source of
+        // truth).
+        java.util.Map<String, Object> values = new java.util.LinkedHashMap<>();
+        values.put("I_DEP", "typed");
+        java.util.Map<String, String> rules = new java.util.HashMap<>();
+        rules.put("I_DEP", "item_I_GROUP eq cohort-A");
+
+        java.util.Map<String, Object> out = EventCrfsApiController.filterByVisibility(values, rules);
+        org.junit.jupiter.api.Assertions.assertEquals(1, out.size());
+        org.junit.jupiter.api.Assertions.assertEquals("typed", out.get("I_DEP"));
+    }
+
+    @Test
+    void extractJsonField_returnsValueOrNull() {
+        String json = "{\"sourceItemOid\":\"I_GROUP\",\"comparator\":\"==\",\"literal\":\"cohort-A\"}";
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "I_GROUP", EventCrfsApiController.extractJsonField(json, "sourceItemOid"));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "==", EventCrfsApiController.extractJsonField(json, "comparator"));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "cohort-A", EventCrfsApiController.extractJsonField(json, "literal"));
+        org.junit.jupiter.api.Assertions.assertNull(
+                EventCrfsApiController.extractJsonField(json, "missing"));
+        org.junit.jupiter.api.Assertions.assertNull(
+                EventCrfsApiController.extractJsonField(null, "anything"));
+        org.junit.jupiter.api.Assertions.assertNull(
+                EventCrfsApiController.extractJsonField("not json", "anything"));
+    }
+
+    @Test
+    void extractJsonField_handlesEscapedQuoteInLiteral() {
+        String json = "{\"sourceItemOid\":\"I_X\",\"comparator\":\"==\",\"literal\":\"say \\\"hi\\\"\"}";
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "say \"hi\"", EventCrfsApiController.extractJsonField(json, "literal"));
     }
 }

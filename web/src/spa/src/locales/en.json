@@ -895,8 +895,7 @@
     "authorManually": "Manually author",
     "author": {
       "heading": "Author new version of \"{name}\"",
-      "subheading": "Phase E.6 Milestone A — vertical slice (one section, two-three items, TEXT response).",
-      "scopeNote": "Milestone A scope: ST / INTEGER / BL items with a single TEXT response set. Show-when, calculations, multi-language labels and reusable response sets land in Milestones B/C/D.",
+      "subheading": "Create CRF definition",
       "rail": {
         "metadata": "1 · Metadata",
         "sections": "2 · Sections",
@@ -929,6 +928,9 @@
       "addSection": "+ Add section",
       "dragSection": "Drag to reorder section",
       "dragItem": "Drag to reorder item",
+      "sectionUntitled": "Untitled section",
+      "sectionItemCount": "{n} item(s)",
+      "itemUnnamed": "Unnamed item",
       "review": {
         "heading": "Review and submit",
         "intro": "On submit the server synthesises an XLS workbook from this draft and runs it through the legacy CRF parser. The resulting version is semantically identical to one uploaded via the upload-version flow.",
@@ -959,15 +961,54 @@
       "single-select": "Single-select dropdown",
       "multi-select": "Multi-select dropdown",
       "checkbox": "Checkbox group",
-      "file": "File upload"
+      "file": "File upload",
+      "matrixHelper": "Response types compatible with data type {dataType}."
+    },
+    "showWhen": {
+      "toggle": "Show this item conditionally",
+      "toggleHint": "When enabled, this item only appears when another item's value matches the rule.",
+      "sourceLabel": "Source item",
+      "sourcePlaceholder": "Select an item…",
+      "sourceHelper": "Only items declared before this one are eligible, so evaluation order stays linear.",
+      "noEarlierItems": "No earlier items are available. Add an item before this one to use as the source.",
+      "comparatorLabel": "Comparator",
+      "literalLabel": "Compare to value",
+      "literalPlaceholder": "Select a value…",
+      "literalHelper": "Compared against the source item's stored value at runtime.",
+      "literal": {
+        "true": "True (Yes)",
+        "false": "False (No)"
+      },
+      "comparator": {
+        "eq": "= (equals)",
+        "eqHelper": "Show when the source item's value equals the literal.",
+        "ne": "≠ (does not equal)",
+        "neHelper": "Show when the source item's value does not equal the literal.",
+        "gt": "> (greater than)",
+        "gtHelper": "Show when the source item's value is greater than the literal (numeric comparison).",
+        "lt": "< (less than)",
+        "ltHelper": "Show when the source item's value is less than the literal (numeric comparison).",
+        "gte": "≥ (greater than or equal)",
+        "gteHelper": "Show when the source item's value is greater than or equal to the literal.",
+        "lte": "≤ (less than or equal)",
+        "lteHelper": "Show when the source item's value is less than or equal to the literal."
+      },
+      "errors": {
+        "sourceRequired": "Pick the source item the rule should look at.",
+        "sourceMissing": "The selected source item is no longer available — pick another item.",
+        "literalRequired": "Enter the value to compare against.",
+        "literalNotInt": "Expected an integer (e.g. 42).",
+        "literalNotReal": "Expected a number (e.g. 3.14).",
+        "literalNotBool": "Expected true, false, 1 or 0."
+      }
     },
     "item": {
       "name": "Item name",
       "oid": "Item OID",
       "oidHelper": "Auto-suggested from the item name; override if you need a specific identifier.",
       "descriptionLabel": "Description label",
-      "leftItemText": "Left item text",
-      "rightItemText": "Right item text",
+      "leftItemText": "Label",
+      "rightItemText": "Helper text",
       "units": "Units",
       "dataType": "Data type",
       "responseType": "Response type",
