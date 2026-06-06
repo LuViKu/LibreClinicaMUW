@@ -1086,7 +1086,8 @@
       "VISUAL_FIELD_DONE": { "label": "Gesichtsfeld durchgeführt" },
       "OCT_A_DONE": { "label": "OCT-Angiographie durchgeführt" },
       "ACD": { "label": "Vorderkammertiefe" },
-      "AXIAL_LENGTH": { "label": "Achsenlänge" }
+      "AXIAL_LENGTH": { "label": "Achsenlänge" },
+      "reasonIfNotDone": "Grund (falls nicht durchgeführt)"
     }
   },
   "crfPreview": {

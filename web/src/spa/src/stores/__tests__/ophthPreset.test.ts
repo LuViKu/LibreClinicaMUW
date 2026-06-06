@@ -137,6 +137,56 @@ describe('generateBilateralPair', () => {
     expect(os.dataType).toBe('BL')
   })
 
+  it('appends a reason-if-not-done follow-up for imaging BL entries', () => {
+    // Imaging BL items (SPECTRALIS_DONE, PLEX_ELITE_DONE, FUNDUS_PHOTO_DONE,
+    // VISUAL_FIELD_DONE, OCT_A_DONE) get a per-eye text follow-up that
+    // is shown at runtime only when the parent boolean is "No". The
+    // hidden value is not persisted (Phase E.6 show-when spec).
+    const entry = findPresetEntry('SPECTRALIS_DONE')!
+    const items = generateBilateralPair(entry, idT)
+    expect(items).toHaveLength(4)
+    expect(items.map((it) => it.oid)).toEqual([
+      'OD_SPECTRALIS_DONE',
+      'OS_SPECTRALIS_DONE',
+      'OD_SPECTRALIS_DONE_REASON',
+      'OS_SPECTRALIS_DONE_REASON',
+    ])
+    const [, , odReason, osReason] = items
+    // Reason follow-ups are optional plain-text fields, not boolean.
+    expect(odReason!.dataType).toBe('ST')
+    expect(odReason!.required).toBe(false)
+    expect(odReason!.responseType).toBe('text')
+    // Show-when rule points at the same-eye parent boolean with literal '0'.
+    expect(odReason!.showWhen).toEqual({
+      sourceItemOid: 'OD_SPECTRALIS_DONE',
+      comparator: '==',
+      literal: '0',
+    })
+    expect(osReason!.showWhen).toEqual({
+      sourceItemOid: 'OS_SPECTRALIS_DONE',
+      comparator: '==',
+      literal: '0',
+    })
+    // bilateralPair cross-link wires OD↔OS reasons together so the grid
+    // can render them as a single bilateral row.
+    expect(odReason!.bilateralPair).toBe('OS_SPECTRALIS_DONE_REASON')
+    expect(osReason!.bilateralPair).toBe('OD_SPECTRALIS_DONE_REASON')
+  })
+
+  it('does NOT append a reason follow-up for non-imaging BL entries (sanity)', () => {
+    // The IMAGING_BL_KEYS allowlist is closed — adding a future BL entry
+    // (e.g. a global "fasting status?") should NOT silently grow a
+    // reason field unless explicitly opted in.
+    // No non-imaging BL exists today so this asserts the catalog
+    // invariant: every BL entry currently in the catalog IS imaging.
+    const blEntries = OPHTH_PRESET_CATALOG.filter((e) => e.dataType === 'BL')
+    for (const entry of blEntries) {
+      const items = generateBilateralPair(entry, idT)
+      // Today every BL is imaging — 4 items each.
+      expect(items).toHaveLength(4)
+    }
+  })
+
   it('encodes leftItemText with the eye laterality label', () => {
     const entry = findPresetEntry('IOP')!
     const [od, os] = generateBilateralPair(entry, idT)
@@ -176,10 +226,12 @@ describe('generateBilateralPair', () => {
 })
 
 describe('generateOphthSectionItems', () => {
-  it('returns N×2 items for a selection of size N', () => {
+  it('returns 2 items per non-imaging-BL key and 4 per imaging-BL key', () => {
+    // SPECTRALIS_DONE expands to OD_DONE + OS_DONE + OD_REASON + OS_REASON
+    // (imaging follow-up); the other two entries stay at 2 each.
     const selection = ['BCVA_LETTERS', 'IOP', 'SPECTRALIS_DONE']
     const items = generateOphthSectionItems(selection, idT)
-    expect(items).toHaveLength(selection.length * 2)
+    expect(items).toHaveLength(2 + 2 + 4)
   })
 
   it('produces the expected OD_ / OS_ prefix pairs in catalog order', () => {
