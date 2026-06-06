@@ -438,6 +438,20 @@
     },
     "selectMulti": {
       "noneSelected": "Keine Auswahl"
+    },
+    "sectionBadge": {
+      "requiredFilled": "{filled} von {required} Pflichtfeldern ausgefüllt",
+      "errors": "{count} Validierungsfehler",
+      "openQueries": "{count} offene Rückfrage(n)"
+    },
+    "concurrentEdit": {
+      "bannerTitle": "Ein anderer Benutzer bearbeitet dieses CRF",
+      "lastSeen": "aktiv um {at}"
+    },
+    "itemNote": {
+      "openThread": "Diskussionsthread öffnen",
+      "statusNew": "{count} offen",
+      "statusResolved": "{count} erledigt"
     }
   },
   "dde": {

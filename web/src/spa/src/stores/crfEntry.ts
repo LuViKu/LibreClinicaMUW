@@ -99,6 +99,31 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     return computeItemErrors(entry.value.schema, entry.value.values)
   })
 
+  /**
+   * Phase E.6 crf-entry-advanced — per-section { required, filled, errors }
+   * tallies derived from the currently-loaded entry. The TOC SideRail
+   * badge component composes this with the backend's openQueries count
+   * from `crfEntryAdvanced.sectionStatuses`; this getter keeps the
+   * client-side view honest for items the user typed but hasn't yet
+   * saved (the server-side counts only see persisted values).
+   */
+  const sectionFilledCounts = computed<Record<string, { required: number; filled: number; errors: number }>>(() => {
+    const out: Record<string, { required: number; filled: number; errors: number }> = {}
+    if (!entry.value) return out
+    for (const section of entry.value.schema.sections) {
+      let required = 0
+      let filled = 0
+      let errors = 0
+      for (const item of section.items) {
+        if (item.required) required++
+        if (item.required && hasValue(entry.value.values[item.oid])) filled++
+        if (itemErrors.value[item.oid] != null) errors++
+      }
+      out[section.oid] = { required, filled, errors }
+    }
+    return out
+  })
+
   const isComplete = computed<boolean>(() => {
     if (!entry.value) return false
     if (Object.keys(itemErrors.value).length > 0) return false
@@ -614,6 +639,7 @@ export const useCrfEntryStore = defineStore('crfEntry', () => {
     status,
     groups,
     itemErrors,
+    sectionFilledCounts,
     isComplete,
     // Phase E.6 admin-rfc — RFC capture surface.
     pendingReasons,

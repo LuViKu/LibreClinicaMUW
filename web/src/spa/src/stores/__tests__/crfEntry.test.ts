@@ -463,4 +463,30 @@ describe('useCrfEntryStore', () => {
     const g = store.groups.find((gr) => gr.oid === 'G_EYE_FINDINGS')!
     expect(g.rows.map((r) => r.ordinal)).toEqual([1])
   })
+
+  /* ---------------------------------------------------------------------- */
+  /* Phase E.6 crf-entry-advanced — sectionFilledCounts getter              */
+  /* ---------------------------------------------------------------------- */
+
+  it('sectionFilledCounts reports zero filled when no values entered', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    const s = store.sectionFilledCounts
+    expect(s.S_IDENT.required).toBe(2)
+    expect(s.S_IDENT.filled).toBe(0)
+    expect(s.S_VITALS.required).toBe(2)
+    expect(s.S_VITALS.filled).toBe(0)
+    // Required-missing yields errors counted client-side.
+    expect(s.S_IDENT.errors).toBeGreaterThan(0)
+  })
+
+  it('sectionFilledCounts increments filled as required items get typed', async () => {
+    const store = useCrfEntryStore()
+    await store.load('EC_M001_V1_DEMO')
+    store.setValue('I_CONSENT_DATE', '2026-05-01')
+    store.setValue('I_CONSENT_SIGNED', 'Y')
+    expect(store.sectionFilledCounts.S_IDENT.filled).toBe(2)
+    // Vitals required not touched yet.
+    expect(store.sectionFilledCounts.S_VITALS.filled).toBe(0)
+  })
 })

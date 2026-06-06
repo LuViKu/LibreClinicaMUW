@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceRegistry;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.test.web.servlet.MockMvc;
@@ -41,7 +42,8 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
     private MockMvc mockMvcWith() {
         return mockMvcFor(new EventCrfsApiController(mockDataSource(),
                 Mockito.mock(SiteVisibilityFilter.class),
-                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService.class)));
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService.class),
+                new EventCrfPresenceRegistry()));
     }
 
     /* ---------------------------------------------------------------------- */
@@ -398,6 +400,73 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
                 .DdeService.parseDdeMismatchDescription("not a valid format");
         org.junit.jupiter.api.Assertions.assertEquals("", parsed[0]);
         org.junit.jupiter.api.Assertions.assertEquals("", parsed[1]);
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* Phase E.6 crf-entry-advanced — guard contract on the four new          */
+    /* read endpoints. Pins 401/400 short-circuit + URL routing.              */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void lockStatusReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/lock-status")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void lockStatusReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/lock-status")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void heartbeatReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/heartbeat")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void heartbeatReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(post("/api/v1/eventCrfs/1/heartbeat")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void notesReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/notes")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void notesReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/notes")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void sectionStatusReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/section-status")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void sectionStatusReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/section-status")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

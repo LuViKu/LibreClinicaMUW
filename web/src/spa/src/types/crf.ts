@@ -196,3 +196,57 @@ export function canReopenCrf(role: UserRole, status: CrfEntryStatus): boolean {
     role === 'Administrator'
   )
 }
+
+/* ------------------------------------------------------------------ */
+/* Phase E.6 crf-entry-advanced — TOC badges, concurrent-edit probe,  */
+/*                                 per-item notes roll-up.            */
+/*                                                                    */
+/* Shapes mirror the new backend records:                             */
+/*   SectionStatusDto                                                 */
+/*   EventCrfLockProbeDto                                             */
+/*   EventCrfNotesRollupDto + nested ItemNoteSummary                  */
+/* ------------------------------------------------------------------ */
+
+/** Per-section TOC roll-up. Driven by GET …/section-status. */
+export interface SectionStatus {
+  sectionOid: string
+  title: string
+  requiredCount: number
+  filledCount: number
+  errorCount: number
+  openQueries: number
+}
+
+/** Soft-lock probe shape. Driven by GET …/lock-status and POST …/heartbeat. */
+export interface LockProbe {
+  eventCrfOid: string
+  /** True iff the freshest editor IS the calling session — no banner. */
+  sameUser: boolean
+  /** Username of the freshest editor; null on cold probe. */
+  lastEditorName: string | null
+  /** ISO-8601 instant of the freshest probe; null on cold probe. */
+  lastSeenAt: string | null
+  /** Server-side presence TTL in seconds. SPA should heartbeat at < TTL/2. */
+  ttlSeconds: number
+}
+
+/** Per-item summary inside the rollup. */
+export interface ItemNoteSummary {
+  totalCount: number
+  openCount: number
+  /** 'open' if any note is open; otherwise 'resolved'. */
+  status: 'open' | 'resolved'
+  /** Latest-activity instant across all notes on this item. */
+  lastActivityAt: string | null
+  /** Note ids attached to this item — drives the popover lazy fetch. */
+  noteIds: string[]
+}
+
+/** Driven by GET …/notes. */
+export interface NotesRollup {
+  eventCrfOid: string
+  totalCount: number
+  openCount: number
+  /** Item OID → summary. Items without notes are absent. */
+  byItemOid: Record<string, ItemNoteSummary>
+}
