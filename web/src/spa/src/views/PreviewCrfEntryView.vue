@@ -111,7 +111,7 @@ function onMarkCompleteStub(): void {
 
 const rootClass = computed(() =>
   props.asOverlay
-    ? 'fixed inset-0 z-50 bg-slate-900/40 overflow-y-auto'
+    ? 'fixed inset-0 z-[60] bg-slate-900/40 overflow-y-auto'
     : 'relative',
 )
 </script>

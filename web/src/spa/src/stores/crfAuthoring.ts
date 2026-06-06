@@ -430,13 +430,35 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     title?: string
     /** Section instructions. Defaults to an empty string. */
     instructions?: string
+    /**
+     * When set, REPLACE the section at this index (keeping the
+     * existing {@code uid} + {@code ordinal}) instead of appending a
+     * new section. Used by the magic-label hotkey path
+     * (CrfAuthoringWizard.vue keydown handler): operators type
+     * {@code OPHTHA_EXAM} as a section label and press Shift+Enter,
+     * which opens the picker; on confirm the picker overwrites the
+     * trigger section in place so the operator doesn't end up with a
+     * leftover empty trigger row.
+     */
+    replaceAtIndex?: number
   }): void {
-    const next = draft.value.sections.length + 1
     const sectionLabel = 'OPHTH_EXAM'
     const seeded: AuthoringItem[] = opts.items.map((item) => ({
       ...item,
       uid: nextUid('item'),
     }))
+    if (opts.replaceAtIndex != null) {
+      const existing = draft.value.sections[opts.replaceAtIndex]
+      if (existing) {
+        existing.label = sectionLabel
+        existing.title = opts.title ?? 'Ophthalmology examination'
+        existing.instructions = opts.instructions ?? ''
+        existing.items = seeded
+        return
+      }
+      // Fall through to append if the index was stale.
+    }
+    const next = draft.value.sections.length + 1
     draft.value.sections.push({
       uid: nextUid('sec'),
       label: sectionLabel,

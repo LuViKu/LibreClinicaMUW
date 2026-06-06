@@ -179,24 +179,46 @@ function onCancel(): void {
 }
 
 /**
- * Ophthalmology bilateral preset picker — wired from the Sections step.
+ * Ophthalmology bilateral preset picker — triggered by typing
+ * {@code OPHTH_EXAM} or {@code OPHTHA_EXAM} (case-insensitive) as a
+ * section label and pressing Shift+Enter.
  *
  * <p>Opens a modal listing every entry in {@link OPHTH_PRESET_CATALOG}
  * with a checkbox. On confirm, the generator produces paired OD / OS
- * items and the store appends a new {@code OPHTH_EXAM} section to the
- * draft. The picker resets on each open so prior selections don't
- * survive cancel.
+ * items and REPLACES the trigger section's items + clears the magic
+ * label so the resulting section reads as a normal OPHTH_EXAM
+ * section (titled by the i18n preset). If the picker is opened
+ * without a trigger section (defensive null case), a new section is
+ * appended instead. The picker resets on each open so prior
+ * selections don't survive cancel.
  */
+const OPHTH_TRIGGER_LABELS = ['OPHTH_EXAM', 'OPHTHA_EXAM']
 const ophthPickerOpen = ref(false)
 const ophthSelection = ref<Set<string>>(new Set())
+const ophthTriggerSectionIndex = ref<number | null>(null)
 
-function openOphthPicker(): void {
+function isOphthTrigger(value: string): boolean {
+  const normalised = value.trim().toUpperCase()
+  return OPHTH_TRIGGER_LABELS.includes(normalised)
+}
+
+function openOphthPickerForSection(sectionIndex: number): void {
   ophthSelection.value = new Set()
+  ophthTriggerSectionIndex.value = sectionIndex
   ophthPickerOpen.value = true
+}
+
+function onSectionLabelKeydown(sectionIndex: number, event: KeyboardEvent): void {
+  if (!event.shiftKey || event.key !== 'Enter') return
+  const section = store.draft.sections[sectionIndex]
+  if (!section || !isOphthTrigger(section.label)) return
+  event.preventDefault()
+  openOphthPickerForSection(sectionIndex)
 }
 
 function closeOphthPicker(): void {
   ophthPickerOpen.value = false
+  ophthTriggerSectionIndex.value = null
 }
 
 function toggleOphthEntry(key: string): void {
@@ -228,6 +250,7 @@ function confirmOphthPicker(): void {
     items,
     title: t('ophthPreset.section.title'),
     instructions: t('ophthPreset.section.instructions'),
+    replaceAtIndex: ophthTriggerSectionIndex.value ?? undefined,
   })
   closeOphthPicker()
 }
@@ -433,12 +456,6 @@ function onAddItemAndExpand(sectionIndex: number): void {
               <button
                 type="button"
                 class="text-xs text-muw-blue hover:underline"
-                data-testid="crf-author-add-ophth-preset"
-                @click="openOphthPicker"
-              >{{ t('ophthPreset.addBilateralExam') }}</button>
-              <button
-                type="button"
-                class="text-xs text-muw-blue hover:underline"
                 data-testid="crf-author-add-section"
                 @click="onAddSectionAndExpand"
               >{{ t('crfLibrary.author.addSection') }}</button>
@@ -519,7 +536,7 @@ function onAddItemAndExpand(sectionIndex: number): void {
                   class="p-3 transition-all"
                 >
                 <div class="grid grid-cols-2 gap-3">
-                  <div>
+                  <div @keydown="onSectionLabelKeydown(sIdx, $event)">
                     <FieldLabel :for="`crf-author-slabel-${sIdx}`" required>
                       {{ t('crfLibrary.author.sectionLabel') }}
                     </FieldLabel>
@@ -527,6 +544,9 @@ function onAddItemAndExpand(sectionIndex: number): void {
                       :id="`crf-author-slabel-${sIdx}`"
                       v-model="section.label"
                     />
+                    <p class="mt-1 text-[10px] text-slate-400">
+                      {{ t('ophthPreset.triggerHint') }}
+                    </p>
                   </div>
                   <div>
                     <FieldLabel :for="`crf-author-stitle-${sIdx}`" required>
@@ -856,9 +876,14 @@ function onAddItemAndExpand(sectionIndex: number): void {
     </template>
   </Modal>
 
-  <!-- Phase E.6 — Live preview overlay. Mounted as a sibling of the
-       Modal so its z-50 stacking sits cleanly on top of the wizard.
-       The overlay reads from useCrfPreviewStore; closing the overlay
-       calls store.close() and leaves the wizard draft untouched. -->
-  <PreviewCrfEntryView as-overlay />
+  <!-- Phase E.6 — Live preview overlay. Teleported to document.body so
+       its `position: fixed` + z-[60] escape the wizard's Modal
+       stacking context (the wizard itself is a Modal at z-50; without
+       Teleport the preview rendered behind the wizard content + was
+       not interactable). The overlay reads from useCrfPreviewStore;
+       closing the overlay calls store.close() and leaves the wizard
+       draft untouched. -->
+  <Teleport to="body">
+    <PreviewCrfEntryView as-overlay />
+  </Teleport>
 </template>
