@@ -913,6 +913,8 @@
       "itemsHeading": "Items",
       "itemsEmpty": "No items yet — add at least one to enable submit.",
       "addItem": "+ Add item",
+      "bilateralToggle": "Bilateral (OD/OS) layout",
+      "bilateralToggleHint": "OD-prefixed items render on the LEFT, OS on the RIGHT (clinician-facing). \"+ Add item\" creates an OD/OS pair.",
       "itemName": "Item name",
       "descriptionLabel": "Description label",
       "leftItemText": "Left item text",
