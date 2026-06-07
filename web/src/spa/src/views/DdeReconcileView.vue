@@ -100,7 +100,7 @@ const openCount = computed<number>(() =>
                 { subject: dde.conflicts.subjectId, crf: dde.conflicts.crfName }) }}
       </p>
       <p class="dde-reconcile__open-count">
-        {{ t('dde.reconcile.openCount', openCount, { count: openCount }) }}
+        {{ t('dde.reconcile.openCount', { count: openCount }, openCount) }}
       </p>
     </header>
 

@@ -157,8 +157,8 @@ export const useEventDetailStore = defineStore('eventDetail', () => {
       // Refetch so the CRF card flips from "removed" to the resumed
       // status without the caller needing to know which slot to
       // patch in place.
-      if (event.value?.id) {
-        await load(event.value.id)
+      if (event.value?.eventId) {
+        await load(event.value.eventId)
       }
       return true
     } catch (e) {

@@ -452,6 +452,12 @@ function parseWizardCompoundSuffix(suffix: string): { prefix: string; subKey: st
 
 const EYE_PREFIX_RE = /^(OD|OS|OU)_(.+)$/
 
+function formatCompoundSubLabels(
+  subFields: BilateralAuthoringRow['subFields'],
+): string {
+  return (subFields ?? []).map((s) => s.compactLabel).join(' · ')
+}
+
 function stripWizardEyeMarker(label: string): string {
   return label
     .replace(/^\s*(OD|OS|OU)\s*[—\-:_]?\s+/i, '')
@@ -944,7 +950,7 @@ function onAddItemAndExpand(sectionIndex: number): void {
                         </div>
                         <template v-if="row.kind === 'compound-bilateral'">
                           <span class="col-span-2 text-[10px] text-slate-500 truncate">
-                            {{ row.subFields?.map((s) => s.compactLabel).join(' · ') }}
+                            {{ formatCompoundSubLabels(row.subFields) }}
                           </span>
                         </template>
                         <template v-else>
