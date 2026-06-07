@@ -452,6 +452,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subjects/{label}/eyes/{eye}/transition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["transition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies": {
         parameters: {
             query?: never;
@@ -1556,6 +1572,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subjects/{label}/eye-transitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_11"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/export-jobs": {
         parameters: {
             query?: never;
@@ -1627,7 +1659,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_11"];
+        get: operations["list_12"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1915,7 +1947,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_12"];
+        get: operations["list_13"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2061,6 +2093,17 @@ export interface components {
             location?: string;
             dataEntryStage?: string;
         };
+        EyeTransitionSummary: {
+            /** Format: int32 */
+            transitionId?: number;
+            eye?: string;
+            side?: string;
+            partnerStudyOid?: string;
+            partnerStudyName?: string;
+            partnerLabel?: string;
+            transitionedAt?: string;
+            reason?: string;
+        };
         GroupAssignmentSnapshot: {
             /** Format: int32 */
             groupClassId?: number;
@@ -2091,6 +2134,7 @@ export interface components {
             screeningDate?: string;
             status?: string;
             groupAssignments?: components["schemas"]["GroupAssignmentSnapshot"][];
+            eyeTransitions?: components["schemas"]["EyeTransitionSummary"][];
         };
         Assignment: {
             /** Format: int32 */
@@ -2469,6 +2513,22 @@ export interface components {
         SignSubjectRequest: {
             password?: string;
             attestation?: boolean;
+        };
+        TransitionRequest: {
+            targetStudyOid?: string;
+            targetLabel?: string;
+            reason?: string;
+        };
+        EyeCohortTransitionResponse: {
+            /** Format: int32 */
+            transitionId?: number;
+            /** Format: int32 */
+            sourceStudySubjectId?: number;
+            /** Format: int32 */
+            targetStudySubjectId?: number;
+            targetLabel?: string;
+            sourceEyeAfter?: string;
+            targetEyeAfter?: string;
         };
         CreateStudyRequest: {
             name?: string;
@@ -3117,6 +3177,17 @@ export interface components {
             warnings?: number;
             subjectAlreadySigned?: boolean;
             userRoleCanSign?: boolean;
+        };
+        EyeTransitionDto: {
+            /** Format: int32 */
+            transitionId?: number;
+            eye?: string;
+            side?: string;
+            partnerStudyOid?: string;
+            partnerStudyName?: string;
+            partnerLabel?: string;
+            transitionedAt?: string;
+            reason?: string;
         };
         StudyOptionDto: {
             oid?: string;
@@ -4372,6 +4443,33 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    transition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                label: string;
+                eye: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TransitionRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EyeCohortTransitionResponse"];
                 };
             };
         };
@@ -6432,6 +6530,28 @@ export interface operations {
             };
         };
     };
+    list_11: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                label: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EyeTransitionDto"];
+                };
+            };
+        };
+    };
     listJobsByStudy: {
         parameters: {
             query?: never;
@@ -6521,7 +6641,7 @@ export interface operations {
             };
         };
     };
-    list_11: {
+    list_12: {
         parameters: {
             query?: never;
             header?: never;
@@ -6943,7 +7063,7 @@ export interface operations {
             };
         };
     };
-    list_12: {
+    list_13: {
         parameters: {
             query?: {
                 actor?: string;
