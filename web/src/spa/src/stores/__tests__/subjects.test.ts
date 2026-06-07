@@ -459,3 +459,93 @@ describe('useSubjectsStore — fetchOne() reconciles matrix row (Y3)', () => {
     expect(store.selected?.id).toBe('M-999')
   })
 })
+
+describe('useSubjectsStore — transitionEye() (Phase E.6 per-eye cohort)', () => {
+  // Phase E.6 per-eye cohort transition workflow — the dialog posts
+  // a single-eye downgrade to the backend and the store refetches
+  // the active-study subject so the new eyeTransitions cross-ref
+  // banner lands without a manual reload.
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(apiGet).mockReset()
+    vi.mocked(apiPost).mockReset()
+  })
+
+  it('POSTs to /pages/api/v1/subjects/{label}/eyes/{eye}/transition with the right body and refetches the subject detail on success', async () => {
+    const store = useSubjectsStore()
+    // The store calls fetchOne after the POST resolves; stub it.
+    vi.mocked(apiPost).mockResolvedValueOnce({ transitionId: 99 })
+    const refreshed: SubjectDetail = {
+      id: 'M-001',
+      secondaryId: null,
+      siteOid: 'TDS0004',
+      siteLabel: 'München',
+      studyOid: 'TDS0004',
+      studyName: 'München',
+      gender: 'F',
+      yearOfBirth: 1962,
+      groupLabel: null,
+      enrolledOn: '2020-10-06',
+      signed: false,
+      locked: false,
+      openQueries: 0,
+      studyEye: 'OS',
+      screeningDate: null,
+      events: [],
+      eyeTransitions: [
+        {
+          transitionId: 99,
+          eye: 'OD',
+          side: 'source',
+          partnerStudyOid: 'S_GA001',
+          partnerStudyName: 'GA',
+          partnerLabel: 'M-101',
+          transitionedAt: '2026-06-07T09:00:00Z',
+          reason: 'Progression to GA',
+        },
+      ],
+    }
+    vi.mocked(apiGet).mockResolvedValueOnce(refreshed)
+
+    const result = await store.transitionEye('M-001', 'OD', {
+      targetStudyOid: 'S_GA001',
+      targetLabel: 'M-101',
+      reason: 'Progression to GA',
+    })
+
+    expect(apiPost).toHaveBeenCalledWith(
+      '/pages/api/v1/subjects/M-001/eyes/OD/transition',
+      {
+        targetStudyOid: 'S_GA001',
+        targetLabel: 'M-101',
+        reason: 'Progression to GA',
+      },
+    )
+    // The store delegates to fetchOne, which keys lookups by the
+    // SS_-prefixed OID derived from the label.
+    expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/subjects/SS_M001')
+    // selected was updated from the refetch — the source banner data
+    // is now reachable to the view.
+    expect(store.selected?.eyeTransitions?.[0]?.transitionId).toBe(99)
+    // Returns the parsed POST body so the dialog can use it (e.g. for
+    // the toast partner-label rendering).
+    expect(result).toEqual({ transitionId: 99 })
+  })
+
+  it('rethrows on 4xx so the calling dialog can surface the error inline', async () => {
+    const { ApiError } = await import('@/api/client')
+    const store = useSubjectsStore()
+    vi.mocked(apiPost).mockRejectedValueOnce(
+      new ApiError(409, 'Eye already transitioned', { message: 'Eye already transitioned' }),
+    )
+
+    await expect(
+      store.transitionEye('M-001', 'OD', {
+        targetStudyOid: 'S_GA001',
+        reason: 'Progression to GA',
+      }),
+    ).rejects.toThrow(/Eye already transitioned/)
+    // No refetch attempted when the POST itself failed.
+    expect(apiGet).not.toHaveBeenCalled()
+  })
+})
