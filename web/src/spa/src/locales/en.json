@@ -37,15 +37,16 @@
       "sectionLabel": "Investigator workflows",
       "subjectMatrixDesc": "Site-scoped subject list with per-event status. Search, filter, schedule new event, sign subject.",
       "addSubjectDesc": "Enrol a study subject. PHI-aware validation, gender selector, three save modes.",
-      "scheduleVisitTitle": "Schedule a visit",
-      "scheduleVisitDesc": "Plan the next visit for an enrolled subject. Pick the subject in the matrix and choose the event definition + date.",
       "signQueueTitle": "Sign-pending subjects",
       "signQueueDesc": "Subjects with completed events ready for e-signature. 21 CFR Part 11 §11.50 attestation.",
       "todaysCrfsTitle": "Today's pending CRFs",
-      "todaysCrfsDesc": "Subjects with events in data-entry-started state or scheduled for today."
+      "todaysCrfsDesc": "Subjects with events in data-entry-started state or scheduled for today.",
+      "openQueriesTitle": "My queries",
+      "openQueriesDesc": "Discrepancies assigned to me. Respond from the CRF entry view."
     },
     "monitor": {
       "sectionLabel": "Monitor workflows",
+      "subjectMatrixDesc": "Browse subjects and their CRFs read-only. Open a CRF to review data and raise queries.",
       "sdvDesc": "Completed CRFs across all subjects with SDV requirement. Bulk-verify, inline Add Query.",
       "sdvBadgeAria": "{n} CRFs pending source-data verification",
       "openQueriesDesc": "Cross-subject query + annotation list with status / type / assigned-to-me filters.",
@@ -109,6 +110,7 @@
     "openSubject": "Open →",
     "signed": "Signed",
     "scheduleHint": "Pick a subject below to schedule the next visit.",
+    "scheduleVisitCta": "+ Schedule visit",
     "openQueriesTooltip": "{count} open query/queries",
     "ariaSigned": "Subject {id}, signed",
     "ariaUnsigned": "Subject {id}, not signed",
@@ -452,7 +454,45 @@
     "itemNote": {
       "openThread": "Open discussion thread",
       "statusNew": "{count} open",
-      "statusResolved": "{count} resolved"
+      "statusResolved": "{count} resolved",
+      "createNew": "Query",
+      "reportValidation": "→ Report as validation issue"
+    },
+    "userAutocomplete": {
+      "placeholder": "Search user by name, username, or email…",
+      "noMatches": "No matches"
+    },
+    "noteDialog": {
+      "heading": "New query on {itemLabel}",
+      "description": "Description",
+      "descriptionPlaceholder": "Describe the discrepancy or question…",
+      "type": "Type",
+      "typeOption": {
+        "query": "Query",
+        "failedValidation": "Failed validation",
+        "annotation": "Annotation",
+        "reasonForChange": "Reason for change"
+      },
+      "assignTo": "Assign to (optional)",
+      "submit": "Create query",
+      "cancel": "Cancel",
+      "errorRequired": "Description is required",
+      "errorTooLong": "Description must be 4000 characters or fewer"
+    },
+    "threadDialog": {
+      "heading": "Discussion on {itemLabel}",
+      "respond": "Respond",
+      "propose": "Propose resolution",
+      "close": "Close",
+      "responsePlaceholder": "Add your response…",
+      "statusNew": "New",
+      "statusUpdated": "Updated",
+      "statusResolutionProposed": "Resolution proposed",
+      "statusClosed": "Closed",
+      "statusNotApplicable": "Not applicable",
+      "empty": "No messages yet.",
+      "loadError": "Could not load thread.",
+      "submitError": "Could not save change."
     },
     "bilateral": {
       "headerItem": "Item",

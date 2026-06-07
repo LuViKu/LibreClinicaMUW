@@ -190,14 +190,32 @@ public class SiteVisibilityFilter {
                 if (site != null && site.getId() > 0) siteIdsUnderParent.add(site.getId());
             }
         }
+        UserAccountDAO userDAO = new UserAccountDAO(dataSource);
+        List<StudyUserRoleBean> allGrants = userDAO.findAllRolesByUserName(user.getName());
+
         if (siteIdsUnderParent.isEmpty()) {
-            // No sites at all under this parent — visible set is
-            // either {parent} or {} per the includeParent rule above.
+            // Single-site / no-children parent. For non-Monitor roles
+            // `visible` already contains {parent} via includeParent.
+            // For Monitor: the legacy site-only rule collapses to
+            // empty here, which means a Monitor on a single-site
+            // deployment (MUW Vienna is configured as one top-level
+            // study with no sub-sites) sees nothing. Promote the
+            // parent into the visible set if the Monitor has an
+            // explicit Monitor grant on it.
+            if (role.getId() == Role.MONITOR.getId() && allGrants != null) {
+                for (StudyUserRoleBean grant : allGrants) {
+                    if (grant == null) continue;
+                    if (grant.getStudyId() != currentStudy.getId()) continue;
+                    Role gRole = grant.getRole();
+                    if (gRole != null && gRole.getId() == Role.MONITOR.getId()) {
+                        visible.add(currentStudy.getId());
+                        break;
+                    }
+                }
+            }
             return visible;
         }
 
-        UserAccountDAO userDAO = new UserAccountDAO(dataSource);
-        List<StudyUserRoleBean> allGrants = userDAO.findAllRolesByUserName(user.getName());
         if (allGrants == null) return visible;
         for (StudyUserRoleBean grant : allGrants) {
             if (grant == null) continue;

@@ -85,11 +85,20 @@ export const useNotesStore = defineStore('notes', () => {
     onlyAssignedToMe.value = false
   }
 
-  async function load(_studyOid?: string): Promise<void> {
+  async function load(input?: { assignedTo?: string } | string): Promise<void> {
+    // Back-compat: existing call sites pass a studyOid string (unused
+    // server-side) or no arg at all; new HomeView Investigator card
+    // passes { assignedTo } so the server narrows to notes owned by
+    // the signed-in user before they ship.
+    const assignedTo =
+      typeof input === 'object' && input !== null ? input.assignedTo : undefined
     isLoading.value = true
     error.value = null
     try {
-      rows.value = await apiGet<DiscrepancyNote[]>('/pages/api/v1/discrepancies')
+      const path = assignedTo
+        ? `/pages/api/v1/discrepancies?assignedTo=${encodeURIComponent(assignedTo)}`
+        : '/pages/api/v1/discrepancies'
+      rows.value = await apiGet<DiscrepancyNote[]>(path)
     } catch (e) {
       rows.value = []
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
@@ -112,6 +121,16 @@ export const useNotesStore = defineStore('notes', () => {
   async function add(input: {
     subjectId: string
     itemOid: string
+    /**
+     * Phase E.6 DN — opaque event_crf identifier from the SPA route
+     * (e.g. {@code /subjects/:subjectId/events/:eventCrfOid/crf/:itemOid}).
+     * Required for the backend to pin the note to the correct event
+     * ordinal in repeating events; when absent the backend falls back
+     * to its unscoped item-data lookup (the M7 behaviour, which
+     * collapses repeating-event ordinals to whichever item_data row
+     * was hydrated first).
+     */
+    eventCrfOid?: string
     description: string
     assignedTo?: string | null
     /**
@@ -128,6 +147,7 @@ export const useNotesStore = defineStore('notes', () => {
       const created = await apiPost<DiscrepancyNote>('/pages/api/v1/discrepancies', {
         subjectId: input.subjectId,
         itemOid: input.itemOid,
+        eventCrfOid: input.eventCrfOid ?? null,
         description: input.description,
         assignedTo: input.assignedTo ?? null,
         type: input.type ?? 'query',
@@ -397,6 +417,11 @@ export const useNotesStore = defineStore('notes', () => {
     clearFilters,
     load,
     add,
+    // Phase E.6 DN — alias for `add` used by the new dialog/wiring slices
+    // (NewNoteDialog, CrfEntryView). Keeps the legacy `add` callsites
+    // working while the new components read more naturally as
+    // `notes.createNote(...)`.
+    createNote: add,
     appendThread,
     loadThread,
     buildExportUrl,

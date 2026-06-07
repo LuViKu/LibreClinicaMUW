@@ -15,12 +15,12 @@
  * exactly where it already lives.
  *
  * Boolean ('BL' in the legacy data model, dataType=11) is rendered as
- * a styled checkbox + yes/no labels so paired ophthalmology items
- * such as "Cataract present (OD)" / "Cataract present (OS)" can be
- * answered with a single click each. Restoring BL on the entry side
- * is independent of the wizard authoring side — the underlying
- * adapter already accepts BL on the same code path used by the XLS
- * uploader.
+ * a Ja / Nein radio pair. A single checkbox would conflate "Nein"
+ * with "unbeantwortet" — the radio pair forces an explicit answer
+ * which then drives downstream show-when rules (e.g. the imaging
+ * "reason if not done" follow-up that appears only when the parent
+ * BL is explicitly "Nein"). Wire contract: `'1'` = Yes, `'0'` = No,
+ * empty / null / undefined = unanswered (neither radio selected).
  */
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -70,6 +70,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: unknown]
   'upload-file': [file: File]
   'clear-file': []
+  'report-validation': [payload: { itemOid: string; errorMessage: string }]
 }>()
 
 const { t } = useI18n()
@@ -89,11 +90,9 @@ function onNumberInput(event: Event) {
   emit('update:modelValue', raw === '' ? null : Number(raw))
 }
 
-function onBooleanInput(event: Event) {
-  emit('update:modelValue', (event.target as HTMLInputElement).checked)
-}
-
-const isBooleanChecked = computed(() => props.modelValue === true || props.modelValue === 'true')
+const booleanRadioName = computed(() => `bl-radio-${props.item.oid}`)
+const isBooleanYes = computed(() => props.modelValue === '1')
+const isBooleanNo = computed(() => props.modelValue === '0')
 
 function fileRef(): { filename: string; bytes: number } | null {
   const v = props.modelValue
@@ -169,37 +168,95 @@ function fileRef(): { filename: string; bytes: number } | null {
     </template>
 
     <template v-else-if="item.dataType === 'date'">
-      <TextInput
-        v-bind="textBindings"
+      <!-- DATE — native picker. The store already round-trips values
+           as ISO 'YYYY-MM-DD' (see {@link validateOne} in crfEntry.ts),
+           which is exactly the wire format `input[type=date]` consumes. -->
+      <input
+        :id="inputId"
+        :value="(modelValue == null ? '' : String(modelValue))"
+        :aria-invalid="hasError || undefined"
+        type="date"
+        :disabled="disabled"
+        class="w-full px-3 py-2 border rounded-md focus:outline-none transition-colors muw-focus"
+        :class="hasError
+          ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+          : 'border-slate-300 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100'"
+        @input="(e) => emit('update:modelValue', (e.target as HTMLInputElement).value)"
+      />
+    </template>
+
+    <template v-else-if="item.dataType === 'partial-date'">
+      <!-- PDATE — partial date is either YYYY or YYYY-MM. No native
+           HTML control covers both (input[type=month] forces month);
+           render a plain text input with pattern + inputmode so mobile
+           keyboards default to numeric and the browser flags invalid
+           shapes on submit. -->
+      <input
+        :id="inputId"
+        :value="(modelValue == null ? '' : String(modelValue))"
+        :aria-invalid="hasError || undefined"
         type="text"
-        placeholder="YYYY-MM-DD"
         inputmode="numeric"
+        pattern="\d{4}(-\d{2})?"
+        placeholder="YYYY or YYYY-MM"
+        :disabled="disabled"
+        class="w-full px-3 py-2 border rounded-md focus:outline-none transition-colors muw-focus"
+        :class="hasError
+          ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+          : 'border-slate-300 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100'"
+        @input="(e) => emit('update:modelValue', (e.target as HTMLInputElement).value)"
       />
     </template>
 
     <template v-else-if="item.dataType === 'boolean'">
       <!-- Phase E.6 — BL renderer. data_type=11 in the legacy model.
-           Stored as a JS boolean in CrfValues so the wire payload
-           matches the JSON 'true'/'false' the backend uploader has
-           accepted since the XLS import path. -->
-      <label
-        :for="inputId"
-        class="inline-flex items-center gap-2 cursor-pointer select-none"
-        :class="{ 'cursor-not-allowed opacity-60': disabled }"
+           Wire contract: '1' = Yes, '0' = No, empty = unanswered.
+           A single checkbox would conflate "Nein" with "unbeantwortet";
+           the radio pair forces an explicit answer so downstream
+           show-when rules (e.g. the imaging "reason if not done" text
+           that appears only when the parent BL is "Nein") have a
+           reliable signal to react to. -->
+      <div
+        role="radiogroup"
+        :aria-invalid="hasError || undefined"
+        :aria-labelledby="suppressLabel ? undefined : `${inputId}-label`"
+        class="inline-flex items-center gap-4"
       >
-        <input
-          :id="inputId"
-          type="checkbox"
-          :checked="isBooleanChecked"
-          :disabled="disabled"
-          :aria-invalid="hasError || undefined"
-          class="h-4 w-4 rounded border-slate-300 text-muw-blue focus:ring-muw-blue-100 muw-focus"
-          @change="onBooleanInput"
-        />
-        <span class="text-xs text-slate-700">
-          {{ isBooleanChecked ? t('crfEntry.boolean.yes') : t('crfEntry.boolean.no') }}
-        </span>
-      </label>
+        <label
+          :for="`${inputId}-yes`"
+          class="inline-flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-700"
+          :class="{ 'cursor-not-allowed opacity-60': disabled }"
+        >
+          <input
+            :id="`${inputId}-yes`"
+            type="radio"
+            :name="booleanRadioName"
+            value="1"
+            :checked="isBooleanYes"
+            :disabled="disabled"
+            class="h-4 w-4 border-slate-300 text-muw-blue focus:ring-muw-blue-100 muw-focus"
+            @change="emit('update:modelValue', '1')"
+          />
+          <span>{{ t('crfEntry.boolean.yes') }}</span>
+        </label>
+        <label
+          :for="`${inputId}-no`"
+          class="inline-flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-700"
+          :class="{ 'cursor-not-allowed opacity-60': disabled }"
+        >
+          <input
+            :id="`${inputId}-no`"
+            type="radio"
+            :name="booleanRadioName"
+            value="0"
+            :checked="isBooleanNo"
+            :disabled="disabled"
+            class="h-4 w-4 border-slate-300 text-muw-blue focus:ring-muw-blue-100 muw-focus"
+            @change="emit('update:modelValue', '0')"
+          />
+          <span>{{ t('crfEntry.boolean.no') }}</span>
+        </label>
+      </div>
     </template>
 
     <template v-else>
@@ -207,6 +264,16 @@ function fileRef(): { filename: string; bytes: number } | null {
     </template>
 
     <HelperText v-if="item.helper">{{ item.helper }}</HelperText>
-    <ErrorText v-if="errorMessage">{{ errorMessage }}</ErrorText>
+    <ErrorText v-if="errorMessage">
+      {{ errorMessage }}
+      <button
+        type="button"
+        class="ml-2 inline-flex items-center text-[11px] text-muw-blue underline-offset-2 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-muw-blue"
+        :data-testid="`crf-item-report-validation-${item.oid}`"
+        @click="$emit('report-validation', { itemOid: item.oid, errorMessage: errorMessage as string })"
+      >
+        {{ t('crfEntry.itemNote.reportValidation') }}
+      </button>
+    </ErrorText>
   </div>
 </template>

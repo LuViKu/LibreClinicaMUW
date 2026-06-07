@@ -254,6 +254,11 @@ public class StudiesApiController {
         persisted.setOldStatus(persisted.getStatus());
         studyDao.update(persisted);
 
+        AuditEventDAO auditEventDAO = new AuditEventDAO(dataSource);
+        EventCrfsApiController.writeAuditEvent(auditEventDAO, me, persisted, null,
+                "Study created", "study", persisted.getId(),
+                "study_id", "", String.valueOf(persisted.getId()));
+
         // Auto-bind the caller as COORDINATOR on the new study — they
         // can immediately build out the study without an explicit grant.
         try {
@@ -266,6 +271,12 @@ public class StudiesApiController {
             binding.setUserName(me.getName());
             binding.setUserAccountId(me.getId());
             userDao.createStudyUserRole(me, binding);
+
+            EventCrfsApiController.writeAuditEvent(auditEventDAO, me, persisted, null,
+                    "Study role granted (initial) — user=" + me.getName()
+                            + " role=" + Role.COORDINATOR.getName(),
+                    "study_user_role", 0, "role_id",
+                    "", String.valueOf(Role.COORDINATOR.getId()));
         } catch (Exception e) {
             LOG.warn("Failed to auto-bind creator as COORDINATOR on study {} (continuing): {}",
                     persisted.getOid(), e.getMessage());

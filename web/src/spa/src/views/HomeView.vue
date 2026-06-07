@@ -90,6 +90,22 @@ const openQueriesCount = computed<number | null>(() => {
   return notes.rows.filter((r) => r.status !== 'closed' && r.status !== 'not-applicable').length
 })
 
+// Investigator-only "queries assigned to me" derivation. The store
+// load was issued with assignedTo=current-username, so notes.rows is
+// already server-narrowed to the right scope — we just collapse the
+// open/closed dimension on top.
+const openQueriesAssignedToMeCount = computed<number | null>(() => {
+  if (!notes.rows) return null
+  const me = auth.user?.username
+  if (!me) return null
+  return notes.rows.filter(
+    (r) =>
+      r.assignedTo === me &&
+      r.status !== 'closed' &&
+      r.status !== 'not-applicable',
+  ).length
+})
+
 const pendingInvitesCount = computed<number | null>(() => {
   if (!users.rows) return null
   // Pending invites are users with .auth='pending-invite' per the
@@ -116,6 +132,11 @@ onMounted(() => {
   // Notes is cross-role (Monitor + DM + Administrator all surface it).
   if (showMonitor.value || showDataManager.value || showAdministrator.value) {
     inflight.push(notes.load())
+  }
+  // Investigator surfaces only the queries assigned to them; ask the
+  // server to narrow before the response ships.
+  if (showInvestigator.value && auth.user?.username) {
+    inflight.push(notes.load({ assignedTo: auth.user.username }))
   }
   if (showAdministrator.value || showDataManager.value) {
     inflight.push(users.load())
@@ -160,13 +181,6 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
         :description="t('home.investigator.addSubjectDesc')"
       />
       <LandingCard
-        :to="{ name: 'subject-matrix', query: { action: 'schedule' } }"
-        role-variant="investigator"
-        :role-label="t('home.role.Investigator')"
-        :title="t('home.investigator.scheduleVisitTitle')"
-        :description="t('home.investigator.scheduleVisitDesc')"
-      />
-      <LandingCard
         :to="{ name: 'subject-matrix', query: { filter: 'ready-to-sign' } }"
         role-variant="investigator"
         :role-label="t('home.role.Investigator')"
@@ -180,10 +194,25 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
         :title="t('home.investigator.todaysCrfsTitle')"
         :description="t('home.investigator.todaysCrfsDesc')"
       />
+      <LandingCard
+        :to="{ name: 'notes', query: { assignedTo: auth.user?.username ?? '' } }"
+        role-variant="investigator"
+        :role-label="t('home.role.Investigator')"
+        :title="t('home.investigator.openQueriesTitle')"
+        :description="t('home.investigator.openQueriesDesc')"
+        :badge="openQueriesAssignedToMeCount"
+      />
     </section>
 
     <!-- Monitor landing -->
     <section v-if="showMonitor" :aria-label="t('home.monitor.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
+      <LandingCard
+        :to="{ name: 'subject-matrix' }"
+        role-variant="monitor"
+        :role-label="t('home.role.Monitor')"
+        :title="t('subjectMatrix.title')"
+        :description="t('home.monitor.subjectMatrixDesc')"
+      />
       <LandingCard
         :to="{ name: 'sdv' }"
         role-variant="monitor"

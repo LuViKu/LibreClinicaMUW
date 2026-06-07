@@ -362,3 +362,100 @@ describe('useSubjectsStore — add()', () => {
     // errors.
   })
 })
+
+describe('useSubjectsStore — fetchOne() reconciles matrix row (Y3)', () => {
+  // Phase E.6 Y3 — Subject Matrix and Subject Detail were rendering
+  // contradictory per-visit pills for the same subject ("In progress"
+  // on the matrix vs "Completed" on the detail). Both endpoints read
+  // from the same source field (study_event.subject_event_status_id),
+  // but the matrix's `rows` is loaded once at mount and never
+  // refreshed — so a markComplete elsewhere in the SPA that cascades
+  // the visit to COMPLETED only reaches the detail re-fetch path.
+  // The fix syncs the matching matrix row whenever fetchOne returns
+  // fresh detail data; this test pins that behaviour.
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(apiGet).mockReset()
+  })
+
+  it('overwrites the matching matrix row with fresh per-event status from the detail payload', async () => {
+    // Seed the matrix with V1 in-progress (the stale snapshot the
+    // operator would see before the cascade).
+    vi.mocked(apiGet).mockResolvedValueOnce(FIXTURE_SUBJECTS)
+    const store = useSubjectsStore()
+    await store.load()
+    expect(store.rows.find((r) => r.id === 'M-001')!.events[0]!.status).toBe('complete')
+
+    // Build a SubjectDetail with V1 flipped to 'complete' and V3 to
+    // 'complete' (simulating a markComplete cascade that just closed
+    // the visits server-side).
+    const refreshedDetail: SubjectDetail = {
+      id: 'M-001',
+      secondaryId: null,
+      siteOid: 'TDS0004',
+      siteLabel: 'München',
+      studyOid: 'TDS0004',
+      studyName: 'München',
+      gender: 'F',
+      yearOfBirth: 1962,
+      groupLabel: null,
+      enrolledOn: '2020-10-06',
+      signed: false,
+      locked: false,
+      openQueries: 2,
+      studyEye: null,
+      screeningDate: null,
+      events: [
+        { eventId: '1', eventDefinitionOid: 'SE_V1_INCLUSION', label: 'V1 Inclusion',
+          status: 'complete', openQueries: 1,
+          dateStart: '2020-10-06', dateEnd: null, location: null, dataEntryStage: 'initial-data-entry-completed' },
+        { eventId: '2', eventDefinitionOid: 'SE_V2_DAY30', label: 'V2 Day 30',
+          status: 'complete', openQueries: 1,
+          dateStart: '2020-11-05', dateEnd: null, location: null, dataEntryStage: 'initial-data-entry-completed' },
+        { eventId: '3', eventDefinitionOid: 'SE_V3_DAY90', label: 'V3 Day 90',
+          status: 'complete', openQueries: 0,
+          dateStart: '2021-01-05', dateEnd: null, location: null, dataEntryStage: 'initial-data-entry-completed' },
+      ],
+    }
+    vi.mocked(apiGet).mockResolvedValueOnce(refreshedDetail)
+
+    await store.fetchOne('M-001')
+
+    // The matrix row's V3 cell was 'in-progress' before; after the
+    // detail fetch it must reflect the fresh 'complete' state — i.e.
+    // both views agree.
+    const row = store.rows.find((r) => r.id === 'M-001')
+    expect(row).toBeDefined()
+    expect(row!.events.map((e) => e.status)).toEqual(['complete', 'complete', 'complete'])
+  })
+
+  it('is a no-op when the fetched subject is not in the matrix rows', async () => {
+    // Pre-condition: matrix never loaded (rows empty).
+    const store = useSubjectsStore()
+    expect(store.rows).toEqual([])
+
+    const refreshedDetail: SubjectDetail = {
+      id: 'M-999',
+      secondaryId: null,
+      siteOid: 'TDS0004',
+      siteLabel: 'München',
+      studyOid: 'TDS0004',
+      studyName: 'München',
+      gender: 'F',
+      yearOfBirth: 1990,
+      groupLabel: null,
+      enrolledOn: '2024-01-01',
+      signed: false,
+      locked: false,
+      openQueries: 0,
+      studyEye: null,
+      screeningDate: null,
+      events: [],
+    }
+    vi.mocked(apiGet).mockResolvedValueOnce(refreshedDetail)
+
+    await store.fetchOne('M-999')
+    expect(store.rows).toEqual([])
+    expect(store.selected?.id).toBe('M-999')
+  })
+})

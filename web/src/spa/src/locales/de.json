@@ -37,15 +37,16 @@
       "sectionLabel": "Arbeitsabläufe Prüfarzt/-ärztin",
       "subjectMatrixDesc": "Standortbezogene Teilnehmerübersicht mit Visiten-Status. Suchen, filtern, neue Visite planen, Teilnehmer signieren.",
       "addSubjectDesc": "Studienteilnehmer/-in aufnehmen. PHI-bewusste Validierung, Geschlechtsauswahl, drei Speichermodi.",
-      "scheduleVisitTitle": "Visite planen",
-      "scheduleVisitDesc": "Nächste Visite für eine/n eingeschlossene/n Teilnehmer/-in planen. Teilnehmer/-in in der Matrix auswählen und Visite + Datum festlegen.",
       "signQueueTitle": "Signatur ausstehend",
       "signQueueDesc": "Teilnehmer mit abgeschlossenen Visiten zur E-Signatur. 21 CFR Part 11 §11.50 Attestierung.",
       "todaysCrfsTitle": "Heutige offene CRFs",
-      "todaysCrfsDesc": "Teilnehmer mit Visiten in Dateneingabe oder für heute geplant."
+      "todaysCrfsDesc": "Teilnehmer mit Visiten in Dateneingabe oder für heute geplant.",
+      "openQueriesTitle": "Meine Rückfragen",
+      "openQueriesDesc": "Mir zugewiesene Rückfragen. Antwort aus der CRF-Eingabe heraus."
     },
     "monitor": {
       "sectionLabel": "Arbeitsabläufe Monitor/-in",
+      "subjectMatrixDesc": "Teilnehmende und CRFs lesend einsehen. CRF öffnen, Daten prüfen und Rückfragen anlegen.",
       "sdvDesc": "Abgeschlossene CRFs aller Teilnehmer mit Quelldatenanforderung. Stapel-Verifikation, inline-Rückfragen.",
       "sdvBadgeAria": "{n} CRFs warten auf Quelldatenvergleich",
       "openQueriesDesc": "Studienweite Rückfragen + Anmerkungen. Filter nach Status / Art / Zuweisung.",
@@ -109,6 +110,7 @@
     "openSubject": "Öffnen →",
     "signed": "Signiert",
     "scheduleHint": "Bitte unten eine/n Teilnehmer/-in auswählen, um die nächste Visite zu planen.",
+    "scheduleVisitCta": "+ Visite planen",
     "openQueriesTooltip": "{count} offene Rückfrage(n)",
     "ariaSigned": "Teilnehmer {id}, signiert",
     "ariaUnsigned": "Teilnehmer {id}, nicht signiert",
@@ -452,7 +454,45 @@
     "itemNote": {
       "openThread": "Diskussionsthread öffnen",
       "statusNew": "{count} offen",
-      "statusResolved": "{count} erledigt"
+      "statusResolved": "{count} erledigt",
+      "createNew": "Frage",
+      "reportValidation": "→ Als Validierungsproblem melden"
+    },
+    "userAutocomplete": {
+      "placeholder": "Person nach Name, Benutzername oder E-Mail suchen…",
+      "noMatches": "Keine Treffer"
+    },
+    "noteDialog": {
+      "heading": "Neue Frage zu {itemLabel}",
+      "description": "Beschreibung",
+      "descriptionPlaceholder": "Beschreiben Sie die Diskrepanz oder Rückfrage…",
+      "type": "Typ",
+      "typeOption": {
+        "query": "Rückfrage",
+        "failedValidation": "Fehlgeschlagene Validierung",
+        "annotation": "Anmerkung",
+        "reasonForChange": "Änderungsgrund"
+      },
+      "assignTo": "Zuweisen an (optional)",
+      "submit": "Frage anlegen",
+      "cancel": "Abbrechen",
+      "errorRequired": "Beschreibung ist erforderlich",
+      "errorTooLong": "Die Beschreibung darf maximal 4000 Zeichen umfassen"
+    },
+    "threadDialog": {
+      "heading": "Diskussion zu {itemLabel}",
+      "respond": "Antworten",
+      "propose": "Lösung vorschlagen",
+      "close": "Schließen",
+      "responsePlaceholder": "Antwort eingeben…",
+      "statusNew": "Neu",
+      "statusUpdated": "Aktualisiert",
+      "statusResolutionProposed": "Lösungsvorschlag",
+      "statusClosed": "Geschlossen",
+      "statusNotApplicable": "Nicht anwendbar",
+      "empty": "Noch keine Nachrichten.",
+      "loadError": "Diskussion konnte nicht geladen werden.",
+      "submitError": "Änderung konnte nicht gespeichert werden."
     },
     "bilateral": {
       "headerItem": "Merkmal",
