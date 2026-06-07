@@ -1200,6 +1200,15 @@
 							     HibernateOcDbTestCase, and require a live
 							     Postgres. Run via the integration-tests profile. -->
 							<exclude>**/it/*IT.java</exclude>
+							<!-- Phase E.6 — *DatabaseIT MockMvc tests that
+							     extend AbstractApiControllerDatabaseIT or
+							     otherwise require a live Postgres. They live
+							     next to the controller-class tests in
+							     controller/api/, so the `it/` exclude above
+							     does NOT catch them; this suffix exclude does.
+							     Re-included via combine.self="override" by
+							     the integration-tests profile. -->
+							<exclude>**/*DatabaseIT.java</exclude>
 						</excludes>
 					</configuration>
 				</plugin>

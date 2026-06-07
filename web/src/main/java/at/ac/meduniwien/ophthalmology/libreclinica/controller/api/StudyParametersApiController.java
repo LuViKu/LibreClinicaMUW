@@ -193,6 +193,16 @@ public class StudyParametersApiController {
                             "body", "missing"))));
         }
 
+        // Shape validation runs before any DB I/O so an invalid payload
+        // surfaces as 400 even when the downstream lookup would throw
+        // (the existing tests cover the chaos/blank handle cases).
+        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+                validateUpdateShape(body);
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean target = studyDao.findByOid(studyOid);
         if (target == null || target.getId() == 0) {
@@ -209,13 +219,6 @@ public class StudyParametersApiController {
             return ResponseEntity.status(409).body(Map.of("message",
                     "Study is " + target.getStatus().getName().toLowerCase()
                             + " — parameter writes are refused until it is unlocked"));
-        }
-
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
-                validateUpdateShape(body);
-        if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
-                    "Validation failed", errors));
         }
 
         // Diff supplied handles against current persisted values inside
