@@ -85,11 +85,20 @@ export const useNotesStore = defineStore('notes', () => {
     onlyAssignedToMe.value = false
   }
 
-  async function load(_studyOid?: string): Promise<void> {
+  async function load(input?: { assignedTo?: string } | string): Promise<void> {
+    // Back-compat: existing call sites pass a studyOid string (unused
+    // server-side) or no arg at all; new HomeView Investigator card
+    // passes { assignedTo } so the server narrows to notes owned by
+    // the signed-in user before they ship.
+    const assignedTo =
+      typeof input === 'object' && input !== null ? input.assignedTo : undefined
     isLoading.value = true
     error.value = null
     try {
-      rows.value = await apiGet<DiscrepancyNote[]>('/pages/api/v1/discrepancies')
+      const path = assignedTo
+        ? `/pages/api/v1/discrepancies?assignedTo=${encodeURIComponent(assignedTo)}`
+        : '/pages/api/v1/discrepancies'
+      rows.value = await apiGet<DiscrepancyNote[]>(path)
     } catch (e) {
       rows.value = []
       if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {

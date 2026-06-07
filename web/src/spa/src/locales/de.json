@@ -37,12 +37,12 @@
       "sectionLabel": "Arbeitsabläufe Prüfarzt/-ärztin",
       "subjectMatrixDesc": "Standortbezogene Teilnehmerübersicht mit Visiten-Status. Suchen, filtern, neue Visite planen, Teilnehmer signieren.",
       "addSubjectDesc": "Studienteilnehmer/-in aufnehmen. PHI-bewusste Validierung, Geschlechtsauswahl, drei Speichermodi.",
-      "scheduleVisitTitle": "Visite planen",
-      "scheduleVisitDesc": "Nächste Visite für eine/n eingeschlossene/n Teilnehmer/-in planen. Teilnehmer/-in in der Matrix auswählen und Visite + Datum festlegen.",
       "signQueueTitle": "Signatur ausstehend",
       "signQueueDesc": "Teilnehmer mit abgeschlossenen Visiten zur E-Signatur. 21 CFR Part 11 §11.50 Attestierung.",
       "todaysCrfsTitle": "Heutige offene CRFs",
-      "todaysCrfsDesc": "Teilnehmer mit Visiten in Dateneingabe oder für heute geplant."
+      "todaysCrfsDesc": "Teilnehmer mit Visiten in Dateneingabe oder für heute geplant.",
+      "openQueriesTitle": "Meine Rückfragen",
+      "openQueriesDesc": "Mir zugewiesene Rückfragen. Antwort aus der CRF-Eingabe heraus."
     },
     "monitor": {
       "sectionLabel": "Arbeitsabläufe Monitor/-in",
@@ -109,6 +109,7 @@
     "openSubject": "Öffnen →",
     "signed": "Signiert",
     "scheduleHint": "Bitte unten eine/n Teilnehmer/-in auswählen, um die nächste Visite zu planen.",
+    "scheduleVisitCta": "+ Visite planen",
     "openQueriesTooltip": "{count} offene Rückfrage(n)",
     "ariaSigned": "Teilnehmer {id}, signiert",
     "ariaUnsigned": "Teilnehmer {id}, nicht signiert",
