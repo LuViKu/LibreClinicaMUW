@@ -805,7 +805,8 @@ public class SubjectsApiController {
                 ssb.getStudyEye(),
                 formatIsoDate(ssb.getScreeningDate()),
                 mapStudySubjectStatus(ssb.getStatus()),
-                initialAssignments
+                initialAssignments,
+                /* eyeTransitions — fresh subject, none yet */ null
         );
 
         LOG.info("Add Subject: created study_subject id={} oid={} label={} (study {}, user {})",
@@ -2058,6 +2059,13 @@ public class SubjectsApiController {
         // which can defer the per-row fetch via the N+1 mitigation).
         List<GroupAssignmentSnapshot> groupAssignments = loadActiveGroupAssignments(ss.getId());
 
+        // Phase E.6 eye-cohort transition — flatten the per-eye
+        // hand-off history so the SPA's banner renders in a single
+        // call (no extra round trip to /eye-transitions on first
+        // load). Returns null when the subject has no transitions.
+        List<SubjectDetailDto.EyeTransitionSummary> eyeTransitions =
+                loadEyeTransitionSummaries(ss);
+
         return new SubjectDetailDto(
                 ss.getLabel(),
                 secondaryId,
@@ -2076,8 +2084,80 @@ public class SubjectsApiController {
                 ss.getStudyEye(),
                 formatIsoDate(ss.getScreeningDate()),
                 mapStudySubjectStatus(ss.getStatus()),
-                groupAssignments
+                groupAssignments,
+                eyeTransitions
         );
+    }
+
+    /**
+     * Phase E.6 eye-cohort transition — load per-eye transition history
+     * for embedding on {@link SubjectDetailDto}. Walks both directions:
+     * a row where the subject is the source becomes
+     * {@code side='source'} (the subject GAVE the eye away — typically
+     * iAMD downgrading on transition to GA), and a row where the
+     * subject is the target becomes {@code side='target'} (the subject
+     * RECEIVED the eye — typically GA on the receiving side of an iAMD
+     * hand-off).
+     *
+     * <p>Returns {@code null} when the subject has no transitions on
+     * record so the SPA can branch banner rendering on null vs empty;
+     * a present but empty array would suggest "explicitly empty" which
+     * may confuse front-end caching.
+     *
+     * <p>Best-effort: any SQLException is logged + suppressed; we
+     * return null rather than failing the whole detail load. Losing
+     * the cross-reference banner is annoying but not as bad as
+     * refusing to render the subject at all.
+     */
+    private List<SubjectDetailDto.EyeTransitionSummary> loadEyeTransitionSummaries(StudySubjectBean ss) {
+        if (ss == null || ss.getId() == 0) return null;
+        String sql = "SELECT t.transition_id, t.eye, "
+                + "       CASE WHEN t.source_study_subject_id = ? THEN 'source' ELSE 'target' END AS side, "
+                + "       partner_study.unique_identifier AS partner_study_oid, "
+                + "       partner_study.name AS partner_study_name, "
+                + "       partner_ss.label AS partner_label, "
+                + "       t.transitioned_at, t.reason "
+                + "  FROM eye_cohort_transition t "
+                + "  JOIN study_subject partner_ss "
+                + "    ON partner_ss.study_subject_id = CASE WHEN t.source_study_subject_id = ? "
+                + "                                          THEN t.target_study_subject_id "
+                + "                                          ELSE t.source_study_subject_id END "
+                + "  JOIN study partner_study "
+                + "    ON partner_study.study_id = CASE WHEN t.source_study_subject_id = ? "
+                + "                                     THEN t.target_study_id "
+                + "                                     ELSE t.source_study_id END "
+                + " WHERE t.source_study_subject_id = ? OR t.target_study_subject_id = ? "
+                + " ORDER BY t.transitioned_at ASC, t.transition_id ASC";
+        List<SubjectDetailDto.EyeTransitionSummary> out = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            int ssId = ss.getId();
+            ps.setInt(1, ssId);
+            ps.setInt(2, ssId);
+            ps.setInt(3, ssId);
+            ps.setInt(4, ssId);
+            ps.setInt(5, ssId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    java.sql.Timestamp ts = rs.getTimestamp("transitioned_at");
+                    out.add(new SubjectDetailDto.EyeTransitionSummary(
+                            rs.getInt("transition_id"),
+                            rs.getString("eye"),
+                            rs.getString("side"),
+                            rs.getString("partner_study_oid"),
+                            rs.getString("partner_study_name"),
+                            rs.getString("partner_label"),
+                            ts == null ? null : ts.toInstant().toString(),
+                            rs.getString("reason")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            LOG.warn("Failed to load eye_cohort_transition history for study_subject_id={}: {}",
+                    ss.getId(), e.getMessage());
+            return null;
+        }
+        return out.isEmpty() ? null : out;
     }
 
     /**
