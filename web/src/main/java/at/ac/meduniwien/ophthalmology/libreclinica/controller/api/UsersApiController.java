@@ -904,6 +904,17 @@ public class UsersApiController {
                 username, body.studyOid(), legacyRole.getName(), me.getName());
 
         StudyUserRoleBean refreshed = userDao.findRoleByUserNameAndStudyId(username, study.getId());
+
+        String oldRoleName = existing != null && existing.getRole() != null
+                ? existing.getRole().getName() : "";
+        String newRoleName = refreshed != null && refreshed.getRole() != null
+                ? refreshed.getRole().getName() : legacyRole.getName();
+        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
+                "User role granted — user=" + username + " role=" + newRoleName,
+                "study_user_role",
+                refreshed != null ? refreshed.getId() : 0,
+                "role_id", oldRoleName, newRoleName);
+
         return ResponseEntity.status(201).body(toRoleBindingDto(refreshed, studyDao));
     }
 
@@ -958,6 +969,8 @@ public class UsersApiController {
                     "No active role binding for user '" + username + "' on study '" + studyOid + "'"));
         }
 
+        String oldRoleName = existing.getRole() != null ? existing.getRole().getName() : "";
+
         existing.setRoleName(legacyRole.getName());
         existing.setStatus(Status.AVAILABLE);
         existing.setUpdater(me);
@@ -967,6 +980,15 @@ public class UsersApiController {
                 username, studyOid, legacyRole.getName(), me.getName());
 
         StudyUserRoleBean refreshed = userDao.findRoleByUserNameAndStudyId(username, study.getId());
+
+        String newRoleName = refreshed != null && refreshed.getRole() != null
+                ? refreshed.getRole().getName() : legacyRole.getName();
+        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
+                "User role changed — user=" + username + " role=" + newRoleName,
+                "study_user_role",
+                refreshed != null ? refreshed.getId() : existing.getId(),
+                "role_id", oldRoleName, newRoleName);
+
         return ResponseEntity.ok(toRoleBindingDto(refreshed, studyDao));
     }
 
@@ -1000,12 +1022,19 @@ public class UsersApiController {
                     "No active role binding for user '" + username + "' on study '" + studyOid + "'"));
         }
 
+        String oldRoleName = existing.getRole() != null ? existing.getRole().getName() : "";
+
         existing.setStatus(Status.DELETED);
         existing.setUpdater(me);
         userDao.updateStudyUserRole(existing, username);
 
         LOG.info("Revoke role: username={} studyOid={} by admin={}",
                 username, studyOid, me.getName());
+
+        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
+                "User role revoked — user=" + username + " role=" + oldRoleName,
+                "study_user_role", existing.getId(),
+                "role_id", oldRoleName, "");
 
         return ResponseEntity.ok(toRoleBindingDto(existing, studyDao));
     }
