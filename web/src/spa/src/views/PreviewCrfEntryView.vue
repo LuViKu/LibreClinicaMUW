@@ -28,6 +28,7 @@ import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import CheckboxArrayInput from '@/components/CheckboxArrayInput.vue'
 import BilateralItemGroup from '@/components/BilateralItemGroup.vue'
+import CrfItemWidget from '@/components/CrfItemWidget.vue'
 import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 
 import { useCrfPreviewStore } from '@/stores/crfPreview'
@@ -273,16 +274,13 @@ const rootClass = computed(() =>
                     />
                   </template>
                   <template v-else-if="row.item.dataType === 'boolean'">
-                    <label class="inline-flex items-center gap-2 text-xs text-slate-700">
-                      <input
-                        :id="`preview-item-${row.item.oid}`"
-                        type="checkbox"
-                        :checked="Boolean(store.values[row.item.oid])"
-                        class="rounded border-slate-300 text-muw-blue focus:ring-muw-blue"
-                        @change="store.setValue(row.item.oid, ($event.target as HTMLInputElement).checked)"
-                      />
-                      <span>{{ t('crfPreview.boolean.true') }}</span>
-                    </label>
+                    <CrfItemWidget
+                      :item="row.item"
+                      :model-value="store.values[row.item.oid]"
+                      :error-message="showError(row.item)"
+                      :suppress-label="true"
+                      @update:model-value="(v: unknown) => store.setValue(row.item.oid, v)"
+                    />
                   </template>
                   <template v-else-if="row.item.dataType === 'file'">
                     <div class="text-[11px] italic text-slate-500 border border-dashed border-slate-300 rounded-md px-3 py-3">
@@ -340,15 +338,13 @@ const rootClass = computed(() =>
                     </SelectInput>
                   </template>
                   <template v-else-if="item.dataType === 'boolean'">
-                    <label class="inline-flex items-center gap-2 text-xs text-slate-700">
-                      <input
-                        :id="`preview-item-${item.oid}`"
-                        type="checkbox"
-                        :checked="Boolean(store.values[item.oid])"
-                        class="rounded border-slate-300 text-muw-blue focus:ring-muw-blue"
-                        @change="store.setValue(item.oid, ($event.target as HTMLInputElement).checked)"
-                      />
-                    </label>
+                    <CrfItemWidget
+                      :item="item"
+                      :model-value="store.values[item.oid]"
+                      :error-message="showError(item)"
+                      :suppress-label="true"
+                      @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
+                    />
                   </template>
                   <template v-else-if="item.dataType === 'integer' || item.dataType === 'real'">
                     <input

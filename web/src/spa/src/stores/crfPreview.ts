@@ -238,6 +238,33 @@ export const useCrfPreviewStore = defineStore('crfPreview', () => {
     return computeItemErrors(schema.value, values.value)
   })
 
+  /**
+   * Phase E.6 — values map with currently-hidden items filtered out, so
+   * the preview's mock submit / sample-data flow mirrors what the live
+   * `crfEntry.save()` ships to the backend. Hidden values stay
+   * preserved in {@link hiddenValues} (the live watcher already migrates
+   * them out of `values` on the hide transition, but the filter keeps
+   * the contract explicit + insulates the preview from any test that
+   * pokes `values` directly).
+   */
+  const visibleValues = computed<CrfValues>(() => {
+    const out: CrfValues = {}
+    for (const [oid, v] of Object.entries(values.value)) {
+      if (!hiddenItemOids.value.has(oid)) out[oid] = v
+    }
+    return out
+  })
+
+  /**
+   * Build the payload the preview's stub submit would post. Equivalent
+   * to {@link useCrfEntryStore.save}'s `visibleValues` body — hidden
+   * items are excluded so the operator's preview matches what the
+   * backend actually receives at entry time.
+   */
+  function buildPreviewPayload(): { values: CrfValues } {
+    return { values: { ...visibleValues.value } }
+  }
+
   const isComplete = computed<boolean>(() => {
     if (!schema.value) return false
     // Phase E.6 polish-runtime — required-when-shown: hidden items
@@ -352,6 +379,8 @@ export const useCrfPreviewStore = defineStore('crfPreview', () => {
     hiddenValues,
     hiddenItemOids,
     isItemHidden,
+    visibleValues,
+    buildPreviewPayload,
     load,
     setValue,
     save,
@@ -423,7 +452,8 @@ export function sampleValueFor(item: CrfItem): unknown {
       // the partial-date branch. Mirrors the date seed month/year.
       return SAMPLE_DATE_SEED.slice(0, 7)
     case 'boolean':
-      return true
+      // Wire contract per Phase E.6: '1' = Yes / '0' = No / '' = unanswered.
+      return '1'
     case 'select-one':
       return item.options?.[0]?.code ?? ''
     case 'select-multi':
