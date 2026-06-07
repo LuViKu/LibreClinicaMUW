@@ -10,6 +10,7 @@ import type {
   StudyEye,
   Subject,
   SubjectDetail,
+  TransitionEyeRequest,
 } from '@/types/subject'
 
 /**
@@ -717,6 +718,47 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
+   * Phase E.6 per-eye cohort transition workflow — POST a
+   * single-eye downgrade / upgrade transition to the backend.
+   *
+   * The active-study subject is the source side; the backend
+   * resolves (or creates) the matching target subject in the
+   * partner study per the clinical rules:
+   *   1. OU sources downgrade to the partner eye on the source
+   *      row; the transitioned eye lives on a new target row.
+   *   2. Single-eye sources are stubbed to NULL on the source
+   *      row when their lone eye transitions out.
+   *   3. Bilateral GA: a second eye progressing into an existing
+   *      target row upgrades OD→OU on that row (no new row).
+   *
+   * On success the store re-fetches the subject detail so both the
+   * source banner (this view) and `eyeTransitions` rendering reflect
+   * the new cross-reference without a manual refresh. Returns the
+   * parsed response body for callers (the dialog uses it for the
+   * success toast text — partner label, partner study, etc.).
+   *
+   * 4xx / 5xx are rethrown verbatim so the calling dialog can
+   * surface the error inline without competing with the store's
+   * banner-level error ref.
+   */
+  async function transitionEye(
+    label: string,
+    eye: 'OD' | 'OS',
+    body: TransitionEyeRequest,
+  ): Promise<unknown> {
+    const response = await apiPost<unknown>(
+      `/pages/api/v1/subjects/${encodeURIComponent(label)}/eyes/${eye}/transition`,
+      body,
+    )
+    // Re-fetch the subject detail so eyeTransitions on the active-
+    // study subject reflects the brand-new source-side cross-
+    // reference. The detail endpoint is authoritative; no need to
+    // push the response shape onto selected.value manually.
+    await fetchOne(label)
+    return response
+  }
+
+  /**
    * Phase E.6 — clear every piece of study-scoped state so the store
    * doesn't bleed subjects from study A into the matrix after the
    * user switches to study B. Called by {@link useAuthStore.pickStudy}
@@ -773,6 +815,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
     updateSubject,
     lockSubject,
     unlockSubject,
+    transitionEye,
     reset,
   }
 })

@@ -17,10 +17,10 @@
  * teleports to body, which the operator-facing detail screen does not
  * want here — the dialog must stay anchored to the patient frame.
  *
- * <p>Type stubs ({@code StudyOption}, {@code TransitionEyeRequest})
- * are inlined for parallel-worktree decoupling; the harmonization PR
- * replaces them with the canonical shared types from
- * {@code @/types/subject}.
+ * <p>Types ({@code StudyOption}, {@code TransitionEyeRequest}) are
+ * imported from the canonical shared module {@code @/types/subject};
+ * the parallel-worktree stubs the dialog branch originally inlined
+ * were replaced during the Phase E.6 integration merge.
  */
 import { computed, onBeforeUnmount, watch } from 'vue'
 import { ref } from 'vue'
@@ -30,25 +30,7 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import TextInput from '@/components/TextInput.vue'
 import ErrorText from '@/components/ErrorText.vue'
-
-/**
- * Candidate target study row. Local stub — harmonization replaces with
- * the shared shape exported from {@code @/types/subject}.
- */
-interface StudyOption {
-  oid: string
-  name: string
-}
-
-/**
- * Emitted payload on a valid confirm. Local stub — harmonization
- * replaces with the shared type the backend client consumes.
- */
-interface TransitionEyeRequest {
-  targetStudyOid: string
-  targetLabel?: string
-  reason: string
-}
+import type { StudyOption, TransitionEyeRequest } from '@/types/subject'
 
 interface Props {
   /** Source subject label, e.g. "M-001". Rendered into the heading. */
