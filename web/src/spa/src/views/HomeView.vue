@@ -185,6 +185,13 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
     <!-- Monitor landing -->
     <section v-if="showMonitor" :aria-label="t('home.monitor.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
       <LandingCard
+        :to="{ name: 'subject-matrix' }"
+        role-variant="monitor"
+        :role-label="t('home.role.Monitor')"
+        :title="t('subjectMatrix.title')"
+        :description="t('home.monitor.subjectMatrixDesc')"
+      />
+      <LandingCard
         :to="{ name: 'sdv' }"
         role-variant="monitor"
         :role-label="t('home.role.Monitor')"

@@ -46,6 +46,7 @@
     },
     "monitor": {
       "sectionLabel": "Monitor workflows",
+      "subjectMatrixDesc": "Browse subjects and their CRFs read-only. Open a CRF to review data and raise queries.",
       "sdvDesc": "Completed CRFs across all subjects with SDV requirement. Bulk-verify, inline Add Query.",
       "sdvBadgeAria": "{n} CRFs pending source-data verification",
       "openQueriesDesc": "Cross-subject query + annotation list with status / type / assigned-to-me filters.",
