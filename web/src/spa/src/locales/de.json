@@ -1685,6 +1685,32 @@
         "skipped": "Übersprungen"
       }
     },
+    "eyeTransition": {
+      "title": "{eye} bei {subjectLabel} in andere Studie verlagern",
+      "panelHeading": "Studienauge",
+      "field": {
+        "targetStudy": "Zielstudie",
+        "targetLabel": "Teilnehmer-ID in Zielstudie (optional)",
+        "reason": "Begründung"
+      },
+      "action": {
+        "transition": "In andere Studie verlagern",
+        "confirm": "Verlagerung speichern",
+        "cancel": "Abbrechen",
+        "openPartner": "Verknüpfte Erfassung öffnen →"
+      },
+      "error": {
+        "reasonRequired": "Eine Begründung ist erforderlich.",
+        "eyeAlreadyTracked": "Das Auge wird in der Zielstudie bereits geführt.",
+        "unknownStudy": "Zielstudie nicht gefunden.",
+        "network": "Verlagerung konnte nicht gespeichert werden — bitte erneut versuchen."
+      },
+      "banner": {
+        "source": "{eye} am {date} in {study} ({label}) verlagert",
+        "target": "{eye} zuvor in {study} geführt als {label}"
+      },
+      "success": "Verlagerung gespeichert."
+    },
     "locked": "Gesperrt"
   },
   "eventDetail": {
