@@ -348,13 +348,19 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
      */
     @Test
     void testCreateNoteScopedToEventCrf_pinsToCorrectItemDataRow() throws Exception {
+        // Under the mock DataSource the visible-study + subject lookup
+        // returns no row → 404 before the eventCrfOid resolution runs.
+        // The assertion pins that the new eventCrfOid carry-through does
+        // NOT introduce an early 400/500 for a syntactically-valid id;
+        // the row-identity happy path (which V3 vs V4 row the note
+        // attaches to) needs a DatabaseIT.
         mockMvcWith().perform(post("/api/v1/discrepancies")
                 .contentType("application/json")
                 .content("{\"subjectId\":\"M-001\",\"itemOid\":\"I_AGE\","
                         + "\"description\":\"d\",\"eventCrfOid\":\"42\"}")
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
-                .andExpect(status().isInternalServerError())
+                .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").exists());
     }
 
@@ -366,13 +372,17 @@ class DiscrepancyApiControllerTest extends AbstractApiControllerTest {
      */
     @Test
     void testCreateNoteWithoutEventCrfOid_stillWorks() throws Exception {
+        // Backwards-compat — the legacy POST omits eventCrfOid and
+        // falls through to the M7 unscoped lookup path. Under mock the
+        // subject lookup yields nothing → 404. The assertion pins that
+        // omitting eventCrfOid does NOT trip a new required-field guard.
         mockMvcWith().perform(post("/api/v1/discrepancies")
                 .contentType("application/json")
                 .content("{\"subjectId\":\"M-001\",\"itemOid\":\"I_AGE\","
                         + "\"description\":\"d\"}")
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
-                .andExpect(status().isInternalServerError())
+                .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.message").exists());
     }
 

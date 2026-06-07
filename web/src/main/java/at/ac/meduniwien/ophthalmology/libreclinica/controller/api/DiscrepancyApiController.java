@@ -392,6 +392,31 @@ public class DiscrepancyApiController {
                     "'subjectId' and 'itemOid' are required to attach the query to a data point"));
         }
 
+        // Phase E.6 dn — parse the optional eventCrfOid up-front so a
+        // bad shape (non-numeric) is rejected with 400 before any DB
+        // round-trip. The DAO-backed subject-belongs-to check happens
+        // later, after the subject lookup, since it needs ss.getId().
+        Integer parsedEventCrfId = null;
+        if (body.eventCrfOid() != null && !body.eventCrfOid().isBlank()) {
+            try {
+                parsedEventCrfId = Integer.parseInt(body.eventCrfOid().trim());
+            } catch (NumberFormatException nfe) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Invalid eventCrfOid '" + body.eventCrfOid() + "'"));
+            }
+        }
+
+        // Type-name input validation runs up-front too so an unknown
+        // type short-circuits with 400 before any DB round-trip. The
+        // role gate (canCreateType) still runs after the role lookup.
+        String typeName = (body.type() == null || body.type().isBlank()) ? "query" : body.type();
+        int typeId = NoteTransitionMatrix.typeIdForSpaName(typeName);
+        if (typeId == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Unknown type '" + typeName + "' — expected one of: "
+                            + "query | failed-validation | annotation | reason-for-change"));
+        }
+
         // A4 — per-site visibility. The legacy findByLabelAndStudy
         // call is parent-only; for top-level Monitors with site-only
         // grants we'd otherwise reject every subject by label. Walk
@@ -428,18 +453,14 @@ public class DiscrepancyApiController {
         // Phase E.6 dn — when the SPA pins an event_crf, scope the
         // item_data lookup to that row so repeating events (same OID
         // across V3 + V4 + V5 …) attach the note to the chosen visit
-        // and not the latest-inserted sibling.
+        // and not the latest-inserted sibling. The shape-validity check
+        // ran earlier (parsedEventCrfId is non-null here iff the input
+        // was numeric); this block resolves the row + confirms it
+        // belongs to the located subject.
         Integer scopedEventCrfId = null;
-        if (body.eventCrfOid() != null && !body.eventCrfOid().isBlank()) {
-            int parsedId;
-            try {
-                parsedId = Integer.parseInt(body.eventCrfOid().trim());
-            } catch (NumberFormatException nfe) {
-                return ResponseEntity.badRequest().body(Map.of("message",
-                        "Invalid eventCrfOid '" + body.eventCrfOid() + "'"));
-            }
+        if (parsedEventCrfId != null) {
             EventCRFDAO ecDao = new EventCRFDAO(dataSource);
-            EventCRFBean ec = (EventCRFBean) ecDao.findByPK(parsedId);
+            EventCRFBean ec = (EventCRFBean) ecDao.findByPK(parsedEventCrfId);
             if (ec == null || ec.getId() == 0) {
                 return ResponseEntity.status(404).body(Map.of("message",
                         "No event_crf with id '" + body.eventCrfOid() + "'"));
@@ -448,7 +469,7 @@ public class DiscrepancyApiController {
                 return ResponseEntity.status(404).body(Map.of("message",
                         "event_crf does not belong to subject '" + body.subjectId() + "'"));
             }
-            scopedEventCrfId = parsedId;
+            scopedEventCrfId = parsedEventCrfId;
         }
 
         ItemDataBean target = (scopedEventCrfId == null)
@@ -459,15 +480,9 @@ public class DiscrepancyApiController {
                     "No item_data row for subject '" + body.subjectId() + "' and item '" + body.itemOid() + "'"));
         }
 
-        // Phase E.6 — type field. Defaults to QUERY when null/blank for
-        // M7 backwards-compat. RFC is gated to DM/Admin.
-        String typeName = (body.type() == null || body.type().isBlank()) ? "query" : body.type();
-        int typeId = NoteTransitionMatrix.typeIdForSpaName(typeName);
-        if (typeId == 0) {
-            return ResponseEntity.badRequest().body(Map.of("message",
-                    "Unknown type '" + typeName + "' — expected one of: "
-                            + "query | failed-validation | annotation | reason-for-change"));
-        }
+        // typeName + typeId resolved earlier; role gate runs here so
+        // it can read currentRole (which was loaded for the visibility
+        // filter above).
         int roleId = (currentRole != null && currentRole.getRole() != null)
                 ? currentRole.getRole().getId() : 0;
         if (!NoteTransitionMatrix.canCreateType(typeId, roleId)) {
