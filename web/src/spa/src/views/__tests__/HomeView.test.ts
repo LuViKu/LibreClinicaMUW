@@ -124,6 +124,31 @@ describe('HomeView role-aware sections', () => {
     expect(w.find('[aria-label="Administrator workflows"]').exists()).toBe(false)
   })
 
+  it('renders the Investigator landing without scheduleVisit and with the My queries card (Y2 follow-up)', async () => {
+    const w = mountWith('Investigator')
+    await w.vm.$nextTick()
+    const section = w.find('[aria-label="Investigator workflows"]')
+    expect(section.exists()).toBe(true)
+    const cards = section.findAll('a')
+    // Subject Matrix · Add Subject · Sign-pending · Today's CRFs · My queries
+    expect(cards.length).toBe(5)
+    const titles = cards.map((c) => c.text())
+    expect(titles.some((t) => t.includes('My queries'))).toBe(true)
+    expect(titles.some((t) => t.includes('Schedule a visit'))).toBe(false)
+  })
+
+  it('routes the Investigator queries card to /notes with assignedTo=current username', async () => {
+    const w = mountWith('Investigator')
+    await w.vm.$nextTick()
+    const section = w.find('[aria-label="Investigator workflows"]')
+    const queriesCard = section.findAll('a').find((a) => a.text().includes('My queries'))
+    expect(queriesCard).toBeDefined()
+    // RouterLink renders the resolved href; the route stub registers
+    // /notes with no params and the assignedTo lands in the query string.
+    expect(queriesCard!.attributes('href')).toContain('/notes')
+    expect(queriesCard!.attributes('href')).toContain('assignedTo=demo')
+  })
+
   it('shows only the Monitor section for Monitor', async () => {
     const w = mountWith('Monitor')
     await w.vm.$nextTick()
