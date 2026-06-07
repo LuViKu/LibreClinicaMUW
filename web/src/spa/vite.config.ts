@@ -76,5 +76,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/setupTests.ts'],
+    // tests/a11y/spa-routes.spec.ts is a Playwright spec that pulls in
+    // @playwright/test (a non-vitest runner). When vitest's default
+    // include picks it up the file fails to collect. Exclude it here;
+    // Playwright runs out-of-band.
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests/a11y/spa-routes.spec.ts'],
   },
 })
