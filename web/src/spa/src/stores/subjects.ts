@@ -139,6 +139,45 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
+   * Phase E.6 Y3 — project a `SubjectDetail` back down to the leaner
+   * matrix `Subject` shape and overwrite the matching row in
+   * {@link rows} (no-op if the matrix hasn't been loaded yet).
+   *
+   * The matrix list endpoint and the detail endpoint both read
+   * per-event status from `study_event.subject_event_status_id` via
+   * the same `mapSubjectEventStatus` server-side helper, so the
+   * projection is lossless — drops `dateStart`, `dateEnd`,
+   * `location`, `dataEntryStage`, `eventId` which the matrix doesn't
+   * render. Used by both {@link fetchOne} and {@link signSubject} so
+   * any operation that returns a fresh detail keeps the matrix
+   * coherent without forcing a second list refetch.
+   */
+  function syncMatrixRowFromDetail(detail: SubjectDetail): void {
+    const idx = rows.value.findIndex((r) => r.id === detail.id)
+    if (idx < 0) return
+    const eventSnapshots: EventCellSnapshot[] = detail.events.map((e) => ({
+      eventDefinitionOid: e.eventDefinitionOid,
+      label: e.label,
+      status: e.status as EventStatus,
+      openQueries: e.openQueries,
+    }))
+    rows.value[idx] = {
+      id: detail.id,
+      secondaryId: detail.secondaryId,
+      siteOid: detail.siteOid,
+      siteLabel: detail.siteLabel,
+      gender: detail.gender as Gender,
+      yearOfBirth: detail.yearOfBirth,
+      groupLabel: detail.groupLabel,
+      enrolledOn: detail.enrolledOn,
+      signed: detail.signed,
+      openQueries: detail.openQueries,
+      studyEye: detail.studyEye as StudyEye | null,
+      events: eventSnapshots,
+    }
+  }
+
+  /**
    * Phase E.4 M3 — fetch a single subject's detail by study_subject OID.
    *
    * Lookup is by the legacy `study_subject.oc_oid` (e.g. `SS_M001`),
@@ -159,6 +198,19 @@ export const useSubjectsStore = defineStore('subjects', () => {
     try {
       const detail = await apiGet<SubjectDetail>(`/pages/api/v1/subjects/${encodeURIComponent(oid)}`)
       selected.value = detail
+      // Phase E.6 Y3 — reconcile the matching matrix row from the
+      // detail payload. Both endpoints read the same source of truth
+      // (study_event.subject_event_status_id, via mapSubjectEventStatus
+      // server-side), but the matrix's `rows` is loaded once at mount
+      // and never refreshed. Without this sync, a markComplete inside
+      // CrfEntryView cascades the visit to COMPLETED → the detail
+      // re-fetch on /subjects/:id#events flips the detail view's pill
+      // to "Abgeschlossen", but the user navigating back to /subjects
+      // still sees the pre-cascade "In Bearbeitung" / "Geplant" cells
+      // from the stale snapshot. Projecting the detail's events down
+      // to the matrix row keeps both views in sync without forcing a
+      // second list refetch (which would also reset filter context).
+      syncMatrixRowFromDetail(detail)
       return detail
     } catch (e) {
       selected.value = null
@@ -359,34 +411,9 @@ export const useSubjectsStore = defineStore('subjects', () => {
     // to "signed" without a manual re-fetch.
     selected.value = detail
 
-    // Update the matrix row (if loaded). We project the detail DTO
-    // back down to the leaner matrix `Subject` shape — events get
-    // re-mapped to `EventCellSnapshot` (drops dateStart, dateEnd,
-    // location, dataEntryStage which the matrix doesn't render).
-    const idx = rows.value.findIndex((r) => r.id === detail.id)
-    if (idx >= 0) {
-      const eventSnapshots: EventCellSnapshot[] = detail.events.map((e) => ({
-        eventDefinitionOid: e.eventDefinitionOid,
-        label: e.label,
-        status: e.status as EventStatus,
-        openQueries: e.openQueries,
-      }))
-      rows.value[idx] = {
-        id: detail.id,
-        secondaryId: detail.secondaryId,
-        siteOid: detail.siteOid,
-        siteLabel: detail.siteLabel,
-        gender: detail.gender as Gender,
-        yearOfBirth: detail.yearOfBirth,
-        groupLabel: detail.groupLabel,
-        enrolledOn: detail.enrolledOn,
-        signed: detail.signed,
-        openQueries: detail.openQueries,
-        // Phase E.6 Tier 1 — propagate study-eye scope to the matrix.
-        studyEye: detail.studyEye as StudyEye | null,
-        events: eventSnapshots,
-      }
-    }
+    // Project the detail back down to the leaner matrix `Subject`
+    // shape and overwrite the matching row (if loaded).
+    syncMatrixRowFromDetail(detail)
 
     return detail
   }
