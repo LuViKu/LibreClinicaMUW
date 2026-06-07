@@ -173,6 +173,8 @@ export const useSubjectsStore = defineStore('subjects', () => {
       signed: detail.signed,
       openQueries: detail.openQueries,
       studyEye: detail.studyEye as StudyEye | null,
+      status: detail.status ?? 'available',
+      groupAssignments: detail.groupAssignments ?? [],
       events: eventSnapshots,
     }
   }
@@ -294,6 +296,8 @@ export const useSubjectsStore = defineStore('subjects', () => {
         openQueries: detail.openQueries,
         // Phase E.6 Tier 1 — propagate study-eye scope to the matrix.
         studyEye: detail.studyEye as StudyEye | null,
+        status: detail.status ?? 'available',
+        groupAssignments: detail.groupAssignments ?? [],
         // No events scheduled yet — M11 will schedule them.
         events: [],
       }

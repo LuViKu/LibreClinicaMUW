@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subjects/{studySubjectOid}/groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["replaceGroups"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}": {
         parameters: {
             query?: never;
@@ -68,6 +84,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/parameters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_1"];
+        put: operations["update_3"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/group-classes/{groupClassId}": {
         parameters: {
             query?: never;
@@ -76,7 +108,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_3"];
+        put: operations["update_4"];
         post?: never;
         delete?: never;
         options?: never;
@@ -92,7 +124,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_4"];
+        put: operations["update_5"];
         post?: never;
         delete?: never;
         options?: never;
@@ -124,7 +156,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put: operations["update_5"];
+        put: operations["update_6"];
         post?: never;
         delete?: never;
         options?: never;
@@ -244,6 +276,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/{username}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unlock"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{username}/roles": {
         parameters: {
             query?: never;
@@ -333,7 +381,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["unlock"];
+        post: operations["unlock_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -532,6 +580,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedOid}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unlock_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedOid}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_4"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedOid}/lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["lock_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/event-definitions/{sedOid}/disable": {
         parameters: {
             query?: never;
@@ -653,7 +749,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post: operations["restore_4"];
+        post: operations["restore_5"];
         delete?: never;
         options?: never;
         head?: never;
@@ -948,6 +1044,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["uploadImport_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["commitImport_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/events": {
         parameters: {
             query?: never;
@@ -958,6 +1086,54 @@ export interface paths {
         get: operations["list_8"];
         put?: never;
         post: operations["schedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_6"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{id}/crfs/{edcId}:start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["startEventCrf"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restore_7"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1012,6 +1188,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/eventCrfs/{id}/items/{itemOid}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadItemFile"];
+        put?: never;
+        post: operations["uploadItemFile"];
+        delete: operations["deleteItemFile"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/heartbeat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["heartbeat"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/groups/{groupOid}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addGroupRow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/dde-conflicts/{itemOid}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolveDdeConflict"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/dde-commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["commitDdePass2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/discrepancies": {
         parameters: {
             query?: never;
@@ -1035,7 +1291,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["getThread"];
         put?: never;
         post: operations["appendThread"];
         delete?: never;
@@ -1086,6 +1342,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["testFilter"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/datasets/{datasetId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restoreDataset"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1172,6 +1444,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/crfs/{crfOid}/versions/{versionOid}/unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["unlockVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/versions/{versionOid}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["restoreVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/versions/{versionOid}/lock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["lockVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/crfs/{crfOid}/versions/{versionOid}/disable": {
         parameters: {
             query?: never;
@@ -1182,6 +1502,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["disableVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/versions/{fromOid}/migrate-to/{toOid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["migrateVersion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1348,6 +1684,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rule-sets/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportXml"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -1356,6 +1708,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import/{token}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRows"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1428,6 +1796,118 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/eventCrfs/{id}/section-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["sectionStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["notesRollup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/lock-status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["lockStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/dde-pass": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDdePass"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/dde-conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getDdeConflicts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discrepancies/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/versions/{versionOid}/xls": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["downloadVersionXls"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -1436,6 +1916,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_12"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit/export.xlsx": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["exportXlsx"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1471,6 +1967,38 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["deleteSchedule"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}/groups/{groupOid}/rows/{ordinal}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteGroupRow"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/crfs/{crfOid}/versions/{versionOid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["hardRemoveVersion"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1533,6 +2061,15 @@ export interface components {
             location?: string;
             dataEntryStage?: string;
         };
+        GroupAssignmentSnapshot: {
+            /** Format: int32 */
+            groupClassId?: number;
+            groupClassName?: string;
+            /** Format: int32 */
+            groupId?: number;
+            groupName?: string;
+            subjectAssignment?: string;
+        };
         SubjectDetailDto: {
             id?: string;
             secondaryId?: string;
@@ -1552,6 +2089,17 @@ export interface components {
             openQueries?: number;
             studyEye?: string;
             screeningDate?: string;
+            status?: string;
+            groupAssignments?: components["schemas"]["GroupAssignmentSnapshot"][];
+        };
+        Assignment: {
+            /** Format: int32 */
+            groupClassId?: number;
+            /** Format: int32 */
+            groupId?: number;
+        };
+        UpdateSubjectGroupsRequest: {
+            assignments?: components["schemas"]["Assignment"][];
         };
         UpdateStudyRequest: {
             name?: string;
@@ -1583,6 +2131,47 @@ export interface components {
             status?: string;
             parentStudyOid?: string;
             parentStudyName?: string;
+        };
+        UpdateStudyParametersRequest: {
+            subjectIdGeneration?: string;
+            subjectIdPrefixSuffix?: string;
+            subjectPersonIdRequired?: string;
+            personIdShownOnCRF?: string;
+            collectDob?: string;
+            genderRequired?: string;
+            eventLocationRequired?: string;
+            discrepancyManagement?: string;
+            interviewerNameRequired?: string;
+            interviewerNameDefault?: string;
+            interviewerNameEditable?: string;
+            interviewDateRequired?: string;
+            interviewDateDefault?: string;
+            interviewDateEditable?: string;
+            secondaryLabelViewable?: string;
+            adminForcedReasonForChange?: string;
+            participantPortal?: string;
+            randomization?: string;
+        };
+        StudyParametersDto: {
+            studyOid?: string;
+            subjectIdGeneration?: string;
+            subjectIdPrefixSuffix?: string;
+            subjectPersonIdRequired?: string;
+            personIdShownOnCRF?: string;
+            collectDob?: string;
+            genderRequired?: string;
+            eventLocationRequired?: string;
+            discrepancyManagement?: string;
+            interviewerNameRequired?: string;
+            interviewerNameDefault?: string;
+            interviewerNameEditable?: string;
+            interviewDateRequired?: string;
+            interviewDateDefault?: string;
+            interviewDateEditable?: string;
+            secondaryLabelViewable?: string;
+            adminForcedReasonForChange?: string;
+            participantPortal?: string;
+            randomization?: string;
         };
         GroupEntry: {
             /** Format: int32 */
@@ -1855,6 +2444,9 @@ export interface components {
             sendEmail?: boolean;
             externalId?: string;
         };
+        UnlockUserRequest: {
+            sendEmail?: boolean;
+        };
         RestoreUserRequest: {
             sendEmail?: boolean;
         };
@@ -1871,6 +2463,8 @@ export interface components {
             groupLabel?: string;
             studyEye?: string;
             screeningDate?: string;
+            personId?: string;
+            groupAssignments?: components["schemas"]["Assignment"][];
         };
         SignSubjectRequest: {
             password?: string;
@@ -1974,11 +2568,11 @@ export interface components {
             evaluatedAt?: string;
         };
         ImportIssue: {
-            /** @description "rule" or "ruleSet". */
+            /** @description "metadata" or "row". */
             scope?: string;
-            /** @description Rule OID or rule-set target expression. */
+            /** @description Subject/event/item triple or offending OID. */
             identifier?: string;
-            /** @description "ERROR" (skip on commit) or "WARNING" (replace on commit). */
+            /** @description "ERROR" (skip on commit) or "WARNING" (import + flag). */
             severity?: string;
             /** @description Validator message; typically an OCRERR_* code with substituted parameters. */
             message?: string;
@@ -2117,13 +2711,175 @@ export interface components {
         ActiveStudyRequest: {
             oid?: string;
         };
+        ImportCrfPreviewDto: {
+            /** @description Opaque token returned by /import; pass it back to /import/commit within 15 minutes. */
+            previewToken?: string;
+            /** @description OID of the study the upload targets (echoed back from the ODM payload). */
+            studyOid?: string;
+            /** @description Original filename of the uploaded XML, for display. */
+            filename?: string;
+            /**
+             * Format: int32
+             * @description Distinct subjects referenced in the ODM payload.
+             */
+            subjectCount?: number;
+            /**
+             * Format: int32
+             * @description Distinct study events referenced across all subjects.
+             */
+            eventCount?: number;
+            /**
+             * Format: int32
+             * @description Distinct CRFs (form_oid) referenced across all events.
+             */
+            crfCount?: number;
+            /**
+             * Format: int32
+             * @description Total item_data rows the commit would touch (insert + overwrite + skip).
+             */
+            rowCount?: number;
+            /**
+             * Format: int32
+             * @description Rows that would be inserted (no existing item_data row for the triple).
+             */
+            insertCount?: number;
+            /**
+             * Format: int32
+             * @description Rows that would overwrite an existing item_data value.
+             */
+            overwriteCount?: number;
+            /**
+             * Format: int32
+             * @description Rows the validator rejected; commit skips them.
+             */
+            errorCount?: number;
+            /**
+             * Format: int32
+             * @description Rows the validator flagged as soft warnings (out-of-range etc.); commit imports them and files a discrepancy.
+             */
+            warningCount?: number;
+            /** @description Inline first page of preview rows (up to 200). Page the rest via /import/{token}/rows. */
+            rows?: components["schemas"]["PreviewRowDto"][];
+            /** @description Validator findings keyed by scope/identifier; surface to operators before committing. */
+            issues?: components["schemas"]["ImportIssue"][];
+        };
+        PreviewRowDto: {
+            /** @description Row status: ready | overwrite | warning | error. */
+            status?: string;
+            /** @description Commit action: insert | overwrite | skip | flag. */
+            action?: string;
+            /** @description Subject OID from the ODM SubjectData element. */
+            subjectOid?: string;
+            /** @description Study event OID + ordinal. */
+            eventOid?: string;
+            /** @description CRF / form OID. */
+            crfOid?: string;
+            /** @description Item OID + group identifier. */
+            itemOid?: string;
+            /** @description Existing database value (null when the row will be inserted). */
+            before?: string;
+            /** @description Incoming value from the ODM payload (null when the row will be skipped). */
+            after?: string;
+            /** @description Diagnostic message for warnings + errors (null for ready / overwrite rows). */
+            detail?: string;
+        };
+        ImportCrfCommitResult: {
+            /**
+             * Format: int32
+             * @description Number of new item_data rows added.
+             */
+            rowsInserted?: number;
+            /**
+             * Format: int32
+             * @description Number of existing item_data rows overwritten (each carries reasonForChange in audit_log).
+             */
+            rowsOverwritten?: number;
+            /**
+             * Format: int32
+             * @description Number of rows skipped — validator errors or operator opted into skip mode.
+             */
+            rowsSkipped?: number;
+            /**
+             * Format: int32
+             * @description Number of soft-warning rows imported with an attached open discrepancy note.
+             */
+            discrepancyNotes?: number;
+            /** @description ISO-8601 instant the commit transaction completed (server clock). */
+            committedAt?: string;
+            /**
+             * Format: int32
+             * @description Active study id at commit time (helper for the SPA audit-trail link).
+             */
+            auditLogStudyId?: number;
+        };
         ScheduleEventRequest: {
             subjectId?: string;
             eventDefinitionOid?: string;
             dateStarted?: string;
             location?: string;
         };
+        StartEventCrfRequest: {
+            /** Format: int32 */
+            crfVersionId?: number;
+        };
+        StartEventCrfResponse: {
+            /** Format: int32 */
+            eventCrfId?: number;
+            eventCrfOid?: string;
+            /** Format: int32 */
+            eventId?: number;
+            /** Format: int32 */
+            eventDefinitionCrfId?: number;
+            /** Format: int32 */
+            crfVersionId?: number;
+            status?: string;
+        };
+        GroupRowSavePayload: {
+            groupOid?: string;
+            /** Format: int32 */
+            rowOrdinal?: number;
+            values?: {
+                [key: string]: unknown;
+            };
+        };
+        /** @description Bulk save body for POST /api/v1/eventCrfs/{id}/items. */
         SaveItemsRequest: {
+            /**
+             * @description Item OID → new value. Required.
+             * @example {
+             *       "I_HEIGHT_CM": 172,
+             *       "I_WEIGHT_KG": 70.5
+             *     }
+             */
+            values?: {
+                [key: string]: unknown;
+            };
+            /**
+             * @description Item OID → reason-for-change text. Required for every changed item once the CRF is complete.
+             * @example {
+             *       "I_HEIGHT_CM": "Correcting transcription error"
+             *     }
+             */
+            reasons?: {
+                [key: string]: string;
+            };
+            /** @description Repeating-group row payloads (E.6 crf-data-types). */
+            groups?: components["schemas"]["GroupRowSavePayload"][];
+        };
+        EventCrfLockProbeDto: {
+            eventCrfOid?: string;
+            sameUser?: boolean;
+            lastEditorName?: string;
+            lastSeenAt?: string;
+            /** Format: int32 */
+            ttlSeconds?: number;
+        };
+        DdeReconcileRequest: {
+            winner?: string;
+            value?: string;
+            reasonForChange?: string;
+        };
+        DdeCommitRequest: {
             values?: {
                 [key: string]: unknown;
             };
@@ -2133,6 +2889,8 @@ export interface components {
             itemOid?: string;
             description?: string;
             assignedTo?: string;
+            type?: string;
+            eventCrfOid?: string;
         };
         DiscrepancyNoteDto: {
             id?: string;
@@ -2145,6 +2903,14 @@ export interface components {
             /** Format: int32 */
             daysOpen?: number;
             lastActivityAt?: string;
+            thread?: components["schemas"]["DiscrepancyThreadEntryDto"][];
+        };
+        DiscrepancyThreadEntryDto: {
+            id?: string;
+            status?: string;
+            description?: string;
+            author?: string;
+            createdAt?: string;
         };
         AddThreadEntryRequest: {
             newStatus?: string;
@@ -2290,6 +3056,28 @@ export interface components {
             /** Format: int32 */
             itemCount?: number;
         };
+        /** @description Batch reassign event_definition_crf default_version_id. */
+        CrfMigrateVersionRequest: {
+            sedOids?: string[];
+            dryRun?: boolean;
+        };
+        /** @description Result of an event_definition_crf default version migration. */
+        CrfMigrateVersionResult: {
+            crfOid?: string;
+            fromVersionOid?: string;
+            toVersionOid?: string;
+            dryRun?: boolean;
+            /** Format: int32 */
+            totalMigrated?: number;
+            perSed?: components["schemas"]["CrfMigrateVersionSedRow"][];
+        };
+        CrfMigrateVersionSedRow: {
+            studyOid?: string;
+            sedOid?: string;
+            sedName?: string;
+            migrated?: boolean;
+            reasonSkipped?: string;
+        };
         EventCellDto: {
             eventDefinitionOid?: string;
             label?: string;
@@ -2312,6 +3100,8 @@ export interface components {
             /** Format: int32 */
             openQueries?: number;
             studyEye?: string;
+            status?: string;
+            groupAssignments?: components["schemas"]["GroupAssignmentSnapshot"][];
         };
         CheckRow: {
             id?: string;
@@ -2415,6 +3205,25 @@ export interface components {
             value?: string;
             firedAt?: string;
         };
+        PreviewRowsPageDto: {
+            /**
+             * Format: int32
+             * @description Total row count across the entire preview (matches ImportCrfPreviewDto.rowCount).
+             */
+            total?: number;
+            /**
+             * Format: int32
+             * @description 0-based offset of the first row in this page.
+             */
+            offset?: number;
+            /**
+             * Format: int32
+             * @description Number of rows requested for this page (≤ total - offset).
+             */
+            limit?: number;
+            /** @description Page payload, ordered by subject_oid → event_oid → crf_oid → item_oid. */
+            rows?: components["schemas"]["PreviewRowDto"][];
+        };
         ExportJobListResponse: {
             jobs?: components["schemas"]["ExportJobDto"][];
             /** Format: int64 */
@@ -2461,8 +3270,21 @@ export interface components {
             values?: {
                 [key: string]: unknown;
             };
+            groups?: components["schemas"]["CrfItemGroupDto"][];
+            /** Format: int64 */
+            maxFileBytes?: number;
+            fileExtensions?: string;
             status?: string;
             lastSavedAt?: string;
+            requiresReasonForChange?: boolean;
+            dde?: components["schemas"]["DdeBlockDto"];
+        };
+        CrfGroupRowDto: {
+            /** Format: int32 */
+            ordinal?: number;
+            values?: {
+                [key: string]: unknown;
+            };
         };
         CrfItemDto: {
             oid?: string;
@@ -2475,16 +3297,16 @@ export interface components {
             min?: number;
             /** Format: double */
             max?: number;
-            /** OID of the repeating group this item belongs to, if any. */
-            groupOid?: string | null;
-            /**
-             * Phase E.6 polish-runtime — conditional-display rule.
-             * Two wire shapes coexist:
-             *  - JSON {"sourceItemOid":"...","comparator":"==","literal":"..."}
-             *  - OpenClinica legacy "item_OID eq value" string.
-             * Null means always show.
-             */
-            showWhen?: string | null;
+            groupOid?: string;
+            showWhen?: string;
+        };
+        CrfItemGroupDto: {
+            oid?: string;
+            label?: string;
+            /** Format: int32 */
+            repeatMax?: number;
+            itemOids?: string[];
+            rows?: components["schemas"]["CrfGroupRowDto"][];
         };
         CrfSchemaDto: {
             oid?: string;
@@ -2498,9 +3320,45 @@ export interface components {
             instructions?: string;
             items?: components["schemas"]["CrfItemDto"][];
         };
+        DdeBlockDto: {
+            pass?: string;
+            /** Format: int32 */
+            idePass1ClerkId?: number;
+        };
         ResponseOptionDto: {
             code?: string;
             label?: string;
+        };
+        SectionStatusDto: {
+            sectionOid?: string;
+            title?: string;
+            /** Format: int32 */
+            requiredCount?: number;
+            /** Format: int32 */
+            filledCount?: number;
+            /** Format: int32 */
+            errorCount?: number;
+            /** Format: int32 */
+            openQueries?: number;
+        };
+        EventCrfNotesRollupDto: {
+            eventCrfOid?: string;
+            /** Format: int32 */
+            totalCount?: number;
+            /** Format: int32 */
+            openCount?: number;
+            byItemOid?: {
+                [key: string]: components["schemas"]["ItemNoteSummary"];
+            };
+        };
+        ItemNoteSummary: {
+            /** Format: int32 */
+            totalCount?: number;
+            /** Format: int32 */
+            openCount?: number;
+            status?: string;
+            lastActivityAt?: string;
+            noteIds?: string[];
         };
         AuditEventDto: {
             id?: string;
@@ -2515,6 +3373,21 @@ export interface components {
             before?: string;
             after?: string;
             reason?: string;
+        };
+        CrfVersionUsageEventDefinitionRef: {
+            studyOid?: string;
+            sedOid?: string;
+            sedName?: string;
+        };
+        /** @description Why a CRF version cannot be hard-removed. */
+        CrfVersionUsageReport: {
+            crfOid?: string;
+            versionOid?: string;
+            versionName?: string;
+            blockingEventDefinitions?: components["schemas"]["CrfVersionUsageEventDefinitionRef"][];
+            /** Format: int32 */
+            eventCrfCount?: number;
+            sampleSubjectLabels?: string[];
         };
     };
     responses: never;
@@ -2649,6 +3522,32 @@ export interface operations {
             };
         };
     };
+    replaceGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studySubjectOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateSubjectGroupsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubjectDetailDto"];
+                };
+            };
+        };
+    };
     get: {
         parameters: {
             query?: never;
@@ -2697,7 +3596,55 @@ export interface operations {
             };
         };
     };
+    get_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyParametersDto"];
+                };
+            };
+        };
+    };
     update_3: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UpdateStudyParametersRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyParametersDto"];
+                };
+            };
+        };
+    };
+    update_4: {
         parameters: {
             query?: never;
             header?: never;
@@ -2724,7 +3671,7 @@ export interface operations {
             };
         };
     };
-    update_4: {
+    update_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -2803,7 +3750,7 @@ export interface operations {
             };
         };
     };
-    update_5: {
+    update_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -3121,6 +4068,32 @@ export interface operations {
             };
         };
     };
+    unlock: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                username: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["UnlockUserRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     listRoles: {
         parameters: {
             query?: never;
@@ -3245,7 +4218,9 @@ export interface operations {
     };
     list_1: {
         parameters: {
-            query?: never;
+            query?: {
+                includeRemoved?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3287,7 +4262,7 @@ export interface operations {
             };
         };
     };
-    unlock: {
+    unlock_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -3662,6 +4637,75 @@ export interface operations {
             };
         };
     };
+    unlock_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventDefinitionDto"];
+                };
+            };
+        };
+    };
+    restore_4: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventDefinitionDto"];
+                };
+            };
+        };
+    };
+    lock_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventDefinitionDto"];
+                };
+            };
+        };
+    };
     disable_2: {
         parameters: {
             query?: never;
@@ -3785,7 +4829,9 @@ export interface operations {
     };
     listDatasets: {
         parameters: {
-            query?: never;
+            query?: {
+                includeRemoved?: boolean;
+            };
             header?: never;
             path: {
                 studyOid: string;
@@ -3901,7 +4947,7 @@ export interface operations {
             };
         };
     };
-    restore_4: {
+    restore_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -4400,12 +5446,66 @@ export interface operations {
             };
         };
     };
+    uploadImport_1: {
+        parameters: {
+            query?: never;
+            header?: {
+                "Accept-Language"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ImportCrfPreviewDto"];
+                };
+            };
+        };
+    };
+    commitImport_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CommitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ImportCrfCommitResult"];
+                };
+            };
+        };
+    };
     list_8: {
         parameters: {
             query?: {
                 subjectId?: string;
                 status?: string;
                 eventDefinitionOid?: string;
+                includeRemoved?: boolean;
             };
             header?: never;
             path?: never;
@@ -4444,6 +5544,77 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["StudyEventDto"];
+                };
+            };
+        };
+    };
+    restore_6: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    startEventCrf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                edcId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["StartEventCrfRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StartEventCrfResponse"];
+                };
+            };
+        };
+    };
+    restore_7: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
                 };
             };
         };
@@ -4518,6 +5689,186 @@ export interface operations {
             };
         };
     };
+    downloadItemFile: {
+        parameters: {
+            query?: {
+                rowOrdinal?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                itemOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    uploadItemFile: {
+        parameters: {
+            query?: {
+                rowOrdinal?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                itemOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    deleteItemFile: {
+        parameters: {
+            query?: {
+                rowOrdinal?: number;
+            };
+            header?: never;
+            path: {
+                id: number;
+                itemOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    heartbeat: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfLockProbeDto"];
+                };
+            };
+        };
+    };
+    addGroupRow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                groupOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    resolveDdeConflict: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                itemOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DdeReconcileRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    commitDdePass2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DdeCommitRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     list_9: {
         parameters: {
             query?: {
@@ -4554,6 +5905,28 @@ export interface operations {
                 "application/json": components["schemas"]["AddQueryRequest"];
             };
         };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DiscrepancyNoteDto"];
+                };
+            };
+        };
+    };
+    getThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                parentId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description OK */
             200: {
@@ -4688,6 +6061,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["FilterTestResult"];
+                };
+            };
+        };
+    };
+    restoreDataset: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                datasetId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DatasetDto"];
                 };
             };
         };
@@ -4873,6 +6268,75 @@ export interface operations {
             };
         };
     };
+    unlockVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+                versionOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfVersionDto"];
+                };
+            };
+        };
+    };
+    restoreVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+                versionOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfVersionDto"];
+                };
+            };
+        };
+    };
+    lockVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+                versionOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfVersionDto"];
+                };
+            };
+        };
+    };
     disableVersion: {
         parameters: {
             query?: never;
@@ -4892,6 +6356,34 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["CrfVersionDto"];
+                };
+            };
+        };
+    };
+    migrateVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+                fromOid: string;
+                toOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CrfMigrateVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfMigrateVersionResult"];
                 };
             };
         };
@@ -5138,6 +6630,28 @@ export interface operations {
             };
         };
     };
+    exportXml: {
+        parameters: {
+            query?: {
+                ruleSetRuleIds?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/xml": unknown;
+                };
+            };
+        };
+    };
     getMe: {
         parameters: {
             query?: never;
@@ -5154,6 +6668,31 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["MeDto"];
+                };
+            };
+        };
+    };
+    listRows: {
+        parameters: {
+            query?: {
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PreviewRowsPageDto"];
                 };
             };
         };
@@ -5247,6 +6786,163 @@ export interface operations {
             };
         };
     };
+    sectionStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SectionStatusDto"];
+                };
+            };
+        };
+    };
+    notesRollup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfNotesRollupDto"];
+                };
+            };
+        };
+    };
+    lockStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EventCrfLockProbeDto"];
+                };
+            };
+        };
+    };
+    getDdePass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getDdeConflicts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    exportCsv: {
+        parameters: {
+            query?: {
+                status?: string;
+                subjectId?: string;
+                assignedTo?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+        };
+    };
+    downloadVersionXls: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+                versionOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     list_12: {
         parameters: {
             query?: {
@@ -5267,6 +6963,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AuditEventDto"];
+                };
+            };
+        };
+    };
+    exportXlsx: {
+        parameters: {
+            query?: {
+                actor?: string;
+                variant?: string;
+                subjectId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": unknown;
                 };
             };
         };
@@ -5309,6 +7029,62 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    deleteGroupRow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+                groupOid: string;
+                ordinal: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    hardRemoveVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+                versionOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfVersionUsageReport"];
                 };
             };
         };
