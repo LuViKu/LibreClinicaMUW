@@ -37,12 +37,12 @@
       "sectionLabel": "Investigator workflows",
       "subjectMatrixDesc": "Site-scoped subject list with per-event status. Search, filter, schedule new event, sign subject.",
       "addSubjectDesc": "Enrol a study subject. PHI-aware validation, gender selector, three save modes.",
-      "scheduleVisitTitle": "Schedule a visit",
-      "scheduleVisitDesc": "Plan the next visit for an enrolled subject. Pick the subject in the matrix and choose the event definition + date.",
       "signQueueTitle": "Sign-pending subjects",
       "signQueueDesc": "Subjects with completed events ready for e-signature. 21 CFR Part 11 §11.50 attestation.",
       "todaysCrfsTitle": "Today's pending CRFs",
-      "todaysCrfsDesc": "Subjects with events in data-entry-started state or scheduled for today."
+      "todaysCrfsDesc": "Subjects with events in data-entry-started state or scheduled for today.",
+      "openQueriesTitle": "My queries",
+      "openQueriesDesc": "Discrepancies assigned to me. Respond from the CRF entry view."
     },
     "monitor": {
       "sectionLabel": "Monitor workflows",
@@ -110,6 +110,7 @@
     "openSubject": "Open →",
     "signed": "Signed",
     "scheduleHint": "Pick a subject below to schedule the next visit.",
+    "scheduleVisitCta": "+ Schedule visit",
     "openQueriesTooltip": "{count} open query/queries",
     "ariaSigned": "Subject {id}, signed",
     "ariaUnsigned": "Subject {id}, not signed",
@@ -454,7 +455,7 @@
       "openThread": "Open discussion thread",
       "statusNew": "{count} open",
       "statusResolved": "{count} resolved",
-      "createNew": "+ Query",
+      "createNew": "Query",
       "reportValidation": "→ Report as validation issue"
     },
     "userAutocomplete": {

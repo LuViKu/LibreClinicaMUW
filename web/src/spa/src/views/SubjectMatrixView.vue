@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
@@ -16,13 +16,14 @@ const subjects = useSubjectsStore()
 const route = useRoute()
 
 /**
- * Phase E.6 — HomeView's "Schedule visit" card routes here with
- * `?action=schedule`. v1 surfaces a banner "Pick a subject" — the
- * actual scheduler lives on the subject-detail view. Operator
- * feedback may upgrade this to an inline dialog launched from the
- * matrix row, but the banner keeps the scope honest.
+ * Phase E.6 follow-up Y2 — the Investigator landing's separate
+ * "Visite planen" card was retired (it routed here with
+ * `?action=schedule` to surface the same Pick-a-subject banner); the
+ * banner now lives behind a header CTA inside this view so the
+ * operator picks a subject first, then schedules. We still honour the
+ * legacy `?action=schedule` query for inbound links / bookmarks.
  */
-const isScheduleMode = computed(() => route.query.action === 'schedule')
+const isScheduleMode = ref(route.query.action === 'schedule')
 
 onMounted(() => {
   if (subjects.rows.length === 0) {
@@ -139,6 +140,21 @@ const ariaSortLabel = (subject: Subject) =>
           <h1 class="text-xl font-semibold tracking-tight">{{ t('subjectMatrix.title') }}</h1>
         </div>
         <div class="flex items-center gap-2">
+          <button
+            type="button"
+            data-testid="schedule-visit-cta"
+            class="px-3 py-1.5 text-xs border border-muw-blue-200 rounded-md bg-white hover:bg-muw-blue-50 text-muw-blue-700 inline-flex items-center gap-1.5"
+            :aria-pressed="isScheduleMode"
+            @click="isScheduleMode = true"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+              <rect width="18" height="18" x="3" y="4" rx="2" />
+              <path d="M16 2v4M8 2v4M3 10h18" />
+              <line x1="12" x2="12" y1="14" y2="18" />
+              <line x1="10" x2="14" y1="16" y2="16" />
+            </svg>
+            {{ t('subjectMatrix.scheduleVisitCta') }}
+          </button>
           <button class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />

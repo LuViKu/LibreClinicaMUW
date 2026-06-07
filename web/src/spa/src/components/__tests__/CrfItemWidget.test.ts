@@ -145,6 +145,48 @@ describe('CrfItemWidget — BL Yes/No radio', () => {
   })
 })
 
+describe('CrfItemWidget — DATE / PDATE rendering', () => {
+  it('renders a native date picker (input[type=date]) for dataType="date"', () => {
+    const item = mkItem('I_DOB', 'Geburtsdatum', 'date')
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: { item, modelValue: '1980-01-15', suppressLabel: true },
+    })
+    const input = wrapper.find<HTMLInputElement>('input[type="date"]')
+    expect(input.exists()).toBe(true)
+    expect(input.element.value).toBe('1980-01-15')
+  })
+
+  it('emits the raw YYYY-MM-DD string on date input', async () => {
+    const item = mkItem('I_DOB', 'Geburtsdatum', 'date')
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: { item, modelValue: '', suppressLabel: true },
+    })
+    const input = wrapper.find<HTMLInputElement>('input[type="date"]')
+    await input.setValue('2026-06-07')
+    const emits = wrapper.emitted('update:modelValue')
+    expect(emits).toBeTruthy()
+    expect(emits?.[0][0]).toBe('2026-06-07')
+  })
+
+  it('renders a constrained text input for dataType="partial-date"', () => {
+    const item = mkItem('I_DX_DATE', 'Diagnosedatum (Monat / Jahr)', 'partial-date')
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: { item, modelValue: '2024-03', suppressLabel: true },
+    })
+    // PDATE stays as a text input because no native control covers both
+    // YYYY and YYYY-MM. Pattern + inputmode guide the user instead.
+    const input = wrapper.find<HTMLInputElement>(`input#item-${item.oid}`)
+    expect(input.exists()).toBe(true)
+    expect(input.element.type).toBe('text')
+    expect(input.attributes('pattern')).toBe('\\d{4}(-\\d{2})?')
+    expect(input.attributes('inputmode')).toBe('numeric')
+    expect(input.element.value).toBe('2024-03')
+  })
+})
+
 describe('crfPreview store — BL show-when filter for the reason follow-up', () => {
   // Schema mirrors the Spectralis-OCT ophth-preset shape: a parent BL
   // item + a reason text follow-up whose show-when fires only when the

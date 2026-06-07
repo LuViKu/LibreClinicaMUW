@@ -168,11 +168,43 @@ function fileRef(): { filename: string; bytes: number } | null {
     </template>
 
     <template v-else-if="item.dataType === 'date'">
-      <TextInput
-        v-bind="textBindings"
+      <!-- DATE — native picker. The store already round-trips values
+           as ISO 'YYYY-MM-DD' (see {@link validateOne} in crfEntry.ts),
+           which is exactly the wire format `input[type=date]` consumes. -->
+      <input
+        :id="inputId"
+        :value="(modelValue == null ? '' : String(modelValue))"
+        :aria-invalid="hasError || undefined"
+        type="date"
+        :disabled="disabled"
+        class="w-full px-3 py-2 border rounded-md focus:outline-none transition-colors muw-focus"
+        :class="hasError
+          ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+          : 'border-slate-300 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100'"
+        @input="(e) => emit('update:modelValue', (e.target as HTMLInputElement).value)"
+      />
+    </template>
+
+    <template v-else-if="item.dataType === 'partial-date'">
+      <!-- PDATE — partial date is either YYYY or YYYY-MM. No native
+           HTML control covers both (input[type=month] forces month);
+           render a plain text input with pattern + inputmode so mobile
+           keyboards default to numeric and the browser flags invalid
+           shapes on submit. -->
+      <input
+        :id="inputId"
+        :value="(modelValue == null ? '' : String(modelValue))"
+        :aria-invalid="hasError || undefined"
         type="text"
-        placeholder="YYYY-MM-DD"
         inputmode="numeric"
+        pattern="\d{4}(-\d{2})?"
+        placeholder="YYYY or YYYY-MM"
+        :disabled="disabled"
+        class="w-full px-3 py-2 border rounded-md focus:outline-none transition-colors muw-focus"
+        :class="hasError
+          ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
+          : 'border-slate-300 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100'"
+        @input="(e) => emit('update:modelValue', (e.target as HTMLInputElement).value)"
       />
     </template>
 
