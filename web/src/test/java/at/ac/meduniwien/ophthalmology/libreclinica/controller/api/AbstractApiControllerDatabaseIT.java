@@ -101,6 +101,39 @@ public abstract class AbstractApiControllerDatabaseIT {
         CATALINA_HOME_WAS_SET = SAVED_CATALINA_HOME != null;
         System.setProperty("catalina.home", "testcontainers-it");
 
+        // Phase E.6 ci — bind the ResourceBundle locale once for every
+        // DatabaseIT. Without this, any DAO read path that eventually
+        // resolves Term.getName() (e.g. findAllRolesByUserName) NPEs on
+        // a ThreadLocal-bundle miss, surfacing as a 500 to MockMvc and
+        // breaking assertions. AbstractApiControllerTest (mock DataSource
+        // sibling) binds per-test in @BeforeEach; we bind here once
+        // because the @BeforeAll lifecycle of the static container suits
+        // a single bind for the whole class. Z2 (PR #153) added this
+        // per-class for two user ITs; hoisting to the base so every
+        // DatabaseIT gets it transparently.
+        at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider.updateLocale(
+                java.util.Locale.ENGLISH);
+
+        // Phase E.6 ci — DAO paths that hit the EhCache wrapper
+        // (e.g. ItemDataDAO.getDataType → ItemDAO.findByPK → EntityDAO.select)
+        // call CoreResources.getField("…") which reads from the static
+        // CoreResources.DATAINFO. In production a Tomcat bean lifecycle
+        // populates that Properties bag; in standalone ITs it stays null
+        // and any read path NPEs. Pre-populate with the classpath test
+        // datainfo.properties (already used by the legacy DAO test suite).
+        java.util.Properties dataInfo = new java.util.Properties();
+        try (java.io.InputStream is = AbstractApiControllerDatabaseIT.class
+                .getClassLoader().getResourceAsStream("datainfo.properties")) {
+            if (is != null) dataInfo.load(is);
+        }
+        java.lang.reflect.Field dataInfoField =
+                at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources.class
+                        .getDeclaredField("DATAINFO");
+        dataInfoField.setAccessible(true);
+        if (dataInfoField.get(null) == null) {
+            dataInfoField.set(null, dataInfo);
+        }
+
         POSTGRES = new PostgreSQLContainer<>(DockerImageName.parse("postgres:14-alpine"))
                 .withDatabaseName("openclinica")
                 .withUsername("clinica")
