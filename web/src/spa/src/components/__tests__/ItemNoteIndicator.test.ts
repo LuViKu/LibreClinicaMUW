@@ -12,7 +12,7 @@ const messages = {
         openThread: 'Open discussion thread',
         statusNew: '{count} open',
         statusResolved: '{count} resolved',
-        createNew: '+ Frage',
+        createNew: 'Frage',
       },
     },
   },
@@ -37,7 +37,13 @@ describe('ItemNoteIndicator', () => {
     const w = mountIndicator({ summary: null })
 
     const btn = w.get('button')
-    expect(btn.text()).toContain('+ Frage')
+    // The "+" comes from the SVG icon inside the button skin; the i18n
+    // value carries the noun only. Guard against the historical double-plus
+    // ("+ + Frage") by ensuring the rendered text has no "+ +" sequence
+    // and contains the noun exactly once.
+    expect(btn.text()).toContain('Frage')
+    expect(btn.text()).not.toContain('+ +')
+    expect((btn.text().match(/\+/g) ?? []).length).toBe(0)
 
     await btn.trigger('click')
     const events = w.emitted('create')

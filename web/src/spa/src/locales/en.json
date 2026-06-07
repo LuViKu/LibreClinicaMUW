@@ -454,7 +454,7 @@
       "openThread": "Open discussion thread",
       "statusNew": "{count} open",
       "statusResolved": "{count} resolved",
-      "createNew": "+ Query",
+      "createNew": "Query",
       "reportValidation": "→ Report as validation issue"
     },
     "userAutocomplete": {

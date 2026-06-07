@@ -454,7 +454,7 @@
       "openThread": "Diskussionsthread öffnen",
       "statusNew": "{count} offen",
       "statusResolved": "{count} erledigt",
-      "createNew": "+ Frage",
+      "createNew": "Frage",
       "reportValidation": "→ Als Validierungsproblem melden"
     },
     "userAutocomplete": {
