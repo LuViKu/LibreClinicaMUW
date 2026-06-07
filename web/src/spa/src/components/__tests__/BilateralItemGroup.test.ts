@@ -204,38 +204,44 @@ describe('BilateralItemGroup — layout', () => {
 })
 
 describe('CrfItemWidget — BL rendering', () => {
-  it('renders a boolean item as a checkbox with a yes/no label', async () => {
+  it('renders a boolean item as a Yes/No radio pair', async () => {
     const item = mkItem('OD_CATARACT_PRESENT', 'Cataract present (OD)', 'boolean')
 
     const wrapper = mount(CrfItemWidget, {
       global: { plugins: [mkI18n()] },
-      props: { item, modelValue: false, suppressLabel: true },
+      props: { item, modelValue: '', suppressLabel: true },
     })
 
-    const checkbox = wrapper.find<HTMLInputElement>('input[type="checkbox"]')
-    expect(checkbox.exists()).toBe(true)
-    expect(checkbox.element.checked).toBe(false)
+    const radios = wrapper.findAll<HTMLInputElement>('input[type="radio"]')
+    expect(radios.length).toBe(2)
+    expect(radios[0]!.element.value).toBe('1')
+    expect(radios[1]!.element.value).toBe('0')
+    // Empty modelValue → neither selected (unanswered state).
+    expect(radios[0]!.element.checked).toBe(false)
+    expect(radios[1]!.element.checked).toBe(false)
     expect(wrapper.text()).toContain('No')
+    expect(wrapper.text()).toContain('Yes')
 
-    await checkbox.setValue(true)
+    await radios[0]!.setValue('1')
     const emits = wrapper.emitted('update:modelValue')
     expect(emits).toBeTruthy()
-    expect(emits?.[0][0]).toBe(true)
+    expect(emits?.[0]?.[0]).toBe('1')
 
-    // Re-mount with modelValue=true to confirm the Yes label shows up.
+    // Re-mount with modelValue='1' to confirm Yes is selected.
     const onWrapper = mount(CrfItemWidget, {
       global: { plugins: [mkI18n()] },
-      props: { item, modelValue: true, suppressLabel: true },
+      props: { item, modelValue: '1', suppressLabel: true },
     })
-    expect(onWrapper.text()).toContain('Yes')
-    expect(onWrapper.find<HTMLInputElement>('input[type="checkbox"]').element.checked).toBe(true)
+    const onRadios = onWrapper.findAll<HTMLInputElement>('input[type="radio"]')
+    expect(onRadios[0]!.element.checked).toBe(true)
+    expect(onRadios[1]!.element.checked).toBe(false)
   })
 
   it('renders German Ja/Nein for a boolean item under the de locale', () => {
     const item = mkItem('OD_CATARACT_PRESENT', 'Katarakt vorhanden (OD)', 'boolean')
     const wrapper = mount(CrfItemWidget, {
       global: { plugins: [mkI18n('de')] },
-      props: { item, modelValue: true, suppressLabel: true },
+      props: { item, modelValue: '1', suppressLabel: true },
     })
     expect(wrapper.text()).toContain('Ja')
   })

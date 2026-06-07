@@ -191,8 +191,9 @@ describe('useCrfPreviewStore', () => {
       expect(store.values.I_SEX).toBe('F')
       // First two options for select-multi
       expect(store.values.I_COMORBID).toEqual(['HTN', 'DM'])
-      // BL → true
-      expect(store.values.I_CONSENT).toBe(true)
+      // BL → '1' (Yes). New radio rendering uses string values
+      // '1' / '0' / '' (unanswered) so the show-when comparator works.
+      expect(store.values.I_CONSENT).toBe('1')
       // Status promoted from not-started → in-progress
       expect(store.status).toBe('in-progress')
     })
