@@ -19,10 +19,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuthoritiesDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import java.sql.Connection;
 import java.sql.Statement;
+import java.util.Locale;
 
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -72,6 +74,19 @@ class UsersApiControllerResetPasswordDatabaseIT extends AbstractApiControllerDat
 
     @BeforeAll
     static void seedAuthFixtures() throws Exception {
+        // Phase E.6.ci Z2: bind a locale on the test thread so that
+        // StudyUserRoleBean#setRole(Role) — invoked transitively from
+        // UserAccountDAO.findByUserName → findByPK(ownerId) →
+        // findAllRolesByUserName(owner) — can resolve Term.getName()
+        // via ResourceBundleProvider. Without this the lookup at
+        // ResourceBundleProvider.getResBundle line 139 NPEs on a
+        // ThreadLocal-bundle miss, which the global ApiExceptionHandler
+        // surfaces as 500 to MockMvc and the IT then asserts against
+        // the expected 400 / 200 status. The mock-DataSource sibling
+        // AbstractApiControllerTest binds the same locale in @BeforeEach
+        // — the DatabaseIT base does not, so we bind here.
+        ResourceBundleProvider.updateLocale(Locale.ENGLISH);
+
         // Insert three additional user_account rows beyond the demo
         // seed: one SSO-bound, one LDAP-typed, one disabled. The
         // id space (10001+) stays well above the demo seed (1..4) so
