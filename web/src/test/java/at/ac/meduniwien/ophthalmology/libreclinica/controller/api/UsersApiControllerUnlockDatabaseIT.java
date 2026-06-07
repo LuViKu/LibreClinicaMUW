@@ -19,13 +19,16 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.config.SsoProperties;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuthoritiesDao;
+import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Statement;
+import java.util.Locale;
 
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -49,6 +52,24 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * digester query catalog.
  */
 class UsersApiControllerUnlockDatabaseIT extends AbstractApiControllerDatabaseIT {
+
+    /**
+     * Phase E.6.ci Z2: bind a locale on the test thread so that
+     * StudyUserRoleBean#setRole(Role) — invoked transitively from
+     * UserAccountDAO.findByUserName → findByPK(ownerId) →
+     * findAllRolesByUserName(owner) — can resolve Term.getName()
+     * via ResourceBundleProvider. Without this the lookup at
+     * ResourceBundleProvider.getResBundle line 139 NPEs on a
+     * ThreadLocal-bundle miss, which the global ApiExceptionHandler
+     * surfaces as 500 instead of the 200 / 4xx the unlock IT expects.
+     * The mock-DataSource sibling AbstractApiControllerTest binds the
+     * same locale in @BeforeEach — the DatabaseIT base does not, so
+     * we bind here.
+     */
+    @BeforeAll
+    static void bindTestLocale() {
+        ResourceBundleProvider.updateLocale(Locale.ENGLISH);
+    }
 
     /** Lock the `physician` seed user before each test. */
     @BeforeEach
@@ -118,12 +139,18 @@ class UsersApiControllerUnlockDatabaseIT extends AbstractApiControllerDatabaseIT
             }
         }
 
-        // Side-effect: an audit_log_event row was emitted for the lock flip.
+        // Side-effect: an audit_log_event row was emitted for the lock
+        // flip. The schema's per-column-name slot is `entity_name`
+        // (audit_log_event has no `column_name` column — that lives on
+        // audit_event_values, which the legacy AuditEventDAO.create
+        // never writes). MeApiController#emitProfileAudit established
+        // the convention for user_account audit rows; the unlock
+        // controller mirrors it.
         try (Connection conn = DATA_SOURCE.getConnection();
              PreparedStatement ps = conn.prepareStatement(
                      "SELECT COUNT(*) FROM audit_log_event "
                      + "WHERE audit_table = 'user_account' "
-                     + "  AND column_name = 'account_non_locked' "
+                     + "  AND entity_name = 'account_non_locked' "
                      + "  AND new_value = 'true'")) {
             try (ResultSet rs = ps.executeQuery()) {
                 org.junit.jupiter.api.Assertions.assertTrue(rs.next());

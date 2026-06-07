@@ -8,6 +8,9 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -1257,28 +1260,16 @@ public class UsersApiController {
         userDao.update(target);
 
         // Audit row: keyed on account_non_locked (the column the admin
-        // flipped) — NOT a literal copy of the resetPassword audit
-        // block. Reviewer flag from §4: columnName + value swap, not
-        // a "passwd" copy. We emit a single row for the lock-state
-        // change; the OTP rotation is implicit (no audit_log_event row
-        // for passwd values, ever — same redaction policy as
-        // resetPassword).
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setAuditTable("user_account");
-            ae.setEntityId(target.getId());
-            ae.setColumnName("account_non_locked");
-            ae.setOldValue("false");
-            ae.setNewValue("true");
-            ae.setActionMessage("unlock by admin " + me.getName()
-                    + " for user " + target.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for unlock username={} (continuing): {}",
-                    username, e.getMessage());
-        }
+        // flipped). Phase E.6.ci: write straight to audit_log_event
+        // instead of routing through {@link AuditEventDAO#create},
+        // which only persists {@code audit_table / user_id / entity_id
+        // / reason_for_change / action_message} and drops the typed
+        // {@code old_value / new_value / entity_name / audit_log_event_type_id}
+        // fields the SPA's Audit Log view + the unlock IT both read.
+        // Same shape as {@link MeApiController#emitProfileAudit} — column
+        // name rides in {@code entity_name} (audit_log_event has no
+        // {@code column_name} column, that's audit_event_values).
+        emitUnlockAudit(me.getId(), target.getId());
 
         LOG.info("Unlock user: username={} by admin={}", username, me.getName());
 
@@ -1287,6 +1278,44 @@ public class UsersApiController {
         response.put("user", projectToStudyUserDto(target, currentStudy));
         response.put("generatedPassword", returnPassword ? generatedPassword : null);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Phase E.6.ci — emit a typed {@code audit_log_event} row for the
+     * unlock action. Same SQL shape as
+     * {@link MeApiController#emitProfileAudit}: column name lands in
+     * {@code entity_name} (audit_log_event has no {@code column_name}
+     * column), pre/post values land in {@code old_value / new_value}.
+     *
+     * <p>Reuses {@code audit_log_event_type_id = 50}
+     * ({@code user_account_profile_updated}) — the unlock is a
+     * user_account state mutation, lifecycle-adjacent to the SPA's
+     * own profile-edit audit rows, and the existing dictionary row
+     * already carries a sensible display name for the Audit Log view.
+     * Minting a dedicated type id would force a Liquibase changeset
+     * for cosmetic differentiation.
+     *
+     * <p>Failures are swallowed: the unlock itself has already
+     * persisted (account_non_locked = true), so a missed audit row
+     * should NOT roll back the admin's lifecycle change.
+     */
+    private void emitUnlockAudit(int adminUserId, int targetUserId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, ?, ?)")) {
+            ps.setInt(1, 50); // user_account_profile_updated
+            ps.setInt(2, adminUserId);
+            ps.setInt(3, targetUserId);
+            ps.setString(4, "account_non_locked");
+            ps.setString(5, "false");
+            ps.setString(6, "true");
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Failed to write audit_log_event row for unlock target={} admin={}: {}",
+                    targetUserId, adminUserId, e.getMessage());
+        }
     }
 
     /* ----------------------------------------------------------------- */
