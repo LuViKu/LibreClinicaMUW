@@ -46,6 +46,7 @@
     },
     "monitor": {
       "sectionLabel": "Arbeitsabläufe Monitor/-in",
+      "subjectMatrixDesc": "Teilnehmende und CRFs lesend einsehen. CRF öffnen, Daten prüfen und Rückfragen anlegen.",
       "sdvDesc": "Abgeschlossene CRFs aller Teilnehmer mit Quelldatenanforderung. Stapel-Verifikation, inline-Rückfragen.",
       "sdvBadgeAria": "{n} CRFs warten auf Quelldatenvergleich",
       "openQueriesDesc": "Studienweite Rückfragen + Anmerkungen. Filter nach Status / Art / Zuweisung.",
