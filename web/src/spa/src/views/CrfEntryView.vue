@@ -764,6 +764,7 @@ function onThreadUpdated(_parentId: string) {
 
     <NewNoteDialog
       v-if="newNoteDialogState"
+      :open="true"
       :subject-id="store.entry?.subjectId ?? ''"
       :item-oid="newNoteDialogState.itemOid"
       :event-crf-oid="store.entry?.eventCrfOid ?? ''"

@@ -408,6 +408,11 @@ export const useNotesStore = defineStore('notes', () => {
     clearFilters,
     load,
     add,
+    // Phase E.6 DN — alias for `add` used by the new dialog/wiring slices
+    // (NewNoteDialog, CrfEntryView). Keeps the legacy `add` callsites
+    // working while the new components read more naturally as
+    // `notes.createNote(...)`.
+    createNote: add,
     appendThread,
     loadThread,
     buildExportUrl,
