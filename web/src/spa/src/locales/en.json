@@ -1685,6 +1685,32 @@
         "skipped": "Skipped"
       }
     },
+    "eyeTransition": {
+      "title": "Transfer {eye} on {subjectLabel} to another study",
+      "panelHeading": "Study eye",
+      "field": {
+        "targetStudy": "Target study",
+        "targetLabel": "Subject ID in target study (optional)",
+        "reason": "Reason"
+      },
+      "action": {
+        "transition": "Transfer to another study",
+        "confirm": "Save transfer",
+        "cancel": "Cancel",
+        "openPartner": "Open linked enrollment →"
+      },
+      "error": {
+        "reasonRequired": "A reason is required.",
+        "eyeAlreadyTracked": "The eye is already tracked in the target study.",
+        "unknownStudy": "Target study not found.",
+        "network": "Could not save the transfer — please try again."
+      },
+      "banner": {
+        "source": "{eye} transferred to {study} ({label}) on {date}",
+        "target": "{eye} previously tracked in {study} as {label}"
+      },
+      "success": "Transfer saved."
+    },
     "locked": "Locked"
   },
   "eventDetail": {
