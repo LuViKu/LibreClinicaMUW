@@ -26,6 +26,13 @@
     "skipToMain": "Zum Hauptinhalt springen",
     "signInLink": "Anmelden"
   },
+  "topBar": {
+    "profile": {
+      "rolesLabel": "Rollen",
+      "rolesAriaLabel": "Zugewiesene Rollen",
+      "signOut": "Abmelden"
+    }
+  },
   "home": {
     "eyebrow": "Willkommen",
     "sectionLabel": "Ihre Arbeitsabläufe für {study}",

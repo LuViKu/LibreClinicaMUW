@@ -26,6 +26,13 @@
     "skipToMain": "Skip to main content",
     "signInLink": "Sign in"
   },
+  "topBar": {
+    "profile": {
+      "rolesLabel": "Roles",
+      "rolesAriaLabel": "Assigned roles",
+      "signOut": "Sign out"
+    }
+  },
   "home": {
     "eyebrow": "Welcome",
     "sectionLabel": "Your workflows for {study}",
