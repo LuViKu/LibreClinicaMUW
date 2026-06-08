@@ -179,6 +179,43 @@ export const useStudyStore = defineStore('study', () => {
   }
 
   /**
+   * Phase E.6 — cached study-identity snapshot for the
+   * SubjectMatrixView footer (PI, planned start, status). Separate
+   * from {@link status} (the build-status tracker) — the identity
+   * payload is small + immutable per session, so we keep a single
+   * cached copy keyed by the last fetched OID.
+   */
+  const identity = ref<StudyIdentity | null>(null)
+  const identityOid = ref<string | null>(null)
+  const isLoadingIdentity = ref(false)
+  const identityError = ref<string | null>(null)
+
+  async function loadIdentity(studyOid?: string): Promise<void> {
+    if (!studyOid || studyOid.trim() === '') {
+      identity.value = null
+      identityOid.value = null
+      return
+    }
+    // Cache hit — no re-fetch.
+    if (identityOid.value === studyOid && identity.value !== null) return
+    isLoadingIdentity.value = true
+    identityError.value = null
+    try {
+      identity.value = await apiGet<StudyIdentity>(
+        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}`,
+      )
+      identityOid.value = studyOid
+    } catch (e) {
+      identity.value = null
+      identityOid.value = null
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) throw e
+      identityError.value = e instanceof Error ? e.message : 'Failed to load study identity.'
+    } finally {
+      isLoadingIdentity.value = false
+    }
+  }
+
+  /**
    * Phase E.6 — clear the cached build-status snapshot so the SPA
    * doesn't show study-A progress when navigating into study B's
    * build view. Called by {@link useAuthStore.pickStudy} before
@@ -188,6 +225,10 @@ export const useStudyStore = defineStore('study', () => {
     status.value = null
     isLoading.value = false
     error.value = null
+    identity.value = null
+    identityOid.value = null
+    isLoadingIdentity.value = false
+    identityError.value = null
   }
 
   return {
@@ -197,7 +238,11 @@ export const useStudyStore = defineStore('study', () => {
     completedTasks,
     totalTasks,
     percentComplete,
+    identity,
+    isLoadingIdentity,
+    identityError,
     load,
+    loadIdentity,
     create,
     update,
     disable,

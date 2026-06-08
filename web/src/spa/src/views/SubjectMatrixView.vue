@@ -9,10 +9,14 @@ import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
+import { useStudyStore } from '@/stores/study'
+import { useAuthStore } from '@/stores/auth'
 import type { EventStatus, Subject } from '@/types/subject'
 
 const { t } = useI18n()
 const subjects = useSubjectsStore()
+const study = useStudyStore()
+const auth = useAuthStore()
 const route = useRoute()
 
 /**
@@ -29,7 +33,39 @@ onMounted(() => {
   if (subjects.rows.length === 0) {
     subjects.load('TDS0004')
   }
+  // Phase E.6 — fetch the active study identity so the footer card
+  // (PI, planned start, status) renders real data instead of the
+  // Phase-E.4 mock placeholders ("Max von Pettenkofer", "01-Jul-2020").
+  const oid = auth.user?.activeStudy?.oid
+  if (oid) void study.loadIdentity(oid)
 })
+
+/**
+ * SubjectMatrix footer card bindings — drive PI / planned-start /
+ * status off the cached study identity. Each falls back to an
+ * em-dash when the field is empty or the identity hasn't loaded
+ * yet, so a fresh navigation never flashes a stale value from the
+ * previous study.
+ */
+const studyPi = computed(() => {
+  const v = study.identity?.principalInvestigator?.trim()
+  return v && v.length > 0 ? v : '—'
+})
+const studyStart = computed(() => {
+  const iso = study.identity?.datePlannedStart ?? null
+  return iso ? formatDate(iso) : '—'
+})
+const studyStatusLabel = computed(() => {
+  const raw = study.identity?.status?.trim() ?? ''
+  if (raw === '') return '—'
+  // Backend ships the StudyStatus enum's resource-bundle label
+  // ("Available" / "Pending" / "Frozen" / "Locked"); normalise to
+  // operator-visible terms in the local SPA palette.
+  return raw
+})
+const studyStatusActive = computed(
+  () => (study.identity?.status ?? '').toLowerCase().includes('available'),
+)
 
 /**
  * Compute the table's column header set from the first row's events.
@@ -60,7 +96,8 @@ const statusLabel = (status: EventStatus): string => t(`subjectMatrix.status.${s
 
 /** ISO `YYYY-MM-DD` → `dd-MMM-yyyy` (clinical convention). */
 const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-function formatDate(iso: string): string {
+function formatDate(iso: string | null | undefined): string {
+  if (!iso) return '—'
   const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10))
   const mi = (m ?? 1) - 1
   return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[mi] ?? '???'}-${y}`
@@ -106,10 +143,10 @@ const ariaSortLabel = (subject: Subject) =>
 
       <template #footer>
         <dl class="space-y-1.5 text-[11px]">
-          <div class="flex justify-between"><dt class="text-slate-500">{{ t('subjectMatrix.studyCard.pi') }}</dt><dd class="text-slate-700">Max von Pettenkofer</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">{{ t('subjectMatrix.studyCard.start') }}</dt><dd class="text-slate-700">01-Jul-2020</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">{{ t('subjectMatrix.studyCard.subjects') }}</dt><dd class="text-slate-700">{{ subjects.totalCount }} {{ t('subjectMatrix.studyCard.enrolled') }}</dd></div>
-          <div class="flex justify-between"><dt class="text-slate-500">{{ t('subjectMatrix.studyCard.status') }}</dt><dd><StatusPill variant="success">{{ t('subjectMatrix.studyCard.active') }}</StatusPill></dd></div>
+          <div class="flex justify-between gap-3"><dt class="text-slate-500 shrink-0">{{ t('subjectMatrix.studyCard.pi') }}</dt><dd class="text-slate-700 text-right truncate">{{ studyPi }}</dd></div>
+          <div class="flex justify-between gap-3"><dt class="text-slate-500 shrink-0">{{ t('subjectMatrix.studyCard.start') }}</dt><dd class="text-slate-700 text-right truncate">{{ studyStart }}</dd></div>
+          <div class="flex justify-between gap-3"><dt class="text-slate-500 shrink-0">{{ t('subjectMatrix.studyCard.subjects') }}</dt><dd class="text-slate-700 text-right">{{ subjects.totalCount }} {{ t('subjectMatrix.studyCard.enrolled') }}</dd></div>
+          <div class="flex justify-between gap-3"><dt class="text-slate-500 shrink-0">{{ t('subjectMatrix.studyCard.status') }}</dt><dd><StatusPill :variant="studyStatusActive ? 'success' : 'neutral'">{{ studyStatusActive ? t('subjectMatrix.studyCard.active') : studyStatusLabel }}</StatusPill></dd></div>
         </dl>
       </template>
     </SideRail>
