@@ -10,6 +10,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
@@ -942,6 +943,27 @@ public class UsersApiController {
      * longer sufficient now that the same pair can host multiple
      * role rows.
      */
+    /**
+     * Map a SPA UserRole string to the LITERAL DB role_name string —
+     * mirrors {@link Role}'s declared {@code name} field for each
+     * constant (e.g. Investigator → "Investigator", Monitor → "monitor",
+     * Data Manager → "director"). The legacy {@link Role#getName()}
+     * routes through ResourceBundleProvider and returns a localized
+     * display value, so it's NOT safe to use for SQL WHERE clauses or
+     * for set-replace diff keys.
+     */
+    private static String rawDbRoleNameFor(String spaRole) {
+        if (spaRole == null) return "";
+        return switch (spaRole) {
+            case "Administrator" -> "admin";
+            case "Data Manager" -> "director";
+            case "CRC" -> "coordinator";
+            case "Monitor" -> "monitor";
+            case "Investigator" -> "Investigator";
+            default -> "";
+        };
+    }
+
     private static boolean hasActiveGrantWithRole(UserAccountDAO userDao,
                                                   String username,
                                                   int studyId,
@@ -1099,6 +1121,11 @@ public class UsersApiController {
                                               StudyDAO studyDao) {
         // Validate every requested role; reject the bulk request if
         // any single role is unknown or illegal at the study tier.
+        // The map key is the RAW DB role_name string (not Role.getName()
+        // which goes through the term bundle and returns a localized
+        // display value). Hardcoded mapping is the simplest correct
+        // option — Role.name is a protected EntityBean field, not
+        // accessible from outside the bean's package.
         List<SubjectsApiController.ValidationErrorBody.FieldError> errors = new ArrayList<>();
         LinkedHashMap<String, Role> resolved = new LinkedHashMap<>();
         for (String spaRole : requestedSpaRoles) {
@@ -1114,7 +1141,7 @@ public class UsersApiController {
                         + "' cannot be granted at site level — assign at the parent study"));
                 continue;
             }
-            resolved.put(legacy.getName(), legacy);
+            resolved.put(rawDbRoleNameFor(spaRole), legacy);
         }
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
@@ -1133,17 +1160,29 @@ public class UsersApiController {
         }
 
         // Snapshot the current active grants for (user, study), keyed by
-        // legacy role-name. Multiple grants per role (shouldn't happen,
-        // but the schema allows it) collapse to the first row — the rest
-        // ride along as if they're being soft-deleted-and-recreated.
-        ArrayList<StudyUserRoleBean> all = userDao.findAllRolesByUserName(username);
-        LinkedHashMap<String, StudyUserRoleBean> currentByRole = new LinkedHashMap<>();
-        for (StudyUserRoleBean r : all) {
-            if (r == null || r.getStudyId() != study.getId()) continue;
-            if (r.getStatus() == null
-                    || r.getStatus().getId() != Status.AVAILABLE.getId()) continue;
-            if (r.getRole() == null) continue;
-            currentByRole.putIfAbsent(r.getRole().getName(), r);
+        // the RAW DB role_name string. The legacy DAO routes role_name
+        // through ResourceBundleProvider.getString(...) (Term.getName)
+        // which returns the LOCALIZED display value, not the literal —
+        // so we can't trust StudyUserRoleBean.getRoleName() for diff or
+        // WHERE-clause keys. Read the raw column directly.
+        LinkedHashMap<String, Integer> currentByRawRole = new LinkedHashMap<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT role_name FROM study_user_role "
+                             + "WHERE study_id = ? AND user_name = ? AND status_id = 1")) {
+            ps.setInt(1, study.getId());
+            ps.setString(2, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String raw = rs.getString(1);
+                    if (raw != null) currentByRawRole.putIfAbsent(raw, 1);
+                }
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("Failed to snapshot current grants for (study={}, user={}): {}",
+                    study.getId(), username, sqlEx.getMessage());
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load current role grants"));
         }
 
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);
@@ -1152,35 +1191,56 @@ public class UsersApiController {
 
         // Adds: anything in resolved that isn't already active.
         for (Map.Entry<String, Role> e : resolved.entrySet()) {
-            String legacyRoleName = e.getKey();
-            if (currentByRole.containsKey(legacyRoleName)) continue;
+            String rawRoleName = e.getKey();
+            if (currentByRawRole.containsKey(rawRoleName)) continue;
             StudyUserRoleBean sur = new StudyUserRoleBean();
             sur.setStudyId(study.getId());
-            sur.setRoleName(legacyRoleName);
+            sur.setRoleName(rawRoleName);
             sur.setStatus(Status.AVAILABLE);
             sur.setOwner(me);
             sur.setUserName(username);
             sur.setUserAccountId(target.getId());
             userDao.createStudyUserRole(target, sur);
             EventCrfsApiController.writeAuditEvent(auditDao, me, study, null,
-                    "User role granted (bulk) — user=" + username + " role=" + legacyRoleName,
+                    "User role granted (bulk) — user=" + username + " role=" + rawRoleName,
                     "study_user_role", 0,
-                    "role_id", "", legacyRoleName);
+                    "role_id", "", rawRoleName);
             adds++;
         }
 
         // Removes: anything currently active but absent from resolved.
-        for (Map.Entry<String, StudyUserRoleBean> e : currentByRole.entrySet()) {
-            String legacyRoleName = e.getKey();
-            if (resolved.containsKey(legacyRoleName)) continue;
-            StudyUserRoleBean row = e.getValue();
-            row.setStatus(Status.DELETED);
-            row.setUpdater(me);
-            userDao.updateStudyUserRole(row, username);
+        //
+        // CANNOT use userDao.updateStudyUserRole(row, username) — that
+        // SQL keys on (study_id, user_name) only, which mutates EVERY
+        // row for that (user, study) pair and clobbers the rows we
+        // intend to keep. The table has no PK column (legacy schema —
+        // see migration/2.5/changeLogCreateTables.xml), so the per-row
+        // discriminator is (study_id, user_name, role_name) and we
+        // additionally pin status_id=1 to avoid resurrecting an
+        // already-deleted row with the same role-name.
+        for (Map.Entry<String, Integer> e : currentByRawRole.entrySet()) {
+            String rawRoleName = e.getKey();
+            if (resolved.containsKey(rawRoleName)) continue;
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement ps = conn.prepareStatement(
+                         "UPDATE study_user_role SET status_id = ?, date_updated = NOW(), "
+                                 + "update_id = ? WHERE study_id = ? AND user_name = ? "
+                                 + "AND role_name = ? AND status_id = 1")) {
+                ps.setInt(1, Status.DELETED.getId());
+                ps.setInt(2, me.getId());
+                ps.setInt(3, study.getId());
+                ps.setString(4, username);
+                ps.setString(5, rawRoleName);
+                ps.executeUpdate();
+            } catch (SQLException sqlEx) {
+                LOG.warn("Soft-delete failed for (study={}, user={}, role={}) — continuing: {}",
+                        study.getId(), username, rawRoleName, sqlEx.getMessage());
+                continue;
+            }
             EventCrfsApiController.writeAuditEvent(auditDao, me, study, null,
-                    "User role revoked (bulk) — user=" + username + " role=" + legacyRoleName,
-                    "study_user_role", row.getId(),
-                    "role_id", legacyRoleName, "");
+                    "User role revoked (bulk) — user=" + username + " role=" + rawRoleName,
+                    "study_user_role", 0,
+                    "role_id", rawRoleName, "");
             removes++;
         }
 
