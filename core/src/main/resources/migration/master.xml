@@ -44,5 +44,6 @@
   <include  file="migration/lc-muw-2026-06-06-audit-event-type-discrepancy-export.xml"/>
   <include  file="migration/lc-muw-2026-06-08-dde-index.xml"/>
   <include  file="migration/lc-muw-2026-06-07-eye-cohort-transition.xml"/>
+  <include  file="migration/lc-muw-2026-06-08-modality.xml"/>
 </databaseChangeLog>
 
