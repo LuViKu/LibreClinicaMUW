@@ -22,9 +22,11 @@
     "codegen:openapi": "openapi-typescript http://127.0.0.1:8080/LibreClinica/pages/v3/api-docs/spa-api -o src/types/api.ts"
   },
   "dependencies": {
+    "chart.js": "^4.4.4",
     "pinia": "^2.2.2",
     "sortablejs": "^1.15.7",
     "vue": "^3.4.38",
+    "vue-chartjs": "^5.3.1",
     "vue-i18n": "^9.14.0",
     "vue-router": "^4.4.3",
     "vuedraggable": "^4",

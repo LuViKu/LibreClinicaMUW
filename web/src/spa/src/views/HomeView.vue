@@ -202,6 +202,13 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
         :description="t('home.investigator.openQueriesDesc')"
         :badge="openQueriesAssignedToMeCount"
       />
+      <LandingCard
+        :to="{ name: 'patients-overview' }"
+        role-variant="investigator"
+        :role-label="t('home.role.Investigator')"
+        :title="t('home.cards.patientsOverview.title')"
+        :description="t('home.cards.patientsOverview.description')"
+      />
     </section>
 
     <!-- Monitor landing -->
@@ -237,6 +244,13 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
         :role-label="t('home.role.Monitor')"
         :title="t('auditLog.title')"
         :description="t('home.monitor.auditLogDesc')"
+      />
+      <LandingCard
+        :to="{ name: 'patients-overview' }"
+        role-variant="monitor"
+        :role-label="t('home.role.Monitor')"
+        :title="t('home.cards.patientsOverview.title')"
+        :description="t('home.cards.patientsOverview.description')"
       />
     </section>
 
@@ -285,6 +299,13 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
         :role-label="t('home.role.Data Manager')"
         :title="t('home.dataManager.dataExportTitle')"
         :description="t('home.dataManager.dataExportDesc')"
+      />
+      <LandingCard
+        :to="{ name: 'patients-overview' }"
+        role-variant="data-manager"
+        :role-label="t('home.role.Data Manager')"
+        :title="t('home.cards.patientsOverview.title')"
+        :description="t('home.cards.patientsOverview.description')"
       />
     </section>
 
@@ -377,6 +398,13 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
           :role-label="t('home.role.Administrator')"
           :title="t('home.administrator.dataExportTitle')"
           :description="t('home.administrator.dataExportDesc')"
+        />
+        <LandingCard
+          :to="{ name: 'patients-overview' }"
+          role-variant="administrator"
+          :role-label="t('home.role.Administrator')"
+          :title="t('home.cards.patientsOverview.title')"
+          :description="t('home.cards.patientsOverview.description')"
         />
       </section>
     </template>

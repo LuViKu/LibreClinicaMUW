@@ -64,6 +64,7 @@ function makeRouter() {
       { path: '/studies/new', name: 'study-create', component: { template: '<div />' } },
       { path: '/pick-study', name: 'pick-study', component: { template: '<div />' } },
       { path: '/export', name: 'data-export', component: { template: '<div />' } },
+      { path: '/patients', name: 'patients-overview', component: { template: '<div />' } },
     ],
   })
 }
@@ -130,8 +131,8 @@ describe('HomeView role-aware sections', () => {
     const section = w.find('[aria-label="Investigator workflows"]')
     expect(section.exists()).toBe(true)
     const cards = section.findAll('a')
-    // Subject Matrix · Add Subject · Sign-pending · Today's CRFs · My queries
-    expect(cards.length).toBe(5)
+    // Subject Matrix · Add Subject · Sign-pending · Today's CRFs · My queries · Patientenübersicht (E.6 patients-overview).
+    expect(cards.length).toBe(6)
     const titles = cards.map((c) => c.text())
     expect(titles.some((t) => t.includes('My queries'))).toBe(true)
     expect(titles.some((t) => t.includes('Schedule a visit'))).toBe(false)

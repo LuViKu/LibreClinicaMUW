@@ -265,6 +265,14 @@ const router = createRouter({
         role: ['Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
+    /* Phase E.6 — Patient Overview (cross-study, keyed on the underlying
+       patient rather than the active-study study-subject label). */
+    {
+      path: '/patients',
+      name: 'patients-overview',
+      component: () => import('@/views/PatientsOverviewView.vue'),
+      meta: { title: 'Patientenübersicht', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
+    },
   ],
 })
 
