@@ -120,8 +120,8 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
         session.setAttribute("userBean", ub);
         StudyBean study = new StudyBean();
         study.setId(1);
-        study.setOid("default-study");
-        study.setName("default-study");
+        study.setOid("S_DEFAULTS1");
+        study.setName("S_DEFAULTS1");
         session.setAttribute("study", study);
         return session;
     }
@@ -134,8 +134,8 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
         session.setAttribute("userBean", ub);
         StudyBean study = new StudyBean();
         study.setId(1);
-        study.setOid("default-study");
-        study.setName("default-study");
+        study.setOid("S_DEFAULTS1");
+        study.setName("S_DEFAULTS1");
         session.setAttribute("study", study);
         return session;
     }
@@ -148,7 +148,7 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
      */
     @Test
     void bulkPutCollapsesRolesToTargetSet() throws Exception {
-        usersMockMvc().perform(put("/api/v1/users/bulk-user/roles/default-study")
+        usersMockMvc().perform(put("/api/v1/users/bulk-user/roles/S_DEFAULTS1")
                 .contentType("application/json")
                 .content("{\"roles\":[\"Investigator\"]}")
                 .session(sysadminSession()))
@@ -196,7 +196,7 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
     void postAddsSecondRoleToExistingGrant() throws Exception {
         usersMockMvc().perform(post("/api/v1/users/monitor/roles")
                 .contentType("application/json")
-                .content("{\"studyOid\":\"default-study\",\"role\":\"Investigator\"}")
+                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Investigator\"}")
                 .session(sysadminSession()))
                 .andExpect(status().isCreated());
 
@@ -225,7 +225,7 @@ class UsersApiControllerBulkRoleDatabaseIT extends AbstractApiControllerDatabase
         // physician already has Investigator on the demo study (seeded).
         usersMockMvc().perform(post("/api/v1/users/physician/roles")
                 .contentType("application/json")
-                .content("{\"studyOid\":\"default-study\",\"role\":\"Investigator\"}")
+                .content("{\"studyOid\":\"S_DEFAULTS1\",\"role\":\"Investigator\"}")
                 .session(sysadminSession()))
                 .andExpect(status().isConflict());
     }
