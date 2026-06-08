@@ -49,9 +49,15 @@ interface Props {
   availableStudies: StudyOption[]
   /** Controls visibility (v-if pattern from BuildStudyView). */
   open: boolean
+  /**
+   * In-flight POST indicator. The parent owns the request lifecycle;
+   * the dialog renders a spinner + disables the confirm button while
+   * this is true so the operator can't double-fire the submit.
+   */
+  isSubmitting?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), { isSubmitting: false })
 
 const emit = defineEmits<{
   submit: [payload: TransitionEyeRequest]
@@ -218,10 +224,20 @@ onBeforeUnmount(() => {
           </button>
           <button
             type="submit"
-            class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!canSubmit"
+            class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center gap-1.5"
+            :disabled="!canSubmit || isSubmitting"
+            :aria-busy="isSubmitting || undefined"
             data-testid="transition-eye-submit"
           >
+            <svg
+              v-if="isSubmitting"
+              class="animate-spin h-3.5 w-3.5"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none" />
+              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
             {{ t('subjectDetail.eyeTransition.action.confirm') }}
           </button>
         </div>

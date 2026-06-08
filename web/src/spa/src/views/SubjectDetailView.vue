@@ -300,11 +300,20 @@ interface TransitionDialogState {
 const dialogState = ref<TransitionDialogState | null>(null)
 const transitionError = ref<string | null>(null)
 const transitionSuccess = ref<string | null>(null)
+const transitionSubmitting = ref(false)
 
 function openTransitionDialog(eye: 'OD' | 'OS') {
   transitionError.value = null
   transitionSuccess.value = null
   dialogState.value = { eye }
+  // auth.availableStudies is only auto-populated by StudyPickerView. If
+  // the operator landed on this view via a deep link / post-login
+  // redirect that skipped the picker, the list is empty and the
+  // dialog's target-study dropdown renders zero options. Refresh now
+  // so the picker shows every study the operator has access to.
+  if ((auth.availableStudies ?? []).length === 0) {
+    void auth.loadStudies()
+  }
 }
 
 const otherStudies = computed<{ oid: string; name: string }[]>(() => {
@@ -317,6 +326,7 @@ const otherStudies = computed<{ oid: string; name: string }[]>(() => {
 async function onTransitionSubmit(payload: TransitionEyeRequest) {
   if (!dialogState.value || !subject.value) return
   transitionError.value = null
+  transitionSubmitting.value = true
   try {
     await subjects.transitionEye(subject.value.id, dialogState.value.eye, payload)
     transitionSuccess.value = t('subjectDetail.eyeTransition.success')
@@ -324,6 +334,8 @@ async function onTransitionSubmit(payload: TransitionEyeRequest) {
   } catch (e) {
     transitionError.value =
       e instanceof Error ? e.message : t('subjectDetail.eyeTransition.error.network')
+  } finally {
+    transitionSubmitting.value = false
   }
 }
 
@@ -502,7 +514,7 @@ function dataEntryStageLabel(stage: string | null): string {
                   <button
                     v-if="canTransitionEye && eyeInScope(eye)"
                     type="button"
-                    class="text-xs text-muw-blue hover:underline ml-auto"
+                    class="text-xs text-muw-blue hover:underline ml-3"
                     :data-testid="`transition-${eye}`"
                     @click="openTransitionDialog(eye)"
                   >
@@ -892,6 +904,7 @@ function dataEntryStageLabel(stage: string | null): string {
       :eye="dialogState.eye"
       :current-study-oid="auth.user?.activeStudy?.oid ?? ''"
       :available-studies="otherStudies"
+      :is-submitting="transitionSubmitting"
       @submit="onTransitionSubmit"
       @cancel="dialogState = null"
     />

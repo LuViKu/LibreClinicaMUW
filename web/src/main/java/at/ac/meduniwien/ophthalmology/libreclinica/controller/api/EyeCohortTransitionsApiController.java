@@ -29,6 +29,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SubjectDAO;
@@ -264,13 +265,21 @@ public class EyeCohortTransitionsApiController {
         }
 
         // ---- Resolve target study by OID + visibility check ----
+        // The target study sits OUTSIDE the active study's site tree
+        // (iAMD ⇄ GA are sibling top-level studies, not parent/site), so
+        // SiteVisibilityFilter — which only walks currentStudy's tree —
+        // would reject every transition. The transition use case wants
+        // "does the operator have ANY active grant on the target?", which
+        // is exactly what GET /api/v1/studies returns. Mirror that:
+        // walk the user's full active grant set and accept the target
+        // if it (or its parent, when target is a site) matches.
         StudyDAO studyDAO = new StudyDAO(dataSource);
         StudyBean targetStudy = studyDAO.findByOid(targetStudyOid);
         if (targetStudy == null || targetStudy.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "Target study with OID '" + targetStudyOid + "' not found."));
         }
-        if (!visibleStudyIds.contains(targetStudy.getId())) {
+        if (!userHasActiveGrantOnStudy(currentUser, targetStudy)) {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "Target study is not in your visible study set."));
         }
@@ -427,6 +436,31 @@ public class EyeCohortTransitionsApiController {
         if (studyEye == null) return false;
         if ("OU".equals(studyEye)) return true;
         return studyEye.equals(eye);
+    }
+
+    /**
+     * Cross-study visibility check for the transition use case.
+     * Returns true when the user has any active study_user_role binding
+     * on {@code target} — or, when {@code target} is a site, on the
+     * site's parent (which is how sites are accessed in practice).
+     * Mirrors what {@link StudiesApiController}'s list endpoint considers
+     * "accessible studies" for the SPA's study picker, which is the
+     * superset the operator already sees when switching active study.
+     */
+    private boolean userHasActiveGrantOnStudy(UserAccountBean user, StudyBean target) {
+        if (user == null || target == null || target.getId() == 0) return false;
+        UserAccountDAO userDAO = new UserAccountDAO(dataSource);
+        ArrayList<StudyUserRoleBean> grants = userDAO.findAllRolesByUserName(user.getName());
+        int targetId = target.getId();
+        int parentId = target.getParentStudyId();
+        for (StudyUserRoleBean g : grants) {
+            if (g == null || g.getStatus() == null) continue;
+            if (g.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            int sid = g.getStudyId();
+            if (sid == targetId) return true;
+            if (parentId > 0 && sid == parentId) return true;
+        }
+        return false;
     }
 
     /**
