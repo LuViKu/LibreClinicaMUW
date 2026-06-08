@@ -71,7 +71,7 @@ class EventCrfsApiControllerAdminRfcDatabaseIT extends AbstractApiControllerData
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.requiresReasonForChange").value(true))
                 .andExpect(jsonPath("$.schema").exists())
-                .andExpect(jsonPath("$.schema.crfOid").exists());
+                .andExpect(jsonPath("$.schema.oid").exists());
     }
 
     @Test
