@@ -68,6 +68,25 @@ const canSwitchStudy = computed(
   () => (auth.availableStudies?.length ?? 0) > 1,
 )
 
+/**
+ * Cross-study cards (Heutige offene CRFs, Patientenübersicht) share a
+ * single section above the role-specific landings. Because the section
+ * is role-agnostic but LandingCard still expects a role variant for
+ * the chip color, derive the operator's dominant role variant from
+ * the existing show* flags.
+ */
+const primaryRoleVariant = computed<
+  'investigator' | 'monitor' | 'data-manager' | 'administrator'
+>(() =>
+  showAdministrator.value
+    ? 'administrator'
+    : showDataManager.value
+    ? 'data-manager'
+    : showMonitor.value
+    ? 'monitor'
+    : 'investigator',
+)
+
 /* ---------- count derivations from already-loaded store state ---------- */
 //
 // All store .rows arrays are populated by the eager onMounted load. We
@@ -164,6 +183,83 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
       {{ t('app.tagline') }}
     </p>
 
+    <!-- Universal "general" section (study-independent actions) shown
+         once at the top, mirroring the Administrator's
+         platform-wide / study-scoped split. Followed by a divider
+         carrying the active study's name + then the role-specific
+         landings. Today's open CRFs and Patientenübersicht render
+         here for every role (they don't depend on the bound study).
+         Administrator additionally gets Manage Users / Create Study
+         / Modalities here so they don't need a separate top section. -->
+    <template v-if="role">
+      <section
+        :aria-label="t('home.generalSectionLabel')"
+        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-6"
+      >
+        <LandingCard
+          :to="{ name: 'subject-matrix', query: { filter: 'today' } }"
+          :role-variant="primaryRoleVariant"
+          :role-label="t('home.crossStudy.cardRoleLabel')"
+          :title="t('home.crossStudy.todaysCrfsTitle')"
+          :description="t('home.crossStudy.todaysCrfsDesc')"
+        />
+        <LandingCard
+          :to="{ name: 'patients-overview' }"
+          :role-variant="primaryRoleVariant"
+          :role-label="t('home.crossStudy.cardRoleLabel')"
+          :title="t('home.cards.patientsOverview.title')"
+          :description="t('home.cards.patientsOverview.description')"
+        />
+        <!-- Administrator additions: platform-wide user / study
+             provisioning + the modality catalogue. Kept in this
+             general section instead of a separate admin-only one. -->
+        <template v-if="showAdministrator">
+          <LandingCard
+            :to="{ name: 'manage-users' }"
+            role-variant="administrator"
+            :role-label="t('home.role.Administrator')"
+            :title="t('manageUsers.title')"
+            :description="t('home.administrator.manageUsersDesc')"
+            :badge="pendingInvitesCount"
+            :badge-aria-label="t('home.administrator.pendingInvitesBadgeAria', { n: pendingInvitesCount ?? 0 })"
+          />
+          <LandingCard
+            :to="{ name: 'study-create' }"
+            role-variant="administrator"
+            :role-label="t('home.role.Administrator')"
+            :title="t('home.administrator.createStudyTitle')"
+            :description="t('home.administrator.createStudyDesc')"
+          />
+          <LandingCard
+            :to="{ name: 'modalities' }"
+            role-variant="administrator"
+            :role-label="t('home.role.Administrator')"
+            :title="t('modalities.title')"
+            :description="t('home.administrator.modalitiesDesc')"
+          />
+        </template>
+        <!-- Switch-study card surfaces for every role with >1 grant. -->
+        <LandingCard
+          v-if="canSwitchStudy"
+          :to="{ name: 'pick-study' }"
+          :role-variant="primaryRoleVariant"
+          :role-label="t('home.crossStudy.cardRoleLabel')"
+          :title="t('home.switchStudyTitle')"
+          :description="t('home.switchStudyDesc')"
+        />
+      </section>
+
+      <!-- Divider with active study name — same copy as the admin
+           layout already used, lifted to apply to every role. -->
+      <div class="max-w-5xl mb-6 flex items-center gap-3">
+        <hr class="flex-1 border-t border-slate-200" />
+        <span class="text-[11px] uppercase tracking-[0.14em] text-slate-500 whitespace-nowrap">
+          {{ t('home.administrator.studyScopedLabel', { study: activeStudyName }) }}
+        </span>
+        <hr class="flex-1 border-t border-slate-200" />
+      </div>
+    </template>
+
     <!-- Investigator + CRC landing -->
     <section v-if="showInvestigator" :aria-label="t('home.investigator.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
       <LandingCard
@@ -188,26 +284,12 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
         :description="t('home.investigator.signQueueDesc')"
       />
       <LandingCard
-        :to="{ name: 'subject-matrix', query: { filter: 'today' } }"
-        role-variant="investigator"
-        :role-label="t('home.role.Investigator')"
-        :title="t('home.investigator.todaysCrfsTitle')"
-        :description="t('home.investigator.todaysCrfsDesc')"
-      />
-      <LandingCard
         :to="{ name: 'notes', query: { assignedTo: auth.user?.username ?? '' } }"
         role-variant="investigator"
         :role-label="t('home.role.Investigator')"
         :title="t('home.investigator.openQueriesTitle')"
         :description="t('home.investigator.openQueriesDesc')"
         :badge="openQueriesAssignedToMeCount"
-      />
-      <LandingCard
-        :to="{ name: 'patients-overview' }"
-        role-variant="investigator"
-        :role-label="t('home.role.Investigator')"
-        :title="t('home.cards.patientsOverview.title')"
-        :description="t('home.cards.patientsOverview.description')"
       />
     </section>
 
@@ -244,13 +326,6 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
         :role-label="t('home.role.Monitor')"
         :title="t('auditLog.title')"
         :description="t('home.monitor.auditLogDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'patients-overview' }"
-        role-variant="monitor"
-        :role-label="t('home.role.Monitor')"
-        :title="t('home.cards.patientsOverview.title')"
-        :description="t('home.cards.patientsOverview.description')"
       />
     </section>
 
@@ -300,71 +375,13 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
         :title="t('home.dataManager.dataExportTitle')"
         :description="t('home.dataManager.dataExportDesc')"
       />
-      <LandingCard
-        :to="{ name: 'patients-overview' }"
-        role-variant="data-manager"
-        :role-label="t('home.role.Data Manager')"
-        :title="t('home.cards.patientsOverview.title')"
-        :description="t('home.cards.patientsOverview.description')"
-      />
     </section>
 
-    <!-- Administrator landing — split into two zones so the operator can
-         tell at a glance which actions are platform-wide vs scoped to
-         the currently active study. -->
+    <!-- Administrator study-scoped landing. Platform-wide cards
+         (Manage Users, Create Study, Modalities, Switch Study) now
+         live in the universal general section above the divider, so
+         only the study-scoped actions render here. -->
     <template v-if="showAdministrator">
-      <!-- Platform-wide actions: cross-study user lifecycle, new-study
-           provisioning, switching the active study. None of these
-           depend on which study is currently bound. -->
-      <section
-        :aria-label="t('home.administrator.globalSectionLabel')"
-        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-6"
-      >
-        <LandingCard
-          :to="{ name: 'manage-users' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('manageUsers.title')"
-          :description="t('home.administrator.manageUsersDesc')"
-          :badge="pendingInvitesCount"
-          :badge-aria-label="t('home.administrator.pendingInvitesBadgeAria', { n: pendingInvitesCount ?? 0 })"
-        />
-        <LandingCard
-          :to="{ name: 'study-create' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('home.administrator.createStudyTitle')"
-          :description="t('home.administrator.createStudyDesc')"
-        />
-        <LandingCard
-          v-if="canSwitchStudy"
-          :to="{ name: 'pick-study' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('home.switchStudyTitle')"
-          :description="t('home.switchStudyDesc')"
-        />
-        <LandingCard
-          :to="{ name: 'modalities' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('modalities.title')"
-          :description="t('home.administrator.modalitiesDesc')"
-        />
-      </section>
-
-      <!-- Visual divider + label between platform-wide and study-scoped. -->
-      <div class="max-w-5xl mb-6 flex items-center gap-3">
-        <hr class="flex-1 border-t border-slate-200" />
-        <span class="text-[11px] uppercase tracking-[0.14em] text-slate-500 whitespace-nowrap">
-          {{ t('home.administrator.studyScopedLabel', { study: activeStudyName }) }}
-        </span>
-        <hr class="flex-1 border-t border-slate-200" />
-      </div>
-
-      <!-- Study-scoped actions: everything that operates on the
-           currently active study (its identity, sites, audit trail,
-           open queries). -->
       <section
         :aria-label="t('home.administrator.sectionLabel')"
         class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8"
@@ -406,39 +423,12 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
           :title="t('home.administrator.dataExportTitle')"
           :description="t('home.administrator.dataExportDesc')"
         />
-        <LandingCard
-          :to="{ name: 'patients-overview' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('home.cards.patientsOverview.title')"
-          :description="t('home.cards.patientsOverview.description')"
-        />
       </section>
     </template>
 
-    <!-- Switch-study card (per-role landings other than Administrator). -->
-    <!-- Switch-study card sits in its own divider-led section, mirroring the
-         Administrator landing's platform-wide vs study-scoped split so the
-         intent (this action is cross-study, not scoped to the bound one)
-         is visually obvious. -->
-    <template v-if="canSwitchStudy && !showAdministrator">
-      <div class="max-w-5xl mb-6 flex items-center gap-3">
-        <hr class="flex-1 border-t border-slate-200" />
-        <span class="text-[11px] uppercase tracking-[0.14em] text-slate-500 whitespace-nowrap">
-          {{ t('home.switchStudySectionLabel') }}
-        </span>
-        <hr class="flex-1 border-t border-slate-200" />
-      </div>
-      <section :aria-label="t('home.switchStudySectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
-        <LandingCard
-          :to="{ name: 'pick-study' }"
-          :role-variant="role === 'Monitor' ? 'monitor' : role === 'Data Manager' ? 'data-manager' : 'investigator'"
-          :role-label="role ? t('home.role.' + role) : ''"
-          :title="t('home.switchStudyTitle')"
-          :description="t('home.switchStudyDesc')"
-        />
-      </section>
-    </template>
+    <!-- Switch-study card now lives in the universal general section
+         above (rendered when canSwitchStudy is true for any role), so
+         no separate bottom block is needed. -->
 
     <!-- Fallback when role hasn't loaded yet (auth.bootstrap() in flight). -->
     <p v-if="!role" class="text-slate-500 text-sm italic">

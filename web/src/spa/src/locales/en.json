@@ -91,11 +91,18 @@
       "sitesDesc": "Site identity + activation + per-site user roles.",
       "auditLogDesc": "Platform audit trail with diff cards on every change.",
       "dataExportTitle": "Data Export",
-      "dataExportDesc": "Saved datasets for the active study — trigger exports and download generated files."
+      "dataExportDesc": "Saved datasets for the active study — trigger exports and download generated files.",
+      "modalitiesDesc": "Manage measurement modalities + their per-eye item OIDs."
     },
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
-    "switchStudyDesc": "Pick another study you are assigned to. Only your bound studies are shown."
+    "switchStudyDesc": "Pick another study you are assigned to. Only your bound studies are shown.",
+    "generalSectionLabel": "General actions",
+    "crossStudy": {
+      "cardRoleLabel": "Cross-study",
+      "todaysCrfsTitle": "Today's open CRFs",
+      "todaysCrfsDesc": "Subjects with visits in data entry or scheduled for today — across every study you can see."
+    }
   },
   "common": {
     "loading": "Loading…",
@@ -1425,7 +1432,7 @@
     }
   },
   "patientDetail": {
-    "heading": "Patient #{subjectId}",
+    "heading": "Patient",
     "close": "Close",
     "emptyTimeline": "No transitions for this eye.",
     "timeline": {
@@ -1436,6 +1443,7 @@
       "currentBadge": "current"
     },
     "charts": {
+      "title": "Measurements over time",
       "heading": "Measurements over time",
       "modalityPicker": "Modalities",
       "empty": "No measurements available.",
@@ -1445,8 +1453,15 @@
   "patients": {
     "list": {
       "title": "Patient Overview",
+      "subtitle": "Cross-study list of every patient with an active enrolment you can see.",
       "searchPlaceholder": "Search by ID or identifier…",
       "empty": "No patients match your access.",
+      "rowAria": "Patient {label}, born {yearOfBirth}",
+      "rangeLabel": "{start}–{end} of {total}",
+      "pageOfTotal": "Page {page} of {total}",
+      "prev": "Previous",
+      "next": "Next",
+      "open": "Open →",
       "pagination": {
         "label": "{from}–{to} of {total}"
       },
@@ -1455,7 +1470,7 @@
         "gender": "Sex",
         "studies": "Studies",
         "lastVisit": "Last visit",
-        "actions": ""
+        "actions": "Action"
       },
       "action": {
         "openDetail": "Open →"

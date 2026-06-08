@@ -95,7 +95,13 @@
     },
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
-    "switchStudyDesc": "Andere Studie auswählen, der Sie zugeordnet sind. Nur Ihre zugeordneten Studien werden angezeigt."
+    "switchStudyDesc": "Andere Studie auswählen, der Sie zugeordnet sind. Nur Ihre zugeordneten Studien werden angezeigt.",
+    "generalSectionLabel": "Allgemeine Aktionen",
+    "crossStudy": {
+      "cardRoleLabel": "Studienübergreifend",
+      "todaysCrfsTitle": "Heutige offene CRFs",
+      "todaysCrfsDesc": "Teilnehmer mit Visiten in Dateneingabe oder für heute geplant — über alle Studien hinweg."
+    }
   },
   "common": {
     "loading": "Wird geladen…",
@@ -1425,7 +1431,7 @@
     }
   },
   "patientDetail": {
-    "heading": "Patient #{subjectId}",
+    "heading": "Patient",
     "close": "Schließen",
     "emptyTimeline": "Keine Verlagerungen für dieses Auge.",
     "timeline": {
@@ -1436,6 +1442,7 @@
       "currentBadge": "aktuell"
     },
     "charts": {
+      "title": "Messungen über Zeit",
       "heading": "Messungen über Zeit",
       "modalityPicker": "Modalitäten",
       "empty": "Keine Messungen vorhanden.",
@@ -1445,8 +1452,15 @@
   "patients": {
     "list": {
       "title": "Patientenübersicht",
+      "subtitle": "Studienübergreifende Übersicht aller Patient/innen mit aktiver Erfassung.",
       "searchPlaceholder": "Suchen nach ID oder Identifier…",
       "empty": "Keine Patient/innen in Ihrer Zugriffsliste.",
+      "rowAria": "Patient {label}, geboren {yearOfBirth}",
+      "rangeLabel": "{start}–{end} von {total}",
+      "pageOfTotal": "Seite {page} von {total}",
+      "prev": "Zurück",
+      "next": "Weiter",
+      "open": "Öffnen →",
       "pagination": {
         "label": "{from}–{to} von {total}"
       },
@@ -1455,7 +1469,7 @@
         "gender": "Geschlecht",
         "studies": "Studien",
         "lastVisit": "Letzte Visite",
-        "actions": ""
+        "actions": "Aktion"
       },
       "action": {
         "openDetail": "Öffnen →"

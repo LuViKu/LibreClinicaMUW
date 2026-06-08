@@ -132,8 +132,10 @@ describe('HomeView role-aware sections', () => {
     const section = w.find('[aria-label="Investigator workflows"]')
     expect(section.exists()).toBe(true)
     const cards = section.findAll('a')
-    // Subject Matrix · Add Subject · Sign-pending · Today's CRFs · My queries · Patientenübersicht (E.6 patients-overview).
-    expect(cards.length).toBe(6)
+    // Subject Matrix · Add Subject · Sign-pending · My queries.
+    // Today's CRFs + Patientenübersicht moved to the general
+    // (cross-study) section above the per-role landings.
+    expect(cards.length).toBe(4)
     const titles = cards.map((c) => c.text())
     expect(titles.some((t) => t.includes('My queries'))).toBe(true)
     expect(titles.some((t) => t.includes('Schedule a visit'))).toBe(false)
