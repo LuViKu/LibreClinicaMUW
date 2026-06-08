@@ -96,6 +96,7 @@ watch(
       refresh()
     }
   },
+  { immediate: true },
 )
 
 interface StudyGroup {
