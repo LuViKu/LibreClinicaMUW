@@ -1,20 +1,23 @@
 /**
- * Phase E.6 — role-aware HomeView rendering spec.
+ * Phase E.6 (2026-06-03) → Multi-role per (user, study) — M2 (2026-06-08).
  *
- * Verifies that the landing renders the correct per-role section
- * conditional on auth.user.role and hides everything else. A small
- * change to the role-projection rules (RoleMapper, MeApiController's
- * sysadmin shortcut) should produce a test diff visible here.
+ * Verifies the role-aware landing. The Phase E.6 per-section model
+ * was replaced by a de-duplicated catalogue in M2: every visible
+ * card carries an {@code allowedRoles} list, and the rendered set is
+ * the intersection of those lists with the user's active-study
+ * binding. A small change to the catalogue, the role-projection
+ * rules (RoleMapper, MeApiController), or the fallback-chain in
+ * userRoles should produce a test diff visible here.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import { createI18n } from 'vue-i18n'
 
 // Stub the API client so the per-store .load() actions resolve to
 // empty arrays. The landing doesn't assert on the badge counts —
-// only on which sections render — so we don't need a richer stub.
+// only on which cards render — so we don't need a richer stub.
 vi.mock('@/api/client', () => ({
   apiGet: vi.fn().mockResolvedValue([]),
   apiPost: vi.fn().mockResolvedValue({}),
@@ -64,31 +67,44 @@ function makeRouter() {
       { path: '/studies/new', name: 'study-create', component: { template: '<div />' } },
       { path: '/pick-study', name: 'pick-study', component: { template: '<div />' } },
       { path: '/export', name: 'data-export', component: { template: '<div />' } },
-      { path: '/modalities', name: 'modalities', component: { template: '<div />' } },
-      { path: '/patients', name: 'patients-overview', component: { template: '<div />' } },
     ],
   })
 }
 
-function mountWith(role: string | null) {
+type Role = 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'
+
+function mountWith(roles: Role[] | null) {
   const pinia = createPinia()
   setActivePinia(pinia)
-  // Seed auth.user BEFORE mount so onMounted-time computeds see the
-  // role and dispatch the right .load() calls.
   const auth = useAuthStore()
-  if (role) {
+  if (roles && roles.length > 0) {
+    // Highest-priority role wins the top-level singular projection,
+    // mirroring the backend MeDto shape.
+    const priority: Record<Role, number> = {
+      Administrator: 5, 'Data Manager': 4, Monitor: 3, CRC: 2, Investigator: 1,
+    }
+    const sorted = [...roles].sort((a, b) => priority[b] - priority[a])
     auth.user = {
       username: 'demo',
       displayName: 'Demo',
       email: null,
-      role: role as 'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC',
+      role: sorted[0],
       siteLabel: null,
       source: 'local',
       mfaSatisfied: true,
       profileComplete: true,
       locale: null,
       timezone: null,
-      activeStudy: { id: 1, oid: 'S_DEFAULTS1', name: 'Default Study', isSite: false },
+      mustChangePassword: false,
+      passwordChangeReason: null,
+      activeStudy: {
+        id: 1,
+        oid: 'S_DEFAULTS1',
+        name: 'Default Study',
+        isSite: false,
+        role: sorted[0],
+        roles: roles,
+      },
     }
   } else {
     auth.user = null
@@ -102,87 +118,147 @@ function mountWith(role: string | null) {
   return wrapper
 }
 
+function cardIds(wrapper: ReturnType<typeof mountWith>): string[] {
+  return wrapper.findAll('[data-card-id]').map((el) => el.attributes('data-card-id') as string)
+}
+
 beforeEach(() => {
-  // The createTestingPinia stub replaces all actions with no-op spies,
-  // so the onMounted .load() calls don't actually fire network requests.
+  // No-op; createPinia/setActivePinia run per mount.
 })
 
-describe('HomeView role-aware sections', () => {
-  it('hides every per-role section while auth is loading (role = null)', async () => {
+describe('HomeView role-aware catalogue', () => {
+  it('renders no cards while auth is loading (user = null)', async () => {
     const w = mountWith(null)
     await w.vm.$nextTick()
-    expect(w.find('[aria-label="Investigator workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Monitor workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Data Manager workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Administrator workflows"]').exists()).toBe(false)
+    expect(cardIds(w).length).toBe(0)
   })
 
-  it('shows only the Investigator section for Investigator', async () => {
-    const w = mountWith('Investigator')
+  it('renders the Investigator catalogue for a pure Investigator (5 cards)', async () => {
+    const w = mountWith(['Investigator'])
     await w.vm.$nextTick()
-    expect(w.find('[aria-label="Investigator workflows"]').exists()).toBe(true)
-    expect(w.find('[aria-label="Monitor workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Data Manager workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Administrator workflows"]').exists()).toBe(false)
+    const ids = cardIds(w)
+    expect(ids).toContain('subject-matrix')
+    expect(ids).toContain('subject-new')
+    expect(ids).toContain('sign-queue')
+    expect(ids).toContain('todays-crfs')
+    expect(ids).toContain('notes')
+    // Admin/Monitor/DM-only cards must not appear.
+    expect(ids).not.toContain('sdv')
+    expect(ids).not.toContain('build-study')
+    expect(ids).not.toContain('manage-users')
+    expect(ids).not.toContain('audit-log')
   })
 
-  it('renders the Investigator landing without scheduleVisit and with the My queries card (Y2 follow-up)', async () => {
-    const w = mountWith('Investigator')
+  it('renders the Investigator catalogue for CRC (CRC inherits Investigator)', async () => {
+    const w = mountWith(['CRC'])
     await w.vm.$nextTick()
-    const section = w.find('[aria-label="Investigator workflows"]')
-    expect(section.exists()).toBe(true)
-    const cards = section.findAll('a')
-    // Subject Matrix · Add Subject · Sign-pending · My queries.
-    // Today's CRFs + Patientenübersicht moved to the general
-    // (cross-study) section above the per-role landings.
-    expect(cards.length).toBe(4)
-    const titles = cards.map((c) => c.text())
-    expect(titles.some((t) => t.includes('My queries'))).toBe(true)
-    expect(titles.some((t) => t.includes('Schedule a visit'))).toBe(false)
+    const ids = cardIds(w)
+    expect(ids).toContain('subject-matrix')
+    expect(ids).toContain('subject-new')
+    expect(ids).toContain('sign-queue')
+    expect(ids).toContain('todays-crfs')
+    expect(ids).toContain('notes')
   })
 
-  it('routes the Investigator queries card to /notes with assignedTo=current username', async () => {
-    const w = mountWith('Investigator')
+  it('renders the Monitor catalogue for a pure Monitor', async () => {
+    const w = mountWith(['Monitor'])
     await w.vm.$nextTick()
-    const section = w.find('[aria-label="Investigator workflows"]')
-    const queriesCard = section.findAll('a').find((a) => a.text().includes('My queries'))
-    expect(queriesCard).toBeDefined()
-    // RouterLink renders the resolved href; the route stub registers
-    // /notes with no params and the assignedTo lands in the query string.
-    expect(queriesCard!.attributes('href')).toContain('/notes')
-    expect(queriesCard!.attributes('href')).toContain('assignedTo=demo')
+    const ids = cardIds(w)
+    expect(ids).toContain('subject-matrix')
+    expect(ids).toContain('sdv')
+    expect(ids).toContain('notes')
+    expect(ids).toContain('audit-log')
+    expect(ids).not.toContain('subject-new')
+    expect(ids).not.toContain('build-study')
+    expect(ids).not.toContain('manage-users')
   })
 
-  it('shows only the Monitor section for Monitor', async () => {
-    const w = mountWith('Monitor')
+  it('renders the Data Manager catalogue for a pure Data Manager', async () => {
+    const w = mountWith(['Data Manager'])
     await w.vm.$nextTick()
-    expect(w.find('[aria-label="Investigator workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Monitor workflows"]').exists()).toBe(true)
-    expect(w.find('[aria-label="Data Manager workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Administrator workflows"]').exists()).toBe(false)
+    const ids = cardIds(w)
+    expect(ids).toContain('build-study')
+    expect(ids).toContain('notes')
+    expect(ids).toContain('audit-log')
+    expect(ids).toContain('import-crf-data')
+    expect(ids).toContain('rules')
+    expect(ids).toContain('data-export')
+    expect(ids).not.toContain('subject-new')
+    expect(ids).not.toContain('manage-users')
   })
 
-  it('shows the Data Manager section for Data Manager (Admin section hidden)', async () => {
-    const w = mountWith('Data Manager')
+  it('renders the Administrator catalogue (DM no longer inherited — 2026-06-03)', async () => {
+    const w = mountWith(['Administrator'])
     await w.vm.$nextTick()
-    expect(w.find('[aria-label="Investigator workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Monitor workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Data Manager workflows"]').exists()).toBe(true)
-    expect(w.find('[aria-label="Administrator workflows"]').exists()).toBe(false)
+    const ids = cardIds(w)
+    expect(ids).toContain('manage-users')
+    expect(ids).toContain('study-create')
+    expect(ids).toContain('notes')
+    expect(ids).toContain('audit-log')
+    expect(ids).toContain('sites')
+    expect(ids).toContain('data-export')
+    // study-edit only when activeStudyOid is set; our mount sets it.
+    expect(ids).toContain('study-edit')
+    expect(ids).not.toContain('build-study')
+    expect(ids).not.toContain('import-crf-data')
   })
 
-  it('shows only the Administrator section for Administrator (DM no longer inherited — 2026-06-03)', async () => {
-    const w = mountWith('Administrator')
+  it('dedups cards across overlapping roles — Investigator + Data Manager sees exactly one Notes card', async () => {
+    const w = mountWith(['Investigator', 'Data Manager'])
     await w.vm.$nextTick()
-    expect(w.find('[aria-label="Investigator workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Monitor workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Data Manager workflows"]').exists()).toBe(false)
-    expect(w.find('[aria-label="Administrator workflows"]').exists()).toBe(true)
+    const ids = cardIds(w)
+    const notesCards = ids.filter((id) => id === 'notes')
+    expect(notesCards.length).toBe(1)
   })
 
-  it('shows the Investigator section for CRC (inherits Investigator landing in v1)', async () => {
-    const w = mountWith('CRC')
+  it('union of Investigator + Data Manager catalogues — visible cards equal the union of both single-role catalogues', async () => {
+    const inv = mountWith(['Investigator'])
+    const dm = mountWith(['Data Manager'])
+    await inv.vm.$nextTick()
+    await dm.vm.$nextTick()
+    const both = mountWith(['Investigator', 'Data Manager'])
+    await both.vm.$nextTick()
+
+    const expected = new Set<string>([...cardIds(inv), ...cardIds(dm)])
+    const got = new Set<string>(cardIds(both))
+    expect(got).toEqual(expected)
+  })
+
+  it('stacks RoleDots on shared cards — the Notes card for Investigator + Data Manager carries two dots', async () => {
+    const w = mountWith(['Investigator', 'Data Manager'])
     await w.vm.$nextTick()
-    expect(w.find('[aria-label="Investigator workflows"]').exists()).toBe(true)
+    const notesCard = w.find('[data-card-id="notes"]')
+    expect(notesCard.exists()).toBe(true)
+    const dots = notesCard.findAll('span[aria-hidden="true"].rounded-full')
+    // RoleDots renders one dot per (unique) variant — Investigator
+    // (teal) + Data Manager (coral) → two dots.
+    expect(dots.length).toBe(2)
+  })
+
+  it('collapses CRC + Investigator dots into a single Investigator-coloured dot', async () => {
+    const w = mountWith(['Investigator', 'CRC'])
+    await w.vm.$nextTick()
+    const notesCard = w.find('[data-card-id="notes"]')
+    const dots = notesCard.findAll('span[aria-hidden="true"].rounded-full')
+    // CRC + Investigator both map to the investigator variant.
+    expect(dots.length).toBe(1)
+    expect(dots[0].classes()).toContain('bg-muw-teal-500')
+  })
+
+  it('hides the switch-study card by default and shows it when availableStudies has more than one entry', async () => {
+    const w = mountWith(['Data Manager'])
+    // Flush the onMounted Promise.allSettled (loadStudies → []) so it
+    // doesn't race with the manual mutation below.
+    await flushPromises()
+    expect(cardIds(w)).not.toContain('switch-study')
+
+    // Simulate two available studies arriving — Pinia store mutation directly.
+    const auth = useAuthStore()
+    auth.availableStudies = [
+      { id: 1, oid: 'S_A', name: 'Study A', isSite: false, role: 'Data Manager', parentOid: null, parentName: null },
+      { id: 2, oid: 'S_B', name: 'Study B', isSite: false, role: 'Data Manager', parentOid: null, parentName: null },
+    ] as never
+    await w.vm.$nextTick()
+    expect(cardIds(w)).toContain('switch-study')
   })
 })
