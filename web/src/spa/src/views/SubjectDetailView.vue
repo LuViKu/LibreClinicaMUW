@@ -13,6 +13,7 @@ import ErrorText from '@/components/ErrorText.vue'
 import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
 import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
+import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
 import { useEventsStore } from '@/stores/events'
@@ -418,6 +419,37 @@ function dataEntryStageLabel(stage: string | null): string {
   if (!stage) return '—'
   return t(`subjectDetail.dataEntryStage.${stage}`)
 }
+
+/* ------------------------------------------------------------- */
+/* Phase E.6 — modality-baselines panel mounting.                 */
+/*                                                                */
+/* One panel per eye that's either:                               */
+/*   1. In scope: subject.studyEye includes the eye (OD/OS/OU)    */
+/*   2. Transitioned-away: out of scope but eyeTransitions has    */
+/*      at least one entry for this eye, so historic baselines    */
+/*      may still exist and be diagnostically useful.             */
+/* Skip eyes with neither — nothing to show.                      */
+/* ------------------------------------------------------------- */
+
+interface EyePanelDescriptor {
+  eye: 'OD' | 'OS'
+  inScope: boolean
+}
+
+const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
+  const s = subject.value
+  if (!s) return []
+  const transitions = s.eyeTransitions ?? []
+  const descriptors: EyePanelDescriptor[] = []
+  for (const eye of ['OD', 'OS'] as const) {
+    const inScope = eyeInScope(eye)
+    const hasTransition = transitions.some((row) => row.eye === eye)
+    if (inScope || hasTransition) {
+      descriptors.push({ eye, inScope })
+    }
+  }
+  return descriptors
+})
 </script>
 
 <template>
@@ -812,6 +844,26 @@ function dataEntryStageLabel(stage: string | null): string {
             </template>
           </DenseTable>
         </section>
+
+        <!-- Phase E.6 — per-eye modality baselines. One panel per
+             in-scope eye (subject.studyEye includes the eye) and per
+             transitioned-away eye that still has historic baselines
+             worth surfacing. The inner panel renders its own heading
+             with the eye letter; we add a faint top divider per panel
+             so OD vs OS stay visually distinct without an extra label
+             row. -->
+        <div
+          v-if="baselinePanelEyes.length"
+          data-testid="modality-baselines-block"
+        >
+          <ModalityBaselinesPanel
+            v-for="panel in baselinePanelEyes"
+            :key="`baseline-${panel.eye}`"
+            :subject-label="subject.id"
+            :eye="panel.eye"
+            i18n-locale="de"
+          />
+        </div>
 
         <!-- Action row -->
         <div class="flex items-center justify-between flex-wrap gap-3">
