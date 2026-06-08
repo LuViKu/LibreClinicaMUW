@@ -18,7 +18,9 @@
     "manageUsers": "Manage Users",
     "importCrfData": "Import CRF Data",
     "dataExport": "Data Export",
-    "changePassword": "Change password"
+    "changePassword": "Change password",
+    "patientsOverview": "Patient Overview",
+    "modalities": "Modalities"
   },
   "a11y": {
     "skipToMain": "Skip to main content",
@@ -34,6 +36,16 @@
       "Data Manager": "Data Manager",
       "Administrator": "Administrator",
       "CRC": "CRC"
+    },
+    "cards": {
+      "patientsOverview": {
+        "title": "Patient Overview",
+        "description": "Cross-study view of every patient you can access."
+      },
+      "modalities": {
+        "title": "Modalities",
+        "description": "Manage exam modalities and their item OIDs."
+      }
     },
     "investigator": {
       "sectionLabel": "Investigator workflows",
@@ -81,7 +93,8 @@
       "sitesDesc": "Site identity + activation + per-site user roles.",
       "auditLogDesc": "Platform audit trail with diff cards on every change.",
       "dataExportTitle": "Data Export",
-      "dataExportDesc": "Saved datasets for the active study — trigger exports and download generated files."
+      "dataExportDesc": "Saved datasets for the active study — trigger exports and download generated files.",
+      "modalitiesDesc": "Manage measurement modalities + their per-eye item OIDs."
     },
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
@@ -1376,6 +1389,99 @@
       "auditNote": "All grants, role changes, and revocations are recorded in the audit trail."
     }
   },
+  "modalities": {
+    "title": "Modalities",
+    "subTitle": "Map exam modalities to per-eye item OIDs.",
+    "columns": {
+      "code": "Code",
+      "labelDe": "Label DE",
+      "labelEn": "Label EN",
+      "oidOd": "OD OID",
+      "oidOs": "OS OID",
+      "type": "Type",
+      "unit": "Unit",
+      "ordinal": "Ordinal",
+      "actions": ""
+    },
+    "action": {
+      "new": "New modality",
+      "edit": "Edit",
+      "delete": "Remove",
+      "deleteConfirm": "Remove modality {code}? Existing baselines stay; the panel will no longer surface this row."
+    },
+    "dialog": {
+      "titleNew": "New modality",
+      "titleEdit": "Edit modality",
+      "field": {
+        "code": "Code",
+        "labelEn": "Label EN",
+        "labelDe": "Label DE",
+        "ordinal": "Ordinal (sort key)",
+        "itemOidOd": "OD item OID (e.g. I_VA_OD_LOGMAR)",
+        "itemOidOs": "OS item OID (e.g. I_VA_OS_LOGMAR)",
+        "dataType": "Type",
+        "dataType.numeric": "Numeric (chartable)",
+        "dataType.categorical": "Categorical",
+        "unit": "Unit (optional)"
+      },
+      "action": {
+        "save": "Save",
+        "cancel": "Cancel"
+      }
+    },
+    "error": {
+      "duplicateCode": "A modality with this code already exists.",
+      "unknownOid": "Item OID '{oid}' not found in any active CRF version.",
+      "missingOid": "Provide at least one of OD OID / OS OID.",
+      "network": "Could not save the modality — please try again."
+    }
+  },
+  "patientDetail": {
+    "heading": "Patient",
+    "close": "Close",
+    "emptyTimeline": "No transitions for this eye.",
+    "timeline": {
+      "heading": "Study path per eye",
+      "eyeLabel": "{eye}",
+      "enrolmentPill": "Enrolled",
+      "transitionPill": "Transferred",
+      "currentBadge": "current"
+    },
+    "charts": {
+      "title": "Measurements over time",
+      "heading": "Measurements over time",
+      "modalityPicker": "Modalities",
+      "empty": "No measurements available.",
+      "categoricalRow": "{modality} — categorical timeline"
+    }
+  },
+  "patients": {
+    "list": {
+      "title": "Patient Overview",
+      "subtitle": "Cross-study list of every patient with an active enrolment you can see.",
+      "searchPlaceholder": "Search by ID or identifier…",
+      "empty": "No patients match your access.",
+      "rowAria": "Patient {label}, born {yearOfBirth}",
+      "rangeLabel": "{start}–{end} of {total}",
+      "pageOfTotal": "Page {page} of {total}",
+      "prev": "Previous",
+      "next": "Next",
+      "open": "Open →",
+      "pagination": {
+        "label": "{from}–{to} of {total}"
+      },
+      "columns": {
+        "yearOfBirth": "Year of birth",
+        "gender": "Sex",
+        "studies": "Studies",
+        "lastVisit": "Last visit",
+        "actions": "Action"
+      },
+      "action": {
+        "openDetail": "Open →"
+      }
+    }
+  },
   "importCrf": {
     "title": "Import CRF Data",
     "subTrail": "LCDemo · bulk-load existing data",
@@ -1721,6 +1827,23 @@
         "target": "{eye} previously tracked in {study} as {label}"
       },
       "success": "Transfer saved."
+    },
+    "modalityBaselines": {
+      "title": "{eye} baselines",
+      "loading": "Loading baselines…",
+      "empty": "No baselines available.",
+      "columns": {
+        "modality": "Modality",
+        "baselineDateGlobal": "First (global)",
+        "baselineValueGlobal": "Value (global)",
+        "baselineDatePerStudy": "First (this study)",
+        "baselineValuePerStudy": "Value (this study)",
+        "count": "n"
+      },
+      "error": {
+        "network": "Could not load baselines — please try again.",
+        "retry": "Retry"
+      }
     },
     "locked": "Locked"
   },

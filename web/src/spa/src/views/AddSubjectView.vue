@@ -6,7 +6,6 @@ import { useRouter } from 'vue-router'
 import SideRail from '@/components/SideRail.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
-import SelectInput from '@/components/SelectInput.vue'
 import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import StatusPill from '@/components/StatusPill.vue'
@@ -34,7 +33,7 @@ const form = reactive<AddSubjectInput>({
   siteLabel: 'München',
   gender: '' as Gender, // empty until user picks
   yearOfBirth: null,
-  groupLabel: null,
+  groupLabel: null, // retained for type compat; UI dropdown removed (no real group_class wiring)
   enrolledOn: todayIso.value,
   // Phase E.6 Tier 1 — ophthalmology domain fields. Both optional;
   // null keeps non-ophth studies free of forced eye scope.
@@ -299,14 +298,15 @@ const yearMax = computed(() => Number(todayIso.value.slice(0, 4)))
               <ErrorText v-if="errorFor('yearOfBirth')">{{ errorFor('yearOfBirth') }}</ErrorText>
             </div>
 
-            <div>
-              <FieldLabel for="group-label">{{ t('addSubject.field.groupLabel') }}</FieldLabel>
-              <SelectInput id="group-label" v-model="form.groupLabel">
-                <option :value="null">{{ t('addSubject.group.notAssigned') }}</option>
-                <option value="Arm A">Arm A</option>
-                <option value="Arm B">Arm B</option>
-              </SelectInput>
-            </div>
+            <!-- Group assignment dropdown is deliberately omitted.
+                 The historical hardcoded "Arm A / Arm B" stub
+                 (pre-Phase-E.6) never read from the active study's
+                 actual group_class definitions, and MUW's iAMD/GA
+                 cohorts are observational — no randomisation arm.
+                 The proper group_class-driven UI surfaces on the
+                 SubjectDetailView per-group picker for studies that
+                 declare groups; the AddSubject form posts
+                 groupAssignments=null which the backend accepts. -->
           </div>
         </section>
 

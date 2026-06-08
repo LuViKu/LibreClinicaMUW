@@ -341,6 +341,53 @@ class EyeCohortTransitionApiControllerDatabaseIT extends AbstractApiControllerDa
     }
 
     /* ====================================================================== */
+    /* 201 — reverse transition using NULL stub                              */
+    /* ====================================================================== */
+
+    /**
+     * Phase E.6 study-nurse polish — reverse-transition lock-in.
+     *
+     * <p>An OD-only subject (M-007) was previously transitioned from
+     * iAMD (study #1) to GA (study #2). Per the source-downgrade rule,
+     * the iAMD row's {@code study_eye} is now NULL (single-eye → NULL).
+     * The operator wants to "reverse" the transition: bring OD back to
+     * iAMD from GA. We POST against the GA-side label as the new
+     * source; the iAMD row already exists with study_eye=NULL, so
+     * {@code resolveOrCreateTarget} hits the "row exists with
+     * study_eye=null → re-occupy with eye" branch and the test asserts
+     * 201 (NOT 409) plus the NULL-stubbed iAMD row upgrades back to OD.
+     */
+    @Test
+    void transitionReturns201ForReverseTransitionUsingNullStub() throws Exception {
+        // Phase 1: build the "after a prior transition" state for M-007.
+        // M-007 (study_subject_id=7, subject_id=7) — start fresh: source
+        // study_eye=NULL (post-transition stub), target M-007-GA in
+        // study #2 with study_eye=OD (the eye that left).
+        setStudyEye(7, null);
+        unenrollSubjectFromStudy(targetStudyId, 7);
+        int targetSsId = insertTargetStudySubject(targetStudyId, 7, "M-007-GA", "OD");
+
+        // Phase 2: reverse the transition. Active study bound to study
+        // #2 (GA); source = "M-007-GA", target = iAMD (S_DEFAULTS1).
+        // Since the iAMD row exists with study_eye=NULL, the controller
+        // upgrades it back to study_eye='OD' instead of creating a new
+        // row or 409'ing.
+        mockMvc().perform(post("/api/v1/subjects/M-007-GA/eyes/OD/transition")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"targetStudyOid\":\"S_DEFAULTS1\","
+                        + "\"reason\":\"Reverse transition — patient re-classified to iAMD\"}")
+                .session(adminSession(targetStudyId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.sourceEyeAfter").doesNotExist())
+                .andExpect(jsonPath("$.targetEyeAfter").value("OD"));
+
+        // The GA source row downgrades single-eye → NULL.
+        assertStudyEye(targetSsId, null);
+        // The iAMD NULL-stub row upgrades to OD.
+        assertStudyEye(7, "OD");
+    }
+
+    /* ====================================================================== */
     /* Helpers                                                                */
     /* ====================================================================== */
 

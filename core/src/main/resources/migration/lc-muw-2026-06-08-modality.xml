@@ -1,0 +1,249 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 study-nurse polish — institution-wide modality catalog.
+
+        A "modality" is a clinically-named per-eye measurement family
+        (BCVA-logMAR, BCVA-ETDRS, IOP, refraction sphere/cyl, lens
+        status, etc.) that maps onto a pair of item OIDs (OD/OS) seeded
+        by lc-muw-2026-06-05-ophth-visit-crf-seed.xml. The Modality
+        Admin SPA writes rows here; the Per-Eye Baselines + Patient
+        Measurement Series endpoints read them to build the "earliest
+        observation" and "full history" surfaces.
+
+        Why a table (vs hardcoded enum). The operator can extend the
+        catalog with site-local instruments without a code change. The
+        OID columns are nullable per-side because some modalities are
+        single-eye (rare but plausible, e.g. an OS-only specialty test).
+        Bilateral modalities populate BOTH columns; the controller
+        enforces "at least one OID set".
+
+        ID allocation. audit_log_event_type rows 56 + 57 are already
+        claimed (discrepancy_exported + eye_cohort_transition). The
+        brief's 56/57/58 numbering predated those landings; we pick
+        the next free slot (58, 59, 60). The preCondition guards
+        against double-seed in case a sibling phase claims these.
+
+        FK behaviour. No FK from modality.item_oid_od / item_oid_os to
+        item.oc_oid: an OID may be deprecated or renamed at the CRF
+        seed level without breaking the modality row's audit history.
+        The controller validates "OID exists at write time" via DAO
+        lookup; runtime read paths tolerate stale OIDs by skipping the
+        modality's data for that eye.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-08-modality-table">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="modality"/></not>
+        </preConditions>
+        <createTable tableName="modality">
+            <column autoIncrement="true" name="modality_id" type="SERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="code" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true"
+                             uniqueConstraintName="uq_modality_code"/>
+            </column>
+            <column name="label_en" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="label_de" type="VARCHAR(120)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ordinal" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="item_oid_od" type="VARCHAR(64)"/>
+            <column name="item_oid_os" type="VARCHAR(64)"/>
+            <column name="data_type" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="unit" type="VARCHAR(32)"/>
+            <column name="status_id" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_created" type="TIMESTAMP" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="INT"/>
+            <column name="date_updated" type="TIMESTAMP"/>
+            <column name="updated_by_user_id" type="INT"/>
+        </createTable>
+
+        <!--
+            data_type is a closed taxonomy — 'numeric' (parseable as
+            decimal; SPA renders gauges, sparklines, baselines) or
+            'categorical' (string code; SPA renders labels, no
+            sparkline). Belt-and-braces CHECK so a bad write at the
+            JDBC layer can't slip an unexpected value into the column.
+        -->
+        <sql>
+            ALTER TABLE modality
+            ADD CONSTRAINT ck_modality_data_type CHECK (data_type IN ('numeric', 'categorical'));
+        </sql>
+
+        <!--
+            Lookup-by-active-ordinal: the list endpoint paginates by
+            (status_id=1, ordinal ASC, code ASC). A composite index on
+            (status_id, ordinal) is the natural fit; code is added by
+            the secondary sort in the SQL.
+        -->
+        <createIndex tableName="modality" indexName="ix_modality_status_ordinal">
+            <column name="status_id"/>
+            <column name="ordinal"/>
+        </createIndex>
+    </changeSet>
+
+    <!--
+        audit_log_event_type rows the ModalitiesApiController writes
+        for create/update/delete. One type per verb so the Audit Log
+        SPA renders distinct human-readable titles without tag-decoding
+        the new_value column.
+
+        Brief asked for 56/57/58; those were already claimed by
+        sibling landings (discrepancy_exported=56, eye_cohort_transition=57).
+        We pick 58, 59, 60 here. Sibling preConditions guard against
+        future double-seed in case a parallel phase races us for these.
+    -->
+    <changeSet id="2026-06-08-audit-event-type-modality-created"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 58;
+            </sqlCheck>
+        </preConditions>
+        <comment>Audit type for ModalitiesApiController.POST writes.</comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="58"/>
+            <column name="name" value="modality_created"/>
+            <column name="display_name" value="Modality created"/>
+        </insert>
+    </changeSet>
+    <changeSet id="2026-06-08-audit-event-type-modality-updated"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 59;
+            </sqlCheck>
+        </preConditions>
+        <comment>Audit type for ModalitiesApiController.PUT writes.</comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="59"/>
+            <column name="name" value="modality_updated"/>
+            <column name="display_name" value="Modality updated"/>
+        </insert>
+    </changeSet>
+    <changeSet id="2026-06-08-audit-event-type-modality-deleted"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 60;
+            </sqlCheck>
+        </preConditions>
+        <comment>Audit type for ModalitiesApiController.DELETE writes (soft delete).</comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="60"/>
+            <column name="name" value="modality_deleted"/>
+            <column name="display_name" value="Modality deleted"/>
+        </insert>
+    </changeSet>
+
+    <!--
+        Seed the six institution-wide modalities the SPA renders by
+        default. OIDs map onto the visit CRF items seeded by
+        lc-muw-2026-06-05-ophth-visit-crf-seed.xml. The SPA's Modality
+        Admin view can edit / extend these post-seed; soft-delete by
+        flipping status_id to 5.
+
+        We use a single changeSet with multiple inserts because they
+        share lifecycle (all six land together or none does). The
+        preCondition lets a partial re-run skip if any seed row is
+        already present.
+    -->
+    <changeSet id="2026-06-08-modality-seed"
+               author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM modality;
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed the six MUW Ophthalmology institution-wide modalities.</comment>
+        <insert tableName="modality">
+            <column name="code" value="BCVA_LOGMAR"/>
+            <column name="label_en" value="Best-corrected visual acuity (LogMAR)"/>
+            <column name="label_de" value="Bestkorrigierter Visus (LogMAR)"/>
+            <column name="ordinal" valueNumeric="10"/>
+            <column name="item_oid_od" value="I_VA_OD_LOGMAR"/>
+            <column name="item_oid_os" value="I_VA_OS_LOGMAR"/>
+            <column name="data_type" value="numeric"/>
+            <column name="unit" value="logMAR"/>
+            <column name="status_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="modality">
+            <column name="code" value="BCVA_ETDRS"/>
+            <column name="label_en" value="Best-corrected visual acuity (ETDRS)"/>
+            <column name="label_de" value="Bestkorrigierter Visus (ETDRS-Buchstaben)"/>
+            <column name="ordinal" valueNumeric="20"/>
+            <column name="item_oid_od" value="I_VA_OD_ETDRS"/>
+            <column name="item_oid_os" value="I_VA_OS_ETDRS"/>
+            <column name="data_type" value="numeric"/>
+            <column name="unit" value="letters"/>
+            <column name="status_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="modality">
+            <column name="code" value="IOP"/>
+            <column name="label_en" value="Intraocular pressure"/>
+            <column name="label_de" value="Augeninnendruck"/>
+            <column name="ordinal" valueNumeric="30"/>
+            <column name="item_oid_od" value="I_IOP_OD"/>
+            <column name="item_oid_os" value="I_IOP_OS"/>
+            <column name="data_type" value="numeric"/>
+            <column name="unit" value="mmHg"/>
+            <column name="status_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="modality">
+            <column name="code" value="REFRACTION_SPH"/>
+            <column name="label_en" value="Manifest refraction (sphere)"/>
+            <column name="label_de" value="Manifeste Refraktion (Sphäre)"/>
+            <column name="ordinal" valueNumeric="40"/>
+            <column name="item_oid_od" value="I_REFRACT_OD_SPH"/>
+            <column name="item_oid_os" value="I_REFRACT_OS_SPH"/>
+            <column name="data_type" value="numeric"/>
+            <column name="unit" value="dpt"/>
+            <column name="status_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="modality">
+            <column name="code" value="REFRACTION_CYL"/>
+            <column name="label_en" value="Manifest refraction (cylinder)"/>
+            <column name="label_de" value="Manifeste Refraktion (Zylinder)"/>
+            <column name="ordinal" valueNumeric="50"/>
+            <column name="item_oid_od" value="I_REFRACT_OD_CYL"/>
+            <column name="item_oid_os" value="I_REFRACT_OS_CYL"/>
+            <column name="data_type" value="numeric"/>
+            <column name="unit" value="dpt"/>
+            <column name="status_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="modality">
+            <column name="code" value="LENS_STATUS"/>
+            <column name="label_en" value="Anatomical lens status"/>
+            <column name="label_de" value="Anatomischer Linsenstatus"/>
+            <column name="ordinal" valueNumeric="60"/>
+            <column name="item_oid_od" value="I_LENS_OD"/>
+            <column name="item_oid_os" value="I_LENS_OS"/>
+            <column name="data_type" value="categorical"/>
+            <column name="status_id" valueNumeric="1"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

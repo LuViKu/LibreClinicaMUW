@@ -188,6 +188,11 @@ async function mountAt(options: MountOptions = {}) {
 
   const detail = options.detail ?? makeDetail()
   apiGetMock.mockReset()
+  // Default tail-fallback for the ModalityBaselinesPanel's own apiGet
+  // calls (one per mounted panel). The subject detail itself is fixed
+  // via mockResolvedValueOnce so it stays the first response regardless
+  // of how many baseline calls land afterwards.
+  apiGetMock.mockResolvedValue([])
   apiGetMock.mockResolvedValueOnce(detail)
 
   const wrapper = mount(SubjectDetailView, {
@@ -303,5 +308,61 @@ describe('SubjectDetailView — cross-reference banners', () => {
     })
     expect(w.find('[data-testid="eye-transition-banner-source"]').exists()).toBe(false)
     expect(w.find('[data-testid="eye-transition-banner-target"]').exists()).toBe(false)
+  })
+})
+
+describe('SubjectDetailView — modality baselines block', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+  })
+
+  it('mounts one panel per in-scope eye (OU → both eyes)', async () => {
+    const w = await mountAt({
+      role: 'Investigator',
+      detail: makeDetail({ studyEye: 'OU' }),
+    })
+    expect(w.find('[data-testid="modality-baselines-OD"]').exists()).toBe(true)
+    expect(w.find('[data-testid="modality-baselines-OS"]').exists()).toBe(true)
+  })
+
+  it('mounts a single panel for a single-eye subject (OD only)', async () => {
+    const w = await mountAt({
+      role: 'Investigator',
+      detail: makeDetail({ studyEye: 'OD' as StudyEye }),
+    })
+    expect(w.find('[data-testid="modality-baselines-OD"]').exists()).toBe(true)
+    expect(w.find('[data-testid="modality-baselines-OS"]').exists()).toBe(false)
+  })
+
+  it('mounts a panel for a transitioned-away eye even when out of scope', async () => {
+    const transition: EyeTransitionDto = {
+      transitionId: 11,
+      eye: 'OD',
+      side: 'source',
+      partnerStudyOid: 'S_GA001',
+      partnerStudyName: 'GA',
+      partnerLabel: 'M-101',
+      transitionedAt: '2026-06-07T09:00:00Z',
+      reason: 'Progression to GA',
+    }
+    const w = await mountAt({
+      role: 'Investigator',
+      // OD has transitioned away to GA — current studyEye is now OS only,
+      // but the OD historic baselines should still surface.
+      detail: makeDetail({ studyEye: 'OS' as StudyEye, eyeTransitions: [transition] }),
+    })
+    expect(w.find('[data-testid="modality-baselines-OD"]').exists()).toBe(true)
+    expect(w.find('[data-testid="modality-baselines-OS"]').exists()).toBe(true)
+  })
+
+  it('skips eyes with neither in-scope nor transitioned-away (null studyEye, no transitions)', async () => {
+    const w = await mountAt({
+      role: 'Investigator',
+      detail: makeDetail({ studyEye: null, eyeTransitions: [] }),
+    })
+    expect(w.find('[data-testid="modality-baselines-OD"]').exists()).toBe(false)
+    expect(w.find('[data-testid="modality-baselines-OS"]').exists()).toBe(false)
+    // The block wrapper isn't rendered either when there's nothing to show.
+    expect(w.find('[data-testid="modality-baselines-block"]').exists()).toBe(false)
   })
 })
