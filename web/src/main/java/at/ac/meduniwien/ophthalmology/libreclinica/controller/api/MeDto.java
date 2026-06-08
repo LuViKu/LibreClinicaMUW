@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
@@ -17,6 +19,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * (web/src/spa/src/types/auth.ts). The `role` field is mapped from
  * the legacy `Role.id` taxonomy into the SPA's 5-value union
  * (Investigator / Monitor / Data Manager / Administrator / CRC).
+ *
+ * <p>Multi-role (M1 backend): {@code roles} carries EVERY active SPA-
+ * projected role the user holds on the active study, sorted highest-
+ * to-lowest by priority (Administrator > Data Manager > Monitor > CRC
+ * > Investigator). {@code role} continues to carry the
+ * highest-priority value for back-compat with code paths that only
+ * cared about the dominant role. Both fields are always populated.
  *
  * <p>`activeStudy` is null when the user hasn't picked a study yet
  * (legacy SecureController binds it from `ub.getActiveStudyId()` on
@@ -55,6 +64,7 @@ public record MeDto(
         String displayName,
         String email,
         String role,
+        List<String> roles,
         String siteLabel,
         String source,
         boolean mfaSatisfied,

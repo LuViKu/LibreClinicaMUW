@@ -2065,6 +2065,7 @@ export interface components {
         RoleAssignmentRequest: {
             studyOid?: string;
             role?: string;
+            roles?: string[];
         };
         RoleBindingDto: {
             /** Format: int32 */
@@ -2400,6 +2401,7 @@ export interface components {
             displayName?: string;
             email?: string;
             role?: string;
+            roles?: string[];
             siteLabel?: string;
             source?: string;
             mfaSatisfied?: boolean;
