@@ -202,7 +202,7 @@ export type EventCellDetail =
  * fields; the detail view fetches them separately.
  */
 export type SubjectDetail =
-  Omit<Required<components['schemas']['SubjectDetailDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events' | 'studyEye' | 'screeningDate'>
+  Omit<Required<components['schemas']['SubjectDetailDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events' | 'studyEye' | 'screeningDate' | 'eyeTransitions'>
   & {
     gender: Gender
     secondaryId: string | null
