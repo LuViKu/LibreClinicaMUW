@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUsersStore } from '../users'
 import { ApiError, ApiNetworkError } from '@/api/client'
-import type { StudyUser } from '@/types/user'
+import type { RoleBinding, StudyUser } from '@/types/user'
 
 /**
  * Phase E.6 — Vitest coverage for the users store.
@@ -28,7 +28,7 @@ vi.mock('@/api/client', async () => {
   }
 })
 
-import { apiPost } from '@/api/client'
+import { apiGet, apiPost, apiPut } from '@/api/client'
 
 const FIXTURE_LOCKED: StudyUser = {
   id: '42',
@@ -240,6 +240,118 @@ describe('useUsersStore.resetPassword', () => {
     const store = useUsersStore()
 
     const result = await store.resetPassword('physician')
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toContain('Backend nicht erreichbar')
+    }
+    expect(store.error).toContain('Backend nicht erreichbar')
+  })
+})
+
+const ROLE_BINDING_INV: RoleBinding = {
+  studyId: 1,
+  studyOid: 'S1',
+  studyName: 'Study One',
+  siteLabel: null,
+  role: 'Investigator',
+  active: true,
+}
+const ROLE_BINDING_MON: RoleBinding = { ...ROLE_BINDING_INV, role: 'Monitor' }
+
+describe('useUsersStore.setStudyRoles', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(apiPut).mockReset()
+    vi.mocked(apiGet).mockReset()
+  })
+
+  it('PUTs the bulk-replace endpoint with {roles} body and refreshes from GET on success', async () => {
+    vi.mocked(apiPut).mockResolvedValueOnce([ROLE_BINDING_INV, ROLE_BINDING_MON])
+    vi.mocked(apiGet).mockResolvedValueOnce([ROLE_BINDING_INV, ROLE_BINDING_MON])
+    const store = useUsersStore()
+
+    const result = await store.setStudyRoles('alice', 'S1', ['Investigator', 'Monitor'])
+
+    expect(apiPut).toHaveBeenCalledTimes(1)
+    expect(apiPut).toHaveBeenCalledWith(
+      '/pages/api/v1/users/alice/roles/S1',
+      { roles: ['Investigator', 'Monitor'] },
+    )
+    // Refresh via listUserRoles.
+    expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/users/alice/roles')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.bindings).toEqual([ROLE_BINDING_INV, ROLE_BINDING_MON])
+    }
+    expect(store.error).toBeNull()
+  })
+
+  it('passes an empty roles array through verbatim (remove-all semantics)', async () => {
+    vi.mocked(apiPut).mockResolvedValueOnce([])
+    vi.mocked(apiGet).mockResolvedValueOnce([])
+    const store = useUsersStore()
+
+    const result = await store.setStudyRoles('alice', 'S1', [])
+
+    expect(apiPut).toHaveBeenCalledWith(
+      '/pages/api/v1/users/alice/roles/S1',
+      { roles: [] },
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) expect(result.bindings).toEqual([])
+  })
+
+  it('encodes username + studyOid path segments', async () => {
+    vi.mocked(apiPut).mockResolvedValueOnce([])
+    vi.mocked(apiGet).mockResolvedValueOnce([])
+    const store = useUsersStore()
+
+    await store.setStudyRoles('ad/user', 'S 1/A', ['Investigator'])
+
+    expect(apiPut).toHaveBeenCalledWith(
+      '/pages/api/v1/users/ad%2Fuser/roles/S%201%2FA',
+      { roles: ['Investigator'] },
+    )
+  })
+
+  it('surfaces a 400 validation error message and sets store.error', async () => {
+    vi.mocked(apiPut).mockRejectedValueOnce(
+      new ApiError(400, 'Bad Request', {
+        message: 'Cannot assign Administrator as a per-study role',
+        errors: [{ field: 'roles', message: 'Administrator forbidden' }],
+      }),
+    )
+    const store = useUsersStore()
+
+    const result = await store.setStudyRoles('alice', 'S1', ['Administrator'])
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toContain('Administrator')
+      expect(result.fieldErrors.roles).toBe('Administrator forbidden')
+    }
+    expect(store.error).toContain('Administrator')
+    expect(apiGet).not.toHaveBeenCalled()
+  })
+
+  it('rethrows on 403 so the router auth-guard runs', async () => {
+    vi.mocked(apiPut).mockRejectedValueOnce(
+      new ApiError(403, 'Forbidden', { message: 'sysadmin only' }),
+    )
+    const store = useUsersStore()
+
+    await expect(
+      store.setStudyRoles('alice', 'S1', ['Investigator']),
+    ).rejects.toBeInstanceOf(ApiError)
+    expect(store.error).toBe('sysadmin only')
+  })
+
+  it('maps a network failure into a friendly error', async () => {
+    vi.mocked(apiPut).mockRejectedValueOnce(new ApiNetworkError('refused', undefined))
+    const store = useUsersStore()
+
+    const result = await store.setStudyRoles('alice', 'S1', ['Investigator'])
 
     expect(result.ok).toBe(false)
     if (!result.ok) {
