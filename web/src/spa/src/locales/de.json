@@ -1354,6 +1354,8 @@
       "title": "Rollenzuweisungen verwalten",
       "currentHeading": "Aktuelle Zuweisungen",
       "grantHeading": "Neue Rolle vergeben",
+      "addStudyHeading": "Studie hinzufügen",
+      "addStudy": "Studie hinzufügen",
       "empty": "Keine aktiven Rollenzuweisungen auf sichtbaren Studien.",
       "study": "Studie",
       "studyPlaceholder": "Studie auswählen…",
@@ -1362,6 +1364,13 @@
       "revoke": "Entziehen",
       "revoked": "Entzogen",
       "revokeConfirm": "Rolle von {username} in Studie {study} entziehen? Der Studienzugriff wird entfernt; bestehende Daten bleiben unverändert. Die Aktion wird im Audit Trail dokumentiert.",
+      "removeStudy": "Studie entfernen",
+      "removeStudyAria": "Alle Rollen in Studie {study} entfernen",
+      "removeStudyConfirm": "Alle Rollen von {username} in Studie {study} entfernen? Der Studienzugriff wird vollständig entzogen; bestehende Daten bleiben unverändert. Die Aktion wird im Audit Trail dokumentiert.",
+      "rolesForStudy": "Rollen in Studie {study}",
+      "rolesForNewStudy": "Rollen für die neue Studie",
+      "saveError": "Speichern der Rollen fehlgeschlagen. Bitte erneut versuchen.",
+      "savedToast": "Rollen aktualisiert.",
       "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert."
     }
   },
