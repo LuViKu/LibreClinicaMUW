@@ -615,8 +615,8 @@ function dataEntryStageLabel(stage: string | null): string {
           <div class="font-medium mb-1">
             {{ t('subjectDetail.eyeTransition.banner.target', {
               eye: row.eye,
-              partnerStudy: row.partnerStudyName,
-              partnerLabel: row.partnerLabel,
+              study: row.partnerStudyName,
+              label: row.partnerLabel,
             }) }}
           </div>
           <button
@@ -637,9 +637,9 @@ function dataEntryStageLabel(stage: string | null): string {
           <div class="font-medium mb-1">
             {{ t('subjectDetail.eyeTransition.banner.source', {
               eye: row.eye,
-              transitionedAt: formatDate(row.transitionedAt.slice(0, 10)),
-              partnerStudy: row.partnerStudyName,
-              partnerLabel: row.partnerLabel,
+              date: formatDate(row.transitionedAt.slice(0, 10)),
+              study: row.partnerStudyName,
+              label: row.partnerLabel,
               reason: row.reason,
             }) }}
           </div>
