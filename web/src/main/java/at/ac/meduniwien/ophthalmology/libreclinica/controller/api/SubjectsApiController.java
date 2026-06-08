@@ -836,6 +836,189 @@ public class SubjectsApiController {
         return ResponseEntity.status(201).body(dto);
     }
 
+    /* =============================================================== */
+    /* Phase E.6 retrospective-backfill — match-preflight              */
+    /* =============================================================== */
+
+    /**
+     * Request body for {@link #matchPreflight}.
+     *
+     * <p>Only the patient-identity triplet matters here — the form
+     * hasn't yet committed an enrolment, so no study-level fields
+     * accompany the lookup. The backend is liberal about partial
+     * fields (matches need all three) and renders a permissive 400
+     * with explicit reasons rather than leaking match counts.
+     */
+    public record SubjectMatchPreflightRequest(
+            String firstName,
+            String lastName,
+            String dateOfBirth
+    ) {}
+
+    /**
+     * Single match candidate row.
+     *
+     * <p>The frontend renders one card per candidate with the
+     * operator-typed PHI triplet pre-filled (no PHI leaks back from
+     * this DTO — the operator already typed it). {@code studyOids} is
+     * filtered to studies the operator can see; {@code otherStudyCount}
+     * surfaces the count of additional active enrolments in studies
+     * the operator lacks access to so the "this human is already in
+     * the system somewhere" signal isn't suppressed for privacy.
+     */
+    public record SubjectMatchCandidate(
+            int subjectId,
+            String uniqueIdentifier,
+            String gender,
+            String dateOfBirth,
+            List<String> studyOids,
+            int otherStudyCount
+    ) {}
+
+    /**
+     * Phase E.6 retrospective-backfill — dedup preflight before the
+     * SPA POSTs to {@link #create}.
+     *
+     * <p>Operator types first name + last name + DoB on the AddSubject
+     * form. The SPA fires this endpoint as the operator finishes the
+     * DoB field so the match candidates can render in a dialog before
+     * commit. Match strategy is exact, case-insensitive on the full
+     * triplet (locked 2026-06-08 with the user) — the dedup index on
+     * subject (LOWER(first_name), LOWER(last_name), date_of_birth)
+     * makes the lookup an index-only scan.
+     *
+     * <p>Returns 200 always (zero candidates → empty array). The 400
+     * branch only fires for missing fields, never for "no matches" —
+     * that's a normal flow.
+     *
+     * <p>The endpoint walks the full active-grant set the operator has
+     * (mirroring {@link StudiesApiController}'s list) to populate
+     * {@code studyOids}; non-visible enrolments only contribute to
+     * {@code otherStudyCount}. Soft-deleted (status_id=5) subjects are
+     * excluded by the partial dedup index.
+     */
+    @PostMapping(value = "/match-preflight", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array",
+                         implementation = SubjectMatchCandidate.class)))
+    public ResponseEntity<?> matchPreflight(@RequestBody(required = false) SubjectMatchPreflightRequest body,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Request body is required."));
+        }
+        String firstName = body.firstName() == null ? "" : body.firstName().trim();
+        String lastName  = body.lastName()  == null ? "" : body.lastName().trim();
+        String dobRaw    = body.dateOfBirth() == null ? "" : body.dateOfBirth().trim();
+        if (firstName.isEmpty() || lastName.isEmpty() || dobRaw.isEmpty()) {
+            // Not an error per se — the SPA fires this once all three
+            // are populated, but a defensive 400 helps surface misuses.
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "firstName, lastName, dateOfBirth are all required."));
+        }
+        java.sql.Date dob;
+        try {
+            dob = java.sql.Date.valueOf(LocalDate.parse(dobRaw));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "dateOfBirth must be an ISO date (yyyy-MM-dd)."));
+        }
+
+        // Build the visible-study OID set for this operator. Mirrors
+        // the patient-overview list endpoint's visibility model.
+        Set<String> visibleStudyOids = loadVisibleStudyOids(currentUser);
+
+        List<SubjectMatchCandidate> out = new ArrayList<>();
+        // Triplet match — partial index handles status_id != 5 + all
+        // three columns NOT NULL. study_subject is joined to surface
+        // active enrolments.
+        String sql =
+                "WITH matched AS (" +
+                "  SELECT s.subject_id, s.unique_identifier, s.gender, s.date_of_birth " +
+                "    FROM subject s " +
+                "   WHERE LOWER(s.first_name) = LOWER(?) " +
+                "     AND LOWER(s.last_name)  = LOWER(?) " +
+                "     AND s.date_of_birth     = ?         " +
+                "     AND s.status_id IS DISTINCT FROM 5  " +
+                ") " +
+                "SELECT m.subject_id, m.unique_identifier, m.gender, m.date_of_birth, " +
+                "       st.unique_identifier AS study_oid " +
+                "  FROM matched m " +
+                "  LEFT JOIN study_subject ss ON ss.subject_id = m.subject_id " +
+                "                            AND ss.status_id  IS DISTINCT FROM 5 " +
+                "  LEFT JOIN study st         ON st.study_id   = ss.study_id " +
+                " ORDER BY m.subject_id, st.unique_identifier";
+
+        // Mutable accumulator keyed by subject_id. The row stream
+        // joins study_subject many-to-one, so we fold per subject as
+        // we walk.
+        record Acc(String uniqueIdentifier, String gender, String dobIso,
+                   List<String> visibleStudies, int[] otherCount) {}
+        java.util.LinkedHashMap<Integer, Acc> bySubject = new java.util.LinkedHashMap<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, firstName);
+            ps.setString(2, lastName);
+            ps.setDate(3, dob);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int subjectId = rs.getInt("subject_id");
+                    Acc acc = bySubject.get(subjectId);
+                    if (acc == null) {
+                        java.sql.Date d = rs.getDate("date_of_birth");
+                        acc = new Acc(
+                                rs.getString("unique_identifier"),
+                                rs.getString("gender"),
+                                d == null ? null : d.toLocalDate().toString(),
+                                new ArrayList<>(),
+                                new int[1]);
+                        bySubject.put(subjectId, acc);
+                    }
+                    String studyOid = rs.getString("study_oid");
+                    if (studyOid != null) {
+                        if (visibleStudyOids.contains(studyOid)) acc.visibleStudies().add(studyOid);
+                        else acc.otherCount()[0]++;
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("Match-preflight lookup failed for user={}", currentUser.getName(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Match preflight failed — see server log."));
+        }
+        for (Map.Entry<Integer, Acc> e : bySubject.entrySet()) {
+            Acc a = e.getValue();
+            out.add(new SubjectMatchCandidate(
+                    e.getKey(),
+                    a.uniqueIdentifier(),
+                    a.gender(),
+                    a.dobIso(),
+                    a.visibleStudies(),
+                    a.otherCount()[0]));
+        }
+
+        LOG.info("Match-preflight: {} candidate(s) for user={}", out.size(), currentUser.getName());
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Cached helper — the visible-study OID set for this operator.
+     * Walks every active study_user_role binding (StudyDAO has the
+     * same lookup the patients-list controller uses).
+     */
+    private Set<String> loadVisibleStudyOids(UserAccountBean user) {
+        Set<String> oids = new java.util.HashSet<>();
+        ArrayList<StudyBean> studies = new StudyDAO(dataSource).findAllByUser(user.getName());
+        for (StudyBean s : studies) {
+            if (s != null && s.getOid() != null) oids.add(s.getOid());
+        }
+        return oids;
+    }
+
     /**
      * Phase E.4 M8 — Sign Subject endpoint.
      *
