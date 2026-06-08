@@ -2,16 +2,22 @@
 /**
  * Phase E.6 (2026-06-03) — role-aware landing.
  *
- * Replaces the Phase E.4 mock-era static catalog (10 hardcoded cards
- * pointing at demo subjects + demo CRFs) with per-role landings driven
- * by the session's projected SPA role.
+ * Multi-role per (user, study) — M2 (2026-06-08): the four per-role
+ * sections that previously duplicated cards by role have been
+ * collapsed into a single de-duplicated catalogue. Each card carries
+ * an explicit {@code allowedRoles} list; visibility is the
+ * intersection of {@code allowedRoles} with the user's active-study
+ * binding. When a card matches more than one of the user's roles its
+ * {@link RoleDots} surface the full set, so a Monitor + Data Manager
+ * operator sees the Notes card once with both dots stacked in the
+ * header.
  *
  * <p>Visibility:
  * <ul>
  *   <li>Investigator (incl. CRC) — subject-centred workflows</li>
  *   <li>Monitor                  — SDV + queries + audit</li>
  *   <li>Data Manager             — study build + user admin + import</li>
- *   <li>Administrator            — DM cards + study/site/event-definition admin</li>
+ *   <li>Administrator            — platform admin + study identity</li>
  * </ul>
  *
  * <p>Counts are eager-loaded from existing list endpoints on mount via
@@ -19,19 +25,20 @@
  * duplicate fetches (navigation into the underlying view reuses the
  * already-loaded store state).
  *
- * <p>Source-of-truth for the role taxonomy: {@link AuthenticatedUser.role}
- * (post-PR-#96 the sysadmin/techadmin projection always lands at
- * "Administrator"; the legacy {@code admin} role-row also projects there
- * via {@code RoleMapper.toSpaRole}).
+ * <p>Source-of-truth for the role set: {@code AuthenticatedUser.activeStudy.roles}
+ * (M2+) with a fallback chain to {@code activeStudy.role} →
+ * top-level {@code user.role} for the M1 wire shape.
  */
 import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import LandingCard from '@/components/LandingCard.vue'
+import LandingCard, { type RoleVariant } from '@/components/LandingCard.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useSdvStore } from '@/stores/sdv'
 import { useNotesStore } from '@/stores/notes'
 import { useUsersStore } from '@/stores/users'
 import { useRulesStore } from '@/stores/rules'
+import type { UserRole } from '@/types/auth'
+import type { RouteLocationRaw } from 'vue-router'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -40,33 +47,48 @@ const notes = useNotesStore()
 const users = useUsersStore()
 const rules = useRulesStore()
 
-/**
- * The SPA UserRole taxonomy is 5 wide ('Investigator' | 'Monitor' |
- * 'Data Manager' | 'Administrator' | 'CRC'). CRC inherits the
- * Investigator landing in v1 — it's a thin variant of Investigator and
- * a dedicated landing is a separate slice after operator feedback.
- *
- * Phase E.6 (2026-06-03): Administrator is no longer a Data Manager
- * superset. Per operator feedback the Admin landing surfaces only
- * platform-administration paths (Manage Users, Study identity,
- * Sites, Audit log). Users needing data-management workflows sign
- * in under a Data Manager binding.
- */
-const role = computed(() => auth.user?.role ?? null)
-const showInvestigator = computed(() => role.value === 'Investigator' || role.value === 'CRC')
-const showMonitor = computed(() => role.value === 'Monitor')
-const showDataManager = computed(() => role.value === 'Data Manager')
-const showAdministrator = computed(() => role.value === 'Administrator')
+/* ---------- role set with M1 → M2 fallback chain ---------- */
+const userRoles = computed<UserRole[]>(() => {
+  const active = auth.user?.activeStudy
+  if (active?.roles && active.roles.length > 0) return [...active.roles]
+  if (active?.role) return [active.role]
+  if (auth.user?.role) return [auth.user.role]
+  return []
+})
 
 /**
- * Phase E.6 — surface a "Switch active study" card once the user has
- * access to more than one study. Lazy-loads availableStudies via the
- * existing /me/studies endpoint; failure modes (offline, single-study
- * user) collapse to hiding the card.
+ * Role priority (highest-to-lowest) — mirrors the backend
+ * UsersApiController.rolePriority projection so the card's accent
+ * colour reflects the strongest binding the user holds.
+ */
+const ROLE_PRIORITY: Record<UserRole, number> = {
+  Administrator: 5,
+  'Data Manager': 4,
+  Monitor: 3,
+  CRC: 2,
+  Investigator: 1,
+}
+
+const ROLE_TO_VARIANT: Record<UserRole, RoleVariant> = {
+  Investigator: 'investigator',
+  CRC: 'investigator',
+  Monitor: 'monitor',
+  'Data Manager': 'data-manager',
+  Administrator: 'administrator',
+}
+
+/**
+ * Surface a "Switch active study" card once the user has access to
+ * more than one study. Lazy-loads availableStudies via the existing
+ * /me/studies endpoint; failure modes (offline, single-study user)
+ * collapse to hiding the card.
  */
 const canSwitchStudy = computed(
   () => (auth.availableStudies?.length ?? 0) > 1,
 )
+
+const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
+const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
 
 /* ---------- count derivations from already-loaded store state ---------- */
 //
@@ -78,38 +100,16 @@ const canSwitchStudy = computed(
 
 const sdvPendingCount = computed<number | null>(() => {
   if (!sdv.rows) return null
-  // SDV "pending" rows are those still awaiting verification.
   return sdv.rows.filter((r) => r.status === 'pending').length
 })
 
 const openQueriesCount = computed<number | null>(() => {
   if (!notes.rows) return null
-  // Open discrepancies per NoteStatus union: anything that's not
-  // 'closed' (resolved + dispositioned) and not 'not-applicable'
-  // (operator-marked-noise).
   return notes.rows.filter((r) => r.status !== 'closed' && r.status !== 'not-applicable').length
-})
-
-// Investigator-only "queries assigned to me" derivation. The store
-// load was issued with assignedTo=current-username, so notes.rows is
-// already server-narrowed to the right scope — we just collapse the
-// open/closed dimension on top.
-const openQueriesAssignedToMeCount = computed<number | null>(() => {
-  if (!notes.rows) return null
-  const me = auth.user?.username
-  if (!me) return null
-  return notes.rows.filter(
-    (r) =>
-      r.assignedTo === me &&
-      r.status !== 'closed' &&
-      r.status !== 'not-applicable',
-  ).length
 })
 
 const pendingInvitesCount = computed<number | null>(() => {
   if (!users.rows) return null
-  // Pending invites are users with .auth='pending-invite' per the
-  // ManageUsersView convention (also surfaces a top-of-page chip there).
   return users.rows.filter((u) => u.auth === 'pending-invite').length
 })
 
@@ -118,37 +118,229 @@ const activeRuleSetsCount = computed<number | null>(() => {
   return rules.rows.filter((rs) => rs.status === 'available').length
 })
 
+/* ---------- de-duplicated card catalogue ---------- */
+
+interface CatalogEntry {
+  id: string
+  to: RouteLocationRaw | (() => RouteLocationRaw)
+  titleKey: string
+  descKey: string
+  allowedRoles: UserRole[]
+  /** Optional getter producing the badge count; resolved at render time. */
+  badge?: () => number | string | null
+  badgeAriaKey?: string
+  /** Optional gate evaluated after role match (e.g. activeStudyOid presence). */
+  visibleWhen?: () => boolean
+}
+
+const CATALOG = computed<CatalogEntry[]>(() => [
+  // ---------- subject-centred workflows ----------
+  {
+    id: 'subject-matrix',
+    to: { name: 'subject-matrix' },
+    titleKey: 'subjectMatrix.title',
+    descKey: 'home.investigator.subjectMatrixDesc',
+    allowedRoles: ['Investigator', 'CRC', 'Monitor'],
+  },
+  {
+    id: 'subject-new',
+    to: { name: 'subject-new' },
+    titleKey: 'addSubject.title',
+    descKey: 'home.investigator.addSubjectDesc',
+    allowedRoles: ['Investigator', 'CRC'],
+  },
+  {
+    id: 'sign-queue',
+    to: { name: 'subject-matrix', query: { filter: 'ready-to-sign' } },
+    titleKey: 'home.investigator.signQueueTitle',
+    descKey: 'home.investigator.signQueueDesc',
+    allowedRoles: ['Investigator', 'CRC'],
+  },
+  {
+    id: 'todays-crfs',
+    to: { name: 'subject-matrix', query: { filter: 'today' } },
+    titleKey: 'home.investigator.todaysCrfsTitle',
+    descKey: 'home.investigator.todaysCrfsDesc',
+    allowedRoles: ['Investigator', 'CRC'],
+  },
+
+  // ---------- SDV (Monitor-only) ----------
+  {
+    id: 'sdv',
+    to: { name: 'sdv' },
+    titleKey: 'sdv.title',
+    descKey: 'home.monitor.sdvDesc',
+    allowedRoles: ['Monitor'],
+    badge: () => sdvPendingCount.value,
+    badgeAriaKey: 'home.monitor.sdvBadgeAria',
+  },
+
+  // ---------- cross-role Notes (consolidated) ----------
+  {
+    id: 'notes',
+    to: { name: 'notes' },
+    titleKey: 'notes.title',
+    descKey: 'home.monitor.openQueriesDesc',
+    allowedRoles: ['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'],
+    badge: () => openQueriesCount.value,
+    badgeAriaKey: 'home.monitor.openQueriesBadgeAria',
+  },
+
+  // ---------- cross-role Audit log ----------
+  {
+    id: 'audit-log',
+    to: { name: 'audit-log' },
+    titleKey: 'auditLog.title',
+    descKey: 'home.administrator.auditLogDesc',
+    allowedRoles: ['Monitor', 'Data Manager', 'Administrator'],
+  },
+
+  // ---------- Data Manager workflows ----------
+  {
+    id: 'build-study',
+    to: { name: 'build-study' },
+    titleKey: 'buildStudy.title',
+    descKey: 'home.dataManager.buildStudyDesc',
+    allowedRoles: ['Data Manager'],
+  },
+  {
+    id: 'import-crf-data',
+    to: { name: 'import-crf-data' },
+    titleKey: 'importCrf.title',
+    descKey: 'home.dataManager.importCrfDesc',
+    allowedRoles: ['Data Manager'],
+  },
+  {
+    id: 'rules',
+    to: { name: 'rules' },
+    titleKey: 'rules.title',
+    descKey: 'home.dataManager.rulesDesc',
+    allowedRoles: ['Data Manager'],
+    badge: () => activeRuleSetsCount.value,
+  },
+
+  // ---------- cross-role Data Export ----------
+  {
+    id: 'data-export',
+    to: { name: 'data-export' },
+    titleKey: 'home.dataManager.dataExportTitle',
+    descKey: 'home.dataManager.dataExportDesc',
+    allowedRoles: ['Monitor', 'Data Manager', 'Administrator'],
+  },
+
+  // ---------- Administrator platform actions ----------
+  {
+    id: 'manage-users',
+    to: { name: 'manage-users' },
+    titleKey: 'manageUsers.title',
+    descKey: 'home.administrator.manageUsersDesc',
+    allowedRoles: ['Administrator'],
+    badge: () => pendingInvitesCount.value,
+    badgeAriaKey: 'home.administrator.pendingInvitesBadgeAria',
+  },
+  {
+    id: 'study-create',
+    to: { name: 'study-create' },
+    titleKey: 'home.administrator.createStudyTitle',
+    descKey: 'home.administrator.createStudyDesc',
+    allowedRoles: ['Administrator'],
+  },
+  {
+    id: 'study-edit',
+    to: () => ({ name: 'study-edit', params: { oid: activeStudyOid.value } }),
+    titleKey: 'home.administrator.editStudyTitle',
+    descKey: 'home.administrator.editStudyDesc',
+    allowedRoles: ['Administrator'],
+    visibleWhen: () => activeStudyOid.value !== '',
+  },
+  {
+    id: 'sites',
+    to: { name: 'sites' },
+    titleKey: 'home.administrator.sitesTitle',
+    descKey: 'home.administrator.sitesDesc',
+    allowedRoles: ['Administrator'],
+  },
+
+  // ---------- cross-role Switch active study ----------
+  {
+    id: 'switch-study',
+    to: { name: 'pick-study' },
+    titleKey: 'home.switchStudyTitle',
+    descKey: 'home.switchStudyDesc',
+    allowedRoles: ['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'],
+    visibleWhen: () => canSwitchStudy.value,
+  },
+])
+
+interface VisibleCard {
+  id: string
+  to: RouteLocationRaw
+  titleKey: string
+  descKey: string
+  grantingRoles: UserRole[]
+  roleVariants: RoleVariant[]
+  badge: number | string | null
+  badgeAriaKey?: string
+}
+
+const visibleCards = computed<VisibleCard[]>(() => {
+  const rs = userRoles.value
+  if (rs.length === 0) return []
+  return CATALOG.value
+    .filter((c) => c.allowedRoles.some((r) => rs.includes(r)))
+    .filter((c) => (c.visibleWhen ? c.visibleWhen() : true))
+    .map((c) => {
+      // grantingRoles are ordered by priority (highest first) so the
+      // card's accent colour and the first dot reflect the strongest
+      // binding the user holds against this card.
+      const granting = c.allowedRoles
+        .filter((r) => rs.includes(r))
+        .sort((a, b) => ROLE_PRIORITY[b] - ROLE_PRIORITY[a])
+      // Variants follow grantingRoles but collapse duplicate variants
+      // (CRC + Investigator both map to 'investigator' — render one dot).
+      const variants: RoleVariant[] = []
+      for (const r of granting) {
+        const v = ROLE_TO_VARIANT[r]
+        if (!variants.includes(v)) variants.push(v)
+      }
+      return {
+        id: c.id,
+        to: typeof c.to === 'function' ? c.to() : c.to,
+        titleKey: c.titleKey,
+        descKey: c.descKey,
+        grantingRoles: granting,
+        roleVariants: variants,
+        badge: c.badge ? c.badge() : null,
+        badgeAriaKey: c.badgeAriaKey,
+      }
+    })
+})
+
 /* ---------- eager load on mount ---------- */
 onMounted(() => {
   // Kick everything off in parallel; tolerate per-action failures so
   // one transient backend hiccup doesn't cascade-blank the whole
   // landing. The shape is identical to a sequential await chain but
   // with no head-of-line blocking.
+  const rs = userRoles.value
+  const has = (r: UserRole) => rs.includes(r)
   const inflight: Array<Promise<unknown>> = []
-  if (showMonitor.value || showDataManager.value) {
+  if (has('Monitor') || has('Data Manager')) {
     inflight.push(sdv.load())
     inflight.push(rules.load())
   }
-  // Notes is cross-role (Monitor + DM + Administrator all surface it).
-  if (showMonitor.value || showDataManager.value || showAdministrator.value) {
+  // Notes is cross-role — load whenever the user can see the catalog
+  // entry (Investigator/CRC/Monitor/DM/Administrator).
+  if (rs.length > 0) {
     inflight.push(notes.load())
   }
-  // Investigator surfaces only the queries assigned to them; ask the
-  // server to narrow before the response ships.
-  if (showInvestigator.value && auth.user?.username) {
-    inflight.push(notes.load({ assignedTo: auth.user.username }))
-  }
-  if (showAdministrator.value || showDataManager.value) {
+  if (has('Administrator') || has('Data Manager')) {
     inflight.push(users.load())
   }
   // Always populate availableStudies for the multi-study switch card.
   inflight.push(auth.loadStudies())
-  // Promise.allSettled never rejects — fire and forget.
   void Promise.allSettled(inflight)
 })
-
-const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
-const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
 </script>
 
 <template>
@@ -164,249 +356,29 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
       {{ t('app.tagline') }}
     </p>
 
-    <!-- Investigator + CRC landing -->
-    <section v-if="showInvestigator" :aria-label="t('home.investigator.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
+    <!-- Single de-duplicated catalogue. Cards carry the full set of
+         roles that grant access so a multi-role operator sees their
+         RoleDots stacked in the card header. -->
+    <section
+      v-if="visibleCards.length > 0"
+      :aria-label="t('home.sectionLabel', { study: activeStudyName })"
+      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8"
+    >
       <LandingCard
-        :to="{ name: 'subject-matrix' }"
-        role-variant="investigator"
-        :role-label="t('home.role.Investigator')"
-        :title="t('subjectMatrix.title')"
-        :description="t('home.investigator.subjectMatrixDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'subject-new' }"
-        role-variant="investigator"
-        :role-label="t('home.role.Investigator')"
-        :title="t('addSubject.title')"
-        :description="t('home.investigator.addSubjectDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'subject-matrix', query: { filter: 'ready-to-sign' } }"
-        role-variant="investigator"
-        :role-label="t('home.role.Investigator')"
-        :title="t('home.investigator.signQueueTitle')"
-        :description="t('home.investigator.signQueueDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'subject-matrix', query: { filter: 'today' } }"
-        role-variant="investigator"
-        :role-label="t('home.role.Investigator')"
-        :title="t('home.investigator.todaysCrfsTitle')"
-        :description="t('home.investigator.todaysCrfsDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'notes', query: { assignedTo: auth.user?.username ?? '' } }"
-        role-variant="investigator"
-        :role-label="t('home.role.Investigator')"
-        :title="t('home.investigator.openQueriesTitle')"
-        :description="t('home.investigator.openQueriesDesc')"
-        :badge="openQueriesAssignedToMeCount"
+        v-for="card in visibleCards"
+        :key="card.id"
+        :data-card-id="card.id"
+        :to="card.to"
+        :role-variants="card.roleVariants"
+        :title="t(card.titleKey)"
+        :description="t(card.descKey)"
+        :badge="card.badge"
+        :badge-aria-label="card.badgeAriaKey ? t(card.badgeAriaKey, { n: card.badge ?? 0 }) : undefined"
       />
     </section>
-
-    <!-- Monitor landing -->
-    <section v-if="showMonitor" :aria-label="t('home.monitor.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
-      <LandingCard
-        :to="{ name: 'subject-matrix' }"
-        role-variant="monitor"
-        :role-label="t('home.role.Monitor')"
-        :title="t('subjectMatrix.title')"
-        :description="t('home.monitor.subjectMatrixDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'sdv' }"
-        role-variant="monitor"
-        :role-label="t('home.role.Monitor')"
-        :title="t('sdv.title')"
-        :description="t('home.monitor.sdvDesc')"
-        :badge="sdvPendingCount"
-        :badge-aria-label="t('home.monitor.sdvBadgeAria', { n: sdvPendingCount ?? 0 })"
-      />
-      <LandingCard
-        :to="{ name: 'notes' }"
-        role-variant="monitor"
-        :role-label="t('home.role.Monitor')"
-        :title="t('notes.title')"
-        :description="t('home.monitor.openQueriesDesc')"
-        :badge="openQueriesCount"
-        :badge-aria-label="t('home.monitor.openQueriesBadgeAria', { n: openQueriesCount ?? 0 })"
-      />
-      <LandingCard
-        :to="{ name: 'audit-log' }"
-        role-variant="monitor"
-        :role-label="t('home.role.Monitor')"
-        :title="t('auditLog.title')"
-        :description="t('home.monitor.auditLogDesc')"
-      />
-    </section>
-
-    <!-- Data Manager landing — strict role (Administrator no longer inherits). -->
-    <section v-if="showDataManager" :aria-label="t('home.dataManager.sectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
-      <LandingCard
-        :to="{ name: 'build-study' }"
-        role-variant="data-manager"
-        :role-label="t('home.role.Data Manager')"
-        :title="t('buildStudy.title')"
-        :description="t('home.dataManager.buildStudyDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'notes' }"
-        role-variant="data-manager"
-        :role-label="t('home.role.Data Manager')"
-        :title="t('notes.title')"
-        :description="t('home.dataManager.openQueriesDesc')"
-        :badge="openQueriesCount"
-      />
-      <LandingCard
-        :to="{ name: 'audit-log' }"
-        role-variant="data-manager"
-        :role-label="t('home.role.Data Manager')"
-        :title="t('auditLog.title')"
-        :description="t('home.dataManager.auditLogDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'import-crf-data' }"
-        role-variant="data-manager"
-        :role-label="t('home.role.Data Manager')"
-        :title="t('importCrf.title')"
-        :description="t('home.dataManager.importCrfDesc')"
-      />
-      <LandingCard
-        :to="{ name: 'rules' }"
-        role-variant="data-manager"
-        :role-label="t('home.role.Data Manager')"
-        :title="t('rules.title')"
-        :description="t('home.dataManager.rulesDesc')"
-        :badge="activeRuleSetsCount"
-      />
-      <LandingCard
-        :to="{ name: 'data-export' }"
-        role-variant="data-manager"
-        :role-label="t('home.role.Data Manager')"
-        :title="t('home.dataManager.dataExportTitle')"
-        :description="t('home.dataManager.dataExportDesc')"
-      />
-    </section>
-
-    <!-- Administrator landing — split into two zones so the operator can
-         tell at a glance which actions are platform-wide vs scoped to
-         the currently active study. -->
-    <template v-if="showAdministrator">
-      <!-- Platform-wide actions: cross-study user lifecycle, new-study
-           provisioning, switching the active study. None of these
-           depend on which study is currently bound. -->
-      <section
-        :aria-label="t('home.administrator.globalSectionLabel')"
-        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-6"
-      >
-        <LandingCard
-          :to="{ name: 'manage-users' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('manageUsers.title')"
-          :description="t('home.administrator.manageUsersDesc')"
-          :badge="pendingInvitesCount"
-          :badge-aria-label="t('home.administrator.pendingInvitesBadgeAria', { n: pendingInvitesCount ?? 0 })"
-        />
-        <LandingCard
-          :to="{ name: 'study-create' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('home.administrator.createStudyTitle')"
-          :description="t('home.administrator.createStudyDesc')"
-        />
-        <LandingCard
-          v-if="canSwitchStudy"
-          :to="{ name: 'pick-study' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('home.switchStudyTitle')"
-          :description="t('home.switchStudyDesc')"
-        />
-      </section>
-
-      <!-- Visual divider + label between platform-wide and study-scoped. -->
-      <div class="max-w-5xl mb-6 flex items-center gap-3">
-        <hr class="flex-1 border-t border-slate-200" />
-        <span class="text-[11px] uppercase tracking-[0.14em] text-slate-500 whitespace-nowrap">
-          {{ t('home.administrator.studyScopedLabel', { study: activeStudyName }) }}
-        </span>
-        <hr class="flex-1 border-t border-slate-200" />
-      </div>
-
-      <!-- Study-scoped actions: everything that operates on the
-           currently active study (its identity, sites, audit trail,
-           open queries). -->
-      <section
-        :aria-label="t('home.administrator.sectionLabel')"
-        class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8"
-      >
-        <LandingCard
-          v-if="activeStudyOid"
-          :to="{ name: 'study-edit', params: { oid: activeStudyOid } }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('home.administrator.editStudyTitle')"
-          :description="t('home.administrator.editStudyDesc')"
-        />
-        <LandingCard
-          :to="{ name: 'sites' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('home.administrator.sitesTitle')"
-          :description="t('home.administrator.sitesDesc')"
-        />
-        <LandingCard
-          :to="{ name: 'audit-log' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('auditLog.title')"
-          :description="t('home.administrator.auditLogDesc')"
-        />
-        <LandingCard
-          :to="{ name: 'notes' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('notes.title')"
-          :description="t('home.dataManager.openQueriesDesc')"
-          :badge="openQueriesCount"
-        />
-        <LandingCard
-          :to="{ name: 'data-export' }"
-          role-variant="administrator"
-          :role-label="t('home.role.Administrator')"
-          :title="t('home.administrator.dataExportTitle')"
-          :description="t('home.administrator.dataExportDesc')"
-        />
-      </section>
-    </template>
-
-    <!-- Switch-study card (per-role landings other than Administrator). -->
-    <!-- Switch-study card sits in its own divider-led section, mirroring the
-         Administrator landing's platform-wide vs study-scoped split so the
-         intent (this action is cross-study, not scoped to the bound one)
-         is visually obvious. -->
-    <template v-if="canSwitchStudy && !showAdministrator">
-      <div class="max-w-5xl mb-6 flex items-center gap-3">
-        <hr class="flex-1 border-t border-slate-200" />
-        <span class="text-[11px] uppercase tracking-[0.14em] text-slate-500 whitespace-nowrap">
-          {{ t('home.switchStudySectionLabel') }}
-        </span>
-        <hr class="flex-1 border-t border-slate-200" />
-      </div>
-      <section :aria-label="t('home.switchStudySectionLabel')" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8">
-        <LandingCard
-          :to="{ name: 'pick-study' }"
-          :role-variant="role === 'Monitor' ? 'monitor' : role === 'Data Manager' ? 'data-manager' : 'investigator'"
-          :role-label="role ? t('home.role.' + role) : ''"
-          :title="t('home.switchStudyTitle')"
-          :description="t('home.switchStudyDesc')"
-        />
-      </section>
-    </template>
 
     <!-- Fallback when role hasn't loaded yet (auth.bootstrap() in flight). -->
-    <p v-if="!role" class="text-slate-500 text-sm italic">
+    <p v-if="userRoles.length === 0" class="text-slate-500 text-sm italic">
       {{ t('common.loading') }}
     </p>
   </div>

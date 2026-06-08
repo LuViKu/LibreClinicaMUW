@@ -26,6 +26,8 @@
   },
   "home": {
     "eyebrow": "Willkommen",
+    "sectionLabel": "Ihre Arbeitsabläufe für {study}",
+    "roleDotsAria": "Berechtigende Rollen",
     "role": {
       "Investigator": "Prüfarzt/-ärztin",
       "Monitor": "Monitor/-in",
