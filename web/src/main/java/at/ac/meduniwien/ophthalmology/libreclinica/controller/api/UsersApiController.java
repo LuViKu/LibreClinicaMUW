@@ -995,6 +995,24 @@ public class UsersApiController {
                         List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
                                 "role", "Role is required"))));
             }
+        } else {
+            // Bulk path — pre-validate every requested role name before
+            // we touch the DAOs. An unknown role short-circuits to 400
+            // here so the test path doesn't hit findByOid against a
+            // mock DataSource (and so real callers get a fast 400
+            // instead of a needless DB round-trip).
+            List<SubjectsApiController.ValidationErrorBody.FieldError> pre = new ArrayList<>();
+            for (String spaRole : body.roles()) {
+                if (spaRole == null || spaRole.isBlank()) continue;
+                if (RoleMapper.fromSpaRole(spaRole) == null) {
+                    pre.add(fieldError("roles",
+                            "Unknown role '" + spaRole + "' — expected Administrator / Data Manager / CRC / Monitor / Investigator"));
+                }
+            }
+            if (!pre.isEmpty()) {
+                return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                        "Validation failed", pre));
+            }
         }
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
