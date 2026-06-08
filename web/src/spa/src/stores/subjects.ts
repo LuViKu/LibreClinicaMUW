@@ -274,6 +274,14 @@ export const useSubjectsStore = defineStore('subjects', () => {
         // them on the legacy enrolment path.
         personId: input.personId?.trim() || null,
         groupAssignments: input.groupAssignments ?? null,
+        // Phase E.6 retrospective-backfill — PHI triplet (full DoB
+        // wins over yearOfBirth when both present) + the
+        // match-prompt acknowledgement when operator confirmed
+        // create-new against a candidate.
+        firstName: input.firstName?.trim() || null,
+        lastName: input.lastName?.trim() || null,
+        dateOfBirth: input.dateOfBirth?.trim() || null,
+        acknowledgeMatchSubjectId: input.acknowledgeMatchSubjectId ?? null,
       }
       const detail = await apiPost<SubjectDetail>('/pages/api/v1/subjects', payload)
 
@@ -759,6 +767,30 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
+   * Phase E.6 retrospective-backfill — duplicate-patient lookup.
+   *
+   * <p>Fires from the AddSubject form once the operator has filled
+   * first name + last name + DoB. The backend returns the list of
+   * matching subjects (exact, case-insensitive); the SPA renders a
+   * dialog when the list is non-empty so the operator can either
+   * link to an existing subject or confirm "different person".
+   *
+   * <p>The endpoint is read-only; failures bubble up as ApiError
+   * (rare — 5xx from a DB issue) and the form treats "no candidates"
+   * as the success path so a backend hiccup never blocks enrolment.
+   */
+  async function preflightMatch(
+    firstName: string,
+    lastName: string,
+    dateOfBirth: string,
+  ): Promise<SubjectMatchCandidate[]> {
+    return apiPost<SubjectMatchCandidate[]>(
+      '/pages/api/v1/subjects/match-preflight',
+      { firstName, lastName, dateOfBirth },
+    )
+  }
+
+  /**
    * Phase E.6 — clear every piece of study-scoped state so the store
    * doesn't bleed subjects from study A into the matrix after the
    * user switches to study B. Called by {@link useAuthStore.pickStudy}
@@ -816,9 +848,28 @@ export const useSubjectsStore = defineStore('subjects', () => {
     lockSubject,
     unlockSubject,
     transitionEye,
+    preflightMatch,
     reset,
   }
 })
+
+/**
+ * Phase E.6 retrospective-backfill — single match-preflight result.
+ *
+ * Mirrors the backend `SubjectMatchCandidate` record. `studyOids` lists
+ * studies the operator has visible. `otherStudyCount` carries the
+ * count of additional enrolments in studies the operator can't see —
+ * surfaced so the dialog can show "Bekannt in {n} weiteren Studien
+ * (kein Zugriff)" without leaking the study identities.
+ */
+export interface SubjectMatchCandidate {
+  subjectId: number
+  uniqueIdentifier: string | null
+  gender: string | null
+  dateOfBirth: string | null
+  studyOids: string[]
+  otherStudyCount: number
+}
 
 /**
  * Convert a SPA subject identifier (the human-readable `M-001`-style
@@ -872,6 +923,23 @@ export interface AddSubjectInput {
    * enrolment so the SPA doesn't need a second round trip.
    */
   groupAssignments?: GroupAssignmentInput[] | null
+  /**
+   * Phase E.6 retrospective-backfill — patient identity captured on
+   * the AddSubject form. `dateOfBirth` is the canonical DoB (ISO
+   * `YYYY-MM-DD`); when present the backend uses it directly and
+   * flips `dob_collected` to true. Legacy callers that only have a
+   * year still post `yearOfBirth` for back-compat.
+   */
+  firstName?: string | null
+  lastName?: string | null
+  dateOfBirth?: string | null
+  /**
+   * Set when the operator clicked "Different person, create new" on
+   * a match-preflight dialog. Carries the subject_id(s) of the
+   * candidates they explicitly rejected so the backend can audit
+   * the override.
+   */
+  acknowledgeMatchSubjectId?: number | null
 }
 
 export type AddSubjectErrorField =
@@ -881,6 +949,9 @@ export type AddSubjectErrorField =
   | 'gender'
   | 'yearOfBirth'
   | 'personId'
+  | 'firstName'
+  | 'lastName'
+  | 'dateOfBirth'
 
 export interface AddSubjectError {
   field: AddSubjectErrorField
