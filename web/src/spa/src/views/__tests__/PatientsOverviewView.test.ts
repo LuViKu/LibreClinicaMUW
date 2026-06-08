@@ -134,8 +134,9 @@ describe('PatientsOverviewView', () => {
     store.list = []
     store.totalCount = 0
     await flushPromises()
-    // Rendered via i18n fallback — at minimum the key string appears.
-    expect(w.text()).toContain('patients.list.empty')
+    // The patients.list.empty key landed via the i18n worktree merge
+    // (en.json: "No patients match your access.").
+    expect(w.text()).toContain('No patients match your access.')
   })
 
   it('search input debounces and triggers loadList(0, pageSize, search)', async () => {
