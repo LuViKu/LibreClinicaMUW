@@ -28,6 +28,8 @@
   },
   "home": {
     "eyebrow": "Welcome",
+    "sectionLabel": "Your workflows for {study}",
+    "roleDotsAria": "Granting roles",
     "role": {
       "Investigator": "Investigator",
       "Monitor": "Monitor",
@@ -96,13 +98,7 @@
     },
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
-    "switchStudyDesc": "Pick another study you are assigned to. Only your bound studies are shown.",
-    "generalSectionLabel": "General actions",
-    "crossStudy": {
-      "cardRoleLabel": "Cross-study",
-      "todaysCrfsTitle": "Today's open CRFs",
-      "todaysCrfsDesc": "Subjects with visits in data entry or scheduled for today — across every study you can see."
-    }
+    "switchStudyDesc": "Pick another study you are assigned to. Only your bound studies are shown."
   },
   "common": {
     "loading": "Loading…",
@@ -1391,6 +1387,8 @@
       "title": "Manage role bindings",
       "currentHeading": "Current bindings",
       "grantHeading": "Grant a new role",
+      "addStudyHeading": "Add study",
+      "addStudy": "Add study",
       "empty": "No active role bindings on visible studies.",
       "study": "Study",
       "studyPlaceholder": "Select a study…",
@@ -1399,6 +1397,13 @@
       "revoke": "Revoke",
       "revoked": "Revoked",
       "revokeConfirm": "Revoke {username}'s role on study {study}? Their access to that study is removed; their data on the study is unaffected. The action is recorded in the audit trail.",
+      "removeStudy": "Remove study",
+      "removeStudyAria": "Remove all roles on study {study}",
+      "removeStudyConfirm": "Remove every role of {username} on study {study}? Their access to that study is fully revoked; their data on the study is unaffected. The action is recorded in the audit trail.",
+      "rolesForStudy": "Roles on study {study}",
+      "rolesForNewStudy": "Roles for the new study",
+      "saveError": "Saving roles failed. Please try again.",
+      "savedToast": "Roles updated.",
       "auditNote": "All grants, role changes, and revocations are recorded in the audit trail."
     }
   },

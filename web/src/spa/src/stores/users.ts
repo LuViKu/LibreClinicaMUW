@@ -404,6 +404,62 @@ export const useUsersStore = defineStore('users', () => {
     )
   }
 
+  /**
+   * Multi-role per (user, study) — atomic bulk replace via
+   * {@code PUT /pages/api/v1/users/{username}/roles/{studyOid}} with
+   * body {@code { roles: UserRole[] }}.
+   *
+   * Backend atomically replaces the active role set for this user on
+   * this study and returns the refreshed binding list (zero or more
+   * bindings, one per surviving role). Passing an empty array removes
+   * every role for the study — semantically equivalent to revoke-all.
+   *
+   * Mirrors {@link grantRole}'s success-path refresh by calling
+   * {@link listUserRoles} so the dialog's local cache picks up the new
+   * binding set without an extra round-trip from the view layer.
+   */
+  async function setStudyRoles(
+    username: string,
+    studyOid: string,
+    roles: UserRole[],
+  ): Promise<
+    | { ok: true; bindings: RoleBinding[] }
+    | { ok: false; fieldErrors: Record<string, string>; message?: string }
+  > {
+    try {
+      await apiPut<RoleBinding[]>(
+        `/pages/api/v1/users/${encodeURIComponent(username)}/roles/${encodeURIComponent(studyOid)}`,
+        { roles },
+      )
+      const refreshed = await listUserRoles(username)
+      return { ok: true, bindings: refreshed }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
+        const body = e.body as { message?: string } | null
+        error.value = body?.message ?? `Rollen-Update nicht erlaubt (HTTP ${e.status}).`
+        throw e
+      }
+      if (e instanceof ApiError) {
+        const errBody = e.body as
+          | { message?: string; errors?: Array<{ field: string; message: string }> }
+          | null
+        const fieldErrors: Record<string, string> = {}
+        if (errBody?.errors) for (const fe of errBody.errors) fieldErrors[fe.field] = fe.message
+        const msg = errBody?.message ?? `Rollen-Update fehlgeschlagen (HTTP ${e.status}).`
+        error.value = msg
+        return { ok: false, fieldErrors, message: msg }
+      }
+      if (e instanceof ApiNetworkError) {
+        const msg = 'Backend nicht erreichbar — Rollen-Update fehlgeschlagen. Bitte später erneut versuchen.'
+        error.value = msg
+        return { ok: false, fieldErrors: {}, message: msg }
+      }
+      const msg = e instanceof Error ? e.message : 'Unbekannter Fehler beim Rollen-Update.'
+      error.value = msg
+      return { ok: false, fieldErrors: {}, message: msg }
+    }
+  }
+
   async function roleAssignment(
     op: () => Promise<RoleBinding>,
     label: 'grant' | 'update' | 'revoke',
@@ -483,6 +539,7 @@ export const useUsersStore = defineStore('users', () => {
     grantRole,
     updateRole,
     revokeRole,
+    setStudyRoles,
     reset,
   }
 })
