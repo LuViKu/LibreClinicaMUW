@@ -178,16 +178,34 @@
       "enrolledOn": "Aufnahmedatum",
       "gender": "Geschlecht",
       "yearOfBirth": "Geburtsjahr",
-      "groupLabel": "Gruppenzuordnung"
+      "groupLabel": "Gruppenzuordnung",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "dateOfBirth": "Geburtsdatum"
     },
     "placeholder": {
       "subjectId": "z. B. M-042",
       "secondaryId": "Optional",
-      "yearOfBirth": "JJJJ"
+      "yearOfBirth": "JJJJ",
+      "firstName": "z. B. Maria",
+      "lastName": "z. B. Müller"
     },
     "helper": {
       "subjectId": "Die in den Quelldokumenten verwendete Kennung. Nach dem Speichern nicht mehr änderbar.",
-      "yearOfBirth": "Optional — abhängig von der Studienkonfiguration."
+      "yearOfBirth": "Optional — abhängig von der Studienkonfiguration.",
+      "dateOfBirth": "Vollständiges Geburtsdatum (TT.MM.JJJJ). Wird zur studienübergreifenden Dublettenprüfung verwendet."
+    },
+    "matchDialog": {
+      "title": "Patient ggf. bereits erfasst ({n})",
+      "description": "Diese Person ist bereits im System unter dem angegebenen Geburtsdatum/Namen vorhanden. Bestehende Erfassung übernehmen oder als neue Person fortfahren.",
+      "actionLink": "Diesen Patienten verwenden",
+      "actionCreateNew": "Andere Person — trotzdem neu anlegen",
+      "actionCancel": "Eingabe ändern",
+      "noStudies": "Keine aktive Erfassung",
+      "studiesVisible": "Aktiv in: {list}",
+      "studiesHiddenOnly": "Bekannt in {n} weiteren Studien (kein Zugriff)",
+      "studiesMixed": "Aktiv in: {list} (+ {n} weitere ohne Zugriff)",
+      "unnamedSubject": "— ohne Studien-ID —"
     },
     "phiWarning": "Niemals Name, Krankenhaus-ID, Sozialversicherungsnummer oder andere identifizierende Daten verwenden.",
     "gender": {
@@ -1807,7 +1825,8 @@
       "field": {
         "targetStudy": "Zielstudie",
         "targetLabel": "Teilnehmer-ID in Zielstudie (optional)",
-        "reason": "Begründung"
+        "reason": "Begründung",
+        "transitionedAt": "Datum der Verlagerung"
       },
       "action": {
         "transition": "In andere Studie verlagern",
@@ -1819,7 +1838,8 @@
         "reasonRequired": "Eine Begründung ist erforderlich.",
         "eyeAlreadyTracked": "Das Auge wird in der Zielstudie bereits geführt.",
         "unknownStudy": "Zielstudie nicht gefunden.",
-        "network": "Verlagerung konnte nicht gespeichert werden — bitte erneut versuchen."
+        "network": "Verlagerung konnte nicht gespeichert werden — bitte erneut versuchen.",
+        "transitionedAtFuture": "Datum darf nicht in der Zukunft liegen."
       },
       "banner": {
         "source": "{eye} am {date} in {study} ({label}) verlagert",

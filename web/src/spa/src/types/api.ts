@@ -484,6 +484,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subjects/match-preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["matchPreflight"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies": {
         parameters: {
             query?: never;
@@ -2631,6 +2647,11 @@ export interface components {
             screeningDate?: string;
             personId?: string;
             groupAssignments?: components["schemas"]["Assignment"][];
+            firstName?: string;
+            lastName?: string;
+            dateOfBirth?: string;
+            /** Format: int32 */
+            acknowledgeMatchSubjectId?: number;
         };
         SignSubjectRequest: {
             password?: string;
@@ -2640,6 +2661,7 @@ export interface components {
             targetStudyOid?: string;
             targetLabel?: string;
             reason?: string;
+            transitionedAt?: string;
         };
         EyeCohortTransitionResponse: {
             /** Format: int32 */
@@ -2651,6 +2673,21 @@ export interface components {
             targetLabel?: string;
             sourceEyeAfter?: string;
             targetEyeAfter?: string;
+        };
+        SubjectMatchPreflightRequest: {
+            firstName?: string;
+            lastName?: string;
+            dateOfBirth?: string;
+        };
+        SubjectMatchCandidate: {
+            /** Format: int32 */
+            subjectId?: number;
+            uniqueIdentifier?: string;
+            gender?: string;
+            dateOfBirth?: string;
+            studyOids?: string[];
+            /** Format: int32 */
+            otherStudyCount?: number;
         };
         CreateStudyRequest: {
             name?: string;
@@ -4722,6 +4759,30 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EyeCohortTransitionResponse"];
+                };
+            };
+        };
+    };
+    matchPreflight: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SubjectMatchPreflightRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubjectMatchCandidate"];
                 };
             };
         };

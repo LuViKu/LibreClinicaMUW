@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
@@ -9,6 +9,7 @@ import TextInput from '@/components/TextInput.vue'
 import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import PatientMatchDialog from '@/components/PatientMatchDialog.vue'
 
 import {
   useSubjectsStore,
@@ -17,6 +18,7 @@ import {
   type AddSubjectError,
   type AddSubjectErrorField,
   type AddSubjectInput,
+  type SubjectMatchCandidate,
 } from '@/stores/subjects'
 import type { Gender, StudyEye } from '@/types/subject'
 
@@ -39,6 +41,11 @@ const form = reactive<AddSubjectInput>({
   // null keeps non-ophth studies free of forced eye scope.
   studyEye: null,
   screeningDate: '',
+  // Phase E.6 retrospective-backfill — PHI triplet for dedup.
+  firstName: '',
+  lastName: '',
+  dateOfBirth: '',
+  acknowledgeMatchSubjectId: null,
 })
 
 const submitAttempted = ref(false)
@@ -84,12 +91,98 @@ function clearServerErrorFor(field: AddSubjectErrorField) {
   if (serverFieldErrors.value.length === 0) serverFieldErrors.value = null
 }
 
+/* -------------------------------------------------------------- */
+/* Phase E.6 retrospective-backfill — match-preflight + dialog.   */
+/*                                                                 */
+/* Fires once the operator has filled all three of first/last/DoB. */
+/* If the backend returns at least one candidate, the dialog opens */
+/* and the form's submit is gated until the operator either picks  */
+/* "Use existing" (route to existing subject's detail) or "Create  */
+/* new anyway" (which records the acknowledgement on the form so   */
+/* the backend's audit log can see the operator chose to override).*/
+/* -------------------------------------------------------------- */
+
+const matchCandidates = ref<SubjectMatchCandidate[]>([])
+const matchDialogOpen = ref(false)
+const isPreflighting = ref(false)
+const preflightDebounce = ref<number | null>(null)
+
+/**
+ * Debounced preflight — when all three PHI fields are populated, fire
+ * the lookup. The 350ms window keeps keypress-by-keypress noise off
+ * the wire without making the UX feel laggy.
+ */
+function maybePreflight() {
+  if (preflightDebounce.value !== null) {
+    window.clearTimeout(preflightDebounce.value)
+    preflightDebounce.value = null
+  }
+  const first = (form.firstName ?? '').trim()
+  const last = (form.lastName ?? '').trim()
+  const dob = (form.dateOfBirth ?? '').trim()
+  if (!first || !last || !/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+    matchCandidates.value = []
+    matchDialogOpen.value = false
+    return
+  }
+  // The operator may already have acknowledged; if they edit the
+  // triplet, drop the acknowledgement so the next match is fresh.
+  form.acknowledgeMatchSubjectId = null
+  preflightDebounce.value = window.setTimeout(() => {
+    void runPreflight(first, last, dob)
+  }, 350)
+}
+
+async function runPreflight(first: string, last: string, dob: string) {
+  isPreflighting.value = true
+  try {
+    const candidates = await subjects.preflightMatch(first, last, dob)
+    matchCandidates.value = candidates
+    matchDialogOpen.value = candidates.length > 0
+  } catch {
+    // Preflight is best-effort — never block enrolment on a 5xx.
+    matchCandidates.value = []
+    matchDialogOpen.value = false
+  } finally {
+    isPreflighting.value = false
+  }
+}
+
+watch(() => form.firstName, maybePreflight)
+watch(() => form.lastName, maybePreflight)
+watch(() => form.dateOfBirth, maybePreflight)
+
+function onMatchLink(candidate: SubjectMatchCandidate) {
+  matchDialogOpen.value = false
+  if (candidate.uniqueIdentifier) {
+    router.push({ path: `/subjects/${encodeURIComponent(candidate.uniqueIdentifier)}` })
+  }
+}
+
+function onMatchCreateNew() {
+  // Echo the first candidate's id back on submit so the backend audit
+  // captures which match the operator overrode. A multi-candidate
+  // override only echoes the topmost — the dialog already lists them.
+  form.acknowledgeMatchSubjectId = matchCandidates.value[0]?.subjectId ?? null
+  matchDialogOpen.value = false
+}
+
+function onMatchCancel() {
+  matchDialogOpen.value = false
+}
+
 async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
   submitAttempted.value = true
   serverError.value = null
   // Re-running submit invalidates any stale server-side errors.
   serverFieldErrors.value = null
   if (liveErrors.value.length > 0) return
+  // Block the submit if a match dialog is open and the operator
+  // hasn't acknowledged.
+  if (matchCandidates.value.length > 0 && form.acknowledgeMatchSubjectId == null) {
+    matchDialogOpen.value = true
+    return
+  }
 
   try {
     const subject = await subjects.add({ ...form })
@@ -130,8 +223,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
   { code: 'U', label: () => t('addSubject.gender.unknown') },
 ]
 
-const yearMin = 1900
-const yearMax = computed(() => Number(todayIso.value.slice(0, 4)))
 </script>
 
 <template>
@@ -280,22 +371,41 @@ const yearMax = computed(() => Number(todayIso.value.slice(0, 4)))
               <ErrorText v-if="errorFor('gender')">{{ errorFor('gender') }}</ErrorText>
             </div>
 
+            <!-- Phase E.6 retrospective-backfill — PHI triplet. Both
+                 names + the full DoB drive the cross-study dedup
+                 match-preflight; the operator can still submit with
+                 them blank for legacy non-retrospective flows. -->
             <div>
-              <FieldLabel for="year-of-birth">{{ t('addSubject.field.yearOfBirth') }}</FieldLabel>
-              <input
-                id="year-of-birth"
-                v-model.number="form.yearOfBirth"
-                type="number"
-                :min="yearMin"
-                :max="yearMax"
-                :placeholder="t('addSubject.placeholder.yearOfBirth')"
-                class="w-full px-3 py-2 border rounded-md focus:outline-none transition-colors muw-focus"
-                :class="errorFor('yearOfBirth')
-                  ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
-                  : 'border-slate-300 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100'"
+              <FieldLabel for="first-name">{{ t('addSubject.field.firstName') }}</FieldLabel>
+              <TextInput
+                id="first-name"
+                v-model="form.firstName"
+                :placeholder="t('addSubject.placeholder.firstName')"
+                data-testid="add-subject-first-name"
               />
-              <HelperText>{{ t('addSubject.helper.yearOfBirth') }}</HelperText>
-              <ErrorText v-if="errorFor('yearOfBirth')">{{ errorFor('yearOfBirth') }}</ErrorText>
+              <ErrorText v-if="errorFor('firstName')">{{ errorFor('firstName') }}</ErrorText>
+            </div>
+            <div>
+              <FieldLabel for="last-name">{{ t('addSubject.field.lastName') }}</FieldLabel>
+              <TextInput
+                id="last-name"
+                v-model="form.lastName"
+                :placeholder="t('addSubject.placeholder.lastName')"
+                data-testid="add-subject-last-name"
+              />
+              <ErrorText v-if="errorFor('lastName')">{{ errorFor('lastName') }}</ErrorText>
+            </div>
+            <div>
+              <FieldLabel for="date-of-birth">{{ t('addSubject.field.dateOfBirth') }}</FieldLabel>
+              <TextInput
+                id="date-of-birth"
+                v-model="form.dateOfBirth"
+                type="date"
+                :max="todayIso"
+                data-testid="add-subject-date-of-birth"
+              />
+              <HelperText>{{ t('addSubject.helper.dateOfBirth') }}</HelperText>
+              <ErrorText v-if="errorFor('dateOfBirth')">{{ errorFor('dateOfBirth') }}</ErrorText>
             </div>
 
             <!-- Group assignment dropdown is deliberately omitted.
@@ -424,5 +534,14 @@ const yearMax = computed(() => Number(todayIso.value.slice(0, 4)))
         <p class="leading-relaxed">{{ t('addSubject.modesHelp') }}</p>
       </div>
     </main>
+
+    <!-- Phase E.6 retrospective-backfill — match-preflight prompt. -->
+    <PatientMatchDialog
+      :open="matchDialogOpen"
+      :candidates="matchCandidates"
+      @link="onMatchLink"
+      @create-new="onMatchCreateNew"
+      @cancel="onMatchCancel"
+    />
   </div>
 </template>
