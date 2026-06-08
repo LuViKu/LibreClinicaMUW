@@ -1,0 +1,81 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 — Retrospective-backfill enablement.
+
+        Pre-launch the MUW data nurses will hand-enter paper records for
+        the iAMD + GA studies. The platform currently only knows the
+        operator-chosen `subject.unique_identifier` plus a year-of-birth
+        (stored as Jan-1 in `subject.date_of_birth`, `dob_collected`=false).
+        That's insufficient for two operator needs:
+
+          1. Identity. Paper records carry first name + last name + full
+             DoB. We need to record these on the subject so the operator
+             can match a new enrolment against existing records.
+          2. Dedup. The same human will frequently appear in two studies
+             (iAMD → GA hand-off; pharmaceutical trial enrolment of an
+             observational-cohort patient). Without (first, last, dob)
+             we have no canonical key to detect "this person already
+             exists in study X" before the operator commits a new row.
+
+        Schema decisions (2026-06-08, with user):
+          - Columns live directly on `subject` (simplest read path).
+          - VARCHAR(120) per field — long enough for compound European
+            surnames + diacritics.
+          - NULLABLE: existing rows seeded before this phase predate
+            PHI capture; backfill is operator-driven and rolling.
+          - Functional index on (LOWER(first_name), LOWER(last_name),
+            date_of_birth) drives the case-insensitive dedup lookup.
+            Partial-indexed on status_id != 5 so soft-deleted rows
+            don't shadow real matches.
+
+        No data migration here — `dob_collected` already exists; new
+        operator flow will set it to true when the full DoB is captured.
+    -->
+
+    <changeSet author="muw-ophthalmology"
+               id="2026-06-08-subject-first-name-column">
+        <addColumn tableName="subject">
+            <column name="first_name" type="VARCHAR(120)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology"
+               id="2026-06-08-subject-last-name-column">
+        <addColumn tableName="subject">
+            <column name="last_name" type="VARCHAR(120)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <!--
+        Case-insensitive partial index for the dedup lookup. Skips
+        DELETED subjects (status_id=5) so a soft-deleted shell can't
+        block a re-enrolment of the same human. Only indexes rows
+        where the triplet is fully populated — partial NULLs would
+        be noise.
+    -->
+    <changeSet author="muw-ophthalmology"
+               id="2026-06-08-subject-dedup-index">
+        <sql>
+            CREATE INDEX idx_subject_dedup_lower_name_dob
+                ON subject (LOWER(first_name), LOWER(last_name), date_of_birth)
+                WHERE status_id IS DISTINCT FROM 5
+                  AND first_name IS NOT NULL
+                  AND last_name  IS NOT NULL
+                  AND date_of_birth IS NOT NULL;
+        </sql>
+        <rollback>
+            <sql>DROP INDEX IF EXISTS idx_subject_dedup_lower_name_dob;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

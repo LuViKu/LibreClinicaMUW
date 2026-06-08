@@ -701,9 +701,29 @@ public class SubjectsApiController {
         String trimmedSecondary = body.secondaryId() == null ? null : body.secondaryId().trim();
         if (trimmedSecondary != null && trimmedSecondary.isEmpty()) trimmedSecondary = null;
         char genderChar = Character.toLowerCase(body.gender().charAt(0));
-        java.sql.Date dob = (body.yearOfBirth() == null) ? null
-                : java.sql.Date.valueOf(LocalDate.of(body.yearOfBirth(), 1, 1));
-        boolean dobCollected = body.yearOfBirth() != null;
+
+        // Phase E.6 retrospective-backfill — prefer the new ISO
+        // dateOfBirth field when present, fall back to the legacy
+        // yearOfBirth → Jan-1 conversion for back-compat with SPA
+        // call sites that haven't migrated to the new form yet.
+        java.sql.Date dob;
+        boolean dobCollected;
+        String rawDob = body.dateOfBirth() == null ? "" : body.dateOfBirth().trim();
+        if (!rawDob.isEmpty()) {
+            dob = java.sql.Date.valueOf(LocalDate.parse(rawDob));
+            dobCollected = true;
+        } else if (body.yearOfBirth() != null) {
+            dob = java.sql.Date.valueOf(LocalDate.of(body.yearOfBirth(), 1, 1));
+            dobCollected = false;
+        } else {
+            dob = null;
+            dobCollected = false;
+        }
+        String trimmedFirstName = body.firstName() == null ? null : body.firstName().trim();
+        if (trimmedFirstName != null && trimmedFirstName.isEmpty()) trimmedFirstName = null;
+        String trimmedLastName = body.lastName() == null ? null : body.lastName().trim();
+        if (trimmedLastName != null && trimmedLastName.isEmpty()) trimmedLastName = null;
+
         java.sql.Date enrolledOn = java.sql.Date.valueOf(LocalDate.parse(body.enrolledOn()));
 
         // Phase E.6 subject-lifecycle — Person-ID re-enrol branch.
@@ -718,7 +738,8 @@ public class SubjectsApiController {
         } else {
             try {
                 newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId(),
-                        personId == null || personId.isEmpty() ? null : personId);
+                        personId == null || personId.isEmpty() ? null : personId,
+                        trimmedFirstName, trimmedLastName);
             } catch (SQLException e) {
                 LOG.error("Failed to insert subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
                 return ResponseEntity.status(500).body(Map.of("message",
@@ -1903,11 +1924,11 @@ public class SubjectsApiController {
      * convention of {@code getLatestPK} after the insert.
      */
     private int insertSubjectRow(char gender, java.sql.Date dob, boolean dobCollected, int ownerId,
-                                 String personId)
+                                 String personId, String firstName, String lastName)
             throws SQLException {
         String sql = "INSERT INTO subject (status_id, date_of_birth, gender, unique_identifier, "
-                + "owner_id, date_created, dob_collected) "
-                + "VALUES (?, ?, ?, ?, ?, NOW(), ?)";
+                + "owner_id, date_created, dob_collected, first_name, last_name) "
+                + "VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, Status.AVAILABLE.getId());
@@ -1928,6 +1949,20 @@ public class SubjectsApiController {
             }
             ps.setInt(5, ownerId);
             ps.setBoolean(6, dobCollected);
+            // Phase E.6 retrospective-backfill — PHI captured at
+            // enrolment time. Null when omitted (legacy SPA calls
+            // pre-dating the form expansion); the subject row stays
+            // valid without it.
+            if (firstName == null || firstName.isEmpty()) {
+                ps.setNull(7, Types.VARCHAR);
+            } else {
+                ps.setString(7, firstName);
+            }
+            if (lastName == null || lastName.isEmpty()) {
+                ps.setNull(8, Types.VARCHAR);
+            } else {
+                ps.setString(8, lastName);
+            }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
@@ -1981,7 +2016,30 @@ public class SubjectsApiController {
             String studyEye,
             String screeningDate,
             String personId,
-            List<UpdateSubjectGroupsRequest.Assignment> groupAssignments
+            List<UpdateSubjectGroupsRequest.Assignment> groupAssignments,
+            /*
+             * Phase E.6 retrospective-backfill — operator-supplied
+             * patient identity. The MUW workflow captures the full
+             * triplet on every new enrolment so the dedup query can
+             * find an existing subject regardless of which study they
+             * were first entered in. All three fields are optional on
+             * the wire (legacy SPA call sites still post without them),
+             * but the SPA enforces required=true at the form layer.
+             *
+             * dateOfBirth (ISO yyyy-MM-dd) is the canonical DoB. When
+             * present it overrides the legacy yearOfBirth → Jan-1
+             * mapping; when absent the controller falls back to the
+             * yearOfBirth path so old payloads still work.
+             *
+             * acknowledgeMatchSubjectId: when the SPA's match-preflight
+             * surfaced a duplicate and the operator picked "different
+             * person, create new anyway", the SPA echoes the seen
+             * subject_id(s) so the backend can audit the decision.
+             */
+            String firstName,
+            String lastName,
+            String dateOfBirth,
+            Integer acknowledgeMatchSubjectId
     ) {}
 
     /**
