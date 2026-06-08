@@ -787,8 +787,19 @@ public class UsersApiController {
     /*    (Phase E A7.5 — study-user-role assignments)                    */
     /* ----------------------------------------------------------------- */
 
+    /**
+     * Body of POST /users/{username}/roles and PUT
+     * /users/{username}/roles/{studyOid}.
+     *
+     * <p>Multi-role: callers may submit either a single SPA role via
+     * {@code role}, or a bulk set-replace via {@code roles}. PUT
+     * accepts both shapes ({@code roles} wins when both are present);
+     * POST treats them as additive grants (one row per role). When
+     * neither {@code role} nor {@code roles} is provided the call
+     * fails validation.
+     */
     @Schema(name = "RoleAssignmentRequest")
-    public record RoleAssignmentRequest(String studyOid, String role) {}
+    public record RoleAssignmentRequest(String studyOid, String role, List<String> roles) {}
 
     /**
      * List every study/role binding owned by {@code username},
@@ -833,14 +844,16 @@ public class UsersApiController {
     }
 
     /**
-     * Grant a fresh study/role binding to {@code username}. Mirrors
+     * Grant a study/role binding to {@code username}. Mirrors
      * {@code SetUserRoleServlet:206} — the legacy gate (sysadmin
      * only) and the site-level role legality check (Coordinator /
      * StudyDirector cannot be granted at site level) are preserved.
      *
-     * <p>Refuses 409 when a non-DELETED binding already exists for
-     * the {@code (user, study)} pair: the SPA should call the PUT
-     * endpoint to update an existing binding instead.
+     * <p>Multi-role: the endpoint is now additive. A user may hold
+     * multiple roles on the same study (e.g. CRC + Investigator);
+     * each POST inserts a fresh row. 409 is reserved for the strict
+     * idempotency case where the EXACT SAME (user, study, role)
+     * triple is already an active grant.
      */
     @PostMapping("/{username}/roles")
     @ApiResponse(responseCode = "201",
@@ -887,11 +900,14 @@ public class UsersApiController {
                                     + "' cannot be granted at site level — assign at the parent study"))));
         }
 
-        StudyUserRoleBean existing = userDao.findRoleByUserNameAndStudyId(username, study.getId());
-        if (existing != null && existing.getId() != 0 && existing.isActive()) {
+        // Multi-role idempotency: refuse only when an ACTIVE row already
+        // exists for the EXACT (user, study, role) triple. Other active
+        // grants for the same (user, study) — e.g. user already has CRC,
+        // caller is granting Investigator — pass through as a new row.
+        if (hasActiveGrantWithRole(userDao, username, study.getId(), legacyRole.getName())) {
             return ResponseEntity.status(409).body(Map.of("message",
-                    "User '" + username + "' already has a role on study " + body.studyOid()
-                            + " — use PUT to change it"));
+                    "User '" + username + "' already has role '" + body.role()
+                            + "' on study " + body.studyOid()));
         }
 
         StudyUserRoleBean sur = new StudyUserRoleBean();
@@ -908,23 +924,58 @@ public class UsersApiController {
 
         StudyUserRoleBean refreshed = userDao.findRoleByUserNameAndStudyId(username, study.getId());
 
-        String oldRoleName = existing != null && existing.getRole() != null
-                ? existing.getRole().getName() : "";
-        String newRoleName = refreshed != null && refreshed.getRole() != null
-                ? refreshed.getRole().getName() : legacyRole.getName();
+        String newRoleName = legacyRole.getName();
         EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
                 "User role granted — user=" + username + " role=" + newRoleName,
                 "study_user_role",
                 refreshed != null ? refreshed.getId() : 0,
-                "role_id", oldRoleName, newRoleName);
+                "role_id", "", newRoleName);
 
         return ResponseEntity.status(201).body(toRoleBindingDto(refreshed, studyDao));
     }
 
     /**
-     * Change the role on an existing binding (without revoking).
-     * Mirrors {@code EditStudyUserRoleServlet}. Sysadmin-only, same
+     * Multi-role check: walk every grant the user has, return true
+     * if any active row matches both {@code studyId} and
+     * {@code legacyRoleName}. {@link UserAccountDAO#findRoleByUserNameAndStudyId}
+     * only returns the FIRST match per (user, study) which is no
+     * longer sufficient now that the same pair can host multiple
+     * role rows.
+     */
+    private static boolean hasActiveGrantWithRole(UserAccountDAO userDao,
+                                                  String username,
+                                                  int studyId,
+                                                  String legacyRoleName) {
+        for (StudyUserRoleBean r : userDao.findAllRolesByUserName(username)) {
+            if (r == null || r.getStudyId() != studyId) continue;
+            if (r.getStatus() == null
+                    || r.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            if (r.getRole() != null
+                    && legacyRoleName != null
+                    && legacyRoleName.equalsIgnoreCase(r.getRole().getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Change the role(s) on an existing binding. Mirrors
+     * {@code EditStudyUserRoleServlet}. Sysadmin-only, same
      * site-level legality check.
+     *
+     * <p>Two shapes:
+     * <ul>
+     *   <li>{@code roles}: atomic set-replace. The submitted list
+     *       becomes the new active role set for (user, study);
+     *       missing roles are soft-deleted (status_id = 5), new
+     *       roles are inserted. No-op on roles already active.</li>
+     *   <li>{@code role}: legacy single-role overwrite — kept for
+     *       back-compat with callers that haven't migrated yet.
+     *       Mutates the first active binding row in place.</li>
+     * </ul>
+     *
+     * <p>Returns the refreshed role-binding list for (user, study).
      */
     @PutMapping("/{username}/roles/{studyOid}")
     @ApiResponse(responseCode = "200",
@@ -935,18 +986,15 @@ public class UsersApiController {
                                         HttpSession session) {
         ResponseEntity<?> guard = preflightLifecycle(session, username);
         if (guard != null) return guard;
-        if (body == null || body.role() == null || body.role().isBlank()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
-                    "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
-                            "role", "Role is required"))));
-        }
-        Role legacyRole = RoleMapper.fromSpaRole(body.role());
-        if (legacyRole == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
-                    "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
-                            "role", "Unknown role — expected Administrator / Data Manager / CRC / Monitor / Investigator"))));
+
+        boolean bulkMode = body != null && body.roles() != null && !body.roles().isEmpty();
+        if (!bulkMode) {
+            if (body == null || body.role() == null || body.role().isBlank()) {
+                return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                        "Validation failed",
+                        List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                                "role", "Role is required"))));
+            }
         }
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
@@ -957,6 +1005,19 @@ public class UsersApiController {
         if (study == null || study.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
+        }
+
+        if (bulkMode) {
+            return updateRolesBulk(username, body.roles(), study, studyOid, me, userDao, studyDao);
+        }
+
+        // Legacy single-role overwrite path.
+        Role legacyRole = RoleMapper.fromSpaRole(body.role());
+        if (legacyRole == null) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                            "role", "Unknown role — expected Administrator / Data Manager / CRC / Monitor / Investigator"))));
         }
         if (!UserAdminAuthorization.roleAssignmentIsLegal(legacyRole, study)) {
             return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
@@ -993,6 +1054,131 @@ public class UsersApiController {
                 "role_id", oldRoleName, newRoleName);
 
         return ResponseEntity.ok(toRoleBindingDto(refreshed, studyDao));
+    }
+
+    /**
+     * Bulk set-replace for the multi-role PUT path. Reads the current
+     * active grants for (user, study), diffs against the requested
+     * roles, then in one logical transaction:
+     *
+     * <ul>
+     *   <li>Inserts a fresh row per role in {@code requested - current}.</li>
+     *   <li>Soft-deletes (status_id → 5) the existing row per role in
+     *       {@code current - requested}.</li>
+     *   <li>Leaves untouched any role that appears in both sets.</li>
+     * </ul>
+     *
+     * <p>Audit: one {@code writeAuditEvent} row per inserted or
+     * soft-deleted role, packing the username + role name into the
+     * action-message text so the audit-log view can render the diff.
+     */
+    private ResponseEntity<?> updateRolesBulk(String username,
+                                              List<String> requestedSpaRoles,
+                                              StudyBean study,
+                                              String studyOid,
+                                              UserAccountBean me,
+                                              UserAccountDAO userDao,
+                                              StudyDAO studyDao) {
+        // Validate every requested role; reject the bulk request if
+        // any single role is unknown or illegal at the study tier.
+        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = new ArrayList<>();
+        LinkedHashMap<String, Role> resolved = new LinkedHashMap<>();
+        for (String spaRole : requestedSpaRoles) {
+            if (spaRole == null || spaRole.isBlank()) continue;
+            Role legacy = RoleMapper.fromSpaRole(spaRole);
+            if (legacy == null) {
+                errors.add(fieldError("roles",
+                        "Unknown role '" + spaRole + "' — expected Administrator / Data Manager / CRC / Monitor / Investigator"));
+                continue;
+            }
+            if (!UserAdminAuthorization.roleAssignmentIsLegal(legacy, study)) {
+                errors.add(fieldError("roles", "Role '" + spaRole
+                        + "' cannot be granted at site level — assign at the parent study"));
+                continue;
+            }
+            resolved.put(legacy.getName(), legacy);
+        }
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+        if (resolved.isEmpty()) {
+            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                    "Validation failed",
+                    List.of(fieldError("roles", "At least one role is required"))));
+        }
+
+        UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No user with username '" + username + "'"));
+        }
+
+        // Snapshot the current active grants for (user, study), keyed by
+        // legacy role-name. Multiple grants per role (shouldn't happen,
+        // but the schema allows it) collapse to the first row — the rest
+        // ride along as if they're being soft-deleted-and-recreated.
+        ArrayList<StudyUserRoleBean> all = userDao.findAllRolesByUserName(username);
+        LinkedHashMap<String, StudyUserRoleBean> currentByRole = new LinkedHashMap<>();
+        for (StudyUserRoleBean r : all) {
+            if (r == null || r.getStudyId() != study.getId()) continue;
+            if (r.getStatus() == null
+                    || r.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            if (r.getRole() == null) continue;
+            currentByRole.putIfAbsent(r.getRole().getName(), r);
+        }
+
+        AuditEventDAO auditDao = new AuditEventDAO(dataSource);
+        int adds = 0;
+        int removes = 0;
+
+        // Adds: anything in resolved that isn't already active.
+        for (Map.Entry<String, Role> e : resolved.entrySet()) {
+            String legacyRoleName = e.getKey();
+            if (currentByRole.containsKey(legacyRoleName)) continue;
+            StudyUserRoleBean sur = new StudyUserRoleBean();
+            sur.setStudyId(study.getId());
+            sur.setRoleName(legacyRoleName);
+            sur.setStatus(Status.AVAILABLE);
+            sur.setOwner(me);
+            sur.setUserName(username);
+            sur.setUserAccountId(target.getId());
+            userDao.createStudyUserRole(target, sur);
+            EventCrfsApiController.writeAuditEvent(auditDao, me, study, null,
+                    "User role granted (bulk) — user=" + username + " role=" + legacyRoleName,
+                    "study_user_role", 0,
+                    "role_id", "", legacyRoleName);
+            adds++;
+        }
+
+        // Removes: anything currently active but absent from resolved.
+        for (Map.Entry<String, StudyUserRoleBean> e : currentByRole.entrySet()) {
+            String legacyRoleName = e.getKey();
+            if (resolved.containsKey(legacyRoleName)) continue;
+            StudyUserRoleBean row = e.getValue();
+            row.setStatus(Status.DELETED);
+            row.setUpdater(me);
+            userDao.updateStudyUserRole(row, username);
+            EventCrfsApiController.writeAuditEvent(auditDao, me, study, null,
+                    "User role revoked (bulk) — user=" + username + " role=" + legacyRoleName,
+                    "study_user_role", row.getId(),
+                    "role_id", legacyRoleName, "");
+            removes++;
+        }
+
+        LOG.info("Bulk role update: username={} studyOid={} adds={} removes={} by admin={}",
+                username, studyOid, adds, removes, me.getName());
+
+        // Response: refreshed binding list for (user, study). Includes
+        // soft-deleted rows so the SPA can see the full history if it
+        // wants to render a per-role active/inactive badge.
+        ArrayList<StudyUserRoleBean> refreshed = userDao.findAllRolesByUserName(username);
+        List<RoleBindingDto> bindings = new ArrayList<>();
+        for (StudyUserRoleBean r : refreshed) {
+            if (r == null || r.getStudyId() != study.getId()) continue;
+            bindings.add(toRoleBindingDto(r, studyDao));
+        }
+        return ResponseEntity.ok(bindings);
     }
 
     /**
