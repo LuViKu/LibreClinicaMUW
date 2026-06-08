@@ -225,6 +225,9 @@
     "group": {
       "notAssigned": "— Not assigned —"
     },
+    "error": {
+      "labelTaken": "Study Subject ID '{id}' is already taken in this study."
+    },
     "preview": "Live preview:",
     "cancelLink": "Cancel and return to Subject Matrix",
     "action": {
@@ -1496,6 +1499,9 @@
         "label": "{from}–{to} of {total}"
       },
       "columns": {
+        "lastName": "Last name",
+        "firstName": "First name",
+        "dateOfBirth": "Date of birth",
         "yearOfBirth": "Year of birth",
         "gender": "Sex",
         "studies": "Studies",

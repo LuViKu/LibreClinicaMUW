@@ -24,9 +24,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * column (the institutional patient identifier, sometimes a hospital
  * MRN). May be {@code null} for older subjects pre-dating the field.
  *
- * <p>{@code yearOfBirth} carries the year portion of
- * {@code subject.date_of_birth}; the SPA composes "1962 (F)" in the
- * list view without leaking the full DOB.
+ * <p>{@code firstName} / {@code lastName} / {@code dateOfBirth} —
+ * Phase E.6 retrospective-backfill (2026-06-08) — the full PHI
+ * triplet the AddSubject form now captures. {@code dateOfBirth} is
+ * an ISO {@code yyyy-MM-dd} string (or null when the subject row
+ * predates DoB capture); the SPA's list view renders it as a
+ * locale-formatted column to replace the year-only projection.
+ * {@code yearOfBirth} is preserved verbatim for callers that still
+ * read the slimmer projection.
  */
 @Schema(name = "PatientDto")
 public record PatientDto(
@@ -34,6 +39,9 @@ public record PatientDto(
         String uniqueIdentifier,
         String gender,
         Integer yearOfBirth,
+        String firstName,
+        String lastName,
+        String dateOfBirth,
         List<Enrolment> enrolments
 ) {
 

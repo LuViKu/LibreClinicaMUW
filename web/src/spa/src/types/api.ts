@@ -1652,6 +1652,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subjects/check-label": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["checkLabel"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/export-jobs": {
         parameters: {
             query?: never;
@@ -3365,6 +3381,10 @@ export interface components {
             transitionedAt?: string;
             reason?: string;
         };
+        SubjectLabelAvailability: {
+            available?: boolean;
+            existingSubjectOid?: string;
+        };
         StudyOptionDto: {
             oid?: string;
             name?: string;
@@ -3459,6 +3479,9 @@ export interface components {
             gender?: string;
             /** Format: int32 */
             yearOfBirth?: number;
+            firstName?: string;
+            lastName?: string;
+            dateOfBirth?: string;
             enrolments?: components["schemas"]["PatientEnrolmentDto"][];
         };
         PatientEnrolmentDto: {
@@ -3485,6 +3508,9 @@ export interface components {
             gender?: string;
             /** Format: int32 */
             yearOfBirth?: number;
+            firstName?: string;
+            lastName?: string;
+            dateOfBirth?: string;
             enrolments?: components["schemas"]["PatientEnrolmentDto"][];
             eyeTransitions?: components["schemas"]["PatientEyeTransitionDto"][];
         };
@@ -6929,6 +6955,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EyeTransitionDto"];
+                };
+            };
+        };
+    };
+    checkLabel: {
+        parameters: {
+            query: {
+                label: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SubjectLabelAvailability"];
                 };
             };
         };

@@ -224,6 +224,9 @@
     "group": {
       "notAssigned": "— Nicht zugewiesen —"
     },
+    "error": {
+      "labelTaken": "Studien-Teilnehmer-ID '{id}' ist in dieser Studie bereits vergeben."
+    },
     "preview": "Live-Vorschau:",
     "cancelLink": "Abbrechen — zurück zur Übersicht",
     "action": {
@@ -1495,6 +1498,9 @@
         "label": "{from}–{to} von {total}"
       },
       "columns": {
+        "lastName": "Nachname",
+        "firstName": "Vorname",
+        "dateOfBirth": "Geburtsdatum",
         "yearOfBirth": "Geburtsjahr",
         "gender": "Geschlecht",
         "studies": "Studien",

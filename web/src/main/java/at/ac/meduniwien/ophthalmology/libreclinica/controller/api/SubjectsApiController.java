@@ -838,6 +838,65 @@ public class SubjectsApiController {
     }
 
     /* =============================================================== */
+    /* Phase E.6 — label-availability preflight                         */
+    /* =============================================================== */
+
+    /**
+     * Response shape for {@link #checkLabel}.
+     *
+     * <p>The SPA fires this on debounced input of the Study Subject ID
+     * field; a {@code false} {@code available} flag flips the inline
+     * error before the operator clicks submit, sparing the 400 round
+     * trip + the AddSubject's serverFieldErrors retry cycle. The
+     * structured shape (vs a plain HTTP status) keeps the response
+     * cacheable at the SPA layer and leaves room for surfacing the
+     * existing subject's OID for a "Open existing" affordance in
+     * a future iteration.
+     */
+    @Schema(name = "SubjectLabelAvailability")
+    public record SubjectLabelAvailability(
+            boolean available,
+            String existingSubjectOid
+    ) {}
+
+    /**
+     * Live label-availability check — does the operator-typed Study
+     * Subject ID already exist in the bound study?
+     *
+     * <p>{@code 200 + available=true} when no row matches; {@code 200
+     * + available=false + existingSubjectOid} when a row exists.
+     * {@code 400} for missing/blank label. {@code 401 / 4xx} when no
+     * study is bound. The SPA debounces input by ~350ms before
+     * firing.
+     */
+    @GetMapping("/check-label")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = SubjectLabelAvailability.class)))
+    public ResponseEntity<?> checkLabel(@org.springframework.web.bind.annotation.RequestParam("label") String labelRaw,
+                                        HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+        String label = labelRaw == null ? "" : labelRaw.trim();
+        if (label.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "label is required."));
+        }
+        StudySubjectDAO dao = new StudySubjectDAO(dataSource);
+        StudySubjectBean existing = dao.findByLabelAndStudy(label, currentStudy);
+        if (existing == null || existing.getId() == 0) {
+            return ResponseEntity.ok(new SubjectLabelAvailability(true, null));
+        }
+        return ResponseEntity.ok(new SubjectLabelAvailability(false, existing.getOid()));
+    }
+
+    /* =============================================================== */
     /* Phase E.6 retrospective-backfill — match-preflight              */
     /* =============================================================== */
 

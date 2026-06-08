@@ -170,7 +170,9 @@ function rowAriaLabel(p: PatientListItem): string {
       <DenseTable :sticky-header-offset="56">
         <template #header>
           <tr class="border-b border-slate-200">
-            <th scope="col" class="px-3 py-2 font-medium w-24">{{ t('patients.list.columns.yearOfBirth') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-32">{{ t('patients.list.columns.lastName') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-28">{{ t('patients.list.columns.firstName') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-28">{{ t('patients.list.columns.dateOfBirth') }}</th>
             <th scope="col" class="px-3 py-2 font-medium w-20">{{ t('patients.list.columns.gender') }}</th>
             <th scope="col" class="px-3 py-2 font-medium">{{ t('patients.list.columns.studies') }}</th>
             <th scope="col" class="px-3 py-2 font-medium w-28">{{ t('patients.list.columns.lastVisit') }}</th>
@@ -179,19 +181,19 @@ function rowAriaLabel(p: PatientListItem): string {
         </template>
 
         <tr v-if="store.isLoadingList">
-          <td colspan="5" class="px-3 py-6 text-center text-slate-500 italic">
+          <td colspan="7" class="px-3 py-6 text-center text-slate-500 italic">
             {{ t('common.loading') }}
           </td>
         </tr>
 
         <tr v-else-if="store.listError">
-          <td colspan="5" class="px-3 py-6 text-center text-rose-700">
+          <td colspan="7" class="px-3 py-6 text-center text-rose-700">
             {{ store.listError }}
           </td>
         </tr>
 
         <tr v-else-if="store.list.length === 0">
-          <td colspan="5" class="px-3 py-6 text-center text-slate-500">
+          <td colspan="7" class="px-3 py-6 text-center text-slate-500">
             {{ t('patients.list.empty') }}
           </td>
         </tr>
@@ -205,7 +207,9 @@ function rowAriaLabel(p: PatientListItem): string {
           class="cursor-pointer"
           @click="openDetail(p.subjectId)"
         >
-          <td class="px-3 py-2 text-slate-700 font-mono text-xs">{{ p.yearOfBirth ?? '—' }}</td>
+          <td class="px-3 py-2 text-slate-800 font-medium">{{ p.lastName ?? '—' }}</td>
+          <td class="px-3 py-2 text-slate-700">{{ p.firstName ?? '—' }}</td>
+          <td class="px-3 py-2 text-slate-700 font-mono text-xs">{{ formatDate(p.dateOfBirth) || (p.yearOfBirth ?? '—') }}</td>
           <td class="px-3 py-2 text-slate-600">{{ p.gender }}</td>
           <td class="px-3 py-2">
             <div class="flex flex-wrap gap-1.5">

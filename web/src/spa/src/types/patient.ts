@@ -46,6 +46,16 @@ export interface PatientListItem {
   uniqueIdentifier: string | null
   gender: PatientGender | string
   yearOfBirth: number | null
+  /**
+   * Phase E.6 retrospective-backfill — full PHI triplet captured at
+   * enrolment. `dateOfBirth` is the canonical ISO `yyyy-MM-dd`; the
+   * SPA's list view renders it as a locale-formatted column.
+   * `yearOfBirth` is preserved for callers that only need the year.
+   * All three are nullable for older subjects pre-dating capture.
+   */
+  firstName: string | null
+  lastName: string | null
+  dateOfBirth: string | null
   enrolments: PatientEnrolment[]
 }
 
