@@ -69,21 +69,51 @@ const { t } = useI18n()
 const targetStudyOid = ref('')
 const targetLabel = ref('')
 const reason = ref('')
+const transitionedAt = ref('')
 const submitted = ref(false)
 
 const trimmedReason = computed(() => reason.value.trim())
 const trimmedTargetLabel = computed(() => targetLabel.value.trim())
+const trimmedTransitionedAt = computed(() => transitionedAt.value.trim())
 
 const reasonInvalid = computed(() => submitted.value && trimmedReason.value === '')
 
+// Pre-launch retrospective backfill: the operator pastes a date from
+// paper records. Default to today (prospective case). Reject obviously
+// junk strings + any future date so the audit row never claims a
+// hand-off that hasn't happened. The backend re-validates.
+function todayIso(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+const transitionedAtInvalid = computed(() => {
+  if (!submitted.value) return false
+  const v = trimmedTransitionedAt.value
+  if (v === '') return false
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return true
+  return v > todayIso()
+})
+
 const canSubmit = computed(
-  () => targetStudyOid.value !== '' && trimmedReason.value !== '',
+  () =>
+    targetStudyOid.value !== '' &&
+    trimmedReason.value !== '' &&
+    !(
+      trimmedTransitionedAt.value !== '' &&
+      (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedTransitionedAt.value) ||
+        trimmedTransitionedAt.value > todayIso())
+    ),
 )
 
 function resetForm() {
   targetStudyOid.value = ''
   targetLabel.value = ''
   reason.value = ''
+  transitionedAt.value = todayIso()
   submitted.value = false
 }
 
@@ -100,6 +130,9 @@ function onSubmit() {
   }
   if (trimmedTargetLabel.value !== '') {
     payload.targetLabel = trimmedTargetLabel.value
+  }
+  if (trimmedTransitionedAt.value !== '') {
+    payload.transitionedAt = trimmedTransitionedAt.value
   }
   emit('submit', payload)
 }
@@ -189,6 +222,23 @@ onBeforeUnmount(() => {
             placeholder="automatisch zugewiesen wenn leer"
             data-testid="transition-eye-target-label"
           />
+        </div>
+
+        <div>
+          <FieldLabel for="transition-eye-transitioned-at">
+            {{ t('subjectDetail.eyeTransition.field.transitionedAt') }}
+          </FieldLabel>
+          <TextInput
+            id="transition-eye-transitioned-at"
+            v-model="transitionedAt"
+            type="date"
+            :max="todayIso()"
+            :aria-invalid="transitionedAtInvalid || undefined"
+            data-testid="transition-eye-transitioned-at"
+          />
+          <ErrorText v-if="transitionedAtInvalid">
+            {{ t('subjectDetail.eyeTransition.error.transitionedAtFuture') }}
+          </ErrorText>
         </div>
 
         <div>

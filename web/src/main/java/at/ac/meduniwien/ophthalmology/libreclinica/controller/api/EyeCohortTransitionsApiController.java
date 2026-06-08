@@ -172,7 +172,16 @@ public class EyeCohortTransitionsApiController {
     public record TransitionRequest(
             String targetStudyOid,
             String targetLabel,
-            String reason
+            String reason,
+            /*
+             * Optional ISO-8601 date (yyyy-MM-dd) the operator chose for the
+             * clinical hand-off. Defaults to "now" server-side when absent —
+             * the prospective case. Set by the SPA dialog when entering
+             * already-collected paper records so transitioned_at reflects
+             * when the eye actually moved cohorts, not when it was digitized.
+             * Must be ≤ today; the audit row's timestamp stays at NOW().
+             */
+            String transitionedAt
     ) {}
 
     /**
@@ -242,6 +251,27 @@ public class EyeCohortTransitionsApiController {
         if (reason.length() > 500) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "reason must be ≤ 500 characters."));
+        }
+
+        // Optional retrospective date. Empty/null => prospective (NOW()).
+        // Parsed as java.time.LocalDate to reject obvious junk, then bounded
+        // to today so an operator can't backfill a "future" transition.
+        final java.time.LocalDate transitionedOn;
+        final String transitionedAtRaw =
+                body.transitionedAt() == null ? "" : body.transitionedAt().trim();
+        if (transitionedAtRaw.isEmpty()) {
+            transitionedOn = null;
+        } else {
+            try {
+                transitionedOn = java.time.LocalDate.parse(transitionedAtRaw);
+            } catch (java.time.format.DateTimeParseException ex) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "transitionedAt must be an ISO date (yyyy-MM-dd)."));
+            }
+            if (transitionedOn.isAfter(java.time.LocalDate.now())) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "transitionedAt must not be in the future."));
+            }
         }
 
         // ---- Resolve source study_subject by (active study, path label) ----
@@ -344,7 +374,7 @@ public class EyeCohortTransitionsApiController {
                         sourceSubjectId, eye,
                         sourceSs.getId(), sourceSs.getStudyId(),
                         resolved.targetStudySubjectId, targetStudy.getId(),
-                        currentUser.getId(), reason);
+                        currentUser.getId(), reason, transitionedOn);
 
                 // 5. Insert the audit_log_event row (type 57).
                 emitTransitionAudit(c, currentUser.getId(), transitionId,
@@ -667,12 +697,25 @@ public class EyeCohortTransitionsApiController {
                                     int subjectId, String eye,
                                     int sourceStudySubjectId, int sourceStudyId,
                                     int targetStudySubjectId, int targetStudyId,
-                                    int actorUserId, String reason)
+                                    int actorUserId, String reason,
+                                    java.time.LocalDate transitionedOn)
             throws SQLException {
-        String sql = "INSERT INTO eye_cohort_transition "
-                + "(subject_id, eye, source_study_subject_id, source_study_id, "
-                + " target_study_subject_id, target_study_id, actor_user_id, reason) "
-                + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+        // When transitionedOn is null, omit the column so the DDL default
+        // (now()) wins — preserves the prospective wire shape verbatim.
+        // When non-null, set the timestamp explicitly at noon-local of the
+        // chosen date so DST shifts don't push the audit record into the
+        // adjacent day for the SPA's banner copy.
+        final boolean retro = transitionedOn != null;
+        String sql = retro
+                ? "INSERT INTO eye_cohort_transition "
+                    + "(subject_id, eye, source_study_subject_id, source_study_id, "
+                    + " target_study_subject_id, target_study_id, actor_user_id, reason, "
+                    + " transitioned_at) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                : "INSERT INTO eye_cohort_transition "
+                    + "(subject_id, eye, source_study_subject_id, source_study_id, "
+                    + " target_study_subject_id, target_study_id, actor_user_id, reason) "
+                    + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, subjectId);
             ps.setString(2, eye);
@@ -682,6 +725,10 @@ public class EyeCohortTransitionsApiController {
             ps.setInt(6, targetStudyId);
             ps.setInt(7, actorUserId);
             ps.setString(8, reason);
+            if (retro) {
+                java.time.LocalDateTime noon = transitionedOn.atTime(12, 0);
+                ps.setTimestamp(9, Timestamp.valueOf(noon));
+            }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) return keys.getInt(1);

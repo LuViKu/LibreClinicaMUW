@@ -285,6 +285,13 @@ export interface TransitionEyeRequest {
   targetStudyOid: string
   targetLabel?: string
   reason: string
+  /**
+   * Optional ISO date (yyyy-MM-dd) the operator chose as the clinical
+   * hand-off date. Empty/undefined → server uses NOW() (prospective
+   * default). Set by the dialog when entering already-collected
+   * retrospective paper records. Must be ≤ today.
+   */
+  transitionedAt?: string
 }
 
 /**
