@@ -1,0 +1,185 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 — per-eye cohort transition.
+
+        Ophthalmology cohorts split early/late disease into distinct
+        protocols: iAMD (intermediate AMD) vs GA (geographic atrophy).
+        Each eye progresses independently — one subject can transition
+        the right eye (OD) from iAMD to GA while the left eye (OS) stays
+        in iAMD. The operator wants a per-eye, audit-grade record of the
+        cohort hand-off so the long-running observational story across
+        protocols is preserved without losing the iAMD-era casebook.
+
+        Clinical rules (encoded in the controller; the table just stores
+        the audit edge):
+
+          1. The source iAMD study_subject is DOWNGRADED, never deleted.
+             OU → other-eye (so the remaining eye stays in iAMD);
+             single-eye → NULL (no eye remains in scope).
+          2. The target GA enrollment inherits the same subject_id
+             (subject.unique_identifier / person identity is preserved
+             across protocols — one human, two participations).
+          3. Bilateral GA appends: if a subject's second eye later
+             progresses to GA, the existing GA study_subject row's
+             study_eye is upgraded OD → OU rather than creating a
+             second row. This keeps the GA participation visit-stream
+             contiguous.
+
+        One row per per-eye transition. The eye column records which
+        eye moved; source/target study_subject_id + source/target
+        study_id let the SPA render the cross-reference banner both
+        directions ("M-001 came from iAMD-001" + "M-001 transitioned
+        to GA-001") without a second query.
+
+        reason is a free-text VARCHAR(500) — the SPA collects an
+        operator-visible "why" (e.g. "OCT shows definite GA per BCVA
+        decline") that ends up in the audit log + the casebook header.
+        NOT NULL because clinical traceability requires a stated
+        reason for every cohort transition.
+
+        FK delete behaviour: RESTRICT on every FK so the audit trail
+        cannot be silently broken by a downstream delete of the
+        source/target study_subject or study. Hard-delete of subjects
+        is not part of the workflow anyway (status downgrade is the
+        only delete-equivalent); this is defence-in-depth.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-07-eye-cohort-transition-table">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="eye_cohort_transition"/></not>
+        </preConditions>
+        <createTable tableName="eye_cohort_transition">
+            <column autoIncrement="true" name="transition_id" type="SERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="subject_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="eye" type="VARCHAR(2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_study_subject_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="source_study_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_study_subject_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="target_study_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="transitioned_at" type="TIMESTAMP" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actor_user_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reason" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!--
+            Per-eye scope: 'OD' (right) | 'OS' (left). 'OU' is not
+            permitted in the eye column because every transition row
+            tracks exactly one eye's hand-off; a bilateral simultaneous
+            transition writes two rows (one per eye). The Java
+            controller rejects anything else before INSERT, the CHECK
+            is the belt-and-braces guard.
+        -->
+        <sql>
+            ALTER TABLE eye_cohort_transition
+            ADD CONSTRAINT ck_eye_cohort_transition_eye CHECK (eye IN ('OD', 'OS'));
+        </sql>
+
+        <addForeignKeyConstraint baseTableName="eye_cohort_transition" baseColumnNames="subject_id"
+                                 constraintName="fk_eye_cohort_transition_subject"
+                                 referencedTableName="subject" referencedColumnNames="subject_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="eye_cohort_transition" baseColumnNames="source_study_subject_id"
+                                 constraintName="fk_eye_cohort_transition_source_ss"
+                                 referencedTableName="study_subject" referencedColumnNames="study_subject_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="eye_cohort_transition" baseColumnNames="source_study_id"
+                                 constraintName="fk_eye_cohort_transition_source_study"
+                                 referencedTableName="study" referencedColumnNames="study_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="eye_cohort_transition" baseColumnNames="target_study_subject_id"
+                                 constraintName="fk_eye_cohort_transition_target_ss"
+                                 referencedTableName="study_subject" referencedColumnNames="study_subject_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="eye_cohort_transition" baseColumnNames="target_study_id"
+                                 constraintName="fk_eye_cohort_transition_target_study"
+                                 referencedTableName="study" referencedColumnNames="study_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <addForeignKeyConstraint baseTableName="eye_cohort_transition" baseColumnNames="actor_user_id"
+                                 constraintName="fk_eye_cohort_transition_actor"
+                                 referencedTableName="user_account" referencedColumnNames="user_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+
+        <!--
+            Lookup-by-source for the GET endpoint's "source side" half.
+            (source_study_subject_id, eye) is the natural composite key
+            the SPA's "you came from iAMD-001 OD" cross-reference walks.
+        -->
+        <createIndex tableName="eye_cohort_transition" indexName="ix_eye_cohort_transition_source_eye">
+            <column name="source_study_subject_id"/>
+            <column name="eye"/>
+        </createIndex>
+        <!--
+            Lookup-by-target for the "target side" half — "we received
+            OD on 2026-06-07 from iAMD-001".
+        -->
+        <createIndex tableName="eye_cohort_transition" indexName="ix_eye_cohort_transition_target_eye">
+            <column name="target_study_subject_id"/>
+            <column name="eye"/>
+        </createIndex>
+    </changeSet>
+
+    <!--
+        audit_log_event_type row for EyeCohortTransitionsApiController.
+        The POST endpoint emits one audit_log_event row per successful
+        transition. The reason text the operator entered is stored in
+        the row's new_value so the Audit Trail SPA can render
+        "{user} transitioned {subject} OD: {reason}" without an extra
+        schema field; the old_value carries the source study OID + eye
+        descriptor so the trail records both sides of the hand-off.
+
+        ID allocation. IDs 50–56 are already taken by Phase E.5/E.6
+        sibling rows (user_profile/study_identity/dataset_exported/
+        subject_data_exported/study_parameters/audit_log_exported/
+        discrepancy_exported). The brief's "id 55" predated the
+        2026-06-06 audit-log-exported + discrepancy-exported landings
+        that claimed 55+56 — we pick the next free slot (57). The
+        preCondition guards against a future double-seed in case a
+        sibling phase races us.
+    -->
+    <changeSet id="2026-06-07-audit-event-type-eye-cohort-transition"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 57;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the audit_log_event_type row EyeCohortTransitionsApiController
+            writes whenever a per-eye cohort transition is committed.
+        </comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="57"/>
+            <column name="name" value="eye_cohort_transition"/>
+            <column name="display_name" value="Eye cohort transition"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

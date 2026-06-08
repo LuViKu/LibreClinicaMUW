@@ -12,12 +12,14 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
+import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
 import { useEventsStore } from '@/stores/events'
 import { useAuthStore } from '@/stores/auth'
-import type { EventStatus, Gender } from '@/types/subject'
+import type { EventStatus, Gender, EyeTransitionDto, TransitionEyeRequest } from '@/types/subject'
 import { canManageSubjectLifecycle, canEditSubject } from '@/types/subject'
+import { roleSatisfies } from '@/router'
 import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
 
@@ -260,6 +262,111 @@ async function onUnlock() {
   await subjects.unlockSubject(subject.value.id)
 }
 
+/* ------------------------------------------------------------- */
+/* Phase E.6 — per-eye cohort transition workflow.                */
+/*                                                                */
+/* The per-eye block under the identity card shows OD + OS rows.  */
+/* Each row carries a Transition button gated on:                 */
+/*   1. operator's role (Investigator / Data Manager /            */
+/*      Administrator — CRC inherits via roleSatisfies)            */
+/*   2. eye scope: OD button hidden when studyEye is 'OS',        */
+/*      OS button hidden when studyEye is 'OD'. 'OU' shows both;  */
+/*      null hides both (no enrolled eye to transition).          */
+/*                                                                */
+/* The banners above the events table render from                 */
+/* subject.eyeTransitions with side === 'source' / 'target'.      */
+/* ------------------------------------------------------------- */
+
+const canTransitionEye = computed(() => {
+  const role = auth.user?.role ?? null
+  if (!role) return false
+  return (
+    roleSatisfies(role, 'Investigator') ||
+    roleSatisfies(role, 'Data Manager') ||
+    roleSatisfies(role, 'Administrator')
+  )
+})
+
+function eyeInScope(eye: 'OD' | 'OS'): boolean {
+  const studyEye = subject.value?.studyEye ?? null
+  if (studyEye === null) return false
+  if (studyEye === 'OU') return true
+  return studyEye === eye
+}
+
+interface TransitionDialogState {
+  eye: 'OD' | 'OS'
+}
+const dialogState = ref<TransitionDialogState | null>(null)
+const transitionError = ref<string | null>(null)
+const transitionSuccess = ref<string | null>(null)
+const transitionSubmitting = ref(false)
+
+function openTransitionDialog(eye: 'OD' | 'OS') {
+  transitionError.value = null
+  transitionSuccess.value = null
+  dialogState.value = { eye }
+  // auth.availableStudies is only auto-populated by StudyPickerView. If
+  // the operator landed on this view via a deep link / post-login
+  // redirect that skipped the picker, the list is empty and the
+  // dialog's target-study dropdown renders zero options. Refresh now
+  // so the picker shows every study the operator has access to.
+  if ((auth.availableStudies ?? []).length === 0) {
+    void auth.loadStudies()
+  }
+}
+
+const otherStudies = computed<{ oid: string; name: string }[]>(() => {
+  const currentOid = auth.user?.activeStudy?.oid ?? null
+  return (auth.availableStudies ?? [])
+    .filter((s) => s.oid !== currentOid)
+    .map((s) => ({ oid: s.oid, name: s.name }))
+})
+
+async function onTransitionSubmit(payload: TransitionEyeRequest) {
+  if (!dialogState.value || !subject.value) return
+  transitionError.value = null
+  transitionSubmitting.value = true
+  try {
+    await subjects.transitionEye(subject.value.id, dialogState.value.eye, payload)
+    transitionSuccess.value = t('subjectDetail.eyeTransition.success')
+    dialogState.value = null
+  } catch (e) {
+    transitionError.value =
+      e instanceof Error ? e.message : t('subjectDetail.eyeTransition.error.network')
+  } finally {
+    transitionSubmitting.value = false
+  }
+}
+
+/**
+ * Source / target banner row partitioning. `side === 'source'` rows
+ * mean THIS subject sent an eye elsewhere; `target` rows mean THIS
+ * subject was created from a downgrade elsewhere.
+ */
+const sourceTransitions = computed<EyeTransitionDto[]>(() =>
+  (subject.value?.eyeTransitions ?? []).filter((t) => t.side === 'source'),
+)
+const targetTransitions = computed<EyeTransitionDto[]>(() =>
+  (subject.value?.eyeTransitions ?? []).filter((t) => t.side === 'target'),
+)
+
+/**
+ * Open the partner subject by switching the active study first,
+ * then routing to the standard /subjects/:label page. We push only
+ * after pickStudy resolves so the destination view's onMounted /me
+ * lookups see the new active study.
+ */
+async function openPartner(row: EyeTransitionDto) {
+  try {
+    await auth.pickStudy(row.partnerStudyOid)
+    router.push(`/subjects/${row.partnerLabel}`)
+  } catch {
+    // pickStudy surfaces the error on auth.error; we leave the user
+    // on this page so they can see it. No additional inline state.
+  }
+}
+
 const subjectId = computed(() => String(route.params.subjectId))
 
 /**
@@ -385,13 +492,35 @@ function dataEntryStageLabel(stage: string | null): string {
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.yearOfBirth') }}</dt><dd class="font-medium">{{ subject.yearOfBirth ?? '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.groupLabel') }}</dt><dd class="font-medium">{{ subject.groupLabel ?? '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.enrolledOn') }}</dt><dd class="font-medium font-mono text-xs">{{ formatDate(subject.enrolledOn) }}</dd></div>
-            <!-- Phase E.6 Tier 1 — ophthalmology study-eye + screening date.
-                 Read-only here; editing arrives in a later milestone
-                 along with the eye-scope per-arm overrides. -->
-            <div class="flex justify-between"><dt class="text-slate-500">{{ t('ophth.studyEye.label') }}</dt>
-              <dd class="font-medium">
-                <span v-if="subject.studyEye" class="font-mono text-xs px-1.5 py-0.5 rounded bg-muw-blue-50 text-muw-blue border border-muw-blue-100">{{ subject.studyEye }}</span>
-                <span v-else class="text-slate-400">—</span>
+            <!-- Phase E.6 Tier 1 + per-eye cohort transition workflow —
+                 ophthalmology study-eye block. Each eye row carries a
+                 Transition button when the operator role permits AND
+                 the eye is in scope (studyEye === eye | OU). The
+                 status pill shows the active study's name since we're
+                 already inside it. -->
+            <div class="col-span-2">
+              <dt class="text-slate-500 text-xs uppercase tracking-wider mb-2">{{ t('ophth.studyEye.label') }}</dt>
+              <dd class="space-y-1.5">
+                <div
+                  v-for="eye in (['OD', 'OS'] as const)"
+                  :key="eye"
+                  class="flex items-center gap-3"
+                >
+                  <span class="font-mono text-xs text-slate-500 w-7">{{ eye }}:</span>
+                  <span v-if="eyeInScope(eye)" class="inline-flex items-center">
+                    <StatusPill variant="info">{{ auth.user?.activeStudy?.name ?? '—' }}</StatusPill>
+                  </span>
+                  <span v-else class="text-slate-400 text-xs italic">—</span>
+                  <button
+                    v-if="canTransitionEye && eyeInScope(eye)"
+                    type="button"
+                    class="text-xs text-muw-blue hover:underline ml-3"
+                    :data-testid="`transition-${eye}`"
+                    @click="openTransitionDialog(eye)"
+                  >
+                    {{ t('subjectDetail.eyeTransition.action.transition') }} →
+                  </button>
+                </div>
               </dd>
             </div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('ophth.screeningDate.label') }}</dt><dd class="font-medium font-mono text-xs">{{ subject.screeningDate ? formatDate(subject.screeningDate) : '—' }}</dd></div>
@@ -470,6 +599,77 @@ function dataEntryStageLabel(stage: string | null): string {
             </div>
           </form>
         </section>
+
+        <!-- Phase E.6 per-eye cohort transition — cross-reference
+             banners. The target banner reads "we were created from a
+             downgrade elsewhere — open the original record"; the
+             source banner reads "we sent an eye elsewhere — open the
+             follow-up record". Each opens the partner subject in its
+             own study by calling pickStudy → router.push. -->
+        <div
+          v-for="row in targetTransitions"
+          :key="`tgt-${row.transitionId}`"
+          class="mb-3 rounded-muw border border-muw-blue-200 bg-muw-blue-50 px-4 py-3 text-xs text-muw-blue-800"
+          data-testid="eye-transition-banner-target"
+        >
+          <div class="font-medium mb-1">
+            {{ t('subjectDetail.eyeTransition.banner.target', {
+              eye: row.eye,
+              partnerStudy: row.partnerStudyName,
+              partnerLabel: row.partnerLabel,
+            }) }}
+          </div>
+          <button
+            type="button"
+            class="underline hover:no-underline"
+            @click="openPartner(row)"
+          >
+            {{ t('subjectDetail.eyeTransition.action.openPartner') }} →
+          </button>
+        </div>
+
+        <div
+          v-for="row in sourceTransitions"
+          :key="`src-${row.transitionId}`"
+          class="mb-3 rounded-muw border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+          data-testid="eye-transition-banner-source"
+        >
+          <div class="font-medium mb-1">
+            {{ t('subjectDetail.eyeTransition.banner.source', {
+              eye: row.eye,
+              transitionedAt: formatDate(row.transitionedAt.slice(0, 10)),
+              partnerStudy: row.partnerStudyName,
+              partnerLabel: row.partnerLabel,
+              reason: row.reason,
+            }) }}
+          </div>
+          <button
+            type="button"
+            class="underline hover:no-underline"
+            @click="openPartner(row)"
+          >
+            {{ t('subjectDetail.eyeTransition.action.openPartner') }} →
+          </button>
+        </div>
+
+        <!-- Phase E.6 — transient success/error banners for the
+             transition action itself. The error variant only renders
+             when the dialog rejected (4xx/5xx); the success is
+             cleared on the next dialog open. -->
+        <div
+          v-if="transitionSuccess"
+          class="mb-3 rounded-muw border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800"
+          data-testid="eye-transition-success"
+        >
+          {{ transitionSuccess }}
+        </div>
+        <div
+          v-if="transitionError"
+          class="mb-3 rounded-muw border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800"
+          data-testid="eye-transition-error"
+        >
+          {{ transitionError }}
+        </div>
 
         <!-- Events / casebook -->
         <!-- Phase E.6 polish — `#events` anchor target for post-
@@ -691,6 +891,22 @@ function dataEntryStageLabel(stage: string | null): string {
       :subject-id="subject.id"
       :study-oid="activeStudyOid"
       @scheduled="onEventScheduled"
+    />
+
+    <!-- Phase E.6 per-eye cohort transition — dialog. Sibling
+         worktree owns the real component implementation; the contract
+         is fixed: subject-label + eye + current study + available
+         partner studies + an open flag, emits submit + cancel. -->
+    <TransitionEyeDialog
+      v-if="dialogState && subject"
+      :open="true"
+      :subject-label="subject.id"
+      :eye="dialogState.eye"
+      :current-study-oid="auth.user?.activeStudy?.oid ?? ''"
+      :available-studies="otherStudies"
+      :is-submitting="transitionSubmitting"
+      @submit="onTransitionSubmit"
+      @cancel="dialogState = null"
     />
   </div>
 </template>

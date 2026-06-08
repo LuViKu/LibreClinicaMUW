@@ -202,7 +202,7 @@ export type EventCellDetail =
  * fields; the detail view fetches them separately.
  */
 export type SubjectDetail =
-  Omit<Required<components['schemas']['SubjectDetailDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events' | 'studyEye' | 'screeningDate'>
+  Omit<Required<components['schemas']['SubjectDetailDto']>, 'gender' | 'secondaryId' | 'yearOfBirth' | 'groupLabel' | 'events' | 'studyEye' | 'screeningDate' | 'eyeTransitions'>
   & {
     gender: Gender
     secondaryId: string | null
@@ -233,7 +233,72 @@ export type SubjectDetail =
      * list endpoints).
      */
     groupAssignments?: GroupAssignmentSnapshot[]
+    /**
+     * Phase E.6 per-eye cohort transition workflow — per-eye
+     * cross-references for subjects whose source enrolment was
+     * downgraded (`side='source'`) or whose current enrolment was
+     * created from a downgrade elsewhere (`side='target'`). The
+     * SPA renders two banner blocks above the events table when
+     * matching rows are present. Optional because non-ophth or
+     * never-transitioned subjects don't carry it.
+     */
+    eyeTransitions?: EyeTransitionDto[]
   }
+
+/* ------------------------------------------------------------------ */
+/* Phase E.6 — per-eye cohort transition workflow.                    */
+/*                                                                    */
+/* Clinical rules:                                                    */
+/*   1. Source iAMD enrolment is downgraded — OU → other eye;         */
+/*      single-eye → NULL (stub row).                                 */
+/*   2. GA inherits subject identity + a cross-reference banner.      */
+/*      No CRF migration.                                             */
+/*   3. Bilateral GA appends: a second eye progressing upgrades the   */
+/*      existing GA row from OD to OU.                                */
+/*                                                                    */
+/* Hand-typed (not derived from `components['schemas']`) because the  */
+/* openapi regen happens out-of-band — the type lives here so the    */
+/* SPA store + view code compile against the new shape immediately.  */
+/* ------------------------------------------------------------------ */
+
+export interface EyeTransitionDto {
+  transitionId: number
+  eye: 'OD' | 'OS'
+  /** Which side of the transition this row represents from the active-study subject's POV. */
+  side: 'source' | 'target'
+  partnerStudyOid: string
+  partnerStudyName: string
+  partnerLabel: string
+  transitionedAt: string   // ISO instant
+  reason: string
+}
+
+/**
+ * Phase E.6 per-eye cohort transition — request body for
+ * `POST /pages/api/v1/subjects/{label}/eyes/{eye}/transition`.
+ *
+ * The dialog gathers a target study OID + free-text reason; the
+ * optional `targetLabel` lets the operator pre-name the new
+ * downstream subject (defaults to the source label on the backend).
+ */
+export interface TransitionEyeRequest {
+  targetStudyOid: string
+  targetLabel?: string
+  reason: string
+}
+
+/**
+ * Phase E.6 — Candidate target-study row for the TransitionEyeDialog.
+ *
+ * Byte-compatible with the local stub the dialog branch inlined; this
+ * canonical export removes the duplication that branch's commit
+ * message flagged. See the dialog's own JSDoc for the harmonization
+ * rationale.
+ */
+export interface StudyOption {
+  oid: string
+  name: string
+}
 
 /**
  * Phase E.4 M3 + M8 — sign-preflight wire types.
