@@ -265,6 +265,12 @@ const router = createRouter({
         role: ['Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
+    {
+      path: '/modalities',
+      name: 'modalities',
+      component: () => import('@/views/ModalitiesView.vue'),
+      meta: { title: 'Modalitäten', role: 'Administrator' as const },
+    },
   ],
 })
 
