@@ -18,7 +18,9 @@
     "manageUsers": "Nutzer verwalten",
     "importCrfData": "CRF-Daten importieren",
     "dataExport": "Datenexport",
-    "changePassword": "Passwort ändern"
+    "changePassword": "Passwort ändern",
+    "patientsOverview": "Patientenübersicht",
+    "modalities": "Modalitäten"
   },
   "a11y": {
     "skipToMain": "Zum Hauptinhalt springen",
@@ -32,6 +34,16 @@
       "Data Manager": "Datenmanager/-in",
       "Administrator": "Administrator/-in",
       "CRC": "Studienkoordination"
+    },
+    "cards": {
+      "patientsOverview": {
+        "title": "Patientenübersicht",
+        "description": "Studienübergreifende Sicht auf alle erreichbaren Patient/innen."
+      },
+      "modalities": {
+        "title": "Modalitäten",
+        "description": "Untersuchungsmodalitäten und ihre Item-OIDs verwalten."
+      }
     },
     "investigator": {
       "sectionLabel": "Arbeitsabläufe Prüfarzt/-ärztin",
@@ -1365,6 +1377,91 @@
       "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert."
     }
   },
+  "modalities": {
+    "title": "Modalitäten",
+    "subTitle": "Untersuchungsmodalitäten den eye-spezifischen Item-OIDs zuordnen.",
+    "columns": {
+      "code": "Code",
+      "labelDe": "Label DE",
+      "labelEn": "Label EN",
+      "oidOd": "OD-OID",
+      "oidOs": "OS-OID",
+      "type": "Typ",
+      "unit": "Einheit",
+      "ordinal": "Reihenfolge",
+      "actions": ""
+    },
+    "action": {
+      "new": "Neue Modalität",
+      "edit": "Bearbeiten",
+      "delete": "Entfernen",
+      "deleteConfirm": "Modalität {code} entfernen? Bestehende Erstmessungen bleiben erhalten; die Modalität erscheint nicht mehr im Panel."
+    },
+    "dialog": {
+      "titleNew": "Neue Modalität",
+      "titleEdit": "Modalität bearbeiten",
+      "field": {
+        "code": "Code",
+        "labelEn": "Label EN",
+        "labelDe": "Label DE",
+        "ordinal": "Reihenfolge",
+        "itemOidOd": "OD-Item-OID (z. B. I_VA_OD_LOGMAR)",
+        "itemOidOs": "OS-Item-OID (z. B. I_VA_OS_LOGMAR)",
+        "dataType": "Typ",
+        "dataType.numeric": "Numerisch (graphisch darstellbar)",
+        "dataType.categorical": "Kategorisch",
+        "unit": "Einheit (optional)"
+      },
+      "action": {
+        "save": "Speichern",
+        "cancel": "Abbrechen"
+      }
+    },
+    "error": {
+      "duplicateCode": "Eine Modalität mit diesem Code existiert bereits.",
+      "unknownOid": "Item-OID „{oid}\" wurde in keiner aktiven CRF-Version gefunden.",
+      "missingOid": "Mindestens eine OD- oder OS-OID erforderlich.",
+      "network": "Modalität konnte nicht gespeichert werden — bitte erneut versuchen."
+    }
+  },
+  "patientDetail": {
+    "heading": "Patient #{subjectId}",
+    "close": "Schließen",
+    "emptyTimeline": "Keine Verlagerungen für dieses Auge.",
+    "timeline": {
+      "heading": "Studienverlauf pro Auge",
+      "eyeLabel": "{eye}",
+      "enrolmentPill": "Aufnahme",
+      "transitionPill": "Verlagert",
+      "currentBadge": "aktuell"
+    },
+    "charts": {
+      "heading": "Messungen über Zeit",
+      "modalityPicker": "Modalitäten",
+      "empty": "Keine Messungen vorhanden.",
+      "categoricalRow": "{modality} — kategorische Verlaufsanzeige"
+    }
+  },
+  "patients": {
+    "list": {
+      "title": "Patientenübersicht",
+      "searchPlaceholder": "Suchen nach ID oder Identifier…",
+      "empty": "Keine Patient/innen in Ihrer Zugriffsliste.",
+      "pagination": {
+        "label": "{from}–{to} von {total}"
+      },
+      "columns": {
+        "yearOfBirth": "Geburtsjahr",
+        "gender": "Geschlecht",
+        "studies": "Studien",
+        "lastVisit": "Letzte Visite",
+        "actions": ""
+      },
+      "action": {
+        "openDetail": "Öffnen →"
+      }
+    }
+  },
   "importCrf": {
     "title": "CRF-Daten importieren",
     "subTrail": "LCDemo · Massendaten-Import",
@@ -1710,6 +1807,23 @@
         "target": "{eye} zuvor in {study} geführt als {label}"
       },
       "success": "Verlagerung gespeichert."
+    },
+    "modalityBaselines": {
+      "title": "{eye} Erstmessungen",
+      "loading": "Erstmessungen werden geladen…",
+      "empty": "Keine Erstmessungen vorhanden.",
+      "columns": {
+        "modality": "Modalität",
+        "baselineDateGlobal": "Erstmessung (global)",
+        "baselineValueGlobal": "Wert (global)",
+        "baselineDatePerStudy": "Erstmessung (diese Studie)",
+        "baselineValuePerStudy": "Wert (diese Studie)",
+        "count": "n"
+      },
+      "error": {
+        "network": "Erstmessungen konnten nicht geladen werden — bitte erneut versuchen.",
+        "retry": "Erneut versuchen"
+      }
     },
     "locked": "Gesperrt"
   },
