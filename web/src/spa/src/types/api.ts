@@ -2531,6 +2531,7 @@ export interface components {
             oid?: string;
             name?: string;
             isSite?: boolean;
+            roles?: string[];
         };
         MeDto: {
             username?: string;
