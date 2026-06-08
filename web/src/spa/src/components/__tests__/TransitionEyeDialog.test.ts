@@ -127,11 +127,20 @@ describe('TransitionEyeDialog', () => {
     const events = wrapper.emitted('submit')
     expect(events).toBeTruthy()
     expect(events).toHaveLength(1)
-    expect(events![0][0]).toEqual({
-      targetStudyOid: 'S_GA2',
-      targetLabel: 'M-101',
-      reason: 'GA threshold crossed at visit 7',
-    })
+    // transitionedAt defaults to today (ISO YYYY-MM-DD) per the
+    // retrospective-backfill rollout — assert the static fields plus
+    // an ISO-date shape on transitionedAt so the test doesn't tie
+    // itself to a wall-clock value.
+    const payload = events![0][0] as {
+      targetStudyOid: string
+      targetLabel?: string
+      reason: string
+      transitionedAt?: string
+    }
+    expect(payload.targetStudyOid).toBe('S_GA2')
+    expect(payload.targetLabel).toBe('M-101')
+    expect(payload.reason).toBe('GA threshold crossed at visit 7')
+    expect(payload.transitionedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(wrapper.emitted('cancel')).toBeFalsy()
 
     // Confirms that an empty targetLabel is omitted from the payload.
@@ -143,11 +152,16 @@ describe('TransitionEyeDialog', () => {
     await wrapper2.find('[data-testid="transition-eye-submit"]').trigger('click')
     const events2 = wrapper2.emitted('submit')
     expect(events2).toBeTruthy()
-    expect(events2![0][0]).toEqual({
-      targetStudyOid: 'S_GA1',
-      reason: 'GA detected',
-    })
-    expect((events2![0][0] as { targetLabel?: string }).targetLabel).toBeUndefined()
+    const payload2 = events2![0][0] as {
+      targetStudyOid: string
+      targetLabel?: string
+      reason: string
+      transitionedAt?: string
+    }
+    expect(payload2.targetStudyOid).toBe('S_GA1')
+    expect(payload2.reason).toBe('GA detected')
+    expect(payload2.targetLabel).toBeUndefined()
+    expect(payload2.transitionedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/)
 
     wrapper.unmount()
     wrapper2.unmount()
