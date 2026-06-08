@@ -26,6 +26,8 @@
   },
   "home": {
     "eyebrow": "Welcome",
+    "sectionLabel": "Your workflows for {study}",
+    "roleDotsAria": "Granting roles",
     "role": {
       "Investigator": "Investigator",
       "Monitor": "Monitor",

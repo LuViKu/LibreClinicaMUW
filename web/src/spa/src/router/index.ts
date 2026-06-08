@@ -351,11 +351,39 @@ export function guard(
     | undefined
   if (roleMeta) {
     const required = Array.isArray(roleMeta) ? roleMeta : [roleMeta]
-    const ok = required.some((r) => roleSatisfies(auth.user?.role, r))
+    // Multi-role per (user, study) — M2 (2026-06-08): collect every
+    // role the active binding carries (array → singular projection →
+    // top-level fallback) and accept the navigation if any of them
+    // satisfies any required entry. The CRC → Investigator
+    // inheritance survives unchanged.
+    const actualRoles = userRolesFromAuth(auth)
+    const ok = required.some((r) =>
+      actualRoles.some((actual) => roleSatisfies(actual, r)),
+    )
     if (!ok) return { name: 'home' }
   }
 
   return true
+}
+
+/**
+ * Multi-role per (user, study) — M2 (2026-06-08).
+ *
+ * Reads the active study binding's role set with the same precedence
+ * the rest of the SPA uses ({@code activeStudy.roles} → {@code
+ * activeStudy.role} → top-level {@code user.role}). Returns an array
+ * so the guard can intersect against the route's required-role list
+ * without re-implementing the precedence logic at every call site.
+ */
+function userRolesFromAuth(
+  auth: ReturnType<typeof useAuthStore>,
+): Array<'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'> {
+  const u = auth.user
+  if (!u) return []
+  const active = u.activeStudy
+  if (active?.roles && active.roles.length > 0) return [...active.roles]
+  if (active?.role) return [active.role]
+  return u.role ? [u.role] : []
 }
 
 /**
