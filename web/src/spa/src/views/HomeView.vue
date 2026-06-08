@@ -126,6 +126,16 @@ interface CatalogEntry {
   titleKey: string
   descKey: string
   allowedRoles: UserRole[]
+  /**
+   * Scope determines which lane the card renders in:
+   * - 'general'      → above the divider (platform-wide, cross-study, navigation)
+   * - 'study-scoped' → below the divider (operates against the active study)
+   *
+   * The divider carries the active study's name so the operator can
+   * tell at a glance which actions are bound to the currently bound
+   * study vs which apply across their grant set.
+   */
+  scope: 'general' | 'study-scoped'
   /** Optional getter producing the badge count; resolved at render time. */
   badge?: () => number | string | null
   badgeAriaKey?: string
@@ -141,6 +151,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     titleKey: 'subjectMatrix.title',
     descKey: 'home.investigator.subjectMatrixDesc',
     allowedRoles: ['Investigator', 'CRC', 'Monitor'],
+    scope: 'study-scoped',
   },
   {
     id: 'subject-new',
@@ -148,6 +159,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     titleKey: 'addSubject.title',
     descKey: 'home.investigator.addSubjectDesc',
     allowedRoles: ['Investigator', 'CRC'],
+    scope: 'study-scoped',
   },
   {
     id: 'sign-queue',
@@ -155,6 +167,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     titleKey: 'home.investigator.signQueueTitle',
     descKey: 'home.investigator.signQueueDesc',
     allowedRoles: ['Investigator', 'CRC'],
+    scope: 'study-scoped',
   },
   {
     id: 'todays-crfs',
@@ -162,6 +175,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     titleKey: 'home.investigator.todaysCrfsTitle',
     descKey: 'home.investigator.todaysCrfsDesc',
     allowedRoles: ['Investigator', 'CRC'],
+    scope: 'general',
   },
 
   // ---------- SDV (Monitor-only) ----------
@@ -173,6 +187,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     allowedRoles: ['Monitor'],
     badge: () => sdvPendingCount.value,
     badgeAriaKey: 'home.monitor.sdvBadgeAria',
+    scope: 'study-scoped',
   },
 
   // ---------- cross-role Notes (consolidated) ----------
@@ -184,6 +199,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     allowedRoles: ['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'],
     badge: () => openQueriesCount.value,
     badgeAriaKey: 'home.monitor.openQueriesBadgeAria',
+    scope: 'study-scoped',
   },
 
   // ---------- cross-role Audit log ----------
@@ -193,6 +209,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     titleKey: 'auditLog.title',
     descKey: 'home.administrator.auditLogDesc',
     allowedRoles: ['Monitor', 'Data Manager', 'Administrator'],
+    scope: 'study-scoped',
   },
 
   // ---------- Data Manager workflows ----------
@@ -202,6 +219,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     titleKey: 'buildStudy.title',
     descKey: 'home.dataManager.buildStudyDesc',
     allowedRoles: ['Data Manager'],
+    scope: 'study-scoped',
   },
   {
     id: 'import-crf-data',
@@ -209,6 +227,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     titleKey: 'importCrf.title',
     descKey: 'home.dataManager.importCrfDesc',
     allowedRoles: ['Data Manager'],
+    scope: 'study-scoped',
   },
   {
     id: 'rules',
@@ -217,6 +236,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     descKey: 'home.dataManager.rulesDesc',
     allowedRoles: ['Data Manager'],
     badge: () => activeRuleSetsCount.value,
+    scope: 'study-scoped',
   },
 
   // ---------- cross-role Data Export ----------
@@ -226,6 +246,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     titleKey: 'home.dataManager.dataExportTitle',
     descKey: 'home.dataManager.dataExportDesc',
     allowedRoles: ['Monitor', 'Data Manager', 'Administrator'],
+    scope: 'study-scoped',
   },
 
   // ---------- Administrator platform actions ----------
@@ -237,6 +258,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     allowedRoles: ['Administrator'],
     badge: () => pendingInvitesCount.value,
     badgeAriaKey: 'home.administrator.pendingInvitesBadgeAria',
+    scope: 'general',
   },
   {
     id: 'study-create',
@@ -244,6 +266,15 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     titleKey: 'home.administrator.createStudyTitle',
     descKey: 'home.administrator.createStudyDesc',
     allowedRoles: ['Administrator'],
+    scope: 'general',
+  },
+  {
+    id: 'modalities',
+    to: { name: 'modalities' },
+    titleKey: 'modalities.title',
+    descKey: 'home.administrator.modalitiesDesc',
+    allowedRoles: ['Administrator'],
+    scope: 'general',
   },
   {
     id: 'study-edit',
@@ -252,6 +283,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     descKey: 'home.administrator.editStudyDesc',
     allowedRoles: ['Administrator'],
     visibleWhen: () => activeStudyOid.value !== '',
+    scope: 'study-scoped',
   },
   {
     id: 'sites',
@@ -259,6 +291,17 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     titleKey: 'home.administrator.sitesTitle',
     descKey: 'home.administrator.sitesDesc',
     allowedRoles: ['Administrator'],
+    scope: 'study-scoped',
+  },
+
+  // ---------- cross-study Patient Overview (Phase E.6) ----------
+  {
+    id: 'patients-overview',
+    to: { name: 'patients-overview' },
+    titleKey: 'home.cards.patientsOverview.title',
+    descKey: 'home.cards.patientsOverview.description',
+    allowedRoles: ['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'],
+    scope: 'general',
   },
 
   // ---------- cross-role Switch active study ----------
@@ -269,6 +312,7 @@ const CATALOG = computed<CatalogEntry[]>(() => [
     descKey: 'home.switchStudyDesc',
     allowedRoles: ['Investigator', 'CRC', 'Monitor', 'Data Manager', 'Administrator'],
     visibleWhen: () => canSwitchStudy.value,
+    scope: 'general',
   },
 ])
 
@@ -281,6 +325,7 @@ interface VisibleCard {
   roleVariants: RoleVariant[]
   badge: number | string | null
   badgeAriaKey?: string
+  scope: 'general' | 'study-scoped'
 }
 
 const visibleCards = computed<VisibleCard[]>(() => {
@@ -312,9 +357,17 @@ const visibleCards = computed<VisibleCard[]>(() => {
         roleVariants: variants,
         badge: c.badge ? c.badge() : null,
         badgeAriaKey: c.badgeAriaKey,
+        scope: c.scope,
       }
     })
 })
+
+const generalCards = computed<VisibleCard[]>(() =>
+  visibleCards.value.filter((c) => c.scope === 'general'),
+)
+const studyScopedCards = computed<VisibleCard[]>(() =>
+  visibleCards.value.filter((c) => c.scope === 'study-scoped'),
+)
 
 /* ---------- eager load on mount ---------- */
 onMounted(() => {
@@ -356,16 +409,54 @@ onMounted(() => {
       {{ t('app.tagline') }}
     </p>
 
-    <!-- Single de-duplicated catalogue. Cards carry the full set of
-         roles that grant access so a multi-role operator sees their
-         RoleDots stacked in the card header. -->
+    <!-- Two-lane catalogue: general (study-independent / platform /
+         cross-study navigation) above the divider, study-scoped below.
+         Each card carries the full set of roles that grant access so
+         a multi-role operator sees their RoleDots stacked in the card
+         header — PR #160's de-duplication contract is preserved
+         per-lane. The divider carries the active study name so the
+         operator can tell at a glance which actions are bound to
+         the currently active study. -->
     <section
-      v-if="visibleCards.length > 0"
+      v-if="generalCards.length > 0"
+      :aria-label="t('home.administrator.globalSectionLabel')"
+      class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-6"
+    >
+      <LandingCard
+        v-for="card in generalCards"
+        :key="card.id"
+        :data-card-id="card.id"
+        :to="card.to"
+        :role-variants="card.roleVariants"
+        :title="t(card.titleKey)"
+        :description="t(card.descKey)"
+        :badge="card.badge"
+        :badge-aria-label="card.badgeAriaKey ? t(card.badgeAriaKey, { n: card.badge ?? 0 }) : undefined"
+      />
+    </section>
+
+    <!-- Divider with active-study label. Only renders when there are
+         cards in BOTH lanes (otherwise the divider would dangle above
+         or below an empty section). -->
+    <div
+      v-if="generalCards.length > 0 && studyScopedCards.length > 0"
+      class="max-w-5xl mb-6 flex items-center gap-3"
+      data-testid="home-study-scoped-divider"
+    >
+      <hr class="flex-1 border-t border-slate-200" />
+      <span class="text-[11px] uppercase tracking-[0.14em] text-slate-500 whitespace-nowrap">
+        {{ t('home.administrator.studyScopedLabel', { study: activeStudyName }) }}
+      </span>
+      <hr class="flex-1 border-t border-slate-200" />
+    </div>
+
+    <section
+      v-if="studyScopedCards.length > 0"
       :aria-label="t('home.sectionLabel', { study: activeStudyName })"
       class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-w-5xl mb-8"
     >
       <LandingCard
-        v-for="card in visibleCards"
+        v-for="card in studyScopedCards"
         :key="card.id"
         :data-card-id="card.id"
         :to="card.to"
