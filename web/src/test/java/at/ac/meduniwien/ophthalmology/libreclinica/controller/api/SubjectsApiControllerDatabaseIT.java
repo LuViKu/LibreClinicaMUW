@@ -10,10 +10,12 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -50,5 +52,121 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(jsonPath("$[?(@.id == 'M-006')]").exists())
                 .andExpect(jsonPath("$[?(@.signed == true)].id")
                         .value(containsInAnyOrder("M-003", "M-006")));
+    }
+
+    /* ====================================================================== */
+    /* Phase E.6 retrospective-backfill — match-preflight (dedup lookup)     */
+    /* ====================================================================== */
+
+    /**
+     * No seeded subject carries the (first_name, last_name, dob) triplet
+     * out of the box, so a fresh preflight should return an empty list
+     * and HTTP 200.
+     */
+    @Test
+    void matchPreflightReturnsEmptyArrayWhenNoMatch() throws Exception {
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Nobody\",\"lastName\":\"Unknown\","
+                        + "\"dateOfBirth\":\"1900-01-01\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    /**
+     * Seed a subject with the triplet then call preflight — the match
+     * comes back with the subject's identifying fields and the visible
+     * studies they're in (lookup is case-insensitive: lowercase input
+     * still finds an uppercase-typed name).
+     */
+    @Test
+    void matchPreflightReturnsCandidateCaseInsensitive() throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "UPDATE subject SET first_name = ?, last_name = ?, "
+                             + "date_of_birth = ?, dob_collected = true "
+                             + "WHERE subject_id = 1")) {
+            ps.setString(1, "Maria");
+            ps.setString(2, "Müller");
+            ps.setDate(3, java.sql.Date.valueOf("1965-04-12"));
+            ps.executeUpdate();
+        }
+
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        // Lowercase the operator's input; partial index on
+        // LOWER(first_name)/LOWER(last_name) still hits the row.
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"maria\",\"lastName\":\"müller\","
+                        + "\"dateOfBirth\":\"1965-04-12\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].subjectId").value(1))
+                .andExpect(jsonPath("$[0].dateOfBirth").value("1965-04-12"));
+    }
+
+    /**
+     * Soft-deleted (status_id=5) subjects are excluded by the partial
+     * dedup index — even with an exact PHI match they must not appear
+     * in the candidate list so a tombstoned record can't shadow a real
+     * re-enrolment.
+     */
+    @Test
+    void matchPreflightSkipsSoftDeletedSubjects() throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "UPDATE subject SET first_name = ?, last_name = ?, "
+                             + "date_of_birth = ?, dob_collected = true, "
+                             + "status_id = 5 WHERE subject_id = 2")) {
+            ps.setString(1, "Karl");
+            ps.setString(2, "Tombstone");
+            ps.setDate(3, java.sql.Date.valueOf("1950-01-01"));
+            ps.executeUpdate();
+        }
+
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Karl\",\"lastName\":\"Tombstone\","
+                        + "\"dateOfBirth\":\"1950-01-01\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    /**
+     * Missing fields → 400 with an explicit message. The SPA waits
+     * until all three are populated before firing, but defensive
+     * rejection here keeps the contract clean.
+     */
+    @Test
+    void matchPreflightReturns400WhenAnyFieldMissing() throws Exception {
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Maria\",\"lastName\":\"\","
+                        + "\"dateOfBirth\":\"1965-04-12\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isBadRequest());
     }
 }

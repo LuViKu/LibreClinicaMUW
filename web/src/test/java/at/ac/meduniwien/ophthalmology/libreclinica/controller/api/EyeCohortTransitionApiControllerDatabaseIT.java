@@ -591,4 +591,82 @@ class EyeCohortTransitionApiControllerDatabaseIT extends AbstractApiControllerDa
         session.setAttribute("study", study);
         return session;
     }
+
+    /* ====================================================================== */
+    /* Phase E.6 retrospective-backfill — operator-supplied transition date  */
+    /* ====================================================================== */
+
+    /**
+     * Past dates are accepted (the retrospective backfill use case) and
+     * persisted verbatim on eye_cohort_transition.transitioned_at so the
+     * clinical history reflects when the eye actually moved cohorts.
+     */
+    @Test
+    void transitionAcceptsRetrospectivePastDate() throws Exception {
+        setStudyEye(1, "OD");
+        unenrollSubjectFromStudy(targetStudyId, 1);
+
+        mockMvc().perform(post("/api/v1/subjects/M-001/eyes/OD/transition")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"targetStudyOid\":\"" + TARGET_STUDY_OID + "\","
+                        + "\"reason\":\"Backfill from 2020 paper records\","
+                        + "\"transitionedAt\":\"2020-03-15\"}")
+                .session(adminSession(1)))
+                .andExpect(status().isCreated());
+
+        // The transition_id is the latest row; the transitioned_at
+        // column should be 2020-03-15 at noon-local rather than now().
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "SELECT transitioned_at FROM eye_cohort_transition "
+                             + "ORDER BY transition_id DESC LIMIT 1");
+             java.sql.ResultSet rs = ps.executeQuery()) {
+            org.junit.jupiter.api.Assertions.assertTrue(rs.next(),
+                    "eye_cohort_transition row should exist");
+            java.sql.Timestamp persisted = rs.getTimestamp("transitioned_at");
+            org.junit.jupiter.api.Assertions.assertNotNull(persisted);
+            String iso = persisted.toLocalDateTime().toLocalDate().toString();
+            org.junit.jupiter.api.Assertions.assertEquals("2020-03-15", iso,
+                    "transitioned_at should equal operator-supplied date");
+        }
+    }
+
+    /**
+     * Future dates are rejected with 400 — the operator can backfill
+     * historical data but cannot pre-record a transition that hasn't
+     * happened yet.
+     */
+    @Test
+    void transitionRejectsFutureDateWith400() throws Exception {
+        setStudyEye(1, "OD");
+        unenrollSubjectFromStudy(targetStudyId, 1);
+
+        String futureIso = java.time.LocalDate.now().plusDays(7).toString();
+        mockMvc().perform(post("/api/v1/subjects/M-001/eyes/OD/transition")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"targetStudyOid\":\"" + TARGET_STUDY_OID + "\","
+                        + "\"reason\":\"Pre-recording — should fail\","
+                        + "\"transitionedAt\":\"" + futureIso + "\"}")
+                .session(adminSession(1)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("transitionedAt")));
+    }
+
+    /**
+     * Malformed date strings rejected with 400 before any DB work.
+     */
+    @Test
+    void transitionRejectsMalformedDateWith400() throws Exception {
+        setStudyEye(1, "OD");
+        unenrollSubjectFromStudy(targetStudyId, 1);
+
+        mockMvc().perform(post("/api/v1/subjects/M-001/eyes/OD/transition")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"targetStudyOid\":\"" + TARGET_STUDY_OID + "\","
+                        + "\"reason\":\"Junk date\","
+                        + "\"transitionedAt\":\"not-a-date\"}")
+                .session(adminSession(1)))
+                .andExpect(status().isBadRequest());
+    }
 }
