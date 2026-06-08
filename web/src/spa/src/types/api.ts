@@ -212,6 +212,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/modalities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update_7"];
+        post?: never;
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/profile": {
         parameters: {
             query?: never;
@@ -1028,6 +1044,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/modalities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_8"];
+        put?: never;
+        post: operations["create_7"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/password": {
         parameters: {
             query?: never;
@@ -1099,7 +1131,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_8"];
+        get: operations["list_9"];
         put?: never;
         post: operations["schedule"];
         delete?: never;
@@ -1291,7 +1323,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_9"];
+        get: operations["list_10"];
         put?: never;
         post: operations["add"];
         delete?: never;
@@ -1403,9 +1435,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_10"];
+        get: operations["list_11"];
         put?: never;
-        post: operations["create_7"];
+        post: operations["create_8"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1572,6 +1604,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subjects/{label}/eyes/{eye}/modality-baselines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_12"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subjects/{label}/eye-transitions": {
         parameters: {
             query?: never;
@@ -1579,7 +1627,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_11"];
+        get: operations["list_13"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1659,7 +1707,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_12"];
+        get: operations["list_14"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1724,6 +1772,54 @@ export interface paths {
             cookie?: never;
         };
         get: operations["exportXml"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_15"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{subjectId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{subjectId}/measurements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["measurements"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1947,7 +2043,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_13"];
+        get: operations["list_16"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2382,6 +2478,30 @@ export interface components {
             expressionEvaluatesTo?: boolean;
             to?: string;
             phaseGates?: components["schemas"]["CreateRuleActionRequest.PhaseGatesInput"];
+        };
+        ModalityWriteRequest: {
+            code?: string;
+            labelEn?: string;
+            labelDe?: string;
+            /** Format: int32 */
+            ordinal?: number;
+            itemOidOd?: string;
+            itemOidOs?: string;
+            dataType?: string;
+            unit?: string;
+        };
+        ModalityDto: {
+            /** Format: int32 */
+            modalityId?: number;
+            code?: string;
+            labelEn?: string;
+            labelDe?: string;
+            /** Format: int32 */
+            ordinal?: number;
+            itemOidOd?: string;
+            itemOidOs?: string;
+            dataType?: string;
+            unit?: string;
         };
         ProfileUpdateRequest: {
             displayName?: string;
@@ -3178,6 +3298,22 @@ export interface components {
             subjectAlreadySigned?: boolean;
             userRoleCanSign?: boolean;
         };
+        ModalityBaselineAggregate: {
+            date?: string;
+            value?: string;
+            /** Format: int32 */
+            observationCount?: number;
+        };
+        ModalityBaselineDto: {
+            modalityCode?: string;
+            labelEn?: string;
+            labelDe?: string;
+            itemOid?: string;
+            dataType?: string;
+            unit?: string;
+            global?: components["schemas"]["ModalityBaselineAggregate"];
+            perStudy?: components["schemas"]["ModalityBaselineAggregate"];
+        };
         EyeTransitionDto: {
             /** Format: int32 */
             transitionId?: number;
@@ -3275,6 +3411,72 @@ export interface components {
             itemDataId?: number;
             value?: string;
             firedAt?: string;
+        };
+        PatientDto: {
+            /** Format: int32 */
+            subjectId?: number;
+            uniqueIdentifier?: string;
+            gender?: string;
+            /** Format: int32 */
+            yearOfBirth?: number;
+            enrolments?: components["schemas"]["PatientEnrolmentDto"][];
+        };
+        PatientEnrolmentDto: {
+            studyOid?: string;
+            studyName?: string;
+            label?: string;
+            studyEye?: string;
+            enrolledOn?: string;
+            lastVisitAt?: string;
+        };
+        PatientsListResponse: {
+            /** Format: int64 */
+            totalCount?: number;
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            pageSize?: number;
+            patients?: components["schemas"]["PatientDto"][];
+        };
+        PatientDetailDto: {
+            /** Format: int32 */
+            subjectId?: number;
+            uniqueIdentifier?: string;
+            gender?: string;
+            /** Format: int32 */
+            yearOfBirth?: number;
+            enrolments?: components["schemas"]["PatientEnrolmentDto"][];
+            eyeTransitions?: components["schemas"]["PatientEyeTransitionDto"][];
+        };
+        PatientEyeTransitionDto: {
+            /** Format: int32 */
+            transitionId?: number;
+            eye?: string;
+            eventAt?: string;
+            fromStudyOid?: string;
+            fromStudyName?: string;
+            fromLabel?: string;
+            toStudyOid?: string;
+            toStudyName?: string;
+            toLabel?: string;
+            reason?: string;
+        };
+        MeasurementObservationDto: {
+            date?: string;
+            value?: string;
+            /** Format: double */
+            numericValue?: number;
+            studyOid?: string;
+            studyName?: string;
+            /** Format: int32 */
+            eventCrfId?: number;
+            eventName?: string;
+        };
+        MeasurementSeriesDto: {
+            modalityCode?: string;
+            dataType?: string;
+            unit?: string;
+            series?: components["schemas"]["MeasurementObservationDto"][];
         };
         PreviewRowsPageDto: {
             /**
@@ -3923,6 +4125,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["RuleSetDto"];
+                };
+            };
+        };
+    };
+    update_7: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ModalityWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ModalityDto"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
                 };
             };
         };
@@ -5496,6 +5746,50 @@ export interface operations {
             };
         };
     };
+    list_8: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ModalityDto"];
+                };
+            };
+        };
+    };
+    create_7: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ModalityWriteRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ModalityDto"];
+                };
+            };
+        };
+    };
     changePassword: {
         parameters: {
             query?: never;
@@ -5597,7 +5891,7 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_9: {
         parameters: {
             query?: {
                 subjectId?: string;
@@ -5967,7 +6261,7 @@ export interface operations {
             };
         };
     };
-    list_9: {
+    list_10: {
         parameters: {
             query?: {
                 status?: string;
@@ -6211,7 +6505,7 @@ export interface operations {
             };
         };
     };
-    list_10: {
+    list_11: {
         parameters: {
             query?: {
                 includeRemoved?: boolean;
@@ -6233,7 +6527,7 @@ export interface operations {
             };
         };
     };
-    create_7: {
+    create_8: {
         parameters: {
             query?: never;
             header?: never;
@@ -6530,7 +6824,30 @@ export interface operations {
             };
         };
     };
-    list_11: {
+    list_12: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                label: string;
+                eye: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ModalityBaselineDto"];
+                };
+            };
+        };
+    };
+    list_13: {
         parameters: {
             query?: never;
             header?: never;
@@ -6641,7 +6958,7 @@ export interface operations {
             };
         };
     };
-    list_12: {
+    list_14: {
         parameters: {
             query?: never;
             header?: never;
@@ -6768,6 +7085,77 @@ export interface operations {
                 };
                 content: {
                     "application/xml": unknown;
+                };
+            };
+        };
+    };
+    list_15: {
+        parameters: {
+            query?: {
+                page?: number;
+                pageSize?: number;
+                search?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PatientsListResponse"];
+                };
+            };
+        };
+    };
+    detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                subjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PatientDetailDto"];
+                };
+            };
+        };
+    };
+    measurements: {
+        parameters: {
+            query: {
+                modalityCode: string;
+                eye: string;
+            };
+            header?: never;
+            path: {
+                subjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["MeasurementSeriesDto"];
                 };
             };
         };
@@ -7063,7 +7451,7 @@ export interface operations {
             };
         };
     };
-    list_13: {
+    list_16: {
         parameters: {
             query?: {
                 actor?: string;
