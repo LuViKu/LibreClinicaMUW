@@ -2304,6 +2304,7 @@ export interface components {
             status?: string;
             parentStudyOid?: string;
             parentStudyName?: string;
+            datePlannedStart?: string;
         };
         UpdateStudyParametersRequest: {
             subjectIdGeneration?: string;
