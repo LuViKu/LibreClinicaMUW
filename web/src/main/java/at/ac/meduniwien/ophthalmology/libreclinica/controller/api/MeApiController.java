@@ -16,6 +16,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -141,7 +142,6 @@ public class MeApiController {
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
 
-        String spaRole;
         // Phase E.5 follow-up (2026-06-03): SYSADMIN + TECHADMIN users
         // (UserAccountBean.user_type_id ∈ {2, 3}) bypass every legacy
         // role check — they're superusers. They MUST project as
@@ -150,13 +150,30 @@ public class MeApiController {
         // the demo `root` user with both `admin` AND `director` legacy
         // role rows ended up with spaRole="Data Manager" (whichever
         // role row the session pre-populated) and saw no admin chrome.
+        //
+        // Multi-role (M1 backend): for non-superusers we now project
+        // EVERY active grant on the bound study, not just the first.
+        // The session-attribute `userRole` stays untouched (single
+        // bean — other controllers depend on it for SQL filtering),
+        // but the /me wire shape carries the full sorted list so the
+        // SPA can render per-tab permission with finer-grained gates.
+        List<String> spaRoles;
         if (ub.isSysAdmin() || ub.isTechAdmin()) {
-            spaRole = "Administrator";
-        } else if (currentRole != null && currentRole.getRole() != null) {
-            spaRole = RoleMapper.toSpaRole(currentRole.getRole().getName());
+            spaRoles = List.of("Administrator");
         } else {
-            spaRole = highestSpaRoleAnywhere(ub.getName());
+            int studyId = currentStudy != null ? currentStudy.getId() : 0;
+            spaRoles = collectSpaRolesForStudy(ub.getName(), studyId);
+            if (spaRoles.isEmpty()) {
+                // No active grant on the bound study (or no study bound
+                // at all) — mirror the pre-multi-role fallback path
+                // that projected a single sentinel role.
+                String fallback = currentRole != null && currentRole.getRole() != null
+                        ? RoleMapper.toSpaRole(currentRole.getRole().getName())
+                        : highestSpaRoleAnywhere(ub.getName());
+                spaRoles = List.of(fallback);
+            }
         }
+        String spaRole = spaRoles.get(0);
 
         MeDto.ActiveStudyDto activeStudy = null;
         if (currentStudy != null && currentStudy.getId() > 0) {
@@ -189,6 +206,7 @@ public class MeApiController {
                 joinName(ub.getFirstName(), ub.getLastName(), ub.getName()),
                 blankToNull(ub.getEmail()),
                 spaRole,
+                spaRoles,
                 /* siteLabel */ activeStudy != null && activeStudy.isSite() ? activeStudy.name() : null,
                 /* source */ authSource,
                 /* mfaSatisfied */ true,
@@ -677,6 +695,65 @@ public class MeApiController {
 
     private static String highestSpaRoleAnywhere(String userName) {
         return "Investigator";
+    }
+
+    /**
+     * Multi-role (M1 backend): walk every {@link StudyUserRoleBean}
+     * the user holds, keep the ones bound to {@code studyId} with
+     * {@code status_id = AVAILABLE}, project each via
+     * {@link RoleMapper#toSpaRole(String)}, dedupe, and sort by
+     * priority (Administrator > Data Manager > Monitor > CRC >
+     * Investigator) descending.
+     *
+     * <p>Returns an empty list when the user has no active grant on
+     * the bound study (or {@code studyId == 0}). Callers handle that
+     * by falling back to the legacy single-role projection.
+     */
+    private List<String> collectSpaRolesForStudy(String userName, int studyId) {
+        if (userName == null || userName.isBlank() || studyId <= 0) {
+            return List.of();
+        }
+        // The DAO constructor itself reads from SQLFactory.getInstance(),
+        // which is uninitialised in MockMvc unit tests with a mock
+        // DataSource. Wrap the construction + query in one try/catch so
+        // the unit-test path falls back to the legacy single-role
+        // projection without 500ing.
+        try {
+            UserAccountDAO userDao = new UserAccountDAO(dataSource);
+            ArrayList<StudyUserRoleBean> all = userDao.findAllRolesByUserName(userName);
+            LinkedHashSet<String> bag = new LinkedHashSet<>();
+            for (StudyUserRoleBean r : all) {
+                if (r == null || r.getStudyId() != studyId) continue;
+                if (r.getStatus() == null
+                        || r.getStatus().getId() != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE.getId()) {
+                    continue;
+                }
+                if (r.getRole() == null) continue;
+                bag.add(RoleMapper.toSpaRole(r.getRole().getName()));
+            }
+            List<String> sorted = new ArrayList<>(bag);
+            sorted.sort((a, b) -> Integer.compare(rolePriority(b), rolePriority(a)));
+            return sorted;
+        } catch (RuntimeException e) {
+            LOG.debug("collectSpaRolesForStudy fallback for user={}: {}", userName, e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * Priority of an SPA role for multi-role deduplication. Mirrors
+     * {@code UsersApiController.rolePriority}: Administrator wins
+     * over Data Manager wins over Monitor / CRC / Investigator.
+     */
+    private static int rolePriority(String spaRole) {
+        return switch (spaRole) {
+            case "Administrator" -> 5;
+            case "Data Manager"  -> 4;
+            case "Monitor"       -> 3;
+            case "CRC"           -> 2;
+            case "Investigator"  -> 1;
+            default              -> 0;
+        };
     }
 
     private static String joinName(String first, String last, String fallback) {

@@ -649,6 +649,41 @@ class UsersApiControllerTest extends AbstractApiControllerTest {
     }
 
     @Test
+    void updateRoleReturns400OnUnknownBulkRole() throws Exception {
+        // Multi-role bulk path: every role in `roles` must resolve via
+        // RoleMapper.fromSpaRole. An unknown member surfaces an
+        // errors[].field='roles' entry — the SPA renders a per-row error
+        // against the multi-select widget.
+        mockMvcWith().perform(put("/api/v1/users/somebody/roles/S_DEFAULTS1")
+                .contentType("application/json")
+                .content("{\"roles\":[\"Investigator\",\"Wizard\"]}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field == 'roles')]").exists());
+    }
+
+    @Test
+    void updateRoleAcceptsBulkShapeWithoutSingleRoleField() throws Exception {
+        // Multi-role bulk path: the legacy single-role 400 guard
+        // ("Role is required") must NOT fire when `roles` is present —
+        // even if `role` is omitted. The downstream DAO lookups will
+        // 404 on the unknown study oid against the Mockito DataSource,
+        // but the validation pre-guard the SPA hits first is what we
+        // need to pin here.
+        mockMvcWith().perform(put("/api/v1/users/somebody/roles/S_DEFAULTS1")
+                .contentType("application/json")
+                .content("{\"roles\":[\"Investigator\"]}")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSysadminSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                // Any non-400/"Role is required" status is fine — we
+                // assert the validation gate doesn't reject the bulk
+                // shape.
+                .andExpect(jsonPath("$.errors[?(@.field == 'role' && @.message == 'Role is required')]")
+                        .doesNotExist());
+    }
+
+    @Test
     void revokeRoleReturns401WhenAnonymous() throws Exception {
         mockMvcWith().perform(delete("/api/v1/users/somebody/roles/S_DEFAULTS1")
                 .session((org.springframework.mock.web.MockHttpSession) emptySession()))
