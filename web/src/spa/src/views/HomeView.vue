@@ -323,6 +323,13 @@ const activeStudyName = computed(() => auth.user?.activeStudy?.name ?? '')
           :title="t('home.switchStudyTitle')"
           :description="t('home.switchStudyDesc')"
         />
+        <LandingCard
+          :to="{ name: 'modalities' }"
+          role-variant="administrator"
+          :role-label="t('home.role.Administrator')"
+          :title="t('modalities.title')"
+          :description="t('home.administrator.modalitiesDesc')"
+        />
       </section>
 
       <!-- Visual divider + label between platform-wide and study-scoped. -->
