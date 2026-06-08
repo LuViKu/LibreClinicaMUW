@@ -74,10 +74,11 @@ const messages = {
           transition: 'Transition',
         },
         banner: {
+          // Placeholder names match the production locale keys (per
+          // commit 719554354 — eye / date / study / label).
           source:
-            '{eye} on {transitionedAt} transitioned to {partnerStudy} ({partnerLabel}). Reason: {reason}',
-          target:
-            '{eye} previously recorded in {partnerStudy} as {partnerLabel}.',
+            '{eye} on {date} transitioned to {study} ({label}). Reason: {reason}',
+          target: '{eye} previously recorded in {study} as {label}.',
         },
         error: {
           network: 'Backend unreachable — please retry.',
