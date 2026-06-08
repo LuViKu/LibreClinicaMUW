@@ -517,7 +517,11 @@ public class SitesApiController {
                 nullToEmpty(site.getPhase()),
                 site.getStatus() == null ? "" : site.getStatus().getName(),
                 parent == null ? null : parent.getOid(),
-                parent == null ? null : parent.getName());
+                parent == null ? null : parent.getName(),
+                site.getDatePlannedStart() == null ? null
+                        : java.time.Instant.ofEpochMilli(site.getDatePlannedStart().getTime())
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .toLocalDate().toString());
     }
 
     private static String nullToEmpty(String s) {
