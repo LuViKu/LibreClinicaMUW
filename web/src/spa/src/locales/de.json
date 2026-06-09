@@ -26,6 +26,13 @@
     "skipToMain": "Zum Hauptinhalt springen",
     "signInLink": "Anmelden"
   },
+  "topBar": {
+    "profile": {
+      "rolesLabel": "Rollen",
+      "rolesAriaLabel": "Zugewiesene Rollen",
+      "signOut": "Abmelden"
+    }
+  },
   "home": {
     "eyebrow": "Willkommen",
     "sectionLabel": "Ihre Arbeitsabläufe für {study}",
@@ -124,7 +131,7 @@
     "openSubject": "Öffnen →",
     "signed": "Signiert",
     "scheduleHint": "Bitte unten eine/n Teilnehmer/-in auswählen, um die nächste Visite zu planen.",
-    "scheduleVisitCta": "+ Visite planen",
+    "metricsLink": "Studien-Statistik Details",
     "openQueriesTooltip": "{count} offene Rückfrage(n)",
     "ariaSigned": "Teilnehmer {id}, signiert",
     "ariaUnsigned": "Teilnehmer {id}, nicht signiert",
@@ -162,6 +169,31 @@
       "enrolled": "aufgenommen",
       "status": "Status",
       "active": "Aktiv"
+    }
+  },
+  "studyMetrics": {
+    "title": "Studien-Metriken",
+    "close": "Schließen",
+    "empty": "Keine Daten verfügbar.",
+    "footer": "Aggregiert aus {n} Studienteilnehmer/-innen.",
+    "kpi": {
+      "subjects": "Teilnehmer",
+      "subjectsShort": "n = {n}",
+      "medianAge": "Median-Alter (Jahre)",
+      "medianFollowUp": "Median Follow-up (Monate)"
+    },
+    "sex": {
+      "title": "Geschlechterverteilung",
+      "female": "Weiblich",
+      "male": "Männlich",
+      "other": "Sonstiges"
+    },
+    "age": {
+      "title": "Altersverteilung"
+    },
+    "followUp": {
+      "title": "Follow-up-Dauer",
+      "context": "Median {median} Monate · Spanne {range}"
     }
   },
   "addSubject": {
@@ -216,6 +248,9 @@
     },
     "group": {
       "notAssigned": "— Nicht zugewiesen —"
+    },
+    "error": {
+      "labelTaken": "Studien-Teilnehmer-ID '{id}' ist in dieser Studie bereits vergeben."
     },
     "preview": "Live-Vorschau:",
     "cancelLink": "Abbrechen — zurück zur Übersicht",
@@ -1286,7 +1321,7 @@
   },
   "manageUsers": {
     "title": "Nutzerverwaltung",
-    "subTrail": "LCDemo · alle Rollen",
+    "subTrail": "Plattform-Nutzerverwaltung",
     "searchPlaceholder": "Nutzer/-in nach Name, Username oder E-Mail suchen…",
     "showingCount": "{visible} von {total} sichtbar",
     "empty": "Keine Nutzer/-innen für den aktuellen Filter.",
@@ -1488,6 +1523,9 @@
         "label": "{from}–{to} von {total}"
       },
       "columns": {
+        "lastName": "Nachname",
+        "firstName": "Vorname",
+        "dateOfBirth": "Geburtsdatum",
         "yearOfBirth": "Geburtsjahr",
         "gender": "Geschlecht",
         "studies": "Studien",
@@ -1501,7 +1539,7 @@
   },
   "importCrf": {
     "title": "CRF-Daten importieren",
-    "subTrail": "LCDemo · Massendaten-Import",
+    "subTrail": "Massendaten-Import",
     "intro": "Bestehende CRF-Daten aus CDISC ODM XML laden. Der Import wird gestaged — nichts wird committed, bis Sie im letzten Schritt bestätigen.",
     "step": {
       "upload": "Hochladen",

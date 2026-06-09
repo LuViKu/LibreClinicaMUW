@@ -67,6 +67,8 @@ function makeRouter() {
       { path: '/studies/new', name: 'study-create', component: { template: '<div />' } },
       { path: '/pick-study', name: 'pick-study', component: { template: '<div />' } },
       { path: '/export', name: 'data-export', component: { template: '<div />' } },
+      { path: '/modalities', name: 'modalities', component: { template: '<div />' } },
+      { path: '/patients', name: 'patients-overview', component: { template: '<div />' } },
     ],
   })
 }

@@ -201,6 +201,9 @@ public class PatientsApiController {
                     identity.uniqueIdentifier,
                     identity.gender,
                     identity.yearOfBirth,
+                    identity.firstName,
+                    identity.lastName,
+                    identity.dateOfBirth,
                     enrolments,
                     transitions);
             return ResponseEntity.ok(out);
@@ -412,6 +415,9 @@ public class PatientsApiController {
                     ident.uniqueIdentifier,
                     ident.gender,
                     ident.yearOfBirth,
+                    ident.firstName,
+                    ident.lastName,
+                    ident.dateOfBirth,
                     enrs));
         }
         return out;
@@ -420,7 +426,8 @@ public class PatientsApiController {
     private Map<Integer, PatientIdentity> loadIdentities(Connection c, List<Integer> subjectIds)
             throws SQLException {
         String inList = ModalityBaselinesApiController.inPlaceholders(subjectIds.size());
-        String sql = "SELECT subject_id, unique_identifier, gender, date_of_birth "
+        String sql = "SELECT subject_id, unique_identifier, gender, date_of_birth, "
+                + "       first_name, last_name "
                 + "  FROM subject WHERE subject_id IN " + inList;
         Map<Integer, PatientIdentity> out = new LinkedHashMap<>();
         try (PreparedStatement ps = c.prepareStatement(sql)) {
@@ -438,7 +445,8 @@ public class PatientsApiController {
 
     private PatientIdentity loadIdentity(Connection c, int subjectId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT subject_id, unique_identifier, gender, date_of_birth "
+                "SELECT subject_id, unique_identifier, gender, date_of_birth, "
+                        + "       first_name, last_name "
                         + "FROM subject WHERE subject_id = ?")) {
             ps.setInt(1, subjectId);
             try (ResultSet rs = ps.executeQuery()) {
@@ -452,14 +460,19 @@ public class PatientsApiController {
         String gender = rs.getString("gender");
         java.sql.Date dob = rs.getDate("date_of_birth");
         Integer yob = null;
+        String dobIso = null;
         if (dob != null) {
             yob = dob.toLocalDate().getYear();
+            dobIso = dob.toLocalDate().toString();
         }
         return new PatientIdentity(
                 rs.getInt("subject_id"),
                 rs.getString("unique_identifier"),
                 gender == null ? "" : gender,
-                yob);
+                yob,
+                rs.getString("first_name"),
+                rs.getString("last_name"),
+                dobIso);
     }
 
     private Map<Integer, List<PatientDto.Enrolment>> loadEnrolments(Connection c,
@@ -474,7 +487,7 @@ public class PatientsApiController {
         // MAX(date_start) sub-select for the last-visit indicator.
         String sql = "SELECT ss.subject_id AS sid, "
                 + "       ss.study_subject_id AS ssid, "
-                + "       s.unique_identifier AS study_oid, "
+                + "       s.oc_oid AS study_oid, "
                 + "       s.name AS study_name, "
                 + "       ss.label AS label, "
                 + "       ss.study_eye AS study_eye, "
@@ -522,10 +535,10 @@ public class PatientsApiController {
     private List<PatientDetailDto.EyeTransition> loadEyeTransitions(Connection c, int subjectId)
             throws SQLException {
         String sql = "SELECT t.transition_id, t.eye, t.transitioned_at, t.reason, "
-                + "       src_study.unique_identifier AS from_oid, "
+                + "       src_study.oc_oid AS from_oid, "
                 + "       src_study.name AS from_name, "
                 + "       src_ss.label AS from_label, "
-                + "       tgt_study.unique_identifier AS to_oid, "
+                + "       tgt_study.oc_oid AS to_oid, "
                 + "       tgt_study.name AS to_name, "
                 + "       tgt_ss.label AS to_label "
                 + "  FROM eye_cohort_transition t "
@@ -640,7 +653,7 @@ public class PatientsApiController {
         String sql = "SELECT id_.value AS value, "
                 + "       ec.date_completed AS date_completed, "
                 + "       ec.event_crf_id AS event_crf_id, "
-                + "       s.unique_identifier AS study_oid, "
+                + "       s.oc_oid AS study_oid, "
                 + "       s.name AS study_name, "
                 + "       sed.name AS event_name "
                 + "  FROM item_data id_ "
@@ -714,7 +727,10 @@ public class PatientsApiController {
             int subjectId,
             String uniqueIdentifier,
             String gender,
-            Integer yearOfBirth
+            Integer yearOfBirth,
+            String firstName,
+            String lastName,
+            String dateOfBirth
     ) {}
 
     private record ModalityResolution(

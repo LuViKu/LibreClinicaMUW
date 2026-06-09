@@ -72,6 +72,14 @@ export interface StudyIdentity {
   status: string
   parentStudyOid: string | null
   parentStudyName: string | null
+  /**
+   * Phase E.6 — ISO `yyyy-MM-dd` from `study.date_planned_start`.
+   * Optional in the SPA type to bridge the api.ts regen window;
+   * once the backend ships it (commit landing 2026-06-08) the
+   * SubjectMatrixView footer renders the real date instead of the
+   * Phase-E.4 mock literal "01-Jul-2020".
+   */
+  datePlannedStart?: string | null
 }
 
 /**

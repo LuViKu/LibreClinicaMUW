@@ -1,6 +1,6 @@
 {
   "name": "libreclinica-muw-spa",
-  "version": "0.0.1",
+  "version": "1.4.0rc1-muw",
   "description": "Phase E SPA front-end for LibreClinica MUW — Vue 3 + Vite + Tailwind v4. Bundled into the WAR at /LibreClinica/app/ via the Frontend Maven Plugin (see web/pom.xml).",
   "private": true,
   "type": "module",

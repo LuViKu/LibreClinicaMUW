@@ -1,0 +1,50 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 — backfill transition-target OIDs.
+
+        Until 2026-06-08 the eye-cohort transition flow built target
+        study_subject OIDs as `SS_<studyOid>_<label>_<eye>` (e.g.
+        `SS_S_DEFAULTS1_DF-001_OD`). That shape disagrees with the
+        canonical StudySubjectOidGenerator the AddSubject path uses
+        (`SS_` + uppercased alphanumeric-stripped label, ≤8 chars,
+        e.g. `SS_DF001`). The SPA's toStudySubjectOid("DF-001") builds
+        the short shape, so any attempt to navigate to a transition-
+        created row via /subjects/<label> 404s ("Subject with OID
+        'SS_DF001' not found").
+
+        This changeset rewrites the legacy-style OIDs on existing
+        transition-target rows to match the canonical shape. Targets
+        only — AddSubject rows already have the right shape. We
+        identify them by the OID prefix pattern `SS_S_*_*_O%`. Each
+        candidate is renamed only when its new OID is free — a
+        collision would mean a different row already owns the
+        short form, in which case we leave the legacy OID alone for
+        manual intervention.
+    -->
+
+    <changeSet author="muw-ophthalmology"
+               id="2026-06-08-backfill-transition-target-oid">
+        <sql>
+            UPDATE study_subject ss
+               SET oc_oid = 'SS_' || UPPER(
+                       SUBSTRING(REGEXP_REPLACE(ss.label, '[^A-Za-z0-9]', '', 'g'), 1, 8))
+             WHERE ss.oc_oid ~ '^SS_S_[^_]+_.*_O[DS]$'
+               AND NOT EXISTS (
+                   SELECT 1 FROM study_subject other
+                    WHERE other.study_subject_id &lt;&gt; ss.study_subject_id
+                      AND other.oc_oid = 'SS_' || UPPER(
+                              SUBSTRING(REGEXP_REPLACE(ss.label, '[^A-Za-z0-9]', '', 'g'), 1, 8))
+               );
+        </sql>
+        <rollback>
+            <sql>SELECT 1;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

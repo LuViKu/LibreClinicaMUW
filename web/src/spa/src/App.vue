@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
 import { useAuthStore } from '@/stores/auth'
+import type { UserRole } from '@/types/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -56,10 +57,19 @@ const breadcrumb = computed<Crumb[]>(() => {
 
 const displayUserName = computed(() => auth.user?.username ?? '')
 
-const userRole = computed<'Investigator' | 'Monitor' | 'Data Manager' | null>(() => {
-  if (!auth.user) return null
-  if (auth.user.role === 'Administrator' || auth.user.role === 'CRC') return null
-  return auth.user.role
+/**
+ * Full per-study role set the user holds on the bound study. Prefer
+ * the multi-role `activeStudy.roles` projection (M2 wire shape);
+ * fall back to the single-role legacy chain when the per-study array
+ * isn't populated yet. Drives both the inline chip / dots on the
+ * topbar trigger and the colour-coded role list inside the popover.
+ */
+const userRoles = computed<UserRole[]>(() => {
+  const active = auth.user?.activeStudy
+  if (active?.roles && active.roles.length > 0) return [...active.roles]
+  if (active?.role) return [active.role]
+  if (auth.user?.role) return [auth.user.role]
+  return []
 })
 
 const showTopBar = computed(() => route.name !== 'login' && route.name !== 'first-login')
@@ -74,7 +84,7 @@ const showTopBar = computed(() => route.name !== 'login' && route.name !== 'firs
       v-if="showTopBar && auth.isAuthenticated"
       :breadcrumb="breadcrumb"
       :user-name="displayUserName"
-      :user-role="userRole"
+      :user-roles="userRoles"
       :on-logout="logout"
     />
     <!-- Minimal "Sign in" affordance for anonymous routes that still want chrome. -->

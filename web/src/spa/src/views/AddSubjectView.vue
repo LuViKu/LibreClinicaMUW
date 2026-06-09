@@ -20,19 +20,26 @@ import {
   type AddSubjectInput,
   type SubjectMatchCandidate,
 } from '@/stores/subjects'
+import { useAuthStore } from '@/stores/auth'
 import type { Gender, StudyEye } from '@/types/subject'
 
 const { t } = useI18n()
 const router = useRouter()
 const subjects = useSubjectsStore()
+const auth = useAuthStore()
 
 const todayIso = computed(() => new Date().toISOString().slice(0, 10))
 
 const form = reactive<AddSubjectInput>({
   id: '',
   secondaryId: '',
-  siteOid: 'TDS0004',
-  siteLabel: 'München',
+  // Site context is derived from the session-bound active study.
+  // The backend infers site from the session and ignores siteOid /
+  // siteLabel in the body; these mirror auth.user.activeStudy for
+  // breadcrumb display only. Empty defaults are replaced when
+  // activeStudy resolves.
+  siteOid: auth.user?.activeStudy?.oid ?? '',
+  siteLabel: auth.user?.activeStudy?.name ?? '',
   gender: '' as Gender, // empty until user picks
   yearOfBirth: null,
   groupLabel: null, // retained for type compat; UI dropdown removed (no real group_class wiring)
@@ -58,6 +65,55 @@ const serverFieldErrors = ref<AddSubjectError[] | null>(null)
 
 const liveErrors = computed(() => validateAddSubject(form, subjects.rows, { today: todayIso.value }))
 
+/* ----------------------------------------------------------------- */
+/* Phase E.6 — live Study-Subject-ID availability check (label-taken)*/
+/*                                                                    */
+/* Debounced watch on form.id fires the backend's check-label preflight*/
+/* — surfaces "already taken" as an inline error before the operator  */
+/* clicks submit. The submit-time backend validation stays as the     */
+/* authoritative gate; the live check is purely UX.                  */
+/* ----------------------------------------------------------------- */
+
+const labelTakenError = ref<string | null>(null)
+const labelCheckDebounce = ref<number | null>(null)
+
+function maybeCheckLabel() {
+  if (labelCheckDebounce.value !== null) {
+    window.clearTimeout(labelCheckDebounce.value)
+    labelCheckDebounce.value = null
+  }
+  const value = form.id.trim()
+  if (value === '') {
+    labelTakenError.value = null
+    return
+  }
+  // Reset between debounce window and the actual check so the inline
+  // error doesn't flash stale state during typing.
+  labelTakenError.value = null
+  labelCheckDebounce.value = window.setTimeout(() => {
+    void runLabelCheck(value)
+  }, 350)
+}
+
+async function runLabelCheck(value: string) {
+  try {
+    const result = await subjects.checkLabelAvailability(value)
+    // Drop the result if the operator has typed something else since.
+    if (form.id.trim() !== value) return
+    if (!result.available) {
+      labelTakenError.value = t('addSubject.error.labelTaken', { id: value })
+    } else {
+      labelTakenError.value = null
+    }
+  } catch {
+    // Backend hiccup — clear the inline marker; the submit-time
+    // check is the authoritative gate.
+    labelTakenError.value = null
+  }
+}
+
+watch(() => form.id, maybeCheckLabel)
+
 function errorFor(field: AddSubjectErrorField): string | null {
   // Server-side errors take precedence (authoritative): if the latest
   // submit returned a structured 400, surface those per-field messages.
@@ -65,6 +121,9 @@ function errorFor(field: AddSubjectErrorField): string | null {
     const fromServer = serverFieldErrors.value.find((e) => e.field === field)
     if (fromServer) return fromServer.message
   }
+  // Live label-taken check rides on the `id` field error slot so the
+  // existing red-ring + ErrorText wiring renders it for free.
+  if (field === 'id' && labelTakenError.value) return labelTakenError.value
   if (!submitAttempted.value) return null
   return liveErrors.value.find((e) => e.field === field)?.message ?? null
 }
@@ -177,6 +236,13 @@ async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
   // Re-running submit invalidates any stale server-side errors.
   serverFieldErrors.value = null
   if (liveErrors.value.length > 0) return
+  // Phase E.6 — short-circuit the submit when the live label check
+  // has already surfaced a collision. The backend submit-time check
+  // still owns the authoritative gate (a transient backend hiccup
+  // would clear the inline marker but the 400 path catches it), but
+  // surfacing the same field error inline saves the operator a
+  // failed POST round trip.
+  if (labelTakenError.value) return
   // Block the submit if a match dialog is open and the operator
   // hasn't acknowledged.
   if (matchCandidates.value.length > 0 && form.acknowledgeMatchSubjectId == null) {

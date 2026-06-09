@@ -34,6 +34,9 @@ public record PatientDetailDto(
         String uniqueIdentifier,
         String gender,
         Integer yearOfBirth,
+        String firstName,
+        String lastName,
+        String dateOfBirth,
         List<PatientDto.Enrolment> enrolments,
         List<EyeTransition> eyeTransitions
 ) {

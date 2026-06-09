@@ -791,6 +791,27 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
+   * Phase E.6 — live Study-Subject-ID availability check.
+   *
+   * <p>Fires from the AddSubject form on debounced input of the
+   * Study Subject ID field; surfaces "already taken" inline before
+   * the operator clicks submit (the backend's submit-time check
+   * still fires as the authoritative gate, but the live check
+   * trades a 4xx round-trip for instant feedback).
+   *
+   * <p>Failures bubble — the form treats network errors as
+   * "unknown / pass through to submit" so a transient backend
+   * hiccup never blocks enrolment.
+   */
+  async function checkLabelAvailability(
+    label: string,
+  ): Promise<SubjectLabelAvailability> {
+    return apiGet<SubjectLabelAvailability>(
+      `/pages/api/v1/subjects/check-label?label=${encodeURIComponent(label)}`,
+    )
+  }
+
+  /**
    * Phase E.6 — clear every piece of study-scoped state so the store
    * doesn't bleed subjects from study A into the matrix after the
    * user switches to study B. Called by {@link useAuthStore.pickStudy}
@@ -849,6 +870,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
     unlockSubject,
     transitionEye,
     preflightMatch,
+    checkLabelAvailability,
     reset,
   }
 })
@@ -869,6 +891,20 @@ export interface SubjectMatchCandidate {
   dateOfBirth: string | null
   studyOids: string[]
   otherStudyCount: number
+}
+
+/**
+ * Phase E.6 — response shape for `GET /api/v1/subjects/check-label`.
+ *
+ * <p>{@code available} is the operator-facing answer: true → safe
+ * to submit, false → the typed label is already taken in the bound
+ * study. {@code existingSubjectOid} carries the colliding row's OID
+ * when {@code available=false} so the SPA can later surface an
+ * "Open existing" affordance.
+ */
+export interface SubjectLabelAvailability {
+  available: boolean
+  existingSubjectOid: string | null
 }
 
 /**

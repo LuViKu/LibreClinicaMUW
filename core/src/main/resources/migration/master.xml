@@ -46,5 +46,7 @@
   <include  file="migration/lc-muw-2026-06-07-eye-cohort-transition.xml"/>
   <include  file="migration/lc-muw-2026-06-08-modality.xml"/>
   <include  file="migration/lc-muw-2026-06-08-subject-phi.xml"/>
+  <include  file="migration/lc-muw-2026-06-08-backfill-transition-enrollment-date.xml"/>
+  <include  file="migration/lc-muw-2026-06-08-backfill-transition-oid.xml"/>
 </databaseChangeLog>
 

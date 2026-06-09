@@ -181,7 +181,12 @@ public class MeApiController {
                     currentStudy.getId(),
                     currentStudy.getOid(),
                     currentStudy.getName(),
-                    currentStudy.getParentStudyId() > 0
+                    currentStudy.getParentStudyId() > 0,
+                    // Phase E.6 multi-role — projecting the per-study role
+                    // set onto the active-study payload so the SPA's
+                    // HomeView reads the full set instead of falling back
+                    // to the top-level single highest-priority projection.
+                    spaRoles
             );
         }
 

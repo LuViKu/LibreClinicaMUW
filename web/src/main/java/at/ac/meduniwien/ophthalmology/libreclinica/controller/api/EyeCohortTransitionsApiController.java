@@ -356,7 +356,7 @@ public class EyeCohortTransitionsApiController {
                 //    (c) present with same eye or already OU → 409.
                 TargetResolution resolved = resolveOrCreateTarget(
                         c, targetStudy, sourceSubjectId, eye,
-                        desiredTargetLabel, currentUser);
+                        desiredTargetLabel, currentUser, transitionedOn);
                 if (resolved.conflictMessage != null) {
                     c.rollback();
                     return ResponseEntity.status(409).body(Map.of(
@@ -576,7 +576,8 @@ public class EyeCohortTransitionsApiController {
     private TargetResolution resolveOrCreateTarget(Connection c, StudyBean targetStudy,
                                                    int subjectId, String eye,
                                                    String desiredLabel,
-                                                   UserAccountBean actor)
+                                                   UserAccountBean actor,
+                                                   java.time.LocalDate transitionedOn)
             throws SQLException {
         // Lookup by (target_study_id, subject_id). The legacy
         // study_subject schema doesn't enforce a unique constraint on
@@ -632,7 +633,7 @@ public class EyeCohortTransitionsApiController {
         // OID by appending the eye + study OID to keep it unique
         // without colliding with the source row's OID.
         int newId = insertTargetStudySubjectRow(c, targetStudy, subjectId, desiredLabel,
-                eye, actor);
+                eye, actor, transitionedOn);
         return TargetResolution.ok(newId, eye, desiredLabel);
     }
 
@@ -645,15 +646,25 @@ public class EyeCohortTransitionsApiController {
      * extremely unlikely in single-site MUW deployment and a UNIQUE
      * violation would surface as a transaction rollback (the caller
      * catches it).
+     *
+     * <p>{@code enrollment_date} is set to {@code transitionedOn} when
+     * supplied (retrospective backfill) or today's date when null
+     * (prospective transition). Mirrors what the
+     * AddSubject flow writes for fresh enrolments — the matrix view's
+     * date formatter and any "enrolled since" UI rely on the column
+     * being non-null.
      */
     private int insertTargetStudySubjectRow(Connection c, StudyBean targetStudy,
                                             int subjectId, String label, String eye,
-                                            UserAccountBean actor)
+                                            UserAccountBean actor,
+                                            java.time.LocalDate transitionedOn)
             throws SQLException {
-        String oid = buildOid(targetStudy, label, eye);
+        String oid = buildOid(c, label);
+        java.sql.Date enrollment = java.sql.Date.valueOf(
+                transitionedOn != null ? transitionedOn : java.time.LocalDate.now());
         String sql = "INSERT INTO study_subject (label, subject_id, study_id, status_id, "
-                + "date_created, owner_id, oc_oid, study_eye) "
-                + "VALUES (?, ?, ?, ?, NOW(), ?, ?, ?)";
+                + "date_created, owner_id, oc_oid, study_eye, enrollment_date) "
+                + "VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setString(1, label);
             ps.setInt(2, subjectId);
@@ -662,6 +673,7 @@ public class EyeCohortTransitionsApiController {
             ps.setInt(5, actor.getId());
             ps.setString(6, oid);
             ps.setString(7, eye);
+            ps.setDate(8, enrollment);
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
@@ -672,26 +684,45 @@ public class EyeCohortTransitionsApiController {
         }
     }
 
-    private static String buildOid(StudyBean targetStudy, String label, String eye) {
-        // OpenClinica-style OID: SS_<studyOid>_<label>_<eye>; truncate
-        // to 40 chars to fit the typical OID column width. Adding eye
-        // disambiguates source vs target rows for the same human in
-        // single-study cross-eye tests.
-        String base = "SS_" + safe(targetStudy.getOid()) + "_" + safe(label) + "_" + eye;
-        if (base.length() > 40) base = base.substring(0, 40);
-        return base;
+    /**
+     * Build the target study_subject's OID using the same shape the
+     * canonical {@code StudySubjectOidGenerator} uses for AddSubject-
+     * created rows: {@code SS_} + uppercased alphanumeric-stripped
+     * label, truncated to 8 chars. This shape matches the SPA's
+     * {@code toStudySubjectOid("DF-001")} convention so navigating to
+     * {@code /subjects/DF-001} resolves the row created by a
+     * transition just as it would for a row created by AddSubject.
+     *
+     * <p>On collision we randomize a 4-char suffix until we find a
+     * free OID (mirrors {@link StudySubjectDAO#getValidOid}).
+     */
+    private static String buildOid(Connection c, String label) throws SQLException {
+        String stripped = label == null ? "" : label.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
+        if (stripped.length() > 8) stripped = stripped.substring(0, 8);
+        String base = "SS_" + stripped;
+        String candidate = base;
+        int attempt = 0;
+        while (oidExists(c, candidate)) {
+            attempt++;
+            if (attempt > 25) {
+                throw new SQLException("Could not generate unique OID after 25 attempts for label '" + label + "'.");
+            }
+            candidate = base + Long.toHexString(System.nanoTime() & 0xFFFF).toUpperCase();
+            if (candidate.length() > 40) candidate = candidate.substring(0, 40);
+        }
+        return candidate;
     }
 
-    private static String safe(String s) {
-        if (s == null) return "";
-        StringBuilder sb = new StringBuilder(s.length());
-        for (int i = 0; i < s.length(); i++) {
-            char ch = s.charAt(i);
-            if (Character.isLetterOrDigit(ch) || ch == '-' || ch == '_') sb.append(ch);
-            else sb.append('_');
+    private static boolean oidExists(Connection c, String oid) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT 1 FROM study_subject WHERE oc_oid = ? LIMIT 1")) {
+            ps.setString(1, oid);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
         }
-        return sb.toString();
     }
+
 
     private int insertTransitionRow(Connection c,
                                     int subjectId, String eye,
@@ -786,7 +817,7 @@ public class EyeCohortTransitionsApiController {
     private List<EyeTransitionDto> loadEyeTransitions(int studySubjectId) {
         String sql = "SELECT t.transition_id, t.eye, "
                 + "       CASE WHEN t.source_study_subject_id = ? THEN 'source' ELSE 'target' END AS side, "
-                + "       partner_study.unique_identifier AS partner_study_oid, "
+                + "       partner_study.oc_oid AS partner_study_oid, "
                 + "       partner_study.name AS partner_study_name, "
                 + "       partner_ss.label AS partner_label, "
                 + "       t.transitioned_at, t.reason "

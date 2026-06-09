@@ -28,11 +28,9 @@ import StatusPill from './StatusPill.vue'
 import { useAuthStore } from '@/stores/auth'
 import { usePatientsOverviewStore } from '@/stores/patientsOverview'
 import type {
-  EyeTransitionEvent,
   MeasurementSeries,
   Modality,
   PatientDetail,
-  PatientEnrolment,
 } from '@/types/patient'
 
 interface Props {
@@ -172,38 +170,26 @@ const eyeTimelines = computed<EyeTimeline[]>(() => {
 })
 
 function buildEyeTimeline(d: PatientDetail, eye: 'OD' | 'OS'): EyeTimeline {
-  // Enrolments that include this eye on enrolment day (OD/OS exact or OU).
-  const enrolmentsForEye = d.enrolments
-    .filter((e) => eyeMatches(e.studyEye, eye))
-    .slice()
-    .sort((a, b) => compareIso(a.enrolledOn, b.enrolledOn))
-
   const transitionsForEye = d.eyeTransitions
     .filter((tx) => tx.eye === eye)
     .slice()
     .sort((a, b) => compareIso(a.eventAt, b.eventAt))
 
-  // Start pill = earliest enrolment that introduced the eye. If the
-  // patient has had the eye transitioned, the start pill is the
-  // earliest *originating* enrolment (the from-side of the earliest
-  // transition); the cohort then moves to the to-side via the
-  // transition pill. If there are no transitions we just show the
-  // start pill plus any subsequent enrolments.
   const pills: TimelinePill[] = []
-  if (enrolmentsForEye.length > 0) {
-    const start = enrolmentsForEye[0]
-    pills.push({
-      studyOid: start.studyOid,
-      studyName: start.studyName,
-      label: start.label,
-      eventAt: null,
-      kind: 'enrolment',
-      current: false,
-    })
-  } else if (transitionsForEye.length > 0) {
-    // Edge case: enrolment list pruned but a transition referenced
-    // the from-side. Synthesize a start pill from the first
-    // transition's fromStudy snapshot.
+
+  if (transitionsForEye.length > 0) {
+    // When this eye has transitions, the eye_cohort_transition chain
+    // is the source of truth for the timeline — NOT the enrolments
+    // list. Reason: after a transition the source enrolment's
+    // study_eye is downgraded (OU → other-eye; single-eye → null) and
+    // the SPA's enrolment filter drops it. Selecting the start pill
+    // from the (filtered) enrolments would surface the POST-transition
+    // home (the target) instead of the eye's originating cohort,
+    // collapsing every pill in the chain to the same study.
+    //
+    // Chain shape: start with the first transition's source side
+    // (where the eye lived before any moves), then push every
+    // transition's target side in chronological order.
     const first = transitionsForEye[0]
     pills.push({
       studyOid: first.fromStudyOid,
@@ -213,31 +199,40 @@ function buildEyeTimeline(d: PatientDetail, eye: 'OD' | 'OS'): EyeTimeline {
       kind: 'enrolment',
       current: false,
     })
-  }
-  for (const tx of transitionsForEye) {
-    pills.push({
-      studyOid: tx.toStudyOid,
-      studyName: tx.toStudyName,
-      label: tx.toLabel,
-      eventAt: tx.eventAt,
-      kind: 'transition',
-      current: false,
-    })
+    for (const tx of transitionsForEye) {
+      pills.push({
+        studyOid: tx.toStudyOid,
+        studyName: tx.toStudyName,
+        label: tx.toLabel,
+        eventAt: tx.eventAt,
+        kind: 'transition',
+        current: false,
+      })
+    }
+  } else {
+    // No transitions — the eye has never moved, so the enrolments
+    // list is authoritative. Use the earliest enrolment whose
+    // study_eye covers this eye as the single pill.
+    const enrolmentsForEye = d.enrolments
+      .filter((e) => eyeMatches(e.studyEye, eye))
+      .slice()
+      .sort((a, b) => compareIso(a.enrolledOn, b.enrolledOn))
+    if (enrolmentsForEye.length > 0) {
+      const start = enrolmentsForEye[0]
+      pills.push({
+        studyOid: start.studyOid,
+        studyName: start.studyName,
+        label: start.label,
+        eventAt: null,
+        kind: 'enrolment',
+        current: false,
+      })
+    }
   }
 
-  // Mark the eye's current location — the latest study still listed in
-  // enrolments where the study_eye covers this eye. Falls back to the
-  // last transition's to-side when the latest enrolment can't be
-  // identified.
-  const currentEnrolment = pickCurrentEnrolment(enrolmentsForEye, transitionsForEye)
-  if (currentEnrolment) {
-    const idx = pills.findIndex((p) => p.studyOid === currentEnrolment.studyOid && p.label === currentEnrolment.label)
-    if (idx >= 0) {
-      pills[idx].current = true
-    } else if (pills.length > 0) {
-      pills[pills.length - 1].current = true
-    }
-  } else if (pills.length > 0) {
+  // The last pill is the eye's current home — the chain's terminus
+  // either way (latest transition's to-side OR the only enrolment).
+  if (pills.length > 0) {
     pills[pills.length - 1].current = true
   }
 
@@ -254,18 +249,6 @@ function compareIso(a: string | null, b: string | null): number {
   if (a == null) return -1
   if (b == null) return 1
   return a < b ? -1 : a > b ? 1 : 0
-}
-
-function pickCurrentEnrolment(
-  enrolmentsForEye: PatientEnrolment[],
-  transitionsForEye: EyeTransitionEvent[],
-): PatientEnrolment | null {
-  if (transitionsForEye.length > 0) {
-    const last = transitionsForEye[transitionsForEye.length - 1]
-    const match = enrolmentsForEye.find((e) => e.studyOid === last.toStudyOid && e.label === last.toLabel)
-    if (match) return match
-  }
-  return enrolmentsForEye[enrolmentsForEye.length - 1] ?? null
 }
 
 /* -------------------- Pill click → switch study + route -------------------- */

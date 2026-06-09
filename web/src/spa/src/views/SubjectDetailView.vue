@@ -656,7 +656,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
             class="underline hover:no-underline"
             @click="openPartner(row)"
           >
-            {{ t('subjectDetail.eyeTransition.action.openPartner') }} →
+            {{ t('subjectDetail.eyeTransition.action.openPartner') }}
           </button>
         </div>
 
@@ -680,7 +680,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
             class="underline hover:no-underline"
             @click="openPartner(row)"
           >
-            {{ t('subjectDetail.eyeTransition.action.openPartner') }} →
+            {{ t('subjectDetail.eyeTransition.action.openPartner') }}
           </button>
         </div>
 

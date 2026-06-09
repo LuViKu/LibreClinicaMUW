@@ -887,7 +887,11 @@ public class StudiesApiController {
                 nullToEmpty(s.getPhase()),
                 s.getStatus() == null ? "" : s.getStatus().getName(),
                 parent == null ? null : parent.getOid(),
-                parent == null ? null : parent.getName());
+                parent == null ? null : parent.getName(),
+                s.getDatePlannedStart() == null ? null
+                        : java.time.Instant.ofEpochMilli(s.getDatePlannedStart().getTime())
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .toLocalDate().toString());
     }
 
     private static String nullToEmpty(String s) {

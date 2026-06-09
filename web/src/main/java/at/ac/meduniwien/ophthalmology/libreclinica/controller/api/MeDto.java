@@ -88,6 +88,16 @@ public record MeDto(
      * the SPA needs to dispatch those calls against the active study without
      * a separate {@code /studies?oid=} lookup.
      */
+    /**
+     * <p>Multi-role per (user, study) — M2 (2026-06-08): {@code roles}
+     * carries the full set of SPA-mapped role bindings the user holds
+     * in this active study. The HomeView's catalogue filter reads this
+     * to render every card the user can reach via ANY of their role
+     * grants on the bound study — without it, the SPA collapses to the
+     * top-level {@code MeDto.role} highest-priority projection and a
+     * dual-role user (e.g. Investigator + Data Manager) loses access
+     * to the lower-priority lane's cards.
+     */
     @Schema(name = "ActiveStudyDto")
-    public record ActiveStudyDto(int id, String oid, String name, boolean isSite) {}
+    public record ActiveStudyDto(int id, String oid, String name, boolean isSite, List<String> roles) {}
 }

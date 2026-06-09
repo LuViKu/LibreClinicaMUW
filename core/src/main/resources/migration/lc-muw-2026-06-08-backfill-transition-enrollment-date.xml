@@ -1,0 +1,47 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 — backfill enrollment_date on transition-created
+        study_subject rows.
+
+        The eye-cohort transition flow (PR #156 + #161) creates a
+        target study_subject row but the INSERT only set the source
+        eye + label + OID; enrollment_date was left NULL because
+        StudySubjectDAO.create wasn't reused for the in-transaction
+        path. That left every transition-target row with NULL
+        enrollment_date, which the SubjectMatrixView formatDate helper
+        then crashed on (TypeError: can't access property "split",
+        iso is null).
+
+        This changeset patches the forward path (target INSERT now
+        writes enrollment_date) AND backfills historical rows: any
+        study_subject row whose enrollment_date IS NULL but whose
+        date_created IS NOT NULL gets enrollment_date set to the
+        date portion of date_created. That's the closest historically-
+        meaningful timestamp — when the row was first written to the
+        database. AddSubject-created rows always wrote enrollment_date,
+        so this backfill only touches transition-created rows.
+    -->
+
+    <changeSet author="muw-ophthalmology"
+               id="2026-06-08-backfill-enrollment-date-from-date-created">
+        <sql>
+            UPDATE study_subject
+               SET enrollment_date = date_created::date
+             WHERE enrollment_date IS NULL
+               AND date_created IS NOT NULL;
+        </sql>
+        <rollback>
+            <!-- No-op: we cannot identify which rows were backfilled
+                 without a marker. Reverting is unsafe — leaving the
+                 forward state in place is the safer rollback. -->
+            <sql>SELECT 1;</sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
