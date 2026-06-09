@@ -182,12 +182,15 @@ class PatientsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(jsonPath("$.enrolments.length()").value(Matchers.greaterThanOrEqualTo(2)))
                 .andExpect(jsonPath("$.eyeTransitions.length()").value(Matchers.greaterThanOrEqualTo(1)))
                 .andExpect(jsonPath("$.eyeTransitions[0].eye").value("OD"))
-                // The legacy default study's unique_identifier is
-                // 'default-study' (the OID-column in the legacy schema);
-                // EyeCohortTransitionsApiController surfaces this same
-                // column as `partner_study_oid` so we match its convention.
-                .andExpect(jsonPath("$.eyeTransitions[0].fromStudyOid").value("default-study"))
-                .andExpect(jsonPath("$.eyeTransitions[0].toStudyOid").value("patients-ga"));
+                // Phase E.6 (2026-06-09 fix): PatientsApiController.loadEyeTransitions
+                // now projects study.oc_oid instead of study.unique_identifier
+                // — the SPA's auth.pickStudy() resolves via StudyDAO.findByOid
+                // which queries oc_oid, so the partner-link affordance only
+                // works with the system OID. Default study seeds to
+                // oc_oid='S_DEFAULTS1'; second-study seed uses oc_oid=
+                // SECOND_STUDY_OID ('S_PATIENTS_GA').
+                .andExpect(jsonPath("$.eyeTransitions[0].fromStudyOid").value("S_DEFAULTS1"))
+                .andExpect(jsonPath("$.eyeTransitions[0].toStudyOid").value(SECOND_STUDY_OID));
     }
 
     /* =============================================================== */
