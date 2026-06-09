@@ -18,3 +18,12 @@ declare module 'vuedraggable' {
   const draggable: DefineComponent<any, any, any>
   export default draggable
 }
+
+/**
+ * Phase E.6 — Vite-injected build constants. Defined in vite.config.ts
+ * via the `define` map; read by the SideRail footer to surface the
+ * running app's version + build hash + date.
+ */
+declare const __APP_VERSION__: string
+declare const __BUILD_HASH__: string
+declare const __BUILD_DATE__: string

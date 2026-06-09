@@ -132,7 +132,7 @@
     "openSubject": "Open →",
     "signed": "Signed",
     "scheduleHint": "Pick a subject below to schedule the next visit.",
-    "scheduleVisitCta": "+ Schedule visit",
+    "metricsLink": "Study statistics details",
     "openQueriesTooltip": "{count} open query/queries",
     "ariaSigned": "Subject {id}, signed",
     "ariaUnsigned": "Subject {id}, not signed",
@@ -170,6 +170,31 @@
       "enrolled": "enrolled",
       "status": "Status",
       "active": "Active"
+    }
+  },
+  "studyMetrics": {
+    "title": "Study metrics",
+    "close": "Close",
+    "empty": "No data available.",
+    "footer": "Aggregated from {n} study subjects.",
+    "kpi": {
+      "subjects": "Subjects",
+      "subjectsShort": "n = {n}",
+      "medianAge": "Median age (years)",
+      "medianFollowUp": "Median follow-up (months)"
+    },
+    "sex": {
+      "title": "Sex distribution",
+      "female": "Female",
+      "male": "Male",
+      "other": "Other"
+    },
+    "age": {
+      "title": "Age distribution"
+    },
+    "followUp": {
+      "title": "Follow-up duration",
+      "context": "Median {median} months · range {range}"
     }
   },
   "addSubject": {

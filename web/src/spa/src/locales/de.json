@@ -131,7 +131,7 @@
     "openSubject": "Öffnen →",
     "signed": "Signiert",
     "scheduleHint": "Bitte unten eine/n Teilnehmer/-in auswählen, um die nächste Visite zu planen.",
-    "scheduleVisitCta": "+ Visite planen",
+    "metricsLink": "Studien-Statistik Details",
     "openQueriesTooltip": "{count} offene Rückfrage(n)",
     "ariaSigned": "Teilnehmer {id}, signiert",
     "ariaUnsigned": "Teilnehmer {id}, nicht signiert",
@@ -169,6 +169,31 @@
       "enrolled": "aufgenommen",
       "status": "Status",
       "active": "Aktiv"
+    }
+  },
+  "studyMetrics": {
+    "title": "Studien-Metriken",
+    "close": "Schließen",
+    "empty": "Keine Daten verfügbar.",
+    "footer": "Aggregiert aus {n} Studienteilnehmer/-innen.",
+    "kpi": {
+      "subjects": "Teilnehmer",
+      "subjectsShort": "n = {n}",
+      "medianAge": "Median-Alter (Jahre)",
+      "medianFollowUp": "Median Follow-up (Monate)"
+    },
+    "sex": {
+      "title": "Geschlechterverteilung",
+      "female": "Weiblich",
+      "male": "Männlich",
+      "other": "Sonstiges"
+    },
+    "age": {
+      "title": "Altersverteilung"
+    },
+    "followUp": {
+      "title": "Follow-up-Dauer",
+      "context": "Median {median} Monate · Spanne {range}"
     }
   },
   "addSubject": {

@@ -11,6 +11,7 @@ import TextInput from '@/components/TextInput.vue'
 import { useSubjectsStore } from '@/stores/subjects'
 import { useStudyStore } from '@/stores/study'
 import { useAuthStore } from '@/stores/auth'
+import StudyMetricsModal from '@/components/StudyMetricsModal.vue'
 import type { EventStatus, Subject } from '@/types/subject'
 
 const { t } = useI18n()
@@ -20,12 +21,12 @@ const auth = useAuthStore()
 const route = useRoute()
 
 /**
- * Phase E.6 follow-up Y2 — the Investigator landing's separate
- * "Visite planen" card was retired (it routed here with
- * `?action=schedule` to surface the same Pick-a-subject banner); the
- * banner now lives behind a header CTA inside this view so the
- * operator picks a subject first, then schedules. We still honour the
- * legacy `?action=schedule` query for inbound links / bookmarks.
+ * Phase E.6 — Pick-a-subject banner that previously launched on the
+ * "Visite planen" CTA in this header. The CTA was retired 2026-06-09
+ * per operator feedback (visit scheduling now starts from the per-
+ * subject detail view), but inbound links / bookmarks carrying
+ * `?action=schedule` keep the banner so the legacy URL still
+ * communicates intent.
  */
 const isScheduleMode = ref(route.query.action === 'schedule')
 
@@ -95,6 +96,9 @@ const studyContextLabel = computed(() => {
 const eventColumns = computed(() =>
   subjects.rows[0]?.events.map((e) => ({ oid: e.eventDefinitionOid, label: e.label })) ?? [],
 )
+
+/* Studien-Statistik modal — opens on the SideRail link. */
+const metricsModalOpen = ref(false)
 
 const statusVariant = (status: EventStatus): 'success' | 'info' | 'warning' | 'neutral' => {
   switch (status) {
@@ -168,6 +172,28 @@ const ariaSortLabel = (subject: Subject) =>
           <div class="flex justify-between gap-3"><dt class="text-slate-500 shrink-0">{{ t('subjectMatrix.studyCard.status') }}</dt><dd><StatusPill :variant="studyStatusActive ? 'success' : 'neutral'">{{ studyStatusActive ? t('subjectMatrix.studyCard.active') : studyStatusLabel }}</StatusPill></dd></div>
         </dl>
       </template>
+
+      <template #metrics>
+        <button
+          type="button"
+          class="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white text-xs"
+          data-testid="open-study-metrics"
+          @click="metricsModalOpen = true"
+        >
+          <span class="inline-flex items-center gap-2">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+              <path d="M3 3v18h18" />
+              <rect x="7" y="11" width="3" height="6" rx="1" />
+              <rect x="12" y="7" width="3" height="10" rx="1" />
+              <rect x="17" y="13" width="3" height="4" rx="1" />
+            </svg>
+            {{ t('subjectMatrix.metricsLink') }}
+          </span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="m9 18 6-6-6-6" />
+          </svg>
+        </button>
+      </template>
     </SideRail>
 
     <main class="flex-1 px-8 py-6 max-w-[1200px]">
@@ -196,21 +222,6 @@ const ariaSortLabel = (subject: Subject) =>
           <h1 class="text-xl font-semibold tracking-tight">{{ t('subjectMatrix.title') }}</h1>
         </div>
         <div class="flex items-center gap-2">
-          <button
-            type="button"
-            data-testid="schedule-visit-cta"
-            class="px-3 py-1.5 text-xs border border-muw-blue-200 rounded-md bg-white hover:bg-muw-blue-50 text-muw-blue-700 inline-flex items-center gap-1.5"
-            :aria-pressed="isScheduleMode"
-            @click="isScheduleMode = true"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
-              <rect width="18" height="18" x="3" y="4" rx="2" />
-              <path d="M16 2v4M8 2v4M3 10h18" />
-              <line x1="12" x2="12" y1="14" y2="18" />
-              <line x1="10" x2="14" y1="16" y2="16" />
-            </svg>
-            {{ t('subjectMatrix.scheduleVisitCta') }}
-          </button>
           <button class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-1.5">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
@@ -380,5 +391,7 @@ const ariaSortLabel = (subject: Subject) =>
         </template>
       </DenseTable>
     </main>
+
+    <StudyMetricsModal :open="metricsModalOpen" @close="metricsModalOpen = false" />
   </div>
 </template>
