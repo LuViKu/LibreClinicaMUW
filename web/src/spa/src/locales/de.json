@@ -1296,7 +1296,7 @@
   },
   "manageUsers": {
     "title": "Nutzerverwaltung",
-    "subTrail": "LCDemo · alle Rollen",
+    "subTrail": "Plattform-Nutzerverwaltung",
     "searchPlaceholder": "Nutzer/-in nach Name, Username oder E-Mail suchen…",
     "showingCount": "{visible} von {total} sichtbar",
     "empty": "Keine Nutzer/-innen für den aktuellen Filter.",
@@ -1514,7 +1514,7 @@
   },
   "importCrf": {
     "title": "CRF-Daten importieren",
-    "subTrail": "LCDemo · Massendaten-Import",
+    "subTrail": "Massendaten-Import",
     "intro": "Bestehende CRF-Daten aus CDISC ODM XML laden. Der Import wird gestaged — nichts wird committed, bis Sie im letzten Schritt bestätigen.",
     "step": {
       "upload": "Hochladen",

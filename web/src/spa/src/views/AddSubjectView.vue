@@ -20,19 +20,26 @@ import {
   type AddSubjectInput,
   type SubjectMatchCandidate,
 } from '@/stores/subjects'
+import { useAuthStore } from '@/stores/auth'
 import type { Gender, StudyEye } from '@/types/subject'
 
 const { t } = useI18n()
 const router = useRouter()
 const subjects = useSubjectsStore()
+const auth = useAuthStore()
 
 const todayIso = computed(() => new Date().toISOString().slice(0, 10))
 
 const form = reactive<AddSubjectInput>({
   id: '',
   secondaryId: '',
-  siteOid: 'TDS0004',
-  siteLabel: 'München',
+  // Site context is derived from the session-bound active study.
+  // The backend infers site from the session and ignores siteOid /
+  // siteLabel in the body; these mirror auth.user.activeStudy for
+  // breadcrumb display only. Empty defaults are replaced when
+  // activeStudy resolves.
+  siteOid: auth.user?.activeStudy?.oid ?? '',
+  siteLabel: auth.user?.activeStudy?.name ?? '',
   gender: '' as Gender, // empty until user picks
   yearOfBirth: null,
   groupLabel: null, // retained for type compat; UI dropdown removed (no real group_class wiring)

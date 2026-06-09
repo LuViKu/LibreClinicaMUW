@@ -1297,7 +1297,7 @@
   },
   "manageUsers": {
     "title": "Manage Users",
-    "subTrail": "LCDemo · all roles",
+    "subTrail": "Platform user management",
     "searchPlaceholder": "Find user by name, username or email…",
     "showingCount": "{visible} of {total} shown",
     "empty": "No users match the current filter.",
@@ -1515,7 +1515,7 @@
   },
   "importCrf": {
     "title": "Import CRF Data",
-    "subTrail": "LCDemo · bulk-load existing data",
+    "subTrail": "Bulk data import",
     "intro": "Bulk-load completed CRFs from CDISC ODM XML. The import is staged — nothing is committed until you confirm at the final step.",
     "step": {
       "upload": "Upload",

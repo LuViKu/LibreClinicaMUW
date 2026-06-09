@@ -31,7 +31,10 @@ const isScheduleMode = ref(route.query.action === 'schedule')
 
 onMounted(() => {
   if (subjects.rows.length === 0) {
-    subjects.load('TDS0004')
+    // The store ignores the argument (server scopes by session-bound
+    // active study); pass null to make that explicit and drop the
+    // legacy "TDS0004" mock-era placeholder.
+    subjects.load()
   }
   // Phase E.6 — fetch the active study identity so the footer card
   // (PI, planned start, status) renders real data instead of the
@@ -66,6 +69,22 @@ const studyStatusLabel = computed(() => {
 const studyStatusActive = computed(
   () => (study.identity?.status ?? '').toLowerCase().includes('available'),
 )
+
+/**
+ * Display label for the matrix's "study · N subjects" trail row.
+ * When the operator is bound to a top-level study, surfaces just
+ * the study's name; when bound to a site, prefixes with the parent
+ * study's identity. Replaces the Phase-E.4 hardcoded "München
+ * (TDS0004)" placeholder.
+ */
+const studyContextLabel = computed(() => {
+  const active = auth.user?.activeStudy
+  if (!active?.name) return ''
+  if (active.isSite && study.identity?.parentStudyName) {
+    return `${study.identity.parentStudyName} · ${active.name}`
+  }
+  return active.name
+})
 
 /**
  * Compute the table's column header set from the first row's events.
@@ -172,7 +191,7 @@ const ariaSortLabel = (subject: Subject) =>
       <div class="flex items-end justify-between mb-5">
         <div>
           <div class="text-xs text-slate-500 mb-1">
-            München (TDS0004) · {{ subjects.totalCount }} {{ t('subjectMatrix.subjectsCountTrail') }}
+            <template v-if="studyContextLabel">{{ studyContextLabel }} · </template>{{ subjects.totalCount }} {{ t('subjectMatrix.subjectsCountTrail') }}
           </div>
           <h1 class="text-xl font-semibold tracking-tight">{{ t('subjectMatrix.title') }}</h1>
         </div>
