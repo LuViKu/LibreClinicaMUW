@@ -2414,7 +2414,7 @@ public class SubjectsApiController {
         if (ss == null || ss.getId() == 0) return null;
         String sql = "SELECT t.transition_id, t.eye, "
                 + "       CASE WHEN t.source_study_subject_id = ? THEN 'source' ELSE 'target' END AS side, "
-                + "       partner_study.unique_identifier AS partner_study_oid, "
+                + "       partner_study.oc_oid AS partner_study_oid, "
                 + "       partner_study.name AS partner_study_name, "
                 + "       partner_ss.label AS partner_label, "
                 + "       t.transitioned_at, t.reason "

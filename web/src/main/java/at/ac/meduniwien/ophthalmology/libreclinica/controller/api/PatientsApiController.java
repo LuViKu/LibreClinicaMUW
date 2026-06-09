@@ -487,7 +487,7 @@ public class PatientsApiController {
         // MAX(date_start) sub-select for the last-visit indicator.
         String sql = "SELECT ss.subject_id AS sid, "
                 + "       ss.study_subject_id AS ssid, "
-                + "       s.unique_identifier AS study_oid, "
+                + "       s.oc_oid AS study_oid, "
                 + "       s.name AS study_name, "
                 + "       ss.label AS label, "
                 + "       ss.study_eye AS study_eye, "
@@ -535,10 +535,10 @@ public class PatientsApiController {
     private List<PatientDetailDto.EyeTransition> loadEyeTransitions(Connection c, int subjectId)
             throws SQLException {
         String sql = "SELECT t.transition_id, t.eye, t.transitioned_at, t.reason, "
-                + "       src_study.unique_identifier AS from_oid, "
+                + "       src_study.oc_oid AS from_oid, "
                 + "       src_study.name AS from_name, "
                 + "       src_ss.label AS from_label, "
-                + "       tgt_study.unique_identifier AS to_oid, "
+                + "       tgt_study.oc_oid AS to_oid, "
                 + "       tgt_study.name AS to_name, "
                 + "       tgt_ss.label AS to_label "
                 + "  FROM eye_cohort_transition t "
@@ -653,7 +653,7 @@ public class PatientsApiController {
         String sql = "SELECT id_.value AS value, "
                 + "       ec.date_completed AS date_completed, "
                 + "       ec.event_crf_id AS event_crf_id, "
-                + "       s.unique_identifier AS study_oid, "
+                + "       s.oc_oid AS study_oid, "
                 + "       s.name AS study_name, "
                 + "       sed.name AS event_name "
                 + "  FROM item_data id_ "
