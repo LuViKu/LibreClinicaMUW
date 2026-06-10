@@ -18,7 +18,7 @@ import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
 import { useSubjectsStore } from '@/stores/subjects'
 import { useEventsStore } from '@/stores/events'
 import { useAuthStore } from '@/stores/auth'
-import type { EventStatus, Gender, EyeTransitionDto, TransitionEyeRequest } from '@/types/subject'
+import type { EventStatus, Gender, StudyEye, EyeTransitionDto, TransitionEyeRequest } from '@/types/subject'
 import { canManageSubjectLifecycle, canEditSubject } from '@/types/subject'
 import { roleSatisfies } from '@/router'
 import type { StudyEventStatus } from '@/types/event'
@@ -68,10 +68,17 @@ interface EditForm {
   secondaryId: string
   gender: Gender
   yearOfBirth: string
+  /**
+   * 2026-06-10 — null-aware study-eye field. Mirrors the AddSubjectView
+   * pattern: native <select> with an empty-string option that projects
+   * to `null` at the v-model boundary so the StudyEye union stays
+   * narrow ('OD' | 'OS' | 'OU').
+   */
+  studyEye: StudyEye | null
 }
 const editing = ref(false)
 const isSaving = ref(false)
-const form = ref<EditForm>({ secondaryId: '', gender: 'F', yearOfBirth: '' })
+const form = ref<EditForm>({ secondaryId: '', gender: 'F', yearOfBirth: '', studyEye: null })
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 
@@ -82,6 +89,7 @@ function startEdit() {
     gender: subject.value.gender as Gender,
     yearOfBirth:
       subject.value.yearOfBirth != null ? String(subject.value.yearOfBirth) : '',
+    studyEye: subject.value.studyEye ?? null,
   }
   fieldErrors.value = {}
   formError.value = null
@@ -92,6 +100,16 @@ function cancelEdit() {
   editing.value = false
   fieldErrors.value = {}
   formError.value = null
+}
+
+/**
+ * 2026-06-10 — mirrors AddSubjectView's onStudyEyeChange: translate the
+ * empty-string select value into `null` so the StudyEye union stays
+ * narrow.
+ */
+function onStudyEyeChange(e: Event) {
+  const v = (e.target as HTMLSelectElement).value
+  form.value.studyEye = v === '' ? null : (v as StudyEye)
 }
 
 async function submitEdit() {
@@ -110,6 +128,7 @@ async function submitEdit() {
       secondaryId: form.value.secondaryId.trim() === '' ? null : form.value.secondaryId.trim(),
       gender: form.value.gender,
       yearOfBirth: parsedYob,
+      studyEye: form.value.studyEye,
     })
     if (result.ok) {
       editing.value = false
@@ -619,6 +638,28 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                 :error="!!fieldErrors.yearOfBirth"
               />
               <ErrorText v-if="fieldErrors.yearOfBirth">{{ fieldErrors.yearOfBirth }}</ErrorText>
+            </div>
+
+            <!-- 2026-06-10 — Studienauge editable post-creation.
+                 Reuses the AddSubjectView pattern (null-aware native
+                 select with an empty option that projects to null at
+                 the v-model boundary). i18n keys are shared from the
+                 ophth.studyEye.* namespace. -->
+            <div>
+              <FieldLabel for="edit-study-eye">{{ t('ophth.studyEye.label') }}</FieldLabel>
+              <select
+                id="edit-study-eye"
+                data-testid="edit-study-eye"
+                :value="form.studyEye ?? ''"
+                class="w-full px-3 py-2 rounded-md text-sm border border-slate-300 bg-white focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100 muw-focus appearance-none cursor-pointer pr-8"
+                @change="onStudyEyeChange"
+              >
+                <option value="">{{ t('ophth.studyEye.notSet') }}</option>
+                <option value="OD">{{ t('ophth.studyEye.od') }}</option>
+                <option value="OS">{{ t('ophth.studyEye.os') }}</option>
+                <option value="OU">{{ t('ophth.studyEye.ou') }}</option>
+              </select>
+              <ErrorText v-if="fieldErrors.studyEye">{{ fieldErrors.studyEye }}</ErrorText>
             </div>
 
             <p v-if="formError" class="col-span-2 text-xs text-rose-600">{{ formError }}</p>
