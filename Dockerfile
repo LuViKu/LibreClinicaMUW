@@ -1,5 +1,13 @@
 FROM docker.io/library/maven:3-eclipse-temurin-21 AS builder
 
+# SKIP_SPA gates the frontend-maven-plugin SPA build (web/pom.xml:23
+# `<skipSpa>false</skipSpa>` is the maven default). Default `true` here
+# preserves the fast-path used by `docker compose up` and the smoke-test
+# job in .github/workflows/build.yml. The release-image workflow
+# (.github/workflows/release-image.yml) passes --build-arg SKIP_SPA=false
+# so production WARs contain the SPA bundle.
+ARG SKIP_SPA=true
+
 WORKDIR /app
 
 # ----- Dependency layer -----
@@ -35,7 +43,7 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.m2 \
     set -eux; \
-    mvn package -DskipSpa=true -DskipTests=true -Dmdep.analyze.skip=true; \
+    mvn package -DskipSpa=${SKIP_SPA} -DskipTests=true -Dmdep.analyze.skip=true; \
     # Maven's default WAR name is ${artifactId}-${version}.war, so this is
     # LibreClinica-web-1.4.0rc1-muw.war today and will keep changing as the
     # project version moves. Glob it and rename to a stable name for the

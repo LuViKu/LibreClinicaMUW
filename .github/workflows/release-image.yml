@@ -1,0 +1,134 @@
+# Builds the production image and pushes it to the GitHub Container
+# Registry (ghcr.io). Intentionally **manual-only** (workflow_dispatch).
+# The intended flow is:
+#   1. CI green on lc-develop
+#   2. lc-develop merged into main (manual gate)
+#   3. Maintainer triggers this workflow from the Actions tab against
+#      `main` (or a release tag), inspects the pushed image, then
+#      promotes to deployment out-of-band.
+#
+# This build differs from the smoke-test build in build.yml: that one
+# passes `-DskipSpa=true` (via the Dockerfile default ARG) for speed;
+# this one passes `SKIP_SPA=false` so the SPA bundle is included in
+# LibreClinica-web.war and the resulting image is deployable as-is.
+#
+# Image: ghcr.io/luviku/libreclinicamuw
+# Visibility / permissions on the package are managed in the repo's
+# Settings → Packages page. First successful run from this workflow
+# creates the package — it inherits the repository's visibility unless
+# overridden.
+
+name: Release image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional raw tag to publish in addition to latest/sha (e.g. "1.4.0-muw" or "rc-2026-06-10"). Leave blank to publish only the default tag set.'
+        required: false
+        type: string
+
+# Don't cancel an in-flight release build — a half-pushed image is
+# worse than a queued one. Group by ref so dispatches against
+# different refs (main + a release tag) don't fight.
+concurrency:
+  group: release-image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  # GHCR rejects mixed-case paths; hardcoded lowercase rather than
+  # piping ${{ github.repository }} through `tr` because the value is
+  # stable for the lifetime of this repo.
+  IMAGE_NAME: luviku/libreclinicamuw
+
+jobs:
+  build-and-push:
+    name: Build and push release image
+    runs-on: ubuntu-latest
+    # 45 min: cold-cache Maven dep download (~5 min) + multi-module
+    # build incl. SPA (~10-15 min) + image push. The smoke-test build
+    # in build.yml typically lands in ~12-15 min with SKIP_SPA=true;
+    # SKIP_SPA=false roughly doubles that and Maven dep-download
+    # rebuilds cold-cache each run because cache-to=mode=min (see
+    # build.yml smoke-test comment for the rationale).
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ${{ env.REGISTRY }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Generates the tag matrix + OCI annotation labels. Tag rules:
+      #   - `latest`                → only when dispatched against main
+      #   - `sha-<short-sha>`       → every build (immutable handle)
+      #   - `<branch-name>`         → when dispatched against a branch
+      #   - `<git-tag>` raw         → when dispatched against a git tag
+      #   - semver families         → tag refs of vX.Y.Z form get
+      #                               `X.Y.Z`, `X.Y`, and `X` tags
+      #   - `<inputs.version>` raw  → only when the optional `version`
+      #                               input is populated
+      - name: Extract image metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-,format=short
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+          labels: |
+            org.opencontainers.image.title=LibreClinica MUW Ophthalmology
+            org.opencontainers.image.description=Electronic Data Capture for the Department of Ophthalmology and Optometry, Medical University of Vienna — institutional build of LibreClinica.
+            org.opencontainers.image.vendor=Department of Ophthalmology and Optometry, Medical University of Vienna
+            org.opencontainers.image.licenses=LGPL-2.1-or-later
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push libreclinica image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Bundle the SPA into the WAR (overrides the Dockerfile's
+          # smoke-test-friendly default of SKIP_SPA=true).
+          build-args: |
+            SKIP_SPA=false
+          # Same GHA-cache strategy as build.yml's smoke-test job:
+          # mode=min keeps the cache transfer small at the cost of
+          # cold-cache Maven dep downloads each run. Scoped separately
+          # so release builds and smoke-test builds don't evict each
+          # other's layers.
+          cache-from: type=gha,scope=release-image
+          cache-to: type=gha,scope=release-image,mode=min
+
+      - name: Summarise pushed image
+        run: |
+          {
+            echo "### Pushed image"
+            echo ""
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo ""
+            echo "Digest: \`${{ steps.build.outputs.digest }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
