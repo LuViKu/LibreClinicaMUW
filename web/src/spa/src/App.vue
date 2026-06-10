@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
 import GlobalErrorToast from '@/components/GlobalErrorToast.vue'
+import ConnectionBanner from '@/components/ConnectionBanner.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/auth'
 
@@ -106,6 +107,12 @@ const showTopBar = computed(() => route.name !== 'login' && route.name !== 'firs
         <RouterLink to="/login" class="text-xs text-muw-blue hover:underline">{{ t('a11y.signInLink') }}</RouterLink>
       </div>
     </header>
+
+    <!-- Phase E hardening — B4: offline banner mounted ABOVE <main> so
+         it takes layout space when visible. Hidden when connection is
+         healthy. -->
+    <ConnectionBanner />
+
     <main id="main-content" tabindex="-1" class="outline-none">
       <RouterView />
     </main>

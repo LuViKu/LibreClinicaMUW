@@ -103,7 +103,11 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # Phase E-hardening B1 (2026-06-10): expose /actuator/prometheus
+        # for institutional Prometheus scrape. Endpoint is permitAll-ed
+        # in SecurityConfig — the institutional reverse-proxy is the
+        # canonical gate preventing public exposure.
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: when-authorized

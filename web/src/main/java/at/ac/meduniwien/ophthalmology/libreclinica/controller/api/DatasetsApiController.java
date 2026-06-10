@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
@@ -1109,17 +1111,17 @@ public class DatasetsApiController {
         WizardPreflight pf = wizardPreflight(session, studyOid, /* mutating */ true);
         if (pf.errorResponse != null) return pf.errorResponse;
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
         DatasetDAO datasetDao = new DatasetDAO(dataSource);
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateWizardShape(body, pf.study, datasetDao, /* selfId */ 0);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -1192,9 +1194,9 @@ public class DatasetsApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
@@ -1231,10 +1233,10 @@ public class DatasetsApiController {
                             + " — writes are refused until it is unlocked"));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateWizardShape(body, parentStudy, datasetDao, /* selfId */ datasetId);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -1658,9 +1660,9 @@ public class DatasetsApiController {
 
     /* ---------------- Wizard validation ---------------- */
 
-    static List<SubjectsApiController.ValidationErrorBody.FieldError> validateWizardShape(
+    static List<ValidationErrorBody.FieldError> validateWizardShape(
             CreateDatasetRequest body, StudyBean study, DatasetDAO datasetDao, int selfId) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         String name = body.name() == null ? "" : body.name().trim();
         if (name.isEmpty()) {
             out.add(wizardFieldError("name", "Dataset name is required"));
@@ -1705,9 +1707,9 @@ public class DatasetsApiController {
         return out;
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError wizardFieldError(
+    private static ValidationErrorBody.FieldError wizardFieldError(
             String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
     private static String nullToEmpty(String s) {

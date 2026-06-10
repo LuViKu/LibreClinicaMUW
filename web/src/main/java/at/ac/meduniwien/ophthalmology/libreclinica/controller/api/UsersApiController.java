@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -35,6 +37,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuthoritiesDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
@@ -43,6 +46,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -328,26 +332,26 @@ public class UsersApiController {
                     "Your role does not permit user administration — sysadmin only"));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
         // Shape-level validation (no DAO calls) — pinned by MockMvc tests.
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = validateCreateUserShape(body);
+        List<ValidationErrorBody.FieldError> errors = validateCreateUserShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
         // DAO-bound validation — uniqueness + study existence + role legality.
         UserAccountDAO userDao = new UserAccountDAO(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
-        List<SubjectsApiController.ValidationErrorBody.FieldError> daoErrors =
+        List<ValidationErrorBody.FieldError> daoErrors =
                 validateCreateUserAgainstDb(body, userDao, studyDao);
         if (!daoErrors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", daoErrors));
         }
 
@@ -361,9 +365,9 @@ public class UsersApiController {
             String eppn = body.externalId().trim();
             UserAccountBean clash = userDao.findByExternalIdentity(provider, eppn);
             if (clash != null && clash.getId() != 0) {
-                return ResponseEntity.status(409).body(new SubjectsApiController.ValidationErrorBody(
+                return ResponseEntity.status(409).body(new ValidationErrorBody(
                         "An account is already bound to that institutional principal",
-                        List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                        List.of(new ValidationErrorBody.FieldError(
                                 "externalId",
                                 "User '" + clash.getName()
                                         + "' is already bound to this SSO principal"))));
@@ -489,20 +493,20 @@ public class UsersApiController {
         return ResponseEntity.status(201).body(response);
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreateUserShape(
+    private static List<ValidationErrorBody.FieldError> validateCreateUserShape(
             CreateUserRequest body) {
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
 
         String username = body.username() == null ? "" : body.username().trim();
         if (username.isEmpty()) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "username", "Username is required"));
         } else if (username.length() > 64) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "username", "Username must be 64 characters or fewer"));
         } else if (!username.matches("[A-Za-z0-9_]+")) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "username", "Username may contain only letters, digits, and underscores"));
         }
 
@@ -511,13 +515,13 @@ public class UsersApiController {
 
         String email = body.email() == null ? "" : body.email().trim();
         if (email.isEmpty()) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "email", "Email is required"));
         } else if (email.length() > 120) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "email", "Email must be 120 characters or fewer"));
         } else if (!email.matches(".+@.+\\..*")) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "email", "Email format is invalid"));
         }
 
@@ -525,17 +529,17 @@ public class UsersApiController {
                 "Institutional affiliation", out);
 
         if (body.studyId() == null || body.studyId() <= 0) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "studyId", "Initial studyId is required"));
         }
 
         if (RoleMapper.fromSpaRole(body.role()) == null) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "role", "Unknown role — expected Administrator / Data Manager / CRC / Monitor / Investigator"));
         }
 
         if ("ldap".equalsIgnoreCase(body.userSource())) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "userSource", "LDAP user provisioning is not supported via this endpoint"));
         }
 
@@ -552,11 +556,11 @@ public class UsersApiController {
                 // handler's ssoBound branch only fires on non-blank,
                 // so this is OK; surface no error.
             } else if (trimmed.length() > 255) {
-                out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                out.add(new ValidationErrorBody.FieldError(
                         "externalId",
                         "External identifier must be 255 characters or fewer"));
             } else if (!trimmed.contains("@")) {
-                out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                out.add(new ValidationErrorBody.FieldError(
                         "externalId",
                         "External identifier must look like an institutional principal (e.g. user@meduniwien.ac.at)"));
             }
@@ -565,26 +569,26 @@ public class UsersApiController {
         return out;
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreateUserAgainstDb(
+    private static List<ValidationErrorBody.FieldError> validateCreateUserAgainstDb(
             CreateUserRequest body, UserAccountDAO userDao, StudyDAO studyDao) {
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
 
         UserAccountBean existing = (UserAccountBean) userDao.findByUserName(body.username().trim());
         if (existing != null && existing.getId() != 0) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "username", "Username already exists"));
         }
 
         StudyBean study = (StudyBean) studyDao.findByPK(body.studyId());
         if (study == null || study.getId() == 0) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "studyId", "No study with that id"));
         } else {
             Role legacyRole = RoleMapper.fromSpaRole(body.role());
             if (legacyRole != null
                     && !UserAdminAuthorization.roleAssignmentIsLegal(legacyRole, study)) {
-                out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                out.add(new ValidationErrorBody.FieldError(
                         "role", "Role '" + body.role()
                                 + "' cannot be granted at site level — assign at the parent study"));
             }
@@ -594,13 +598,13 @@ public class UsersApiController {
     }
 
     private static void requireNonBlank(String v, String field, int max, String label,
-            List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+            List<ValidationErrorBody.FieldError> out) {
         String s = v == null ? "" : v.trim();
         if (s.isEmpty()) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     field, label + " is required"));
         } else if (s.length() > max) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     field, label + " must be " + max + " characters or fewer"));
         }
     }
@@ -865,9 +869,9 @@ public class UsersApiController {
         ResponseEntity<?> guard = preflightLifecycle(session, username);
         if (guard != null) return guard;
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
@@ -875,10 +879,10 @@ public class UsersApiController {
         UserAccountDAO userDao = new UserAccountDAO(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> shapeErrors =
+        List<ValidationErrorBody.FieldError> shapeErrors =
                 validateRoleAssignmentShape(body);
         if (!shapeErrors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", shapeErrors));
         }
 
@@ -894,9 +898,9 @@ public class UsersApiController {
         }
         Role legacyRole = RoleMapper.fromSpaRole(body.role());
         if (!UserAdminAuthorization.roleAssignmentIsLegal(legacyRole, study)) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "role", "Role '" + body.role()
                                     + "' cannot be granted at site level — assign at the parent study"))));
         }
@@ -911,28 +915,67 @@ public class UsersApiController {
                             + "' on study " + body.studyOid()));
         }
 
-        StudyUserRoleBean sur = new StudyUserRoleBean();
-        sur.setStudyId(study.getId());
-        sur.setRoleName(legacyRole.getName());
-        sur.setStatus(Status.AVAILABLE);
-        sur.setOwner(me);
-        sur.setUserName(username);
-        sur.setUserAccountId(target.getId());
-        userDao.createStudyUserRole(target, sur);
+        // Phase B2 (2026-06-10) — failure-audit wrap on the role-binding
+        // insert + the per-grant success audit_log row. Access-control
+        // mutations are GxP-critical — a silent failure here means a
+        // user-role grant request looked successful but didn't land,
+        // or landed without the matching success audit row. The wrap
+        // catches any Throwable into an OPERATION_FAILED row keyed by
+        // the target user's id; entity_id stays the user id because
+        // the study_user_role row's PK isn't known until after insert.
+        final StudyUserRoleBean surTemplate;
+        {
+            StudyUserRoleBean sur = new StudyUserRoleBean();
+            sur.setStudyId(study.getId());
+            sur.setRoleName(legacyRole.getName());
+            sur.setStatus(Status.AVAILABLE);
+            sur.setOwner(me);
+            sur.setUserName(username);
+            sur.setUserAccountId(target.getId());
+            surTemplate = sur;
+        }
+        final UserAccountBean targetRef = target;
+        final UserAccountBean meRef = me;
+        final StudyBean studyRef = study;
+        final StudyDAO studyDaoRef = studyDao;
+        final UserAccountDAO userDaoRef = userDao;
+        final String usernameRef = username;
+        final String studyOidRef = body.studyOid();
+        final Role legacyRoleRef = legacyRole;
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    me.getId(),
+                    "study_user_role",
+                    target.getId(),
+                    "ASSIGN_ROLE",
+                    reqId,
+                    () -> {
+                        userDaoRef.createStudyUserRole(targetRef, surTemplate);
 
-        LOG.info("Grant role: username={} studyOid={} role={} by admin={}",
-                username, body.studyOid(), legacyRole.getName(), me.getName());
+                        LOG.info("Grant role: username={} studyOid={} role={} by admin={}",
+                                usernameRef, studyOidRef, legacyRoleRef.getName(), meRef.getName());
 
-        StudyUserRoleBean refreshed = userDao.findRoleByUserNameAndStudyId(username, study.getId());
+                        StudyUserRoleBean refreshed = userDaoRef.findRoleByUserNameAndStudyId(
+                                usernameRef, studyRef.getId());
 
-        String newRoleName = legacyRole.getName();
-        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
-                "User role granted — user=" + username + " role=" + newRoleName,
-                "study_user_role",
-                refreshed != null ? refreshed.getId() : 0,
-                "role_id", "", newRoleName);
+                        String newRoleName = legacyRoleRef.getName();
+                        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
+                                meRef, studyRef, null,
+                                "User role granted — user=" + usernameRef + " role=" + newRoleName,
+                                "study_user_role",
+                                refreshed != null ? refreshed.getId() : 0,
+                                "role_id", "", newRoleName);
 
-        return ResponseEntity.status(201).body(toRoleBindingDto(refreshed, studyDao));
+                        return ResponseEntity.status(201).body(toRoleBindingDto(refreshed, studyDaoRef));
+                    });
+        } catch (Exception e) {
+            LOG.error("assignRole failed for username={} studyOid={} by admin={}",
+                    username, body.studyOid(), me.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to assign role — see server log."));
+        }
     }
 
     /**
@@ -1012,9 +1055,9 @@ public class UsersApiController {
         boolean bulkMode = body != null && body.roles() != null && !body.roles().isEmpty();
         if (!bulkMode) {
             if (body == null || body.role() == null || body.role().isBlank()) {
-                return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                return ResponseEntity.badRequest().body(new ValidationErrorBody(
                         "Validation failed",
-                        List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                        List.of(new ValidationErrorBody.FieldError(
                                 "role", "Role is required"))));
             }
         } else {
@@ -1023,7 +1066,7 @@ public class UsersApiController {
             // here so the test path doesn't hit findByOid against a
             // mock DataSource (and so real callers get a fast 400
             // instead of a needless DB round-trip).
-            List<SubjectsApiController.ValidationErrorBody.FieldError> pre = new ArrayList<>();
+            List<ValidationErrorBody.FieldError> pre = new ArrayList<>();
             for (String spaRole : body.roles()) {
                 if (spaRole == null || spaRole.isBlank()) continue;
                 if (RoleMapper.fromSpaRole(spaRole) == null) {
@@ -1032,7 +1075,7 @@ public class UsersApiController {
                 }
             }
             if (!pre.isEmpty()) {
-                return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                return ResponseEntity.badRequest().body(new ValidationErrorBody(
                         "Validation failed", pre));
             }
         }
@@ -1054,15 +1097,15 @@ public class UsersApiController {
         // Legacy single-role overwrite path.
         Role legacyRole = RoleMapper.fromSpaRole(body.role());
         if (legacyRole == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "role", "Unknown role — expected Administrator / Data Manager / CRC / Monitor / Investigator"))));
         }
         if (!UserAdminAuthorization.roleAssignmentIsLegal(legacyRole, study)) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "role", "Role '" + body.role()
                                     + "' cannot be granted at site level — assign at the parent study"))));
         }
@@ -1126,7 +1169,7 @@ public class UsersApiController {
         // display value). Hardcoded mapping is the simplest correct
         // option — Role.name is a protected EntityBean field, not
         // accessible from outside the bean's package.
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> errors = new ArrayList<>();
         LinkedHashMap<String, Role> resolved = new LinkedHashMap<>();
         for (String spaRole : requestedSpaRoles) {
             if (spaRole == null || spaRole.isBlank()) continue;
@@ -1144,11 +1187,11 @@ public class UsersApiController {
             resolved.put(rawDbRoleNameFor(spaRole), legacy);
         }
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
         if (resolved.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
                     List.of(fieldError("roles", "At least one role is required"))));
         }
@@ -1306,9 +1349,9 @@ public class UsersApiController {
         return ResponseEntity.ok(toRoleBindingDto(existing, studyDao));
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateRoleAssignmentShape(
+    private static List<ValidationErrorBody.FieldError> validateRoleAssignmentShape(
             RoleAssignmentRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         if (body.studyOid() == null || body.studyOid().isBlank()) {
             out.add(fieldError("studyOid", "studyOid is required"));
         }
@@ -1634,15 +1677,15 @@ public class UsersApiController {
                     "Your role does not permit user administration — sysadmin only"));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = validateUpdateUserShape(body);
+        List<ValidationErrorBody.FieldError> errors = validateUpdateUserShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -1753,9 +1796,9 @@ public class UsersApiController {
         return ResponseEntity.ok(projectToStudyUserDto(target, currentStudy));
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateUpdateUserShape(
+    private static List<ValidationErrorBody.FieldError> validateUpdateUserShape(
             UpdateUserRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
 
         // Each field is optional (null = unchanged); if present, run the
         // same length/format rules as create.
@@ -1789,8 +1832,8 @@ public class UsersApiController {
         return out;
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError fieldError(String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    private static ValidationErrorBody.FieldError fieldError(String field, String msg) {
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
     /**

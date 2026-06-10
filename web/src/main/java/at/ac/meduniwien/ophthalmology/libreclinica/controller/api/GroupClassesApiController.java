@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -137,15 +139,15 @@ public class GroupClassesApiController {
         ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
         if (guard != null) return guard;
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateCreateShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -163,9 +165,9 @@ public class GroupClassesApiController {
         for (StudyGroupClassBean other : existing) {
             if (other.getStatus() != null && other.getStatus().isDeleted()) continue;
             if (newName.equalsIgnoreCase(other.getName())) {
-                return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+                return ResponseEntity.badRequest().body(new ValidationErrorBody(
                         "Validation failed",
-                        List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                        List.of(new ValidationErrorBody.FieldError(
                                 "name", "Group class '" + newName + "' already exists in this study"))));
             }
         }
@@ -222,15 +224,15 @@ public class GroupClassesApiController {
         ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
         if (guard != null) return guard;
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateUpdateShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -501,9 +503,9 @@ public class GroupClassesApiController {
         return null;
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreateShape(
+    private static List<ValidationErrorBody.FieldError> validateCreateShape(
             CreateGroupClassRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         String name = body.name() == null ? "" : body.name().trim();
         if (name.isEmpty()) out.add(fe("name", "Group class name is required"));
         else if (name.length() > 30) out.add(fe("name", "Group class name must be 30 characters or fewer"));
@@ -521,9 +523,9 @@ public class GroupClassesApiController {
         return out;
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateUpdateShape(
+    private static List<ValidationErrorBody.FieldError> validateUpdateShape(
             UpdateGroupClassRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         if (body.name() != null) {
             String s = body.name().trim();
             if (s.isEmpty()) out.add(fe("name", "Group class name cannot be blank"));
@@ -544,8 +546,8 @@ public class GroupClassesApiController {
         return out;
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError fe(String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    private static ValidationErrorBody.FieldError fe(String field, String msg) {
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
     /** Map the SPA's display name back to the legacy {@link GroupClassType} constant. */

@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -187,17 +189,17 @@ public class StudiesApiController {
                     "Your role does not permit creating studies — sysadmin only"));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
         // Shape-level validation (no DAO calls).
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateCreateStudyShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -205,18 +207,18 @@ public class StudiesApiController {
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean uidCollision = studyDao.findByUniqueIdentifier(body.uniqueProtocolId().trim());
         if (uidCollision != null && uidCollision.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "uniqueProtocolId",
                             "Unique protocol id '" + body.uniqueProtocolId()
                                     + "' is already taken"))));
         }
         StudyBean nameCollision = studyDao.findByName(body.name().trim());
         if (nameCollision != null && nameCollision.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "name", "Study name '" + body.name() + "' is already taken"))));
         }
 
@@ -332,16 +334,16 @@ public class StudiesApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateUpdateStudyShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -536,9 +538,9 @@ public class StudiesApiController {
                     "Your role does not permit study status transitions — sysadmin only"));
         }
         if (body == null || body.targetStatus() == null || body.targetStatus().isBlank()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "targetStatus", "targetStatus is required"))));
         }
 
@@ -546,9 +548,9 @@ public class StudiesApiController {
         try {
             target = resolveTargetStatus(body.targetStatus());
         } catch (IllegalArgumentException iae) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "targetStatus",
                             "targetStatus must be one of AVAILABLE / PENDING / LOCKED / FROZEN "
                                     + "(use /disable + /restore for the removed state)"))));
@@ -582,9 +584,9 @@ public class StudiesApiController {
         boolean reasonRequired = currentStatus.equals(Status.AVAILABLE)
                 && (target.equals(Status.LOCKED) || target.equals(Status.FROZEN));
         if (reasonRequired && (body.reason() == null || body.reason().isBlank())) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "reason",
                             "reason is required for AVAILABLE → " + target.getName() + " transitions"))));
         }
@@ -745,9 +747,9 @@ public class StudiesApiController {
     /* Helpers                                                           */
     /* ----------------------------------------------------------------- */
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreateStudyShape(
+    private static List<ValidationErrorBody.FieldError> validateCreateStudyShape(
             CreateStudyRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         requireNonBlank(body.name(), "name", 100, "Study name", out);
         requireNonBlank(body.uniqueProtocolId(), "uniqueProtocolId", 30,
                 "Unique protocol id", out);
@@ -770,9 +772,9 @@ public class StudiesApiController {
         return out;
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateUpdateStudyShape(
+    private static List<ValidationErrorBody.FieldError> validateUpdateStudyShape(
             UpdateStudyRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         if (body.name() != null) {
             String s = body.name().trim();
             if (s.isEmpty()) out.add(fieldError("name", "Study name cannot be blank"));
@@ -803,21 +805,21 @@ public class StudiesApiController {
     }
 
     private static void requireNonBlank(String v, String field, int max, String label,
-            List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+            List<ValidationErrorBody.FieldError> out) {
         String s = v == null ? "" : v.trim();
         if (s.isEmpty()) out.add(fieldError(field, label + " is required"));
         else if (s.length() > max) out.add(fieldError(field, label + " must be " + max + " characters or fewer"));
     }
 
     private static void maxLengthOptional(String v, String field, int max, String label,
-            List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+            List<ValidationErrorBody.FieldError> out) {
         if (v == null) return;
         String s = v.trim();
         if (s.length() > max) out.add(fieldError(field, label + " must be " + max + " characters or fewer"));
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError fieldError(String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    private static ValidationErrorBody.FieldError fieldError(String field, String msg) {
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
     /**

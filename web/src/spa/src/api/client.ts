@@ -153,19 +153,56 @@ async function request<T>(
 
   const url = path.startsWith(CONTEXT_PATH) ? path : `${CONTEXT_PATH}${path}`
 
+  const fetchInit: RequestInit = {
+    method,
+    credentials: 'include',
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: opts.signal,
+  }
+
   let response: Response
   try {
-    response = await fetch(url, {
-      method,
-      credentials: 'include',
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: opts.signal,
-    })
+    response = await fetch(url, fetchInit)
   } catch (cause) {
-    // No response arrived — surface the client-generated id so the
-    // operator can still cross-reference Tomcat access logs.
-    throw new ApiNetworkError(`Network failure calling ${method} ${url}`, cause, reqId)
+    // Phase E hardening — B4 (2026-06-10): flip the connection store
+    // to offline. Covers the captive-portal / DNS-fail / transient-
+    // router-drop case where `navigator.onLine` still reports `true`
+    // but our fetch already failed; the browser's `offline` event
+    // never fires for these. We deliberately do NOT call markOnline()
+    // on the happy path — that's left to the browser `online` event
+    // so a single successful retry on a flaky network doesn't
+    // prematurely dismiss the banner.
+    //
+    // Lazy import to avoid a circular dep: stores/connection ->
+    // (future) anywhere that imports the api client.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = await import('@/stores/connection')
+      mod.useConnectionStore().markOffline()
+    } catch {
+      // Pinia may not be active in a corner case (e.g. unit test
+      // exercising request() in isolation). Ignore — the network
+      // error surfaces below regardless.
+    }
+    // Phase E hardening B3 — single retry on transient network failure
+    // for idempotent GETs only. Mutations (POST/PUT/DELETE/PATCH) must
+    // NEVER retry: a flaky network could otherwise duplicate a clinical
+    // save or leave the server in a partially-written state. ApiError
+    // (server reachable, error response) deliberately stays outside the
+    // retry path — only `fetch` itself throwing triggers the backoff.
+    if (method === 'GET') {
+      await new Promise((r) => setTimeout(r, 500))
+      try {
+        response = await fetch(url, fetchInit)
+      } catch (retryCause) {
+        throw new ApiNetworkError(`Network failure calling ${method} ${url}`, retryCause, reqId)
+      }
+    } else {
+      // No response arrived — surface the client-generated id so the
+      // operator can still cross-reference Tomcat access logs.
+      throw new ApiNetworkError(`Network failure calling ${method} ${url}`, cause, reqId)
+    }
   }
 
   // Prefer the server's echoed id; fall back to the one we sent if the

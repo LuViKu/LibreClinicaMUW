@@ -36,6 +36,14 @@
       "title": "Ein Fehler ist aufgetreten",
       "dismiss": "Fehlermeldung schließen",
       "reqIdLabel": "Fehler-ID"
+    },
+    "systemAuditLog": "System-Audit"
+  },
+  "network": {
+    "offline": {
+      "title": "Verbindung unterbrochen",
+      "body": "Sie sind offline. Eingaben werden erst gespeichert, sobald die Verbindung zurück ist.",
+      "dismiss": "Schließen"
     }
   },
   "notFound": {
@@ -460,6 +468,10 @@
     },
     "error": {
       "exportFailed": "Audit-Log-Export fehlgeschlagen"
+    },
+    "systemTrail": {
+      "title": "System-Audit-Protokoll",
+      "subtitle": "Alle Audit-Ereignisse einschließlich Operationsfehler und Job-Fehler."
     }
   },
   "crfEntry": {

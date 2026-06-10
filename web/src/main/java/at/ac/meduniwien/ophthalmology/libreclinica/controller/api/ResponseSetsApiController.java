@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -157,14 +159,14 @@ public class ResponseSetsApiController {
             }
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = validateCreate(body);
+        List<ValidationErrorBody.FieldError> errors = validateCreate(body);
         if (!errors.isEmpty()) {
             return ResponseEntity.badRequest().body(
-                    new SubjectsApiController.ValidationErrorBody("Validation failed", errors));
+                    new ValidationErrorBody("Validation failed", errors));
         }
 
         ResponseSetDto out = new ResponseSetDto(
@@ -292,8 +294,8 @@ public class ResponseSetsApiController {
     /* POST validation                                                   */
     /* ----------------------------------------------------------------- */
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreate(CreateRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+    private static List<ValidationErrorBody.FieldError> validateCreate(CreateRequest body) {
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         String label = body.label() == null ? "" : body.label().trim();
         if (label.isEmpty()) out.add(fe("label", "Label is required"));
         else if (label.length() > 80) out.add(fe("label", "Label must be 80 characters or fewer"));
@@ -325,8 +327,8 @@ public class ResponseSetsApiController {
         return out;
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError fe(String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    private static ValidationErrorBody.FieldError fe(String field, String msg) {
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
     private static String normalise(String v) {

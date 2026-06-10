@@ -36,6 +36,14 @@
       "title": "An error occurred",
       "dismiss": "Dismiss error message",
       "reqIdLabel": "Error ID"
+    },
+    "systemAuditLog": "System audit"
+  },
+  "network": {
+    "offline": {
+      "title": "Connection lost",
+      "body": "You are offline. Submissions will save only after the connection is restored.",
+      "dismiss": "Dismiss"
     }
   },
   "notFound": {
@@ -461,6 +469,10 @@
     },
     "error": {
       "exportFailed": "Audit log export failed"
+    },
+    "systemTrail": {
+      "title": "System audit trail",
+      "subtitle": "All audit events including operation failures and job failures."
     }
   },
   "crfEntry": {

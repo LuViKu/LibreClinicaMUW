@@ -267,6 +267,17 @@
 			<groupId>ch.qos.logback</groupId>
 			<artifactId>logback-classic</artifactId>
 		</dependency>
+		<!-- Phase E hardening (adjacent gap): structured JSON appender so the
+		     JSON_FILE RollingFileAppender in logback.xml can emit logstash-shaped
+		     events to /usr/local/tomcat/logs/libreclinica.json for SIEM /
+		     institutional log aggregation. Picks up Phase A4's RequestIdFilter
+		     MDC reqId via <includeMdcKeyName>reqId</includeMdcKeyName>. Compatible
+		     with logback-classic 1.5.x + Jackson 2.x already on the classpath. -->
+		<dependency>
+			<groupId>net.logstash.logback</groupId>
+			<artifactId>logstash-logback-encoder</artifactId>
+			<version>7.4</version>
+		</dependency>
 		<!-- LOGBACK needs Janino when conditional statements are used (e.g. in logback.xml) -->
 		<dependency>
 			<groupId>org.codehaus.janino</groupId>

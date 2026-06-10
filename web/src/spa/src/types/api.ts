@@ -2100,6 +2100,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/audit/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listSystem"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit/export.xlsx": {
         parameters: {
             query?: never;
@@ -7612,6 +7628,30 @@ export interface operations {
         };
     };
     list_16: {
+        parameters: {
+            query?: {
+                actor?: string;
+                variant?: string;
+                subjectId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuditEventDto"];
+                };
+            };
+        };
+    };
+    listSystem: {
         parameters: {
             query?: {
                 actor?: string;
