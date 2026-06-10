@@ -17,6 +17,14 @@
 # transitive dep CVE rebuild). `latest` is set both for release
 # publications and for manual dispatches that target main.
 #
+# On release events the workflow also creates a long-lived
+# `locked/<release-tag>` branch pointing at the released commit. The
+# tag alone is sufficient to reproduce the build, but a branch is a
+# friendlier base for hotfixes (cherry-pick onto it, push, cut a new
+# release) and is harder to accidentally delete than a tag. Branch
+# creation is idempotent — re-publishing the same release leaves the
+# existing branch alone.
+#
 # This build differs from the smoke-test build in build.yml: that one
 # passes `-DskipSpa=true` (via the Dockerfile default ARG) for speed;
 # this one passes `SKIP_SPA=false` so the SPA bundle is included in
@@ -70,7 +78,9 @@ jobs:
     # build.yml smoke-test comment for the rationale).
     timeout-minutes: 45
     permissions:
-      contents: read
+      # `contents: write` is needed only for the locked-branch step on
+      # release events; the build+push steps would be happy with `read`.
+      contents: write
       packages: write
     steps:
       - uses: actions/checkout@v4
@@ -138,7 +148,43 @@ jobs:
           cache-from: type=gha,scope=release-image
           cache-to: type=gha,scope=release-image,mode=min
 
-      - name: Summarise pushed image
+      # Create a long-lived `locked/<release-tag>` branch pointing at
+      # the same commit as the published release. Idempotent: re-runs
+      # against the same release tag short-circuit if the branch
+      # already exists (so re-publishing or re-running this workflow
+      # never errors on the branch step). The release event's
+      # `github.sha` is the tagged commit on main at publish time.
+      #
+      # Tag-name sanitisation: GitHub branch refs reject ' ', '~', '^',
+      # ':', '?', '*', '[', '\', and consecutive '..'. Release tags
+      # almost always come from the `v1.2.3-muw` family so this is
+      # belt-and-braces — anything weird gets replaced with '-' so the
+      # workflow doesn't fail late on a 422.
+      - name: Create locked version branch
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          SAFE_TAG=$(printf '%s' "$TAG_NAME" | sed 's#[ ~^:?*\[\\]#-#g')
+          BRANCH="locked/${SAFE_TAG}"
+          if gh api "repos/${GITHUB_REPOSITORY}/branches/${BRANCH}" >/dev/null 2>&1; then
+            echo "Branch ${BRANCH} already exists — leaving as-is."
+            echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f "ref=refs/heads/${BRANCH}" \
+              -f "sha=${COMMIT_SHA}"
+            echo "Created branch ${BRANCH} at ${COMMIT_SHA}"
+            echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+            echo "created=true" >> "$GITHUB_OUTPUT"
+          fi
+        id: lockbranch
+
+      - name: Summarise run
         run: |
           {
             echo "### Pushed image"
@@ -148,4 +194,14 @@ jobs:
             echo '```'
             echo ""
             echo "Digest: \`${{ steps.build.outputs.digest }}\`"
+            if [ "${{ github.event_name }}" = "release" ]; then
+              echo ""
+              echo "### Locked version branch"
+              echo ""
+              if [ "${{ steps.lockbranch.outputs.created }}" = "true" ]; then
+                echo "Created \`${{ steps.lockbranch.outputs.branch }}\` at \`${{ github.sha }}\`."
+              else
+                echo "Branch \`${{ steps.lockbranch.outputs.branch }}\` already existed; left as-is."
+              fi
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
