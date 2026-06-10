@@ -11,6 +11,7 @@ import type {
   Subject,
   SubjectDetail,
   TransitionEyeRequest,
+  TransitionPreflight,
 } from '@/types/subject'
 
 /**
@@ -767,6 +768,40 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
+   * 2026-06-10 — preflight the TransitionEyeDialog calls when the
+   * operator picks a target study (and again, debounced, while typing
+   * a candidate target-study label).
+   *
+   * <p>Two questions in one call:
+   * <ul>
+   *   <li>Is the subject already enrolled in the target study? Drives
+   *       the dialog's "Patient ist bereits angelegt" info line + lets
+   *       the dialog drop the targetLabel input.</li>
+   *   <li>If a candidate {@code targetLabel} was passed, is it free in
+   *       the target study? Surfaces inline beneath the input.</li>
+   * </ul>
+   *
+   * <p>Failures bubble — the dialog treats network errors as
+   * "unknown / let backend gate at submit" so a transient hiccup
+   * never blocks the transition flow.
+   */
+  async function transitionPreflight(
+    label: string,
+    eye: 'OD' | 'OS',
+    targetStudyOid: string,
+    targetLabel: string | null,
+  ): Promise<TransitionPreflight> {
+    const params = new URLSearchParams({ targetStudyOid })
+    if (targetLabel !== null && targetLabel !== '') {
+      params.set('targetLabel', targetLabel)
+    }
+    return apiGet<TransitionPreflight>(
+      `/pages/api/v1/subjects/${encodeURIComponent(label)}/eyes/${eye}`
+        + `/transition/preflight?${params.toString()}`,
+    )
+  }
+
+  /**
    * Phase E.6 retrospective-backfill — duplicate-patient lookup.
    *
    * <p>Fires from the AddSubject form once the operator has filled
@@ -869,6 +904,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
     lockSubject,
     unlockSubject,
     transitionEye,
+    transitionPreflight,
     preflightMatch,
     checkLabelAvailability,
     reset,

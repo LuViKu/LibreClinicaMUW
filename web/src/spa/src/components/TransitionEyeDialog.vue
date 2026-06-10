@@ -9,28 +9,29 @@
  * stays in the source cohort, so the SubjectDetailView opens this
  * dialog once per eye rather than promoting the whole subject.
  *
- * <p>The look-and-feel mirrors the status-change modal in
- * BuildStudyView (inline fixed-overlay panel) rather than the shared
- * {@code Modal} primitive, deliberately: the host view places this
- * inside its own context column and the harmonization PR will wire
- * the resulting payload into a backend POST. The shared `Modal`
- * teleports to body, which the operator-facing detail screen does not
- * want here — the dialog must stay anchored to the patient frame.
- *
- * <p>Types ({@code StudyOption}, {@code TransitionEyeRequest}) are
- * imported from the canonical shared module {@code @/types/subject};
- * the parallel-worktree stubs the dialog branch originally inlined
- * were replaced during the Phase E.6 integration merge.
+ * <p>2026-06-10 — new-enrollment branch wired. When the operator picks
+ * a target study where the subject is NOT yet enrolled, a mandatory
+ * "Subject-ID in der Zielstudie" input appears, with the same
+ * debounced uniqueness check pattern as AddSubjectView's label check.
+ * When the subject IS already enrolled in the target, the input is
+ * hidden + replaced by a one-liner so the operator knows the transition
+ * lands in the existing target row. Both flavours emit the same
+ * TransitionEyeRequest shape — the new-enrollment branch sets
+ * {@code targetLabel}, the upgrade branch leaves it unset.
  */
-import { computed, onBeforeUnmount, watch } from 'vue'
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import FieldLabel from '@/components/FieldLabel.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import TextInput from '@/components/TextInput.vue'
 import ErrorText from '@/components/ErrorText.vue'
-import type { StudyOption, TransitionEyeRequest } from '@/types/subject'
+import { useSubjectsStore } from '@/stores/subjects'
+import type {
+  StudyOption,
+  TransitionEyeRequest,
+  TransitionPreflight,
+} from '@/types/subject'
 
 interface Props {
   /** Source subject label, e.g. "M-001". Rendered into the heading. */
@@ -65,6 +66,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const subjects = useSubjectsStore()
 
 const targetStudyOid = ref('')
 const targetLabel = ref('')
@@ -98,16 +100,136 @@ const transitionedAtInvalid = computed(() => {
   return v > todayIso()
 })
 
-const canSubmit = computed(
-  () =>
-    targetStudyOid.value !== '' &&
-    trimmedReason.value !== '' &&
-    !(
-      trimmedTransitionedAt.value !== '' &&
-      (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedTransitionedAt.value) ||
-        trimmedTransitionedAt.value > todayIso())
-    ),
+/* ----------------------------------------------------------------- */
+/* 2026-06-10 — branched UI: alreadyEnrolled vs new-enrollment       */
+/*                                                                    */
+/* preflightState carries the most-recent server answer for the      */
+/* picked target study (refreshed on every study change AND on every */
+/* debounced targetLabel keystroke). When alreadyEnrolled=true, the  */
+/* dialog hides the label input + shows an info line. When false,    */
+/* the input is mandatory + bound to a live uniqueness check.        */
+/* ----------------------------------------------------------------- */
+
+const preflightState = ref<TransitionPreflight | null>(null)
+const preflightLoading = ref(false)
+// In-flight token used to drop stale preflight responses when the
+// operator switches studies / types more characters before the prior
+// request resolves.
+const preflightToken = ref(0)
+const labelCheckDebounce = ref<number | null>(null)
+
+const targetStudyName = computed(() => {
+  const m = props.availableStudies.find((s) => s.oid === targetStudyOid.value)
+  return m ? m.name : ''
+})
+
+const showNewEnrollmentPanel = computed(() => {
+  if (targetStudyOid.value === '') return false
+  if (preflightState.value === null) return false
+  return preflightState.value.alreadyEnrolled === false
+})
+
+const showAlreadyEnrolledInfo = computed(() => {
+  if (targetStudyOid.value === '') return false
+  if (preflightState.value === null) return false
+  return preflightState.value.alreadyEnrolled === true
+})
+
+const targetLabelRequired = computed(
+  () => submitted.value && showNewEnrollmentPanel.value && trimmedTargetLabel.value === '',
 )
+
+const targetLabelTaken = computed(() => {
+  if (!showNewEnrollmentPanel.value) return false
+  if (trimmedTargetLabel.value === '') return false
+  if (preflightState.value === null) return false
+  return preflightState.value.labelAvailable === false
+})
+
+const targetLabelAvailable = computed(() => {
+  if (!showNewEnrollmentPanel.value) return false
+  if (trimmedTargetLabel.value === '') return false
+  if (preflightLoading.value) return false
+  if (preflightState.value === null) return false
+  return preflightState.value.labelAvailable === true
+})
+
+const canSubmit = computed(() => {
+  if (targetStudyOid.value === '') return false
+  if (trimmedReason.value === '') return false
+  if (
+    trimmedTransitionedAt.value !== ''
+    && (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedTransitionedAt.value)
+      || trimmedTransitionedAt.value > todayIso())
+  ) {
+    return false
+  }
+  // New-enrollment branch: targetLabel mandatory AND must be available.
+  if (showNewEnrollmentPanel.value) {
+    if (trimmedTargetLabel.value === '') return false
+    if (preflightState.value === null) return false
+    if (preflightState.value.labelAvailable === false) return false
+  }
+  return true
+})
+
+async function runPreflight(candidateLabel: string | null) {
+  if (props.subjectLabel === '' || targetStudyOid.value === '') {
+    preflightState.value = null
+    return
+  }
+  const token = ++preflightToken.value
+  preflightLoading.value = true
+  try {
+    const result = await subjects.transitionPreflight(
+      props.subjectLabel,
+      props.eye,
+      targetStudyOid.value,
+      candidateLabel,
+    )
+    if (preflightToken.value !== token) return // stale
+    preflightState.value = result
+  } catch {
+    // Backend hiccup — drop the local state so the submit-time check
+    // remains the authoritative gate. The dialog will fall back to
+    // the legacy "no preflight" behaviour (submit allowed with any
+    // targetLabel; backend gates).
+    if (preflightToken.value === token) {
+      preflightState.value = null
+    }
+  } finally {
+    if (preflightToken.value === token) {
+      preflightLoading.value = false
+    }
+  }
+}
+
+function scheduleLabelCheck() {
+  if (labelCheckDebounce.value !== null) {
+    window.clearTimeout(labelCheckDebounce.value)
+    labelCheckDebounce.value = null
+  }
+  if (!showNewEnrollmentPanel.value) return
+  const value = trimmedTargetLabel.value
+  if (value === '') return
+  labelCheckDebounce.value = window.setTimeout(() => {
+    void runPreflight(value)
+  }, 300)
+}
+
+watch(targetStudyOid, (next) => {
+  // When the operator switches the target study, drop the stale
+  // preflight + re-fire with no candidate label so the dialog can
+  // surface the alreadyEnrolled branch correctly.
+  preflightState.value = null
+  if (next !== '') {
+    void runPreflight(null)
+  }
+})
+
+watch(targetLabel, () => {
+  scheduleLabelCheck()
+})
 
 function resetForm() {
   targetStudyOid.value = ''
@@ -115,6 +237,12 @@ function resetForm() {
   reason.value = ''
   transitionedAt.value = todayIso()
   submitted.value = false
+  preflightState.value = null
+  preflightLoading.value = false
+  if (labelCheckDebounce.value !== null) {
+    window.clearTimeout(labelCheckDebounce.value)
+    labelCheckDebounce.value = null
+  }
 }
 
 function onCancel() {
@@ -128,7 +256,9 @@ function onSubmit() {
     targetStudyOid: targetStudyOid.value,
     reason: trimmedReason.value,
   }
-  if (trimmedTargetLabel.value !== '') {
+  // Only include targetLabel when the new-enrollment panel is active.
+  // alreadyEnrolled=true reuses the existing target row.
+  if (showNewEnrollmentPanel.value && trimmedTargetLabel.value !== '') {
     payload.targetLabel = trimmedTargetLabel.value
   }
   if (trimmedTransitionedAt.value !== '') {
@@ -166,6 +296,10 @@ watch(
 onBeforeUnmount(() => {
   if (typeof document === 'undefined') return
   document.removeEventListener('keydown', onKeydown)
+  if (labelCheckDebounce.value !== null) {
+    window.clearTimeout(labelCheckDebounce.value)
+    labelCheckDebounce.value = null
+  }
 })
 </script>
 
@@ -212,16 +346,53 @@ onBeforeUnmount(() => {
           </SelectInput>
         </div>
 
-        <div>
-          <FieldLabel for="transition-eye-target-label">
-            {{ t('subjectDetail.eyeTransition.field.targetLabel') }}
+        <!-- 2026-06-10 — new-enrollment branch: visible when the
+             subject is NOT yet enrolled in the picked target study. -->
+        <div
+          v-if="showNewEnrollmentPanel"
+          class="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-2"
+          data-testid="transition-eye-new-enrollment-panel"
+        >
+          <div class="text-xs font-medium text-slate-700">
+            {{ t('subjectDetail.eyeTransition.newEnrollment.title', { study: targetStudyName }) }}
+          </div>
+          <FieldLabel for="transition-eye-target-label" required>
+            {{ t('subjectDetail.eyeTransition.newEnrollment.targetLabel.label') }}
           </FieldLabel>
           <TextInput
             id="transition-eye-target-label"
             v-model="targetLabel"
-            placeholder="automatisch zugewiesen wenn leer"
             data-testid="transition-eye-target-label"
+            :aria-invalid="(targetLabelRequired || targetLabelTaken) || undefined"
           />
+          <ErrorText v-if="targetLabelRequired">
+            {{ t('subjectDetail.eyeTransition.newEnrollment.targetLabel.required') }}
+          </ErrorText>
+          <ErrorText v-else-if="targetLabelTaken">
+            {{ t('subjectDetail.eyeTransition.newEnrollment.targetLabel.taken', { study: targetStudyName }) }}
+          </ErrorText>
+          <p
+            v-else-if="targetLabelAvailable"
+            class="text-xs text-emerald-700"
+            data-testid="transition-eye-target-label-available"
+          >
+            {{ t('subjectDetail.eyeTransition.newEnrollment.targetLabel.available') }}
+          </p>
+        </div>
+
+        <!-- 2026-06-10 — already-enrolled branch: visible when the
+             subject already has a study_subject row in the target. -->
+        <div
+          v-if="showAlreadyEnrolledInfo"
+          class="rounded-md border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900"
+          data-testid="transition-eye-already-enrolled-info"
+        >
+          {{
+            t('subjectDetail.eyeTransition.alreadyEnrolled', {
+              study: targetStudyName,
+              label: preflightState?.existingTargetLabel ?? '',
+            })
+          }}
         </div>
 
         <div>

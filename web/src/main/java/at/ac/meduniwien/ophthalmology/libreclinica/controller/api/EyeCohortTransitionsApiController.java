@@ -30,6 +30,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -54,6 +55,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -205,7 +207,61 @@ public class EyeCohortTransitionsApiController {
             int targetStudySubjectId,
             String targetLabel,
             String sourceEyeAfter,
-            String targetEyeAfter
+            String targetEyeAfter,
+            /*
+             * 2026-06-10 — target row's oc_oid (the value the SPA needs to
+             * look the row back up). Newly created rows carry a
+             * deterministic SS_<sanitized-label> OID (see {@link #buildOid});
+             * pre-existing rows on the upgrade path carry whatever OID the
+             * legacy enrolment wrote. Either way the SPA's
+             * toStudySubjectOid(label) helper produces a value that, when
+             * the operator picks a fresh targetLabel, matches this field.
+             */
+            String targetStudySubjectOid,
+            /*
+             * 2026-06-10 — true when the controller created the target
+             * study_subject row in this call (Case 1 in resolveOrCreateTarget);
+             * false when the row pre-existed and got upgraded (Case 2 or
+             * Case 3-as-re-occupation). The SPA uses this for the
+             * post-transition toast wording + to decide whether to refresh
+             * the available-studies dropdown (a newly enrolled subject
+             * appearing in a new study is otherwise invisible until next
+             * picker load).
+             */
+            boolean wasNewlyEnrolled
+    ) {}
+
+    /**
+     * 2026-06-10 — response shape for
+     * {@code GET /api/v1/subjects/{label}/eyes/{eye}/transition/preflight}.
+     *
+     * <p>The SPA's TransitionEyeDialog fires this whenever the operator
+     * picks a target study (and again, debounced, while typing a
+     * candidate target label) so it can render the right panel:
+     *
+     * <ul>
+     *   <li>{@code alreadyEnrolled=true} → hide the targetLabel input +
+     *       show "Patient ist bereits als {existingTargetLabel} angelegt
+     *       — der Übergang wird in die bestehende Akte geschrieben."
+     *       Submit POSTs with targetLabel=null and the backend reuses
+     *       the existing row.</li>
+     *   <li>{@code alreadyEnrolled=false} → reveal a mandatory
+     *       targetLabel input. The dialog re-fires this preflight on
+     *       debounced keystrokes with {@code targetLabel=<typed>} and
+     *       gates submit on {@code labelAvailable=true}.</li>
+     * </ul>
+     *
+     * <p>{@code suggestedLabel} is reserved for a future round where we
+     * propose a study-prefix-coded ID (e.g. "GA-001"); for now it is
+     * always blank.
+     */
+    @Schema(name = "EyeCohortTransitionPreflightResponse")
+    public record TransitionPreflightResponse(
+            boolean alreadyEnrolled,
+            String existingTargetOid,
+            String existingTargetLabel,
+            boolean labelAvailable,
+            String suggestedLabel
     ) {}
 
     /* =============================================================== */
@@ -331,9 +387,11 @@ public class EyeCohortTransitionsApiController {
 
         // ---- Transactional write path ----
         int sourceSubjectId = sourceSs.getSubjectId();
-        String desiredTargetLabel = (body.targetLabel() == null || body.targetLabel().trim().isEmpty())
-                ? sourceSs.getLabel()
-                : body.targetLabel().trim();
+        final boolean labelOperatorSupplied =
+                body.targetLabel() != null && !body.targetLabel().trim().isEmpty();
+        String desiredTargetLabel = labelOperatorSupplied
+                ? body.targetLabel().trim()
+                : sourceSs.getLabel();
 
         // Phase A1 (2026-06-10) — failure-audit wrap. Any Throwable
         // that escapes the transactional write block lands in
@@ -347,6 +405,7 @@ public class EyeCohortTransitionsApiController {
         final UserAccountBean currentUserRef = currentUser;
         final int sourceSubjectIdRef = sourceSubjectId;
         final String desiredTargetLabelRef = desiredTargetLabel;
+        final boolean labelOperatorSuppliedRef = labelOperatorSupplied;
         final java.time.LocalDate transitionedOnRef = transitionedOn;
         final String reasonRef = reason;
         final String eyeRef = eye;
@@ -364,7 +423,7 @@ public class EyeCohortTransitionsApiController {
                     reqId,
                     () -> doTransitionPersist(currentStudyRef, sourceSsRef, targetStudyRef,
                             currentUserRef, sourceSubjectIdRef, eyeRef, desiredTargetLabelRef,
-                            transitionedOnRef, reasonRef));
+                            labelOperatorSuppliedRef, transitionedOnRef, reasonRef));
         } catch (Exception e) {
             // FailureAuditTemplate has written the audit row. Surface
             // the same 500 envelope existing callers expect.
@@ -407,6 +466,7 @@ public class EyeCohortTransitionsApiController {
                                        int sourceSubjectId,
                                        String eye,
                                        String desiredTargetLabel,
+                                       boolean labelOperatorSupplied,
                                        java.time.LocalDate transitionedOn,
                                        String reason) throws SQLException {
         try (Connection c = dataSource.getConnection()) {
@@ -432,9 +492,13 @@ public class EyeCohortTransitionsApiController {
                 //    (c) present with same eye or already OU → 409.
                 TargetResolution resolved = resolveOrCreateTarget(
                         c, targetStudy, sourceSubjectId, eye,
-                        desiredTargetLabel, currentUser, transitionedOn);
+                        desiredTargetLabel, labelOperatorSupplied,
+                        currentUser, transitionedOn);
                 if (resolved.conflictMessage != null) {
                     c.rollback();
+                    if (resolved.conflictBody != null) {
+                        return ResponseEntity.status(409).body(resolved.conflictBody);
+                    }
                     return ResponseEntity.status(409).body(Map.of(
                             "message", resolved.conflictMessage));
                 }
@@ -465,7 +529,9 @@ public class EyeCohortTransitionsApiController {
                         resolved.targetStudySubjectId,
                         resolved.targetLabel,
                         sourceEyeAfter,
-                        resolved.targetEyeAfter);
+                        resolved.targetEyeAfter,
+                        resolved.targetOid,
+                        resolved.newlyEnrolled);
             } catch (Exception e) {
                 c.rollback();
                 // Rethrow so FailureAuditTemplate writes the
@@ -477,6 +543,128 @@ public class EyeCohortTransitionsApiController {
                 c.setAutoCommit(priorAutoCommit);
             }
         }
+    }
+
+    /* =============================================================== */
+    /* GET — preflight                                                 */
+    /* =============================================================== */
+
+    /**
+     * 2026-06-10 — preflight endpoint the TransitionEyeDialog calls when
+     * the operator picks a target study (and on debounced keystrokes
+     * while typing a fresh target label).
+     *
+     * <p>Two questions answered in one call:
+     * <ol>
+     *   <li>Is the subject (identified by {@code label} in the active
+     *       study) already enrolled in the target study? If so the dialog
+     *       hides the new-enrollment panel and submits without a
+     *       targetLabel; the backend reuses the existing row.</li>
+     *   <li>Optionally: is a typed {@code targetLabel} candidate already
+     *       taken by another subject in the target study? The dialog
+     *       surfaces this as an inline error and gates submit until
+     *       {@code labelAvailable=true}.</li>
+     * </ol>
+     *
+     * <p>Same authorization shape as the POST transition: session-bound
+     * active study + visibility check on the source side, plus the
+     * cross-study user-grant check on the target side. Out-of-scope
+     * targets surface as 403; missing labels as 404.
+     */
+    @GetMapping("/{label}/eyes/{eye}/transition/preflight")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = TransitionPreflightResponse.class)))
+    public ResponseEntity<?> transitionPreflight(@PathVariable("label") String label,
+                                                 @PathVariable("eye") String eyeRaw,
+                                                 @RequestParam("targetStudyOid") String targetStudyOidRaw,
+                                                 @RequestParam(value = "targetLabel", required = false)
+                                                 String targetLabelRaw,
+                                                 HttpSession session) {
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session — visit /MainMenu after login."));
+        }
+        final String eye = eyeRaw == null ? null : eyeRaw.trim().toUpperCase();
+        if (!"OD".equals(eye) && !"OS".equals(eye)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "eye must be 'OD' or 'OS' (got '" + eyeRaw + "')."));
+        }
+        final String targetStudyOid =
+                targetStudyOidRaw == null ? "" : targetStudyOidRaw.trim();
+        if (targetStudyOid.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "targetStudyOid is required."));
+        }
+
+        StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean sourceSs = studySubjectDAO.findByLabelAndStudy(label, currentStudy);
+        if (sourceSs == null || sourceSs.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Subject with label '" + label + "' not found in active study."));
+        }
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(sourceSs.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Active study is not in your visible study set."));
+        }
+
+        StudyDAO studyDAO = new StudyDAO(dataSource);
+        StudyBean targetStudy = studyDAO.findByOid(targetStudyOid);
+        if (targetStudy == null || targetStudy.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Target study with OID '" + targetStudyOid + "' not found."));
+        }
+        if (!userHasActiveGrantOnStudy(currentUser, targetStudy)) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Target study is not in your visible study set."));
+        }
+
+        // ---- "Subject already enrolled in target study?" ----
+        // findByLabelAndStudy returns the row when found, an empty bean
+        // (id=0) otherwise. The original source label is the right key
+        // here because subjects keep their label across re-enrolment in
+        // the canonical Person-ID pattern.
+        StudySubjectBean existingTarget =
+                studySubjectDAO.findByLabelAndStudy(sourceSs.getLabel(), targetStudy);
+        boolean alreadyEnrolled = existingTarget != null && existingTarget.getId() != 0;
+        String existingTargetOid = alreadyEnrolled ? existingTarget.getOid() : null;
+        String existingTargetLabel = alreadyEnrolled ? existingTarget.getLabel() : null;
+
+        // ---- Candidate-label availability (when supplied) ----
+        // labelAvailable defaults to true when the operator hasn't yet
+        // typed a candidate so the SPA can use the response unchanged.
+        boolean labelAvailable = true;
+        final String candidateLabel =
+                targetLabelRaw == null ? "" : targetLabelRaw.trim();
+        if (!candidateLabel.isEmpty()) {
+            StudySubjectBean collision =
+                    studySubjectDAO.findByLabelAndStudy(candidateLabel, targetStudy);
+            // A collision is OK iff it's the subject's own existing target
+            // row (operator typed back the same label the system already
+            // owns) — in that case the row will be reused, not duplicated.
+            if (collision != null && collision.getId() != 0) {
+                if (alreadyEnrolled && collision.getId() == existingTarget.getId()) {
+                    labelAvailable = true;
+                } else {
+                    labelAvailable = false;
+                }
+            }
+        }
+
+        return ResponseEntity.ok(new TransitionPreflightResponse(
+                alreadyEnrolled,
+                existingTargetOid,
+                existingTargetLabel,
+                labelAvailable,
+                /* suggestedLabel */ ""));
     }
 
     /* =============================================================== */
@@ -604,27 +792,48 @@ public class EyeCohortTransitionsApiController {
      * {@code conflictMessage} is non-null (409 path) or
      * {@code targetStudySubjectId} + {@code targetEyeAfter} +
      * {@code targetLabel} carry the resolved target row.
+     *
+     * <p>{@code conflictBody} is set when the conflict should be
+     * surfaced via the canonical {@link ValidationErrorBody} shape
+     * (per-field, machine-readable). When non-null the controller
+     * returns a 409 with the body verbatim; otherwise it falls back to
+     * a generic {@code {"message": conflictMessage}} envelope.
      */
     private static final class TargetResolution {
         final int targetStudySubjectId;
         final String targetEyeAfter;
         final String targetLabel;
+        final String targetOid;
+        final boolean newlyEnrolled;
         final String conflictMessage;
+        final ValidationErrorBody conflictBody;
 
         private TargetResolution(int targetStudySubjectId, String targetEyeAfter,
-                                 String targetLabel, String conflictMessage) {
+                                 String targetLabel, String targetOid,
+                                 boolean newlyEnrolled,
+                                 String conflictMessage,
+                                 ValidationErrorBody conflictBody) {
             this.targetStudySubjectId = targetStudySubjectId;
             this.targetEyeAfter = targetEyeAfter;
             this.targetLabel = targetLabel;
+            this.targetOid = targetOid;
+            this.newlyEnrolled = newlyEnrolled;
             this.conflictMessage = conflictMessage;
+            this.conflictBody = conflictBody;
         }
 
-        static TargetResolution ok(int ssId, String eyeAfter, String label) {
-            return new TargetResolution(ssId, eyeAfter, label, null);
+        static TargetResolution ok(int ssId, String eyeAfter, String label,
+                                   String oid, boolean newlyEnrolled) {
+            return new TargetResolution(ssId, eyeAfter, label, oid, newlyEnrolled,
+                    null, null);
         }
 
         static TargetResolution conflict(String message) {
-            return new TargetResolution(0, null, null, message);
+            return new TargetResolution(0, null, null, null, false, message, null);
+        }
+
+        static TargetResolution conflict(String message, ValidationErrorBody body) {
+            return new TargetResolution(0, null, null, null, false, message, body);
         }
     }
 
@@ -642,6 +851,7 @@ public class EyeCohortTransitionsApiController {
     private TargetResolution resolveOrCreateTarget(Connection c, StudyBean targetStudy,
                                                    int subjectId, String eye,
                                                    String desiredLabel,
+                                                   boolean labelOperatorSupplied,
                                                    UserAccountBean actor,
                                                    java.time.LocalDate transitionedOn)
             throws SQLException {
@@ -652,7 +862,7 @@ public class EyeCohortTransitionsApiController {
         // invariant of one row per (subject, study). Multiple rows
         // would be a data-integrity bug; we surface them as a 409 too.
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT study_subject_id, label, study_eye FROM study_subject "
+                "SELECT study_subject_id, label, study_eye, oc_oid FROM study_subject "
                         + "WHERE study_id = ? AND subject_id = ? FOR UPDATE")) {
             ps.setInt(1, targetStudy.getId());
             ps.setInt(2, subjectId);
@@ -661,6 +871,7 @@ public class EyeCohortTransitionsApiController {
                     int existingId = rs.getInt("study_subject_id");
                     String existingLabel = rs.getString("label");
                     String existingEye = rs.getString("study_eye");
+                    String existingOid = rs.getString("oc_oid");
                     // Case 3: same eye or OU already present.
                     if (existingEye == null) {
                         // No eye in scope on the target → re-occupy
@@ -674,7 +885,8 @@ public class EyeCohortTransitionsApiController {
                             upd.setInt(2, existingId);
                             upd.executeUpdate();
                         }
-                        return TargetResolution.ok(existingId, eye, existingLabel);
+                        return TargetResolution.ok(existingId, eye, existingLabel,
+                                existingOid, false);
                     }
                     if ("OU".equals(existingEye) || existingEye.equals(eye)) {
                         return TargetResolution.conflict(
@@ -687,7 +899,8 @@ public class EyeCohortTransitionsApiController {
                         upd.setInt(1, existingId);
                         upd.executeUpdate();
                     }
-                    return TargetResolution.ok(existingId, "OU", existingLabel);
+                    return TargetResolution.ok(existingId, "OU", existingLabel,
+                            existingOid, false);
                 }
             }
         }
@@ -698,9 +911,34 @@ public class EyeCohortTransitionsApiController {
         // Mirror the StudySubjectDAO.create field set + a hand-rolled
         // OID by appending the eye + study OID to keep it unique
         // without colliding with the source row's OID.
+        //
+        // 2026-06-10 — when the operator typed a fresh targetLabel, check
+        // it isn't already taken by another subject in the target study
+        // before we INSERT. The SPA's preflight does this proactively,
+        // but the submit-time check is the authoritative gate. Returns a
+        // structured ValidationErrorBody so the SPA can red-ring the
+        // exact field.
+        if (labelOperatorSupplied) {
+            try (PreparedStatement dup = c.prepareStatement(
+                    "SELECT 1 FROM study_subject WHERE study_id = ? AND label = ? LIMIT 1")) {
+                dup.setInt(1, targetStudy.getId());
+                dup.setString(2, desiredLabel);
+                try (ResultSet rs = dup.executeQuery()) {
+                    if (rs.next()) {
+                        ValidationErrorBody body = new ValidationErrorBody(
+                                "Label '" + desiredLabel + "' ist bereits vergeben.",
+                                List.of(new ValidationErrorBody.FieldError(
+                                        "targetLabel", "duplicate")));
+                        return TargetResolution.conflict(body.message(), body);
+                    }
+                }
+            }
+        }
+
+        String newOid = buildOid(c, desiredLabel, labelOperatorSupplied);
         int newId = insertTargetStudySubjectRow(c, targetStudy, subjectId, desiredLabel,
-                eye, actor, transitionedOn);
-        return TargetResolution.ok(newId, eye, desiredLabel);
+                newOid, eye, actor, transitionedOn);
+        return TargetResolution.ok(newId, eye, desiredLabel, newOid, true);
     }
 
     /**
@@ -721,11 +959,11 @@ public class EyeCohortTransitionsApiController {
      * being non-null.
      */
     private int insertTargetStudySubjectRow(Connection c, StudyBean targetStudy,
-                                            int subjectId, String label, String eye,
+                                            int subjectId, String label,
+                                            String oid, String eye,
                                             UserAccountBean actor,
                                             java.time.LocalDate transitionedOn)
             throws SQLException {
-        String oid = buildOid(c, label);
         java.sql.Date enrollment = java.sql.Date.valueOf(
                 transitionedOn != null ? transitionedOn : java.time.LocalDate.now());
         String sql = "INSERT INTO study_subject (label, subject_id, study_id, status_id, "
@@ -762,10 +1000,29 @@ public class EyeCohortTransitionsApiController {
      * <p>On collision we randomize a 4-char suffix until we find a
      * free OID (mirrors {@link StudySubjectDAO#getValidOid}).
      */
-    private static String buildOid(Connection c, String label) throws SQLException {
+    private static String buildOid(Connection c, String label, boolean labelOperatorSupplied)
+            throws SQLException {
         String stripped = label == null ? "" : label.replaceAll("[^A-Za-z0-9]", "").toUpperCase();
         if (stripped.length() > 8) stripped = stripped.substring(0, 8);
         String base = "SS_" + stripped;
+        // When the operator typed a unique target label, the deterministic
+        // SS_<label> OID is the only acceptable shape — that's what the
+        // SPA's toStudySubjectOid(label) helper will derive when looking
+        // the row back up. A collision means a sibling row already owns
+        // the OID; surfacing this as a SQL constraint violation (caller
+        // catches → 500 → FailureAuditTemplate) is correct because the
+        // application-layer duplicate-label check should have caught it
+        // first. The randomized-suffix path is only valid for the legacy
+        // "no targetLabel supplied" branch where the operator implicitly
+        // accepts whatever OID the controller minted.
+        if (labelOperatorSupplied) {
+            if (oidExists(c, base)) {
+                throw new SQLException(
+                        "Deterministic OID '" + base + "' is already taken — the duplicate-label"
+                                + " check upstream should have rejected this submission.");
+            }
+            return base;
+        }
         String candidate = base;
         int attempt = 0;
         while (oidExists(c, candidate)) {

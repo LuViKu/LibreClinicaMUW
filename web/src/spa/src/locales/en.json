@@ -1906,6 +1906,16 @@
         "source": "{eye} transferred to {study} ({label}) on {date}",
         "target": "{eye} previously tracked in {study} as {label}"
       },
+      "newEnrollment": {
+        "title": "Subject will be newly enrolled in {study}",
+        "targetLabel": {
+          "label": "Subject ID in target study",
+          "required": "Please enter a subject ID",
+          "taken": "This subject ID is already taken in {study}",
+          "available": "Available"
+        }
+      },
+      "alreadyEnrolled": "Subject is already in {study} as {label}",
       "success": "Transfer saved."
     },
     "modalityBaselines": {

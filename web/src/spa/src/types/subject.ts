@@ -295,6 +295,47 @@ export interface TransitionEyeRequest {
 }
 
 /**
+ * 2026-06-10 — preflight response shape for
+ * `GET /pages/api/v1/subjects/{label}/eyes/{eye}/transition/preflight`.
+ *
+ * Drives the TransitionEyeDialog's branched UI: the "Patient wird neu
+ * angelegt" panel appears when {@code alreadyEnrolled=false}; the
+ * "Patient ist bereits angelegt" info line appears when
+ * {@code alreadyEnrolled=true}. The {@code labelAvailable} flag answers
+ * the live-uniqueness check the dialog fires while the operator types
+ * a candidate target-study label.
+ */
+export interface TransitionPreflight {
+  alreadyEnrolled: boolean
+  existingTargetOid: string | null
+  existingTargetLabel: string | null
+  labelAvailable: boolean
+  suggestedLabel: string
+}
+
+/**
+ * 2026-06-10 — transition POST response (mirrors
+ * {@code EyeCohortTransitionsApiController.TransitionResponse}).
+ *
+ * Two fields beyond the matrix-update set: {@code targetStudySubjectOid}
+ * is the value the SPA's {@code toStudySubjectOid} convention produces
+ * when the operator supplied a deterministic targetLabel; the dialog's
+ * post-submit handler can use it to navigate into the new enrolment if
+ * the UX flow ever asks for that. {@code wasNewlyEnrolled} flips the
+ * post-transition toast wording.
+ */
+export interface TransitionEyeResponse {
+  transitionId: number
+  sourceStudySubjectId: number
+  targetStudySubjectId: number
+  targetLabel: string
+  sourceEyeAfter: string | null
+  targetEyeAfter: string
+  targetStudySubjectOid: string
+  wasNewlyEnrolled: boolean
+}
+
+/**
  * Phase E.6 — Candidate target-study row for the TransitionEyeDialog.
  *
  * Byte-compatible with the local stub the dialog branch inlined; this

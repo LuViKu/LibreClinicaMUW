@@ -1905,6 +1905,16 @@
         "source": "{eye} am {date} in {study} ({label}) verlagert",
         "target": "{eye} zuvor in {study} geführt als {label}"
       },
+      "newEnrollment": {
+        "title": "Patient wird neu angelegt in {study}",
+        "targetLabel": {
+          "label": "Subject-ID in der Zielstudie",
+          "required": "Bitte Subject-ID eingeben",
+          "taken": "Diese Subject-ID ist in {study} bereits vergeben",
+          "available": "Verfügbar"
+        }
+      },
+      "alreadyEnrolled": "Patient ist bereits in {study} als {label} angelegt",
       "success": "Verlagerung gespeichert."
     },
     "modalityBaselines": {
