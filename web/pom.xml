@@ -637,6 +637,12 @@
                              Without these entries the analyzer demands test-scope. -->
                         <ignoredNonTestScopedDependency>io.micrometer:micrometer-core</ignoredNonTestScopedDependency>
                         <ignoredNonTestScopedDependency>io.micrometer:micrometer-registry-prometheus</ignoredNonTestScopedDependency>
+                        <!-- Phase E-hardening: AbstractApiControllerDatabaseIT references
+                             liquibase types in test-only fixtures. The deployed WAR still
+                             needs liquibase-core at runtime so SpringLiquibase (declared
+                             in core's DataSourceConfig) can apply pending changesets at
+                             boot. Same compile-vs-test-scope tension as micrometer. -->
+                        <ignoredNonTestScopedDependency>org.liquibase:liquibase-core</ignoredNonTestScopedDependency>
                     </ignoredNonTestScopedDependencies>
 		        </configuration>
 		      </plugin>
