@@ -227,7 +227,7 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                     "INSERT INTO study (study_id, name, unique_identifier, oc_oid, "
                             + "type_id, status_id, owner_id, date_created, parent_study_id) "
                             + "VALUES (2, 'Hidden Study', 'hidden-study', 'S_HIDDEN', "
-                            + "1, 1, 1, NOW(), 0) ON CONFLICT (study_id) DO NOTHING")) {
+                            + "1, 1, 1, NOW(), NULL) ON CONFLICT (study_id) DO NOTHING")) {
                 ps.executeUpdate();
             }
             try (java.sql.PreparedStatement ps = c.prepareStatement(
