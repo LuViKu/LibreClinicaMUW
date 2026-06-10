@@ -540,8 +540,10 @@ Next steps:
   2. Edit ${RUNTIME_CONFIG}/datainfo.properties to point mailHost / mailPort /
      mailUsername / mailPassword at the institutional MUW SMTP relay.
   3. (If not already done) trigger the 'Release image' workflow on GitHub
-     against a tagged release so ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG}
-     exists.
+     against a tagged release so BOTH images exist at this tag:
+       - ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG}
+       - ghcr.io/luviku/libreclinicamuw/retinal-inference:${LIBRECLINICA_IMAGE_TAG}
+     The workflow's matrix job publishes both in one dispatch.
   4. Start the stack:
         sudo systemctl start libreclinica
      Watch the boot:

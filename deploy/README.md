@@ -150,14 +150,27 @@ curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
 ### Upgrade to a new image
 
 1. Cut a new release on GitHub (Releases → Draft a new release → publish).
-   The `Release image` workflow fires and pushes
-   `ghcr.io/luviku/libreclinicamuw:<release-tag>` + `latest`.
+   The `Release image` workflow fires and pushes BOTH:
+   - `ghcr.io/luviku/libreclinicamuw:<release-tag>` (+ `latest`)
+   - `ghcr.io/luviku/libreclinicamuw/retinal-inference:<release-tag>` (+ `latest`)
 2. On the VM:
    ```sh
    sudo sed -i 's|^LIBRECLINICA_IMAGE_TAG=.*|LIBRECLINICA_IMAGE_TAG=<new-tag>|' /etc/libreclinica/env
    sudo systemctl restart libreclinica
    ```
-   `pull_policy: always` in the production overlay handles the actual pull.
+   `pull_policy: always` on both services in the production overlay handles
+   the actual pulls. Both images roll together unless
+   `LIBRECLINICA_RETINAL_IMAGE_TAG` is also set in the env file (it pins
+   the sidecar independently of the app).
+
+### Rebuild a single image without cutting a release
+
+For ad-hoc rebuilds (e.g. dep CVE refresh on the sidecar, no app change):
+
+1. Actions → **Release image** → Run workflow
+2. Pick `Use workflow from: main` (or a release tag)
+3. Set `images: app` or `images: retinal-inference` (default `both`)
+4. Optionally fill `version: <raw-tag>` to add a custom tag alongside `latest` + `sha-<short>`
 
 ### Restore from backup
 
