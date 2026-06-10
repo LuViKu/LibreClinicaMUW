@@ -153,19 +153,36 @@ async function request<T>(
 
   const url = path.startsWith(CONTEXT_PATH) ? path : `${CONTEXT_PATH}${path}`
 
+  const fetchInit: RequestInit = {
+    method,
+    credentials: 'include',
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: opts.signal,
+  }
+
   let response: Response
   try {
-    response = await fetch(url, {
-      method,
-      credentials: 'include',
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: opts.signal,
-    })
+    response = await fetch(url, fetchInit)
   } catch (cause) {
-    // No response arrived — surface the client-generated id so the
-    // operator can still cross-reference Tomcat access logs.
-    throw new ApiNetworkError(`Network failure calling ${method} ${url}`, cause, reqId)
+    // Phase E hardening B3 — single retry on transient network failure
+    // for idempotent GETs only. Mutations (POST/PUT/DELETE/PATCH) must
+    // NEVER retry: a flaky network could otherwise duplicate a clinical
+    // save or leave the server in a partially-written state. ApiError
+    // (server reachable, error response) deliberately stays outside the
+    // retry path — only `fetch` itself throwing triggers the backoff.
+    if (method === 'GET') {
+      await new Promise((r) => setTimeout(r, 500))
+      try {
+        response = await fetch(url, fetchInit)
+      } catch (retryCause) {
+        throw new ApiNetworkError(`Network failure calling ${method} ${url}`, retryCause, reqId)
+      }
+    } else {
+      // No response arrived — surface the client-generated id so the
+      // operator can still cross-reference Tomcat access logs.
+      throw new ApiNetworkError(`Network failure calling ${method} ${url}`, cause, reqId)
+    }
   }
 
   // Prefer the server's echoed id; fall back to the one we sent if the
