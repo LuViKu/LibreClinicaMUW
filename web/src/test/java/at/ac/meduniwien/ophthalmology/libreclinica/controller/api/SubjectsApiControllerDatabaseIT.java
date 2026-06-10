@@ -207,31 +207,51 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
      */
     @Test
     void matchPreflightHidesEnrolmentsInInaccessibleStudies() throws Exception {
+        // Insert a FRESH subject (id=99) + enrolment instead of mutating
+        // the seed. The IT suite has no per-test rollback (raw JDBC, no
+        // @Transactional); mutating seed rows breaks sibling tests like
+        // listReturnsSevenSeededSubjects which assert the count of 7.
+        final int HIDDEN_SUBJECT_ID = 99;
+        final int HIDDEN_STUDY_ID = 2;
         try (java.sql.Connection c = DATA_SOURCE.getConnection()) {
-            try (java.sql.PreparedStatement ps = c.prepareStatement(
-                    "UPDATE subject SET first_name = ?, last_name = ?, "
-                            + "date_of_birth = ?, dob_collected = true "
-                            + "WHERE subject_id = 2")) {
-                ps.setString(1, "Hidden");
-                ps.setString(2, "Enrolment");
-                ps.setDate(3, java.sql.Date.valueOf("1980-06-20"));
-                ps.executeUpdate();
-            }
-            // The study row MUST exist BEFORE we re-point the enrolment
-            // (FK study_subject.study_id → study.study_id fires on the
-            // UPDATE). Then re-point subject #2's enrolment row at a
-            // study the operator does NOT have a role on. study_id=2
-            // has no seeded study_user_role grant for "root" →
-            // loadVisibleStudyOids excludes it.
+            // Hidden study (top-level, no parent — NULL).
             try (java.sql.PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO study (study_id, name, unique_identifier, oc_oid, "
                             + "type_id, status_id, owner_id, date_created, parent_study_id) "
-                            + "VALUES (2, 'Hidden Study', 'hidden-study', 'S_HIDDEN', "
+                            + "VALUES (?, 'Hidden Study', 'hidden-study', 'S_HIDDEN', "
                             + "1, 1, 1, NOW(), NULL) ON CONFLICT (study_id) DO NOTHING")) {
+                ps.setInt(1, HIDDEN_STUDY_ID);
                 ps.executeUpdate();
             }
+            // Fresh subject row — distinct PII so the match-preflight
+            // SELECT finds exactly this one + nothing else.
             try (java.sql.PreparedStatement ps = c.prepareStatement(
-                    "UPDATE study_subject SET study_id = 2 WHERE subject_id = 2")) {
+                    "INSERT INTO subject (subject_id, first_name, last_name, "
+                            + "date_of_birth, dob_collected, gender, unique_identifier, "
+                            + "status_id, date_created, owner_id) "
+                            + "VALUES (?, ?, ?, ?, true, 'f', ?, 1, NOW(), 1) "
+                            + "ON CONFLICT (subject_id) DO NOTHING")) {
+                ps.setInt(1, HIDDEN_SUBJECT_ID);
+                ps.setString(2, "Hidden");
+                ps.setString(3, "Enrolment");
+                ps.setDate(4, java.sql.Date.valueOf("1980-06-20"));
+                ps.setString(5, "PERSON_" + HIDDEN_SUBJECT_ID);
+                ps.executeUpdate();
+            }
+            // Enrolment in the hidden study. "root" has no
+            // study_user_role grant on study_id=HIDDEN_STUDY_ID →
+            // loadVisibleStudyOids excludes it, the candidate row is
+            // returned but its enrolment is hidden + otherStudyCount=1.
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO study_subject (study_subject_id, label, subject_id, "
+                            + "study_id, status_id, date_created, owner_id, oc_oid, study_eye) "
+                            + "VALUES (?, ?, ?, ?, 1, NOW(), 1, ?, NULL) "
+                            + "ON CONFLICT (study_subject_id) DO NOTHING")) {
+                ps.setInt(1, 999);
+                ps.setString(2, "HIDDEN-001");
+                ps.setInt(3, HIDDEN_SUBJECT_ID);
+                ps.setInt(4, HIDDEN_STUDY_ID);
+                ps.setString(5, "SS_HIDDEN_001");
                 ps.executeUpdate();
             }
         }
@@ -248,7 +268,7 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .session(authenticatedSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].subjectId").value(2))
+                .andExpect(jsonPath("$[0].subjectId").value(HIDDEN_SUBJECT_ID))
                 .andExpect(jsonPath("$[0].studies").isArray())
                 .andExpect(jsonPath("$[0].studies.length()").value(0))
                 .andExpect(jsonPath("$[0].otherStudyCount").value(1));
