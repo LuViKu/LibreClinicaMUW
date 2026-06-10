@@ -2,6 +2,22 @@
 
 LibreClinica MUW Ophthalmology — Phase A7 (pre-launch hardening).
 
+## Changelog
+
+- **2026-06-10 (Phase B hardening, Stream 8 / PR #170 follow-up):** resolved
+  all 6 in-doc gaps left from v1: §1 documents the existing
+  `liquibase-maven-plugin` v1.9.1.0 (`pom.xml:1310`) `status` goal; §2
+  adds a pre-deploy validation subsection covering `liquibase:validate`
+  + the `LIQUIBASE_CONTEXTS` env var; §3 prescribes the
+  `ghcr.io/luviku/libreclinicamuw:<semver>` image-tag convention and
+  documents the new Dockerfile `HEALTHCHECK` + its 90 s `start-period`
+  rationale; §5 documents the already-pinned compose project name
+  (`compose.yaml:3`) and underscore-separated volume convention; §6
+  gains a sysadmin walk-through with `reqId` correlation steps, a
+  screenshots placeholder (pending Stream 6) and an on-call rotation
+  placeholder.
+- **2026-06-08 (Phase A7, PR #170):** initial publication.
+
 Operational walk-through for the MUW Vienna single-site deployment
 (1 sysadmin, 2 service accounts). The compose stack is the unit of
 deployment; Liquibase runs in-process when the `libreclinica`
@@ -54,6 +70,29 @@ docker compose exec db psql -U clinica libreclinica -c \
 The `db` and `smtp` services stay running. The Liquibase changelog
 runs against the live database when `libreclinica` starts again, so
 the database MUST be reachable through the rest of this runbook.
+
+### Preview pending changesets (optional, recommended)
+
+The `liquibase-maven-plugin` v1.9.1.0 is already declared at
+[`pom.xml:1310`](../../pom.xml). Its `status` goal lists the
+changesets that would be applied on the next `update`, against a live
+DB whose credentials come from the `<config.file>` property — no
+extra compose service required. Run it on the deploy host (or any
+host with network reach to the production DB and the project
+checkout):
+
+```bash
+docker run --rm \
+  -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
+  maven:3-eclipse-temurin-21 \
+  mvn -B -pl core liquibase:status \
+      -Dconfig.file=docker/config/datainfo.properties
+```
+
+A clean release prints something like
+`X changesets have not been applied to clinica@jdbc:postgresql://…`
+or `clinica is up to date` — if it lists anything you did not expect
+to ship, stop and reconcile against the diff.
 
 ---
 
@@ -116,9 +155,71 @@ and flag the three highest-risk patterns before approving:
 
 If any of those land unmitigated, abort the deploy.
 
+### Pre-deploy validation (changelog parses cleanly without writing)
+
+`SpringLiquibase` reads the `LIQUIBASE_CONTEXTS` env var (see
+[`DataSourceConfig.java:82-111`](../../core/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/config/DataSourceConfig.java)).
+Production deployments leave it unset — the in-code default `!demo`
+skips dev-only seed changesets. Staging can override it (e.g.
+`LIQUIBASE_CONTEXTS=demo` to seed demo data) by adding the env var to
+`compose.yaml`.
+
+For a read-only "does the candidate changelog even parse?" check
+that does NOT write to the DB, use the plugin's `validate` goal —
+it walks the changelog and reports parse errors / duplicate
+changeset IDs / preCondition syntax errors without applying
+anything:
+
+```bash
+docker run --rm \
+  -v "$(pwd)":/app -v "$(pwd)/.m2-cache":/root/.m2 -w /app \
+  maven:3-eclipse-temurin-21 \
+  mvn -B -pl core liquibase:validate \
+      -Dconfig.file=docker/config/datainfo.properties
+```
+
+Run this before the staging boot-log dry-run; it surfaces
+authoring mistakes in seconds and avoids burning a staging restart
+cycle on a typo.
+
 ---
 
 ## 3. Deploy
+
+### Image-tag convention
+
+| Environment | Tag pattern | Source of truth |
+|---|---|---|
+| **Production** | `ghcr.io/luviku/libreclinicamuw:<semver>` (e.g. `:1.4.0rc1-muw`) | `project.version` in `pom.xml:8` — published by `.github/workflows/release-image.yml` on every release. |
+| **Staging** | `ghcr.io/luviku/libreclinicamuw:latest` | release workflow re-tags the latest semver push as `:latest`. |
+| **Local dev** | `libreclinica-muw:dev` (built by `docker compose build`) | the `:dev` tag in `compose.yaml` is for local Docker daemons only — never pushed. |
+
+Production **must** pin to a semver tag. `:latest` is acceptable on
+staging because the cost of a rollback is "restart with the
+previous semver tag" — but on production it leaves you unable to
+pin to a known-good prior image (a re-pushed `:latest` poisons the
+record). For pinned semver, edit `compose.yaml` to
+`image: ghcr.io/luviku/libreclinicamuw:<semver>` and commit
+alongside the release.
+
+### HEALTHCHECK (Dockerfile, Phase B/A7)
+
+The runtime stage of `Dockerfile` carries a `HEALTHCHECK` that
+probes `/LibreClinica/actuator/health` every 30 s after a 90 s
+start-period. The start-period budget covers:
+
+| Phase | Typical duration | Source |
+|---|---|---|
+| Liquibase apply | ~20–30 s | steady-state changelog on the MUW DB |
+| Quartz scheduler init | ~5 s | `@DependsOn("liquibase")` at [`QuartzConfig.java:63`](../../core/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/config/QuartzConfig.java) — Quartz waits for Liquibase |
+| Tomcat WAR deploy | ~30–40 s | post-context-refresh servlet init |
+
+90 s gives the cluster orchestrator (or `docker compose up
+--wait`) a clean signal — health goes `UP` once all three phases
+land and the actuator endpoint serves — without false-negative
+restarts during a cold boot.
+
+### Deploy steps
 
 For the single-site MUW deployment the default convention is the
 `:latest` tag (institutional registry pushes the released tag to
@@ -225,7 +326,14 @@ docker compose pull libreclinica
 #     changeset" rather than `--rollback`.
 #
 #     If the failed changeset corrupted data (rare but possible
-#     mid-DML), restore from the §1 backup:
+#     mid-DML), restore from the §1 backup. The volume name is
+#     derived from the pinned compose project name `libreclinica-muw`
+#     (see `compose.yaml:3` `name: libreclinica-muw`) and the volume
+#     key `libreclinica-db-data`, joined by Docker Compose's
+#     standard `<project>_<volume>` underscore separator. The
+#     resulting `libreclinica-muw_libreclinica-db-data` name is the
+#     intentional convention; do NOT change either side without a
+#     coordinated DB-volume migration.
 docker compose down db
 # wipe the data volume only if the dump is verified intact
 docker volume rm libreclinica-muw_libreclinica-db-data
@@ -266,30 +374,33 @@ the request ID (Phase A4 `reqId` in MDC) — cross-reference against
 `libreclinica.log` to recover the stack trace and the operator's
 SPA toast text.
 
----
+### Sysadmin screenshots
 
-## TODOs (gaps found while writing this v1)
+> Screenshots are pending Stream 6 (sysadmin audit-log UI) landing.
+> When the system audit-log UI is live, add screenshots showing:
+> - TopBar Administrator menu with "System audit" link
+> - /system/audit-log view with at least one OPERATION_FAILED row
+> - Filter dropdowns (actor / variant / subject) for narrowing the system trail
 
-- **No `liquibase status` / list-pending-changesets path.** The
-  `SpringLiquibase` bean runs `update` on boot; there is no
-  non-applying preview. §2's dry-run reads the boot log on a
-  staging stack instead. Adding a `liquibase-maven-plugin`
-  `status` goal — or a small main class that calls
-  `Liquibase.listUnrunChangeSets()` — would let staging surface
-  the pending list before touching the DB.
-- **No read-only `--contexts validate` hook.** A second bean
-  gated by `LIQUIBASE_VALIDATE_ONLY=true` (calls `validate` then
-  exits) would let staging prove the changelog parses without
-  writing.
-- **`compose.yaml` ships `image: libreclinica-muw:dev`** with no
-  institutional `:latest` or release-tag convention in-tree. Pin
-  the registry coordinates + release-tag scheme before first
-  production release.
-- **No health-gate between Liquibase finish and Tomcat ready** —
-  the `docker compose logs` follow in §3 is the only signal. A
-  Docker `HEALTHCHECK` probing `/LibreClinica/actuator/health`
-  would let `docker compose up` block until the WAR serves.
-- **No pinned project name** in §5's volume-restore step. The
-  `libreclinica-muw_libreclinica-db-data` derivation assumes
-  `docker compose -p libreclinica-muw`; pin the project name in
-  the institutional ops doc.
+### reqId correlation walk-through
+
+When a user reports an error, the SPA toast shows a Fehler-ID like
+`7f3e4a2b-...`. Use it to correlate across the three layers:
+
+1. SPA toast: Fehler-ID: `7f3e4a2b-c1d4-...`
+2. Server log (text): `docker compose exec libreclinica grep 7f3e4a2b /usr/local/tomcat/logs/libreclinica.log`
+3. Server log (JSON for SIEM): `docker compose exec libreclinica grep 7f3e4a2b /usr/local/tomcat/logs/libreclinica.json | jq`
+4. Audit row: `SELECT * FROM audit_log_event WHERE error_message LIKE '%7f3e4a2b%' OR description LIKE '%7f3e4a2b%';`
+
+The reqId is the same UUIDv4 across all four layers — generated by
+RequestIdFilter (Phase A4), echoed in the X-Request-Id response header
+to the SPA, recorded in the audit row via FailureAuditTemplate, and
+serialized to the JSON appender via includeMdcKeyName>reqId.
+
+### On-call rotation
+
+> To be filled in by MUW IT at deploy time:
+> - Primary on-call sysadmin: [name, contact]
+> - Secondary on-call sysadmin: [name, contact]
+> - Pager rotation schedule: [link to roster]
+> - Escalation to clinical lead: [name, contact]
