@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -76,7 +78,7 @@ class StudyParametersApiControllerTest extends AbstractApiControllerTest {
     @Test
     void putReturns400WhenBodyMissing() throws Exception {
         // No body provided — controller maps to its inline missing-body
-        // FieldError envelope (SubjectsApiController.ValidationErrorBody
+        // FieldError envelope (ValidationErrorBody
         // shape, reused project-wide so the SPA store has one error
         // shape to parse).
         mockMvcWith().perform(put("/api/v1/studies/S_DEMO/parameters")

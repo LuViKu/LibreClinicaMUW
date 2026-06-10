@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -41,7 +43,7 @@ class CrfJsonValidatorTest {
         return new CrfVersionAuthoringRequest("v1.0", "", "", List.of(section));
     }
 
-    private static boolean hasField(List<SubjectsApiController.ValidationErrorBody.FieldError> errors,
+    private static boolean hasField(List<ValidationErrorBody.FieldError> errors,
                                     String fieldPath) {
         return errors.stream().anyMatch(e -> e.field().equals(fieldPath));
     }

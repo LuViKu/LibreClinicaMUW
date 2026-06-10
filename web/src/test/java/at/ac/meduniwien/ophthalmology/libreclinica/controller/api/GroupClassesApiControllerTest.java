@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -70,7 +72,7 @@ class GroupClassesApiControllerTest extends AbstractApiControllerTest {
     void createValidate_RequiresNameTypeAssignment() {
         CreateGroupClassRequest body =
                 new CreateGroupClassRequest(null, null, null, null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         long nameErrors = errors.stream().filter(e -> "name".equals(e.field())).count();
         long typeErrors = errors.stream().filter(e -> "groupClassType".equals(e.field())).count();
@@ -84,7 +86,7 @@ class GroupClassesApiControllerTest extends AbstractApiControllerTest {
     void createValidate_RejectsUnknownType() {
         CreateGroupClassRequest body =
                 new CreateGroupClassRequest("Arms", "Cohort", "REQUIRED", null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         long typeErrors = errors.stream().filter(e -> "groupClassType".equals(e.field())).count();
         org.junit.jupiter.api.Assertions.assertEquals(1, typeErrors);
@@ -94,7 +96,7 @@ class GroupClassesApiControllerTest extends AbstractApiControllerTest {
     void createValidate_RejectsUnknownAssignment() {
         CreateGroupClassRequest body =
                 new CreateGroupClassRequest("Arms", "Arm", "MAYBE", null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         long assignErrors = errors.stream().filter(e -> "subjectAssignment".equals(e.field())).count();
         org.junit.jupiter.api.Assertions.assertEquals(1, assignErrors);
@@ -105,7 +107,7 @@ class GroupClassesApiControllerTest extends AbstractApiControllerTest {
         String tooLong = "a".repeat(31);
         CreateGroupClassRequest body =
                 new CreateGroupClassRequest(tooLong, "Arm", "REQUIRED", null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         long nameErrors = errors.stream().filter(e -> "name".equals(e.field())).count();
         org.junit.jupiter.api.Assertions.assertEquals(1, nameErrors);
@@ -115,7 +117,7 @@ class GroupClassesApiControllerTest extends AbstractApiControllerTest {
     void updateValidate_OmittedFieldsAreNoOps() {
         UpdateGroupClassRequest body =
                 new UpdateGroupClassRequest(null, null, null, null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateUpdateShape(body);
         org.junit.jupiter.api.Assertions.assertTrue(errors.isEmpty());
     }
@@ -124,33 +126,33 @@ class GroupClassesApiControllerTest extends AbstractApiControllerTest {
     void updateValidate_BlankNameRejected() {
         UpdateGroupClassRequest body =
                 new UpdateGroupClassRequest("   ", null, null, null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateUpdateShape(body);
         long nameErrors = errors.stream().filter(e -> "name".equals(e.field())).count();
         org.junit.jupiter.api.Assertions.assertEquals(1, nameErrors);
     }
 
     @SuppressWarnings("unchecked")
-    private static java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>
+    private static java.util.List<ValidationErrorBody.FieldError>
             callValidateCreateShape(CreateGroupClassRequest body) {
         try {
             java.lang.reflect.Method m = GroupClassesApiController.class
                     .getDeclaredMethod("validateCreateShape", CreateGroupClassRequest.class);
             m.setAccessible(true);
-            return (java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>) m.invoke(null, body);
+            return (java.util.List<ValidationErrorBody.FieldError>) m.invoke(null, body);
         } catch (Exception e) {
             throw new AssertionError(e);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private static java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>
+    private static java.util.List<ValidationErrorBody.FieldError>
             callValidateUpdateShape(UpdateGroupClassRequest body) {
         try {
             java.lang.reflect.Method m = GroupClassesApiController.class
                     .getDeclaredMethod("validateUpdateShape", UpdateGroupClassRequest.class);
             m.setAccessible(true);
-            return (java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>) m.invoke(null, body);
+            return (java.util.List<ValidationErrorBody.FieldError>) m.invoke(null, body);
         } catch (Exception e) {
             throw new AssertionError(e);
         }

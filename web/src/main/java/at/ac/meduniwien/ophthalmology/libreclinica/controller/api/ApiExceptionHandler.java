@@ -9,7 +9,7 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.sql.SQLException;
-import java.util.Map;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,6 +25,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
 /**
  * Phase E.5 #6 — global exception handler scoped to the {@code
@@ -57,6 +59,15 @@ import org.springframework.web.multipart.MaxUploadSizeExceededException;
  * {@link MethodArgumentTypeMismatchException} +
  * {@link HttpMessageNotReadableException}; everything else is treated
  * as a server-side fault.
+ *
+ * <p>Phase E-hardening B5 — body shape canonicalised to {@link
+ * ValidationErrorBody}. Framework exceptions don't carry per-field
+ * validation details, so {@code errors} is always {@code List.of()}.
+ * Wire shape changes from {@code {"message": "…"}} to
+ * {@code {"message": "…", "errors": []}}; the SPA's
+ * {@code ApiError.parseBody} is extra-field tolerant (Jackson +
+ * JSON.parse ignore unknown fields by default), so this is a
+ * non-breaking change.
  */
 @RestControllerAdvice(basePackages = "at.ac.meduniwien.ophthalmology.libreclinica.controller.api")
 public class ApiExceptionHandler {
@@ -70,28 +81,33 @@ public class ApiExceptionHandler {
             HttpMessageNotReadableException.class,
             IllegalArgumentException.class,
     })
-    public ResponseEntity<Map<String, Object>> handleBadRequest(Exception e) {
+    public ResponseEntity<ValidationErrorBody> handleBadRequest(Exception e) {
         LOG.debug("API 400 bad request: {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("message", e.getMessage() == null ? "Bad request" : e.getMessage()));
+                .body(new ValidationErrorBody(
+                        e.getMessage() == null ? "Bad request" : e.getMessage(),
+                        List.of()));
     }
 
     /** SQL failures from the DAO layer (connection issues, constraint violations, etc.). */
     @ExceptionHandler(SQLException.class)
-    public ResponseEntity<Map<String, Object>> handleSql(SQLException e) {
+    public ResponseEntity<ValidationErrorBody> handleSql(SQLException e) {
         LOG.error("API 500 from SQLException: {}", e.getMessage(), e);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("message", "Database access failed; the operation could not complete."));
+                .body(new ValidationErrorBody(
+                        "Database access failed; the operation could not complete.",
+                        List.of()));
     }
 
     /* ====================================================================== */
     /* Phase E-hardening A3 — five additional handlers covering AuthN/AuthZ,  */
     /* header validation, integrity collisions, and upload-size cliffs.       */
     /* Placed before the catch-all {@link Throwable} handler so the more-     */
-    /* specific subclass dispatch wins. Body shape stays {@code Map.of(       */
-    /* "message", …)} so the SPA's ApiError parser keeps working unchanged.   */
+    /* specific subclass dispatch wins. Body shape canonicalised to {@link    */
+    /* ValidationErrorBody} in B5 — the SPA's ApiError parser tolerates the   */
+    /* extra empty errors: [] field.                                          */
     /* ====================================================================== */
 
     /**
@@ -99,11 +115,13 @@ public class ApiExceptionHandler {
      * lacks the permission the endpoint requires. 4xx → WARN.
      */
     @ExceptionHandler(AccessDeniedException.class)
-    public ResponseEntity<Map<String, Object>> handleAccessDenied(AccessDeniedException e) {
+    public ResponseEntity<ValidationErrorBody> handleAccessDenied(AccessDeniedException e) {
         LOG.warn("API 403 access denied: {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.FORBIDDEN)
-                .body(Map.of("message", "Forbidden — your role can't perform this action."));
+                .body(new ValidationErrorBody(
+                        "Forbidden — your role can't perform this action.",
+                        List.of()));
     }
 
     /**
@@ -111,11 +129,13 @@ public class ApiExceptionHandler {
      * credentials. 4xx → WARN.
      */
     @ExceptionHandler(AuthenticationException.class)
-    public ResponseEntity<Map<String, Object>> handleAuthentication(AuthenticationException e) {
+    public ResponseEntity<ValidationErrorBody> handleAuthentication(AuthenticationException e) {
         LOG.warn("API 401 authentication failure: {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.UNAUTHORIZED)
-                .body(Map.of("message", "Not authenticated — please sign in again."));
+                .body(new ValidationErrorBody(
+                        "Not authenticated — please sign in again.",
+                        List.of()));
     }
 
     /**
@@ -125,12 +145,13 @@ public class ApiExceptionHandler {
      * stack trace. 4xx → WARN.
      */
     @ExceptionHandler(MissingRequestHeaderException.class)
-    public ResponseEntity<Map<String, Object>> handleMissingHeader(MissingRequestHeaderException e) {
+    public ResponseEntity<ValidationErrorBody> handleMissingHeader(MissingRequestHeaderException e) {
         LOG.warn("API 400 missing request header: {}", e.getHeaderName());
         return ResponseEntity
                 .status(HttpStatus.BAD_REQUEST)
-                .body(Map.of("message",
-                        "Missing required request header: '" + e.getHeaderName() + "'."));
+                .body(new ValidationErrorBody(
+                        "Missing required request header: '" + e.getHeaderName() + "'.",
+                        List.of()));
     }
 
     /**
@@ -141,12 +162,13 @@ public class ApiExceptionHandler {
      * instead of a generic 500. 4xx → WARN.
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<Map<String, Object>> handleDataIntegrity(DataIntegrityViolationException e) {
+    public ResponseEntity<ValidationErrorBody> handleDataIntegrity(DataIntegrityViolationException e) {
         LOG.warn("API 409 data integrity violation: {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.CONFLICT)
-                .body(Map.of("message",
-                        "Data integrity violation — see request body for the conflict."));
+                .body(new ValidationErrorBody(
+                        "Data integrity violation — see request body for the conflict.",
+                        List.of()));
     }
 
     /**
@@ -155,11 +177,13 @@ public class ApiExceptionHandler {
      * only fires on direct API misuse or proxy stripping the size header.
      */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
-    public ResponseEntity<Map<String, Object>> handleMaxUploadSize(MaxUploadSizeExceededException e) {
+    public ResponseEntity<ValidationErrorBody> handleMaxUploadSize(MaxUploadSizeExceededException e) {
         LOG.warn("API 413 upload exceeds maximum allowed size: {}", e.getMessage());
         return ResponseEntity
                 .status(HttpStatus.PAYLOAD_TOO_LARGE)
-                .body(Map.of("message", "Upload exceeds the maximum allowed size."));
+                .body(new ValidationErrorBody(
+                        "Upload exceeds the maximum allowed size.",
+                        List.of()));
     }
 
     /**
@@ -171,10 +195,10 @@ public class ApiExceptionHandler {
      * ServletException re-throw needed.
      */
     @ExceptionHandler(Throwable.class)
-    public ResponseEntity<Map<String, Object>> handleUnexpected(Throwable e) {
+    public ResponseEntity<ValidationErrorBody> handleUnexpected(Throwable e) {
         LOG.error("API 500 unexpected: {}", e.getMessage(), e);
         return ResponseEntity
                 .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(Map.of("message", "Internal server error."));
+                .body(new ValidationErrorBody("Internal server error.", List.of()));
     }
 }

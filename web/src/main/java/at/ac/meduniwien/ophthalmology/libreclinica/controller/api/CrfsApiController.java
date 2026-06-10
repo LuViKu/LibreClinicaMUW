@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -164,16 +166,16 @@ public class CrfsApiController {
         ResponseEntity<?> guard = preflightWrite(session);
         if (guard != null) return guard;
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateCreateShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -185,9 +187,9 @@ public class CrfsApiController {
         // CreateCRFServlet:101–105 uses findByName as the gate).
         CRFBean existing = (CRFBean) crfDao.findByName(body.name().trim());
         if (existing != null && existing.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "name", "A CRF named '" + body.name() + "' already exists"))));
         }
 
@@ -333,9 +335,9 @@ public class CrfsApiController {
 
         String versionNameTrim = versionName == null ? "" : versionName.trim();
         if (versionNameTrim.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "versionName", "versionName is required"))));
         }
 
@@ -353,9 +355,9 @@ public class CrfsApiController {
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         CRFVersionBean dupCheck = versionDao.findByFullName(versionNameTrim, crf.getName());
         if (dupCheck != null && dupCheck.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "versionName",
                             "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"))));
         }
@@ -389,10 +391,10 @@ public class CrfsApiController {
             // can grab it from <filePath>/crf/original/<storedFilename>
             // and feed it to the legacy parser via the JSP path if
             // they need to compare error messages.
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Spreadsheet parse failed — see errors[].message for the rejected rows / cells",
                     result.errors().stream()
-                            .map(e -> new SubjectsApiController.ValidationErrorBody.FieldError("file", e))
+                            .map(e -> new ValidationErrorBody.FieldError("file", e))
                             .toList()));
         }
 
@@ -486,14 +488,14 @@ public class CrfsApiController {
         if (guard != null) return guard;
 
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
+        List<ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -512,9 +514,9 @@ public class CrfsApiController {
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         CRFVersionBean dupCheck = versionDao.findByFullName(versionNameTrim, crf.getName());
         if (dupCheck != null && dupCheck.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "versionName",
                             "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"))));
         }
@@ -547,10 +549,10 @@ public class CrfsApiController {
         }
 
         if (!result.ok()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Authoring request rejected — see errors[].message",
                     result.errors().stream()
-                            .map(e -> new SubjectsApiController.ValidationErrorBody.FieldError("body", e))
+                            .map(e -> new ValidationErrorBody.FieldError("body", e))
                             .toList()));
         }
 
@@ -612,7 +614,7 @@ public class CrfsApiController {
      *       summary (sections + items count + uniqueness echo) when
      *       validation passes</li>
      *   <li>{@code 400 Bad Request} with a
-     *       {@link SubjectsApiController.ValidationErrorBody} carrying
+     *       {@link ValidationErrorBody} carrying
      *       the per-field errors when validation fails</li>
      * </ul>
      *
@@ -632,18 +634,18 @@ public class CrfsApiController {
         if (guard != null) return guard;
 
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
 
         // Shape-level validation first — short-circuits before hitting
         // any DAO so missing/malformed payloads surface as 400 even when
         // the DataSource is a Mockito mock (test parity) or when the
         // CRF lookup would fail for other reasons.
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
+        List<ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -666,9 +668,9 @@ public class CrfsApiController {
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         CRFVersionBean dupCheck = versionDao.findByFullName(versionNameTrim, crf.getName());
         if (dupCheck != null && dupCheck.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "versionName",
                             "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"))));
         }
@@ -747,17 +749,17 @@ public class CrfsApiController {
         if (guard != null) return guard;
 
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
         if (body.expression() == null) {
             // null vs empty: the validator catches empty in-body
             // (returns valid:false). null body fields are a shape failure
             // — the SPA is required to send the field even if blank.
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "expression", "expression is required"))));
         }
 
@@ -1243,9 +1245,9 @@ public class CrfsApiController {
         return null;
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreateShape(
+    private static List<ValidationErrorBody.FieldError> validateCreateShape(
             CreateCrfRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         String name = body.name() == null ? "" : body.name().trim();
         if (name.isEmpty()) out.add(fe("name", "CRF name is required"));
         else if (name.length() > 255) out.add(fe("name", "CRF name must be 255 characters or fewer"));
@@ -1255,8 +1257,8 @@ public class CrfsApiController {
         return out;
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError fe(String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    private static ValidationErrorBody.FieldError fe(String field, String msg) {
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
     private void writeLifecycleAudit(UserAccountBean me,

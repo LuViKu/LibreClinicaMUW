@@ -67,7 +67,8 @@ class ApiExceptionHandlerNewHandlersTest {
         mockMvc().perform(get("/__test/throw/access-denied"))
                 .andExpect(status().isForbidden())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.message").value(not(emptyOrNullString())));
+                .andExpect(jsonPath("$.message").value(not(emptyOrNullString())))
+                .andExpect(jsonPath("$.errors").isArray());
     }
 
     @Test
@@ -75,7 +76,8 @@ class ApiExceptionHandlerNewHandlersTest {
         mockMvc().perform(get("/__test/throw/authentication"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.message").value(not(emptyOrNullString())));
+                .andExpect(jsonPath("$.message").value(not(emptyOrNullString())))
+                .andExpect(jsonPath("$.errors").isArray());
     }
 
     @Test
@@ -83,7 +85,8 @@ class ApiExceptionHandlerNewHandlersTest {
         mockMvc().perform(get("/__test/throw/missing-header"))
                 .andExpect(status().isBadRequest())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.message").value(not(emptyOrNullString())));
+                .andExpect(jsonPath("$.message").value(not(emptyOrNullString())))
+                .andExpect(jsonPath("$.errors").isArray());
     }
 
     @Test
@@ -91,7 +94,8 @@ class ApiExceptionHandlerNewHandlersTest {
         mockMvc().perform(get("/__test/throw/data-integrity"))
                 .andExpect(status().isConflict())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.message").value(not(emptyOrNullString())));
+                .andExpect(jsonPath("$.message").value(not(emptyOrNullString())))
+                .andExpect(jsonPath("$.errors").isArray());
     }
 
     @Test
@@ -99,7 +103,8 @@ class ApiExceptionHandlerNewHandlersTest {
         mockMvc().perform(get("/__test/throw/max-upload-size"))
                 .andExpect(status().isPayloadTooLarge())
                 .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$.message").value(not(emptyOrNullString())));
+                .andExpect(jsonPath("$.message").value(not(emptyOrNullString())))
+                .andExpect(jsonPath("$.errors").isArray());
     }
 
     /**
