@@ -82,6 +82,14 @@ services:
   # task='ga' only (geographic atrophy / cRORA segmentation).
   retinal-inference:
     build: ./retinal-inference
+    # Explicit `image:` tag — without it `docker compose up --no-build`
+    # looks up the auto-generated `<project_name>-<service_name>:latest`
+    # (`libreclinica-muw-retinal-inference:latest`) but `docker buildx
+    # bake` only stores the build output by digest unless the target has
+    # a name. Mirrors what the `libreclinica` service already has
+    # (`image: libreclinica-muw:dev` above) so the CI workflow's bake
+    # step can pre-load both images for `compose up --no-build`.
+    image: libreclinica-muw-retinal-inference:latest
     container_name: libreclinica-muw-retinal-inference-1
     depends_on:
       - db
