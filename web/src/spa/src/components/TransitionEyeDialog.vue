@@ -70,6 +70,16 @@ const subjects = useSubjectsStore()
 
 const targetStudyOid = ref('')
 const targetLabel = ref('')
+/**
+ * Phase E.6 follow-up 2026-06-10 — track whether the operator has
+ * actually typed into the targetLabel field, so we can prefill the
+ * field with the target study's "{uniqueIdentifier}-" prefix on first
+ * reveal without ever clobbering an edit they've already made. Flips
+ * to true on the input's @input event (only fires for real DOM input,
+ * not for programmatic assignment), and is reset by resetForm() when
+ * the dialog is closed/reopened.
+ */
+const userTouchedTargetLabel = ref(false)
 const reason = ref('')
 const transitionedAt = ref('')
 const submitted = ref(false)
@@ -231,9 +241,36 @@ watch(targetLabel, () => {
   scheduleLabelCheck()
 })
 
+/**
+ * Phase E.6 follow-up 2026-06-10 — prefill the targetLabel with the
+ * institutional protocol short-code ({uniqueIdentifier}-) the moment
+ * the new-enrollment panel is revealed AND the operator hasn't
+ * already typed anything. This frees the operator from manually
+ * retyping the prefix every time and matches the AddSubjectView
+ * prefill pattern. If the operator clears the field or types over the
+ * prefix, userTouchedTargetLabel locks the prefill out for the
+ * lifetime of the dialog open.
+ */
+watch(
+  [
+    () => preflightState.value?.alreadyEnrolled,
+    targetStudyOid,
+  ],
+  () => {
+    if (userTouchedTargetLabel.value) return
+    if (preflightState.value?.alreadyEnrolled !== false) return
+    if (targetLabel.value !== '') return
+    const study = props.availableStudies.find((s) => s.oid === targetStudyOid.value)
+    const ident = study?.uniqueIdentifier?.trim()
+    if (!ident) return
+    targetLabel.value = `${ident}-`
+  },
+)
+
 function resetForm() {
   targetStudyOid.value = ''
   targetLabel.value = ''
+  userTouchedTargetLabel.value = false
   reason.value = ''
   transitionedAt.value = todayIso()
   submitted.value = false
@@ -364,6 +401,7 @@ onBeforeUnmount(() => {
             v-model="targetLabel"
             data-testid="transition-eye-target-label"
             :aria-invalid="(targetLabelRequired || targetLabelTaken) || undefined"
+            @input="userTouchedTargetLabel = true"
           />
           <ErrorText v-if="targetLabelRequired">
             {{ t('subjectDetail.eyeTransition.newEnrollment.targetLabel.required') }}

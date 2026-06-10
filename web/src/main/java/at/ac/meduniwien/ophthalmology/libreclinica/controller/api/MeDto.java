@@ -99,5 +99,21 @@ public record MeDto(
      * to the lower-priority lane's cards.
      */
     @Schema(name = "ActiveStudyDto")
-    public record ActiveStudyDto(int id, String oid, String name, boolean isSite, List<String> roles) {}
+    public record ActiveStudyDto(
+            int id,
+            String oid,
+            String name,
+            /**
+             * Institutional protocol short-code (DB column
+             * {@code study.unique_identifier}). Distinct from {@link #oid}
+             * (system-assigned API handle, e.g. {@code S_GA}) and
+             * {@link #name} (display label). Used by the SPA to prefill
+             * subject-ID fields with a "{uniqueIdentifier}-" prefix when
+             * adding a new subject or transitioning an eye into a study
+             * where the patient is not yet enrolled. Phase E.6 follow-up
+             * 2026-06-10.
+             */
+            String uniqueIdentifier,
+            boolean isSite,
+            List<String> roles) {}
 }

@@ -181,6 +181,12 @@ public class MeApiController {
                     currentStudy.getId(),
                     currentStudy.getOid(),
                     currentStudy.getName(),
+                    // Phase E.6 follow-up 2026-06-10 — institutional protocol
+                    // short-code (the "Eindeutige Protokoll-ID" the data
+                    // manager sets at study creation). The SPA prefills
+                    // subject-ID fields with "{uniqueIdentifier}-" so a
+                    // new enrolment in the GA study starts as "GA-…".
+                    currentStudy.getIdentifier(),
                     currentStudy.getParentStudyId() > 0,
                     // Phase E.6 multi-role — projecting the per-study role
                     // set onto the active-study payload so the SPA's

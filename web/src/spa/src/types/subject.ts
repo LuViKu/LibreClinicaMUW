@@ -346,6 +346,15 @@ export interface TransitionEyeResponse {
 export interface StudyOption {
   oid: string
   name: string
+  /**
+   * Phase E.6 follow-up 2026-06-10 — institutional protocol short-code
+   * (DB column {@code study.unique_identifier}). Used by the eye-
+   * transition dialog to prefill the new-enrollment subject-ID with
+   * "{uniqueIdentifier}-". Optional because the parent projection
+   * may not always populate it (e.g. when {@code auth.availableStudies}
+   * is still loading or the legacy wire-shape predates the field).
+   */
+  uniqueIdentifier?: string | null
 }
 
 /**

@@ -45,12 +45,13 @@ const i18n = createI18n({
 interface StudyOption {
   oid: string
   name: string
+  uniqueIdentifier?: string | null
 }
 
 const STUDIES: StudyOption[] = [
-  { oid: 'S_GA1', name: 'GA Observational 2026' },
-  { oid: 'S_GA2', name: 'GA Treatment Arm B' },
-  { oid: 'S_OTHER', name: 'Long-term Follow-up Registry' },
+  { oid: 'S_GA1', name: 'GA Observational 2026', uniqueIdentifier: 'GA1' },
+  { oid: 'S_GA2', name: 'GA Treatment Arm B', uniqueIdentifier: 'GA2' },
+  { oid: 'S_OTHER', name: 'Long-term Follow-up Registry', uniqueIdentifier: null },
 ]
 
 const NOT_ENROLLED: TransitionPreflight = {
@@ -177,7 +178,9 @@ describe('TransitionEyeDialog', () => {
 
   it('keeps submit disabled when targetLabel is empty in the new-enrollment panel', async () => {
     const { wrapper } = mountDialog({}, async () => NOT_ENROLLED)
-    await pickStudy(wrapper, 'S_GA1')
+    // Pick S_OTHER — its uniqueIdentifier is null, so no prefix prefill
+    // fires and we can assert the empty-targetLabel branch directly.
+    await pickStudy(wrapper, 'S_OTHER')
 
     await wrapper.find<HTMLTextAreaElement>('#transition-eye-reason').setValue('GA confirmed')
     const submit = wrapper.find('[data-testid="transition-eye-submit"]')
@@ -284,6 +287,43 @@ describe('TransitionEyeDialog', () => {
     expect(payload.targetLabel).toBeUndefined()
     expect(payload.targetStudyOid).toBe('S_GA1')
     expect(payload.reason).toBe('Bilateral GA')
+
+    wrapper.unmount()
+  })
+
+  it('prefills targetLabel with the target study uniqueIdentifier prefix on first reveal', async () => {
+    const { wrapper } = mountDialog({}, async () => NOT_ENROLLED)
+    await pickStudy(wrapper, 'S_GA1')
+
+    const input = wrapper.find<HTMLInputElement>('#transition-eye-target-label')
+    expect(input.element.value).toBe('GA1-')
+
+    wrapper.unmount()
+  })
+
+  it('does NOT prefill when the target study has no uniqueIdentifier', async () => {
+    const { wrapper } = mountDialog({}, async () => NOT_ENROLLED)
+    await pickStudy(wrapper, 'S_OTHER')
+
+    const input = wrapper.find<HTMLInputElement>('#transition-eye-target-label')
+    expect(input.element.value).toBe('')
+
+    wrapper.unmount()
+  })
+
+  it('preserves an operator edit when the target study is switched', async () => {
+    const { wrapper } = mountDialog({}, async () => NOT_ENROLLED)
+    await pickStudy(wrapper, 'S_GA1')
+
+    const input = wrapper.find<HTMLInputElement>('#transition-eye-target-label')
+    expect(input.element.value).toBe('GA1-')
+    // Operator types over the prefill — triggers @input so userTouched=true.
+    await input.setValue('CUSTOM-007')
+    expect(input.element.value).toBe('CUSTOM-007')
+
+    // Switch target study to GA2 — prefill must NOT clobber the operator's edit.
+    await pickStudy(wrapper, 'S_GA2')
+    expect(input.element.value).toBe('CUSTOM-007')
 
     wrapper.unmount()
   })

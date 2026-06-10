@@ -317,11 +317,18 @@ function openTransitionDialog(eye: 'OD' | 'OS') {
   }
 }
 
-const otherStudies = computed<{ oid: string; name: string }[]>(() => {
+const otherStudies = computed<{ oid: string; name: string; uniqueIdentifier?: string | null }[]>(() => {
   const currentOid = auth.user?.activeStudy?.oid ?? null
   return (auth.availableStudies ?? [])
     .filter((s) => s.oid !== currentOid)
-    .map((s) => ({ oid: s.oid, name: s.name }))
+    .map((s) => ({
+      oid: s.oid,
+      name: s.name,
+      // Phase E.6 follow-up 2026-06-10 — pass the protocol short-code
+      // through so the TransitionEyeDialog can prefill the new-
+      // enrollment label with "{uniqueIdentifier}-".
+      uniqueIdentifier: s.uniqueIdentifier,
+    }))
 })
 
 async function onTransitionSubmit(payload: TransitionEyeRequest) {

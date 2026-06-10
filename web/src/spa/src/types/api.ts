@@ -2579,6 +2579,8 @@ export interface components {
             id?: number;
             oid?: string;
             name?: string;
+            /** Institutional protocol short-code (study.unique_identifier). */
+            uniqueIdentifier?: string;
             isSite?: boolean;
             roles?: string[];
         };
@@ -3421,6 +3423,8 @@ export interface components {
         StudyOptionDto: {
             oid?: string;
             name?: string;
+            /** Institutional protocol short-code (study.unique_identifier). */
+            uniqueIdentifier?: string;
             parentOid?: string;
             parentName?: string;
             role?: string;
