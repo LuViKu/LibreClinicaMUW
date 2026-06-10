@@ -211,11 +211,19 @@ jobs:
       # dep-download layer rebuilds cold-cache each time (+ ~3-5 min on
       # a runner-local Maven download). Net: slower per-build wall-clock
       # vs. mode=max BEST CASE, but no infinity-stuck WORST CASE.
-      - name: Build libreclinica image (cached)
+      # Phase E.7 (2026-06-10): the retinal-inference sidecar joined
+      # compose.yaml. Without it in the bake targets, `compose up
+      # --no-build` below fails on "No such image:
+      # libreclinica-muw-retinal-inference:latest" because the only
+      # image bake had loaded was `libreclinica`. Adding it as a
+      # second target keeps the smoke job validating the full stack.
+      - name: Build libreclinica + retinal-inference images (cached)
         uses: docker/bake-action@v5
         with:
           files: compose.yaml
-          targets: libreclinica
+          targets: |
+            libreclinica
+            retinal-inference
           load: true
           set: |
             *.cache-from=type=gha,scope=smoke-${{ github.workflow }}
