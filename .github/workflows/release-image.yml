@@ -1,11 +1,21 @@
 # Builds the production image and pushes it to the GitHub Container
-# Registry (ghcr.io). Intentionally **manual-only** (workflow_dispatch).
-# The intended flow is:
+# Registry (ghcr.io).
+#
+# Primary trigger is GitHub release **publication** — the canonical
+# release flow is:
 #   1. CI green on lc-develop
 #   2. lc-develop merged into main (manual gate)
-#   3. Maintainer triggers this workflow from the Actions tab against
-#      `main` (or a release tag), inspects the pushed image, then
-#      promotes to deployment out-of-band.
+#   3. Maintainer creates a GitHub Release from `main` (the release
+#      page handles tag creation; the tag points at the main tip
+#      commit at the time of publish)
+#   4. This workflow fires automatically, builds the image from that
+#      tag, and pushes it tagged with the release's version (plus
+#      semver families, `latest`, and `sha-<short>`)
+#
+# `workflow_dispatch` is kept as a safety net so the image can be
+# rebuilt off main or a tag without cutting a fresh release (e.g.
+# transitive dep CVE rebuild). `latest` is set both for release
+# publications and for manual dispatches that target main.
 #
 # This build differs from the smoke-test build in build.yml: that one
 # passes `-DskipSpa=true` (via the Dockerfile default ARG) for speed;
@@ -21,10 +31,16 @@
 name: Release image
 
 on:
+  # Fires when a maintainer hits "Publish release" in the GitHub UI.
+  # `github.ref` for this event is the tag ref (`refs/tags/<tag>`), so
+  # the metadata-action's `type=ref,event=tag` + `type=semver,*` rules
+  # below pick up the version automatically.
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
-        description: 'Optional raw tag to publish in addition to latest/sha (e.g. "1.4.0-muw" or "rc-2026-06-10"). Leave blank to publish only the default tag set.'
+        description: 'Optional raw tag to publish in addition to latest/sha (e.g. "1.4.0-muw" or "rc-2026-06-10"). Leave blank to publish only the default tag set. Ignored on release-publish triggers — the release tag is used directly.'
         required: false
         type: string
 
@@ -70,21 +86,22 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       # Generates the tag matrix + OCI annotation labels. Tag rules:
-      #   - `latest`                → only when dispatched against main
+      #   - `latest`                → release-publish, OR manual dispatch
+      #                               against main
       #   - `sha-<short-sha>`       → every build (immutable handle)
       #   - `<branch-name>`         → when dispatched against a branch
-      #   - `<git-tag>` raw         → when dispatched against a git tag
+      #   - `<git-tag>` raw         → release events and tag refs
       #   - semver families         → tag refs of vX.Y.Z form get
       #                               `X.Y.Z`, `X.Y`, and `X` tags
       #   - `<inputs.version>` raw  → only when the optional `version`
-      #                               input is populated
+      #                               input is populated (manual only)
       - name: Extract image metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=latest,enable=${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
             type=sha,prefix=sha-,format=short
             type=ref,event=branch
             type=ref,event=tag
