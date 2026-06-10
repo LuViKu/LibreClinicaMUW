@@ -36,7 +36,8 @@
       "title": "An error occurred",
       "dismiss": "Dismiss error message",
       "reqIdLabel": "Error ID"
-    }
+    },
+    "systemAuditLog": "System audit"
   },
   "network": {
     "offline": {
@@ -468,6 +469,10 @@
     },
     "error": {
       "exportFailed": "Audit log export failed"
+    },
+    "systemTrail": {
+      "title": "System audit trail",
+      "subtitle": "All audit events including operation failures and job failures."
     }
   },
   "crfEntry": {

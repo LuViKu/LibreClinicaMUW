@@ -80,6 +80,15 @@ const router = createRouter({
       component: () => import('@/views/StudyAuditLogView.vue'),
       meta: { title: 'Study Audit Log', role: ['Monitor', 'Data Manager', 'Administrator'] as const },
     },
+    /* Phase E hardening B — sysadmin-only system-wide audit trail
+       (surfaces OPERATION_FAILED + JOB_FAILED §11.10(e) rows that
+       the per-study endpoint hides). */
+    {
+      path: '/system/audit-log',
+      name: 'system-audit-log',
+      component: () => import('@/views/SystemAuditLogView.vue'),
+      meta: { title: 'System Audit Log', role: 'Administrator' as const },
+    },
     /* Phase E.6 carry-over — Read-only CRF (Monitor's "View Within Record" path). */
     {
       path: '/event-crfs/:eventCrfOid/readonly',
