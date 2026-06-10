@@ -209,7 +209,21 @@ const hasLogout = computed(() => typeof props.onLogout === 'function')
         </template>
       </nav>
 
-      <div v-if="userName" class="ml-auto relative">
+      <!-- Phase E hardening B — sysadmin-only entry-point to the
+           system-wide audit trail. Gated on Administrator role
+           (sysadmin / techadmin both project to Administrator in
+           UsersApiController.list); the same role gate the
+           backend endpoint enforces. -->
+      <RouterLink
+        v-if="primaryRole === 'Administrator'"
+        to="/system/audit-log"
+        class="ml-auto mr-2 px-2 py-1 rounded-md text-xs text-slate-700 hover:bg-slate-100"
+        data-testid="topbar-system-audit-link"
+      >
+        {{ t('topBar.systemAuditLog') }}
+      </RouterLink>
+
+      <div v-if="userName" class="relative" :class="primaryRole === 'Administrator' ? '' : 'ml-auto'">
         <button
           ref="triggerEl"
           type="button"

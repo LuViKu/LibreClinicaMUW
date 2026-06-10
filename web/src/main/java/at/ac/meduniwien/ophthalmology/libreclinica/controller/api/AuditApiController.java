@@ -118,6 +118,32 @@ public class AuditApiController {
      * a single site grant under a multi-site study now sees only that
      * site's rows.
      */
+    /**
+     * Phase E hardening B (sysadmin audit UI) — system-wide audit SQL.
+     *
+     * <p>Same shape as {@link #STUDY_SCOPED_AUDIT_SQL_TEMPLATE} but
+     * <strong>without</strong> the {@code is_user_visible=true} filter
+     * (so {@code OPERATION_FAILED(61)} + {@code JOB_FAILED(62)} rows are
+     * returned for §11.10(e) compliance review) and without the
+     * per-study scoping IN clauses (so all studies are surfaced — this
+     * endpoint is sysadmin-only). LIMIT 500 newest rows mirrors the
+     * per-study endpoint's volume cap.
+     */
+    private static final String SYSTEM_WIDE_AUDIT_SQL = """
+            SELECT
+              a.audit_id, a.audit_date, a.audit_table, a.entity_id,
+              a.entity_name, a.reason_for_change, a.audit_log_event_type_id,
+              a.old_value, a.new_value, a.event_crf_id, a.study_event_id,
+              a.user_id, ua.user_name, alet.name AS type_name,
+              alet.display_name AS type_display_name
+            FROM audit_log_event a
+            LEFT JOIN user_account ua ON ua.user_id = a.user_id
+            LEFT JOIN audit_log_event_type alet
+              ON alet.audit_log_event_type_id = a.audit_log_event_type_id
+            ORDER BY a.audit_date DESC, a.audit_id DESC
+            LIMIT 500
+            """;
+
     private static final String STUDY_SCOPED_AUDIT_SQL_TEMPLATE = """
             SELECT
               a.audit_id, a.audit_date, a.audit_table, a.entity_id,
@@ -312,6 +338,152 @@ public class AuditApiController {
         headers.setContentDispositionFormData("attachment", filename);
         headers.setContentLength(xlsx.length);
         return new ResponseEntity<>(xlsx, headers, 200);
+    }
+
+    /**
+     * Phase E hardening B (sysadmin audit UI) — system-wide audit-log
+     * read.
+     *
+     * <p>The per-study {@link #list} handler filters rows where
+     * {@code audit_log_event_type.is_user_visible = true}, which hides
+     * the failure-class audit rows ({@code OPERATION_FAILED(61)} +
+     * {@code JOB_FAILED(62)}) from study coordinators. This handler
+     * drops that filter so sysadmins can review §11.10(e) failure
+     * rows. It also drops the per-study scoping so the entire
+     * institution's audit trail is visible.
+     *
+     * <p>Gate: sysadmin / techadmin only via
+     * {@link UserAdminAuthorization#roleMayAdministerUsers}. Matches
+     * the convention used by every other admin-only endpoint in this
+     * controller family (UsersApiController create / disable / etc.).
+     *
+     * <p>Same query parameters as {@link #list} so the SPA filter
+     * components can drop in without bespoke wiring.
+     */
+    @GetMapping("/system")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array", implementation = AuditEventDto.class)))
+    public ResponseEntity<?> listSystem(
+            @RequestParam(value = "actor", required = false) String actorFilter,
+            @RequestParam(value = "variant", required = false) String variantFilter,
+            @RequestParam(value = "subjectId", required = false) String subjectIdFilter,
+            HttpSession session) {
+
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (!UserAdminAuthorization.roleMayAdministerUsers(ub)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit system audit-log access — sysadmin only"));
+        }
+        try {
+            return ResponseEntity.ok(
+                    collectSystemWideRows(actorFilter, variantFilter, subjectIdFilter));
+        } catch (SQLException e) {
+            LOG.error("Failed to load system-wide audit-log rows for user_id={}",
+                    ub.getId(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load system audit log: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Phase E hardening B — read every audit row (no
+     * {@code is_user_visible} filter, no per-study scoping). Mirrors
+     * {@link #collectFilteredRows} for everything else (subject /
+     * scope hydration, actor / variant / subject filters, prettify,
+     * details derivation).
+     */
+    private List<AuditEventDto> collectSystemWideRows(
+            String actorFilter, String variantFilter, String subjectIdFilter)
+            throws SQLException {
+
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
+        ItemDAO itemDao = new ItemDAO(dataSource);
+        Map<Integer, String> ssLabelCache = new HashMap<>();
+        Map<Integer, Integer> subjectToStudySubjectCache = new HashMap<>();
+        Map<Integer, EventCRFBean> ecCache = new HashMap<>();
+        Map<Integer, ItemDataBean> itemDataCache = new HashMap<>();
+        Map<Integer, ItemBean> itemCache = new HashMap<>();
+
+        List<AuditEventDto> out = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(SYSTEM_WIDE_AUDIT_SQL);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Integer auditId = rs.getInt("audit_id");
+                Timestamp ts = rs.getTimestamp("audit_date");
+                String auditTable = rs.getString("audit_table");
+                int entityId = rs.getInt("entity_id");
+                String entityName = rs.getString("entity_name");
+                int eventCrfId = rs.getInt("event_crf_id");
+                int typeId = rs.getInt("audit_log_event_type_id");
+                String oldVal = rs.getString("old_value");
+                String newVal = rs.getString("new_value");
+                String reason = rs.getString("reason_for_change");
+                String userName = rs.getString("user_name");
+                String typeName = rs.getString("type_name");
+                String typeDisplay = rs.getString("type_display_name");
+
+                String variant = variantForType(typeId, reason);
+                String actor = (userName == null || userName.isBlank()) ? "system" : userName;
+                String title;
+                if (typeDisplay != null && !typeDisplay.isBlank()) {
+                    title = typeDisplay;
+                } else if (typeName != null && !typeName.isBlank()) {
+                    title = typeName;
+                } else {
+                    title = "Audit event #" + auditId;
+                }
+
+                String subjectLabel = resolveSubjectLabel(
+                        auditTable, entityId, eventCrfId,
+                        ssDao, ecDao, ssLabelCache, subjectToStudySubjectCache, ecCache);
+                String scope = resolveScope(
+                        auditTable, entityId, eventCrfId,
+                        itemDataDao, itemDao, itemDataCache, itemCache);
+
+                if (actorFilter != null && !actorFilter.isBlank()
+                        && !actorFilter.equalsIgnoreCase(actor)) continue;
+                if (variantFilter != null && !variantFilter.isBlank()
+                        && !variantFilter.equalsIgnoreCase(variant)) continue;
+                if (subjectIdFilter != null && !subjectIdFilter.isBlank()
+                        && (subjectLabel == null || !subjectIdFilter.equalsIgnoreCase(subjectLabel)))
+                    continue;
+
+                String occurredAt = ts == null ? null
+                        : ts.toInstant().atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
+
+                String prettyOld = prettifyValue(auditTable, typeName, oldVal);
+                String prettyNew = prettifyValue(auditTable, typeName, newVal);
+
+                String details = null;
+                if (("study".equalsIgnoreCase(auditTable)
+                        || "user_account".equalsIgnoreCase(auditTable)
+                        || "dataset".equalsIgnoreCase(auditTable))
+                        && entityName != null && !entityName.isBlank()) {
+                    details = entityName;
+                }
+
+                out.add(new AuditEventDto(
+                        String.valueOf(auditId),
+                        occurredAt,
+                        variant,
+                        actor,
+                        /* actorRole */ null,
+                        title,
+                        subjectLabel,
+                        scope,
+                        details,
+                        blankToNull(prettyOld),
+                        blankToNull(prettyNew),
+                        blankToNull(reason)));
+            }
+        }
+        return out;
     }
 
     /**
