@@ -17,6 +17,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, ApiNetworkError, apiGet, apiPost } from '../client'
 
+// Phase E hardening B4 added a lazy `await import('@/stores/connection')`
+// + `useConnectionStore().markOffline()` call inside the ApiNetworkError
+// catch path. Under vi.useFakeTimers() the dynamic import's microtask
+// queue doesn't advance through `runAllTimersAsync` reliably, which
+// would time out the GET-retry test. Stubbing the module keeps the
+// import synchronous-equivalent — the retry path is what B3's test
+// actually exercises, B4 has its own dedicated tests for the store.
+vi.mock('@/stores/connection', () => ({
+  useConnectionStore: () => ({ markOffline: vi.fn(), markOnline: vi.fn() }),
+}))
+
 function jsonResponse(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
