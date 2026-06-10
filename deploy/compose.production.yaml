@@ -1,0 +1,77 @@
+# Production compose overlay for LibreClinicaMUW.
+#
+# Apply on top of the base compose.yaml:
+#   docker compose -f compose.yaml -f deploy/compose.production.yaml \
+#       up -d --no-build libreclinica db retinal-inference
+#
+# What this overlay changes vs the dev compose.yaml:
+#   - libreclinica: pinned to ghcr.io/luviku/libreclinicamuw:<tag>, restart
+#     policy added, host port bound to 127.0.0.1 (the institutional reverse
+#     proxy is expected to localhost-target it via SSH tunnel or by sitting
+#     on the same host).
+#   - libreclinica: LIQUIBASE_CONTEXTS forced empty so the demo seed
+#     changesets (M-001..M-007) are skipped on every boot.
+#   - libreclinica: runtime config bind-mounted from
+#     /opt/libreclinica/config so the operator can edit datainfo.properties
+#     (mail relay, etc.) without rebuilding the image.
+#   - db: postgres password sourced from the host env file, data volume
+#     bind-mounted to /var/lib/libreclinica/postgres (matches the backup
+#     timer's expectations).
+#   - retinal-inference: storage volumes redirected to
+#     /var/lib/libreclinica/*, restart policy added.
+#   - smtp/mailcrab: not started in production (the systemd ExecStart in
+#     libreclinica.service names the services explicitly and omits smtp).
+
+name: libreclinica-muw
+
+services:
+  libreclinica:
+    image: ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      # Override the dev "127.0.0.1:8080:8080" with the same — explicit
+      # so future edits to the base compose port mapping don't silently
+      # expose the container on 0.0.0.0.
+      - "127.0.0.1:8080:8080"
+    environment:
+      # Skip the demo Liquibase context (subjects + CRFs + dn_item_data
+      # seed) — production starts on a clean schema.
+      LIQUIBASE_CONTEXTS: ""
+    volumes:
+      # Host-mounted runtime config so the operator can edit
+      # datainfo.properties (mailHost, mailUsername, mailPassword, SSO
+      # values, etc.) without rebuilding the image. Source is seeded
+      # from docker/config/ on first run of setup-ubuntu-host.sh.
+      - /opt/libreclinica/config:/usr/local/tomcat/libreclinica.config:ro
+
+  db:
+    restart: unless-stopped
+    environment:
+      # The base compose hard-codes POSTGRES_PASSWORD=clinica which is
+      # fine for dev. Production reads the host-generated secret from
+      # /etc/libreclinica/env (see libreclinica.service EnvironmentFile).
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clinica}
+    volumes:
+      # Replace the named volume with a stable host path so backups can
+      # read it directly and disk-image snapshots are straightforward.
+      # The setup script creates this dir owned by the libreclinica user.
+      - /var/lib/libreclinica/postgres:/var/lib/postgresql/data
+
+  retinal-inference:
+    # Production pulls a pre-built image from ghcr.io rather than
+    # building from source on the VM. Defaults to the same tag the app
+    # uses so a single LIBRECLINICA_IMAGE_TAG roll moves both in
+    # lockstep; an operator who needs to pin the sidecar independently
+    # can set LIBRECLINICA_RETINAL_IMAGE_TAG in /etc/libreclinica/env.
+    image: ghcr.io/luviku/libreclinicamuw/retinal-inference:${LIBRECLINICA_RETINAL_IMAGE_TAG:-${LIBRECLINICA_IMAGE_TAG:-latest}}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      RETINAL_INFERENCE_ADAPTER: ${RETINAL_INFERENCE_ADAPTER:-placeholder}
+    volumes:
+      # Move the two retinal-inference bind mounts off the dev-tree
+      # ./docker/ paths and onto /var/lib/libreclinica/ paths the setup
+      # script creates and chowns to libreclinica:libreclinica.
+      - /var/lib/libreclinica/retinal-inference:/var/lib/libreclinica/segmentation-output
+      - /var/lib/libreclinica/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
