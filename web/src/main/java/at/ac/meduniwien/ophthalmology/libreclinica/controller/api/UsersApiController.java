@@ -35,6 +35,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuthoritiesDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
@@ -43,6 +44,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -911,28 +913,67 @@ public class UsersApiController {
                             + "' on study " + body.studyOid()));
         }
 
-        StudyUserRoleBean sur = new StudyUserRoleBean();
-        sur.setStudyId(study.getId());
-        sur.setRoleName(legacyRole.getName());
-        sur.setStatus(Status.AVAILABLE);
-        sur.setOwner(me);
-        sur.setUserName(username);
-        sur.setUserAccountId(target.getId());
-        userDao.createStudyUserRole(target, sur);
+        // Phase B2 (2026-06-10) — failure-audit wrap on the role-binding
+        // insert + the per-grant success audit_log row. Access-control
+        // mutations are GxP-critical — a silent failure here means a
+        // user-role grant request looked successful but didn't land,
+        // or landed without the matching success audit row. The wrap
+        // catches any Throwable into an OPERATION_FAILED row keyed by
+        // the target user's id; entity_id stays the user id because
+        // the study_user_role row's PK isn't known until after insert.
+        final StudyUserRoleBean surTemplate;
+        {
+            StudyUserRoleBean sur = new StudyUserRoleBean();
+            sur.setStudyId(study.getId());
+            sur.setRoleName(legacyRole.getName());
+            sur.setStatus(Status.AVAILABLE);
+            sur.setOwner(me);
+            sur.setUserName(username);
+            sur.setUserAccountId(target.getId());
+            surTemplate = sur;
+        }
+        final UserAccountBean targetRef = target;
+        final UserAccountBean meRef = me;
+        final StudyBean studyRef = study;
+        final StudyDAO studyDaoRef = studyDao;
+        final UserAccountDAO userDaoRef = userDao;
+        final String usernameRef = username;
+        final String studyOidRef = body.studyOid();
+        final Role legacyRoleRef = legacyRole;
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    me.getId(),
+                    "study_user_role",
+                    target.getId(),
+                    "ASSIGN_ROLE",
+                    reqId,
+                    () -> {
+                        userDaoRef.createStudyUserRole(targetRef, surTemplate);
 
-        LOG.info("Grant role: username={} studyOid={} role={} by admin={}",
-                username, body.studyOid(), legacyRole.getName(), me.getName());
+                        LOG.info("Grant role: username={} studyOid={} role={} by admin={}",
+                                usernameRef, studyOidRef, legacyRoleRef.getName(), meRef.getName());
 
-        StudyUserRoleBean refreshed = userDao.findRoleByUserNameAndStudyId(username, study.getId());
+                        StudyUserRoleBean refreshed = userDaoRef.findRoleByUserNameAndStudyId(
+                                usernameRef, studyRef.getId());
 
-        String newRoleName = legacyRole.getName();
-        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
-                "User role granted — user=" + username + " role=" + newRoleName,
-                "study_user_role",
-                refreshed != null ? refreshed.getId() : 0,
-                "role_id", "", newRoleName);
+                        String newRoleName = legacyRoleRef.getName();
+                        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
+                                meRef, studyRef, null,
+                                "User role granted — user=" + usernameRef + " role=" + newRoleName,
+                                "study_user_role",
+                                refreshed != null ? refreshed.getId() : 0,
+                                "role_id", "", newRoleName);
 
-        return ResponseEntity.status(201).body(toRoleBindingDto(refreshed, studyDao));
+                        return ResponseEntity.status(201).body(toRoleBindingDto(refreshed, studyDaoRef));
+                    });
+        } catch (Exception e) {
+            LOG.error("assignRole failed for username={} studyOid={} by admin={}",
+                    username, body.studyOid(), me.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to assign role — see server log."));
+        }
     }
 
     /**

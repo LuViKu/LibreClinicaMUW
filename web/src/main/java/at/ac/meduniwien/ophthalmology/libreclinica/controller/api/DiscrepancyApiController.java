@@ -39,6 +39,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubject
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -51,6 +53,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.discrepancy.Discrepan
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
@@ -490,46 +493,84 @@ public class DiscrepancyApiController {
                     "Your role does not permit creating notes of type '" + typeName + "'"));
         }
 
-        DiscrepancyNoteBean note = new DiscrepancyNoteBean();
-        note.setDescription(body.description().trim());
-        note.setDiscrepancyNoteTypeId(typeId);
-        note.setResolutionStatusId(ResolutionStatus.OPEN.getId());
-        note.setStudyId(currentStudy.getId());
-        note.setEntityType("itemData");
-        note.setEntityId(target.getId());
-        note.setColumn("value");
-        note.setOwner(ub);
+        // Phase B2 (2026-06-10) — failure-audit wrap on the parent
+        // discrepancy_note insert + mapping + (best-effort) email
+        // notification. The row doesn't exist yet on entry so entity_id
+        // is the attached item_data id — the closest stable anchor for
+        // post-mortem correlation. Email-failure exceptions are
+        // intentionally caught downstream so an SMTP blip won't
+        // surface as a 500 here; THIS wrap only fires when the DAO
+        // write or mapping insert fails.
+        final DiscrepancyNoteBean noteRef;
+        {
+            DiscrepancyNoteBean note = new DiscrepancyNoteBean();
+            note.setDescription(body.description().trim());
+            note.setDiscrepancyNoteTypeId(typeId);
+            note.setResolutionStatusId(ResolutionStatus.OPEN.getId());
+            note.setStudyId(currentStudy.getId());
+            note.setEntityType("itemData");
+            note.setEntityId(target.getId());
+            note.setColumn("value");
+            note.setOwner(ub);
 
-        Integer assignedUserId = resolveAssignee(body.assignedTo());
-        if (assignedUserId != null && assignedUserId > 0) {
-            note.setAssignedUserId(assignedUserId);
+            Integer assignedUserId = resolveAssignee(body.assignedTo());
+            if (assignedUserId != null && assignedUserId > 0) {
+                note.setAssignedUserId(assignedUserId);
+            }
+            noteRef = note;
         }
+        final Integer assignedUserIdRef = noteRef.getAssignedUserId() > 0
+                ? noteRef.getAssignedUserId() : null;
+        final StudyBean studyRef = currentStudy;
+        final UserAccountBean ubRef = ub;
+        final AddQueryRequest bodyRef = body;
+        final String typeNameRef = typeName;
+        final int itemDataId = target.getId();
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    ub.getId(),
+                    "discrepancy_note",
+                    itemDataId,
+                    "CREATE_DISCREPANCY",
+                    reqId,
+                    () -> {
+                        DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
+                        DiscrepancyNoteBean saved = dnDao.create(noteRef);
+                        dnDao.createMapping(saved);
 
-        DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
-        DiscrepancyNoteBean saved = dnDao.create(note);
-        dnDao.createMapping(saved);
+                        LOG.info("Created discrepancy_note id={} type={} subject={} item={} by user={}",
+                                saved.getId(), typeNameRef, bodyRef.subjectId(), bodyRef.itemOid(),
+                                ubRef.getName());
 
-        LOG.info("Created discrepancy_note id={} type={} subject={} item={} by user={}",
-                saved.getId(), typeName, body.subjectId(), body.itemOid(), ub.getName());
+                        // Phase E.6 — email notification on create
+                        // (when an assignee is set). Best-effort.
+                        if (emailNotifier != null && assignedUserIdRef != null && assignedUserIdRef > 0) {
+                            UserAccountBean assignee =
+                                    new UserAccountDAO(dataSource).findByPK(assignedUserIdRef);
+                            emailNotifier.notifyCreated(saved, assignee, studyRef);
+                        }
 
-        // Phase E.6 — email notification on create (when an assignee is set).
-        if (emailNotifier != null && assignedUserId != null && assignedUserId > 0) {
-            UserAccountBean assignee = new UserAccountDAO(dataSource).findByPK(assignedUserId);
-            emailNotifier.notifyCreated(saved, assignee, currentStudy);
+                        DiscrepancyNoteDto dto = new DiscrepancyNoteDto(
+                                String.valueOf(saved.getId()),
+                                typeToSpa(saved.getDiscrepancyNoteTypeId()),
+                                statusToSpa(saved.getResolutionStatusId()),
+                                bodyRef.subjectId(),
+                                bodyRef.itemOid(),
+                                saved.getDescription(),
+                                resolveUsername(assignedUserIdRef),
+                                0,
+                                Instant.now().truncatedTo(ChronoUnit.SECONDS).toString());
+
+                        return ResponseEntity.status(201).body(dto);
+                    });
+        } catch (Exception e) {
+            LOG.error("Discrepancy create failed for subject={} item={} user={}",
+                    body.subjectId(), body.itemOid(), ub.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to create discrepancy note — see server log."));
         }
-
-        DiscrepancyNoteDto dto = new DiscrepancyNoteDto(
-                String.valueOf(saved.getId()),
-                typeToSpa(saved.getDiscrepancyNoteTypeId()),
-                statusToSpa(saved.getResolutionStatusId()),
-                body.subjectId(),
-                body.itemOid(),
-                saved.getDescription(),
-                resolveUsername(assignedUserId),
-                0,
-                Instant.now().truncatedTo(ChronoUnit.SECONDS).toString());
-
-        return ResponseEntity.status(201).body(dto);
     }
 
     /**

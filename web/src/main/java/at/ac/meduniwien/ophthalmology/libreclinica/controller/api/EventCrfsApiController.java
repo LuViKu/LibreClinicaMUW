@@ -62,6 +62,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefiniti
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.ReasonForChangeWriter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
@@ -81,6 +82,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceR
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -774,39 +776,64 @@ public class EventCrfsApiController {
                     "event_crf " + eventCrfId + " is already locked"));
         }
 
-        // Already complete (date_completed set) → return idempotently —
-        // but still run the cascade. Operators who completed CRFs before
-        // the cascade shipped need a way to reconcile their visit pill,
-        // and the cascade helper is idempotent (it early-returns on
-        // COMPLETED / SIGNED / LOCKED) so re-running it on already-
-        // cascaded visits costs one StudyEventDAO.findByPK.
-        if (ecb.getDateCompleted() == null) {
-            eventCrfDAO.markComplete(ecb, /* ide */ true);
+        // Phase B2 (2026-06-10) — failure-audit wrap. Any Throwable from
+        // the markComplete cascade lands an OPERATION_FAILED (type 61)
+        // row keyed by event_crf id + reqId before the exception
+        // surfaces to the SPA as the same 500 envelope existing callers
+        // expect. Validation guards above (401/400/403/404/409) bypass
+        // the wrap and flow through unchanged.
+        final UserAccountBean userRef = currentUser;
+        final StudyBean studyRef = currentStudy;
+        final StudySubjectBean ssRef = ss;
+        final EventCRFBean ecbRef = ecb;
+        final EventCRFDAO eventCrfDAORef = eventCrfDAO;
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    currentUser.getId(),
+                    "event_crf",
+                    ecb.getId(),
+                    "MARK_COMPLETE",
+                    reqId,
+                    () -> {
+                        // Already complete (date_completed set) → return
+                        // idempotently — but still run the cascade. Operators
+                        // who completed CRFs before the cascade shipped need
+                        // a way to reconcile their visit pill, and the
+                        // cascade helper is idempotent (it early-returns on
+                        // COMPLETED / SIGNED / LOCKED).
+                        if (ecbRef.getDateCompleted() == null) {
+                            eventCrfDAORef.markComplete(ecbRef, /* ide */ true);
 
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
-                    "event_crf_mark_complete", "event_crf", ecb.getId(),
-                    /* columnName */ "date_completed", /* old */ "",
-                    /* new */ Instant.now().toString());
+                            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+                            writeAuditEvent(auditDAO, userRef, studyRef, ssRef,
+                                    "event_crf_mark_complete", "event_crf", ecbRef.getId(),
+                                    /* columnName */ "date_completed", /* old */ "",
+                                    /* new */ Instant.now().toString());
+                        }
+
+                        cascadeEventStatusIfAllCrfsComplete(ecbRef.getStudyEventId(), userRef);
+
+                        EventCRFBean refreshed = eventCrfDAORef.findByPK(ecbRef.getId());
+
+                        Map<String, Object> out = new LinkedHashMap<>();
+                        out.put("eventCrfOid", String.valueOf(refreshed.getId()));
+                        out.put("status", computeStatus(refreshed, true));
+                        out.put("lastSavedAt", formatIsoInstant(latestUpdate(refreshed)));
+
+                        LOG.info("CRF markComplete: event_crf {} status now {}; user {} study {}",
+                                refreshed.getId(), out.get("status"), userRef.getName(),
+                                studyRef.getOid());
+
+                        return ResponseEntity.ok(out);
+                    });
+        } catch (Exception e) {
+            LOG.error("event_crf markComplete failed for id={} user={}",
+                    ecb.getId(), currentUser.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to mark CRF complete — see server log."));
         }
-
-        // Cascade unconditionally — covers both the fresh-complete and
-        // already-complete paths. The legacy DataEntryServlet never
-        // bumped subject_event_status, leaving visits pinned at
-        // DATA_ENTRY_STARTED forever; we reconcile on every mark.
-        cascadeEventStatusIfAllCrfsComplete(ecb.getStudyEventId(), currentUser);
-
-        EventCRFBean refreshed = eventCrfDAO.findByPK(ecb.getId());
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("eventCrfOid", String.valueOf(refreshed.getId()));
-        out.put("status", computeStatus(refreshed, true));
-        out.put("lastSavedAt", formatIsoInstant(latestUpdate(refreshed)));
-
-        LOG.info("CRF markComplete: event_crf {} status now {}; user {} study {}",
-                refreshed.getId(), out.get("status"), currentUser.getName(), currentStudy.getOid());
-
-        return ResponseEntity.ok(out);
     }
 
     /**
@@ -2597,11 +2624,31 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "You entered Pass 1 — a different clerk must perform Pass 2"));
         }
-        // Delegate to DdeService for the diff + spawn + commit work.
+        // Phase B2 (2026-06-10) — failure-audit wrap. DDE Pass-2 commit
+        // is the load-bearing GxP write for double-data-entry studies;
+        // a silent failure here means the reconciliation step left
+        // item_data + audit_log out of sync. The wrap captures any
+        // Throwable into an OPERATION_FAILED audit row keyed by
+        // event_crf id before the 500 propagates to the SPA.
+        final EventCRFBean ecbRef = ecb;
+        final StudySubjectBean ssRef = ss;
+        final StudyBean studyRef = currentStudy;
+        final UserAccountBean userRef = currentUser;
+        final Map<String, Object> valuesRef = body.values();
+        final String reqId = MDC.get("reqId");
         try {
-            DdeCommitResponse resp = ddeService().commitPass2(
-                    ecb, ss, currentStudy, currentUser, body.values());
-            return ResponseEntity.ok(resp);
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    currentUser.getId(),
+                    "event_crf",
+                    ecb.getId(),
+                    "DDE_COMMIT",
+                    reqId,
+                    () -> {
+                        DdeCommitResponse resp = ddeService().commitPass2(
+                                ecbRef, ssRef, studyRef, userRef, valuesRef);
+                        return ResponseEntity.ok(resp);
+                    });
         } catch (Exception svcEx) {
             LOG.error("DDE commit failed for event_crf {} (user {})",
                     eventCrfId, currentUser.getName(), svcEx);
