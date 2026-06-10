@@ -328,14 +328,39 @@ install -d -m 0755 -o libreclinica -g libreclinica "$PG_DATA_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$E2E_UPLOADS_DIR"
 install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_OUTPUT_DIR"
 
-# Clone or update the repo. We need it for compose.yaml + the production
-# override + docker/config/. Pinned to LIBRECLINICA_REPO_REF (main by default).
+# Clone or update the repo. The production VM needs only:
+#   - compose.yaml (root file; pulled in by sparse-checkout's implicit
+#     top-level-files behaviour in cone mode)
+#   - deploy/ (this script + production overlay + README)
+#   - docker/config/ (datainfo.properties + extract.properties seed)
+# Everything else (core/, web/, odm/, retinal-inference/, docs/) is built
+# elsewhere and pulled from ghcr.io — it has no place on the deploy host.
+#
+# Implementation: shallow clone + sparse-checkout in cone mode. Cone
+# mode auto-includes every top-level file (compose.yaml, Dockerfile, the
+# READMEs, etc. — all small text) and only the subdirs we name.
+# Working-tree footprint lands around 1-2 MB instead of ~150 MB.
+#
+# --filter=blob:none is belt-and-braces alongside --depth 1: it makes git
+# defer blob downloads for any path not currently checked out. With both
+# in place a `sparse-checkout add` later would lazy-fetch only the newly
+# needed blobs.
+SPARSE_PATHS=(deploy docker/config)
 if [[ ! -d "${INSTALL_PREFIX}/.git" ]]; then
-  log "Cloning ${LIBRECLINICA_REPO_URL} → ${INSTALL_PREFIX}"
-  sudo -u libreclinica git clone --branch "$LIBRECLINICA_REPO_REF" --depth 1 \
+  log "Sparse-cloning ${LIBRECLINICA_REPO_URL} → ${INSTALL_PREFIX} (paths: ${SPARSE_PATHS[*]})"
+  sudo -u libreclinica git clone \
+    --branch "$LIBRECLINICA_REPO_REF" \
+    --depth 1 \
+    --filter=blob:none \
+    --sparse \
     "$LIBRECLINICA_REPO_URL" "$INSTALL_PREFIX"
+  sudo -u libreclinica git -C "$INSTALL_PREFIX" sparse-checkout set "${SPARSE_PATHS[@]}"
 else
   log "Updating ${INSTALL_PREFIX} (${LIBRECLINICA_REPO_REF})"
+  # Re-assert the sparse-checkout pattern on every run. If this dir was
+  # ever a full clone (e.g. created by an older version of this script),
+  # this trims it down on the next reset.
+  sudo -u libreclinica git -C "$INSTALL_PREFIX" sparse-checkout set "${SPARSE_PATHS[@]}"
   sudo -u libreclinica git -C "$INSTALL_PREFIX" fetch --depth 1 origin "$LIBRECLINICA_REPO_REF"
   sudo -u libreclinica git -C "$INSTALL_PREFIX" reset --hard "FETCH_HEAD"
 fi

@@ -67,10 +67,16 @@ that, don't skip it.
    default address pool moved off 172.17/16 to dodge MUW lab subnet clashes).
 8. **Deploy user** — `libreclinica`, system account, no shell, member of
    `docker`. Stack owned by this user.
-9. **Stack directory** — clones the repo to `/opt/libreclinica`, seeds
-   `/opt/libreclinica/config/` from `docker/config/`, creates
+9. **Stack directory** — **sparse + shallow** clone of the repo to
+   `/opt/libreclinica` (only `compose.yaml`, top-level files,
+   `deploy/`, and `docker/config/`; the Java/SPA/Python source dirs
+   stay on the build host where they belong — a few MB instead of
+   ~150 MB on disk). Seeds `/opt/libreclinica/config/` from
+   `docker/config/`. Creates
    `/var/lib/libreclinica/{postgres,e2e-uploads,retinal-inference}` and
-   `/var/backups/libreclinica/`.
+   `/var/backups/libreclinica/`. The sparse-checkout pattern is
+   re-asserted on every re-run, so an older full clone gets trimmed
+   on the next setup pass.
 10. **Env file** — `/etc/libreclinica/env`. On first run it generates a 32-char
     Postgres password; on re-run it preserves the existing secret and only
     updates the image-tag pin.
