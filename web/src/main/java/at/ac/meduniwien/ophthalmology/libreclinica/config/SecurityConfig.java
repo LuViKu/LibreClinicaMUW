@@ -151,6 +151,13 @@ public class SecurityConfig {
                         "/actuator/health",
                         "/actuator/health/**",
                         "/actuator/info",
+                        // Phase E-hardening B1 (2026-06-10): Prometheus scrape
+                        // endpoint. The institutional reverse-proxy is the
+                        // canonical gate preventing public exposure — the
+                        // permitAll here lets the metrics endpoint be readable
+                        // from inside the deployment network (Prometheus +
+                        // node-exporter sidecar) without requiring a session.
+                        "/actuator/prometheus",
                         // Phase D.10 (DR-014): e-signature re-auth
                         // scaffolding endpoint. Always permits — the
                         // reverse proxy may strip the existing session
