@@ -72,18 +72,60 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
 })
 
+function formatVisibleStudies(c: SubjectMatchCandidate): string {
+  // Phase E.6 follow-up 2026-06-10 — render the per-study label
+  // alongside the protocol short-code so the operator can confirm
+  // "this human is M-001 in default-study".
+  return (c.studies ?? [])
+    .map((s) =>
+      t('addSubject.matchDialog.studyEnrolment', {
+        study: s.studyUniqueIdentifier,
+        label: s.label,
+      }),
+    )
+    .join(', ')
+}
+
 function studiesLabel(c: SubjectMatchCandidate): string {
-  const visible = c.studyOids.length
+  const visible = c.studies?.length ?? 0
   const hidden = c.otherStudyCount
   if (visible === 0 && hidden === 0) return t('addSubject.matchDialog.noStudies')
   if (visible > 0 && hidden === 0)
-    return t('addSubject.matchDialog.studiesVisible', { list: c.studyOids.join(', ') })
+    return t('addSubject.matchDialog.studiesVisible', { list: formatVisibleStudies(c) })
   if (visible === 0 && hidden > 0)
     return t('addSubject.matchDialog.studiesHiddenOnly', { n: hidden })
   return t('addSubject.matchDialog.studiesMixed', {
-    list: c.studyOids.join(', '),
+    list: formatVisibleStudies(c),
     n: hidden,
   })
+}
+
+/**
+ * Phase E.6 follow-up 2026-06-10 — render the candidate's persisted
+ * name in surname-first convention. Both halves null → render a single
+ * "Name unknown" placeholder; one half null → the i18n template still
+ * renders the available half (it's deliberately the same wording in
+ * DE + EN, since "Müller, " with a stray trailing comma is the visible
+ * cue that the form was filed with a half-typed name).
+ */
+function nameLine(c: SubjectMatchCandidate): string {
+  if (!c.firstName && !c.lastName) return t('addSubject.matchDialog.nameLineUnknown')
+  return t('addSubject.matchDialog.nameLine', {
+    lastName: c.lastName ?? '',
+    firstName: c.firstName ?? '',
+  })
+}
+
+/**
+ * Phase E.6 follow-up 2026-06-10 — the SPA's other date-display call
+ * sites all use locally-defined formatDate() helpers; one consumer
+ * here doesn't justify a shared utility yet. ISO yyyy-MM-dd → DD.MM.YYYY
+ * (German clinical convention). Falls through unchanged on null /
+ * malformed strings — defensive against partial-row edge cases.
+ */
+function formatDob(iso: string | null): string {
+  if (!iso) return '—'
+  return iso.replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$3.$2.$1')
 }
 </script>
 
@@ -120,14 +162,23 @@ function studiesLabel(c: SubjectMatchCandidate): string {
           :data-testid="`patient-match-candidate-${c.subjectId}`"
         >
           <div class="flex-1 min-w-0">
-            <div class="font-medium text-slate-800">
+            <div
+              class="font-semibold text-slate-900"
+              :data-testid="`patient-match-name-${c.subjectId}`"
+            >
+              {{ nameLine(c) }}
+            </div>
+            <div class="font-medium text-slate-800 mt-0.5">
               {{ c.uniqueIdentifier ?? t('addSubject.matchDialog.unnamedSubject') }}
               <span class="text-slate-500 ml-1 font-normal">
-                · {{ c.dateOfBirth ?? '—' }}
+                · {{ formatDob(c.dateOfBirth) }}
                 <span v-if="c.gender">· {{ c.gender }}</span>
               </span>
             </div>
-            <div class="text-slate-600 mt-0.5">
+            <div
+              class="text-slate-600 mt-0.5"
+              :data-testid="`patient-match-studies-${c.subjectId}`"
+            >
               {{ studiesLabel(c) }}
             </div>
           </div>

@@ -961,20 +961,61 @@ public class SubjectsApiController {
      *
      * <p>The frontend renders one card per candidate with the
      * operator-typed PHI triplet pre-filled (no PHI leaks back from
-     * this DTO — the operator already typed it). {@code studyOids} is
+     * this DTO — the operator already typed it). {@code studies} is
      * filtered to studies the operator can see; {@code otherStudyCount}
      * surfaces the count of additional active enrolments in studies
      * the operator lacks access to so the "this human is already in
      * the system somewhere" signal isn't suppressed for privacy.
+     *
+     * <p>Phase E.6 follow-up 2026-06-10 — added {@code firstName},
+     * {@code lastName} (operator-confirmation aid: they just typed it
+     * on the form, so echoing the persisted spelling sanity-checks
+     * the match) and replaced the legacy {@code studyOids} list with
+     * a list of {@link StudyEnrollment} that carries the per-study
+     * subject-label too ("this patient is M-001 in default-study and
+     * GA-008 in GA"). {@link #studyOids()} stays as a derived view so
+     * older SPA bundles in the wild keep working during the rollout.
      */
     public record SubjectMatchCandidate(
             int subjectId,
             String uniqueIdentifier,
             String gender,
             String dateOfBirth,
-            List<String> studyOids,
+            /** Phase E.6 follow-up 2026-06-10 — operator-confirmation aid. */
+            String firstName,
+            String lastName,
+            /**
+             * Phase E.6 follow-up 2026-06-10 — visible study enrolments
+             * with the patient's per-study subject-id. Replaces the old
+             * studyOids list which carried only the study OID and missed
+             * the cross-reference operators need ("this patient is M-001
+             * in default-study and GA-008 in GA-Studie"). No backwards-
+             * compat shim — the SPA store update lands in the same PR,
+             * so the wire shape changes atomically.
+             */
+            List<StudyEnrollment> studies,
             int otherStudyCount
-    ) {}
+    ) {
+        /**
+         * One visible enrolment of the candidate subject in a study the
+         * operator can see. Carries both the institutional short-code
+         * ({@code study.unique_identifier}, e.g. {@code default-study} or
+         * {@code GA-Studie}) and the system OID ({@code study.oc_oid})
+         * so the SPA can format the operator-facing string and use the
+         * OID for navigation. {@code label} is the per-study subject-id
+         * ({@code study_subject.label}, e.g. {@code M-001}, {@code GA-008}).
+         */
+        public record StudyEnrollment(
+                /** Institutional protocol short-code (study.unique_identifier). */
+                String studyUniqueIdentifier,
+                /** System OID (study.oc_oid). */
+                String studyOid,
+                /** Display name (study.name). */
+                String studyName,
+                /** Per-study label (study_subject.label) — the operator-typed subject-ID in that study. */
+                String label
+        ) {}
+    }
 
     /**
      * Phase E.6 retrospective-backfill — dedup preflight before the
@@ -994,9 +1035,10 @@ public class SubjectsApiController {
      *
      * <p>The endpoint walks the full active-grant set the operator has
      * (mirroring {@link StudiesApiController}'s list) to populate
-     * {@code studyOids}; non-visible enrolments only contribute to
+     * {@code studies}; non-visible enrolments only contribute to
      * {@code otherStudyCount}. Soft-deleted (status_id=5) subjects are
-     * excluded by the partial dedup index.
+     * excluded by the partial dedup index. {@code studyOids()} remains
+     * as a derived view for backwards compat with older SPA bundles.
      */
     @PostMapping(value = "/match-preflight", consumes = MediaType.APPLICATION_JSON_VALUE)
     @ApiResponse(responseCode = "200",
@@ -1036,10 +1078,17 @@ public class SubjectsApiController {
         List<SubjectMatchCandidate> out = new ArrayList<>();
         // Triplet match — partial index handles status_id != 5 + all
         // three columns NOT NULL. study_subject is joined to surface
-        // active enrolments.
+        // active enrolments, and study contributes both the
+        // unique_identifier (protocol short-code, e.g. "default-study")
+        // and the oc_oid (system OID, e.g. "S_DEFAULTS1") so the SPA
+        // can render the operator-friendly short-code in the dialog
+        // and still navigate by OID. Phase E.6 follow-up 2026-06-10
+        // also projects first_name + last_name from subject — they
+        // were already in the WHERE clause but never echoed back.
         String sql =
                 "WITH matched AS (" +
-                "  SELECT s.subject_id, s.unique_identifier, s.gender, s.date_of_birth " +
+                "  SELECT s.subject_id, s.unique_identifier, s.gender, " +
+                "         s.date_of_birth, s.first_name, s.last_name " +
                 "    FROM subject s " +
                 "   WHERE LOWER(s.first_name) = LOWER(?) " +
                 "     AND LOWER(s.last_name)  = LOWER(?) " +
@@ -1047,7 +1096,11 @@ public class SubjectsApiController {
                 "     AND s.status_id IS DISTINCT FROM 5  " +
                 ") " +
                 "SELECT m.subject_id, m.unique_identifier, m.gender, m.date_of_birth, " +
-                "       st.unique_identifier AS study_oid " +
+                "       m.first_name, m.last_name, " +
+                "       st.unique_identifier AS study_unique_identifier, " +
+                "       st.oc_oid            AS study_oc_oid, " +
+                "       st.name              AS study_name, " +
+                "       ss.label             AS subject_label " +
                 "  FROM matched m " +
                 "  LEFT JOIN study_subject ss ON ss.subject_id = m.subject_id " +
                 "                            AND ss.status_id  IS DISTINCT FROM 5 " +
@@ -1058,7 +1111,9 @@ public class SubjectsApiController {
         // joins study_subject many-to-one, so we fold per subject as
         // we walk.
         record Acc(String uniqueIdentifier, String gender, String dobIso,
-                   List<String> visibleStudies, int[] otherCount) {}
+                   String firstNameOut, String lastNameOut,
+                   List<SubjectMatchCandidate.StudyEnrollment> visibleStudies,
+                   int[] otherCount) {}
         java.util.LinkedHashMap<Integer, Acc> bySubject = new java.util.LinkedHashMap<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -1075,14 +1130,25 @@ public class SubjectsApiController {
                                 rs.getString("unique_identifier"),
                                 rs.getString("gender"),
                                 d == null ? null : d.toLocalDate().toString(),
+                                rs.getString("first_name"),
+                                rs.getString("last_name"),
                                 new ArrayList<>(),
                                 new int[1]);
                         bySubject.put(subjectId, acc);
                     }
-                    String studyOid = rs.getString("study_oid");
-                    if (studyOid != null) {
-                        if (visibleStudyOids.contains(studyOid)) acc.visibleStudies().add(studyOid);
-                        else acc.otherCount()[0]++;
+                    String studyUid  = rs.getString("study_unique_identifier");
+                    String studyOcOid = rs.getString("study_oc_oid");
+                    String studyName = rs.getString("study_name");
+                    String label     = rs.getString("subject_label");
+                    if (studyUid != null || studyOcOid != null) {
+                        // visibleStudyOids is keyed on oc_oid (StudyBean.getOid);
+                        // hidden rows still contribute to otherCount.
+                        if (studyOcOid != null && visibleStudyOids.contains(studyOcOid)) {
+                            acc.visibleStudies().add(new SubjectMatchCandidate.StudyEnrollment(
+                                    studyUid, studyOcOid, studyName, label));
+                        } else {
+                            acc.otherCount()[0]++;
+                        }
                     }
                 }
             }
@@ -1098,6 +1164,8 @@ public class SubjectsApiController {
                     a.uniqueIdentifier(),
                     a.gender(),
                     a.dobIso(),
+                    a.firstNameOut(),
+                    a.lastNameOut(),
                     a.visibleStudies(),
                     a.otherCount()[0]));
         }

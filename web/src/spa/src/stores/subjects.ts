@@ -926,19 +926,48 @@ export const useSubjectsStore = defineStore('subjects', () => {
 /**
  * Phase E.6 retrospective-backfill — single match-preflight result.
  *
- * Mirrors the backend `SubjectMatchCandidate` record. `studyOids` lists
- * studies the operator has visible. `otherStudyCount` carries the
- * count of additional enrolments in studies the operator can't see —
- * surfaced so the dialog can show "Bekannt in {n} weiteren Studien
- * (kein Zugriff)" without leaking the study identities.
+ * Mirrors the backend `SubjectMatchCandidate` record. `studies` lists
+ * the operator-visible enrolments with the per-study subject label
+ * ("this patient is M-001 in default-study, GA-008 in GA-Studie").
+ * `otherStudyCount` carries the count of additional enrolments in
+ * studies the operator can't see — surfaced so the dialog can show
+ * "Bekannt in {n} weiteren Studien (kein Zugriff)" without leaking
+ * the study identities.
+ *
+ * Phase E.6 follow-up 2026-06-10 — added {@link firstName} +
+ * {@link lastName} (operator-confirmation aid: the operator typed
+ * these on the form, so echoing the persisted spelling sanity-checks
+ * the match), and replaced the bare {@link studyOids} list with the
+ * richer {@link studies} shape. {@link studyOids} stays for a brief
+ * transition window because the backend still emits it as a derived
+ * view.
  */
 export interface SubjectMatchCandidate {
   subjectId: number
   uniqueIdentifier: string | null
   gender: string | null
   dateOfBirth: string | null
-  studyOids: string[]
+  /** Phase E.6 follow-up 2026-06-10 — operator-confirmation aid. */
+  firstName: string | null
+  /** Phase E.6 follow-up 2026-06-10 — operator-confirmation aid. */
+  lastName: string | null
+  /** Phase E.6 follow-up 2026-06-10 — visible enrolments + per-study label. */
+  studies: PatientMatchStudyEnrollment[]
   otherStudyCount: number
+}
+
+/**
+ * Phase E.6 follow-up 2026-06-10 — one visible enrolment surfaced by
+ * the match-preflight endpoint. {@link studyUniqueIdentifier} is the
+ * operator-facing protocol short-code ({@code default-study}); the
+ * {@link studyOid} carries the system OID for navigation; {@link label}
+ * is the operator-typed per-study subject-id ({@code M-001}).
+ */
+export interface PatientMatchStudyEnrollment {
+  studyUniqueIdentifier: string
+  studyOid: string
+  studyName: string
+  label: string
 }
 
 /**
