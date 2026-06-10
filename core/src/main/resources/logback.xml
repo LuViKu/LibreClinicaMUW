@@ -1,14 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <configuration>
-  
+
  <contextListener class="at.ac.meduniwien.ophthalmology.libreclinica.log.LoggerStartupListener"/>
- 
-  
+
+  <!--
+    Phase E hardening A4 (2026-06-10): shared reqId fragment surfaces the
+    request-correlation id populated by RequestIdFilter. The "-" default
+    keeps the brackets visible but empty for startup logs / background
+    threads with no inbound HTTP request. All patterns below that include
+    %logger or %thread must include ${reqIdField} so the SPA console →
+    server log → audit row chain stays unbroken.
+  -->
+  <property name="reqIdField" value="[%X{reqId:-}]"/>
+  <property name="consolePattern"
+            value="%date{MM/dd HH:mm:ss.SSS} [%thread] ${reqIdField} %-5level %logger{35}:%L - %msg %n %ex{full}"/>
+  <property name="filePatternBase"
+            value="%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] ${reqIdField}"/>
+  <property name="syslogSuffixPattern"
+            value="[%mdc{WEBAPP}] ${reqIdField} %mdc{USERNAME} %logger %msg"/>
+
   <!-- APPENDERS -->
   <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
      <encoder>
-      <pattern>%date{MM/dd HH:mm:ss.SSS} [%thread] %-5level %logger{35}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${consolePattern}</pattern>
     </encoder>
   </appender>
  
@@ -35,7 +50,7 @@
       <maxHistory>30</maxHistory>
     </rollingPolicy>
     <encoder>
-      <pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}]  LPR %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${filePatternBase}  LPR %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
     </encoder>
   </appender>
   
@@ -48,7 +63,7 @@
       <maxHistory>30</maxHistory>
     </rollingPolicy>
     <encoder>
-      <pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${filePatternBase} NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
     </encoder>
   </appender>
   
@@ -61,7 +76,7 @@
       <maxHistory>30</maxHistory>
     </rollingPolicy>
     <encoder>
-      <pattern>%date{MM/dd HH:mm:ss}  [%mdc{WEBAPP}] FTP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${filePatternBase} FTP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
     </encoder>
   </appender>
     	
@@ -76,7 +91,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] LPR %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} LPR %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file USER facility -->
@@ -89,7 +104,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] USER %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} USER %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file MAIL facility -->
@@ -103,7 +118,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] MAIL %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} MAIL %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file AUTH facility -->
@@ -116,7 +131,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] AUTH %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} AUTH %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file UUCP facility -->
@@ -129,7 +144,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] UUCP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} UUCP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file CRON facility -->
@@ -142,7 +157,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] CRON %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} CRON %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file AUTHPRIV facility -->
@@ -155,7 +170,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] AUTHPRIV %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} AUTHPRIV %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file DAEMON facility -->
@@ -169,7 +184,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] DAEMON %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} DAEMON %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file NEWS facility -->
@@ -181,7 +196,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file FTP facility - to get logs excluded from other defined facilities -->
@@ -194,7 +209,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] FTP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} FTP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Syslog LPR facility -->
@@ -203,7 +218,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>		
 		<Facility>LPR</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>  
 	<!-- Syslog USER facility -->
 	<appender name="SYSLOG-USER" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -211,7 +226,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>USER</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>	
 	<!-- Syslog MAIL facility -->
 	<appender name="SYSLOG-MAIL" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -219,7 +234,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>MAIL</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog AUTH facility -->
 	<appender name="SYSLOG-AUTH" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -227,7 +242,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>AUTH</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog UUCP facility -->
 	<appender name="SYSLOG-UUCP" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -235,7 +250,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>UUCP</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog CRON facility -->
 	<appender name="SYSLOG-CRON" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -243,7 +258,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>CRON</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog AUTHPRIV facility -->
 	<appender name="SYSLOG-AUTHPRIV" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -251,7 +266,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>AUTHPRIV</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog DAEMON facility -->
 	<appender name="SYSLOG-DAEMON" class="ch.qos.logback.classic.net.SyslogAppender">		
@@ -259,14 +274,14 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>DAEMON</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog NEWS facility -->
 	<appender name="SYSLOG-NEWS" class="ch.qos.logback.classic.net.SyslogAppender">		
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>NEWS</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog FTP facility - to get logs excluded from other defined facilities -->
 	<appender name="SYSLOG-OTHER" class="ch.qos.logback.classic.net.SyslogAppender">		
@@ -274,7 +289,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>FTP</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	
 	<!-- LOGGERS -->

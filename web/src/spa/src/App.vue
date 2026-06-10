@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
+import GlobalErrorToast from '@/components/GlobalErrorToast.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/auth'
 
@@ -108,5 +109,10 @@ const showTopBar = computed(() => route.name !== 'login' && route.name !== 'firs
     <main id="main-content" tabindex="-1" class="outline-none">
       <RouterView />
     </main>
+
+    <!-- Phase E hardening — A5: singleton global error toast. Mounted
+         once, outside any conditional, so uncaught errors from any
+         view (including login / first-login / NotFound) surface. -->
+    <GlobalErrorToast />
   </div>
 </template>

@@ -31,7 +31,17 @@
       "rolesLabel": "Rollen",
       "rolesAriaLabel": "Zugewiesene Rollen",
       "signOut": "Abmelden"
+    },
+    "error": {
+      "title": "Ein Fehler ist aufgetreten",
+      "dismiss": "Fehlermeldung schließen",
+      "reqIdLabel": "Fehler-ID"
     }
+  },
+  "notFound": {
+    "title": "Seite nicht gefunden",
+    "body": "Die aufgerufene Adresse existiert nicht oder die Seite wurde verschoben. Bitte über die Navigation zur gewünschten Ansicht zurückkehren.",
+    "cta": "Zur Startseite"
   },
   "home": {
     "eyebrow": "Willkommen",

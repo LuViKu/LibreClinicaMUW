@@ -23,12 +23,14 @@ import java.util.Set;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
@@ -42,6 +44,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -332,7 +335,80 @@ public class EyeCohortTransitionsApiController {
                 ? sourceSs.getLabel()
                 : body.targetLabel().trim();
 
+        // Phase A1 (2026-06-10) — failure-audit wrap. Any Throwable
+        // that escapes the transactional write block lands in
+        // audit_log_event as an OPERATION_FAILED row (type 61) on a
+        // separate connection so the outer rollback can't take it down
+        // with it. Validation guards above (400 / 403 / 404 with no
+        // throw) flow through unchanged.
+        final StudyBean currentStudyRef = currentStudy;
+        final StudySubjectBean sourceSsRef = sourceSs;
+        final StudyBean targetStudyRef = targetStudy;
+        final UserAccountBean currentUserRef = currentUser;
+        final int sourceSubjectIdRef = sourceSubjectId;
+        final String desiredTargetLabelRef = desiredTargetLabel;
+        final java.time.LocalDate transitionedOnRef = transitionedOn;
+        final String reasonRef = reason;
+        final String eyeRef = eye;
+        final String reqId = MDC.get("reqId");
+
         TransitionResponse out;
+        Object transitionResult;
+        try {
+            transitionResult = FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    currentUser.getId(),
+                    "eye_cohort_transition",
+                    sourceSsRef.getId(),
+                    "EyeCohortTransitionsApiController.transition",
+                    reqId,
+                    () -> doTransitionPersist(currentStudyRef, sourceSsRef, targetStudyRef,
+                            currentUserRef, sourceSubjectIdRef, eyeRef, desiredTargetLabelRef,
+                            transitionedOnRef, reasonRef));
+        } catch (Exception e) {
+            // FailureAuditTemplate has written the audit row. Surface
+            // the same 500 envelope existing callers expect.
+            LOG.error("Eye cohort transition failed for source_ss={} eye={} target_study={}: {}",
+                    sourceSs.getId(), eye, targetStudy.getOid(), e.getMessage(), e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "message", "Failed to commit eye cohort transition — see server log."));
+        }
+
+        // doTransitionPersist returns either a ResponseEntity (early
+        // domain-level rejection — 400/409 inside the tx) or a
+        // TransitionResponse (the happy path 201).
+        if (transitionResult instanceof ResponseEntity<?> earlyResponse) {
+            return earlyResponse;
+        }
+        out = (TransitionResponse) transitionResult;
+
+        LOG.info("Eye cohort transition: source_ss={} (label={}) eye={} → target_ss={} (label={}, study={}) by user={}",
+                out.sourceStudySubjectId(), sourceSs.getLabel(), eye,
+                out.targetStudySubjectId(), out.targetLabel(), targetStudy.getOid(),
+                currentUser.getName());
+
+        return ResponseEntity.status(201).body(out);
+    }
+
+    /**
+     * Phase A1 (2026-06-10) — transactional write block extracted from
+     * {@link #transition} so {@link FailureAuditTemplate#runOrAudit}
+     * can wrap it cleanly. Returns a {@link TransitionResponse} on the
+     * happy path, or a {@link ResponseEntity} when a domain-level
+     * rejection happens INSIDE the transaction (concurrent transition
+     * detected by the FOR UPDATE re-read, target already covers the
+     * eye → 409, etc). Any other failure throws and the wrapper writes
+     * an OPERATION_FAILED audit row before the exception propagates.
+     */
+    private Object doTransitionPersist(StudyBean currentStudy,
+                                       StudySubjectBean sourceSs,
+                                       StudyBean targetStudy,
+                                       UserAccountBean currentUser,
+                                       int sourceSubjectId,
+                                       String eye,
+                                       String desiredTargetLabel,
+                                       java.time.LocalDate transitionedOn,
+                                       String reason) throws SQLException {
         try (Connection c = dataSource.getConnection()) {
             boolean priorAutoCommit = c.getAutoCommit();
             c.setAutoCommit(false);
@@ -383,7 +459,7 @@ public class EyeCohortTransitionsApiController {
                         reason, sourceSs.getLabel());
 
                 c.commit();
-                out = new TransitionResponse(
+                return new TransitionResponse(
                         transitionId,
                         sourceSs.getId(),
                         resolved.targetStudySubjectId,
@@ -392,25 +468,15 @@ public class EyeCohortTransitionsApiController {
                         resolved.targetEyeAfter);
             } catch (Exception e) {
                 c.rollback();
-                LOG.error("Eye cohort transition failed for source_ss={} eye={} target_study={}: {}",
-                        sourceSs.getId(), eye, targetStudy.getOid(), e.getMessage(), e);
-                return ResponseEntity.status(500).body(Map.of(
-                        "message", "Failed to commit eye cohort transition — see server log."));
+                // Rethrow so FailureAuditTemplate writes the
+                // OPERATION_FAILED audit row on its own connection.
+                if (e instanceof SQLException sqle) throw sqle;
+                if (e instanceof RuntimeException re) throw re;
+                throw new SQLException("Transition persist failed", e);
             } finally {
                 c.setAutoCommit(priorAutoCommit);
             }
-        } catch (SQLException e) {
-            LOG.error("Failed to open connection for eye cohort transition", e);
-            return ResponseEntity.status(500).body(Map.of(
-                    "message", "Failed to open transaction — see server log."));
         }
-
-        LOG.info("Eye cohort transition: source_ss={} (label={}) eye={} → target_ss={} (label={}, study={}) by user={}",
-                out.sourceStudySubjectId(), sourceSs.getLabel(), eye,
-                out.targetStudySubjectId(), out.targetLabel(), targetStudy.getOid(),
-                currentUser.getName());
-
-        return ResponseEntity.status(201).body(out);
     }
 
     /* =============================================================== */

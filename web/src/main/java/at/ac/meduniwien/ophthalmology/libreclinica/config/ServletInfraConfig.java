@@ -20,6 +20,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.OCContextLoaderListe
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.ApiSecurityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.LocaleFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.RequestIdFilter;
 import jakarta.servlet.Filter;
 
 /**
@@ -75,6 +76,21 @@ public class ServletInfraConfig {
 
     // --- Filters ---
 
+    /**
+     * Phase E hardening A4 — first filter in the chain. Populates the
+     * {@code reqId} MDC key + {@code X-Request-Id} response header before
+     * any downstream filter logs. See {@link RequestIdFilter} JavaDoc for
+     * the rationale on filter ordering + MDC hygiene.
+     */
+    @Bean
+    public FilterRegistrationBean<RequestIdFilter> requestIdFilter() {
+        FilterRegistrationBean<RequestIdFilter> reg =
+                new FilterRegistrationBean<>(new RequestIdFilter());
+        reg.addUrlPatterns("/*");
+        reg.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        return reg;
+    }
+
     @Bean
     public FilterRegistrationBean<CharacterEncodingFilter> encodingFilter() {
         CharacterEncodingFilter filter = new CharacterEncodingFilter();
@@ -82,7 +98,9 @@ public class ServletInfraConfig {
         filter.setForceEncoding(true);
         FilterRegistrationBean<CharacterEncodingFilter> reg = new FilterRegistrationBean<>(filter);
         reg.addUrlPatterns("/*");
-        reg.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        // A4 (2026-06-10): bumped from HIGHEST_PRECEDENCE to +5 so
+        // requestIdFilter sits strictly ahead of every other filter.
+        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 5);
         return reg;
     }
 

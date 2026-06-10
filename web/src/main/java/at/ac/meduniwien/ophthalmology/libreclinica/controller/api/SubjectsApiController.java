@@ -36,6 +36,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
@@ -53,6 +54,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
@@ -697,6 +699,52 @@ public class SubjectsApiController {
                     "Validation failed", errors));
         }
 
+        // Phase A1 (2026-06-10) — failure-audit wrap. Any Throwable that
+        // leaks out of the persistence block below lands in
+        // audit_log_event as an OPERATION_FAILED row (type 61) tagged
+        // with the actor, request id, and operation label before the
+        // exception propagates to Spring's default error handler. The
+        // DAO uses a separate JDBC connection so the row survives any
+        // rollback of the in-flight subject + study_subject inserts.
+        final SubjectBean existingByPersonIdRef = existingByPersonId;
+        final SubjectGroupAssignmentService groupServiceRef = groupService;
+        final String personIdRef = personId;
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    currentUser.getId(),
+                    "study_subject",
+                    null,
+                    "SubjectsApiController.create",
+                    reqId,
+                    () -> doCreatePersist(body, currentStudy, currentUser,
+                            studySubjectDAO, existingByPersonIdRef,
+                            groupServiceRef, personIdRef));
+        } catch (Exception e) {
+            // FailureAuditTemplate has already written the audit row.
+            // Surface the same 500 envelope existing callers expect.
+            LOG.error("SubjectsApiController.create failed for label={} study={}",
+                    body.id(), currentStudy.getOid(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to create subject — see server log."));
+        }
+    }
+
+    /**
+     * Phase A1 (2026-06-10) — the persistence block extracted from
+     * {@link #create} so {@link FailureAuditTemplate#runOrAudit} can
+     * wrap it cleanly. Throws on any failure so the template's catch
+     * lands an OPERATION_FAILED audit row. Returns the success
+     * ResponseEntity (201 + SubjectDetailDto) on the happy path.
+     */
+    private ResponseEntity<?> doCreatePersist(AddSubjectRequest body,
+                                              StudyBean currentStudy,
+                                              UserAccountBean currentUser,
+                                              StudySubjectDAO studySubjectDAO,
+                                              SubjectBean existingByPersonId,
+                                              SubjectGroupAssignmentService groupService,
+                                              String personId) throws Exception {
         // ----- Persist subject row (direct SQL to preserve O/U gender codes) -----
         String trimmedId = body.id().trim();
         String trimmedSecondary = body.secondaryId() == null ? null : body.secondaryId().trim();
@@ -737,15 +785,12 @@ public class SubjectsApiController {
             LOG.info("Person-ID re-enrol: reusing subject_id={} for personId={} study={}",
                     newSubjectId, personId, currentStudy.getOid());
         } else {
-            try {
-                newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId(),
-                        personId == null || personId.isEmpty() ? null : personId,
-                        trimmedFirstName, trimmedLastName);
-            } catch (SQLException e) {
-                LOG.error("Failed to insert subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
-                return ResponseEntity.status(500).body(Map.of("message",
-                        "Failed to create subject — see server log."));
-            }
+            // Phase A1 — rethrow so FailureAuditTemplate writes the
+            // OPERATION_FAILED row. The outer create() catches Exception
+            // and surfaces the legacy 500 envelope.
+            newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId(),
+                    personId == null || personId.isEmpty() ? null : personId,
+                    trimmedFirstName, trimmedLastName);
         }
 
         // ----- Persist study_subject row via DAO (reuse OID generator) -----
@@ -770,17 +815,12 @@ public class SubjectsApiController {
             ssb.setScreeningDate(java.sql.Date.valueOf(LocalDate.parse(body.screeningDate().trim())));
         }
 
-        try {
-            ssb = studySubjectDAO.create(ssb);
-        } catch (Exception e) {
-            LOG.error("Failed to insert study_subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to enrol subject — see server log."));
-        }
+        // Phase A1 — rethrow on study_subject insert failure so
+        // FailureAuditTemplate audits the OPERATION_FAILED row.
+        ssb = studySubjectDAO.create(ssb);
         if (ssb == null || ssb.getId() == 0) {
-            LOG.error("study_subject insert returned no PK for label={} study={}", trimmedId, currentStudy.getOid());
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to enrol subject — no PK returned."));
+            throw new SQLException("study_subject insert returned no PK for label="
+                    + trimmedId + " study=" + currentStudy.getOid());
         }
 
         // Phase E.6 subject-lifecycle — apply the SPA's group-assignment

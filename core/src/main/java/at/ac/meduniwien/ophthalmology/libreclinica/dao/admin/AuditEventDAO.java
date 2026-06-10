@@ -9,6 +9,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.dao.admin;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+import java.sql.Types;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -508,4 +512,108 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
 	public AuditEventBean emptyBean() {
 		return new AuditEventBean();
 	}
+
+    /**
+     * Phase A1 (2026-06-10) — failure-audit write path.
+     *
+     * <p>Inserts an {@code audit_log_event} row with
+     * {@code audit_log_event_type_id=61} (OPERATION_FAILED, seeded by
+     * {@code lc-muw-2026-06-10-audit-event-type-operation-failed.xml})
+     * recording that a wrapped controller / servlet method threw.
+     *
+     * <p>The row is written via a <strong>separate JDBC connection</strong>
+     * obtained directly from the DataSource with {@code autoCommit=true}.
+     * This is the manual equivalent of Spring's
+     * {@code @Transactional(propagation = REQUIRES_NEW)} — the caller's
+     * outer transaction can roll back its partial write while this row
+     * stays committed, preserving the §11.10(e) audit trail entry.
+     * Legacy callers use direct JDBC, not Spring tx managers, so a
+     * propagation-based attribute would silently no-op; piggy-backing
+     * on the caller's connection would tie the audit row to the rollback.
+     *
+     * <p>The {@code new_value} column pipe-encodes the diagnostic triple
+     * {@code errorClass|errorMessage|reqId}. Audit Log SPA renderers
+     * that target this type split on the pipe, matching the convention
+     * established by {@code EyeCohortTransitionsApiController.emitTransitionAudit}.
+     *
+     * @param userId       acting user id (0 if not authenticated)
+     * @param entityType   table or symbolic name (e.g. "study_subject",
+     *                     "eye_cohort_transition"); becomes
+     *                     {@code audit_table}
+     * @param entityId     domain entity id when applicable; null sets
+     *                     SQL NULL for async paths (SMTP failure with
+     *                     no entity context)
+     * @param operation    controller method or action label;
+     *                     becomes {@code entity_name}
+     * @param errorClass   throwable class FQN
+     * @param errorMessage throwable message, truncated to fit when packed
+     * @param reqId        request correlation id from MDC; null on
+     *                     pre-A4 callers and async paths
+     * @throws SQLException when the audit insert itself fails — the
+     *                     FailureAuditTemplate catches and logs at
+     *                     ERROR so the original exception still wins
+     */
+    public void insertOperationFailure(int userId,
+                                       String entityType,
+                                       Integer entityId,
+                                       String operation,
+                                       String errorClass,
+                                       String errorMessage,
+                                       String reqId) throws SQLException {
+        // Pipe-encode the diagnostic triple. audit_log_event.new_value
+        // is VARCHAR(4000) (per the legacy ddl); we cap each component
+        // proportionally so a 6 KB stack trace can't blow past the
+        // column width.
+        String safeClass = errorClass == null ? "" : errorClass;
+        String safeMessage = errorMessage == null ? "" : errorMessage;
+        String safeReqId = reqId == null ? "" : reqId;
+        String newValue = truncate(safeClass, 200) + "|"
+                + truncate(safeMessage, 3600) + "|"
+                + truncate(safeReqId, 64);
+
+        String safeEntityType = entityType == null ? "" : entityType;
+        String safeOperation = operation == null ? "" : operation;
+
+        // REQUIRES_NEW-equivalent: open a fresh connection straight from
+        // the pool, force autoCommit=true, never touch the caller's
+        // Connection. Try-with-resources closes the connection deterministically
+        // even if the INSERT throws.
+        try (Connection c = this.ds.getConnection()) {
+            boolean priorAutoCommit = c.getAutoCommit();
+            if (!priorAutoCommit) {
+                c.setAutoCommit(true);
+            }
+            try (PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                            + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                            + "VALUES (61, now(), ?, ?, ?, ?, '', ?)")) {
+                ps.setInt(1, userId);
+                ps.setString(2, truncate(safeEntityType, 255));
+                if (entityId == null) {
+                    ps.setNull(3, Types.INTEGER);
+                } else {
+                    ps.setInt(3, entityId);
+                }
+                ps.setString(4, truncate(safeOperation, 255));
+                ps.setString(5, truncate(newValue, 4000));
+                ps.executeUpdate();
+            } finally {
+                if (!priorAutoCommit) {
+                    // Restore for any pool wrapper that recycles
+                    // connections without resetting autoCommit.
+                    try {
+                        c.setAutoCommit(priorAutoCommit);
+                    } catch (SQLException ignore) {
+                        // Connection is about to be closed by
+                        // try-with-resources; nothing to do.
+                    }
+                }
+            }
+        }
+    }
+
+    private static String truncate(String s, int max) {
+        if (s == null) return "";
+        return s.length() <= max ? s : s.substring(0, max);
+    }
 }

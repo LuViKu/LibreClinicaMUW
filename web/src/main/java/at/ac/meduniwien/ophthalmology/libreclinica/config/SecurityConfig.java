@@ -227,7 +227,21 @@ public class SecurityConfig {
                         // the SPA's LoginView ever loaded — the SPA's own
                         // login screen was unreachable in production builds
                         // and only visible via the Vite dev server.
-                        "/app/**"
+                        "/app/**",
+                        // Phase E hardening (A2): GlobalErrorServlet is
+                        // mapped at /error in web.xml and is the target of
+                        // every <error-page> entry. Without an explicit
+                        // permitAll, the catch-all hasRole("USER") below
+                        // 302s anonymous failure paths to the login page —
+                        // hiding the German error JSP from unauthenticated
+                        // callers and breaking the SPA's JSON-500 contract
+                        // for the un-logged-in case. Safe to expose
+                        // anonymously: the servlet renders ONLY the
+                        // Tomcat-supplied javax.servlet.error.* request
+                        // attributes (status, exception class+message,
+                        // request URI), never DB contents nor session
+                        // state.
+                        "/error"
                 )).permitAll()
                 .anyRequest().hasRole("USER")
             )

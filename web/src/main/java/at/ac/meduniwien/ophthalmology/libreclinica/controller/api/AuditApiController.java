@@ -129,7 +129,17 @@ public class AuditApiController {
             LEFT JOIN user_account ua ON ua.user_id = a.user_id
             LEFT JOIN audit_log_event_type alet
               ON alet.audit_log_event_type_id = a.audit_log_event_type_id
-            WHERE
+            -- Phase A1 (2026-06-10) — hide OPERATION_FAILED / JOB_FAILED
+            -- rows from the per-study investigator view. They are
+            -- recorded for §11.10(e) compliance + sysadmin / compliance
+            -- review but are operational noise for a study coordinator.
+            -- Legacy event types default to is_user_visible=true via
+            -- the Liquibase column add. A future sysadmin / compliance
+            -- audit-log endpoint drops this clause to see everything.
+            -- COALESCE keeps the historical rows that pre-date the
+            -- audit_log_event_type lookup join (NULL type id) visible.
+            WHERE COALESCE(alet.is_user_visible, true) = true
+            AND (
               ( a.audit_table = 'item_data' AND a.entity_id IN (
                   SELECT id.item_data_id FROM item_data id
                     JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id
@@ -164,6 +174,7 @@ public class AuditApiController {
               -- on that join rather than on the entity_id itself.
               OR ( a.audit_table = 'dataset' AND a.entity_id IN (
                   SELECT dataset_id FROM dataset WHERE study_id IN __IN__))
+            )
             ORDER BY a.audit_date DESC, a.audit_id DESC
             LIMIT 500
             """;

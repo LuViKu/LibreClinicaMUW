@@ -76,4 +76,40 @@
          the spring-ws / com.sun.jersey jars that never made the jakarta
          transition. -->
 
+    <!-- Phase A2 (2026-06-10): global error-page dispatcher.
+         Closes the legacy-servlet bypass — exceptions raised by the
+         ~222 legacy servlets registered via LegacyServletRegistry
+         today fall through to Tomcat's default HTML 500 page, which
+         (a) bypasses the §11.10(e) failure audit trail and (b)
+         returns HTML to /pages/api/v1/** JSON callers when the
+         ApiExceptionHandler didn't catch first.
+
+         GlobalErrorServlet is a raw HttpServlet (declared here, NOT in
+         LegacyServletRegistry) so it stays addressable even if a
+         future cleanup pass empties the @Configuration registry.
+         It calls A1's FailureAuditTemplate equivalent
+         (AuditEventDAO.insertOperationFailure) directly and content-
+         negotiates: JSON request → {message, reqId} body, HTML
+         request → forward to /WEB-INF/jsp/error-page.jsp (a self-
+         contained minimal German page; the legacy /WEB-INF/jsp/error.jsp
+         keeps its sidebar / bundle / session wiring for the few
+         legacy paths that already target it). -->
+    <servlet>
+        <servlet-name>GlobalErrorServlet</servlet-name>
+        <servlet-class>at.ac.meduniwien.ophthalmology.libreclinica.servlet.GlobalErrorServlet</servlet-class>
+    </servlet>
+    <servlet-mapping>
+        <servlet-name>GlobalErrorServlet</servlet-name>
+        <url-pattern>/error</url-pattern>
+    </servlet-mapping>
+
+    <error-page>
+        <error-code>500</error-code>
+        <location>/error</location>
+    </error-page>
+    <error-page>
+        <exception-type>java.lang.Throwable</exception-type>
+        <location>/error</location>
+    </error-page>
+
 </web-app>
