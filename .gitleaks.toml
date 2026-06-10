@@ -56,6 +56,33 @@ paths = [
   # gitleaks flags as high-entropy. Either retired in Phase B or kept
   # as opaque artefacts.
   '''^.+\.(dll|so|class|jar|war)$''',
+
+  # Phase B.11 (commit 4f531f9f7, 2026-05-29) renamed every Java
+  # package from `org.akaza.openclinica.*` to
+  # `at.ac.meduniwien.ophthalmology.libreclinica.*`. The post-rename
+  # tree is the canonical source; the pre-rename paths under
+  # `org/akaza/openclinica/` no longer exist in HEAD but persist in
+  # git history. gitleaks's default `--full-history --all` scan walks
+  # those historical commits and flags the JavaDoc API-key example
+  # values that came in with the upstream OpenClinica 3.0 drop in
+  # 2009 (e.g. `"apiKey": "5f462a16b3b04b1b9747262968bd5d2f"` shown
+  # in the `/createuseraccount` REST controller documentation). The
+  # matching documentation examples in the current
+  # `at.ac.meduniwien.*` copies are not credentials — they show the
+  # SHAPE of an API key, the values themselves are demo-only and
+  # never deployed. Real secrets live in `docker/datainfo.properties`
+  # + env vars at runtime per the institutional convention. Allowlist
+  # the historical org.akaza tree across every module.
+  '''(^|/)org/akaza/openclinica/.*\.java$''',
+
+  # Password-encoder unit tests use developer-readable plaintext
+  # fixtures (e.g. `RAW_PASSWORD = "muw-d1-legacy-pin"` in
+  # LegacyMd5Sha1PasswordEncoderTest.java line 33) to assert that a
+  # given input produces a known hash. The values are deliberately
+  # stable for regression testing and are NOT deployed credentials.
+  # Allowlist all `*PasswordEncoder*Test.java` files under the test
+  # sources of every module.
+  '''(^|/)src/test/java/.*PasswordEncoder[A-Za-z0-9]*Test\.java$''',
 ]
 
 # Targeted allowlist for the `generic-api-key` rule — covers JSPs that
