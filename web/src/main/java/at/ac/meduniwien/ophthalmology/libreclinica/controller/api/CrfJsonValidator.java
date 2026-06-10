@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -81,9 +83,9 @@ public class CrfJsonValidator {
      *       yet), but a parse error fails fast.</li>
      * </ul>
      */
-    public List<SubjectsApiController.ValidationErrorBody.FieldError> validate(
+    public List<ValidationErrorBody.FieldError> validate(
             CrfVersionAuthoringRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         validateVersionName(body, out);
         if (body.sections() == null || body.sections().isEmpty()) {
             out.add(fe("sections", "At least one section is required"));
@@ -111,7 +113,7 @@ public class CrfJsonValidator {
     }
 
     private void validateVersionName(CrfVersionAuthoringRequest body,
-                                     List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+                                     List<ValidationErrorBody.FieldError> out) {
         String vname = body.versionName() == null ? "" : body.versionName().trim();
         if (vname.isEmpty()) {
             out.add(fe("versionName", "versionName is required"));
@@ -126,7 +128,7 @@ public class CrfJsonValidator {
                                  Set<String> seenItemNames,
                                  LinkedHashMap<String, String> seenOidsInOrder,
                                  Map<String, Integer> groupLabelToSection,
-                                 List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+                                 List<ValidationErrorBody.FieldError> out) {
         String prefix = "sections[" + sectionIdx + "]";
         String label = section == null || section.label() == null ? "" : section.label().trim();
         String title = section == null || section.title() == null ? "" : section.title().trim();
@@ -156,7 +158,7 @@ public class CrfJsonValidator {
                               Set<String> seenItemNames,
                               LinkedHashMap<String, String> seenOidsInOrder,
                               Map<String, Integer> groupLabelToSection,
-                              List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+                              List<ValidationErrorBody.FieldError> out) {
         String iPrefix = "sections[" + sectionIdx + "].items[" + itemIdx + "]";
         // ---- item name ----
         String iname = item == null || item.name() == null ? "" : item.name().trim();
@@ -219,7 +221,7 @@ public class CrfJsonValidator {
     private void validateShowItem(CrfVersionAuthoringRequest.Item item,
                                   String iPrefix,
                                   LinkedHashMap<String, String> seenOidsInOrder,
-                                  List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+                                  List<ValidationErrorBody.FieldError> out) {
         String showItem = item.showItem();
         if (showItem == null || showItem.trim().isEmpty()) return;
         String parentOid = item.parentItemOid();
@@ -247,7 +249,7 @@ public class CrfJsonValidator {
                                     String iPrefix,
                                     int sectionIdx,
                                     Map<String, Integer> groupLabelToSection,
-                                    List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+                                    List<ValidationErrorBody.FieldError> out) {
         String groupLabel = item.groupLabel();
         if (groupLabel == null || groupLabel.trim().isEmpty()) return;
         String label = groupLabel.trim();
@@ -264,7 +266,7 @@ public class CrfJsonValidator {
     private void validateResponseSet(CrfVersionAuthoringRequest.Item item,
                                      String iPrefix,
                                      String dataType,
-                                     List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+                                     List<ValidationErrorBody.FieldError> out) {
         CrfVersionAuthoringRequest.ResponseSet rs = item.responseSet();
         if (rs == null) {
             // Default response type is TEXT — no constraint to check
@@ -364,7 +366,7 @@ public class CrfJsonValidator {
     private void validateCalculationFormula(CrfVersionAuthoringRequest.ResponseSet rs,
                                             String iPrefix,
                                             String dataType,
-                                            List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+                                            List<ValidationErrorBody.FieldError> out) {
         if ("FILE".equals(dataType)) {
             out.add(fe(iPrefix + ".dataType",
                     "Data type FILE is incompatible with calculation response types"));
@@ -422,7 +424,7 @@ public class CrfJsonValidator {
     private void validateValidation(CrfVersionAuthoringRequest.Item item,
                                     String iPrefix,
                                     String dataType,
-                                    List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+                                    List<ValidationErrorBody.FieldError> out) {
         CrfVersionAuthoringRequest.Validation v = item.validation();
         if (v == null) return;
         String regexp = v.regexp();
@@ -460,7 +462,7 @@ public class CrfJsonValidator {
     private void validateDefaultValue(CrfVersionAuthoringRequest.Item item,
                                       String iPrefix,
                                       String dataType,
-                                      List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+                                      List<ValidationErrorBody.FieldError> out) {
         String def = item.defaultValue();
         if (def == null || def.trim().isEmpty()) return;
         String trimmed = def.trim();
@@ -495,8 +497,8 @@ public class CrfJsonValidator {
         }
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError fe(String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    private static ValidationErrorBody.FieldError fe(String field, String msg) {
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
     /* ----------------------------------------------------------------- */

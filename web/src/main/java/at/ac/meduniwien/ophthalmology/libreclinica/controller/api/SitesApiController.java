@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -128,15 +130,15 @@ public class SitesApiController {
         ResponseEntity<?> preflight = preflight(session, parentOid, /* mutating */ true);
         if (preflight != null) return preflight;
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateCreateShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -148,17 +150,17 @@ public class SitesApiController {
         // globally unique).
         StudyBean uidCollision = studyDao.findByUniqueIdentifier(body.uniqueProtocolId().trim());
         if (uidCollision != null && uidCollision.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "uniqueProtocolId",
                             "Unique protocol id '" + body.uniqueProtocolId() + "' is already taken"))));
         }
         StudyBean nameCollision = studyDao.findByName(body.name().trim());
         if (nameCollision != null && nameCollision.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "name", "Study/site name '" + body.name() + "' is already taken"))));
         }
 
@@ -244,14 +246,14 @@ public class SitesApiController {
         ResponseEntity<?> preflight = preflight(session, parentOid, /* mutating */ true);
         if (preflight != null) return preflight;
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = validateUpdateShape(body);
+        List<ValidationErrorBody.FieldError> errors = validateUpdateShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -417,9 +419,9 @@ public class SitesApiController {
         return null;
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreateShape(
+    private static List<ValidationErrorBody.FieldError> validateCreateShape(
             CreateSiteRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         requireNonBlank(body.name(), "name", 100, "Site name", out);
         requireNonBlank(body.uniqueProtocolId(), "uniqueProtocolId", 30, "Unique protocol id", out);
         if (body.uniqueProtocolId() != null && !body.uniqueProtocolId().trim().isEmpty()
@@ -435,9 +437,9 @@ public class SitesApiController {
         return out;
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateUpdateShape(
+    private static List<ValidationErrorBody.FieldError> validateUpdateShape(
             UpdateSiteRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         if (body.name() != null) {
             String s = body.name().trim();
             if (s.isEmpty()) out.add(fe("name", "Site name cannot be blank"));
@@ -455,14 +457,14 @@ public class SitesApiController {
     }
 
     private static void requireNonBlank(String v, String field, int max, String label,
-            List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+            List<ValidationErrorBody.FieldError> out) {
         String s = v == null ? "" : v.trim();
         if (s.isEmpty()) out.add(fe(field, label + " is required"));
         else if (s.length() > max) out.add(fe(field, label + " must be " + max + " characters or fewer"));
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError fe(String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    private static ValidationErrorBody.FieldError fe(String field, String msg) {
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
     /**

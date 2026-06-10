@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -135,7 +137,7 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
         // Hit the static validation method directly — DAO-free.
         CreateEventDefinitionRequest body =
                 new CreateEventDefinitionRequest(null, null, null, null, null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         // Both required fields should fire.
         long nameErrors = errors.stream().filter(e -> "name".equals(e.field())).count();
@@ -148,7 +150,7 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
     void createValidate_RejectsUnknownType() {
         CreateEventDefinitionRequest body =
                 new CreateEventDefinitionRequest("Visit 1", null, null, "wizard-only", false);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         long typeErrors = errors.stream().filter(e -> "type".equals(e.field())).count();
         org.junit.jupiter.api.Assertions.assertEquals(1, typeErrors);
@@ -159,7 +161,7 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
         for (String type : new String[]{"scheduled", "unscheduled", "common"}) {
             CreateEventDefinitionRequest body =
                     new CreateEventDefinitionRequest("Visit 1", null, null, type, false);
-            java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+            java.util.List<ValidationErrorBody.FieldError> errors =
                     callValidateCreateShape(body);
             org.junit.jupiter.api.Assertions.assertTrue(errors.isEmpty(),
                     "Expected no errors for type=" + type + " but got " + errors);
@@ -171,7 +173,7 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
         String tooLong = "a".repeat(2001);
         CreateEventDefinitionRequest body =
                 new CreateEventDefinitionRequest(tooLong, null, null, "scheduled", false);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         long nameErrors = errors.stream().filter(e -> "name".equals(e.field())).count();
         org.junit.jupiter.api.Assertions.assertEquals(1, nameErrors);
@@ -181,7 +183,7 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
     void updateValidate_BlankNameRejected() {
         UpdateEventDefinitionRequest body =
                 new UpdateEventDefinitionRequest("   ", null, null, null, null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateUpdateShape(body);
         long nameErrors = errors.stream().filter(e -> "name".equals(e.field())).count();
         org.junit.jupiter.api.Assertions.assertEquals(1, nameErrors);
@@ -191,7 +193,7 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
     void updateValidate_OmittedFieldsAreNoOps() {
         UpdateEventDefinitionRequest body =
                 new UpdateEventDefinitionRequest(null, null, null, null, null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateUpdateShape(body);
         org.junit.jupiter.api.Assertions.assertTrue(errors.isEmpty());
     }
@@ -199,26 +201,26 @@ class EventDefinitionsApiControllerTest extends AbstractApiControllerTest {
     /* Reflection helpers — the validate* methods are package-private
        static; surface them in tests without exposing them publicly. */
     @SuppressWarnings("unchecked")
-    private static java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>
+    private static java.util.List<ValidationErrorBody.FieldError>
             callValidateCreateShape(CreateEventDefinitionRequest body) {
         try {
             java.lang.reflect.Method m = EventDefinitionsApiController.class
                     .getDeclaredMethod("validateCreateShape", CreateEventDefinitionRequest.class);
             m.setAccessible(true);
-            return (java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>) m.invoke(null, body);
+            return (java.util.List<ValidationErrorBody.FieldError>) m.invoke(null, body);
         } catch (Exception e) {
             throw new AssertionError(e);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private static java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>
+    private static java.util.List<ValidationErrorBody.FieldError>
             callValidateUpdateShape(UpdateEventDefinitionRequest body) {
         try {
             java.lang.reflect.Method m = EventDefinitionsApiController.class
                     .getDeclaredMethod("validateUpdateShape", UpdateEventDefinitionRequest.class);
             m.setAccessible(true);
-            return (java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>) m.invoke(null, body);
+            return (java.util.List<ValidationErrorBody.FieldError>) m.invoke(null, body);
         } catch (Exception e) {
             throw new AssertionError(e);
         }

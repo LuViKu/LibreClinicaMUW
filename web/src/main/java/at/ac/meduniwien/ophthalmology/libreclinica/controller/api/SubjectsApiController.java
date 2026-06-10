@@ -41,6 +41,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -2324,16 +2325,6 @@ public class SubjectsApiController {
             String dateOfBirth,
             Integer acknowledgeMatchSubjectId
     ) {}
-
-    /**
-     * 400-response body shape for validation failures. Matches the
-     * SPA's existing {@code AddSubjectError} TS shape byte-for-byte:
-     * an {@code errors} array of {field, message} pairs plus a
-     * top-level {@code message} summary.
-     */
-    public record ValidationErrorBody(String message, List<FieldError> errors) {
-        public record FieldError(String field, String message) {}
-    }
 
     private SubjectDetailDto toDetailDto(StudySubjectBean ss, SubjectBean subj, StudyBean study,
                                          StudyEventDAO studyEventDAO,
