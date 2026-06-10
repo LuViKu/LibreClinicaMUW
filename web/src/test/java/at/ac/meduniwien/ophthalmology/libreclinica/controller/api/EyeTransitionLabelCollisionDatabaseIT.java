@@ -172,8 +172,8 @@ class EyeTransitionLabelCollisionDatabaseIT extends AbstractApiControllerDatabas
         try (Connection c = DATA_SOURCE.getConnection()) {
             try (PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO subject (subject_id, date_of_birth, dob_collected, gender, "
-                            + "unique_identifier, charity_required, status_id, date_created, owner_id) "
-                            + "VALUES (?, NULL, false, 'm', ?, false, 1, NOW(), 1) "
+                            + "unique_identifier, status_id, date_created, owner_id) "
+                            + "VALUES (?, NULL, false, 'm', ?, 1, NOW(), 1) "
                             + "ON CONFLICT (subject_id) DO NOTHING")) {
                 ps.setInt(1, subjectId);
                 ps.setString(2, "person-collision-" + subjectId);
