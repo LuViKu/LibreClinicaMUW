@@ -941,8 +941,6 @@ export interface SubjectMatchCandidate {
   lastName: string | null
   /** Phase E.6 follow-up 2026-06-10 — visible enrolments + per-study label. */
   studies: PatientMatchStudyEnrollment[]
-  /** @deprecated Use {@link studies}. Kept for backwards compat during rollout. */
-  studyOids: string[]
   otherStudyCount: number
 }
 

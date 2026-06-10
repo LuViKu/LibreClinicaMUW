@@ -2748,6 +2748,12 @@ export interface components {
             lastName?: string;
             dateOfBirth?: string;
         };
+        StudyEnrollment: {
+            studyUniqueIdentifier?: string;
+            studyOid?: string;
+            studyName?: string;
+            label?: string;
+        };
         SubjectMatchCandidate: {
             /** Format: int32 */
             subjectId?: number;
@@ -2757,15 +2763,8 @@ export interface components {
             firstName?: string;
             lastName?: string;
             studies?: components["schemas"]["StudyEnrollment"][];
-            studyOids?: string[];
             /** Format: int32 */
             otherStudyCount?: number;
-        };
-        StudyEnrollment: {
-            studyUniqueIdentifier?: string;
-            studyOid?: string;
-            studyName?: string;
-            label?: string;
         };
         CreateStudyRequest: {
             name?: string;

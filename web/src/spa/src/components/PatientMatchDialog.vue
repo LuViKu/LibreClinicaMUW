@@ -75,28 +75,19 @@ onBeforeUnmount(() => {
 function formatVisibleStudies(c: SubjectMatchCandidate): string {
   // Phase E.6 follow-up 2026-06-10 — render the per-study label
   // alongside the protocol short-code so the operator can confirm
-  // "this human is M-001 in default-study". Falls back to the legacy
-  // studyOids list (= unique_identifier) when the backend hasn't
-  // populated the richer shape (e.g. older API bundle in the wild).
-  if (c.studies && c.studies.length > 0) {
-    return c.studies
-      .map((s) =>
-        t('addSubject.matchDialog.studyEnrolment', {
-          study: s.studyUniqueIdentifier,
-          label: s.label,
-        }),
-      )
-      .join(', ')
-  }
-  return c.studyOids.join(', ')
+  // "this human is M-001 in default-study".
+  return (c.studies ?? [])
+    .map((s) =>
+      t('addSubject.matchDialog.studyEnrolment', {
+        study: s.studyUniqueIdentifier,
+        label: s.label,
+      }),
+    )
+    .join(', ')
 }
 
 function studiesLabel(c: SubjectMatchCandidate): string {
-  // Prefer the richer studies shape, but fall back to studyOids when
-  // an older backend bundle is in the wild (it'll still surface the
-  // unique_identifier list, just without the per-study label).
-  const studiesLen = c.studies?.length ?? 0
-  const visible = studiesLen > 0 ? studiesLen : c.studyOids.length
+  const visible = c.studies?.length ?? 0
   const hidden = c.otherStudyCount
   if (visible === 0 && hidden === 0) return t('addSubject.matchDialog.noStudies')
   if (visible > 0 && hidden === 0)

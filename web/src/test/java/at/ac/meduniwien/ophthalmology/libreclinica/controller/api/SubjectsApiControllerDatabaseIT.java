@@ -192,12 +192,7 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(jsonPath("$[0].studies[0].studyUniqueIdentifier")
                         .value("default-study"))
                 .andExpect(jsonPath("$[0].studies[0].studyOid").value("S_DEFAULTS1"))
-                .andExpect(jsonPath("$[0].studies[0].label").value("M-001"))
-                // Legacy derived view kept for backwards compat — still
-                // surfaces the unique_identifier list older SPA bundles
-                // expect.
-                .andExpect(jsonPath("$[0].studyOids").isArray())
-                .andExpect(jsonPath("$[0].studyOids[0]").value("default-study"));
+                .andExpect(jsonPath("$[0].studies[0].label").value("M-001"));
     }
 
     /**
@@ -222,22 +217,21 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 ps.setDate(3, java.sql.Date.valueOf("1980-06-20"));
                 ps.executeUpdate();
             }
-            // Re-point subject #2's enrolment row at a study the
-            // operator does NOT have a role on. study_id=2 has no
-            // seeded study_user_role grant for "root" → loadVisibleStudyOids
-            // excludes it.
-            try (java.sql.PreparedStatement ps = c.prepareStatement(
-                    "UPDATE study_subject SET study_id = 2 WHERE subject_id = 2")) {
-                ps.executeUpdate();
-            }
-            // The study row must exist so the LEFT JOIN doesn't drop
-            // the enrolment entirely (we still want it counted in
-            // otherStudyCount, not just lost).
+            // The study row MUST exist BEFORE we re-point the enrolment
+            // (FK study_subject.study_id → study.study_id fires on the
+            // UPDATE). Then re-point subject #2's enrolment row at a
+            // study the operator does NOT have a role on. study_id=2
+            // has no seeded study_user_role grant for "root" →
+            // loadVisibleStudyOids excludes it.
             try (java.sql.PreparedStatement ps = c.prepareStatement(
                     "INSERT INTO study (study_id, name, unique_identifier, oc_oid, "
                             + "type_id, status_id, owner_id, date_created, parent_study_id) "
                             + "VALUES (2, 'Hidden Study', 'hidden-study', 'S_HIDDEN', "
                             + "1, 1, 1, NOW(), 0) ON CONFLICT (study_id) DO NOTHING")) {
+                ps.executeUpdate();
+            }
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "UPDATE study_subject SET study_id = 2 WHERE subject_id = 2")) {
                 ps.executeUpdate();
             }
         }

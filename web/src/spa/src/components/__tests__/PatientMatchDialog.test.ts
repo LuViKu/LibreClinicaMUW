@@ -61,7 +61,6 @@ const CANDIDATE_FULL: SubjectMatchCandidate = {
       label: 'GA-008',
     },
   ],
-  studyOids: ['default-study', 'GA'],
   otherStudyCount: 0,
 }
 
@@ -135,22 +134,4 @@ describe('PatientMatchDialog', () => {
     wrapper.unmount()
   })
 
-  it('falls back to studyOids list when backend has not populated studies', () => {
-    // Backwards-compat — older API bundles may still emit only the
-    // studyOids derived view. The dialog must still render something
-    // sensible: the bare unique_identifier list.
-    const wrapper = mountDialog([
-      {
-        ...CANDIDATE_FULL,
-        studies: [],
-        studyOids: ['default-study', 'GA'],
-      },
-    ])
-    const studiesLine = wrapper.find('[data-testid="patient-match-studies-1"]')
-    expect(studiesLine.text()).toContain('default-study')
-    expect(studiesLine.text()).toContain('GA')
-    // No parentheses (no label info available).
-    expect(studiesLine.text()).not.toContain('(M-001)')
-    wrapper.unmount()
-  })
 })

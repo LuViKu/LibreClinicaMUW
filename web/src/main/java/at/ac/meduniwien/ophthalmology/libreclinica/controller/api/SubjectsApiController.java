@@ -989,18 +989,13 @@ public class SubjectsApiController {
              * with the patient's per-study subject-id. Replaces the old
              * studyOids list which carried only the study OID and missed
              * the cross-reference operators need ("this patient is M-001
-             * in default-study and GA-008 in GA-Studie"). The legacy
-             * {@link #studyOids()} stays as a derived view for backwards
-             * compat during the SPA migration window.
+             * in default-study and GA-008 in GA-Studie"). No backwards-
+             * compat shim — the SPA store update lands in the same PR,
+             * so the wire shape changes atomically.
              */
             List<StudyEnrollment> studies,
             int otherStudyCount
     ) {
-        /** Backwards-compat derived view used by older SPA bundles. */
-        public List<String> studyOids() {
-            return studies.stream().map(StudyEnrollment::studyOid).toList();
-        }
-
         /**
          * One visible enrolment of the candidate subject in a study the
          * operator can see. Carries both the institutional short-code
