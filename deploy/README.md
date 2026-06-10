@@ -14,9 +14,13 @@ the host like a managed config target, not a hand-crafted server.
 - One or more CIDRs the institutional reverse proxy lives on (so UFW can scope
   port 8080 to just those sources). Today's MUW campus CIDRs: ask
   netops/infrastructure.
-- A published release image at `ghcr.io/luviku/libreclinicamuw:<tag>`. Cut one
-  via the **Release image** workflow on GitHub:
-  Actions → Release image → Run workflow → pick `main` or a release tag → Run.
+- Published release images at both
+  `ghcr.io/luviku/libreclinicamuw:<tag>` and
+  `ghcr.io/luviku/libreclinicamuw/retinal-inference:<tag>`. One workflow
+  builds both in parallel — cut a release via Actions → **Release
+  image** → Run workflow → pick `main` or a release tag → Run.
+  (Both images share the tag matrix so a single release tag pins
+  the whole stack.)
 - Outbound HTTPS to `ghcr.io`, `download.docker.com`, `archive.ubuntu.com`,
   `security.ubuntu.com`, `github.com`.
 
@@ -71,12 +75,14 @@ that, don't skip it.
     Postgres password; on re-run it preserves the existing secret and only
     updates the image-tag pin.
 11. **systemd unit** — `libreclinica.service`. Uses
-    `compose.yaml` + `deploy/compose.production.yaml`. Pulls the pinned
-    `libreclinica` image on every start (via `pull_policy: always`), brings
-    up `libreclinica`, `db`, and `retinal-inference`. The `retinal-inference`
-    sidecar builds locally from `retinal-inference/Dockerfile` on first
-    start (placeholder adapter; ~2 min build, ~0 sec after that). The
-    `smtp` mailcrab dev service is intentionally not started.
+    `compose.yaml` + `deploy/compose.production.yaml`. Both `libreclinica`
+    and `retinal-inference` images are pulled from ghcr.io on every start
+    (`pull_policy: always` on both services), so the VM never builds —
+    it just pulls and runs. The sidecar tag defaults to the app tag so
+    one `LIBRECLINICA_IMAGE_TAG` roll moves both; pin the sidecar
+    independently by setting `LIBRECLINICA_RETINAL_IMAGE_TAG` in
+    `/etc/libreclinica/env`. The `smtp` mailcrab dev service is
+    intentionally not started.
 12. **Backups** — `libreclinica-backup-db.timer` fires nightly at 03:00 local
     (with 30 min jitter). Output goes to `/var/backups/libreclinica/`,
     gzipped, retention 30 days (`--backup-days`).

@@ -59,6 +59,13 @@ services:
       - /var/lib/libreclinica/postgres:/var/lib/postgresql/data
 
   retinal-inference:
+    # Production pulls a pre-built image from ghcr.io rather than
+    # building from source on the VM. Defaults to the same tag the app
+    # uses so a single LIBRECLINICA_IMAGE_TAG roll moves both in
+    # lockstep; an operator who needs to pin the sidecar independently
+    # can set LIBRECLINICA_RETINAL_IMAGE_TAG in /etc/libreclinica/env.
+    image: ghcr.io/luviku/libreclinicamuw/retinal-inference:${LIBRECLINICA_RETINAL_IMAGE_TAG:-${LIBRECLINICA_IMAGE_TAG:-latest}}
+    pull_policy: always
     restart: unless-stopped
     environment:
       RETINAL_INFERENCE_ADAPTER: ${RETINAL_INFERENCE_ADAPTER:-placeholder}

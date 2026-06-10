@@ -353,6 +353,11 @@ if [[ ! -s "$ENV_FILE" ]]; then
 # lock the application out.
 
 LIBRECLINICA_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
+# Sidecar image tag. Defaults to the app's tag — both images publish
+# together via the Release image workflow, so a single tag rolls both
+# in lockstep. Override only when you need to pin the sidecar at a
+# different version than the app.
+#LIBRECLINICA_RETINAL_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
 POSTGRES_PASSWORD=${pg_password}
 
 # Phase D SSO (DR-014). Defaults are safe-off; flip when the institutional
