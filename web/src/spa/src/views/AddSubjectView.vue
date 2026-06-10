@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import SideRail from '@/components/SideRail.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
+import DateInput from '@/components/DateInput.vue'
 import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import StatusPill from '@/components/StatusPill.vue'
@@ -410,13 +411,12 @@ const genderOptions: { code: Gender; label: () => string }[] = [
           <div class="grid grid-cols-2 gap-x-6 gap-y-4">
             <div>
               <FieldLabel for="enrolled-on" required>{{ t('addSubject.field.enrolledOn') }}</FieldLabel>
-              <TextInput
+              <DateInput
                 id="enrolled-on"
                 v-model="form.enrolledOn"
-                type="text"
-                placeholder="YYYY-MM-DD"
+                required
+                :max="todayIso"
                 :error="errorFor('enrolledOn') != null"
-                inputmode="numeric"
               />
               <ErrorText v-if="errorFor('enrolledOn')">{{ errorFor('enrolledOn') }}</ErrorText>
             </div>
@@ -478,10 +478,9 @@ const genderOptions: { code: Gender; label: () => string }[] = [
             </div>
             <div>
               <FieldLabel for="date-of-birth">{{ t('addSubject.field.dateOfBirth') }}</FieldLabel>
-              <TextInput
+              <DateInput
                 id="date-of-birth"
                 v-model="form.dateOfBirth"
-                type="date"
                 :max="todayIso"
                 data-testid="add-subject-date-of-birth"
               />
@@ -539,11 +538,9 @@ const genderOptions: { code: Gender; label: () => string }[] = [
 
             <div>
               <FieldLabel for="screening-date">{{ t('ophth.screeningDate.label') }}</FieldLabel>
-              <TextInput
+              <DateInput
                 id="screening-date"
                 v-model="form.screeningDate"
-                type="date"
-                placeholder="YYYY-MM-DD"
                 autocomplete="off"
               />
               <HelperText>{{ t('ophth.screeningDate.helper') }}</HelperText>

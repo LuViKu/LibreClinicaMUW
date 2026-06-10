@@ -25,6 +25,7 @@ import Modal from '@/components/Modal.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import TextInput from '@/components/TextInput.vue'
+import DateInput from '@/components/DateInput.vue'
 import SelectInput from '@/components/SelectInput.vue'
 
 import { useEventsStore } from '@/stores/events'
@@ -196,10 +197,10 @@ async function onSubmit() {
         <FieldLabel for="schedule-event-date" required>
           {{ t('scheduleEvent.field.dateStarted') }}
         </FieldLabel>
-        <TextInput
+        <DateInput
           id="schedule-event-date"
           v-model="dateStarted"
-          type="date"
+          required
           :error="!!fieldErrors.dateStarted"
         />
         <ErrorText v-if="fieldErrors.dateStarted">{{ fieldErrors.dateStarted }}</ErrorText>

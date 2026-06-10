@@ -25,6 +25,7 @@ import { useI18n } from 'vue-i18n'
 import FieldLabel from '@/components/FieldLabel.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import TextInput from '@/components/TextInput.vue'
+import DateInput from '@/components/DateInput.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import { useSubjectsStore } from '@/stores/subjects'
 import type {
@@ -437,12 +438,11 @@ onBeforeUnmount(() => {
           <FieldLabel for="transition-eye-transitioned-at">
             {{ t('subjectDetail.eyeTransition.field.transitionedAt') }}
           </FieldLabel>
-          <TextInput
+          <DateInput
             id="transition-eye-transitioned-at"
             v-model="transitionedAt"
-            type="date"
             :max="todayIso()"
-            :aria-invalid="transitionedAtInvalid || undefined"
+            :error="transitionedAtInvalid"
             data-testid="transition-eye-transitioned-at"
           />
           <ErrorText v-if="transitionedAtInvalid">
