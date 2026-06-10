@@ -27,6 +27,7 @@ import { useI18n } from 'vue-i18n'
 
 import FieldLabel from './FieldLabel.vue'
 import TextInput from './TextInput.vue'
+import DateInput from './DateInput.vue'
 import SelectInput from './SelectInput.vue'
 import HelperText from './HelperText.vue'
 import ErrorText from './ErrorText.vue'
@@ -168,20 +169,17 @@ function fileRef(): { filename: string; bytes: number } | null {
     </template>
 
     <template v-else-if="item.dataType === 'date'">
-      <!-- DATE — native picker. The store already round-trips values
-           as ISO 'YYYY-MM-DD' (see {@link validateOne} in crfEntry.ts),
-           which is exactly the wire format `input[type=date]` consumes. -->
-      <input
+      <!-- DATE — DateInput primitive renders a native picker pinned to
+           de-AT so the display is TT.MM.JJJJ. The store already
+           round-trips values as ISO 'YYYY-MM-DD' (see {@link validateOne}
+           in crfEntry.ts), which is exactly the wire format
+           `input[type=date]` consumes. -->
+      <DateInput
         :id="inputId"
-        :value="(modelValue == null ? '' : String(modelValue))"
-        :aria-invalid="hasError || undefined"
-        type="date"
+        :model-value="modelValue == null ? '' : String(modelValue)"
+        :error="hasError"
         :disabled="disabled"
-        class="w-full px-3 py-2 border rounded-md focus:outline-none transition-colors muw-focus"
-        :class="hasError
-          ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
-          : 'border-slate-300 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100'"
-        @input="(e) => emit('update:modelValue', (e.target as HTMLInputElement).value)"
+        @update:model-value="(v) => emit('update:modelValue', v)"
       />
     </template>
 
