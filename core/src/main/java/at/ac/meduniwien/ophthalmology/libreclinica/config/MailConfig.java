@@ -2,6 +2,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.config;
 
 import java.util.Properties;
 
+import javax.sql.DataSource;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -80,9 +82,15 @@ public class MailConfig {
     }
 
     @Bean
-    public OpenClinicaMailSender openClinicaMailSender(JavaMailSenderImpl mailSender) {
+    public OpenClinicaMailSender openClinicaMailSender(JavaMailSenderImpl mailSender, DataSource dataSource) {
         OpenClinicaMailSender wrapper = new OpenClinicaMailSender();
         wrapper.setMailSender(mailSender);
+        // Phase A6 (2026-06-10): wire DataSource so an SMTP failure
+        // lands an OPERATION_FAILED audit row before the wrapped
+        // OpenClinicaSystemException bubbles to the caller. Without
+        // this the audit-write step is silently skipped (legacy
+        // fail-open contract preserved for out-of-Spring callers).
+        wrapper.setDataSource(dataSource);
         return wrapper;
     }
 
