@@ -151,6 +151,116 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
     }
 
     /**
+     * Phase E.6 follow-up 2026-06-10 — the candidate row echoes back
+     * {@code firstName} + {@code lastName} as persisted (operator
+     * confirmation aid: they just typed it). The seeded subject #1
+     * has visible enrolment as M-001 in default-study (oc_oid
+     * S_DEFAULTS1) → the {@code studies} array carries the protocol
+     * short-code, the system OID, the display name, and the per-study
+     * subject label.
+     */
+    @Test
+    void matchPreflightReturnsNameAndStudyEnrolments() throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "UPDATE subject SET first_name = ?, last_name = ?, "
+                             + "date_of_birth = ?, dob_collected = true "
+                             + "WHERE subject_id = 1")) {
+            ps.setString(1, "Anna");
+            ps.setString(2, "Schmidt");
+            ps.setDate(3, java.sql.Date.valueOf("1970-03-15"));
+            ps.executeUpdate();
+        }
+
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Anna\",\"lastName\":\"Schmidt\","
+                        + "\"dateOfBirth\":\"1970-03-15\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].subjectId").value(1))
+                .andExpect(jsonPath("$[0].firstName").value("Anna"))
+                .andExpect(jsonPath("$[0].lastName").value("Schmidt"))
+                .andExpect(jsonPath("$[0].studies").isArray())
+                .andExpect(jsonPath("$[0].studies.length()").value(1))
+                .andExpect(jsonPath("$[0].studies[0].studyUniqueIdentifier")
+                        .value("default-study"))
+                .andExpect(jsonPath("$[0].studies[0].studyOid").value("S_DEFAULTS1"))
+                .andExpect(jsonPath("$[0].studies[0].label").value("M-001"))
+                // Legacy derived view kept for backwards compat — still
+                // surfaces the unique_identifier list older SPA bundles
+                // expect.
+                .andExpect(jsonPath("$[0].studyOids").isArray())
+                .andExpect(jsonPath("$[0].studyOids[0]").value("default-study"));
+    }
+
+    /**
+     * Phase E.6 follow-up 2026-06-10 — enrolments in studies the
+     * operator can't see are suppressed from {@code studies} but still
+     * counted in {@code otherStudyCount}. The seeded subject #2 has a
+     * visible enrolment in default-study (study_id=1) which the operator
+     * CAN see; flipping its study_id to a hidden study id (=2, absent
+     * from the seed) hides the enrolment row instead. The candidate is
+     * still returned but {@code studies} is empty and
+     * {@code otherStudyCount} is 1.
+     */
+    @Test
+    void matchPreflightHidesEnrolmentsInInaccessibleStudies() throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection()) {
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "UPDATE subject SET first_name = ?, last_name = ?, "
+                            + "date_of_birth = ?, dob_collected = true "
+                            + "WHERE subject_id = 2")) {
+                ps.setString(1, "Hidden");
+                ps.setString(2, "Enrolment");
+                ps.setDate(3, java.sql.Date.valueOf("1980-06-20"));
+                ps.executeUpdate();
+            }
+            // Re-point subject #2's enrolment row at a study the
+            // operator does NOT have a role on. study_id=2 has no
+            // seeded study_user_role grant for "root" → loadVisibleStudyOids
+            // excludes it.
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "UPDATE study_subject SET study_id = 2 WHERE subject_id = 2")) {
+                ps.executeUpdate();
+            }
+            // The study row must exist so the LEFT JOIN doesn't drop
+            // the enrolment entirely (we still want it counted in
+            // otherStudyCount, not just lost).
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO study (study_id, name, unique_identifier, oc_oid, "
+                            + "type_id, status_id, owner_id, date_created, parent_study_id) "
+                            + "VALUES (2, 'Hidden Study', 'hidden-study', 'S_HIDDEN', "
+                            + "1, 1, 1, NOW(), 0) ON CONFLICT (study_id) DO NOTHING")) {
+                ps.executeUpdate();
+            }
+        }
+
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Hidden\",\"lastName\":\"Enrolment\","
+                        + "\"dateOfBirth\":\"1980-06-20\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].subjectId").value(2))
+                .andExpect(jsonPath("$[0].studies").isArray())
+                .andExpect(jsonPath("$[0].studies.length()").value(0))
+                .andExpect(jsonPath("$[0].otherStudyCount").value(1));
+    }
+
+    /**
      * Missing fields → 400 with an explicit message. The SPA waits
      * until all three are populated before firing, but defensive
      * rejection here keeps the contract clean.

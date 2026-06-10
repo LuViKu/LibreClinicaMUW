@@ -256,6 +256,9 @@
       "studiesVisible": "Active in: {list}",
       "studiesHiddenOnly": "Known in {n} other studies (no access)",
       "studiesMixed": "Active in: {list} (+ {n} more without access)",
+      "studyEnrolment": "{study} ({label})",
+      "nameLine": "{lastName}, {firstName}",
+      "nameLineUnknown": "Name unknown",
       "unnamedSubject": "— no study ID —"
     },
     "phiWarning": "Never include name, hospital ID, social security number, or any other identifying data.",
