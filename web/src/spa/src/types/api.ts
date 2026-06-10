@@ -1636,6 +1636,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/subjects/{label}/eyes/{eye}/transition/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["transitionPreflight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/subjects/{label}/eyes/{eye}/modality-baselines": {
         parameters: {
             query?: never;
@@ -2579,7 +2595,6 @@ export interface components {
             id?: number;
             oid?: string;
             name?: string;
-            /** Institutional protocol short-code (study.unique_identifier). */
             uniqueIdentifier?: string;
             isSite?: boolean;
             roles?: string[];
@@ -2725,6 +2740,8 @@ export interface components {
             targetLabel?: string;
             sourceEyeAfter?: string;
             targetEyeAfter?: string;
+            targetStudySubjectOid?: string;
+            wasNewlyEnrolled?: boolean;
         };
         SubjectMatchPreflightRequest: {
             firstName?: string;
@@ -3389,6 +3406,13 @@ export interface components {
             subjectAlreadySigned?: boolean;
             userRoleCanSign?: boolean;
         };
+        EyeCohortTransitionPreflightResponse: {
+            alreadyEnrolled?: boolean;
+            existingTargetOid?: string;
+            existingTargetLabel?: string;
+            labelAvailable?: boolean;
+            suggestedLabel?: string;
+        };
         ModalityBaselineAggregate: {
             date?: string;
             value?: string;
@@ -3423,7 +3447,6 @@ export interface components {
         StudyOptionDto: {
             oid?: string;
             name?: string;
-            /** Institutional protocol short-code (study.unique_identifier). */
             uniqueIdentifier?: string;
             parentOid?: string;
             parentName?: string;
@@ -6978,6 +7001,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["SignPreflightDto"];
+                };
+            };
+        };
+    };
+    transitionPreflight: {
+        parameters: {
+            query: {
+                targetStudyOid: string;
+                targetLabel?: string;
+            };
+            header?: never;
+            path: {
+                label: string;
+                eye: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EyeCohortTransitionPreflightResponse"];
                 };
             };
         };
