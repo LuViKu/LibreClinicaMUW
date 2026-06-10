@@ -166,6 +166,29 @@ class EyeTransitionPreflightDatabaseIT extends AbstractApiControllerDatabaseIT {
                         .value("SS_PRE_M-003_" + targetSsId));
     }
 
+    @Test
+    void preflightReturnsAlreadyEnrolledTrueWhenSubjectInTargetUnderDifferentLabel()
+            throws Exception {
+        // M-003 lives in study #1 under label "M-003" + has ALSO been
+        // (re-)enrolled in the target study under a DIFFERENT per-study
+        // label "DF-001" (same subject_id=3, distinct labels). The
+        // preflight must key off subject_id, not label, so the dialog
+        // recognises the existing enrolment and shows "als DF-001".
+        setStudyEye(3, "OU");
+        unenrollSubjectFromStudy(targetStudyId, 3);
+        int targetSsId = insertTargetEnrollment(targetStudyId, /*subjectId=*/3, "DF-001");
+
+        mockMvc().perform(
+                get("/api/v1/subjects/M-003/eyes/OD/transition/preflight")
+                        .param("targetStudyOid", TARGET_STUDY_OID)
+                        .session(adminSession(1)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.alreadyEnrolled").value(true))
+                .andExpect(jsonPath("$.existingTargetLabel").value("DF-001"))
+                .andExpect(jsonPath("$.existingTargetOid")
+                        .value("SS_PRE_DF-001_" + targetSsId));
+    }
+
     /* ====================================================================== */
     /* Helpers                                                                */
     /* ====================================================================== */

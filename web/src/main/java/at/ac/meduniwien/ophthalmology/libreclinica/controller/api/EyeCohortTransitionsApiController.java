@@ -628,12 +628,15 @@ public class EyeCohortTransitionsApiController {
         }
 
         // ---- "Subject already enrolled in target study?" ----
-        // findByLabelAndStudy returns the row when found, an empty bean
-        // (id=0) otherwise. The original source label is the right key
-        // here because subjects keep their label across re-enrolment in
-        // the canonical Person-ID pattern.
+        // findBySubjectIdAndStudy returns the row when found, an empty
+        // bean (id=0) otherwise. The binding tuple is
+        // (subject_id, study_id) — NOT (label, study_id) — because
+        // cross-study re-enrolments commonly carry distinct per-study
+        // labels (e.g. "GA-003" in the source study, "DF-001" in the
+        // default study for the same person). This mirrors the lookup
+        // performed by resolveOrCreateTarget on the POST path.
         StudySubjectBean existingTarget =
-                studySubjectDAO.findByLabelAndStudy(sourceSs.getLabel(), targetStudy);
+                studySubjectDAO.findBySubjectIdAndStudy(sourceSs.getSubjectId(), targetStudy);
         boolean alreadyEnrolled = existingTarget != null && existingTarget.getId() != 0;
         String existingTargetOid = alreadyEnrolled ? existingTarget.getOid() : null;
         String existingTargetLabel = alreadyEnrolled ? existingTarget.getLabel() : null;
