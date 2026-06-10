@@ -18,7 +18,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplayItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.DisplayItemGroupBean;
@@ -26,11 +28,13 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.DiscrepancyValidator;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.RuleValidator;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.core.LocaleResolver;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 
@@ -356,6 +360,49 @@ public class InitialDataEntryServlet extends DataEntryServlet {
     @Override
     protected boolean isAdminForcedReasonForChange(HttpServletRequest request) {
         return false;
+    }
+
+    /**
+     * Phase A1 (2026-06-10) — failure-audit wrap for the canonical
+     * legacy CRF-save POST path.
+     *
+     * <p>{@code InitialDataEntryServlet} is the concrete first-pass
+     * data-entry servlet (the abstract parent {@link DataEntryServlet}
+     * also drives review, print, and double-data-entry variants). The
+     * Spring {@code @RequestMapping("/InitialDataEntry")} maps the
+     * operator's form POST into this class, and the inherited
+     * {@code doPost → process → processRequest} chain writes
+     * {@code event_crf} + {@code item_data} rows + the per-item audit
+     * records via {@code writeSubjectFieldAudit}. Wrapping at this
+     * subclass keeps the wrap local to first-pass saves; ViewSection /
+     * Print servlets continue to call the unwrapped parent.
+     *
+     * <p>Any {@link Throwable} that escapes the inherited save body
+     * lands in {@code audit_log_event} as an OPERATION_FAILED row
+     * (type 61) on a separate connection so it survives the legacy
+     * code's rollback, then is rethrown so the existing
+     * {@code CoreSecureController.doPost} catch can run its
+     * unlock-CRF-on-error cleanup unchanged.
+     */
+    @Override
+    protected void processRequest(HttpServletRequest request, HttpServletResponse response) throws Exception {
+        UserAccountBean ub = (UserAccountBean) request.getSession().getAttribute("userBean");
+        int actorUserId = ub == null ? 0 : ub.getId();
+        EventCRFBean ecb = (EventCRFBean) request.getAttribute(INPUT_EVENT_CRF);
+        Integer eventCrfId = (ecb == null || ecb.getId() == 0) ? null : ecb.getId();
+        String reqId = MDC.get("reqId");
+
+        FailureAuditTemplate.runOrAudit(
+                new AuditEventDAO(getDataSource()),
+                actorUserId,
+                "event_crf",
+                eventCrfId,
+                "InitialDataEntryServlet.processRequest",
+                reqId,
+                () -> {
+                    super.processRequest(request, response);
+                    return null;
+                });
     }
 
 }

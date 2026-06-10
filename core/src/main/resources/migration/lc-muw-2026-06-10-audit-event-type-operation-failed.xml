@@ -1,0 +1,104 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase A1 (2026-06-10): failure-audit foundation.
+
+        Two new audit_log_event_type rows + one schema-additive column.
+
+        Background. The GxP audit log (21 CFR Part 11 §11.10(e)) captures
+        successful clinical operations but is silent on failures. If a
+        save throws between commit and audit-write, the trail diverges
+        from the event store. Phase A1 wraps the three highest-value
+        write paths (subject create, eye-cohort transition, legacy CRF
+        save via InitialDataEntryServlet) in a FailureAuditTemplate that
+        writes an OPERATION_FAILED row in its own connection (separate
+        from the caller's transaction, so the row survives rollback) and
+        rethrows. Phase A6 layers JOB_FAILED on top of the Quartz +
+        SMTP failure paths.
+
+        User-visibility constraint. The failure rows must be recorded
+        for compliance but must NOT appear in the user-facing per-study
+        audit-log view — operational failures are sysadmin / compliance
+        content, not investigator content. The is_user_visible column
+        defaults to true so every existing event-type row stays in the
+        study view; the two new rows seed with is_user_visible=false so
+        AuditApiController's existing study-scoped SELECT (joined on
+        audit_log_event_type via alet.is_user_visible=true filter) skips
+        them. A future sysadmin / compliance audit-log surface drops the
+        filter and surfaces the failures.
+
+        ID allocation. 56 (discrepancy_log_exported), 57 (eye_cohort_transition),
+        58/59/60 (modality_created/updated/deleted) already taken. Next
+        free slot is 61 + 62.
+    -->
+
+    <changeSet id="2026-06-10-audit-event-type-add-is-user-visible"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <not><columnExists tableName="audit_log_event_type" columnName="is_user_visible"/></not>
+        </preConditions>
+        <comment>
+            Add is_user_visible flag to the lookup table. Default true
+            so every existing event-type row stays surfaced in the SPA's
+            Audit Log view; the new OPERATION_FAILED + JOB_FAILED rows
+            seed with false in the sibling changesets below.
+        </comment>
+        <addColumn tableName="audit_log_event_type">
+            <column name="is_user_visible" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+    </changeSet>
+
+    <changeSet id="2026-06-10-audit-event-type-operation-failed"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 61;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the OPERATION_FAILED row FailureAuditTemplate writes
+            from any wrapped controller / servlet method that throws.
+            is_user_visible=false hides it from the per-study Audit Log.
+        </comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="61"/>
+            <column name="name" value="OPERATION_FAILED"/>
+            <column name="display_name" value="Server-side operation failed"/>
+            <column name="is_user_visible" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+    <changeSet id="2026-06-10-audit-event-type-job-failed"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 62;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the JOB_FAILED row for Phase A6 (Quartz + scheduled-job
+            failure audits). Landed in A1 so the lookup row exists when
+            A6 wires its callers — A1 + A6 ship in separate PRs and the
+            seed must be in place before A6's first failure.
+        </comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="62"/>
+            <column name="name" value="JOB_FAILED"/>
+            <column name="display_name" value="Background job execution failed"/>
+            <column name="is_user_visible" valueBoolean="false"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
