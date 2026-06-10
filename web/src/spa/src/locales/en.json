@@ -38,6 +38,13 @@
       "reqIdLabel": "Error ID"
     }
   },
+  "network": {
+    "offline": {
+      "title": "Connection lost",
+      "body": "You are offline. Submissions will save only after the connection is restored.",
+      "dismiss": "Dismiss"
+    }
+  },
   "notFound": {
     "title": "Page not found",
     "body": "The address you entered does not exist or the page has moved. Please use the navigation to return to the desired view.",
