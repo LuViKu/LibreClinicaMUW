@@ -127,6 +127,9 @@ public class StudiesApiController {
             StudyOptionDto candidate = new StudyOptionDto(
                     s.getOid(),
                     s.getName(),
+                    // Phase E.6 follow-up 2026-06-10 — institutional protocol
+                    // short-code for the SPA's subject-ID prefix prefill.
+                    s.getIdentifier(),
                     parent == null ? null : parent.getOid(),
                     parent == null ? null : parent.getName(),
                     spaRole,

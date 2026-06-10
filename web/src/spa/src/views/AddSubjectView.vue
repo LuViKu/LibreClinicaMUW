@@ -30,8 +30,21 @@ const auth = useAuthStore()
 
 const todayIso = computed(() => new Date().toISOString().slice(0, 10))
 
+/**
+ * Phase E.6 follow-up 2026-06-10 — institutional protocol short-code
+ * for the active study (DB column {@code study.unique_identifier} —
+ * shown in the SPA as "Eindeutige Protokoll-ID"). When set, the
+ * subject-ID input prefills with "{uniqueIdentifier}-" so a new
+ * enrolment in the GA study starts as "GA-…". The operator is free
+ * to edit or clear it.
+ */
+const subjectIdPrefix = computed(() => {
+  const ident = auth.user?.activeStudy?.uniqueIdentifier?.trim()
+  return ident ? `${ident}-` : ''
+})
+
 const form = reactive<AddSubjectInput>({
-  id: '',
+  id: subjectIdPrefix.value,
   secondaryId: '',
   // Site context is derived from the session-bound active study.
   // The backend infers site from the session and ignores siteOid /
@@ -255,8 +268,10 @@ async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
     if (redirect === 'matrix') {
       router.push({ name: 'subject-matrix' })
     } else if (redirect === 'addNext') {
-      // Reset for next subject; preserve site context.
-      form.id = ''
+      // Reset for next subject; preserve site context. Re-apply the
+      // protocol-ID prefix prefill so the operator doesn't retype it
+      // for every consecutive enrolment.
+      form.id = subjectIdPrefix.value
       form.secondaryId = ''
       form.gender = '' as Gender
       form.yearOfBirth = null
