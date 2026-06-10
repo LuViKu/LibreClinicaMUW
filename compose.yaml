@@ -74,5 +74,27 @@ services:
     ports:
       - "127.0.0.1:1080:1080"
 
+  # Phase E.7 (2026-06-10): retinal inference sidecar.
+  # FastAPI sync /screen + Postgres-as-queue background worker (single
+  # container, two sibling processes). v1 ships the deterministic
+  # PlaceholderAdapter — flip RETINAL_INFERENCE_ADAPTER=mirage once the
+  # real MIRAGE-based model lands. Task-agnostic by design; v1 enables
+  # task='ga' only (geographic atrophy / cRORA segmentation).
+  retinal-inference:
+    build: ./retinal-inference
+    container_name: libreclinica-muw-retinal-inference-1
+    depends_on:
+      - db
+    environment:
+      RETINAL_INFERENCE_INFERENCE_ADAPTER: ${RETINAL_INFERENCE_ADAPTER:-placeholder}
+      RETINAL_INFERENCE_DB_URL: postgresql://clinica:clinica@db:5432/libreclinica
+      RETINAL_INFERENCE_SHARED_STORAGE_PATH: /var/lib/libreclinica/segmentation-output
+      RETINAL_INFERENCE_E2E_UPLOADS_PATH: /var/lib/libreclinica/e2e-uploads
+    volumes:
+      - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
+    cpus: "4.0"
+    mem_limit: 4g
+
 volumes:
   libreclinica-db-data:

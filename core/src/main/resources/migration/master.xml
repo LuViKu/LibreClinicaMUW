@@ -48,5 +48,6 @@
   <include  file="migration/lc-muw-2026-06-08-subject-phi.xml"/>
   <include  file="migration/lc-muw-2026-06-08-backfill-transition-enrollment-date.xml"/>
   <include  file="migration/lc-muw-2026-06-08-backfill-transition-oid.xml"/>
+  <include  file="migration/lc-muw-2026-06-10-retinal-inference-tables.xml"/>
 </databaseChangeLog>
 
