@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useErrorsStore } from '@/stores/errors'
 
 /**
  * Phase E.1 (2026-05-30): minimal vue-router scaffold.
@@ -279,7 +280,42 @@ const router = createRouter({
       component: () => import('@/views/PatientsOverviewView.vue'),
       meta: { title: 'Patientenübersicht', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
+    /**
+     * Phase E hardening — A5 (2026-06-10): catch-all "Seite nicht
+     * gefunden" route. Must remain the LAST entry — vue-router
+     * matches top-to-bottom and any subsequent named route would be
+     * shadowed by `:pathMatch(.*)*`.
+     */
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('@/views/NotFound.vue'),
+      meta: { title: 'Seite nicht gefunden', public: true },
+    },
   ],
+})
+
+/**
+ * Phase E hardening — A5 (2026-06-10): router error trap.
+ *
+ *   - "Failed to fetch dynamically imported module" is Vite's signal
+ *     that the manifest the browser remembers no longer matches the
+ *     bundle on the server (mid-session redeploy). A hard reload
+ *     refetches the manifest and resolves the import on the next
+ *     navigation. This is the only auto-recovery path; everything
+ *     else is logged for the operator to act on.
+ *   - All other router errors flow through the errors store so
+ *     GlobalErrorToast surfaces them with the standard "Fehler-ID"
+ *     pill (post-A4).
+ */
+router.onError((e) => {
+  if (e instanceof Error && e.message.includes('Failed to fetch dynamically imported')) {
+    if (typeof window !== 'undefined') {
+      window.location.reload()
+    }
+    return
+  }
+  useErrorsStore().push(e, 'router.onError')
 })
 
 router.afterEach((to) => {
