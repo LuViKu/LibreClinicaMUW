@@ -2257,6 +2257,7 @@ export interface components {
             gender?: string;
             /** Format: int32 */
             yearOfBirth?: number;
+            studyEye?: string;
         };
         EventCellDetailDto: {
             eventId?: string;

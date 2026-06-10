@@ -1497,6 +1497,33 @@ public class SubjectsApiController {
         subj.setUpdatedDate(now);
         subjectDAO.update(subj);
 
+        // ---- studyEye (Phase E.6 Tier 1) — lives on study_subject ----
+        // 2026-06-10 — diverges from the secondaryId / yearOfBirth
+        // "null preserves" convention: the SPA's edit form emits
+        // `studyEye: null` when the operator picks "nicht gesetzt",
+        // and we want that to actively CLEAR the column so a missed
+        // pick at create time can be corrected (or wiped) post-hoc.
+        // Empty string is normalized to NULL identically to the
+        // create path (see line ~811). Validator above gated the
+        // value to {null, "", OD, OS, OU} (case-insensitive).
+        String oldEye = ss.getStudyEye();
+        String newEye;
+        if (body.studyEye() == null || body.studyEye().trim().isEmpty()) {
+            newEye = null;
+        } else {
+            newEye = body.studyEye().trim().toUpperCase();
+        }
+        if (!java.util.Objects.equals(oldEye, newEye)) {
+            ss.setStudyEye(newEye);
+            ss.setUpdater(currentUser);
+            ss.setUpdatedDate(now);
+            studySubjectDAO.update(ss);
+            writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
+                    "study_eye",
+                    oldEye == null ? "" : oldEye,
+                    newEye == null ? "" : newEye);
+        }
+
         LOG.info("Subject demographics update: study_subject {} (label={}) by user={} role={}",
                 ss.getId(), ss.getLabel(), currentUser.getName(), roleId);
 
@@ -1542,6 +1569,19 @@ public class SubjectsApiController {
             if (yob < 1900 || yob > thisYear) {
                 errors.add(new ValidationErrorBody.FieldError("yearOfBirth",
                         "Year of birth must be between 1900 and " + thisYear + "."));
+            }
+        }
+
+        // ---- studyEye (Phase E.6 Tier 1): optional; one of OD/OS/OU ----
+        // Mirrors the create-path rule verbatim (see validateAddSubject
+        // at line ~2170): null or empty string is acceptable (the
+        // controller treats both as "clear"); otherwise must be one
+        // of the three ophthalmology codes.
+        if (body.studyEye() != null) {
+            String eye = body.studyEye().trim().toUpperCase();
+            if (!eye.isEmpty() && !eye.equals("OD") && !eye.equals("OS") && !eye.equals("OU")) {
+                errors.add(new ValidationErrorBody.FieldError("studyEye",
+                        "'" + body.studyEye() + "' is not a valid study-eye code (OD / OS / OU)."));
             }
         }
         return errors;

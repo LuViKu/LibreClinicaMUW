@@ -490,7 +490,18 @@ export const useSubjectsStore = defineStore('subjects', () => {
    */
   async function updateSubject(
     subjectId: string,
-    body: { secondaryId: string | null; gender: 'F' | 'M' | 'O' | 'U'; yearOfBirth: number | null },
+    body: {
+      secondaryId: string | null
+      gender: 'F' | 'M' | 'O' | 'U'
+      yearOfBirth: number | null
+      /**
+       * 2026-06-10 — null clears the study-eye scope; 'OD' / 'OS' /
+       * 'OU' set it. Omit (undefined) when the caller doesn't surface
+       * the field at all — the backend's null-preserves-current
+       * convention applies in that case.
+       */
+      studyEye?: StudyEye | null
+    },
   ): Promise<{ ok: true; detail: SubjectDetail }
               | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
     try {
@@ -506,6 +517,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
           gender: detail.gender,
           secondaryId: detail.secondaryId,
           yearOfBirth: detail.yearOfBirth,
+          studyEye: detail.studyEye,
         }
       }
       return { ok: true, detail }
