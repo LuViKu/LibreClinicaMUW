@@ -26,8 +26,26 @@
       <pattern>${consolePattern}</pattern>
     </encoder>
   </appender>
- 
- <!-- @pgawade 19-NOV-2010 commented out this file appender as it will not be used any where; instead new file appeders added will be used 
+
+  <!--
+    Phase E hardening (adjacent gap, 2026-06-10): structured JSON appender
+    for SIEM / institutional log aggregation. Sits ALONGSIDE the existing
+    20+ text appenders — sysadmins keep grep-able text, SIEM gets JSON.
+    LogstashEncoder picks up Phase A4's RequestIdFilter MDC field so each
+    event carries the reqId that ties SPA console → server log → audit row.
+  -->
+  <appender name="JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>/usr/local/tomcat/logs/libreclinica.json</file>
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <includeMdcKeyName>reqId</includeMdcKeyName>
+    </encoder>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>/usr/local/tomcat/logs/libreclinica.json.%d{yyyy-MM-dd}.gz</fileNamePattern>
+      <maxHistory>30</maxHistory>
+    </rollingPolicy>
+  </appender>
+
+ <!-- @pgawade 19-NOV-2010 commented out this file appender as it will not be used any where; instead new file appeders added will be used
   <appender name="LOGFILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
     <file>${log.dir}.log</file>
     <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy"> -->
@@ -469,29 +487,35 @@
 	</logger>
 	<!-- LibreClinica logs -->
 	<logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica">
-		<level value="${logLevel}" />	
+		<level value="${logLevel}" />
 			<if condition='property("logLocation").equalsIgnoreCase("local") || property("logLocation").equalsIgnoreCase("both")'>
 				<then>
-					<appender-ref ref="LOGFILE-OTHER"/>					
+					<appender-ref ref="LOGFILE-OTHER"/>
 					<appender-ref ref="LOGFILE-LPR"/>
 					<appender-ref ref="LOGFILE-USER"/>
 					<appender-ref ref="LOGFILE-MAIL"/>
 					<appender-ref ref="LOGFILE-AUTH"/>
-					<appender-ref ref="LOGFILE-UUCP"/>				
-					<appender-ref ref="LOGFILE-AUTHPRIV"/>									
+					<appender-ref ref="LOGFILE-UUCP"/>
+					<appender-ref ref="LOGFILE-AUTHPRIV"/>
 				</then>
 			</if>
-			<if condition='property("logLocation").equalsIgnoreCase("syslog") || property("logLocation").equalsIgnoreCase("both")'>			
+			<if condition='property("logLocation").equalsIgnoreCase("syslog") || property("logLocation").equalsIgnoreCase("both")'>
 				<then>
-					<appender-ref ref="SYSLOG-OTHER"/>					
+					<appender-ref ref="SYSLOG-OTHER"/>
 					<appender-ref ref="SYSLOG-LPR"/>
 					<appender-ref ref="SYSLOG-USER"/>
 					<appender-ref ref="SYSLOG-MAIL"/>
 					<appender-ref ref="SYSLOG-AUTH"/>
-					<appender-ref ref="SYSLOG-UUCP"/>		
-					<appender-ref ref="SYSLOG-AUTHPRIV"/>									
+					<appender-ref ref="SYSLOG-UUCP"/>
+					<appender-ref ref="SYSLOG-AUTHPRIV"/>
 				</then>
-			</if>			
+			</if>
+			<!-- Phase E hardening (adjacent gap, 2026-06-10): JSON_FILE wired
+			     unconditionally — SIEM feed should not depend on the
+			     logLocation property (which gates local-text vs syslog).
+			     additivity="false" on this logger blocks events from
+			     reaching root's JSON_FILE, so we attach JSON_FILE here too. -->
+			<appender-ref ref="JSON_FILE"/>
 	</logger>
 	<!-- application exceptions -->	
 	<logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.exception">
@@ -525,5 +549,13 @@
   <root>
     <level value="INFO"/>
     <appender-ref ref="CONSOLE"/>
+    <!-- Phase E hardening (adjacent gap, 2026-06-10): JSON_FILE on root so
+         framework + third-party events (Spring, Hibernate at WARN/ERROR,
+         Tomcat, Liquibase startup) reach the SIEM feed. The main app
+         logger 'at.ac.meduniwien.ophthalmology.libreclinica' below has
+         additivity="false", so JSON_FILE is also referenced there to
+         capture app events; SIEM gets one event per logged line, not
+         duplicates. -->
+    <appender-ref ref="JSON_FILE"/>
   </root>
 </configuration>
