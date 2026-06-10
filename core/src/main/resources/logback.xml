@@ -35,12 +35,19 @@
     event carries the reqId that ties SPA console → server log → audit row.
   -->
   <appender name="JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>/usr/local/tomcat/logs/libreclinica.json</file>
+    <!-- ${log.dir} resolves to ${catalina.home}/logs/openclinica at
+         deploy time, matching the existing text-pattern appenders so
+         SIEM and grep targets stay siblings under the same logs/ dir.
+         The build-time unit-test JVM has no catalina.home set, so
+         logback falls back to "catalina.home_IS_UNDEFINED/..." and
+         aborts the appender init with FileNotFoundException — same
+         non-fatal warning the LOGFILE-* text appenders already emit. -->
+    <file>${log.dir}.json</file>
     <encoder class="net.logstash.logback.encoder.LogstashEncoder">
       <includeMdcKeyName>reqId</includeMdcKeyName>
     </encoder>
     <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
-      <fileNamePattern>/usr/local/tomcat/logs/libreclinica.json.%d{yyyy-MM-dd}.gz</fileNamePattern>
+      <fileNamePattern>${log.dir}.json.%d{yyyy-MM-dd}.gz</fileNamePattern>
       <maxHistory>30</maxHistory>
     </rollingPolicy>
   </appender>

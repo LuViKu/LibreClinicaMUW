@@ -620,7 +620,24 @@
                         <ignoredUsedUndeclaredDependency>org.springdoc:springdoc-openapi-starter-common</ignoredUsedUndeclaredDependency>
                         <ignoredUsedUndeclaredDependency>org.springdoc:springdoc-openapi-starter-webmvc-api</ignoredUsedUndeclaredDependency>
                         <ignoredUsedUndeclaredDependency>io.swagger.core.v3:swagger-annotations-jakarta</ignoredUsedUndeclaredDependency>
+                        <!-- Phase E-hardening B1: PrometheusActuatorTest's
+                             ScrapeController instantiates a PrometheusMeterRegistry
+                             directly (avoiding @SpringBootTest's logback collision
+                             in the catalina.home-less unit-test JVM). The registry's
+                             MeterRegistry supertype lives in micrometer-core,
+                             a transitive of micrometer-registry-prometheus. -->
+                        <ignoredUsedUndeclaredDependency>io.micrometer:micrometer-core</ignoredUsedUndeclaredDependency>
                     </ignoredUsedUndeclaredDependencies>
+                    <ignoredNonTestScopedDependencies>
+                        <!-- Phase E-hardening B1: both micrometer artifacts are used
+                             only by the unit-test ScrapeController today (production
+                             code path is Boot autoconfig + actuator scrape, no direct
+                             references). They must stay at compile/runtime scope so
+                             Spring Boot can autowire the registry in the deployed WAR.
+                             Without these entries the analyzer demands test-scope. -->
+                        <ignoredNonTestScopedDependency>io.micrometer:micrometer-core</ignoredNonTestScopedDependency>
+                        <ignoredNonTestScopedDependency>io.micrometer:micrometer-registry-prometheus</ignoredNonTestScopedDependency>
+                    </ignoredNonTestScopedDependencies>
 		        </configuration>
 		      </plugin>
 			<plugin>
