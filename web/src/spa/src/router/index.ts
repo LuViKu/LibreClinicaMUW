@@ -43,13 +43,13 @@ const router = createRouter({
       path: '/subjects/new',
       name: 'subject-new',
       component: () => import('@/views/AddSubjectView.vue'),
-      meta: { title: 'Add Subject', role: 'Investigator' as const },
+      meta: { title: 'Add Subject', role: ['Investigator', 'Administrator'] as const },
     },
     {
       path: '/event-crfs/:eventCrfOid',
       name: 'crf-entry',
       component: () => import('@/views/CrfEntryView.vue'),
-      meta: { title: 'CRF Entry', role: 'Investigator' as const },
+      meta: { title: 'CRF Entry', role: ['Investigator', 'Administrator'] as const },
     },
     {
       // Phase E.6 dde — reconcile view; DM / Admin / Investigator only.
@@ -66,7 +66,7 @@ const router = createRouter({
       path: '/sdv',
       name: 'sdv',
       component: () => import('@/views/SdvView.vue'),
-      meta: { title: 'Source Data Verification', role: 'Monitor' as const },
+      meta: { title: 'Source Data Verification', role: ['Monitor', 'Administrator'] as const },
     },
     {
       path: '/notes',
@@ -94,14 +94,14 @@ const router = createRouter({
       path: '/event-crfs/:eventCrfOid/readonly',
       name: 'crf-readonly',
       component: () => import('@/views/CrfEntryView.vue'),
-      meta: { title: 'Read-only CRF', role: 'Monitor' as const, readOnly: true },
+      meta: { title: 'Read-only CRF', role: ['Monitor', 'Administrator'] as const, readOnly: true },
     },
     /* Phase E.7 — Data Manager workflow. */
     {
       path: '/build-study',
       name: 'build-study',
       component: () => import('@/views/BuildStudyView.vue'),
-      meta: { title: 'Build Study', role: 'Data Manager' as const },
+      meta: { title: 'Build Study', role: ['Data Manager', 'Administrator'] as const },
     },
     /* Phase E A8.1 — Study identity create/edit (sysadmin only). */
     {
@@ -128,14 +128,14 @@ const router = createRouter({
       path: '/event-definitions',
       name: 'event-definitions',
       component: () => import('@/views/EventDefinitionsView.vue'),
-      meta: { title: 'Event definitions', role: 'Data Manager' as const },
+      meta: { title: 'Event definitions', role: ['Data Manager', 'Administrator'] as const },
     },
     /* Phase E A8.3 — CRF library + version upload. */
     {
       path: '/crf-library',
       name: 'crf-library',
       component: () => import('@/views/CrfLibraryView.vue'),
-      meta: { title: 'CRF Library', role: 'Data Manager' as const },
+      meta: { title: 'CRF Library', role: ['Data Manager', 'Administrator'] as const },
     },
     /* Phase E A8.4 — sites / multi-center setup. */
     {
@@ -149,14 +149,14 @@ const router = createRouter({
       path: '/group-classes',
       name: 'group-classes',
       component: () => import('@/views/GroupClassesView.vue'),
-      meta: { title: 'Group classes', role: 'Data Manager' as const },
+      meta: { title: 'Group classes', role: ['Data Manager', 'Administrator'] as const },
     },
     /* Phase E RX.1 — read-only rules viewer. */
     {
       path: '/rules',
       name: 'rules',
       component: () => import('@/views/RulesView.vue'),
-      meta: { title: 'Rules', role: 'Data Manager' as const },
+      meta: { title: 'Rules', role: ['Data Manager', 'Administrator'] as const },
     },
     {
       path: '/manage-users',
@@ -194,19 +194,19 @@ const router = createRouter({
       path: '/import-crf-data',
       name: 'import-crf-data',
       component: () => import('@/views/ImportCrfDataView.vue'),
-      meta: { title: 'Import CRF Data', role: 'Data Manager' as const },
+      meta: { title: 'Import CRF Data', role: ['Data Manager', 'Administrator'] as const },
     },
     {
       path: '/subjects/:subjectId/sign',
       name: 'sign-subject',
       component: () => import('@/views/SignSubjectView.vue'),
-      meta: { title: 'Sign Subject', role: 'Investigator' as const },
+      meta: { title: 'Sign Subject', role: ['Investigator', 'Administrator'] as const },
     },
     {
       path: '/subjects/:subjectId',
       name: 'subject-detail',
       component: () => import('@/views/SubjectDetailView.vue'),
-      meta: { title: 'Subject', role: 'Investigator' as const },
+      meta: { title: 'Subject', role: ['Investigator', 'Administrator'] as const },
     },
     /* Phase E.6 — standalone Event Detail (replaces the legacy
        /pages/EnterDataForStudyEvent JSP that SubjectDetailView used
