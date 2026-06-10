@@ -17,19 +17,6 @@
 			access="ROLE_ADMIN" />
 		<security:intercept-url pattern="/accounts/account*"
 			access="ROLE_ADMIN,ROLE_MEMBER" />
-		<!--
-			Phase E hardening (A2): the GlobalErrorServlet is mapped at
-			/error (web.xml) and is the target of every <error-page>
-			entry. The catch-all `/**` rule below would otherwise 302
-			it to the login page, hiding the German error JSP from
-			anonymous failure paths and breaking the SPA's JSON 500
-			contract for unauthenticated callers. Anonymous access is
-			SAFE because the servlet renders only the Tomcat-supplied
-			javax.servlet.error.* request attributes — never DB
-			contents, never session state.
-		-->
-		<security:intercept-url pattern="/error"
-			access="IS_AUTHENTICATED_ANONYMOUSLY" />
 		<security:intercept-url pattern="/**"
 			access="ROLE_USER" />
 
