@@ -38,6 +38,13 @@
       "reqIdLabel": "Fehler-ID"
     }
   },
+  "network": {
+    "offline": {
+      "title": "Verbindung unterbrochen",
+      "body": "Sie sind offline. Eingaben werden erst gespeichert, sobald die Verbindung zurück ist.",
+      "dismiss": "Schließen"
+    }
+  },
   "notFound": {
     "title": "Seite nicht gefunden",
     "body": "Die aufgerufene Adresse existiert nicht oder die Seite wurde verschoben. Bitte über die Navigation zur gewünschten Ansicht zurückkehren.",

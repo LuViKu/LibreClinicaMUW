@@ -165,6 +165,26 @@ async function request<T>(
   try {
     response = await fetch(url, fetchInit)
   } catch (cause) {
+    // Phase E hardening — B4 (2026-06-10): flip the connection store
+    // to offline. Covers the captive-portal / DNS-fail / transient-
+    // router-drop case where `navigator.onLine` still reports `true`
+    // but our fetch already failed; the browser's `offline` event
+    // never fires for these. We deliberately do NOT call markOnline()
+    // on the happy path — that's left to the browser `online` event
+    // so a single successful retry on a flaky network doesn't
+    // prematurely dismiss the banner.
+    //
+    // Lazy import to avoid a circular dep: stores/connection ->
+    // (future) anywhere that imports the api client.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = await import('@/stores/connection')
+      mod.useConnectionStore().markOffline()
+    } catch {
+      // Pinia may not be active in a corner case (e.g. unit test
+      // exercising request() in isolation). Ignore — the network
+      // error surfaces below regardless.
+    }
     // Phase E hardening B3 — single retry on transient network failure
     // for idempotent GETs only. Mutations (POST/PUT/DELETE/PATCH) must
     // NEVER retry: a flaky network could otherwise duplicate a clinical

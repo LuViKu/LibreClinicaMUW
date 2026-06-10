@@ -6,6 +6,7 @@ import App from './App.vue'
 import router from './router'
 import { useAuthStore } from '@/stores/auth'
 import { useErrorsStore } from '@/stores/errors'
+import { useConnectionStore } from '@/stores/connection'
 import deMessages from './locales/de.json'
 import enMessages from './locales/en.json'
 
@@ -49,6 +50,24 @@ app.config.errorHandler = (err, _vm, info) => {
   useErrorsStore(pinia).push(err, info)
   // eslint-disable-next-line no-console
   console.error('[GlobalError]', err, info)
+}
+
+/**
+ * Phase E hardening — B4 (2026-06-10): wire the browser-level
+ * connectivity events to the `connection` store. The store is the
+ * single source of truth that `ConnectionBanner` and (future)
+ * per-form `:disabled` integration consult. `api/client.ts` also
+ * flips the store when an `ApiNetworkError` is thrown — that covers
+ * the captive-portal / DNS-fail case where `navigator.onLine` lies.
+ *
+ * We only re-enable on the browser's `online` event, not on a
+ * successful retry, so a single lucky fetch on a still-flaky network
+ * does not prematurely dismiss the banner.
+ */
+if (typeof window !== 'undefined') {
+  const connection = useConnectionStore(pinia)
+  window.addEventListener('online', () => connection.markOnline())
+  window.addEventListener('offline', () => connection.markOffline())
 }
 
 /**
