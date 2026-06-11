@@ -28,6 +28,13 @@ interface Props {
   userRole?: UserRole | null
   /** Optional logout handler — surfaced inside the popover. */
   onLogout?: () => void
+  /**
+   * Optional handler for the "Report a bug" popover entry. When
+   * supplied, the entry appears for every authenticated user
+   * regardless of role. The parent owns the dialog mount + the store
+   * wiring so the TopBar stays a pure presenter.
+   */
+  onReportBug?: () => void
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -36,6 +43,7 @@ const props = withDefaults(defineProps<Props>(), {
   userRoles: () => [],
   userRole: null,
   onLogout: undefined,
+  onReportBug: undefined,
 })
 
 const { t } = useI18n()
@@ -182,6 +190,19 @@ function onLogoutClick() {
  * the computed flips it into a plain boolean.
  */
 const hasLogout = computed(() => typeof props.onLogout === 'function')
+
+/**
+ * Same shape as {@link hasLogout} — only render the popover row when
+ * the parent supplied a handler, so the TopBar stays usable on
+ * surfaces that have no bug-report integration wired (storybook,
+ * splash, etc.).
+ */
+const hasReportBug = computed(() => typeof props.onReportBug === 'function')
+
+function onReportBugClick() {
+  closePopover()
+  props.onReportBug?.()
+}
 </script>
 
 <template>
@@ -295,6 +316,25 @@ const hasLogout = computed(() => typeof props.onLogout === 'function')
               <span class="text-slate-700">{{ r }}</span>
             </li>
           </ul>
+
+          <div
+            v-if="hasReportBug"
+            class="border-t border-slate-200 mt-1 pt-1.5 px-2"
+          >
+            <button
+              type="button"
+              class="w-full text-left px-2 py-1.5 rounded-md hover:bg-slate-100 text-slate-700 flex items-center gap-2"
+              data-testid="topbar-report-bug"
+              @click="onReportBugClick"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                <rect x="8" y="6" width="8" height="14" rx="4" />
+                <path d="M12 6V3" />
+                <path d="M5 11h3M16 11h3M5 17h3M16 17h3" />
+              </svg>
+              {{ t('bugReport.title') }}
+            </button>
+          </div>
 
           <div v-if="hasLogout" class="border-t border-slate-200 mt-1 pt-1.5 px-2">
             <button

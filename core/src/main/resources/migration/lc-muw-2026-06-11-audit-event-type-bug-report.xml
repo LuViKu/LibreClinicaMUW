@@ -1,0 +1,59 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E in-app bug-report endpoint — audit_log_event_type row
+        for the new POST /pages/api/v1/bug-report adapter.
+
+        Backend semantics. BugReportApiController accepts a structured
+        bug report from any authenticated user, composes a plain-text
+        email body, and dispatches via OpenClinicaMailSender to the
+        institutional administrator inbox configured under
+        libreclinica.bugReport.recipient. On success the controller
+        emits one row of type BUG_REPORT_FILED via direct INSERT into
+        audit_log_event; on send failure the existing Phase A1
+        FailureAuditTemplate writes a sibling OPERATION_FAILED (type
+        61) row tagged with audit_table='bug_report'. Either path
+        leaves a trail-of-evidence row for compliance.
+
+        User-visibility. The bug-report stream is not patient or
+        study content; it is meta-feedback from the operator on the
+        platform itself. is_user_visible=true so it surfaces in the
+        SPA's Audit Log view alongside other user-attributable events
+        (the per-study filter joins audit_log_event_type via
+        alet.is_user_visible=true). A sysadmin reviewing the trail
+        can spot bursts of bug reports as a UX-signal.
+
+        ID allocation. 61 + 62 (operation_failed, job_failed) and 63
+        (build_study_task_acknowledged) are already taken on
+        lc-develop. Next free slot is 64.
+    -->
+    <changeSet id="2026-06-11-audit-event-type-bug-report-filed"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 64;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the BUG_REPORT_FILED row BugReportApiController.submit
+            emits via direct INSERT into audit_log_event on a successful
+            mail dispatch. is_user_visible=true matches the institutional
+            policy that bug-report submission is a user-attributable
+            audit event.
+        </comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="64"/>
+            <column name="name" value="BUG_REPORT_FILED"/>
+            <column name="display_name" value="Bug report filed"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

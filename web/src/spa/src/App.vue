@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
 import GlobalErrorToast from '@/components/GlobalErrorToast.vue'
 import ConnectionBanner from '@/components/ConnectionBanner.vue'
+import BugReportDialog from '@/components/BugReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import type { UserRole } from '@/types/auth'
 
@@ -75,6 +76,18 @@ const userRoles = computed<UserRole[]>(() => {
 })
 
 const showTopBar = computed(() => route.name !== 'login' && route.name !== 'first-login')
+
+/**
+ * Bug-report dialog open state. The dialog itself is always mounted
+ * (cheap, no DOM in body until {@code open=true}) so the topbar's
+ * popover handler can flip it open without an additional v-if dance.
+ * Auth-gated alongside the TopBar — anonymous users have no way to
+ * trigger it.
+ */
+const bugReportOpen = ref(false)
+function openBugReport() {
+  bugReportOpen.value = true
+}
 </script>
 
 <template>
@@ -88,6 +101,7 @@ const showTopBar = computed(() => route.name !== 'login' && route.name !== 'firs
       :user-name="displayUserName"
       :user-roles="userRoles"
       :on-logout="logout"
+      :on-report-bug="openBugReport"
     />
     <!-- Minimal "Sign in" affordance for anonymous routes that still want chrome. -->
     <header
@@ -121,5 +135,14 @@ const showTopBar = computed(() => route.name !== 'login' && route.name !== 'firs
          once, outside any conditional, so uncaught errors from any
          view (including login / first-login / NotFound) surface. -->
     <GlobalErrorToast />
+
+    <!-- Phase E in-app bug-report. Dialog lives at the app shell so
+         every authenticated route can open it via the TopBar
+         user-menu entry; rendering is gated on auth state so the
+         splash / login chrome stays minimal. -->
+    <BugReportDialog
+      v-if="auth.isAuthenticated"
+      v-model:open="bugReportOpen"
+    />
   </div>
 </template>
