@@ -10,6 +10,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -202,6 +205,8 @@ public class EventDefinitionsApiController {
         if (rehydrated != null && rehydrated.getId() != 0) {
             persisted = rehydrated;
         }
+
+        writeEventDefCreatedAudit(me, persisted);
 
         LOG.info("Create event definition: oid={} name={} study={} by admin={}",
                 persisted.getOid(), persisted.getName(), studyOid, me.getName());
@@ -1153,6 +1158,36 @@ public class EventDefinitionsApiController {
 
     private static ValidationErrorBody.FieldError fieldError(String field, String msg) {
         return new ValidationErrorBody.FieldError(field, msg);
+    }
+
+    private static final int AUDIT_TYPE_EVENT_DEFINITION_CREATED = 70;
+
+    /**
+     * Direct INSERT into audit_log_event for EventDefinition create —
+     * audit_log_event_type_id 70 seeded by
+     * lc-muw-2026-06-11-audit-event-types-gap-coverage.xml.
+     *
+     * <p>Bypasses the legacy AuditEventDAO.create path (writes to
+     * audit_event, invisible to the SPA Audit Log view). Edit + disable
+     * paths still use the legacy helper — out of scope for this gap
+     * closure; see audit-coverage doc for the planned unification.
+     */
+    private void writeEventDefCreatedAudit(UserAccountBean creator,
+                                           StudyEventDefinitionBean persisted) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study_event_definition', ?, ?, '', '')")) {
+            ps.setInt(1, AUDIT_TYPE_EVENT_DEFINITION_CREATED);
+            ps.setInt(2, creator.getId());
+            ps.setInt(3, persisted.getId());
+            ps.setString(4, persisted.getName() == null ? "" : persisted.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for study_event_definition {} (continuing): {}",
+                    persisted.getId(), e.getMessage());
+        }
     }
 
     private void writeEventDefFieldAudit(AuditEventDAO auditDAO,

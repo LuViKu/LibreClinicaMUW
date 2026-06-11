@@ -572,6 +572,7 @@ public class DiscrepancyApiController {
                         DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
                         DiscrepancyNoteBean saved = dnDao.create(noteRef);
                         dnDao.createMapping(saved);
+                        writeDnAudit(AUDIT_TYPE_DN_CREATED, ubRef, saved, "", "");
 
                         LOG.info("Created discrepancy_note id={} type={} subject={} item={} by user={}",
                                 saved.getId(), typeNameRef, bodyRef.subjectId(), bodyRef.itemOid(),
@@ -628,9 +629,17 @@ public class DiscrepancyApiController {
      * with {@code parent_dn_id = parentId}; updates the parent's
      * {@code resolution_status_id}; optionally updates the parent's
      * {@code assigned_user_id} when {@code body.assignedTo} is
-     * present. Audit-event rows are written by the table trigger
-     * {@code discrepancy_note_trigger}; no controller-side audit
-     * emission is required.
+     * present. Each side effect emits one {@code audit_log_event}
+     * row via {@link #writeDnAudit} (types 72/73/74), seeded by
+     * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}
+     * and closing the §11.10(e) gaps catalogued in
+     * {@code docs/development/audit-coverage-2026-06-11.md}.
+     *
+     * <p>Earlier revisions of this docstring claimed audit rows were
+     * written by a {@code discrepancy_note_trigger} — that trigger
+     * has never existed in the migrations. The misleading comment
+     * was a regulatory landmine and was removed when this method
+     * was wired to {@link #writeDnAudit} directly.
      */
     @PostMapping("/{parentId}/thread")
     @ApiResponse(responseCode = "200",
@@ -728,6 +737,7 @@ public class DiscrepancyApiController {
             child.setAssignedUserId(assignedUserId);
         }
         dnDao.create(child);
+        writeDnAudit(AUDIT_TYPE_DN_THREAD_APPENDED, ub, parent, "", "");
 
         // Update the parent's resolution_status_id in place. DAO.update
         // writes description / type / status / detailed_notes —
@@ -735,11 +745,20 @@ public class DiscrepancyApiController {
         // so we only change the status column.
         parent.setResolutionStatusId(newStatusId);
         dnDao.update(parent);
+        if (previousStatusId != newStatusId) {
+            writeDnAudit(AUDIT_TYPE_DN_STATUS_CHANGED, ub, parent,
+                    statusToSpa(previousStatusId), statusToSpa(newStatusId));
+        }
 
         // Optional reassignment on the parent.
         if (assignedUserId != null && assignedUserId > 0) {
             parent.setAssignedUserId(assignedUserId);
             dnDao.updateAssignedUser(parent);
+            if (previousAssignedUserId != assignedUserId.intValue()) {
+                writeDnAudit(AUDIT_TYPE_DN_REASSIGNED, ub, parent,
+                        previousAssignedUserId > 0 ? resolveUsername(previousAssignedUserId) : "",
+                        resolveUsername(assignedUserId));
+            }
         }
 
         LOG.info("Appended thread entry to discrepancy_note id={} status={} by user={} role={}",
@@ -1091,6 +1110,63 @@ public class DiscrepancyApiController {
         if (subjectId != null && !subjectId.isBlank()) sb.append(" subjectId=").append(subjectId);
         if (assignedTo != null && !assignedTo.isBlank()) sb.append(" assignedTo=").append(assignedTo);
         return sb.toString();
+    }
+
+    /**
+     * Type ids for the DN-threading §11.10(e) audit-coverage gaps
+     * closed by
+     * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
+     *
+     * <p>Type 71 (DN created) is the SUCCESS-path companion to the
+     * existing FailureAuditTemplate (type 61) wrapper around the
+     * DN-create lambda. Before this row, success-path DN creation
+     * was silent; only failures were audited.
+     */
+    private static final int AUDIT_TYPE_DN_CREATED         = 71;
+    private static final int AUDIT_TYPE_DN_THREAD_APPENDED = 72;
+    private static final int AUDIT_TYPE_DN_STATUS_CHANGED  = 73;
+    private static final int AUDIT_TYPE_DN_REASSIGNED      = 74;
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for discrepancy-note
+     * state mutations. Mirrors {@link #emitExportAudit} and
+     * {@code StudiesApiController.writeStudyFieldAudit} — bypasses the
+     * legacy {@code AuditEventDAO.create} path which writes to
+     * {@code audit_event} (invisible to the SPA Audit Log view).
+     *
+     * <p>{@code oldValue} / {@code newValue} carry the meaningful diff
+     * per type:
+     * <ul>
+     *   <li>{@code 71} DN created — both empty.</li>
+     *   <li>{@code 72} thread appended — both empty (the child's content
+     *       is captured in the row's {@code entity_id} pointer).</li>
+     *   <li>{@code 73} status changed — old / new SPA-form status name.</li>
+     *   <li>{@code 74} reassigned — old / new username; either may be
+     *       empty when there was no prior or new assignee.</li>
+     * </ul>
+     *
+     * <p>Failures are swallowed: the DN mutation has already persisted,
+     * so a missed audit row should NOT roll back the user's action.
+     */
+    private void writeDnAudit(int auditTypeId, UserAccountBean actor,
+                              DiscrepancyNoteBean dn,
+                              String oldValue, String newValue) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'discrepancy_note', ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, actor.getId());
+            ps.setInt(3, dn.getId());
+            ps.setString(4, dn.getDescription() == null ? "" : dn.getDescription());
+            ps.setString(5, oldValue == null ? "" : oldValue);
+            ps.setString(6, newValue == null ? "" : newValue);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Failed to write audit_log_event row for discrepancy_note id={} type={}: {}",
+                    dn.getId(), auditTypeId, e.getMessage());
+        }
     }
 
     /**

@@ -30,6 +30,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.view.Page;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.InsufficientPermissionException;
 import org.apache.commons.lang.StringUtils;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
+
 /**
  * Reset expired password
  *
@@ -150,6 +155,7 @@ public class ResetPasswordServlet extends SecureController {
                 ub.setPasswdChallengeQuestion(passwdChallengeQ);
                 ub.setPasswdChallengeAnswer(passwdChallengeA);
                 udao.update(ub);
+                writeExpiredResetAudit(ub);
 
                 ArrayList<String> pageMessages = new ArrayList<>();
                 request.setAttribute(PAGE_MESSAGE, pageMessages);
@@ -157,6 +163,46 @@ public class ResetPasswordServlet extends SecureController {
                 ub.incNumVisitsToMainMenu();
                 forwardPage(Page.MENU_SERVLET);
             }
+        }
+    }
+
+    /**
+     * Type id for forced-on-login expired-password reset §11.10(e)
+     * audit coverage, seeded by
+     * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
+     * The actor is the target — the user is changing their own password.
+     */
+    private static final int AUDIT_TYPE_USER_PASSWORD_EXPIRED_RESET = 69;
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for the forced
+     * password-reset flow triggered when a user lands on the login
+     * page with an expired (or never-set) password. Bypasses the
+     * legacy {@code AuditEventDAO.create} path which writes to
+     * {@code audit_event} (invisible to the SPA Audit Log view).
+     *
+     * <p>Failures are swallowed: the password update has already
+     * persisted, so a missed audit row should NOT roll back the
+     * user's reset.
+     */
+    private void writeExpiredResetAudit(UserAccountBean target) {
+        try {
+            DataSource ds = (DataSource) SpringServletAccess
+                    .getApplicationContext(context).getBean("dataSource");
+            try (Connection c = ds.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                                 + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                                 + "VALUES (?, now(), ?, 'user_account', ?, ?, '', '')")) {
+                ps.setInt(1, AUDIT_TYPE_USER_PASSWORD_EXPIRED_RESET);
+                ps.setInt(2, target.getId());
+                ps.setInt(3, target.getId());
+                ps.setString(4, target.getName() == null ? "" : target.getName());
+                ps.executeUpdate();
+            }
+        } catch (SQLException e) {
+            logger.warn("Audit write failed for expired password reset user={}: {}",
+                    target.getId(), e.getMessage());
         }
     }
 
