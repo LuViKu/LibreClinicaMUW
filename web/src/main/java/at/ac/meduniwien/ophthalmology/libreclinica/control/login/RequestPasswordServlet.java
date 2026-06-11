@@ -14,6 +14,11 @@ import java.util.Date;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.PwdChallengeQuestion;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.SpringServletAccess;
+
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.core.SecureController;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.FormProcessor;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.form.Validator;
@@ -118,6 +123,7 @@ public class RequestPasswordServlet extends SecureController {
                     logger.info("user bean to be updated:" + ubDB.getId() + ubDB.getName() + ubDB.getActiveStudyId());
 
                     uDAO.update(ubDB);
+                    writeSelfServiceResetAudit(ubDB, AUDIT_TYPE_USER_PASSWORD_RESET_REQUESTED);
                     sendPassword(newPass, ubDB);
                 } else {
                     addPageMessage(respage.getString("your_password_not_verified_try_again"));
@@ -164,5 +170,46 @@ public class RequestPasswordServlet extends SecureController {
         session.removeAttribute("challengeQuestions");
         forwardPage(Page.LOGIN);
     }
-    
+
+    /**
+     * Type id for self-service forgot-password §11.10(e) audit
+     * coverage, seeded by
+     * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
+     * The actor is the target — there's no admin in this flow.
+     */
+    private static final int AUDIT_TYPE_USER_PASSWORD_RESET_REQUESTED = 68;
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for self-service
+     * password-reset events. The legacy {@code AuditEventDAO.create}
+     * path writes to {@code audit_event} (invisible to the SPA Audit
+     * Log view); this servlet bypasses Spring DI so we obtain the
+     * {@link DataSource} via {@link SpringServletAccess}, matching the
+     * other login-flow servlets' convention.
+     *
+     * <p>Failures are swallowed: the password update has already
+     * persisted, so a missed audit row should NOT roll back the
+     * user's reset.
+     */
+    private void writeSelfServiceResetAudit(UserAccountBean target, int auditTypeId) {
+        try {
+            DataSource ds = (DataSource) SpringServletAccess
+                    .getApplicationContext(context).getBean("dataSource");
+            try (Connection c = ds.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                                 + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                                 + "VALUES (?, now(), ?, 'user_account', ?, ?, '', '')")) {
+                ps.setInt(1, auditTypeId);
+                ps.setInt(2, target.getId());
+                ps.setInt(3, target.getId());
+                ps.setString(4, target.getName() == null ? "" : target.getName());
+                ps.executeUpdate();
+            }
+        } catch (SQLException e) {
+            logger.warn("Audit write failed for self-service password reset user={}: {}",
+                    target.getId(), e.getMessage());
+        }
+    }
+
 }

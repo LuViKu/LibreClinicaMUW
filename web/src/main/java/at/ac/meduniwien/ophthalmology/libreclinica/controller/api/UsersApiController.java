@@ -666,6 +666,8 @@ public class UsersApiController {
         target.setUpdater(me);
         userDao.delete(target);
 
+        emitLifecycleAudit(AUDIT_TYPE_USER_ACCOUNT_DISABLED, me.getId(), target.getId(), username);
+
         LOG.info("Disable user: username={} by admin={}", username, me.getName());
         // Re-load so the bean reflects the post-cascade state.
         UserAccountBean refreshed = (UserAccountBean) userDao.findByUserName(username);
@@ -732,6 +734,8 @@ public class UsersApiController {
 
         target.setUpdater(me);
         userDao.restore(target);
+
+        emitLifecycleAudit(AUDIT_TYPE_USER_ACCOUNT_RESTORED, me.getId(), target.getId(), username);
 
         LOG.info("Restore user: username={} by admin={} directoryOwned={}",
                 username, me.getName(), isDirectoryOwned);
@@ -1606,6 +1610,45 @@ public class UsersApiController {
      * persisted (account_non_locked = true), so a missed audit row
      * should NOT roll back the admin's lifecycle change.
      */
+    /**
+     * Type ids for the user-account lifecycle §11.10(e) audit-coverage
+     * gaps closed by
+     * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
+     * Disable/restore previously went straight through {@code
+     * UserAccountDAO.delete/restore} with no audit emission.
+     */
+    private static final int AUDIT_TYPE_USER_ACCOUNT_DISABLED = 66;
+    private static final int AUDIT_TYPE_USER_ACCOUNT_RESTORED = 67;
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for user-account
+     * lifecycle (disable / restore). Mirrors {@link #emitUnlockAudit}
+     * — uses {@code audit_table='user_account'} with the username in
+     * {@code entity_name} so the SPA Audit Log view groups the row
+     * with other lifecycle entries for the same user.
+     *
+     * <p>Failures are swallowed: the lifecycle mutation has already
+     * persisted, so a missed audit row should NOT roll back the
+     * admin's action.
+     */
+    private void emitLifecycleAudit(int auditTypeId, int adminUserId,
+                                    int targetUserId, String targetUsername) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, '', '')")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, adminUserId);
+            ps.setInt(3, targetUserId);
+            ps.setString(4, targetUsername == null ? "" : targetUsername);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Failed to write audit_log_event row for user_account lifecycle target={} admin={} type={}: {}",
+                    targetUserId, adminUserId, auditTypeId, e.getMessage());
+        }
+    }
+
     private void emitUnlockAudit(int adminUserId, int targetUserId) {
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
