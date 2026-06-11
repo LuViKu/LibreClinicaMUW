@@ -259,6 +259,33 @@ describe('useSubjectsStore', () => {
     expect(ids).toEqual(['R-001'])
   })
 
+  it('statusFilter "all-events-complete" drops patients with zero events (no vacuous .every() truth)', async () => {
+    // 2026-06-11 — `events.every(...)` returns true on an empty array,
+    // so a patient with no visits would silently land in the
+    // "alle Visiten abgeschlossen" bucket. The filter now requires
+    // events.length > 0 as well.
+    const CUSTOM: Subject[] = [
+      {
+        id: 'NOVISITS', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'F', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: false, openQueries: 0, studyEye: null, events: [],
+      },
+      {
+        id: 'DONE', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'M', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: false, openQueries: 0, studyEye: null,
+        events: [
+          { eventDefinitionOid: 'SE_V1', label: 'V1', status: 'complete', openQueries: 0 },
+        ],
+      },
+    ]
+    vi.mocked(apiGet).mockResolvedValueOnce(CUSTOM)
+    const store = useSubjectsStore()
+    await store.load()
+    store.statusFilter = 'all-events-complete'
+    expect(store.filtered.map((s) => s.id)).toEqual(['DONE'])
+  })
+
   it('clearFilters resets query + statusFilter + onlyWithQueries', async () => {
     const store = useSubjectsStore()
     await store.load()
