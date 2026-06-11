@@ -16,6 +16,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -210,6 +213,9 @@ public class CrfsApiController {
 
         LOG.info("Create CRF: oid={} name={} by user={}",
                 persisted.getOid(), persisted.getName(), me.getName());
+
+        writeCrfLibraryAudit(AUDIT_TYPE_CRF_CREATED, me, "crf",
+                persisted.getId(), persisted.getName());
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         return ResponseEntity.status(201).body(toDto(persisted, versionDao));
@@ -431,6 +437,9 @@ public class CrfsApiController {
         LOG.info("Upload CRF version (parsed): crfOid={} versionOid={} versionName={} file={} by user={}",
                 crfOid, persisted.getOid(), versionNameTrim, storedFilename, me.getName());
 
+        writeCrfLibraryAudit(AUDIT_TYPE_CRF_VERSION_UPLOADED, me, "crf_version",
+                persisted.getId(), persisted.getName());
+
         return ResponseEntity.status(201).body(toVersionDto(persisted));
     }
 
@@ -583,6 +592,9 @@ public class CrfsApiController {
                 crfOid, persisted.getOid(), versionNameTrim,
                 body.sections() == null ? 0 : body.sections().size(),
                 countItems(body), me.getName());
+
+        writeCrfLibraryAudit(AUDIT_TYPE_CRF_VERSION_AUTHORED, me, "crf_version",
+                persisted.getId(), persisted.getName());
 
         return ResponseEntity.status(201).body(toVersionDto(persisted));
     }
@@ -1259,6 +1271,49 @@ public class CrfsApiController {
 
     private static ValidationErrorBody.FieldError fe(String field, String msg) {
         return new ValidationErrorBody.FieldError(field, msg);
+    }
+
+    /**
+     * Type ids for the CRF-library §11.10(e) audit-coverage gaps closed
+     * by {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
+     * Mapped to the "admin" variant in {@code AuditApiController.
+     * variantForType}.
+     */
+    private static final int AUDIT_TYPE_CRF_CREATED            = 63;
+    private static final int AUDIT_TYPE_CRF_VERSION_UPLOADED   = 64;
+    private static final int AUDIT_TYPE_CRF_VERSION_AUTHORED   = 65;
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for CRF-library actions.
+     * Mirrors {@code StudiesApiController.writeStudyFieldAudit} — bypasses
+     * the legacy {@code AuditEventDAO.create} path (writes to
+     * {@code audit_event}, invisible to the SPA Audit Log view). Type
+     * ids 63-65 seeded by
+     * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
+     *
+     * @param auditTable  symbolic table name — {@code 'crf'} or
+     *                    {@code 'crf_version'}
+     * @param entityName  the resource's human-readable handle (CRF name
+     *                    or version label)
+     */
+    private void writeCrfLibraryAudit(int auditTypeId, UserAccountBean actor,
+                                      String auditTable, int entityId,
+                                      String entityName) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, '', '')")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, actor.getId());
+            ps.setString(3, auditTable);
+            ps.setInt(4, entityId);
+            ps.setString(5, entityName == null ? "" : entityName);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for {} {} (continuing): {}",
+                    auditTable, entityId, e.getMessage());
+        }
     }
 
     private void writeLifecycleAudit(UserAccountBean me,
