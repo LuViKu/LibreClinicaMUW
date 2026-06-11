@@ -56,5 +56,6 @@
   <include  file="migration/lc-muw-2026-06-12-audit-event-types-unification.xml"/>
   <include  file="migration/lc-muw-2026-06-12-audit-event-types-dde-retinal-study.xml"/>
   <include  file="migration/lc-muw-2026-06-12-audit-event-backfill.xml"/>
+  <include  file="migration/lc-muw-2026-06-11-ophth-field-catalog.xml"/>
 </databaseChangeLog>
 

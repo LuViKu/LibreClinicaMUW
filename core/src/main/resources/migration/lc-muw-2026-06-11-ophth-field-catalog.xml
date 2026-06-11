@@ -1,0 +1,324 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 (2026-06-11): standardized ophthalmology field
+        catalog. Each row is a "pre-built" CRF item the CRF Library
+        wizard can drop into a section without making the author type
+        the OID + label + units + validation by hand.
+
+        The catalog covers the 10 measurement types the seeded
+        Ophthalmology Visit CRF needs (BCVA Letters/LogMAR/Snellen,
+        IOP, refraction, Spectralis-OCT done/reason, central retinal
+        thickness, fundus done/reason, anterior chamber depth, lens
+        status) + ties each numeric/categorical entry to its
+        `modality.code` counterpart where one exists, so the per-eye
+        baselines panel reads through to whichever CRF version
+        carries the value.
+
+        Authoring contract: the wizard ships `catalogCode` per item
+        the operator picks; the backend materialises (a) the canonical
+        item OID (I_OPHTH_<eye>_<code>), (b) the label + helper text
+        from label_de + hint_de + unit, (c) the data type + validation
+        + response set. Operators never have to choose an OID or
+        a modality manually.
+    -->
+    <changeSet id="2026-06-11-ophth-field-catalog-table"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="ophth_field_catalog"/></not>
+        </preConditions>
+        <createTable tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" type="INTEGER">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="code" type="VARCHAR(64)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="label_de" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="label_en" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="hint_de" type="VARCHAR(200)"/>
+            <column name="hint_en" type="VARCHAR(200)"/>
+            <column name="bilateral" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="data_type" type="VARCHAR(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="widget" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="unit" type="VARCHAR(32)"/>
+            <column name="min_value" type="NUMERIC(8,3)"/>
+            <column name="max_value" type="NUMERIC(8,3)"/>
+            <column name="step_value" type="NUMERIC(8,3)"/>
+            <column name="placeholder_text" type="VARCHAR(64)"/>
+            <column name="conditional_on_code" type="VARCHAR(64)"/>
+            <column name="conditional_show_when_value" type="VARCHAR(32)"/>
+            <column name="response_options" type="VARCHAR(400)"/>
+            <column name="modality_code" type="VARCHAR(32)"/>
+            <column name="oid_prefix" type="VARCHAR(32)" defaultValue="OPHTH">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ordinal" type="INTEGER" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status_id" type="INTEGER" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="date_created" type="TIMESTAMP" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="INTEGER"/>
+            <column name="date_updated" type="TIMESTAMP"/>
+            <column name="updated_by_user_id" type="INTEGER"/>
+        </createTable>
+        <!-- 3.6-schema doesn't model addCheckConstraint; use raw SQL. -->
+        <sql>
+            ALTER TABLE ophth_field_catalog
+            ADD CONSTRAINT ck_ophth_field_catalog_data_type
+            CHECK (data_type IN ('integer', 'real', 'string', 'select-one'));
+            ALTER TABLE ophth_field_catalog
+            ADD CONSTRAINT ck_ophth_field_catalog_widget
+            CHECK (widget IN ('number-stepper', 'snellen', 'refraction', 'yesno', 'text', 'select-one'));
+        </sql>
+        <createIndex tableName="ophth_field_catalog"
+                     indexName="ix_ophth_field_catalog_status_ordinal">
+            <column name="status_id"/>
+            <column name="ordinal"/>
+        </createIndex>
+        <createSequence sequenceName="ophth_field_catalog_seq" startValue="1000"/>
+        <rollback>
+            <dropSequence sequenceName="ophth_field_catalog_seq"/>
+            <dropTable tableName="ophth_field_catalog"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-06-11-ophth-field-catalog-seed"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM ophth_field_catalog;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the 12 baseline ophthalmology field types. Numeric ranges
+            mirror the design mockup ophthalmology-visit-bilateral.html.
+            modality_code is set wherever the modality registry has a
+            corresponding entry — those fields auto-populate the per-eye
+            baselines panel without a separate "link to modality" step.
+        </comment>
+
+        <!-- 1. BCVA Letters (ETDRS) -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="1"/>
+            <column name="code" value="BCVA_LETTERS"/>
+            <column name="label_de" value="BCVA Buchstaben (letters)"/>
+            <column name="label_en" value="BCVA letters"/>
+            <column name="hint_de" value="ETDRS · 0–100 Buchstaben"/>
+            <column name="hint_en" value="ETDRS · 0–100 letters"/>
+            <column name="data_type" value="integer"/>
+            <column name="widget" value="number-stepper"/>
+            <column name="unit" value="Buchst."/>
+            <column name="min_value" valueNumeric="0"/>
+            <column name="max_value" valueNumeric="100"/>
+            <column name="step_value" valueNumeric="1"/>
+            <column name="placeholder_text" value="0–100"/>
+            <column name="modality_code" value="BCVA_ETDRS"/>
+            <column name="ordinal" valueNumeric="10"/>
+        </insert>
+
+        <!-- 2. BCVA LogMAR -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="2"/>
+            <column name="code" value="BCVA_LOGMAR"/>
+            <column name="label_de" value="BCVA LogMAR"/>
+            <column name="label_en" value="BCVA logMAR"/>
+            <column name="hint_de" value="Bereich −0,3 bis 2,0"/>
+            <column name="hint_en" value="Range −0.3 to 2.0"/>
+            <column name="data_type" value="real"/>
+            <column name="widget" value="number-stepper"/>
+            <column name="unit" value="logMAR"/>
+            <column name="min_value" valueNumeric="-0.3"/>
+            <column name="max_value" valueNumeric="2.0"/>
+            <column name="step_value" valueNumeric="0.1"/>
+            <column name="placeholder_text" value="0,0"/>
+            <column name="modality_code" value="BCVA_LOGMAR"/>
+            <column name="ordinal" valueNumeric="20"/>
+        </insert>
+
+        <!-- 3. BCVA Snellen — fraction widget, no modality registry binding -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="3"/>
+            <column name="code" value="BCVA_SNELLEN"/>
+            <column name="label_de" value="BCVA Snellen"/>
+            <column name="label_en" value="BCVA Snellen"/>
+            <column name="hint_de" value="Fußnotation (z. B. 20/40)"/>
+            <column name="hint_en" value="Fraction notation (e.g. 20/40)"/>
+            <column name="data_type" value="string"/>
+            <column name="widget" value="snellen"/>
+            <column name="ordinal" valueNumeric="30"/>
+        </insert>
+
+        <!-- 4. Augeninnendruck (IOP) -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="4"/>
+            <column name="code" value="IOP"/>
+            <column name="label_de" value="Augeninnendruck (IOP)"/>
+            <column name="label_en" value="Intraocular pressure (IOP)"/>
+            <column name="hint_de" value="Normbereich 10–21 mmHg"/>
+            <column name="hint_en" value="Normal range 10–21 mmHg"/>
+            <column name="data_type" value="integer"/>
+            <column name="widget" value="number-stepper"/>
+            <column name="unit" value="mmHg"/>
+            <column name="min_value" valueNumeric="0"/>
+            <column name="max_value" valueNumeric="80"/>
+            <column name="step_value" valueNumeric="1"/>
+            <column name="placeholder_text" value="10–21"/>
+            <column name="modality_code" value="IOP"/>
+            <column name="ordinal" valueNumeric="40"/>
+        </insert>
+
+        <!-- 5. Spectralis-OCT durchgeführt — Ja/Nein -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="5"/>
+            <column name="code" value="SPECTRALIS_OCT_DONE"/>
+            <column name="label_de" value="Spectralis-OCT durchgeführt"/>
+            <column name="label_en" value="Spectralis OCT performed"/>
+            <column name="hint_de" value="Bildgebung erfolgt?"/>
+            <column name="hint_en" value="Was the imaging performed?"/>
+            <column name="data_type" value="select-one"/>
+            <column name="widget" value="yesno"/>
+            <column name="response_options" value="ja|Ja,nein|Nein"/>
+            <column name="ordinal" valueNumeric="50"/>
+        </insert>
+
+        <!-- 6. Spectralis-OCT — Grund (conditional on SPECTRALIS_OCT_DONE = nein) -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="6"/>
+            <column name="code" value="SPECTRALIS_OCT_REASON"/>
+            <column name="label_de" value="Spectralis-OCT — Grund falls nicht durchgeführt"/>
+            <column name="label_en" value="Spectralis OCT — reason if not performed"/>
+            <column name="hint_de" value="Aktiv, sobald „Nein" gewählt ist"/>
+            <column name="hint_en" value="Active once „No" is selected"/>
+            <column name="data_type" value="string"/>
+            <column name="widget" value="text"/>
+            <column name="placeholder_text" value="Grund angeben…"/>
+            <column name="conditional_on_code" value="SPECTRALIS_OCT_DONE"/>
+            <column name="conditional_show_when_value" value="nein"/>
+            <column name="ordinal" valueNumeric="60"/>
+        </insert>
+
+        <!-- 7. Refraktion — compound (Sph/Cyl/Axis/Vis) -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="7"/>
+            <column name="code" value="REFRACTION"/>
+            <column name="label_de" value="Refraktion"/>
+            <column name="label_en" value="Refraction"/>
+            <column name="hint_de" value="Sphäre / Zylinder / Achse / Visus"/>
+            <column name="hint_en" value="Sphere / Cylinder / Axis / Visus"/>
+            <column name="data_type" value="real"/>
+            <column name="widget" value="refraction"/>
+            <column name="modality_code" value="REFRACTION_SPH"/>
+            <column name="ordinal" valueNumeric="70"/>
+        </insert>
+
+        <!-- 8. Zentrale Netzhautdicke (CRT) -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="8"/>
+            <column name="code" value="CRT"/>
+            <column name="label_de" value="Zentrale Netzhautdicke (CRT)"/>
+            <column name="label_en" value="Central retinal thickness (CRT)"/>
+            <column name="hint_de" value="OCT · Normbereich 250–320 µm"/>
+            <column name="hint_en" value="OCT · normal 250–320 µm"/>
+            <column name="data_type" value="integer"/>
+            <column name="widget" value="number-stepper"/>
+            <column name="unit" value="µm"/>
+            <column name="min_value" valueNumeric="0"/>
+            <column name="max_value" valueNumeric="900"/>
+            <column name="step_value" valueNumeric="1"/>
+            <column name="placeholder_text" value="250–320"/>
+            <column name="ordinal" valueNumeric="80"/>
+        </insert>
+
+        <!-- 9. Fundusfotografie durchgeführt — Ja/Nein -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="9"/>
+            <column name="code" value="FUNDUS_DONE"/>
+            <column name="label_de" value="Fundusfotografie durchgeführt"/>
+            <column name="label_en" value="Fundus photograph performed"/>
+            <column name="hint_de" value="Aufnahme erfolgt?"/>
+            <column name="hint_en" value="Was the photograph taken?"/>
+            <column name="data_type" value="select-one"/>
+            <column name="widget" value="yesno"/>
+            <column name="response_options" value="ja|Ja,nein|Nein"/>
+            <column name="ordinal" valueNumeric="90"/>
+        </insert>
+
+        <!-- 10. Fundusfotografie — Grund (conditional) -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="10"/>
+            <column name="code" value="FUNDUS_REASON"/>
+            <column name="label_de" value="Fundusfotografie — Grund falls nicht durchgeführt"/>
+            <column name="label_en" value="Fundus photograph — reason if not performed"/>
+            <column name="hint_de" value="Aktiv, sobald „Nein" gewählt ist"/>
+            <column name="hint_en" value="Active once „No" is selected"/>
+            <column name="data_type" value="string"/>
+            <column name="widget" value="text"/>
+            <column name="placeholder_text" value="Grund angeben…"/>
+            <column name="conditional_on_code" value="FUNDUS_DONE"/>
+            <column name="conditional_show_when_value" value="nein"/>
+            <column name="ordinal" valueNumeric="100"/>
+        </insert>
+
+        <!-- 11. Vorderkammertiefe (ACD) -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="11"/>
+            <column name="code" value="ACD"/>
+            <column name="label_de" value="Vorderkammertiefe (ACD)"/>
+            <column name="label_en" value="Anterior chamber depth (ACD)"/>
+            <column name="hint_de" value="Normbereich 2,5–4,0 mm"/>
+            <column name="hint_en" value="Normal range 2.5–4.0 mm"/>
+            <column name="data_type" value="real"/>
+            <column name="widget" value="number-stepper"/>
+            <column name="unit" value="mm"/>
+            <column name="min_value" valueNumeric="0"/>
+            <column name="max_value" valueNumeric="9"/>
+            <column name="step_value" valueNumeric="0.1"/>
+            <column name="placeholder_text" value="2,5–4,0"/>
+            <column name="ordinal" valueNumeric="110"/>
+        </insert>
+
+        <!-- 12. Anatomischer Linsenstatus -->
+        <insert tableName="ophth_field_catalog">
+            <column name="ophth_field_catalog_id" valueNumeric="12"/>
+            <column name="code" value="LENS_STATUS"/>
+            <column name="label_de" value="Anatomischer Linsenstatus"/>
+            <column name="label_en" value="Anatomical lens status"/>
+            <column name="hint_de" value="Klassifikation"/>
+            <column name="hint_en" value="Classification"/>
+            <column name="data_type" value="select-one"/>
+            <column name="widget" value="select-one"/>
+            <column name="response_options" value="phakic|Phak,cataract|Katarakt,iol|IOL (pseudophak),aphakic|Aphak"/>
+            <column name="modality_code" value="LENS_STATUS"/>
+            <column name="ordinal" valueNumeric="120"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="ophth_field_catalog">
+                <where>ophth_field_catalog_id BETWEEN 1 AND 12</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
