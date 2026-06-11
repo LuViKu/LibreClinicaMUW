@@ -152,6 +152,14 @@ libreclinica:
     reauth:
       enabled: ${LIBRECLINICA_SSO_REAUTH:false}
       url-template: ${LIBRECLINICA_SSO_REAUTH_URL_TEMPLATE:/Shibboleth.sso/Login?forceAuthn=true&target={target}}
+  # In-app bug-report mail destination. Operator clicks "Fehler melden"
+  # in the SPA's TopBar, the BugReportApiController formats a plain-text
+  # email and dispatches via OpenClinicaMailSender to this recipient.
+  # Safe default: empty — the endpoint returns 503 + a ValidationErrorBody
+  # asking the operator to contact the sysadmin if no recipient is wired
+  # at deploy time. Override via LIBRECLINICA_BUG_REPORT_RECIPIENT.
+  bugReport:
+    recipient: ${LIBRECLINICA_BUG_REPORT_RECIPIENT:}
 
 # Phase E.5 follow-up (2026-06-01): springdoc properties intentionally
 # left at default (api-docs.path = /v3/api-docs). The OpenApiResource

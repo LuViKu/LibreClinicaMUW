@@ -2244,5 +2244,33 @@
       "heading": "Confirm",
       "placeholder": "Confirmation surface lands with Phase 2."
     }
+  },
+  "bugReport": {
+    "title": "Report a bug",
+    "dialog": {
+      "title": "Report a bug",
+      "description": "Describe the bug as clearly as possible — what you expected, what you saw instead, and any details that may help us reproduce it."
+    },
+    "field": {
+      "title": {
+        "label": "Title",
+        "placeholder": "Short summary, e.g. 'Subjects list empty after filter'"
+      },
+      "description": {
+        "label": "Description",
+        "placeholder": "What did you expect, and what did you see instead?"
+      },
+      "reproductionSteps": {
+        "label": "Reproduction steps (optional)",
+        "placeholder": "1) Open Subjects 2) Pick OD filter 3) …"
+      }
+    },
+    "submit": "Send",
+    "cancel": "Cancel",
+    "success": "Thanks — ticket {ticketId} sent to the administrator.",
+    "error": {
+      "network": "Could not send the report. Please try again.",
+      "recipientNotConfigured": "Bug-report recipient is not configured. Please contact your sysadmin."
+    }
   }
 }

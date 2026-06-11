@@ -51,6 +51,10 @@
   <include  file="migration/lc-muw-2026-06-10-retinal-inference-tables.xml"/>
   <include  file="migration/lc-muw-2026-06-10-audit-event-type-operation-failed.xml"/>
   <include  file="migration/lc-muw-2026-06-11-build-study-task-ack.xml"/>
+<<<<<<< HEAD
   <include  file="migration/lc-muw-2026-06-11-audit-event-types-gap-coverage.xml"/>
+=======
+  <include  file="migration/lc-muw-2026-06-11-audit-event-type-bug-report.xml"/>
+>>>>>>> 14ce3e571 (feat(phase-e.6): in-app bug-report dialog that emails the administrator)
 </databaseChangeLog>
 

@@ -2243,5 +2243,33 @@
       "heading": "Bestätigen",
       "placeholder": "Bestätigungsoberfläche folgt mit Phase 2."
     }
+  },
+  "bugReport": {
+    "title": "Fehler melden",
+    "dialog": {
+      "title": "Fehler melden",
+      "description": "Beschreiben Sie den Fehler so genau wie möglich — was Sie erwartet, was Sie stattdessen gesehen haben, und alle Details, die uns helfen, das Problem nachzustellen."
+    },
+    "field": {
+      "title": {
+        "label": "Titel",
+        "placeholder": "Kurze Zusammenfassung, z. B. 'Probanden-Liste leer nach Filter'"
+      },
+      "description": {
+        "label": "Beschreibung",
+        "placeholder": "Was haben Sie erwartet, und was haben Sie stattdessen gesehen?"
+      },
+      "reproductionSteps": {
+        "label": "Schritte zur Reproduktion (optional)",
+        "placeholder": "1) Probanden öffnen 2) OD-Filter wählen 3) …"
+      }
+    },
+    "submit": "Senden",
+    "cancel": "Abbrechen",
+    "success": "Vielen Dank — Ticket {ticketId} wurde an die Administration gesendet.",
+    "error": {
+      "network": "Fehler beim Versand. Bitte versuchen Sie es erneut.",
+      "recipientNotConfigured": "Bug-Report-Empfänger ist nicht konfiguriert. Bitte den Sysadmin kontaktieren."
+    }
   }
 }
