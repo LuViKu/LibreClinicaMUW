@@ -1448,27 +1448,6 @@ public class EventCrfsApiController {
     // package-private isn't visible across sub-packages; public is the
     // minimum that compiles. Stable API for sibling services going
     // forward.
-    /**
-     * Backward-compat overload — temporary shim for callers that
-     * haven't yet been migrated to pass an explicit
-     * {@code audit_log_event_type_id}. Defaults to id 50
-     * ({@code user_account_profile_updated}) which is the right bucket
-     * for the half-dozen UsersApiController role/profile audit sites
-     * that Slice E of the audit-unification sweep will migrate
-     * separately. Drop this overload once those callers carry their
-     * own type id.
-     */
-    public static void writeAuditEvent(AuditEventDAO dao,
-                                        UserAccountBean user,
-                                        StudyBean study, StudySubjectBean ss,
-                                        String actionMessage, String auditTable,
-                                        int entityId, String columnName,
-                                        String oldValue, String newValue) {
-        writeAuditEvent(dao, /* user_account_profile_updated */ 50,
-                user, study, ss, actionMessage, auditTable, entityId,
-                columnName, oldValue, newValue);
-    }
-
     public static void writeAuditEvent(AuditEventDAO dao, int auditTypeId,
                                         UserAccountBean user,
                                         StudyBean study, StudySubjectBean ss,

@@ -965,6 +965,7 @@ public class UsersApiController {
 
                         String newRoleName = legacyRoleRef.getName();
                         EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
+                                AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
                                 meRef, studyRef, null,
                                 "User role granted — user=" + usernameRef + " role=" + newRoleName,
                                 "study_user_role",
@@ -1133,7 +1134,9 @@ public class UsersApiController {
 
         String newRoleName = refreshed != null && refreshed.getRole() != null
                 ? refreshed.getRole().getName() : legacyRole.getName();
-        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
+        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
+                AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                me, study, null,
                 "User role changed — user=" + username + " role=" + newRoleName,
                 "study_user_role",
                 refreshed != null ? refreshed.getId() : existing.getId(),
@@ -1247,7 +1250,9 @@ public class UsersApiController {
             sur.setUserName(username);
             sur.setUserAccountId(target.getId());
             userDao.createStudyUserRole(target, sur);
-            EventCrfsApiController.writeAuditEvent(auditDao, me, study, null,
+            EventCrfsApiController.writeAuditEvent(auditDao,
+                    AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                    me, study, null,
                     "User role granted (bulk) — user=" + username + " role=" + rawRoleName,
                     "study_user_role", 0,
                     "role_id", "", rawRoleName);
@@ -1283,7 +1288,9 @@ public class UsersApiController {
                         study.getId(), username, rawRoleName, sqlEx.getMessage());
                 continue;
             }
-            EventCrfsApiController.writeAuditEvent(auditDao, me, study, null,
+            EventCrfsApiController.writeAuditEvent(auditDao,
+                    AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                    me, study, null,
                     "User role revoked (bulk) — user=" + username + " role=" + rawRoleName,
                     "study_user_role", 0,
                     "role_id", rawRoleName, "");
@@ -1344,7 +1351,9 @@ public class UsersApiController {
         LOG.info("Revoke role: username={} studyOid={} by admin={}",
                 username, studyOid, me.getName());
 
-        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
+        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
+                AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                me, study, null,
                 "User role revoked — user=" + username + " role=" + oldRoleName,
                 "study_user_role", existing.getId(),
                 "role_id", oldRoleName, "");
