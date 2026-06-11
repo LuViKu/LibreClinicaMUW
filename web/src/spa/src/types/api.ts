@@ -1924,6 +1924,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ophth-field-catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_16"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -2139,7 +2155,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_16"];
+        get: operations["list_17"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3668,6 +3684,32 @@ export interface components {
             dataType?: string;
             unit?: string;
             series?: components["schemas"]["MeasurementObservationDto"][];
+        };
+        OphthFieldCatalogDto: {
+            code?: string;
+            labelDe?: string;
+            labelEn?: string;
+            hintDe?: string;
+            hintEn?: string;
+            bilateral?: boolean;
+            dataType?: string;
+            widget?: string;
+            unit?: string;
+            minValue?: number;
+            maxValue?: number;
+            stepValue?: number;
+            placeholderText?: string;
+            conditionalOnCode?: string;
+            conditionalShowWhenValue?: string;
+            responseOptions?: components["schemas"]["OphthFieldCatalogResponseOption"][];
+            modalityCode?: string;
+            oidPrefix?: string;
+            /** Format: int32 */
+            ordinal?: number;
+        };
+        OphthFieldCatalogResponseOption: {
+            value?: string;
+            label?: string;
         };
         PreviewRowsPageDto: {
             /**
@@ -7504,6 +7546,26 @@ export interface operations {
             };
         };
     };
+    list_16: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OphthFieldCatalogDto"];
+                };
+            };
+        };
+    };
     getMe: {
         parameters: {
             query?: never;
@@ -7795,7 +7857,7 @@ export interface operations {
             };
         };
     };
-    list_16: {
+    list_17: {
         parameters: {
             query?: {
                 actor?: string;
