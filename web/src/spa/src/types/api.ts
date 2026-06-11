@@ -3201,6 +3201,10 @@ export interface components {
             daysOpen?: number;
             lastActivityAt?: string;
             thread?: components["schemas"]["DiscrepancyThreadEntryDto"][];
+            itemLabel?: string;
+            itemValue?: string;
+            eventCrfOid?: string;
+            eventName?: string;
         };
         DiscrepancyThreadEntryDto: {
             id?: string;

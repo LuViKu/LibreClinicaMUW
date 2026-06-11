@@ -35,6 +35,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
@@ -44,6 +46,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
@@ -301,33 +305,57 @@ public class DiscrepancyApiController {
         Map<Integer, EventCRFBean> eventCrfCache = new HashMap<>();
         Map<Integer, StudySubjectBean> studySubjectCache = new HashMap<>();
         Map<Integer, ItemBean> itemCache = new HashMap<>();
+        Map<Integer, StudyEventBean> studyEventCache = new HashMap<>();
+        Map<Integer, StudyEventDefinitionBean> seDefCache = new HashMap<>();
 
         ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
         StudySubjectDAO studySubjectDao = new StudySubjectDAO(dataSource);
         ItemDAO itemDao = new ItemDAO(dataSource);
+        StudyEventDAO studyEventDao = new StudyEventDAO(dataSource);
+        StudyEventDefinitionDAO seDefDao = new StudyEventDefinitionDAO(dataSource);
 
         List<DiscrepancyNoteDto> out = new ArrayList<>(notes.size());
         for (DiscrepancyNoteBean n : notes) {
             String subjectLabel = "";
             String itemOid = "";
+            // notes-deeplink (2026-06-11) — additional context the SPA row needs
+            // to render the value the DM is asking about + deep-link to the CRF.
+            String itemLabel = null;
+            String itemValue = null;
+            String eventCrfOid = null;
+            String eventName = null;
 
             if ("itemData".equalsIgnoreCase(n.getEntityType()) && n.getEntityId() > 0) {
                 ItemDataBean idb = itemDataCache.computeIfAbsent(n.getEntityId(),
                         id -> (ItemDataBean) itemDataDao.findByPK(id));
                 if (idb != null && idb.getId() > 0) {
+                    itemValue = idb.getValue();
                     ItemBean item = itemCache.computeIfAbsent(idb.getItemId(),
                             id -> (ItemBean) itemDao.findByPK(id));
                     if (item != null && item.getId() > 0) {
                         itemOid = nullToEmpty(item.getOid());
+                        itemLabel = pickItemLabel(item);
                     }
                     EventCRFBean ec = eventCrfCache.computeIfAbsent(idb.getEventCRFId(),
                             id -> (EventCRFBean) eventCrfDao.findByPK(id));
                     if (ec != null && ec.getId() > 0) {
+                        eventCrfOid = String.valueOf(ec.getId());
                         StudySubjectBean ss = studySubjectCache.computeIfAbsent(ec.getStudySubjectId(),
                                 id -> (StudySubjectBean) studySubjectDao.findByPK(id));
                         if (ss != null && ss.getId() > 0) {
                             subjectLabel = nullToEmpty(ss.getLabel());
+                        }
+                        // event_crf → study_event → study_event_definition.name
+                        StudyEventBean se = studyEventCache.computeIfAbsent(ec.getStudyEventId(),
+                                id -> (StudyEventBean) studyEventDao.findByPK(id));
+                        if (se != null && se.getId() > 0) {
+                            StudyEventDefinitionBean def = seDefCache.computeIfAbsent(
+                                    se.getStudyEventDefinitionId(),
+                                    id -> (StudyEventDefinitionBean) seDefDao.findByPK(id));
+                            if (def != null && def.getId() > 0) {
+                                eventName = def.getName();
+                            }
                         }
                     }
                 }
@@ -367,7 +395,12 @@ public class DiscrepancyApiController {
                     nullToEmpty(n.getDescription()),
                     assignedTo,
                     daysOpen,
-                    lastActivityAt));
+                    lastActivityAt,
+                    List.of(),
+                    itemLabel,
+                    itemValue,
+                    eventCrfOid,
+                    eventName));
         }
 
         return out;
@@ -794,7 +827,10 @@ public class DiscrepancyApiController {
             }
         }
 
-        // Re-project with the populated thread field.
+        // Re-project with the populated thread field. Preserve the
+        // notes-deeplink context fields (itemLabel / itemValue /
+        // eventCrfOid / eventName) so the SPA thread modal keeps the
+        // same context the list row already showed.
         DiscrepancyNoteDto hydrated = new DiscrepancyNoteDto(
                 parentDto.id(),
                 parentDto.type(),
@@ -805,7 +841,11 @@ public class DiscrepancyApiController {
                 parentDto.assignedTo(),
                 parentDto.daysOpen(),
                 parentDto.lastActivityAt(),
-                entries);
+                entries,
+                parentDto.itemLabel(),
+                parentDto.itemValue(),
+                parentDto.eventCrfOid(),
+                parentDto.eventName());
         return ResponseEntity.ok(hydrated);
     }
 
@@ -844,23 +884,40 @@ public class DiscrepancyApiController {
     private DiscrepancyNoteDto projectParentDto(DiscrepancyNoteBean n) {
         String subjectLabel = "";
         String itemOid = "";
+        String itemLabel = null;
+        String itemValue = null;
+        String eventCrfOid = null;
+        String eventName = null;
 
         if ("itemData".equalsIgnoreCase(n.getEntityType()) && n.getEntityId() > 0) {
             ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
             ItemDataBean idb = (ItemDataBean) itemDataDao.findByPK(n.getEntityId());
             if (idb != null && idb.getId() > 0) {
+                itemValue = idb.getValue();
                 ItemDAO itemDao = new ItemDAO(dataSource);
                 ItemBean item = (ItemBean) itemDao.findByPK(idb.getItemId());
                 if (item != null && item.getId() > 0) {
                     itemOid = nullToEmpty(item.getOid());
+                    itemLabel = pickItemLabel(item);
                 }
                 EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
                 EventCRFBean ec = (EventCRFBean) eventCrfDao.findByPK(idb.getEventCRFId());
                 if (ec != null && ec.getId() > 0) {
+                    eventCrfOid = String.valueOf(ec.getId());
                     StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
                     StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ec.getStudySubjectId());
                     if (ss != null && ss.getId() > 0) {
                         subjectLabel = nullToEmpty(ss.getLabel());
+                    }
+                    StudyEventDAO studyEventDao = new StudyEventDAO(dataSource);
+                    StudyEventBean se = (StudyEventBean) studyEventDao.findByPK(ec.getStudyEventId());
+                    if (se != null && se.getId() > 0) {
+                        StudyEventDefinitionDAO seDefDao = new StudyEventDefinitionDAO(dataSource);
+                        StudyEventDefinitionBean def =
+                                (StudyEventDefinitionBean) seDefDao.findByPK(se.getStudyEventDefinitionId());
+                        if (def != null && def.getId() > 0) {
+                            eventName = def.getName();
+                        }
                     }
                 }
             }
@@ -884,7 +941,28 @@ public class DiscrepancyApiController {
                 nullToEmpty(n.getDescription()),
                 assignedTo,
                 daysOpen,
-                lastActivityAt);
+                lastActivityAt,
+                List.of(),
+                itemLabel,
+                itemValue,
+                eventCrfOid,
+                eventName);
+    }
+
+    /**
+     * notes-deeplink (2026-06-11) — pick the operator-facing item label.
+     * {@code item.description} is the human-readable label captured at
+     * CRF build time (see the demo seed: "Height (cm)", "Weight (kg)",
+     * …); {@code item.name} is the OID-shaped identifier the operator
+     * already sees. Falls back to the OID-ish name when description is
+     * empty, then to {@code null} so the SPA renders the bare OID.
+     */
+    private static String pickItemLabel(ItemBean item) {
+        String desc = item.getDescription();
+        if (desc != null && !desc.isBlank()) return desc;
+        String name = item.getName();
+        if (name != null && !name.isBlank()) return name;
+        return null;
     }
 
 
