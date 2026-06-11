@@ -610,6 +610,10 @@
     "boolean": {
       "yes": "Ja",
       "no": "Nein"
+    },
+    "stepper": {
+      "increment": "Erhöhen",
+      "decrement": "Verringern"
     }
   },
   "dde": {

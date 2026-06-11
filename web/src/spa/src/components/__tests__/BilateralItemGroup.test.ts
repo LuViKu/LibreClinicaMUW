@@ -204,7 +204,10 @@ describe('BilateralItemGroup — layout', () => {
 })
 
 describe('CrfItemWidget — BL rendering', () => {
-  it('renders a boolean item as a Yes/No radio pair', async () => {
+  it('renders a boolean item as a Yes/No segmented pill pair', async () => {
+    // Phase E.6 ophth-bilateral-design (2026-06-11) — the boolean
+    // renderer is now a segmented Ja/Nein pill control (button pair).
+    // Same wire contract ('1' Ja, '0' Nein, empty unanswered).
     const item = mkItem('OD_CATARACT_PRESENT', 'Cataract present (OD)', 'boolean')
 
     const wrapper = mount(CrfItemWidget, {
@@ -212,29 +215,28 @@ describe('CrfItemWidget — BL rendering', () => {
       props: { item, modelValue: '', suppressLabel: true },
     })
 
-    const radios = wrapper.findAll<HTMLInputElement>('input[type="radio"]')
-    expect(radios.length).toBe(2)
-    expect(radios[0]!.element.value).toBe('1')
-    expect(radios[1]!.element.value).toBe('0')
-    // Empty modelValue → neither selected (unanswered state).
-    expect(radios[0]!.element.checked).toBe(false)
-    expect(radios[1]!.element.checked).toBe(false)
+    const buttons = wrapper.findAll<HTMLButtonElement>('[role="radiogroup"] button')
+    expect(buttons.length).toBe(2)
+    // Empty modelValue → neither pill carries the active "bg-white"
+    // chrome the design's .seg.on rule applies.
+    expect(buttons[0]!.classes()).not.toContain('bg-white')
+    expect(buttons[1]!.classes()).not.toContain('bg-white')
     expect(wrapper.text()).toContain('No')
     expect(wrapper.text()).toContain('Yes')
 
-    await radios[0]!.setValue('1')
+    await buttons[0]!.trigger('click')
     const emits = wrapper.emitted('update:modelValue')
     expect(emits).toBeTruthy()
     expect(emits?.[0]?.[0]).toBe('1')
 
-    // Re-mount with modelValue='1' to confirm Yes is selected.
+    // Re-mount with modelValue='1' to confirm Ja is selected.
     const onWrapper = mount(CrfItemWidget, {
       global: { plugins: [mkI18n()] },
       props: { item, modelValue: '1', suppressLabel: true },
     })
-    const onRadios = onWrapper.findAll<HTMLInputElement>('input[type="radio"]')
-    expect(onRadios[0]!.element.checked).toBe(true)
-    expect(onRadios[1]!.element.checked).toBe(false)
+    const onButtons = onWrapper.findAll<HTMLButtonElement>('[role="radiogroup"] button')
+    expect(onButtons[0]!.classes()).toContain('bg-white')
+    expect(onButtons[1]!.classes()).not.toContain('bg-white')
   })
 
   it('renders German Ja/Nein for a boolean item under the de locale', () => {

@@ -544,7 +544,17 @@ function onThreadUpdated(_parentId: string) {
                 {{ section.title }}
               </h2>
             </div>
-            <p v-if="section.instructions" class="text-[11px] text-slate-500 mt-2 leading-relaxed">
+            <!-- Phase E.6 ophth-bilateral-design (2026-06-11): suppress
+                 section.instructions whenever the section already carries
+                 a bilateral header — the OD/OS column header with the
+                 R/L badges communicates the same "OD links, OS rechts"
+                 convention more concisely than a hint sentence. Keeps
+                 instructions on sections that genuinely have author-
+                 supplied context (procedure notes, eligibility tells). -->
+            <p
+              v-if="section.instructions && !hasBilateralRow(rowsForSection(section.items))"
+              class="text-[11px] text-slate-500 mt-2 leading-relaxed"
+            >
               {{ section.instructions }}
             </p>
           </header>
@@ -558,10 +568,17 @@ function onThreadUpdated(_parentId: string) {
                Underline-rules drop the visual weight onto the per-eye
                column without claiming the slate-500 weight of the OID
                itself. Renders only when the section contains at least
-               one bilateral or OU row. -->
+               one bilateral or OU row.
+
+               minmax(160px, …) / minmax(200px, …) min-widths keep the
+               table flush inside the wizard's preview modal (max-w-xl
+               on a tablet viewport) — the original design's 210/248
+               min-widths bled past the modal edge under narrower
+               panels. Desktop CRF entry still fills the available
+               width via the fr ratio. -->
           <div
             v-if="hasBilateralRow(rowsForSection(section.items))"
-            class="grid grid-cols-[minmax(210px,1.15fr)_minmax(248px,1fr)_minmax(248px,1fr)] gap-x-[30px] pb-3 mb-2"
+            class="grid grid-cols-[minmax(160px,1.15fr)_minmax(200px,1fr)_minmax(200px,1fr)] gap-x-5 pb-3 mb-2"
             role="row"
             data-testid="bilateral-header"
           >

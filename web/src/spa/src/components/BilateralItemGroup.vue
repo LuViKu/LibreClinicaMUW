@@ -95,11 +95,11 @@ const osOnly = computed(() => isBilateral.value && !od.value && os.value)
 
 <template>
   <div
-    class="bilateral-row grid items-center gap-x-[30px] border-t border-slate-100 first:border-t-0 py-[17px] hover:bg-gradient-to-r hover:from-slate-50 hover:to-transparent"
+    class="bilateral-row grid items-center gap-x-5 border-t border-slate-100 first:border-t-0 py-[17px] hover:bg-gradient-to-r hover:from-slate-50 hover:to-transparent"
     :class="
       isBothEyes
-        ? 'grid-cols-[minmax(210px,1.15fr)_minmax(248px,2.04fr)]'
-        : 'grid-cols-[minmax(210px,1.15fr)_minmax(248px,1fr)_minmax(248px,1fr)]'
+        ? 'grid-cols-[minmax(160px,1.15fr)_minmax(200px,2.04fr)]'
+        : 'grid-cols-[minmax(160px,1.15fr)_minmax(200px,1fr)_minmax(200px,1fr)]'
     "
     role="group"
     :aria-label="label"
