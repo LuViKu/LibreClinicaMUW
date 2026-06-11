@@ -73,3 +73,42 @@ describe('useClientLogsStore', () => {
     expect(store.entries).toHaveLength(0)
   })
 })
+
+import { redactPii } from '../clientLogs'
+
+describe('redactPii', () => {
+  it('replaces subject labels (M-001, DF-001, GA-001) with [REDACTED:SUBJECT-ID]', () => {
+    expect(redactPii('failed for M-001')).toBe('failed for [REDACTED:SUBJECT-ID]')
+    expect(redactPii('subject DF-001 not found')).toBe('subject [REDACTED:SUBJECT-ID] not found')
+    expect(redactPii('GA-001-V1 query stale')).toBe('[REDACTED:SUBJECT-ID] query stale')
+  })
+
+  it('does NOT eat git SHA-7 or version strings', () => {
+    expect(redactPii('built from abc1234')).toBe('built from abc1234') // lowercase
+    expect(redactPii('vite 3.4.10 ready')).toBe('vite 3.4.10 ready')
+  })
+
+  it('replaces ISO / German / US dates of birth', () => {
+    expect(redactPii('dob 1970-03-15')).toBe('dob [REDACTED:DOB]')
+    expect(redactPii('Geburtsdatum 15.03.1970')).toBe('Geburtsdatum [REDACTED:DOB]')
+    expect(redactPii('DOB 03/15/1970')).toBe('DOB [REDACTED:DOB]')
+  })
+
+  it('does NOT redact other dotted/slashed tokens that aren’t plausible DOBs', () => {
+    expect(redactPii('rgba 0.0.0.1')).toBe('rgba 0.0.0.1')
+    expect(redactPii('path foo/bar/baz')).toBe('path foo/bar/baz')
+  })
+
+  it('replaces email addresses with [REDACTED:EMAIL]', () => {
+    expect(redactPii('mail to lukas.test@meduniwien.ac.at')).toBe(
+      'mail to [REDACTED:EMAIL]',
+    )
+  })
+
+  it('chains across multiple PII tokens in a single message', () => {
+    const input = 'M-001 dob 1970-03-15 email pat@example.com failed'
+    expect(redactPii(input)).toBe(
+      '[REDACTED:SUBJECT-ID] dob [REDACTED:DOB] email [REDACTED:EMAIL] failed',
+    )
+  })
+})

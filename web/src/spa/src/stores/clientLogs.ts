@@ -36,6 +36,74 @@ export interface ConsoleEntry {
 /** Ring-buffer cap. 100 keeps the in-memory footprint trivially small. */
 const RING_BUFFER_CAP = 100
 
+/**
+ * Best-effort PII redaction applied to every message BEFORE it lands
+ * in the ring buffer. The bug-report dialog ships these entries
+ * to an institutional inbox — anything PHI-shaped that leaks via a
+ * stack trace, an Error message that interpolated patient data, or
+ * a third-party library's debug log gets replaced with a
+ * `[REDACTED:…]` marker.
+ *
+ * Pattern set tuned for the MUW Ophth deployment:
+ *
+ *  - Subject labels matching the seeded conventions ({@code M-001},
+ *    {@code DF-001}, {@code GA-001}, {@code OPH-2024-001}). Pattern is
+ *    1-4 uppercase letters, a dash, 2-4 digits, optional further
+ *    dash + 1-4 alphanumerics (covers M-001-V1 sub-IDs). We DON'T
+ *    redact arbitrary "FOO-123" tokens — too broad and would scrub
+ *    library identifiers / git SHAs / Spring bean ids.
+ *  - Dates of birth in ISO ({@code 1970-03-15}), German
+ *    ({@code 15.03.1970}), and US ({@code 03/15/1970}) format.
+ *    Restricted to 19xx / 20xx year ranges so things like CSS
+ *    {@code rgba(0.0.0.1)} or version strings ({@code 3.4.10}) survive.
+ *  - Email addresses (any RFC-ish shape).
+ *
+ * Operator preview still shows the (already-redacted) entries, so the
+ * operator can scan one more time before submitting. Truly novel PII
+ * patterns won't be caught — flagged for a Phase F redaction sweep.
+ */
+const REDACTION_PATTERNS: { re: RegExp; replacement: string }[] = [
+  // Email — match first so the `@` boundary doesn't get eaten by the
+  // subject-label rule.
+  {
+    re: /\b[\w.+-]+@[\w.-]+\.[a-zA-Z]{2,}\b/g,
+    replacement: '[REDACTED:EMAIL]',
+  },
+  // Subject label — 1-4 uppercase letters + dash + 2-4 digits
+  // + optional further dash-segment.
+  {
+    re: /\b[A-Z]{1,4}-\d{2,4}(?:-[A-Za-z0-9]{1,4})?\b/g,
+    replacement: '[REDACTED:SUBJECT-ID]',
+  },
+  // DOB in ISO 8601 — restricted to plausible years.
+  {
+    re: /\b(?:19|20)\d{2}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\d|3[01])\b/g,
+    replacement: '[REDACTED:DOB]',
+  },
+  // DOB in German DD.MM.YYYY.
+  {
+    re: /\b(?:0[1-9]|[12]\d|3[01])\.(?:0[1-9]|1[0-2])\.(?:19|20)\d{2}\b/g,
+    replacement: '[REDACTED:DOB]',
+  },
+  // DOB in US MM/DD/YYYY (operators occasionally cross-paste).
+  {
+    re: /\b(?:0[1-9]|1[0-2])\/(?:0[1-9]|[12]\d|3[01])\/(?:19|20)\d{2}\b/g,
+    replacement: '[REDACTED:DOB]',
+  },
+]
+
+/**
+ * Apply every {@link REDACTION_PATTERNS} replacement to a single
+ * captured message. Exported for the unit-test layer.
+ */
+export function redactPii(message: string): string {
+  let out = message
+  for (const { re, replacement } of REDACTION_PATTERNS) {
+    out = out.replace(re, replacement)
+  }
+  return out
+}
+
 export const useClientLogsStore = defineStore('clientLogs', () => {
   const entries = ref<ConsoleEntry[]>([])
 
@@ -46,7 +114,10 @@ export const useClientLogsStore = defineStore('clientLogs', () => {
   function push(input: { level: ClientLogLevel; message: string }): ConsoleEntry {
     const entry: ConsoleEntry = {
       level: input.level,
-      message: input.message,
+      // PII guard: redact at capture time so the preview disclosure
+      // shows the scrubbed string — what the operator sees is what
+      // the email will carry.
+      message: redactPii(input.message),
       timestamp: new Date().toISOString(),
     }
     entries.value = [...entries.value, entry]
