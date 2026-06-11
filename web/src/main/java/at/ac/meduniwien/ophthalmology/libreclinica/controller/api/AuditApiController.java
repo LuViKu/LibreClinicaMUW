@@ -200,6 +200,15 @@ public class AuditApiController {
               -- on that join rather than on the entity_id itself.
               OR ( a.audit_table = 'dataset' AND a.entity_id IN (
                   SELECT dataset_id FROM dataset WHERE study_id IN __IN__))
+              -- Phase E.6 follow-up 2026-06-11 — include eye-cohort
+              -- transitions. The row appears in BOTH the source-study
+              -- AND target-study audit logs (a transition affects
+              -- both) so the per-study reviewer sees the move from
+              -- either side.
+              OR ( a.audit_table = 'eye_cohort_transition' AND a.entity_id IN (
+                  SELECT transition_id FROM eye_cohort_transition
+                  WHERE source_study_id IN __IN__
+                     OR target_study_id IN __IN__))
             )
             ORDER BY a.audit_date DESC, a.audit_id DESC
             LIMIT 500
@@ -526,13 +535,17 @@ public class AuditApiController {
         List<AuditEventDto> out = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            // 7 IN clauses × n ids each (item_data, event_crf,
-            // study_subject, subject, study_event, study, dataset —
+            // 9 IN-clause slots × n ids each (item_data, event_crf,
+            // study_subject, subject, study_event, study, dataset,
+            // eye_cohort_transition[source], eye_cohort_transition[target]) —
             // the study branch was added Phase E.6 / 2026-06-03 for
             // identity edits, dataset added Phase E.6 / 2026-06-05
-            // for dataset-export audit events).
+            // for dataset-export audit events, eye_cohort_transition
+            // added Phase E.6 follow-up 2026-06-11 (two slots — the
+            // row is visible from BOTH source-study and target-study
+            // side, so the WHERE clause ORs the two IN tests).
             int bindIdx = 1;
-            for (int branch = 0; branch < 7; branch++) {
+            for (int branch = 0; branch < 9; branch++) {
                 for (Integer sid : visibleStudyIds) {
                     ps.setInt(bindIdx++, sid);
                 }
