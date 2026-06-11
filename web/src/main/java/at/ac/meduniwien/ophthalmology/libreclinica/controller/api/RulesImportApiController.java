@@ -14,6 +14,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,12 +27,10 @@ import java.util.UUID;
 
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.XmlSchemaValidationHelper;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.AuditableBeanWrapper;
 import at.ac.meduniwien.ophthalmology.libreclinica.domain.rule.RuleBean;
@@ -732,26 +733,41 @@ public class RulesImportApiController {
                             int ruleSetsCreated, int ruleSetsReplaced,
                             boolean ignoreDuplicates) {
         if (dataSource == null) return; // test-only path
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("rule_set");
-            ae.setEntityId(0);
-            ae.setColumnName("import");
-            ae.setOldValue("");
-            ae.setNewValue("rulesCreated=" + rulesCreated
-                    + " rulesReplaced=" + rulesReplaced
-                    + " ruleSetsCreated=" + ruleSetsCreated
-                    + " ruleSetsReplaced=" + ruleSetsReplaced
-                    + " ignoreDuplicates=" + ignoreDuplicates);
-            ae.setActionMessage("rules_import_commit: token=" + token + " by " + me.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for rules_import_commit (token={}, continuing): {}",
-                    token, e.getMessage());
+        String summary = "rulesCreated=" + rulesCreated
+                + " rulesReplaced=" + rulesReplaced
+                + " ruleSetsCreated=" + ruleSetsCreated
+                + " ruleSetsReplaced=" + ruleSetsReplaced
+                + " ignoreDuplicates=" + ignoreDuplicates;
+        writeImportAudit(AuditTypeIds.RULES_IMPORT_COMMITTED, me.getId(),
+                "rule_set", 0,
+                "token=" + token, "", summary);
+    }
+
+    /**
+     * Phase audit-unification — direct-JDBC writer feeding
+     * {@code audit_log_event}. Replaces the legacy {@code AuditEventDAO}
+     * fan-out that wrote to the orphaned {@code audit_event} table and
+     * never surfaced in the SPA Audit Log view.
+     */
+    private void writeImportAudit(int auditTypeId, int userId, String auditTable,
+                                  int entityId, String entityName,
+                                  String oldValue, String newValue) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, userId);
+            ps.setString(3, auditTable);
+            ps.setInt(4, entityId);
+            ps.setString(5, entityName == null ? "" : entityName);
+            ps.setString(6, oldValue == null ? "" : oldValue);
+            ps.setString(7, newValue == null ? "" : newValue);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for {} {} (continuing): {}",
+                    auditTable, entityId, e.getMessage());
         }
     }
 

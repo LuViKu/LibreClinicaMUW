@@ -9,6 +9,9 @@
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import java.io.ByteArrayOutputStream;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -18,14 +21,12 @@ import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleActionRunLogDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleDao;
@@ -1075,26 +1076,10 @@ public class RulesApiController {
                                            String columnName,
                                            String oldValue,
                                            String newValue) {
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("rule_action");
-            ae.setEntityId(action.getId() == null ? 0 : action.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("rule_action_update: id=" + action.getId()
-                    + "." + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "' by " + me.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for rule_action field {} id={} (continuing): {}",
-                    columnName, action.getId(), e.getMessage());
-        }
+        writeRuleAudit(AuditTypeIds.RULE_ACTION_UPDATED, me.getId(),
+                "rule_action",
+                action.getId() == null ? 0 : action.getId(),
+                columnName, oldValue, newValue);
     }
 
     /* ----------------------------------------------------------------- */
@@ -1679,71 +1664,23 @@ public class RulesApiController {
     }
 
     private void writeRuleCreateAudit(UserAccountBean me, StudyBean study, RuleBean rule) {
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("rule");
-            ae.setEntityId(rule.getId());
-            ae.setColumnName("create");
-            ae.setOldValue("");
-            ae.setNewValue(rule.getOid() == null ? "" : rule.getOid());
-            ae.setActionMessage("rule_create: oid=" + rule.getOid()
-                    + " name='" + (rule.getName() == null ? "" : rule.getName())
-                    + "' by " + me.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for rule_create id={} (continuing): {}",
-                    rule.getId(), e.getMessage());
-        }
+        writeRuleAudit(AuditTypeIds.RULE_CREATED, me.getId(),
+                "rule", rule.getId(),
+                "create", "", rule.getOid() == null ? "" : rule.getOid());
     }
 
     private void writeRuleSetCreateAudit(UserAccountBean me, StudyBean study, RuleSetBean rs) {
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("rule_set");
-            ae.setEntityId(rs.getId());
-            ae.setColumnName("create");
-            ae.setOldValue("");
-            String targetValue = rs.getTarget() == null ? "" : rs.getTarget().getValue();
-            ae.setNewValue(targetValue == null ? "" : targetValue);
-            ae.setActionMessage("rule_set_create: id=" + rs.getId()
-                    + " target='" + (targetValue == null ? "" : targetValue)
-                    + "' by " + me.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for rule_set_create id={} (continuing): {}",
-                    rs.getId(), e.getMessage());
-        }
+        String targetValue = rs.getTarget() == null ? "" : rs.getTarget().getValue();
+        writeRuleAudit(AuditTypeIds.RULE_SET_CREATED, me.getId(),
+                "rule_set", rs.getId(),
+                "create", "", targetValue);
     }
 
     private void writeRuleActionCreateAudit(UserAccountBean me, StudyBean study,
                                             int newActionId, ActionType actionType) {
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("rule_action");
-            ae.setEntityId(newActionId);
-            ae.setColumnName("create");
-            ae.setOldValue("");
-            ae.setNewValue(actionType == null ? "" : actionType.name());
-            ae.setActionMessage("rule_action_create: id=" + newActionId
-                    + " type=" + (actionType == null ? "?" : actionType.name())
-                    + " by " + me.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for rule_action_create id={} (continuing): {}",
-                    newActionId, e.getMessage());
-        }
+        writeRuleAudit(AuditTypeIds.RULE_ACTION_CREATED, me.getId(),
+                "rule_action", newActionId,
+                "create", "", actionType == null ? "" : actionType.name());
     }
 
     /* ----------------------------------------------------------------- */
@@ -1861,25 +1798,11 @@ public class RulesApiController {
                                    Status oldStatus,
                                    Status newStatus,
                                    String operation) {
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("rule_set");
-            ae.setEntityId(rs.getId());
-            ae.setColumnName("status_id");
-            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getCode()));
-            ae.setNewValue(String.valueOf(newStatus.getCode()));
-            ae.setActionMessage("rule_set_" + operation + ": id=" + rs.getId()
-                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
-                    + " → " + newStatus.getName() + ") by " + me.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for rule_set_{} id={} (continuing): {}",
-                    operation, rs.getId(), e.getMessage());
-        }
+        writeRuleAudit(AuditTypeIds.RULE_SET_LIFECYCLE_CHANGED, me.getId(),
+                "rule_set", rs.getId(),
+                "status_id",
+                oldStatus == null ? "" : String.valueOf(oldStatus.getCode()),
+                String.valueOf(newStatus.getCode()));
     }
 
     /**
@@ -1893,26 +1816,9 @@ public class RulesApiController {
                                         String columnName,
                                         String oldValue,
                                         String newValue) {
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("rule_set");
-            ae.setEntityId(rs.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("rule_set_schedule_update: id=" + rs.getId()
-                    + "." + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "' by " + me.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for rule_set field {}={} (continuing): {}",
-                    columnName, newValue, e.getMessage());
-        }
+        writeRuleAudit(AuditTypeIds.RULE_SET_SCHEDULE_UPDATED, me.getId(),
+                "rule_set", rs.getId(),
+                columnName, oldValue, newValue);
     }
 
     private void writeRuleSetRuleAudit(UserAccountBean me,
@@ -1921,24 +1827,43 @@ public class RulesApiController {
                                        Status oldStatus,
                                        Status newStatus,
                                        String operation) {
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("rule_set_rule");
-            ae.setEntityId(rsr.getId());
-            ae.setColumnName("status_id");
-            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getCode()));
-            ae.setNewValue(String.valueOf(newStatus.getCode()));
-            ae.setActionMessage("rule_set_rule_" + operation + ": id=" + rsr.getId()
-                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
-                    + " → " + newStatus.getName() + ") by " + me.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for rule_set_rule_{} id={} (continuing): {}",
-                    operation, rsr.getId(), e.getMessage());
+        writeRuleAudit(AuditTypeIds.RULE_SET_RULE_LIFECYCLE_CHANGED, me.getId(),
+                "rule_set_rule", rsr.getId(),
+                "status_id",
+                oldStatus == null ? "" : String.valueOf(oldStatus.getCode()),
+                String.valueOf(newStatus.getCode()));
+    }
+
+    /**
+     * Phase audit-unification — single direct-JDBC writer feeding
+     * {@code audit_log_event}. Replaces the legacy {@code AuditEventDAO}
+     * fan-out that wrote to the orphaned {@code audit_event} table and
+     * never surfaced in the SPA Audit Log view.
+     *
+     * <p>{@code entityName} carries the column name on field-update
+     * rows and a synthetic marker (e.g. {@code "create"}) on create /
+     * lifecycle rows — matches the convention used by
+     * {@link StudiesApiController#writeStudyFieldAudit}.
+     */
+    private void writeRuleAudit(int auditTypeId, int userId, String auditTable,
+                                int entityId, String entityName,
+                                String oldValue, String newValue) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, userId);
+            ps.setString(3, auditTable);
+            ps.setInt(4, entityId);
+            ps.setString(5, entityName == null ? "" : entityName);
+            ps.setString(6, oldValue == null ? "" : oldValue);
+            ps.setString(7, newValue == null ? "" : newValue);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for {} {} (continuing): {}",
+                    auditTable, entityId, e.getMessage());
         }
     }
 

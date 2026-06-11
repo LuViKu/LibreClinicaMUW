@@ -8,18 +8,17 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AuditTypeIds;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.MigrateVersionResult;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.MigrateVersionResult.SedMigrationRow;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.VersionUsageReport;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.VersionUsageReport.EventDefinitionReference;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
@@ -33,6 +32,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -240,7 +242,7 @@ public class CrfVersionMigrationService {
     }
 
     /**
-     * Emit one {@code audit_event} row recording the
+     * Emit one {@code audit_log_event} row recording the
      * {@code default_version_id} flip on a single
      * {@code event_definition_crf} row.
      *
@@ -255,24 +257,41 @@ public class CrfVersionMigrationService {
                                      StudyEventDefinitionBean sed,
                                      CRFVersionBean fromVersion,
                                      CRFVersionBean toVersion) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(actor.getId());
-            ae.setAuditTable("event_definition_crf");
-            ae.setEntityId(edc.getId());
-            ae.setColumnName("default_version_id");
-            ae.setOldValue(fromVersion.getOid());
-            ae.setNewValue(toVersion.getOid());
-            ae.setActionMessage("crf_version_migrate: SED " + sed.getOid()
-                    + " (" + fromVersion.getOid() + " → " + toVersion.getOid()
-                    + ") by " + actor.getName());
-            new AuditEventDAO(dataSource).create(ae);
-        } catch (Exception e) {
-            // Audit failures never abort the migration — the actual
-            // mutation already landed; we surface the audit slip in the
-            // log so an operator can reconcile manually.
-            LOG.warn("Audit write failed for migration edc#{} sed={} (continuing): {}",
-                    edc.getId(), sed.getOid(), e.getMessage());
+        writeAudit(AuditTypeIds.CRF_VERSION_MIGRATED, actor.getId(),
+                "event_definition_crf", edc.getId(),
+                "default_version_id",
+                fromVersion.getOid(), toVersion.getOid());
+    }
+
+    /**
+     * Phase audit-unification — direct-JDBC writer feeding
+     * {@code audit_log_event}. Replaces the legacy {@code AuditEventDAO}
+     * fan-out that wrote to the orphaned {@code audit_event} table and
+     * never surfaced in the SPA Audit Log view.
+     *
+     * <p>Audit failures never abort the migration — the actual mutation
+     * already landed; we surface the audit slip in the log so an
+     * operator can reconcile manually.
+     */
+    private void writeAudit(int auditTypeId, int userId, String auditTable,
+                            int entityId, String entityName,
+                            String oldValue, String newValue) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, userId);
+            ps.setString(3, auditTable);
+            ps.setInt(4, entityId);
+            ps.setString(5, entityName == null ? "" : entityName);
+            ps.setString(6, oldValue == null ? "" : oldValue);
+            ps.setString(7, newValue == null ? "" : newValue);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for {} {} (continuing): {}",
+                    auditTable, entityId, e.getMessage());
         }
     }
 }
