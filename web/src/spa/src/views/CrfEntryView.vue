@@ -67,6 +67,34 @@ onMounted(() => {
   }
 })
 
+/* -------------------------------------------------------------------- */
+/* notes-deeplink (2026-06-11): if the route carries ?item=<oid>, scroll  */
+/* the matching item element into view + flash-highlight it briefly so   */
+/* the operator who clicked through from the notes list lands on the     */
+/* exact item the query is about. Watch store.schema rather than mount   */
+/* because the items don't render until the schema arrives.              */
+/* -------------------------------------------------------------------- */
+function applyItemDeepLink(): void {
+  const raw = route.query.item
+  if (typeof raw !== 'string' || raw === '') return
+  const targetId = `item-${raw}`
+  // requestAnimationFrame to let the schema-driven DOM settle before we
+  // try to find the element.
+  requestAnimationFrame(() => {
+    const el = document.getElementById(targetId)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('flash-highlight')
+    window.setTimeout(() => el.classList.remove('flash-highlight'), 1500)
+  })
+}
+
+watch(
+  () => store.schema,
+  (s) => { if (s) applyItemDeepLink() },
+  { immediate: false },
+)
+
 watch(eventCrfOid, (oid) => {
   void store.load(oid)
   void advanced.loadAll(oid)
@@ -729,3 +757,18 @@ function onThreadUpdated(_parentId: string) {
     />
   </div>
 </template>
+
+<style scoped>
+/* notes-deeplink (2026-06-11) — applied transiently by applyItemDeepLink
+   when the operator follows a /event-crfs/<id>?item=<oid> link from the
+   notes list. The animation is one-shot and removes itself after 1.5s,
+   so the highlight tells the operator "this is the item you came for"
+   without lingering as a permanent visual artefact. */
+:deep(.flash-highlight) {
+  animation: flash-highlight 1.5s ease-out;
+}
+@keyframes flash-highlight {
+  0%   { background-color: rgb(252 211 77); }   /* yellow-300 */
+  100% { background-color: transparent; }
+}
+</style>

@@ -28,6 +28,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * compatibility; the SPA only populates this field when the user
  * expands a row.
  *
+ * <p>Notes-deeplink (2026-06-11): extended with four context fields the
+ * operator needs to triage a query without leaving the list — the human
+ * label for the item, the current value of the data point, the event
+ * the value belongs to, and the {@code event_crf} id the SPA needs to
+ * deep-link straight to the right CRF row. All four are empty / null
+ * when the note isn't tied to an {@code itemData} entity or the walk
+ * fails (e.g. orphaned note rows from a deleted CRF version).
+ *
  * @param id              discrepancy_note_id as a string
  * @param type            one of: {@code query | failed-validation |
  *                        annotation | reason-for-change}
@@ -49,6 +57,18 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * @param thread          ordered child notes (Phase E.6); empty list
  *                        when caller hit the list endpoint or no
  *                        children exist
+ * @param itemLabel       human-readable item label
+ *                        ({@code item.description}, falling back to
+ *                        {@code item.name} / oid); null when the note
+ *                        isn't attached to an item_data row
+ * @param itemValue       current {@code item_data.value} at the bound
+ *                        (item, event_crf) tuple; null when unset
+ * @param eventCrfOid     {@code event_crf.id} as a string — the SPA
+ *                        router consumes this as
+ *                        {@code /event-crfs/&lt;eventCrfOid&gt;}; null
+ *                        when unresolvable
+ * @param eventName       {@code study_event_definition.name} (e.g.
+ *                        "V1 Inclusion"); null when unresolvable
  */
 @Schema(name = "DiscrepancyNoteDto")
 public record DiscrepancyNoteDto(
@@ -61,9 +81,14 @@ public record DiscrepancyNoteDto(
         String assignedTo,
         int daysOpen,
         String lastActivityAt,
-        List<DiscrepancyThreadEntryDto> thread
+        List<DiscrepancyThreadEntryDto> thread,
+        String itemLabel,
+        String itemValue,
+        String eventCrfOid,
+        String eventName
 ) {
-    /** Convenience constructor — defaults {@code thread} to an empty list. */
+    /** Convenience constructor — defaults {@code thread} to an empty list
+     *  AND nulls the deeplink context fields. */
     public DiscrepancyNoteDto(
             String id,
             String type,
@@ -75,6 +100,25 @@ public record DiscrepancyNoteDto(
             int daysOpen,
             String lastActivityAt) {
         this(id, type, status, subjectId, itemOid, description,
-                assignedTo, daysOpen, lastActivityAt, List.of());
+                assignedTo, daysOpen, lastActivityAt, List.of(),
+                null, null, null, null);
+    }
+
+    /** Backward-compat 10-arg ctor for callers that already pass a thread
+     *  but predate the notes-deeplink fields. */
+    public DiscrepancyNoteDto(
+            String id,
+            String type,
+            String status,
+            String subjectId,
+            String itemOid,
+            String description,
+            String assignedTo,
+            int daysOpen,
+            String lastActivityAt,
+            List<DiscrepancyThreadEntryDto> thread) {
+        this(id, type, status, subjectId, itemOid, description,
+                assignedTo, daysOpen, lastActivityAt, thread,
+                null, null, null, null);
     }
 }

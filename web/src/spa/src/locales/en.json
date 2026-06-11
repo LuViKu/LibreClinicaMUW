@@ -402,6 +402,10 @@
       "daysOpen": "Days open",
       "actions": "Actions"
     },
+    "row": {
+      "currentValue": "Current value: {value}",
+      "valueEmpty": "empty"
+    },
     "actions": {
       "respond": "Respond",
       "resolve": "Mark resolved",

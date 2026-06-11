@@ -401,6 +401,10 @@
       "daysOpen": "Offene Tage",
       "actions": "Aktionen"
     },
+    "row": {
+      "currentValue": "Aktueller Wert: {value}",
+      "valueEmpty": "leer"
+    },
     "actions": {
       "respond": "Antworten",
       "resolve": "Als gelöst markieren",

@@ -115,6 +115,34 @@ class AuditDiscrepancyExportDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(jsonPath("$.length()").value(greaterThanOrEqualTo(0)));
     }
 
+    /**
+     * notes-deeplink (2026-06-11) — the list response must carry the
+     * deep-link context the SPA row template needs: human-readable
+     * itemLabel, the current item_data.value, the eventCrfOid the SPA
+     * routes to, and the eventName the operator sees. The Phase E.4
+     * demo seed wires note 1 to item_data 3 (item I_HEIGHT_CM, value
+     * "162", event_crf 1, V1 Inclusion); this test pins that wiring so
+     * a schema regression in the new SQL walk fails loudly.
+     */
+    @Test
+    void discrepancyListIncludesItemLabelValueEventContext() throws Exception {
+        discrepancyMockMvc().perform(get("/api/v1/discrepancies")
+                .session(authenticatedRootSession()))
+                .andExpect(status().isOk())
+                // Seed: note 1 is tied to item 3 (I_HEIGHT_CM) with value "162",
+                // attached to event_crf 1 of the V1 Inclusion event.
+                .andExpect(jsonPath("$[?(@.id=='1')].itemOid").value(
+                        org.hamcrest.Matchers.hasItem("I_HEIGHT_CM")))
+                .andExpect(jsonPath("$[?(@.id=='1')].itemLabel").value(
+                        org.hamcrest.Matchers.hasItem("Height (cm)")))
+                .andExpect(jsonPath("$[?(@.id=='1')].itemValue").value(
+                        org.hamcrest.Matchers.hasItem("162")))
+                .andExpect(jsonPath("$[?(@.id=='1')].eventCrfOid").value(
+                        org.hamcrest.Matchers.hasItem("1")))
+                .andExpect(jsonPath("$[?(@.id=='1')].eventName").value(
+                        org.hamcrest.Matchers.hasItem("V1 Inclusion")));
+    }
+
     @Test
     void discrepancyExportCsvReturnsBytesAndEmitsAuditRow() throws Exception {
         int before = countAuditRowsOfType(56);

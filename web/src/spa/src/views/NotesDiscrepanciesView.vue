@@ -308,8 +308,37 @@ async function toggleExpand(n: DiscrepancyNote): Promise<void> {
           <tr>
             <td class="px-3 py-2"><StatusPill :variant="typeVariant(n.type)">{{ t(`notes.type.${n.type}`) }}</StatusPill></td>
             <td class="px-3 py-2"><StatusPill :variant="statusVariant(n.status)">{{ t(`notes.status.${n.status}`) }}</StatusPill></td>
-            <td class="px-3 py-2 font-medium">{{ n.subjectId }}</td>
-            <td class="px-3 py-2 font-mono text-xs text-slate-600">{{ n.itemOid }}</td>
+            <td class="px-3 py-2 font-medium">
+              <RouterLink
+                v-if="n.subjectId"
+                :to="`/subjects/${encodeURIComponent(n.subjectId)}`"
+                class="text-muw-blue hover:underline"
+                data-testid="notes-subject-link"
+              >{{ n.subjectId }}</RouterLink>
+              <span v-else>{{ n.subjectId }}</span>
+            </td>
+            <!-- notes-deeplink (2026-06-11): stacked label / context so the
+                 operator can decide whether the value "looks good" without
+                 navigating to the CRF first. The label is a router-link
+                 straight to the CRF row when an event_crf is resolvable. -->
+            <td class="px-3 py-2 align-top">
+              <template v-if="n.eventCrfOid && n.itemOid">
+                <RouterLink
+                  :to="`/event-crfs/${encodeURIComponent(n.eventCrfOid)}?item=${encodeURIComponent(n.itemOid)}`"
+                  class="font-medium text-slate-800 hover:text-muw-blue hover:underline"
+                  data-testid="notes-item-deeplink"
+                >{{ n.itemLabel || n.itemOid }}</RouterLink>
+              </template>
+              <span v-else class="font-medium text-slate-800">{{ n.itemLabel || n.itemOid }}</span>
+              <span
+                v-if="n.itemLabel && n.itemOid"
+                class="ml-1 font-mono text-[10px] text-slate-400"
+              >({{ n.itemOid }})</span>
+              <div class="text-[11px] text-slate-500 mt-0.5" data-testid="notes-item-context">
+                <span v-if="n.eventName">{{ n.eventName }} — </span>
+                {{ t('notes.row.currentValue', { value: n.itemValue || t('notes.row.valueEmpty') }) }}
+              </div>
+            </td>
             <td class="px-3 py-2 text-slate-700">{{ n.description }}</td>
             <td class="px-3 py-2 text-slate-600 text-xs">{{ n.assignedTo ?? '—' }}</td>
             <td class="px-3 py-2 text-slate-700 text-right">{{ n.daysOpen || '—' }}</td>

@@ -105,7 +105,11 @@ function fileRef(): { filename: string; bytes: number } | null {
 </script>
 
 <template>
-  <div>
+  <!-- notes-deeplink (2026-06-11) — every widget root carries an
+       id="item-<oid>" so NotesDiscrepanciesView's deep-link (eye route
+       /event-crfs/<id>?item=<oid>) can scrollIntoView + flash-highlight
+       the right item without a per-CRF schema lookup. -->
+  <div :id="`item-${item.oid}`">
     <FieldLabel v-if="!suppressLabel" :for="inputId" :required="item.required">
       {{ item.label }}
       <slot name="label-extras" />
