@@ -9,20 +9,21 @@
 #   1. Preflight (root, OS check, network)
 #   2. System packages + unattended-upgrades
 #   3. Timezone Europe/Vienna
-#   4. SSH hardening (key-only, no root, no passwords)
-#   5. UFW firewall (SSH + 8080 from trusted CIDRs only)
-#   6. fail2ban (sshd jail)
-#   7. Docker Engine + Compose v2 (official Docker apt repo)
-#   8. Deploy user `libreclinica` (no shell, member of docker group)
-#   9. Stack tree under /opt/libreclinica + /etc/libreclinica
-#  10. systemd unit `libreclinica.service` that brings the compose stack up
-#  11. Nightly pg_dump backup via systemd timer to /var/backups/libreclinica
-#  12. Log rotation for backup files
+#   4. Docker Engine + Compose v2 (official Docker apt repo)
+#   5. Deploy user `libreclinica` (no shell, member of docker group)
+#   6. Stack tree under /opt/libreclinica + /etc/libreclinica
+#   7. systemd unit `libreclinica.service` that brings the compose stack up
+#   8. Nightly pg_dump backup via systemd timer to /var/backups/libreclinica
+#   9. Log rotation for backup files
 #
 # What it does NOT do:
 #   - TLS termination: the MUW institutional reverse proxy is expected to
-#     front this host. UFW opens 8080 only to trusted CIDRs you configure.
-#     If you need local TLS, add nginx separately.
+#     front this host on the internal network. If you need local TLS,
+#     add nginx separately.
+#   - Host-level firewall / SSH hardening / fail2ban: the production VM
+#     is reachable only via the MUW internal network. Network-level
+#     access control sits at the institutional perimeter; host-level
+#     hardening was removed to keep the deploy script minimal.
 #   - Pull the libreclinica image. The first `systemctl start libreclinica`
 #     after setup will pull from ghcr.io/luviku/libreclinicamuw:<tag>. Make
 #     sure the image exists (run the `Release image` workflow on GitHub
@@ -34,10 +35,12 @@
 # Usage:
 #   sudo bash deploy/setup-ubuntu-host.sh \
 #     --image-tag v1.4.0-muw \
-#     --trusted-cidrs '128.131.0.0/16,10.0.0.0/8' \
-#     --admin-ssh-key 'ssh-ed25519 AAAA... admin@muw'
+#     --trusted-cidrs '128.131.0.0/16,10.0.0.0/8'
 #
 # All knobs can also be set via env vars before invocation; flags override.
+# `--trusted-cidrs` is consumed by the SSO header-trust filter
+# (LIBRECLINICA_SSO_TRUSTED_CIDRS in /etc/libreclinica/env), not by any
+# host-level firewall — there isn't one.
 #
 # Tested against: Ubuntu 24.04 LTS (Noble Numbat), kernel 6.8+
 # ------------------------------------------------------------------------------
@@ -47,8 +50,7 @@ set -euo pipefail
 # ----------------------------- defaults ---------------------------------------
 
 : "${LIBRECLINICA_IMAGE_TAG:=latest}"
-: "${LIBRECLINICA_TRUSTED_CIDRS:=}"      # comma-separated list, e.g. "10.0.0.0/8,192.168.0.0/16"
-: "${LIBRECLINICA_ADMIN_SSH_KEY:=}"      # single SSH pubkey to add to root's authorized_keys
+: "${LIBRECLINICA_TRUSTED_CIDRS:=}"      # comma-separated list, e.g. "10.0.0.0/8,192.168.0.0/16" — consumed by SSO header trust
 : "${LIBRECLINICA_TIMEZONE:=Europe/Vienna}"
 : "${LIBRECLINICA_HOST_PORT:=8080}"      # the host port the reverse proxy targets
 : "${LIBRECLINICA_REPO_URL:=https://github.com/LuViKu/LibreClinicaMUW.git}"
@@ -69,7 +71,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --image-tag)        LIBRECLINICA_IMAGE_TAG="$2"; shift 2 ;;
     --trusted-cidrs)    LIBRECLINICA_TRUSTED_CIDRS="$2"; shift 2 ;;
-    --admin-ssh-key)    LIBRECLINICA_ADMIN_SSH_KEY="$2"; shift 2 ;;
     --timezone)         LIBRECLINICA_TIMEZONE="$2"; shift 2 ;;
     --host-port)        LIBRECLINICA_HOST_PORT="$2"; shift 2 ;;
     --repo-ref)         LIBRECLINICA_REPO_REF="$2"; shift 2 ;;
@@ -109,19 +110,10 @@ if ! grep -q '^VERSION_ID="24\.' /etc/os-release; then
   warn "Proceed with caution."
 fi
 
-if [[ -z "$LIBRECLINICA_TRUSTED_CIDRS" ]]; then
-  warn "No --trusted-cidrs set. UFW will allow port ${LIBRECLINICA_HOST_PORT}"
-  warn "from 0.0.0.0/0 — fine for a private VM, bad for an internet-facing one."
-fi
-
-if [[ -z "$LIBRECLINICA_ADMIN_SSH_KEY" && ! -s /root/.ssh/authorized_keys ]]; then
-  die "No --admin-ssh-key passed AND /root/.ssh/authorized_keys is empty. Refusing to harden SSH — you would lock yourself out."
-fi
-
-log "OS:           $(grep PRETTY_NAME /etc/os-release | cut -d= -f2- | tr -d '"')"
-log "Image tag:    ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG}"
-log "Trusted CIDRs: ${LIBRECLINICA_TRUSTED_CIDRS:-<none>}"
-log "Timezone:     ${LIBRECLINICA_TIMEZONE}"
+log "OS:                $(grep PRETTY_NAME /etc/os-release | cut -d= -f2- | tr -d '"')"
+log "Image tag:         ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG}"
+log "Trusted CIDRs (SSO): ${LIBRECLINICA_TRUSTED_CIDRS:-<none>}"
+log "Timezone:          ${LIBRECLINICA_TIMEZONE}"
 
 # ----------------------------- system packages --------------------------------
 
@@ -133,7 +125,7 @@ apt-get update -qq
 apt-get upgrade -y -qq
 apt-get install -y -qq \
   ca-certificates curl gnupg lsb-release \
-  ufw fail2ban unattended-upgrades \
+  unattended-upgrades \
   jq git rsync htop ncdu \
   postgresql-client-16 \
   logrotate \
@@ -173,87 +165,6 @@ Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
 Unattended-Upgrade::Remove-Unused-Dependencies "true";
 EOF
 systemctl enable --now unattended-upgrades.service >/dev/null 2>&1 || true
-
-# ----------------------------- SSH hardening ----------------------------------
-
-section "SSH hardening"
-
-# 1) Drop in admin key (if supplied) before we disable password login.
-if [[ -n "$LIBRECLINICA_ADMIN_SSH_KEY" ]]; then
-  install -d -m 700 /root/.ssh
-  touch /root/.ssh/authorized_keys
-  chmod 600 /root/.ssh/authorized_keys
-  if ! grep -qF "$LIBRECLINICA_ADMIN_SSH_KEY" /root/.ssh/authorized_keys; then
-    echo "$LIBRECLINICA_ADMIN_SSH_KEY" >> /root/.ssh/authorized_keys
-    log "Added admin SSH key to /root/.ssh/authorized_keys"
-  else
-    log "Admin SSH key already present"
-  fi
-fi
-
-# 2) Replace the per-host config with a single drop-in. We touch only our
-#    file, never /etc/ssh/sshd_config, so package upgrades don't fight us.
-cat >/etc/ssh/sshd_config.d/10-libreclinica.conf <<'EOF'
-# Managed by deploy/setup-ubuntu-host.sh
-PermitRootLogin prohibit-password
-PasswordAuthentication no
-ChallengeResponseAuthentication no
-KbdInteractiveAuthentication no
-UsePAM yes
-X11Forwarding no
-AllowAgentForwarding no
-AllowTcpForwarding no
-MaxAuthTries 3
-LoginGraceTime 30
-ClientAliveInterval 300
-ClientAliveCountMax 2
-EOF
-
-# Validate before reload so a typo doesn't strand us.
-sshd -t
-systemctl reload ssh.service
-
-# ----------------------------- UFW firewall -----------------------------------
-
-section "UFW firewall"
-
-ufw --force reset >/dev/null
-ufw default deny incoming >/dev/null
-ufw default allow outgoing >/dev/null
-
-# SSH: rate-limited so brute-force attempts get throttled by the kernel.
-ufw limit 22/tcp comment 'SSH (rate-limited)' >/dev/null
-
-if [[ -n "$LIBRECLINICA_TRUSTED_CIDRS" ]]; then
-  IFS=',' read -ra CIDRS <<< "$LIBRECLINICA_TRUSTED_CIDRS"
-  for cidr in "${CIDRS[@]}"; do
-    cidr_trimmed=$(echo "$cidr" | tr -d ' ')
-    ufw allow from "$cidr_trimmed" to any port "$LIBRECLINICA_HOST_PORT" proto tcp comment "LibreClinica from $cidr_trimmed" >/dev/null
-  done
-else
-  ufw allow "$LIBRECLINICA_HOST_PORT/tcp" comment 'LibreClinica (UNRESTRICTED — set --trusted-cidrs)' >/dev/null
-fi
-
-ufw --force enable >/dev/null
-log "UFW status:"
-ufw status numbered | sed 's/^/  /'
-
-# ----------------------------- fail2ban ---------------------------------------
-
-section "fail2ban"
-
-cat >/etc/fail2ban/jail.d/libreclinica.local <<'EOF'
-# Managed by deploy/setup-ubuntu-host.sh
-[sshd]
-enabled  = true
-port     = ssh
-maxretry = 5
-findtime = 10m
-bantime  = 1h
-backend  = systemd
-EOF
-systemctl enable --now fail2ban.service >/dev/null
-systemctl reload fail2ban.service >/dev/null
 
 # ----------------------------- Docker -----------------------------------------
 
@@ -575,7 +486,7 @@ Next steps:
         sudo journalctl -u libreclinica -f
      and the Tomcat log:
         sudo docker logs -f libreclinica-muw-libreclinica-1
-  5. From a host on a trusted CIDR, confirm:
+  5. From a host on the MUW internal network, confirm:
         curl -I http://<vm-ip>:${LIBRECLINICA_HOST_PORT}/LibreClinica/
   6. Wire the institutional reverse proxy to forward HTTPS → http://<vm-ip>:${LIBRECLINICA_HOST_PORT}.
   7. Verify the backup timer fires tonight:
