@@ -50,5 +50,6 @@
   <include  file="migration/lc-muw-2026-06-08-backfill-transition-oid.xml"/>
   <include  file="migration/lc-muw-2026-06-10-retinal-inference-tables.xml"/>
   <include  file="migration/lc-muw-2026-06-10-audit-event-type-operation-failed.xml"/>
+  <include  file="migration/lc-muw-2026-06-11-build-study-task-ack.xml"/>
 </databaseChangeLog>
 
