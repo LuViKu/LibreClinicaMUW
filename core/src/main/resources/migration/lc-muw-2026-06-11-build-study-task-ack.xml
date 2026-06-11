@@ -1,0 +1,103 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 build-study tracker — operator-discretion task
+        acknowledgments.
+
+        Three steps in the seven-step Build Study tracker are
+        operator-discretion: groups (subject groups), rules
+        (validation rules), and sites. For a single-site MUW
+        observational study any of these may legitimately have a count
+        of zero. Today the tracker keeps them "optional" forever; the
+        operator has no path to record the explicit decision "we have
+        finished configuring this step and are happy with zero rows".
+
+        This changeset adds a small acknowledgement table the new
+        POST /pages/api/v1/studies/{oid}/build-status/acknowledge
+        endpoint inserts into. The build-status GET joins on this
+        table to flip the task status from "optional" to "complete"
+        once the operator has clicked.
+
+        Schema notes:
+        - task_id is a free-form VARCHAR (not an enum / FK to a
+          taxonomy table) — the controller enforces the closed set
+          {'groups', 'rules', 'sites'} at write time. Keeping the
+          column free-form keeps future operator-discretion tasks
+          additive without a follow-up changeset.
+        - acknowledged_at defaults to NOW() so the controller can
+          insert without binding the timestamp explicitly.
+        - acknowledged_by references user_account.user_id (the same
+          shape used by every other "who-did-this" column).
+        - UNIQUE (study_id, task_id) makes the endpoint idempotent —
+          a double-click is a no-op via ON CONFLICT DO NOTHING.
+
+        ID allocation. audit_log_event_type rows 61 + 62 are claimed
+        by lc-muw-2026-06-10-audit-event-type-operation-failed.xml;
+        we pick 63 here. The preCondition guards a sibling double-seed.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-11-build-study-task-ack-table">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="study_build_task_ack"/></not>
+        </preConditions>
+        <createTable tableName="study_build_task_ack">
+            <column autoIncrement="true" name="study_build_task_ack_id" type="SERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="study_id" type="INT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_study_build_task_ack_study"
+                             references="study(study_id)"/>
+            </column>
+            <column name="task_id" type="VARCHAR(50)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="acknowledged_at" type="TIMESTAMP WITH TIME ZONE"
+                    defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="acknowledged_by" type="INT">
+                <constraints nullable="false"
+                             foreignKeyName="fk_study_build_task_ack_user"
+                             references="user_account(user_id)"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="study_build_task_ack"
+                             columnNames="study_id, task_id"
+                             constraintName="uq_study_build_task_ack_study_task"/>
+
+        <rollback>
+            <dropTable tableName="study_build_task_ack"/>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Audit event type for the new endpoint. One verb only —
+        "acknowledged" — because the operation is monotone: a row is
+        either present or absent, with no update path. ID 63 follows
+        the 61 + 62 slots taken by the operation-failed seed.
+    -->
+    <changeSet id="2026-06-11-audit-event-type-build-study-task-acknowledged"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 63;
+            </sqlCheck>
+        </preConditions>
+        <comment>Audit type for BuildStudyApiController.acknowledge writes.</comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="63"/>
+            <column name="name" value="build_study_task_acknowledged"/>
+            <column name="display_name" value="Build-study task acknowledged"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>

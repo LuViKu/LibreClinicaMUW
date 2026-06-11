@@ -179,6 +179,58 @@ export const useStudyStore = defineStore('study', () => {
   }
 
   /**
+   * Phase E.6 build-study tracker — operator-discretion task ack.
+   *
+   * POSTs to {@code /pages/api/v1/studies/{oid}/build-status/acknowledge}
+   * with a {@code taskId} ∈ {'groups', 'rules', 'sites'} to flip a
+   * zero-count optional task from "optional" to "complete". The
+   * backend returns the refreshed {@link StudyBuildStatus} so the
+   * store overwrites {@code status} verbatim without a follow-up
+   * GET round-trip.
+   *
+   * <p>Idempotent on the backend (ON CONFLICT DO NOTHING) — clicking
+   * twice is safe.
+   */
+  async function acknowledgeTask(
+    studyOid: string,
+    taskId: 'groups' | 'rules' | 'sites',
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    if (!studyOid || studyOid.trim() === '') {
+      return { ok: false, message: 'Active study OID is required.' }
+    }
+    try {
+      status.value = await apiPost<StudyBuildStatus>(
+        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/build-status/acknowledge`,
+        { taskId },
+      )
+      return { ok: true }
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) throw e
+      if (e instanceof ApiNetworkError) {
+        return {
+          ok: false,
+          message:
+            'Backend nicht erreichbar — Schritt konnte nicht als abgeschlossen markiert werden.',
+        }
+      }
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        return {
+          ok: false,
+          message: body?.message ?? `Markierung fehlgeschlagen (HTTP ${e.status}).`,
+        }
+      }
+      return {
+        ok: false,
+        message:
+          e instanceof Error
+            ? e.message
+            : 'Unbekannter Fehler beim Markieren des Schritts.',
+      }
+    }
+  }
+
+  /**
    * Phase E.6 — cached study-identity snapshot for the
    * SubjectMatrixView footer (PI, planned start, status). Separate
    * from {@link status} (the build-status tracker) — the identity
@@ -248,6 +300,7 @@ export const useStudyStore = defineStore('study', () => {
     disable,
     restore,
     setStatus,
+    acknowledgeTask,
     reset,
   }
 })

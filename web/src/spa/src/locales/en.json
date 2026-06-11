@@ -685,6 +685,10 @@
       "complete": "Complete",
       "optional": "Optional"
     },
+    "taskAck": {
+      "button": "Mark as complete",
+      "success": "Step marked complete."
+    },
     "task": {
       "create-study": { "title": "Create study", "summary": "{count} active", "description": "Study metadata, version, OID, sponsor + protocol number." },
       "crf":          { "title": "Design CRFs", "summary": "{count} CRFs", "description": "Form library: item grids, response sets, repeating groups." },

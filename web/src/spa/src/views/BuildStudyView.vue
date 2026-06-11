@@ -24,6 +24,27 @@ const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 type TargetStatus = 'AVAILABLE' | 'PENDING' | 'LOCKED' | 'FROZEN'
 const statusDialog = ref<{ target: TargetStatus; reason: string; error: string | null; busy: boolean } | null>(null)
 
+// Phase E.6 build-study tracker — operator-discretion task ack.
+// Tracks per-task busy + error state for the "Als abgeschlossen
+// markieren" button on zero-count optional cards.
+type AckTaskId = 'groups' | 'rules' | 'sites'
+const ACK_TASK_IDS: readonly AckTaskId[] = ['groups', 'rules', 'sites']
+const ackBusy = ref<AckTaskId | null>(null)
+const ackError = ref<string | null>(null)
+
+function isAckTaskId(id: StudyBuildTaskId): id is AckTaskId {
+  return (ACK_TASK_IDS as readonly StudyBuildTaskId[]).includes(id)
+}
+
+async function acknowledgeTask(taskId: AckTaskId) {
+  if (!activeStudyOid.value) return
+  ackBusy.value = taskId
+  ackError.value = null
+  const result = await study.acknowledgeTask(activeStudyOid.value, taskId)
+  if (!result.ok) ackError.value = result.message
+  ackBusy.value = null
+}
+
 function openStatusDialog(target: TargetStatus) {
   statusDialog.value = { target, reason: '', error: null, busy: false }
 }
@@ -200,6 +221,10 @@ function iconFor(id: StudyBuildTaskId): string {
           </dl>
         </section>
 
+        <p v-if="ackError" class="mb-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded-md px-3 py-2">
+          {{ ackError }}
+        </p>
+
         <!-- Task tracker -->
         <ol class="space-y-3" role="list" :aria-label="t('buildStudy.taskListAriaLabel')">
           <li
@@ -242,19 +267,37 @@ function iconFor(id: StudyBuildTaskId): string {
               <p class="text-xs text-slate-500 mt-1 leading-relaxed">{{ t(`buildStudy.task.${task.id}.description`) }}</p>
             </div>
 
-            <RouterLink
-              v-if="deepLinkFor(task.id, task.to)"
-              :to="deepLinkFor(task.id, task.to)!"
-              class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700"
-            >
-              {{ t('common.next') }} →
-            </RouterLink>
-            <span
-              v-else-if="task.id === 'create-study' && !canManageStudy"
-              class="text-xs text-slate-400 italic"
-              :title="t('buildStudy.adminOnly')"
-            >{{ t('buildStudy.adminOnly') }}</span>
-            <span v-else class="text-xs text-slate-400">{{ t('buildStudy.noDeepLinkYet') }}</span>
+            <div class="flex items-center gap-2 shrink-0">
+              <!-- Phase E.6 — operator-discretion ack. Only render
+                   when the task is still "optional" (zero count + not
+                   yet acknowledged) AND it's one of the three
+                   ack-eligible tasks (groups / rules / sites). -->
+              <button
+                v-if="task.status === 'optional' && isAckTaskId(task.id)"
+                type="button"
+                class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-50"
+                :disabled="ackBusy === task.id"
+                @click="acknowledgeTask(task.id as AckTaskId)"
+              >
+                {{ ackBusy === task.id ? t('common.saving') : t('buildStudy.taskAck.button') }}
+              </button>
+              <RouterLink
+                v-if="deepLinkFor(task.id, task.to)"
+                :to="deepLinkFor(task.id, task.to)!"
+                class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-50 text-slate-700"
+              >
+                {{ t('common.next') }} →
+              </RouterLink>
+              <span
+                v-else-if="task.id === 'create-study' && !canManageStudy"
+                class="text-xs text-slate-400 italic"
+                :title="t('buildStudy.adminOnly')"
+              >{{ t('buildStudy.adminOnly') }}</span>
+              <span
+                v-else-if="!(task.status === 'optional' && isAckTaskId(task.id))"
+                class="text-xs text-slate-400"
+              >{{ t('buildStudy.noDeepLinkYet') }}</span>
+            </div>
           </li>
         </ol>
       </template>
