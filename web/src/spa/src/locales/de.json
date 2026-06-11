@@ -605,7 +605,8 @@
       "osOnlyTell": "nur OS",
       "bothEyesTell": "Beide Augen",
       "odMissing": "—",
-      "osMissing": "—"
+      "osMissing": "—",
+      "compoundSlotMissing": "Unterfeld {subKey} im CRF nicht hinterlegt"
     },
     "boolean": {
       "yes": "Ja",

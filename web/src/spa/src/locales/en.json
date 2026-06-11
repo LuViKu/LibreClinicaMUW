@@ -606,7 +606,8 @@
       "osOnlyTell": "OS only",
       "bothEyesTell": "Both eyes",
       "odMissing": "—",
-      "osMissing": "—"
+      "osMissing": "—",
+      "compoundSlotMissing": "Sub-field {subKey} is not defined on this CRF"
     },
     "boolean": {
       "yes": "Yes",

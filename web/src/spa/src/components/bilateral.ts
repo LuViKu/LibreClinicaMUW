@@ -197,10 +197,23 @@ export function deriveRowLabel(
  */
 const COMPOUND_PREFIX_REGISTRY: Record<
   string,
-  { mainLabel: string; compactBySubKey: Record<string, string> }
+  {
+    mainLabel: string
+    /**
+     * Phase E.6 ophth-bilateral-design (2026-06-11): canonical sub-key
+     * order for this compound. {@link groupBilateralItems} pre-populates
+     * every row scaffold with one slot per canonical sub-key so the
+     * rendered row always presents the full set — slots without a
+     * matching item render an empty placeholder, mirroring the design's
+     * "every refraction row shows Sph · Cyl · Axis · Vis" convention.
+     */
+    canonicalSubKeys: string[]
+    compactBySubKey: Record<string, string>
+  }
 > = {
   REFRACTION: {
     mainLabel: 'Refraction',
+    canonicalSubKeys: ['SPHERE', 'TORUS', 'ANGLE', 'VISUS'],
     compactBySubKey: {
       SPHERE: 'Sph',
       TORUS: 'Tor',
@@ -217,10 +230,31 @@ const COMPOUND_PREFIX_REGISTRY: Record<
   // I_REFRACT (the leading I_ is part of the OID's "item" namespace).
   I_REFRACT: {
     mainLabel: 'Refraktion',
+    canonicalSubKeys: ['SPH', 'CYL', 'AXIS', 'VIS'],
     compactBySubKey: {
       SPH: 'Sphäre',
       CYL: 'Zylinder',
       AXIS: 'Achse',
+      VIS: 'Visus',
+    },
+  },
+  // OPHTH v2.0 CRF (runtime-authored) uses I_OPHTH_OD_REFRACTION_SPHERE.
+  // After eye-token removal the pair key is I_OPHTH_REFRACTION_SPHERE;
+  // the matching compound prefix is therefore I_OPHTH_REFRACTION.
+  // Canonical sub-keys mirror the design's SPH/TOR/ANG/VIS quartet —
+  // the v2.0 seed only ships SPHERE/TORUS/ANGLE, so the VISUS slot
+  // renders an empty placeholder until the catalog migration backfills
+  // a {@code REFRACTION_VISUS} item.
+  I_OPHTH_REFRACTION: {
+    mainLabel: 'Refraktion',
+    canonicalSubKeys: ['SPHERE', 'TORUS', 'ANGLE', 'VISUS'],
+    compactBySubKey: {
+      SPHERE: 'Sphäre',
+      TORUS: 'Zylinder',
+      CYLINDER: 'Zylinder',
+      ANGLE: 'Achse',
+      AXIS: 'Achse',
+      VISUS: 'Visus',
     },
   },
 }
@@ -261,20 +295,41 @@ export function groupBilateralItems(items: CrfItem[]): BilateralRow[] {
       let rowIdx = compoundRowIndexByPrefix.get(prefix)
       if (rowIdx === undefined) {
         const registry = COMPOUND_PREFIX_REGISTRY[prefix]!
+        // Pre-populate the row with one slot per canonical sub-key so
+        // the rendered row always shows the full set — empty slots
+        // render an "—" placeholder so the operator sees what the
+        // compound expects even when the seed elided a sub-field.
+        const seededSubFields = registry.canonicalSubKeys.map((canonicalSubKey) => ({
+          subKey: canonicalSubKey,
+          compactLabel: registry.compactBySubKey[canonicalSubKey] ?? canonicalSubKey,
+          od: null as CrfItem | null,
+          os: null as CrfItem | null,
+        }))
         rows.push({
           kind: 'compound-bilateral',
           key: prefix,
           label: registry.mainLabel,
-          subFields: [],
+          subFields: seededSubFields,
         })
         rowIdx = rows.length - 1
         compoundRowIndexByPrefix.set(prefix, rowIdx)
       }
       const row = rows[rowIdx] as Extract<BilateralRow, { kind: 'compound-bilateral' }>
-      const compactLabel = COMPOUND_PREFIX_REGISTRY[prefix]!.compactBySubKey[subKey] ?? subKey
+      // Find the canonical sub-slot matching this item's sub-key. The
+      // registry's compactBySubKey may map several legacy spellings to
+      // the same canonical slot (e.g. CYLINDER → TORUS); we map the
+      // item's sub-key onto a canonical sub-key via the registry's
+      // compactLabel match.
+      const targetCompactLabel = COMPOUND_PREFIX_REGISTRY[prefix]!.compactBySubKey[subKey]
       let sub = row.subFields.find((s) => s.subKey === subKey)
+      if (!sub && targetCompactLabel) {
+        sub = row.subFields.find((s) => s.compactLabel === targetCompactLabel)
+      }
       if (!sub) {
-        sub = { subKey, compactLabel, od: null, os: null }
+        // Item carries a sub-key the registry doesn't recognise (e.g.
+        // an authoring CRF that added a 5th sub-field). Append the
+        // ad-hoc slot rather than silently drop it.
+        sub = { subKey, compactLabel: subKey, od: null, os: null }
         row.subFields.push(sub)
       }
       if (eye === 'OD' && !sub.od) sub.od = item

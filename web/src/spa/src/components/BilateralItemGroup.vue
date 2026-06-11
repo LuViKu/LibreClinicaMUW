@@ -149,7 +149,20 @@ const osOnly = computed(() => isBilateral.value && !od.value && os.value)
             <template v-if="sub.od">
               <slot name="widget" :item="sub.od" side="OD" :compact="true" />
             </template>
-            <div v-else class="text-[10px] text-slate-400 italic px-1">—</div>
+            <!-- Phase E.6 ophth-bilateral-design (2026-06-11): empty
+                 sub-slot still renders a disabled mini-input so the
+                 row visually presents all canonical sub-fields. The
+                 design's quartet (SPH/TOR/ANG/VIS) reads as a stable
+                 row even when an authoring seed elided one sub-field. -->
+            <input
+              v-else
+              type="text"
+              disabled
+              tabindex="-1"
+              :aria-label="t('crfEntry.bilateral.compoundSlotMissing', { subKey: sub.subKey })"
+              class="w-14 h-[42px] text-center bg-slate-50 border border-dashed border-slate-200 rounded-[10px] text-slate-300 text-[14px] cursor-not-allowed"
+              placeholder="—"
+            />
           </div>
         </div>
       </div>
@@ -166,7 +179,15 @@ const osOnly = computed(() => isBilateral.value && !od.value && os.value)
             <template v-if="sub.os">
               <slot name="widget" :item="sub.os" side="OS" :compact="true" />
             </template>
-            <div v-else class="text-[10px] text-slate-400 italic px-1">—</div>
+            <input
+              v-else
+              type="text"
+              disabled
+              tabindex="-1"
+              :aria-label="t('crfEntry.bilateral.compoundSlotMissing', { subKey: sub.subKey })"
+              class="w-14 h-[42px] text-center bg-slate-50 border border-dashed border-slate-200 rounded-[10px] text-slate-300 text-[14px] cursor-not-allowed"
+              placeholder="—"
+            />
           </div>
         </div>
       </div>
