@@ -87,7 +87,13 @@ export const useSubjectsStore = defineStore('subjects', () => {
         case 'open-events':
           return subject.events.some((e) => e.status === 'scheduled' || e.status === 'in-progress' || e.status === 'not-scheduled')
         case 'all-events-complete':
-          return subject.events.every((e) => e.status === 'complete' || e.status === 'signed' || e.status === 'locked')
+          // Patients with zero events vacuously satisfy `.every()` and
+          // would silently land in this filter. Require at least one
+          // event so "alle Visiten abgeschlossen" reads as "this
+          // subject has visits AND every one of them is done", not "no
+          // visits = nothing left to do".
+          return subject.events.length > 0
+            && subject.events.every((e) => e.status === 'complete' || e.status === 'signed' || e.status === 'locked')
         case 'signed':
           return subject.signed
         case 'today':
