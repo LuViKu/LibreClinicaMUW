@@ -8,11 +8,12 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.it;
 
-import java.util.ArrayList;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 
 import javax.sql.DataSource;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
@@ -33,23 +34,37 @@ import org.dbunit.operation.DatabaseOperation;
  * {@code item_data} row can be written.
  *
  * <p>This IT pins a narrower but equally important contract: the
- * {@link AuditEventDAO} write + read path itself. Production audit
- * writes (failed-login, password-request, job-execution, etc.) all
- * route through {@code AuditEventDAO.createRowForUserAccount} /
- * {@code create}. If that path regresses, no production audit-trail
- * write functions correctly regardless of the trigger context.
+ * {@link AuditEventDAO} write path itself. Production audit writes
+ * (failed-login, password-request, job-execution, etc.) all route
+ * through {@code AuditEventDAO.createRow*}. If that path regresses, no
+ * production audit-trail write functions correctly regardless of the
+ * trigger context.
  *
- * <p><strong>Follow-up:</strong> the full item-18 round-trip
- * ({@code item_data} INSERT → audit_log_event row with old/new values)
- * is in scope for a future PR. It belongs alongside the CRF-data import
- * IT (item 17, {@code OdmImportRoundTripIT}) since both need the same
- * deep setup chain.
+ * <p><strong>Phase audit-unification (2026-06-12):</strong> assertions
+ * swapped from the legacy {@code audit_event} table
+ * ({@code findAllByAuditTable("__user_account")}) to the typed
+ * {@code audit_log_event} table queried by
+ * {@code audit_log_event_type_id=101} (USER_LOGIN_FAILED) — same row
+ * the SPA Audit Log view consumes, same write path the production
+ * failed-login filter drives.
  *
  * <p><strong>Phase B.5 gate:</strong> AuditEventDAO is hand-rolled JDBC.
  * The Hibernate 6 migration shouldn't affect it directly; pinned anyway
  * so a connection-pool / transaction-manager drift surfaces.
  */
 public class AuditTrailIT extends HibernateOcDbTestCase {
+
+    /**
+     * {@code audit_log_event_type_id} for failed login attempts. Mirrors
+     * {@code AuditTypeIds.USER_LOGIN_FAILED} (web module) — the core
+     * test module can't import the controller-package constant without
+     * a layering violation, so it's hardcoded here with a sibling
+     * comment. Type id 101 is seeded by
+     * {@code lc-muw-2026-06-12-audit-event-types-unification.xml} and
+     * is hidden ({@code is_user_visible=false}) — surfaces only in the
+     * sysadmin {@code /api/v1/audit/system} view.
+     */
+    private static final int AUDIT_TYPE_USER_LOGIN_FAILED = 101;
 
     public AuditTrailIT() {
         super();
@@ -68,7 +83,7 @@ public class AuditTrailIT extends HibernateOcDbTestCase {
     /**
      * Item 18 (simplified to DAO layer): an audit event written via
      * {@link AuditEventDAO#createRowForFailedLogin} appears in
-     * {@code audit_event} for the user account it references.
+     * {@code audit_log_event} for the user account it references.
      *
      * <p>The production failed-login filter
      * ({@code OpenClinicaAuthenticationProcessingFilter.unsuccessfulAuthentication})
@@ -82,62 +97,101 @@ public class AuditTrailIT extends HibernateOcDbTestCase {
         UserAccountBean user = (UserAccountBean) userDao.findByPK(1);
         assertNotNull("Bootstrap user (id=1) must exist", user);
 
-        // Snapshot the user_account audit rows before our write.
-        // Note: createRowForUserAccount stores the i18n KEY "__user_account"
-        // (double-underscore prefix), not the literal table name. That's
-        // a pre-existing legacy quirk — pinned here so a future cleanup
-        // that drops the prefix breaks the test loudly rather than
-        // silently changing the on-disk audit_table value.
-        ArrayList<AuditEventBean> before = auditDao.findAllByAuditTable("__user_account");
-        int beforeCount = before == null ? 0 : before.size();
+        // Snapshot the typed audit_log_event rows for this user +
+        // failed-login type before our write so we measure a delta of
+        // exactly +1.
+        int beforeCount = countAuditLogEventRows(dataSource,
+                AUDIT_TYPE_USER_LOGIN_FAILED, user.getId());
 
         // Production failed-login path drives the audit write.
         auditDao.createRowForFailedLogin(user);
 
-        ArrayList<AuditEventBean> after = auditDao.findAllByAuditTable("__user_account");
-        assertNotNull("findAllByAuditTable must not return null", after);
-        assertTrue("createRowForFailedLogin must insert one audit row"
-                + " (before=" + beforeCount + ", after=" + after.size() + ")",
-                after.size() > beforeCount);
+        int afterCount = countAuditLogEventRows(dataSource,
+                AUDIT_TYPE_USER_LOGIN_FAILED, user.getId());
+        assertEquals("createRowForFailedLogin must insert exactly one"
+                + " audit_log_event row of type=" + AUDIT_TYPE_USER_LOGIN_FAILED
+                + " for user " + user.getId()
+                + " (before=" + beforeCount + ", after=" + afterCount + ")",
+                beforeCount + 1, afterCount);
+
+        // Inspect the most-recent row for the (type, user) pair to pin
+        // the column shape: audit_table='user_account', entity_id =
+        // user_id (the entity being audited is the user account itself).
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT user_id, audit_table, entity_id, entity_name "
+                             + "FROM audit_log_event "
+                             + "WHERE audit_log_event_type_id = ? AND entity_id = ? "
+                             + "ORDER BY audit_id DESC LIMIT 1")) {
+            ps.setInt(1, AUDIT_TYPE_USER_LOGIN_FAILED);
+            ps.setInt(2, user.getId());
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue("audit_log_event row must exist after createRowForFailedLogin",
+                        rs.next());
+                assertEquals("user_id must match the failed-login user",
+                        user.getId(), rs.getInt("user_id"));
+                assertEquals("audit_table must be 'user_account'",
+                        "user_account", rs.getString("audit_table"));
+                assertEquals("entity_id must match the failed-login user",
+                        user.getId(), rs.getInt("entity_id"));
+                assertEquals("entity_name must carry the username for SPA Audit Log grouping",
+                        user.getName() == null ? "" : user.getName(),
+                        rs.getString("entity_name"));
+            }
+        }
     }
 
     /**
-     * Pin {@link AuditEventDAO#findAllByAuditTable} as the canonical
-     * read path used by the Study Audit Log + the per-subject audit
-     * drill-in. Filtering by tableName must return only rows for that
-     * table.
+     * Pin the typed-table write path: repeated
+     * {@link AuditEventDAO#createRowForFailedLogin} calls accumulate
+     * rows of type 101 for the targeted user without leaking into rows
+     * of any other type (the SPA Audit Log view filters by type and
+     * must not see false positives).
      */
-    public void testFindAllByAuditTableFiltersByTable() throws Exception {
+    public void testFailedLoginWritesOnlyTheExpectedType() throws Exception {
         DataSource dataSource = (DataSource) getContext().getBean("dataSource");
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);
         UserAccountDAO userDao = (UserAccountDAO) getContext().getBean("userAccountDao");
 
         UserAccountBean user = (UserAccountBean) userDao.findByPK(1);
 
-        // Write at least one user_account audit row so the filter has
-        // something to find. createRowForUserAccount stores the i18n key
-        // "__user_account" — see testFailedLoginWritesAuditRow for the
-        // pinning note.
+        int failedBefore = countAuditLogEventRows(dataSource,
+                AUDIT_TYPE_USER_LOGIN_FAILED, user.getId());
+        // 102 = USER_LOGGED_IN — a sibling type the failed-login writer
+        // must NOT touch.
+        int loginBefore = countAuditLogEventRows(dataSource, 102, user.getId());
+
+        auditDao.createRowForFailedLogin(user);
         auditDao.createRowForFailedLogin(user);
 
-        ArrayList<AuditEventBean> userAccountRows =
-                auditDao.findAllByAuditTable("__user_account");
-        ArrayList<AuditEventBean> imaginaryTableRows =
-                auditDao.findAllByAuditTable("muw_no_such_audited_table");
+        int failedAfter = countAuditLogEventRows(dataSource,
+                AUDIT_TYPE_USER_LOGIN_FAILED, user.getId());
+        int loginAfter = countAuditLogEventRows(dataSource, 102, user.getId());
 
-        assertNotNull("__user_account audit rows must not be null",
-                userAccountRows);
-        assertTrue("__user_account audit rows must be non-empty after"
-                + " a failed-login write",
-                userAccountRows.size() > 0);
-        for (AuditEventBean row : userAccountRows) {
-            assertEquals("findAllByAuditTable must only return rows"
-                    + " for the requested key",
-                    "__user_account", row.getAuditTable());
+        assertEquals("two createRowForFailedLogin calls must add exactly two rows of type 101",
+                failedBefore + 2, failedAfter);
+        assertEquals("createRowForFailedLogin must not write rows of type 102 (USER_LOGGED_IN)",
+                loginBefore, loginAfter);
+    }
+
+    /**
+     * Count {@code audit_log_event} rows matching the {@code (typeId,
+     * entityId)} pair. Mirrors the query the SPA Audit Log view runs
+     * to render the per-user audit drill-in.
+     */
+    private static int countAuditLogEventRows(DataSource ds,
+                                              int typeId,
+                                              int entityId) throws Exception {
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT COUNT(*) FROM audit_log_event "
+                             + "WHERE audit_log_event_type_id = ? AND entity_id = ?")) {
+            ps.setInt(1, typeId);
+            ps.setInt(2, entityId);
+            try (ResultSet rs = ps.executeQuery()) {
+                rs.next();
+                return rs.getInt(1);
+            }
         }
-        assertNotNull("an imaginary table returns an empty list, not null",
-                imaginaryTableRows);
-        assertEquals("an imaginary audit_table returns zero rows",
-                0, imaginaryTableRows.size());
     }
 }

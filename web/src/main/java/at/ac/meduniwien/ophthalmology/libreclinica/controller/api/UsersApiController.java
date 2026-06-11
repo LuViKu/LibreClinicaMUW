@@ -27,7 +27,6 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
@@ -1458,22 +1457,14 @@ public class UsersApiController {
         // Audit row: log the event WITHOUT either side of the password.
         // Mirrors SubjectsApiController's sign-endpoint redaction
         // pattern — passwords never enter the audit_log_event columns.
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setAuditTable("user_account");
-            ae.setEntityId(target.getId());
-            ae.setColumnName("passwd");
-            ae.setOldValue("");
-            ae.setNewValue("");
-            ae.setActionMessage("password_reset by admin " + me.getName()
-                    + " for user " + target.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for password_reset username={} (continuing): {}",
-                    username, e.getMessage());
-        }
+        // Phase audit-unification (2026-06-12): direct INSERT with
+        // type_id=104 (AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION) instead
+        // of routing through AuditEventDAO.create (legacy audit_event
+        // table, invisible to SPA Audit Log view).
+        emitAdminActionAudit(me.getId(), target.getId(), target.getName(),
+                "passwd",
+                "password_reset by admin " + me.getName()
+                        + " for user " + target.getName());
 
         LOG.info("Reset password: username={} by admin={}", username, me.getName());
 
@@ -1892,28 +1883,88 @@ public class UsersApiController {
         return UserType.USER;
     }
 
-    private void writeUserFieldAudit(AuditEventDAO auditDAO,
+    /**
+     * Type id for admin-initiated user-account actions (admin password
+     * reset, admin profile edit). Hardcoded as a magic number with a
+     * sibling comment — see {@link AuditTypeIds#USER_ACCOUNT_ADMIN_ACTION}
+     * for the canonical declaration. A DAO-layer import of the
+     * controller package would be a layering violation; controllers
+     * import AuditTypeIds directly elsewhere, but here we keep the
+     * direct-INSERT writers self-contained for readability.
+     */
+    private static final int AUDIT_TYPE_USER_ACCOUNT_ADMIN_ACTION = 104;
+
+    /**
+     * Phase audit-unification (2026-06-12) — admin profile-edit per-field
+     * audit writer.
+     *
+     * <p>Direct INSERT into {@code audit_log_event} with
+     * {@code audit_log_event_type_id=104}
+     * ({@code AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION}). Replaces the
+     * previous routing through {@code AuditEventDAO.create} (legacy
+     * {@code audit_event} table, invisible to the SPA Audit Log view).
+     *
+     * <p>Column name rides in {@code entity_name} (parity with
+     * {@link #emitUnlockAudit} / {@code MeApiController#emitProfileAudit}
+     * — {@code audit_log_event} has no {@code column_name} column).
+     */
+    private void writeUserFieldAudit(@SuppressWarnings("unused") AuditEventDAO auditDAO,
                                      UserAccountBean editor,
                                      UserAccountBean target,
                                      String columnName,
                                      String oldValue,
                                      String newValue) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(editor.getId());
-            ae.setAuditTable("user_account");
-            ae.setEntityId(target.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("user_profile_update: " + (target.getName() == null ? "" : target.getName())
-                    + "." + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "'");
-            auditDAO.create(ae);
-        } catch (Exception e) {
+        String oldVal = oldValue == null ? "" : oldValue;
+        String newVal = newValue == null ? "" : newValue;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, ?, ?)")) {
+            ps.setInt(1, AUDIT_TYPE_USER_ACCOUNT_ADMIN_ACTION);
+            ps.setInt(2, editor.getId());
+            ps.setInt(3, target.getId());
+            ps.setString(4, columnName == null ? "" : columnName);
+            ps.setString(5, oldVal);
+            ps.setString(6, newVal);
+            ps.executeUpdate();
+        } catch (SQLException e) {
             LOG.warn("Audit write failed for user field {}={} (continuing): {}",
                     columnName, newValue, e.getMessage());
+        }
+    }
+
+    /**
+     * Phase audit-unification (2026-06-12) — admin-initiated user-account
+     * action audit writer (currently password reset; future: account
+     * unlock variants, sysadmin-issued OTP refreshes).
+     *
+     * <p>Direct INSERT into {@code audit_log_event} with
+     * {@code audit_log_event_type_id=104}
+     * ({@code AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION}). The action
+     * message rides in {@code new_value} so the SPA Audit Log view can
+     * surface the full human-readable description without an extra
+     * column. Sensitive payloads (passwords, tokens) MUST NOT enter the
+     * {@code old_value / new_value} columns — mirrors
+     * {@code SubjectsApiController} sign-endpoint redaction.
+     */
+    private void emitAdminActionAudit(int adminUserId, int targetUserId,
+                                      String targetUsername, String columnName,
+                                      String actionMessage) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, '', ?)")) {
+            ps.setInt(1, AUDIT_TYPE_USER_ACCOUNT_ADMIN_ACTION);
+            ps.setInt(2, adminUserId);
+            ps.setInt(3, targetUserId);
+            ps.setString(4, targetUsername == null ? "" : targetUsername);
+            ps.setString(5, actionMessage == null ? "" : actionMessage);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for admin action target={} admin={} column={} (continuing): {}",
+                    targetUserId, adminUserId, columnName, e.getMessage());
         }
     }
 
