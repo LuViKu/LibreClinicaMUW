@@ -110,6 +110,14 @@ public class BugReportApiController {
     /** Cap on description / reproduction-steps length — generous; mail body grows linearly. */
     private static final int MAX_DESCRIPTION_LEN = 5000;
 
+    /**
+     * Cap on the number of console-entry lines the email body carries.
+     * The SPA's ring buffer holds 100, the dialog defaults to attaching
+     * the last 50, but a future caller could POST more — the cap guards
+     * the mail body either way. See {@link #appendConsoleSection}.
+     */
+    private static final int MAX_CONSOLE_LINES = 50;
+
     private final DataSource dataSource;
     private final OpenClinicaMailSender mailSender;
     private final String recipient;
@@ -176,7 +184,8 @@ public class BugReportApiController {
         StudyBean activeStudy = (StudyBean) session.getAttribute("study");
         String emailBody = composeBody(ticketId, me, activeStudy,
                 body.pageUrl(), body.userAgent(),
-                title, description, reproductionSteps);
+                title, description, reproductionSteps,
+                body.consoleEntries());
 
         // Wrap the send so a throw lands an OPERATION_FAILED audit row.
         // FailureAuditTemplate eagerly takes an AuditEventDAO at call
@@ -234,7 +243,8 @@ public class BugReportApiController {
                                       String userAgent,
                                       String title,
                                       String description,
-                                      String reproductionSteps) {
+                                      String reproductionSteps,
+                                      List<ConsoleEntry> consoleEntries) {
         String reportedAt = Instant.now().toString();
         String study = activeStudy != null && activeStudy.getId() > 0
                 ? activeStudy.getOid() + " (" + nullToBlank(activeStudy.getName()) + ")"
@@ -254,7 +264,38 @@ public class BugReportApiController {
         sb.append('\n');
         sb.append("Reproduction steps:\n");
         sb.append(reproductionSteps == null ? "(none provided)" : reproductionSteps).append('\n');
+        appendConsoleSection(sb, consoleEntries);
         return sb.toString();
+    }
+
+    /**
+     * Append the optional "Recent console output" block. No-op when the
+     * SPA omits the field or sends an empty list (the dialog's
+     * "attachConsoleEntries" toggle was off, or the buffer was empty).
+     *
+     * <p>The cap at {@link #MAX_CONSOLE_LINES} keeps the email body sane
+     * — the SPA already caps the ring buffer at 100 + slices to the last
+     * 50 on the wire, but defending here lets a future caller (e.g. a
+     * QA-tool that POSTs the API directly) skip the SPA's slice without
+     * blowing up the mail body.
+     */
+    private static void appendConsoleSection(StringBuilder sb, List<ConsoleEntry> entries) {
+        if (entries == null || entries.isEmpty()) return;
+        int total = entries.size();
+        List<ConsoleEntry> shown = total > MAX_CONSOLE_LINES
+                ? entries.subList(total - MAX_CONSOLE_LINES, total)
+                : entries;
+        sb.append('\n');
+        if (total > MAX_CONSOLE_LINES) {
+            sb.append("(showing last ").append(MAX_CONSOLE_LINES)
+                    .append(" of ").append(total).append(")\n");
+        }
+        sb.append("Recent console output (").append(shown.size()).append("):\n");
+        for (ConsoleEntry e : shown) {
+            sb.append('[').append(nullToBlank(e.timestamp())).append("]  ")
+                    .append(nullToBlank(e.level())).append("  ")
+                    .append(nullToBlank(e.message())).append('\n');
+        }
     }
 
     private void emitSuccessAudit(int userId, String ticketId, String title) {
@@ -318,16 +359,36 @@ public class BugReportApiController {
     /**
      * Request body for {@code POST /pages/api/v1/bug-report}.
      *
-     * <p>{@code reproductionSteps}, {@code pageUrl}, and {@code userAgent}
-     * are optional. {@code title} and {@code description} are required +
-     * length-capped; see the validation block in {@link #submit}.
+     * <p>{@code reproductionSteps}, {@code pageUrl}, {@code userAgent},
+     * and {@code consoleEntries} are optional. {@code title} and
+     * {@code description} are required + length-capped; see the
+     * validation block in {@link #submit}.
+     *
+     * <p>{@code consoleEntries} carries an operator-opt-in slice of
+     * recent browser-console output (errors + warnings + uncaught Vue
+     * throws) so the triage inbox sees the same noise the operator did.
+     * The SPA-side {@code clientLogs} ring buffer keeps the last 100
+     * entries; the dialog defaults to attaching the last 50.
      */
     public record BugReportRequest(
             String title,
             String description,
             String reproductionSteps,
             String pageUrl,
-            String userAgent) {}
+            String userAgent,
+            List<ConsoleEntry> consoleEntries) {}
+
+    /**
+     * One captured browser-console line. The SPA owns the shape — the
+     * backend just relays — so this record carries the three fields the
+     * triage inbox needs: {@code level} ("error" | "warn" | "uncaught"),
+     * the (truncated) {@code message}, and the ISO-8601 capture
+     * {@code timestamp}.
+     */
+    public record ConsoleEntry(
+            String level,
+            String message,
+            String timestamp) {}
 
     /** Success response — operator quotes {@code ticketId} in follow-up conversations. */
     public record BugReportResponse(boolean delivered, String ticketId) {}

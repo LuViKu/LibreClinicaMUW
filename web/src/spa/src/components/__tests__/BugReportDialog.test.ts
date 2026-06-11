@@ -7,12 +7,14 @@
  * mount + render smoke so that future template / i18n / Modal
  * refactors don't silently break the dialog.
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 
 import BugReportDialog from '@/components/BugReportDialog.vue'
+import { useBugReportsStore } from '@/stores/bugReports'
+import { useClientLogsStore } from '@/stores/clientLogs'
 
 const i18n = createI18n({
   legacy: false,
@@ -37,6 +39,15 @@ const i18n = createI18n({
         submit: 'Send',
         cancel: 'Cancel',
         success: 'Thanks — ticket {ticketId} sent to the administrator.',
+        attach: {
+          heading: 'Attach',
+          pageUrl: 'Include current page ({url})',
+          console: 'Include the last {n} console messages',
+          preview: {
+            toggle: 'Show preview',
+            empty: '(no entries)',
+          },
+        },
         error: {
           network: 'Could not send the report. Please try again.',
           recipientNotConfigured: 'Bug-report recipient is not configured.',
@@ -91,6 +102,93 @@ describe('BugReportDialog', () => {
     expect(
       document.body.querySelector('[data-testid="bug-report-submit"]'),
     ).toBeNull()
+
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('renders the page-URL label when attachPageUrl is true (default)', async () => {
+    setActivePinia(createPinia())
+    const wrapper = mount(BugReportDialog, {
+      props: { open: true },
+      global: { plugins: [i18n] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    const checkbox = document.body.querySelector<HTMLInputElement>(
+      '[data-testid="bug-report-attach-page-url"]',
+    )
+    expect(checkbox).not.toBeNull()
+    expect(checkbox!.checked).toBe(true)
+
+    const label = document.body.querySelector(
+      '[data-testid="bug-report-attach-page-url-label"]',
+    )
+    expect(label).not.toBeNull()
+    // jsdom defaults window.location.pathname to "/"; the label
+    // interpolates it via the {url} placeholder.
+    expect(label!.textContent).toContain('Include current page')
+    expect(label!.textContent).toContain('/')
+
+    wrapper.unmount()
+    document.body.innerHTML = ''
+  })
+
+  it('omits consoleEntries from submit payload when attach toggle is unchecked', async () => {
+    setActivePinia(createPinia())
+    const logs = useClientLogsStore()
+    logs.push({ level: 'error', message: 'sample error 1' })
+    logs.push({ level: 'warn', message: 'sample warn 1' })
+
+    const wrapper = mount(BugReportDialog, {
+      props: { open: true },
+      global: { plugins: [i18n] },
+      attachTo: document.body,
+    })
+    await flushPromises()
+
+    // Stub the store action — we only want to assert the payload shape.
+    const store = useBugReportsStore()
+    const submitSpy = vi
+      .spyOn(store, 'submit')
+      .mockResolvedValue('BUG-stub')
+
+    // Fill required fields directly via the inputs. The title field is
+    // wrapped in a TextInput component, so the data-testid lands on the
+    // wrapper <div>; the actual <input> lives under the matching id.
+    const titleEl = document.body.querySelector<HTMLInputElement>(
+      'input#bug-report-title-input',
+    )!
+    titleEl.value = 'A title'
+    titleEl.dispatchEvent(new Event('input', { bubbles: true }))
+
+    const descEl = document.body.querySelector<HTMLTextAreaElement>(
+      '[data-testid="bug-report-description"]',
+    )!
+    descEl.value = 'A description'
+    descEl.dispatchEvent(new Event('input', { bubbles: true }))
+
+    // Uncheck the console-attach toggle.
+    const consoleCheckbox = document.body.querySelector<HTMLInputElement>(
+      '[data-testid="bug-report-attach-console"]',
+    )!
+    consoleCheckbox.checked = false
+    consoleCheckbox.dispatchEvent(new Event('change'))
+
+    await flushPromises()
+
+    const submitBtn = document.body.querySelector<HTMLButtonElement>(
+      '[data-testid="bug-report-submit"]',
+    )!
+    submitBtn.click()
+    await flushPromises()
+
+    expect(submitSpy).toHaveBeenCalledTimes(1)
+    const payload = submitSpy.mock.calls[0][0]
+    expect(payload.consoleEntries).toBeUndefined()
+    // The page-URL toggle was left at its default (true).
+    expect(payload.attachPageUrl).toBe(true)
 
     wrapper.unmount()
     document.body.innerHTML = ''

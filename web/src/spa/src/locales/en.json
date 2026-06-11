@@ -2268,6 +2268,15 @@
     "submit": "Send",
     "cancel": "Cancel",
     "success": "Thanks — ticket {ticketId} sent to the administrator.",
+    "attach": {
+      "heading": "Attach",
+      "pageUrl": "Include current page ({url})",
+      "console": "Include the last {n} console messages",
+      "preview": {
+        "toggle": "Show preview",
+        "empty": "(no entries)"
+      }
+    },
     "error": {
       "network": "Could not send the report. Please try again.",
       "recipientNotConfigured": "Bug-report recipient is not configured. Please contact your sysadmin."

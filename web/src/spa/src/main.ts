@@ -7,6 +7,7 @@ import router from './router'
 import { useAuthStore } from '@/stores/auth'
 import { useErrorsStore } from '@/stores/errors'
 import { useConnectionStore } from '@/stores/connection'
+import { useClientLogsStore } from '@/stores/clientLogs'
 import deMessages from './locales/de.json'
 import enMessages from './locales/en.json'
 
@@ -45,11 +46,102 @@ app.use(i18n)
  * error into the `errors` store gives `GlobalErrorToast` a chance to
  * render a user-facing message + the A4 `reqId` (when present), and
  * keeps the console log for the sysadmin runbook.
+ *
+ * Phase E follow-up (2026-06-11) — pipe the same throw into
+ * `clientLogs` with level=`uncaught` so the bug-report dialog can
+ * attach it on the next operator submission. The two stores stay
+ * separate concerns: `errors` drives the toast (last 20), `clientLogs`
+ * feeds the email (last 100).
  */
 app.config.errorHandler = (err, _vm, info) => {
   useErrorsStore(pinia).push(err, info)
+  useClientLogsStore(pinia).push({
+    level: 'uncaught',
+    message: truncateForLog(formatError(err, info)),
+  })
   // eslint-disable-next-line no-console
   console.error('[GlobalError]', err, info)
+}
+
+/**
+ * Phase E follow-up (2026-06-11) — monkey-patch `console.error` +
+ * `console.warn` to mirror the message into the `clientLogs` ring
+ * buffer before delegating to the original.
+ *
+ * The interceptor runs in any environment that has a `console` (i.e.
+ * always), and is a no-op if it's already been installed — guards
+ * against double-patching in HMR + future tests that boot the app
+ * twice in one process.
+ */
+type ConsoleFn = (...args: unknown[]) => void
+interface PatchedConsole extends Console {
+  __muwClientLogsPatched?: true
+}
+function truncateForLog(value: string): string {
+  // Console output can be huge — stack traces + serialised JSON dumps
+  // routinely run into the tens of kilobytes. Cap at 500 chars per
+  // entry so the in-memory ring buffer stays trivially small even when
+  // the operator hits a render loop.
+  const MAX = 500
+  if (value.length <= MAX) return value
+  return value.slice(0, MAX) + ' …(truncated)'
+}
+function formatConsoleArgs(args: unknown[]): string {
+  return args
+    .map((a) => {
+      if (a instanceof Error) return a.stack ?? `${a.name}: ${a.message}`
+      if (typeof a === 'string') return a
+      try {
+        return JSON.stringify(a)
+      } catch {
+        return String(a)
+      }
+    })
+    .join(' ')
+}
+function formatError(err: unknown, info?: string): string {
+  const head = err instanceof Error
+    ? (err.stack ?? `${err.name}: ${err.message}`)
+    : typeof err === 'string'
+      ? err
+      : (() => {
+          try {
+            return JSON.stringify(err)
+          } catch {
+            return String(err)
+          }
+        })()
+  return info ? `${head}  [info=${info}]` : head
+}
+if (typeof console !== 'undefined') {
+  const patched = console as PatchedConsole
+  if (!patched.__muwClientLogsPatched) {
+    const originalError: ConsoleFn = console.error.bind(console)
+    const originalWarn: ConsoleFn = console.warn.bind(console)
+    console.error = ((...args: unknown[]) => {
+      try {
+        useClientLogsStore(pinia).push({
+          level: 'error',
+          message: truncateForLog(formatConsoleArgs(args)),
+        })
+      } catch {
+        // Pinia not ready / store throw — never let logging break the host call.
+      }
+      originalError(...args)
+    }) as Console['error']
+    console.warn = ((...args: unknown[]) => {
+      try {
+        useClientLogsStore(pinia).push({
+          level: 'warn',
+          message: truncateForLog(formatConsoleArgs(args)),
+        })
+      } catch {
+        // see above.
+      }
+      originalWarn(...args)
+    }) as Console['warn']
+    patched.__muwClientLogsPatched = true
+  }
 }
 
 /**

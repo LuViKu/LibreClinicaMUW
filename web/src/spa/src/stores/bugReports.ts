@@ -16,12 +16,28 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { apiPost, ApiError, ApiNetworkError } from '@/api/client'
+import type { ConsoleEntry } from '@/stores/clientLogs'
 
 export interface BugReportSubmitPayload {
   title: string
   description: string
   /** Optional — empty / undefined skips the field on the wire. */
   reproductionSteps?: string
+  /**
+   * When the operator unchecks the "attach page URL" toggle the dialog
+   * passes {@code false}; the store then omits the {@code pageUrl}
+   * field from the wire payload entirely instead of auto-deriving from
+   * {@code window.location}. Defaults to {@code true} so existing
+   * callers (none yet outside the dialog) preserve the original
+   * always-include behaviour.
+   */
+  attachPageUrl?: boolean
+  /**
+   * Pre-collected console entries to ship with the report. Omitted /
+   * {@code undefined} skips the field; an empty array is treated the
+   * same as omitted (the backend already short-circuits on empty).
+   */
+  consoleEntries?: ConsoleEntry[]
 }
 
 export interface BugReportResponse {
@@ -54,20 +70,27 @@ export const useBugReportsStore = defineStore('bugReports', () => {
     errorKind.value = null
     errorMessage.value = null
     try {
-      const pageUrl = typeof window !== 'undefined' && window.location
+      const attachPageUrl = payload.attachPageUrl !== false
+      const pageUrl = attachPageUrl
+        && typeof window !== 'undefined'
+        && window.location
         ? window.location.pathname + (window.location.search ?? '')
-        : ''
+        : null
       const userAgent = typeof navigator !== 'undefined' && navigator.userAgent
         ? navigator.userAgent
         : ''
       const reproduction = payload.reproductionSteps?.trim() ?? ''
-      const body = {
+      const consoleEntries = payload.consoleEntries && payload.consoleEntries.length > 0
+        ? payload.consoleEntries
+        : undefined
+      const body: Record<string, unknown> = {
         title: payload.title.trim(),
         description: payload.description.trim(),
         reproductionSteps: reproduction === '' ? null : reproduction,
-        pageUrl,
         userAgent,
       }
+      if (pageUrl !== null) body.pageUrl = pageUrl
+      if (consoleEntries !== undefined) body.consoleEntries = consoleEntries
       const resp = await apiPost<BugReportResponse>('/pages/api/v1/bug-report', body)
       lastTicketId.value = resp.ticketId
       return resp.ticketId
