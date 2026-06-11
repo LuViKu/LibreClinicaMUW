@@ -49,86 +49,92 @@ function mkI18n(locale: 'en' | 'de' = 'en') {
   })
 }
 
-describe('CrfItemWidget — BL Yes/No radio', () => {
-  it('renders two radio inputs sharing one name + Ja / Nein labels (de)', () => {
+describe('CrfItemWidget — BL Ja/Nein segmented control', () => {
+  // Phase E.6 ophth-bilateral-design (2026-06-11): the boolean
+  // renderer was lifted from a radio pair to a segmented Ja/Nein
+  // pill control (MUW design's .seg pattern). Wire contract holds:
+  // '1' = Ja, '0' = Nein, empty = unanswered. Tests target the two
+  // <button> elements inside the radiogroup so the assertions stay
+  // selector-agnostic to the visual chrome.
+  function findSegButtons(wrapper: ReturnType<typeof mount>) {
+    return wrapper.findAll<HTMLButtonElement>('[role="radiogroup"] button')
+  }
+
+  it('renders two pill buttons sharing one name + Ja / Nein labels (de)', () => {
     const item = mkItem('OD_SPECTRALIS_DONE', 'Spectralis-OCT durchgeführt', 'boolean')
     const wrapper = mount(CrfItemWidget, {
       global: { plugins: [mkI18n('de')] },
       props: { item, modelValue: '', suppressLabel: true },
     })
 
-    const radios = wrapper.findAll<HTMLInputElement>('input[type="radio"]')
-    expect(radios).toHaveLength(2)
-    // Same name attribute → browser groups them.
-    expect(radios[0].element.name).toBe('bl-radio-OD_SPECTRALIS_DONE')
-    expect(radios[1].element.name).toBe('bl-radio-OD_SPECTRALIS_DONE')
-    // Values are the wire-contract tokens.
-    expect(radios[0].element.value).toBe('1')
-    expect(radios[1].element.value).toBe('0')
-    // Empty modelValue → neither selected (reads as "unbeantwortet").
-    expect(radios[0].element.checked).toBe(false)
-    expect(radios[1].element.checked).toBe(false)
-
+    const buttons = findSegButtons(wrapper)
+    expect(buttons).toHaveLength(2)
+    // Shared name attribute groups the segmented pair the same way
+    // the prior radio implementation did.
+    expect(buttons[0].element.name).toBe('bl-radio-OD_SPECTRALIS_DONE')
+    expect(buttons[1].element.name).toBe('bl-radio-OD_SPECTRALIS_DONE')
     expect(wrapper.text()).toContain('Ja')
     expect(wrapper.text()).toContain('Nein')
   })
 
-  it('selects the Ja radio when modelValue === "1"', () => {
+  it('marks the Ja pill active (white card + colored dot) when modelValue === "1"', () => {
     const item = mkItem('OD_SPECTRALIS_DONE', 'Spectralis-OCT durchgeführt', 'boolean')
     const wrapper = mount(CrfItemWidget, {
       global: { plugins: [mkI18n('de')] },
       props: { item, modelValue: '1', suppressLabel: true },
     })
-    const radios = wrapper.findAll<HTMLInputElement>('input[type="radio"]')
-    expect(radios[0].element.checked).toBe(true)
-    expect(radios[1].element.checked).toBe(false)
+    const [ja, nein] = findSegButtons(wrapper)
+    // Active pill carries the bg-white + shadow chrome from the
+    // design's .seg.on rule.
+    expect(ja.classes()).toContain('bg-white')
+    expect(nein.classes()).not.toContain('bg-white')
   })
 
-  it('selects the Nein radio when modelValue === "0"', () => {
+  it('marks the Nein pill active when modelValue === "0"', () => {
     const item = mkItem('OD_SPECTRALIS_DONE', 'Spectralis-OCT durchgeführt', 'boolean')
     const wrapper = mount(CrfItemWidget, {
       global: { plugins: [mkI18n('de')] },
       props: { item, modelValue: '0', suppressLabel: true },
     })
-    const radios = wrapper.findAll<HTMLInputElement>('input[type="radio"]')
-    expect(radios[0].element.checked).toBe(false)
-    expect(radios[1].element.checked).toBe(true)
+    const [ja, nein] = findSegButtons(wrapper)
+    expect(ja.classes()).not.toContain('bg-white')
+    expect(nein.classes()).toContain('bg-white')
   })
 
-  it('neither selected when modelValue is null / undefined / empty', () => {
+  it('leaves both pills inactive when modelValue is null / undefined / empty', () => {
     const item = mkItem('OD_X', 'X', 'boolean')
     for (const v of [null, undefined, '']) {
       const wrapper = mount(CrfItemWidget, {
         global: { plugins: [mkI18n()] },
         props: { item, modelValue: v as unknown, suppressLabel: true },
       })
-      const radios = wrapper.findAll<HTMLInputElement>('input[type="radio"]')
-      expect(radios[0].element.checked).toBe(false)
-      expect(radios[1].element.checked).toBe(false)
+      const [ja, nein] = findSegButtons(wrapper)
+      expect(ja.classes()).not.toContain('bg-white')
+      expect(nein.classes()).not.toContain('bg-white')
     }
   })
 
-  it('emits "1" when the Ja radio is selected', async () => {
+  it('emits "1" when the Ja pill is clicked', async () => {
     const item = mkItem('OD_SPECTRALIS_DONE', 'Spectralis-OCT durchgeführt', 'boolean')
     const wrapper = mount(CrfItemWidget, {
       global: { plugins: [mkI18n('de')] },
       props: { item, modelValue: '', suppressLabel: true },
     })
-    const yes = wrapper.findAll<HTMLInputElement>('input[type="radio"]')[0]
-    await yes.setValue(true)
+    const [ja] = findSegButtons(wrapper)
+    await ja.trigger('click')
     const emits = wrapper.emitted('update:modelValue')
     expect(emits).toBeTruthy()
     expect(emits?.[0][0]).toBe('1')
   })
 
-  it('emits "0" when the Nein radio is selected', async () => {
+  it('emits "0" when the Nein pill is clicked', async () => {
     const item = mkItem('OD_SPECTRALIS_DONE', 'Spectralis-OCT durchgeführt', 'boolean')
     const wrapper = mount(CrfItemWidget, {
       global: { plugins: [mkI18n('de')] },
       props: { item, modelValue: '', suppressLabel: true },
     })
-    const no = wrapper.findAll<HTMLInputElement>('input[type="radio"]')[1]
-    await no.setValue(true)
+    const [, nein] = findSegButtons(wrapper)
+    await nein.trigger('click')
     const emits = wrapper.emitted('update:modelValue')
     expect(emits).toBeTruthy()
     expect(emits?.[0][0]).toBe('0')

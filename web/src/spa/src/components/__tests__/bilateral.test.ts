@@ -246,6 +246,11 @@ describe('groupBilateralItems', () => {
   })
 
   it('groups REFRACTION items even when interleaved with non-compound bilateral pairs', () => {
+    // Phase E.6 ophth-bilateral-design (2026-06-11): compound rows are
+    // pre-populated with the registry's canonical sub-key set so a
+    // refraction row always presents all 4 slots (SPHERE / TORUS /
+    // ANGLE / VISUS) — the data here ships only the SPHERE + TORUS
+    // sub-fields, leaving the ANGLE + VISUS slots empty (od + os null).
     const rows = groupBilateralItems([
       mkItem('OD_BCVA_LETTERS',      'BCVA letters', 'integer'),
       mkItem('OD_REFRACTION_SPHERE', 'Sphere',       'real'),
@@ -261,8 +266,14 @@ describe('groupBilateralItems', () => {
     expect(rows[1].kind).toBe('compound-bilateral')
     expect(rows[2].kind).toBe('bilateral')
     if (rows[1].kind === 'compound-bilateral') {
-      expect(rows[1].subFields).toHaveLength(2)
-      expect(rows[1].subFields.map((s) => s.subKey)).toEqual(['SPHERE', 'TORUS'])
+      expect(rows[1].subFields).toHaveLength(4)
+      expect(rows[1].subFields.map((s) => s.subKey)).toEqual(['SPHERE', 'TORUS', 'ANGLE', 'VISUS'])
+      // First two slots are filled; ANGLE + VISUS slots remain empty.
+      expect(rows[1].subFields[0].od?.oid).toBe('OD_REFRACTION_SPHERE')
+      expect(rows[1].subFields[1].od?.oid).toBe('OD_REFRACTION_TORUS')
+      expect(rows[1].subFields[2].od).toBeNull()
+      expect(rows[1].subFields[2].os).toBeNull()
+      expect(rows[1].subFields[3].od).toBeNull()
     }
   })
 
@@ -304,6 +315,11 @@ describe('groupBilateralItems', () => {
     // REFRACT_OD_AXIS — three sub-fields per side. After eye-token
     // removal each suffix becomes I_REFRACT_SPH / I_REFRACT_CYL /
     // I_REFRACT_AXIS, all of which match the I_REFRACT compound prefix.
+    //
+    // Phase E.6 ophth-bilateral-design (2026-06-11): row now also
+    // carries the canonical VIS slot — empty (od + os null) so the
+    // operator sees the full SPH/CYL/AXIS/VIS quartet even when the
+    // seed elides the VISUS sub-field.
     const rows = groupBilateralItems([
       mkItem('I_REFRACT_OD_SPH',  'Right eye (OD) — Sphere',   'real'),
       mkItem('I_REFRACT_OD_CYL',  'Right eye (OD) — Cylinder', 'real'),
@@ -317,14 +333,21 @@ describe('groupBilateralItems', () => {
     if (rows[0].kind === 'compound-bilateral') {
       expect(rows[0].key).toBe('I_REFRACT')
       expect(rows[0].label).toBe('Refraktion')
-      expect(rows[0].subFields.map((s) => s.subKey)).toEqual(['SPH', 'CYL', 'AXIS'])
+      expect(rows[0].subFields.map((s) => s.subKey)).toEqual(['SPH', 'CYL', 'AXIS', 'VIS'])
+      expect(rows[0].subFields[3].od).toBeNull()
+      expect(rows[0].subFields[3].os).toBeNull()
       expect(rows[0].subFields.map((s) => s.compactLabel)).toEqual([
-        'Sphäre', 'Zylinder', 'Achse',
+        'Sphäre', 'Zylinder', 'Achse', 'Visus',
       ])
     }
   })
 
-  it('legacy REFRACTION_CYLINDER/AXIS keys map to Tor/Ang compact labels for back-compat', () => {
+  it('legacy REFRACTION_CYLINDER/AXIS items land in the canonical TORUS/ANGLE slots', () => {
+    // Phase E.6 ophth-bilateral-design (2026-06-11): the row scaffold
+    // is now pre-populated with the canonical SPHERE/TORUS/ANGLE/VISUS
+    // slots; the CYLINDER + AXIS items fold into the TORUS + ANGLE
+    // canonical slots via the registry's compactLabel-equivalence
+    // matcher. SPHERE + VISUS remain empty (od + os null).
     const rows = groupBilateralItems([
       mkItem('OD_REFRACTION_CYLINDER', 'Refraction cylinder', 'real'),
       mkItem('OS_REFRACTION_CYLINDER', 'Refraction cylinder', 'real'),
@@ -333,9 +356,44 @@ describe('groupBilateralItems', () => {
     ])
     expect(rows).toHaveLength(1)
     if (rows[0].kind === 'compound-bilateral') {
-      // Old data with CYLINDER/AXIS suffixes maps to the same compact slots
-      // as TORUS/ANGLE so historical CRFs render in the same compound row.
-      expect(rows[0].subFields.map((s) => s.compactLabel)).toEqual(['Tor', 'Ang'])
+      // All 4 canonical slots present.
+      expect(rows[0].subFields.map((s) => s.subKey)).toEqual([
+        'SPHERE', 'TORUS', 'ANGLE', 'VISUS',
+      ])
+      // CYLINDER lands in TORUS slot; AXIS lands in ANGLE slot.
+      expect(rows[0].subFields[1].od?.oid).toBe('OD_REFRACTION_CYLINDER')
+      expect(rows[0].subFields[2].od?.oid).toBe('OD_REFRACTION_AXIS')
+      // Sphere + Visus slots remain empty.
+      expect(rows[0].subFields[0].od).toBeNull()
+      expect(rows[0].subFields[3].od).toBeNull()
+    }
+  })
+
+  it('groups the seeded I_OPHTH_OD_REFRACTION_SPHERE/TORUS/ANGLE items into one compound-bilateral row, VISUS slot empty', () => {
+    // The runtime-authored OPHTH v2.0 CRF (crf_version_id=3) seeds
+    // refraction with the I_OPHTH_OD_REFRACTION_<sub> shape — three
+    // sub-fields, no VISUS. The row joiner pre-populates the
+    // canonical SPHERE/TORUS/ANGLE/VISUS quartet so the operator sees
+    // all four sub-headers even when the seed ships three.
+    const rows = groupBilateralItems([
+      mkItem('I_OPHTH_OD_REFRACTION_SPHERE', 'Refraction sphere',   'real'),
+      mkItem('I_OPHTH_OS_REFRACTION_SPHERE', 'Refraction sphere',   'real'),
+      mkItem('I_OPHTH_OD_REFRACTION_TORUS',  'Refraction torus',    'real'),
+      mkItem('I_OPHTH_OS_REFRACTION_TORUS',  'Refraction torus',    'real'),
+      mkItem('I_OPHTH_OD_REFRACTION_ANGLE',  'Refraction angle',    'integer'),
+      mkItem('I_OPHTH_OS_REFRACTION_ANGLE',  'Refraction angle',    'integer'),
+    ])
+    expect(rows).toHaveLength(1)
+    expect(rows[0].kind).toBe('compound-bilateral')
+    if (rows[0].kind === 'compound-bilateral') {
+      expect(rows[0].key).toBe('I_OPHTH_REFRACTION')
+      expect(rows[0].label).toBe('Refraktion')
+      expect(rows[0].subFields.map((s) => s.subKey)).toEqual([
+        'SPHERE', 'TORUS', 'ANGLE', 'VISUS',
+      ])
+      expect(rows[0].subFields[0].od?.oid).toBe('I_OPHTH_OD_REFRACTION_SPHERE')
+      expect(rows[0].subFields[3].od).toBeNull()
+      expect(rows[0].subFields[3].os).toBeNull()
     }
   })
 })

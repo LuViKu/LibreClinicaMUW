@@ -56,6 +56,14 @@ interface Props {
    * so the cell doesn't render a duplicate "OD …" line.
    */
   suppressLabel?: boolean
+  /**
+   * Phase E.6 ophth-bilateral-design (2026-06-11): switch to the
+   * compact 56×42 mini-input chrome used by compound-bilateral
+   * sub-fields (refraction Sph/Cyl/Axis/Vis). Numeric inputs drop
+   * the unit suffix + stepper buttons in compact mode so 4 sub-
+   * inputs fit on one eye-cell line.
+   */
+  compact?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -65,6 +73,7 @@ const props = withDefaults(defineProps<Props>(), {
   maxFileBytes: 0,
   fileExtensions: '',
   suppressLabel: false,
+  compact: false,
 })
 
 const emit = defineEmits<{
@@ -95,6 +104,127 @@ const booleanRadioName = computed(() => `bl-radio-${props.item.oid}`)
 const isBooleanYes = computed(() => props.modelValue === '1')
 const isBooleanNo = computed(() => props.modelValue === '0')
 
+/**
+ * Phase E.6 ophth-bilateral-design (2026-06-11): tokens for the
+ * segmented yes/no rendered on a non-boolean (select-one) item. The
+ * v2.0 OPHTH CRF authors {@code SPECTRALIS_DONE} as select-one with
+ * options like {@code ja|Ja,nein|Nein}; we read the option codes so
+ * the wire value matches whatever the CRF actually persists. Falls
+ * back to the canonical boolean tokens {@code '1'} / {@code '0'} when
+ * the item carries no options (the heuristic-only path).
+ */
+const yesNoYesToken = computed<string>(() => {
+  const opts = props.item.options
+  if (opts && opts.length > 0) return opts[0].code
+  return '1'
+})
+const yesNoNoToken = computed<string>(() => {
+  const opts = props.item.options
+  if (opts && opts.length > 1) return opts[1].code
+  return '0'
+})
+const isYesNoYes = computed(() => {
+  if (props.modelValue == null || props.modelValue === '') return false
+  return String(props.modelValue) === yesNoYesToken.value
+})
+const isYesNoNo = computed(() => {
+  if (props.modelValue == null || props.modelValue === '') return false
+  return String(props.modelValue) === yesNoNoToken.value
+})
+
+/**
+ * Phase E.6 ophth-bilateral-design (2026-06-11): derive the
+ * ophthalmology-specific presentation hint from the item's OID
+ * token-tail. Pragmatic stepping-stone until the catalog wiring
+ * (PR F1+) ships an explicit {@code item.widget} field; the
+ * detection mirrors the catalog seed's planned OID convention:
+ *
+ *   - {@code *_BCVA_LETTERS}  → number-stepper with "Buchst." unit
+ *   - {@code *_BCVA_LOGMAR}   → number-stepper with "logMAR" unit
+ *   - {@code *_BCVA_SNELLEN}  → snellen fraction
+ *   - {@code *_IOP}           → number-stepper with "mmHg" unit
+ *   - {@code *_CRT}           → number-stepper with "µm" unit
+ *   - {@code *_ACD}           → number-stepper with "mm" unit
+ *   - {@code *_*_DONE}        → segmented Ja/Nein
+ *   - {@code *_*_DONE_REASON} → grayed conditional text input
+ *
+ * Items that don't match drop through to the existing renderers so
+ * non-ophth CRFs keep their current visuals untouched.
+ */
+const ophthPresentation = computed<{
+  widget: 'standard' | 'number-stepper' | 'snellen' | 'segmented-yesno' | 'conditional-reason'
+  unit?: string
+}>(() => {
+  const oid = props.item.oid || ''
+  // Split on _ to inspect the trailing tokens of the OID.
+  const tail = oid.toUpperCase()
+  if (tail.endsWith('_BCVA_LETTERS') || tail.endsWith('BCVA_LETTERS')) {
+    return { widget: 'number-stepper', unit: 'Buchst.' }
+  }
+  if (tail.endsWith('_BCVA_LOGMAR') || tail.endsWith('BCVA_LOGMAR')) {
+    return { widget: 'number-stepper', unit: 'logMAR' }
+  }
+  if (tail.endsWith('_BCVA_SNELLEN') || tail.endsWith('BCVA_SNELLEN')) {
+    return { widget: 'snellen' }
+  }
+  if (tail.endsWith('_IOP') || tail.includes('_IOP_')) {
+    return { widget: 'number-stepper', unit: 'mmHg' }
+  }
+  if (tail.endsWith('_CRT') || tail.includes('_CRT_')) {
+    return { widget: 'number-stepper', unit: 'µm' }
+  }
+  if (tail.endsWith('_ACD') || tail.includes('_ACD_')) {
+    return { widget: 'number-stepper', unit: 'mm' }
+  }
+  if (tail.endsWith('_DONE_REASON')) {
+    return { widget: 'conditional-reason' }
+  }
+  if (tail.endsWith('_DONE') || tail.endsWith('_DURCHGEFUEHRT')) {
+    return { widget: 'segmented-yesno' }
+  }
+  return { widget: 'standard' }
+})
+
+/**
+ * Step the numeric input value by `delta`. Clamps to item.min/max
+ * when those are present in the schema. The MUW design's stepper
+ * pattern: vertical chevron buttons riding inside the input frame
+ * on the right edge.
+ */
+function step(delta: number) {
+  if (props.disabled) return
+  const raw = props.modelValue == null ? '' : String(props.modelValue)
+  const parsed = raw === '' ? 0 : Number(raw.replace(',', '.'))
+  let next = isNaN(parsed) ? 0 : parsed + delta
+  if (props.item.min != null && next < Number(props.item.min)) next = Number(props.item.min)
+  if (props.item.max != null && next > Number(props.item.max)) next = Number(props.item.max)
+  emit('update:modelValue', next)
+}
+
+/**
+ * Snellen widget state — model-value is stored as `"20/40"`. Two
+ * controlled mini-inputs read the numerator/denominator halves and
+ * re-join on every edit. Empty halves serialise as `null` so the
+ * dirty map doesn't churn on a blank widget.
+ */
+const snellenN = computed(() => {
+  const v = props.modelValue == null ? '' : String(props.modelValue)
+  const slash = v.indexOf('/')
+  return slash < 0 ? v : v.slice(0, slash)
+})
+const snellenD = computed(() => {
+  const v = props.modelValue == null ? '' : String(props.modelValue)
+  const slash = v.indexOf('/')
+  return slash < 0 ? '' : v.slice(slash + 1)
+})
+function onSnellenInput(part: 'n' | 'd', event: Event) {
+  const raw = (event.target as HTMLInputElement).value
+  const n = part === 'n' ? raw : snellenN.value
+  const d = part === 'd' ? raw : snellenD.value
+  const combined = (n || '') + '/' + (d || '')
+  emit('update:modelValue', combined === '/' ? null : combined)
+}
+
 function fileRef(): { filename: string; bytes: number } | null {
   const v = props.modelValue
   if (v && typeof v === 'object' && 'filename' in v && 'bytes' in v) {
@@ -115,7 +245,65 @@ function fileRef(): { filename: string; bytes: number } | null {
       <slot name="label-extras" />
     </FieldLabel>
 
-    <template v-if="item.dataType === 'select-one' && item.options">
+    <!-- Phase E.6 ophth-bilateral-design (2026-06-11): ophthalmology
+         specialist branches go FIRST so the heuristic detector wins
+         even when the underlying dataType would otherwise route to
+         the generic select-one dropdown. Spectralis-OCT "durchgeführt"
+         is authored in v2.0 as select-one + ja/nein options, but the
+         OID's _DONE suffix should still produce the segmented Ja/Nein
+         pill — clinician-facing convention. -->
+    <template v-if="ophthPresentation.widget === 'segmented-yesno' && item.dataType !== 'boolean'">
+      <!-- MUW segmented Ja/Nein. Wire contract: value-of-Ja-option
+           token = 'ja' (or '1' if the item is canonical boolean,
+           handled by the dataType==='boolean' branch below). Reads
+           the first two options of a select-one item to decide which
+           token to emit; falls back to the legacy '1' / '0' boolean
+           tokens when no options are present. -->
+      <div
+        role="radiogroup"
+        :aria-invalid="hasError || undefined"
+        :aria-labelledby="suppressLabel ? undefined : `${inputId}-label`"
+        class="inline-flex gap-1 p-1 bg-slate-100 border border-slate-200 rounded-[13px]"
+        :class="{ 'opacity-60': disabled }"
+      >
+        <button
+          :id="`${inputId}-yes`"
+          type="button"
+          :name="booleanRadioName"
+          :disabled="disabled"
+          class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[9px] text-[14px] font-medium transition-colors"
+          :class="isYesNoYes
+            ? 'bg-white text-muw-teal-700 shadow-[0_1px_2px_rgba(17,29,78,0.14),0_0_0_1px_rgba(17,29,78,0.03)]'
+            : 'text-slate-600 hover:text-slate-900'"
+          @click="emit('update:modelValue', yesNoYesToken)"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-muw-teal-700 transition-opacity"
+            :class="isYesNoYes ? 'opacity-100' : 'opacity-0'"
+          ></span>
+          {{ t('crfEntry.boolean.yes') }}
+        </button>
+        <button
+          :id="`${inputId}-no`"
+          type="button"
+          :name="booleanRadioName"
+          :disabled="disabled"
+          class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[9px] text-[14px] font-medium transition-colors"
+          :class="isYesNoNo
+            ? 'bg-white text-muw-coral-700 shadow-[0_1px_2px_rgba(17,29,78,0.14),0_0_0_1px_rgba(17,29,78,0.03)]'
+            : 'text-slate-600 hover:text-slate-900'"
+          @click="emit('update:modelValue', yesNoNoToken)"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-muw-coral-700 transition-opacity"
+            :class="isYesNoNo ? 'opacity-100' : 'opacity-0'"
+          ></span>
+          {{ t('crfEntry.boolean.no') }}
+        </button>
+      </div>
+    </template>
+
+    <template v-else-if="item.dataType === 'select-one' && item.options">
       <SelectInput v-bind="textBindings">
         <option :value="undefined">— {{ t('common.search') }} —</option>
         <option v-for="opt in item.options" :key="opt.code" :value="opt.code">{{ opt.label }}</option>
@@ -152,6 +340,110 @@ function fileRef(): { filename: string; bytes: number } | null {
         @upload="(f: File) => emit('upload-file', f)"
         @clear="emit('clear-file')"
       />
+    </template>
+
+    <template v-else-if="compact && (item.dataType === 'integer' || item.dataType === 'real' || item.dataType === 'string')">
+      <!-- Phase E.6 ophth-bilateral-design (2026-06-11): compact mini
+           input used by compound-bilateral sub-fields (refraction
+           Sph/Cyl/Axis/Vis). 56×42 centred input, no stepper, no
+           unit suffix — the compound row's sub-label header already
+           encodes which value the operator is entering. -->
+      <input
+        :id="inputId"
+        :value="modelValue ?? ''"
+        :aria-invalid="hasError || undefined"
+        :type="item.dataType === 'integer' || item.dataType === 'real' ? 'number' : 'text'"
+        :inputmode="item.dataType === 'integer' ? 'numeric' : (item.dataType === 'real' ? 'decimal' : undefined)"
+        :step="item.dataType === 'integer' ? 1 : 0.1"
+        :disabled="disabled"
+        class="w-14 h-[42px] text-center bg-white border rounded-[10px] outline-none text-[14px] text-slate-900 tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none transition-colors"
+        :class="hasError
+          ? 'border-rose-400 focus:border-rose-500 focus:shadow-[0_0_0_3px_rgba(244,63,94,0.12)]'
+          : 'border-slate-300 hover:border-slate-400 focus:border-muw-blue focus:shadow-[0_0_0_3px_rgba(17,29,78,0.13)]'"
+        @input="item.dataType === 'string' ? emit('update:modelValue', ($event.target as HTMLInputElement).value) : onNumberInput($event)"
+      />
+    </template>
+
+    <template v-else-if="(item.dataType === 'integer' || item.dataType === 'real') && ophthPresentation.widget === 'number-stepper'">
+      <!-- MUW number-stepper. Rounded 12px frame, inline unit suffix,
+           vertical stepper buttons on the right edge — mirrors the
+           ophthalmology-visit-bilateral.html design's .fld pattern. -->
+      <div
+        class="flex items-stretch h-[46px] max-w-[260px] bg-white border rounded-xl transition-colors"
+        :class="hasError
+          ? 'border-rose-400 focus-within:border-rose-500 focus-within:shadow-[0_0_0_3px_rgba(244,63,94,0.12)]'
+          : 'border-slate-300 hover:border-slate-400 focus-within:border-muw-blue focus-within:shadow-[0_0_0_3px_rgba(17,29,78,0.13)]'"
+      >
+        <input
+          :id="inputId"
+          :value="modelValue ?? ''"
+          :aria-invalid="hasError || undefined"
+          type="number"
+          :min="item.min"
+          :max="item.max"
+          :step="item.dataType === 'integer' ? 1 : 0.1"
+          :disabled="disabled"
+          class="flex-1 min-w-0 bg-transparent border-0 outline-none px-3.5 text-[15px] text-slate-900 tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          @input="onNumberInput"
+        />
+        <span v-if="ophthPresentation.unit" class="flex items-center px-1.5 text-[12px] font-medium text-slate-500 whitespace-nowrap">{{ ophthPresentation.unit }}</span>
+        <div class="flex flex-col w-[30px] border-l border-slate-200">
+          <button
+            type="button"
+            tabindex="-1"
+            :disabled="disabled"
+            class="flex-1 flex items-center justify-center text-slate-400 hover:bg-muw-blue-50 hover:text-muw-blue border-b border-slate-200 disabled:cursor-not-allowed"
+            :aria-label="t('crfEntry.stepper.increment')"
+            @click="step(item.dataType === 'integer' ? 1 : 0.1)"
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
+          </button>
+          <button
+            type="button"
+            tabindex="-1"
+            :disabled="disabled"
+            class="flex-1 flex items-center justify-center text-slate-400 hover:bg-muw-blue-50 hover:text-muw-blue disabled:cursor-not-allowed"
+            :aria-label="t('crfEntry.stepper.decrement')"
+            @click="step(item.dataType === 'integer' ? -1 : -0.1)"
+          >
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+          </button>
+        </div>
+      </div>
+    </template>
+
+    <template v-else-if="item.dataType === 'string' && ophthPresentation.widget === 'snellen'">
+      <!-- MUW Snellen fraction widget. Two centered mini-inputs joined
+           by a stylised slash; the model-value serialises as "20/40".
+           Width 200px matches the number-stepper's footprint so the
+           bilateral table stays grid-aligned. -->
+      <div
+        class="inline-flex items-center gap-2 h-[46px] w-[200px] justify-center px-5 bg-white border rounded-xl transition-colors"
+        :class="hasError
+          ? 'border-rose-400 focus-within:border-rose-500 focus-within:shadow-[0_0_0_3px_rgba(244,63,94,0.12)]'
+          : 'border-slate-300 hover:border-slate-400 focus-within:border-muw-blue focus-within:shadow-[0_0_0_3px_rgba(17,29,78,0.13)]'"
+      >
+        <input
+          :id="inputId"
+          :value="snellenN"
+          type="text"
+          inputmode="numeric"
+          placeholder="20"
+          :disabled="disabled"
+          class="w-14 text-center bg-transparent border-0 outline-none text-[16px] text-slate-900 tabular-nums placeholder:text-slate-300"
+          @input="(e) => onSnellenInput('n', e)"
+        />
+        <span class="text-[24px] leading-none text-slate-300 font-light -translate-y-px select-none">/</span>
+        <input
+          :value="snellenD"
+          type="text"
+          inputmode="numeric"
+          placeholder="40"
+          :disabled="disabled"
+          class="w-14 text-center bg-transparent border-0 outline-none text-[16px] text-slate-900 tabular-nums placeholder:text-slate-300"
+          @input="(e) => onSnellenInput('d', e)"
+        />
+      </div>
     </template>
 
     <template v-else-if="item.dataType === 'integer' || item.dataType === 'real'">
@@ -210,54 +502,58 @@ function fileRef(): { filename: string; bytes: number } | null {
       />
     </template>
 
-    <template v-else-if="item.dataType === 'boolean'">
-      <!-- Phase E.6 — BL renderer. data_type=11 in the legacy model.
-           Wire contract: '1' = Yes, '0' = No, empty = unanswered.
-           A single checkbox would conflate "Nein" with "unbeantwortet";
-           the radio pair forces an explicit answer so downstream
-           show-when rules (e.g. the imaging "reason if not done" text
-           that appears only when the parent BL is "Nein") have a
-           reliable signal to react to. -->
+    <template v-else-if="item.dataType === 'boolean' || ophthPresentation.widget === 'segmented-yesno'">
+      <!-- MUW segmented Ja/Nein control. Design pattern from
+           ophthalmology-visit-bilateral.html: pill-shaped wrapper, the
+           selected pill gets a white card with subtle elevation and a
+           coloured dot — teal for Ja, coral for Nein — to match the
+           clinical convention of green=present, coral=absent.
+           Wire contract: '1' = Yes/Ja, '0' = No/Nein, empty = unanswered.
+           The widget activates on either {@code dataType === 'boolean'}
+           OR when the {@code ophthPresentation} heuristic flags a
+           Ja/Nein item (e.g. *_DONE suffix with no explicit boolean
+           type). -->
       <div
         role="radiogroup"
         :aria-invalid="hasError || undefined"
         :aria-labelledby="suppressLabel ? undefined : `${inputId}-label`"
-        class="inline-flex items-center gap-4"
+        class="inline-flex gap-1 p-1 bg-slate-100 border border-slate-200 rounded-[13px]"
+        :class="{ 'opacity-60': disabled }"
       >
-        <label
-          :for="`${inputId}-yes`"
-          class="inline-flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-700"
-          :class="{ 'cursor-not-allowed opacity-60': disabled }"
+        <button
+          :id="`${inputId}-yes`"
+          type="button"
+          :name="booleanRadioName"
+          :disabled="disabled"
+          class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[9px] text-[14px] font-medium transition-colors"
+          :class="isBooleanYes
+            ? 'bg-white text-muw-teal-700 shadow-[0_1px_2px_rgba(17,29,78,0.14),0_0_0_1px_rgba(17,29,78,0.03)]'
+            : 'text-slate-600 hover:text-slate-900'"
+          @click="emit('update:modelValue', '1')"
         >
-          <input
-            :id="`${inputId}-yes`"
-            type="radio"
-            :name="booleanRadioName"
-            value="1"
-            :checked="isBooleanYes"
-            :disabled="disabled"
-            class="h-4 w-4 border-slate-300 text-muw-blue focus:ring-muw-blue-100 muw-focus"
-            @change="emit('update:modelValue', '1')"
-          />
-          <span>{{ t('crfEntry.boolean.yes') }}</span>
-        </label>
-        <label
-          :for="`${inputId}-no`"
-          class="inline-flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-700"
-          :class="{ 'cursor-not-allowed opacity-60': disabled }"
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-muw-teal-700 transition-opacity"
+            :class="isBooleanYes ? 'opacity-100' : 'opacity-0'"
+          ></span>
+          {{ t('crfEntry.boolean.yes') }}
+        </button>
+        <button
+          :id="`${inputId}-no`"
+          type="button"
+          :name="booleanRadioName"
+          :disabled="disabled"
+          class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[9px] text-[14px] font-medium transition-colors"
+          :class="isBooleanNo
+            ? 'bg-white text-muw-coral-700 shadow-[0_1px_2px_rgba(17,29,78,0.14),0_0_0_1px_rgba(17,29,78,0.03)]'
+            : 'text-slate-600 hover:text-slate-900'"
+          @click="emit('update:modelValue', '0')"
         >
-          <input
-            :id="`${inputId}-no`"
-            type="radio"
-            :name="booleanRadioName"
-            value="0"
-            :checked="isBooleanNo"
-            :disabled="disabled"
-            class="h-4 w-4 border-slate-300 text-muw-blue focus:ring-muw-blue-100 muw-focus"
-            @change="emit('update:modelValue', '0')"
-          />
-          <span>{{ t('crfEntry.boolean.no') }}</span>
-        </label>
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-muw-coral-700 transition-opacity"
+            :class="isBooleanNo ? 'opacity-100' : 'opacity-0'"
+          ></span>
+          {{ t('crfEntry.boolean.no') }}
+        </button>
       </div>
     </template>
 
@@ -265,7 +561,16 @@ function fileRef(): { filename: string; bytes: number } | null {
       <TextInput v-bind="textBindings" type="text" />
     </template>
 
-    <HelperText v-if="item.helper">{{ item.helper }}</HelperText>
+    <!-- Phase E.6 ophth-bilateral-design (2026-06-11): suppress the
+         per-item helper sentence whenever the ophth widget already
+         renders a unit suffix inline (number-stepper / snellen).
+         The seeded helper for v2.0 OPHTH items duplicates the unit
+         ("letters" / "mmHg") that the inline suffix already prints. -->
+    <HelperText
+      v-if="item.helper && ophthPresentation.widget !== 'number-stepper' && ophthPresentation.widget !== 'snellen'"
+    >
+      {{ item.helper }}
+    </HelperText>
     <ErrorText v-if="errorMessage">
       {{ errorMessage }}
       <button

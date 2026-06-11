@@ -600,15 +600,22 @@
       "headerItem": "Item",
       "headerOd": "OD (right eye)",
       "headerOs": "OS (left eye)",
+      "headerOdEye": "Right eye",
+      "headerOsEye": "Left eye",
       "odOnlyTell": "OD only",
       "osOnlyTell": "OS only",
       "bothEyesTell": "Both eyes",
       "odMissing": "—",
-      "osMissing": "—"
+      "osMissing": "—",
+      "compoundSlotMissing": "Sub-field {subKey} is not defined on this CRF"
     },
     "boolean": {
       "yes": "Yes",
       "no": "No"
+    },
+    "stepper": {
+      "increment": "Increment",
+      "decrement": "Decrement"
     }
   },
   "dde": {
