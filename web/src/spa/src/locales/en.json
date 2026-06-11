@@ -490,6 +490,9 @@
     "readOnlyTell": "Read-only · Monitor view",
     "lockedTell": "Locked · Subject signed",
     "lockedBanner": "This CRF is locked because the subject is signed. No edits are accepted. Contact the study lead to reopen.",
+    "completedTell": "Completed · Read-only",
+    "completedBanner": "This CRF is completed. Fields are read-only. Click «Reopen CRF» to edit.",
+    "completedBannerNoReopen": "This CRF is completed. Fields are read-only. Contact the study lead to reopen.",
     "unsaved": "Unsaved changes",
     "saving": "Auto-saving…",
     "lastSaved": "Last saved at {at}",
@@ -1884,6 +1887,9 @@
       "location": "Location",
       "dateInvalid": "Date must be in YYYY-MM-DD format.",
       "cancelConfirm": "Cancel event \"{label}\"? Associated CRFs and items will be marked deleted. The action is recorded in the audit trail.",
+      "lockedBanner": "This visit is completed. Click «Edit» to make changes.",
+      "editConfirm": "This visit is completed. Do you really want to edit it?",
+      "editButton": "Edit",
       "status": {
         "stopped": "Stopped",
         "skipped": "Skipped"

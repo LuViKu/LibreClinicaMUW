@@ -158,10 +158,45 @@ interface EditEventState {
   location: string
   status: StudyEventStatus
   fieldError: string | null
+  /**
+   * Phase E completed-crf-and-event-lock (2026-06-11) — the visit's
+   * status at the moment the composer was opened. Drives the
+   * read-only banner + the explicit Bearbeiten unlock step.
+   *
+   * `canEditEvent` already refuses to show the edit affordance for
+   * 'signed' / 'locked' events, so in practice this is either
+   * 'completed' (the only case the unlock-confirm exists for) or
+   * one of the directly-editable statuses (scheduled / stopped /
+   * skipped). We keep the field general so a future role/state
+   * change can't silently bypass the read-only default.
+   */
+  openedFrom: EventStatus
+  /**
+   * True when the operator has explicitly confirmed they want to
+   * edit a previously-completed visit. Local-only state — events
+   * have no backend "reopen" step (unlike CRFs), so the unlock is
+   * purely defensive UX. Save still POSTs PUT /events/{id}; the
+   * server is the source of truth for whether the edit is allowed.
+   */
+  unlocked: boolean
 }
 
 const editEvent = ref<EditEventState | null>(null)
 const isSavingEvent = ref(false)
+
+/**
+ * Phase E completed-crf-and-event-lock — true while the composer is
+ * showing a previously-completed visit and the operator hasn't yet
+ * clicked "Bearbeiten" to flip into edit mode. Used by the template
+ * to disable inputs + the Save button + show the banner.
+ */
+const editEventLocked = computed(() => {
+  if (!editEvent.value) return false
+  // EventStatus uses 'complete' (not 'completed' — StudyEventStatus's
+  // synonym). Both spellings show up in the codebase because the two
+  // enums model different concerns (per-cell roll-up vs. per-event row).
+  return editEvent.value.openedFrom === 'complete' && !editEvent.value.unlocked
+})
 
 function openEditEvent(ev: {
   eventId: string
@@ -186,7 +221,15 @@ function openEditEvent(ev: {
     location: ev.location ?? '',
     status: editable,
     fieldError: null,
+    openedFrom: ev.status,
+    unlocked: false,
   }
+}
+
+function unlockEditEvent() {
+  if (!editEvent.value) return
+  if (!confirm(t('subjectDetail.event.editConfirm'))) return
+  editEvent.value.unlocked = true
 }
 
 function cancelEditEvent() {
@@ -195,6 +238,13 @@ function cancelEditEvent() {
 
 async function submitEditEvent() {
   if (!editEvent.value || !subject.value) return
+  // Phase E completed-crf-and-event-lock — defensive guard. The
+  // template already hides the Save button while editEventLocked
+  // is true, but a stale form submission (e.g. an Enter keypress
+  // on a focused field) could still land here without the
+  // operator's Bearbeiten confirm. Refuse silently — the banner
+  // tells the operator what to do.
+  if (editEventLocked.value) return
   // ISO date sanity check at the form layer; the backend does the
   // authoritative parse + 400.
   const date = editEvent.value.dateStart.trim()
@@ -829,6 +879,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                     v-if="ev.eventId && canEditEv(ev.status)"
                     type="button"
                     class="text-muw-blue hover:underline"
+                    data-testid="event-row-edit-button"
                     @click="openEditEvent(ev)"
                   >{{ t('subjectDetail.event.edit') }}</button>
                   <button
@@ -856,16 +907,32 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               </tr>
 
               <!-- Phase E A4: inline edit composer (only the row matching
-                   the open editEvent state shows this). -->
+                   the open editEvent state shows this).
+                   Phase E completed-crf-and-event-lock (2026-06-11): a
+                   visit opened from the 'completed' state renders the
+                   form read-only by default with a banner + explicit
+                   Bearbeiten confirm to flip into edit mode. The
+                   defensive guard mirrors the CRF-entry pattern so
+                   accidental keystrokes can't silently mutate
+                   abgeschlossene Visiten. -->
               <tr v-if="editEvent && editEvent.eventId === ev.eventId" class="bg-slate-50">
                 <td :colspan="6" class="px-5 py-3">
-                  <div class="grid grid-cols-3 gap-3">
+                  <div
+                    v-if="editEventLocked"
+                    class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-3"
+                    role="status"
+                    data-testid="event-completed-banner"
+                  >
+                    {{ t('subjectDetail.event.lockedBanner') }}
+                  </div>
+                  <fieldset :disabled="editEventLocked" class="grid grid-cols-3 gap-3">
                     <div>
                       <FieldLabel for="edit-event-date">{{ t('subjectDetail.column.dateStart') }}</FieldLabel>
                       <TextInput
                         id="edit-event-date"
                         v-model="editEvent.dateStart"
                         placeholder="YYYY-MM-DD"
+                        :disabled="editEventLocked"
                       />
                     </div>
                     <div>
@@ -873,6 +940,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                       <TextInput
                         id="edit-event-location"
                         v-model="editEvent.location"
+                        :disabled="editEventLocked"
                       />
                     </div>
                     <div>
@@ -880,13 +948,14 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                       <SelectInput
                         id="edit-event-status"
                         v-model="editEvent.status"
+                        :disabled="editEventLocked"
                       >
                         <option value="scheduled">{{ t('subjectMatrix.status.scheduled') }}</option>
                         <option value="stopped">{{ t('subjectDetail.event.status.stopped') }}</option>
                         <option value="skipped">{{ t('subjectDetail.event.status.skipped') }}</option>
                       </SelectInput>
                     </div>
-                  </div>
+                  </fieldset>
                   <ErrorText v-if="editEvent.fieldError" class="mt-2">{{ editEvent.fieldError }}</ErrorText>
                   <div class="flex justify-end gap-2 mt-3">
                     <button
@@ -896,6 +965,14 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                       @click="cancelEditEvent"
                     >{{ t('common.cancel') }}</button>
                     <button
+                      v-if="editEventLocked"
+                      type="button"
+                      class="px-3 py-1.5 text-xs border border-amber-300 bg-amber-50 text-amber-800 rounded-md hover:bg-amber-100"
+                      data-testid="event-unlock-button"
+                      @click="unlockEditEvent"
+                    >{{ t('subjectDetail.event.editButton') }}</button>
+                    <button
+                      v-else
                       type="button"
                       class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 disabled:opacity-50"
                       :disabled="isSavingEvent"

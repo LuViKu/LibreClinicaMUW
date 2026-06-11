@@ -489,6 +489,9 @@
     "readOnlyTell": "Schreibgeschützt · Monitor-Ansicht",
     "lockedTell": "Gesperrt · Teilnehmer signiert",
     "lockedBanner": "Dieses CRF ist gesperrt, weil der Teilnehmer signiert hat. Eingaben sind nicht mehr möglich. Zur Wiedereröffnung wenden Sie sich an die Studienleitung.",
+    "completedTell": "Abgeschlossen · Schreibgeschützt",
+    "completedBanner": "Dieses CRF ist abgeschlossen. Felder sind schreibgeschützt. Klicken Sie «CRF erneut öffnen», um Änderungen zu erfassen.",
+    "completedBannerNoReopen": "Dieses CRF ist abgeschlossen. Felder sind schreibgeschützt. Für Änderungen wenden Sie sich an die Studienleitung.",
     "unsaved": "Ungespeicherte Änderungen",
     "saving": "Automatisches Speichern…",
     "lastSaved": "Zuletzt gespeichert um {at}",
@@ -1883,6 +1886,9 @@
       "location": "Ort",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
       "cancelConfirm": "Visite »{label}« stornieren? Verbundene CRFs und Items werden als gelöscht markiert. Die Aktion wird im Audit Trail dokumentiert.",
+      "lockedBanner": "Diese Visite ist abgeschlossen. Klicken Sie «Bearbeiten», um Änderungen zu erfassen.",
+      "editConfirm": "Diese Visite ist abgeschlossen. Möchten Sie sie wirklich bearbeiten?",
+      "editButton": "Bearbeiten",
       "status": {
         "stopped": "Abgebrochen",
         "skipped": "Übersprungen"
