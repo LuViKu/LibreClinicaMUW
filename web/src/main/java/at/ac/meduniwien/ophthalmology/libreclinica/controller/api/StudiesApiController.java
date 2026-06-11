@@ -18,7 +18,6 @@ import java.util.Map;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -607,25 +606,27 @@ public class StudiesApiController {
                     studyOid, e.getMessage());
         }
 
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(target_.getId());
-            ae.setStudyName(target_.getName() == null ? "" : target_.getName());
-            ae.setAuditTable("study");
-            ae.setEntityId(target_.getId());
-            ae.setColumnName("status_id");
-            ae.setOldValue(String.valueOf(currentStatus.getId()));
-            ae.setNewValue(String.valueOf(target.getId()));
-            String reason = body.reason() == null ? "" : body.reason().trim();
-            ae.setActionMessage("study_status_change: " + studyOid
-                    + " (" + currentStatus.getName() + " → " + target.getName() + ")"
-                    + (reason.isEmpty() ? "" : " reason: \"" + reason + "\"")
-                    + " by " + me.getName());
-            ae.setReasonForChange(reason);
-            auditDAO.create(ae);
-        } catch (Exception e) {
+        // Audit-table unification (slice C, 2026-06-12): direct INSERT
+        // into audit_log_event with type STUDY_STATUS_CHANGED. Carries
+        // the caller-supplied reasonForChange (the only lifecycle event
+        // that does — disable / restore have no operator-supplied
+        // rationale beyond the status flip itself).
+        String reason = body.reason() == null ? "" : body.reason().trim();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, "
+                             + "reason_for_change, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, AuditTypeIds.STUDY_STATUS_CHANGED);
+            ps.setInt(2, me.getId());
+            ps.setInt(3, target_.getId());
+            ps.setString(4, studyOid == null ? "" : studyOid);
+            ps.setString(5, reason);
+            ps.setString(6, currentStatus.getName());
+            ps.setString(7, target.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
             LOG.warn("Audit write failed for study_status_change oid={} (continuing): {}",
                     studyOid, e.getMessage());
         }
@@ -722,25 +723,8 @@ public class StudiesApiController {
         }
 
         // One audit row per lifecycle transition.
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(target.getId());
-            ae.setStudyName(target.getName() == null ? "" : target.getName());
-            ae.setAuditTable("study");
-            ae.setEntityId(target.getId());
-            ae.setColumnName("status_id");
-            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getId()));
-            ae.setNewValue(String.valueOf(targetStatus.getId()));
-            ae.setActionMessage("study_" + operation + ": " + studyOid
-                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
-                    + " → " + targetStatus.getName() + ") by " + me.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for study_{} oid={} (continuing): {}",
-                    operation, studyOid, e.getMessage());
-        }
+        writeLifecycleAudit(AuditTypeIds.STUDY_LIFECYCLE_CHANGED, me,
+                target.getId(), studyOid, oldStatus, targetStatus, "study_" + operation);
 
         LOG.info("Study {}: oid={} by admin={}", operation, studyOid, me.getName());
         return ResponseEntity.ok(toIdentityDto(target, studyDao));
@@ -870,6 +854,41 @@ public class StudiesApiController {
         } catch (SQLException e) {
             LOG.warn("Audit write failed for study {} field {} (continuing): {}",
                     target.getOid(), columnName, e.getMessage());
+        }
+    }
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for the study lifecycle
+     * (disable / restore) status flip. Audit-table unification (slice C,
+     * 2026-06-12) — the legacy {@code AuditEventDAO.create} path wrote
+     * to {@code audit_event} (invisible to the SPA Audit Log view); this
+     * writer targets the unified surface with type
+     * {@link AuditTypeIds#STUDY_LIFECYCLE_CHANGED}. The
+     * {@code actionPrefix} argument is no longer persisted but is kept
+     * in the signature for symmetry with the other lifecycle writers.
+     */
+    private void writeLifecycleAudit(int auditTypeId,
+                                     UserAccountBean me,
+                                     int entityId,
+                                     String oid,
+                                     Status oldStatus,
+                                     Status newStatus,
+                                     @SuppressWarnings("unused") String actionPrefix) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, me.getId());
+            ps.setInt(3, entityId);
+            ps.setString(4, oid == null ? "" : oid);
+            ps.setString(5, oldStatus == null ? "" : oldStatus.getName());
+            ps.setString(6, newStatus == null ? "" : newStatus.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for study lifecycle oid={} (continuing): {}",
+                    oid, e.getMessage());
         }
     }
 

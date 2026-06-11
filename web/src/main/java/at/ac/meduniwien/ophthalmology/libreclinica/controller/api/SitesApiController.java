@@ -10,6 +10,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -17,13 +20,11 @@ import java.util.Map;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 
@@ -271,20 +272,19 @@ public class SitesApiController {
         }
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
-        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
 
-        if (body.name() != null) diffString(site::getName, site::setName, body.name(), "name", auditDAO, me, site);
-        if (body.briefSummary() != null) diffString(site::getSummary, site::setSummary, body.briefSummary(), "summary", auditDAO, me, site);
-        if (body.principalInvestigator() != null) diffString(site::getPrincipalInvestigator, site::setPrincipalInvestigator, body.principalInvestigator(), "principal_investigator", auditDAO, me, site);
-        if (body.facilityName() != null) diffString(site::getFacilityName, site::setFacilityName, body.facilityName(), "facility_name", auditDAO, me, site);
-        if (body.facilityCity() != null) diffString(site::getFacilityCity, site::setFacilityCity, body.facilityCity(), "facility_city", auditDAO, me, site);
-        if (body.facilityState() != null) diffString(site::getFacilityState, site::setFacilityState, body.facilityState(), "facility_state", auditDAO, me, site);
-        if (body.facilityZip() != null) diffString(site::getFacilityZip, site::setFacilityZip, body.facilityZip(), "facility_zip", auditDAO, me, site);
-        if (body.facilityCountry() != null) diffString(site::getFacilityCountry, site::setFacilityCountry, body.facilityCountry(), "facility_country", auditDAO, me, site);
-        if (body.facilityContactName() != null) diffString(site::getFacilityContactName, site::setFacilityContactName, body.facilityContactName(), "facility_contact_name", auditDAO, me, site);
-        if (body.facilityContactDegree() != null) diffString(site::getFacilityContactDegree, site::setFacilityContactDegree, body.facilityContactDegree(), "facility_contact_degree", auditDAO, me, site);
-        if (body.facilityContactPhone() != null) diffString(site::getFacilityContactPhone, site::setFacilityContactPhone, body.facilityContactPhone(), "facility_contact_phone", auditDAO, me, site);
-        if (body.facilityContactEmail() != null) diffString(site::getFacilityContactEmail, site::setFacilityContactEmail, body.facilityContactEmail(), "facility_contact_email", auditDAO, me, site);
+        if (body.name() != null) diffString(site::getName, site::setName, body.name(), "name", me, site);
+        if (body.briefSummary() != null) diffString(site::getSummary, site::setSummary, body.briefSummary(), "summary", me, site);
+        if (body.principalInvestigator() != null) diffString(site::getPrincipalInvestigator, site::setPrincipalInvestigator, body.principalInvestigator(), "principal_investigator", me, site);
+        if (body.facilityName() != null) diffString(site::getFacilityName, site::setFacilityName, body.facilityName(), "facility_name", me, site);
+        if (body.facilityCity() != null) diffString(site::getFacilityCity, site::setFacilityCity, body.facilityCity(), "facility_city", me, site);
+        if (body.facilityState() != null) diffString(site::getFacilityState, site::setFacilityState, body.facilityState(), "facility_state", me, site);
+        if (body.facilityZip() != null) diffString(site::getFacilityZip, site::setFacilityZip, body.facilityZip(), "facility_zip", me, site);
+        if (body.facilityCountry() != null) diffString(site::getFacilityCountry, site::setFacilityCountry, body.facilityCountry(), "facility_country", me, site);
+        if (body.facilityContactName() != null) diffString(site::getFacilityContactName, site::setFacilityContactName, body.facilityContactName(), "facility_contact_name", me, site);
+        if (body.facilityContactDegree() != null) diffString(site::getFacilityContactDegree, site::setFacilityContactDegree, body.facilityContactDegree(), "facility_contact_degree", me, site);
+        if (body.facilityContactPhone() != null) diffString(site::getFacilityContactPhone, site::setFacilityContactPhone, body.facilityContactPhone(), "facility_contact_phone", me, site);
+        if (body.facilityContactEmail() != null) diffString(site::getFacilityContactEmail, site::setFacilityContactEmail, body.facilityContactEmail(), "facility_contact_email", me, site);
 
         site.setUpdater(me);
         site.setUpdatedDate(new java.util.Date());
@@ -355,24 +355,8 @@ public class SitesApiController {
         site.setUpdatedDate(new java.util.Date());
         studyDao.updateStudyStatus(site);
 
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(site.getId());
-            ae.setStudyName(site.getName() == null ? "" : site.getName());
-            ae.setAuditTable("study");
-            ae.setEntityId(site.getId());
-            ae.setColumnName("status_id");
-            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getId()));
-            ae.setNewValue(String.valueOf(target.getId()));
-            ae.setActionMessage("site_" + operation + ": " + siteOid
-                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
-                    + " → " + target.getName() + ") by " + me.getName());
-            new AuditEventDAO(dataSource).create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for site_{} oid={} (continuing): {}",
-                    operation, siteOid, e.getMessage());
-        }
+        writeLifecycleAudit(AuditTypeIds.SITE_LIFECYCLE_CHANGED, me, "study",
+                site.getId(), siteOid, oldStatus, target, "site_" + operation);
 
         LOG.info("Site {}: parentOid={} siteOid={} by user={}",
                 operation, parentOid, siteOid, me.getName());
@@ -470,35 +454,72 @@ public class SitesApiController {
     /**
      * Per-field diff helper — reads the current value via {@code getter},
      * compares against the trimmed new value, applies the setter if
-     * different, and writes one audit row.
+     * different, and writes one {@code audit_log_event} row.
+     * Audit-table unification (slice C, 2026-06-12) — the legacy
+     * {@code AuditEventDAO.create} path wrote to the {@code audit_event}
+     * table (invisible to the SPA Audit Log view); this writer targets
+     * the unified {@code audit_log_event} surface with type
+     * {@link AuditTypeIds#SITE_FIELD_UPDATED}.
      */
     private void diffString(java.util.function.Supplier<String> getter,
                             java.util.function.Consumer<String> setter,
                             String newValue,
                             String columnName,
-                            AuditEventDAO auditDAO,
                             UserAccountBean me,
                             StudyBean site) {
         String oldVal = getter.get();
         String trimmed = newValue.trim();
         if (java.util.Objects.equals(nullToEmpty(oldVal), trimmed)) return;
         setter.accept(trimmed);
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(site.getId());
-            ae.setStudyName(site.getName() == null ? "" : site.getName());
-            ae.setAuditTable("study");
-            ae.setEntityId(site.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldVal == null ? "" : oldVal);
-            ae.setNewValue(trimmed);
-            ae.setActionMessage("site_update: " + (site.getOid() == null ? "?" : site.getOid())
-                    + "." + columnName + " '" + (oldVal == null ? "" : oldVal) + "' → '" + trimmed + "'");
-            auditDAO.create(ae);
-        } catch (Exception e) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?)")) {
+            ps.setInt(1, AuditTypeIds.SITE_FIELD_UPDATED);
+            ps.setInt(2, me.getId());
+            ps.setInt(3, site.getId());
+            ps.setString(4, columnName);
+            ps.setString(5, oldVal == null ? "" : oldVal);
+            ps.setString(6, trimmed);
+            ps.executeUpdate();
+        } catch (SQLException e) {
             LOG.warn("Audit write failed for site field {}={} (continuing): {}",
                     columnName, trimmed, e.getMessage());
+        }
+    }
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for the site lifecycle
+     * (disable / restore) status flip. The {@code actionPrefix} argument
+     * is no longer persisted — the {@code auditTypeId} encodes the
+     * operation type — but is retained in the signature for symmetry
+     * with the other lifecycle writers across the unified surface.
+     */
+    private void writeLifecycleAudit(int auditTypeId,
+                                     UserAccountBean me,
+                                     String auditTable,
+                                     int entityId,
+                                     String oid,
+                                     Status oldStatus,
+                                     Status newStatus,
+                                     @SuppressWarnings("unused") String actionPrefix) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, me.getId());
+            ps.setString(3, auditTable);
+            ps.setInt(4, entityId);
+            ps.setString(5, oid == null ? "" : oid);
+            ps.setString(6, oldStatus == null ? "" : oldStatus.getName());
+            ps.setString(7, newStatus == null ? "" : newStatus.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for {} {} (continuing): {}",
+                    auditTable, entityId, e.getMessage());
         }
     }
 

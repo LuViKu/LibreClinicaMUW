@@ -22,7 +22,6 @@ import java.util.Set;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -34,7 +33,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDe
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -255,14 +253,12 @@ public class EventDefinitionsApiController {
                     "Event definition '" + sedOid + "' is removed — restore before editing"));
         }
 
-        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-
         if (body.name() != null) {
             String oldVal = target.getName();
             String newVal = body.name().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setName(newVal);
-                writeEventDefFieldAudit(auditDAO, me, study, target, "name", oldVal, newVal);
+                writeEventDefFieldAudit(AuditTypeIds.EVENT_DEFINITION_FIELD_UPDATED, me, target, "name", oldVal, newVal);
             }
         }
         if (body.description() != null) {
@@ -270,7 +266,7 @@ public class EventDefinitionsApiController {
             String newVal = body.description().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setDescription(newVal);
-                writeEventDefFieldAudit(auditDAO, me, study, target, "description", oldVal, newVal);
+                writeEventDefFieldAudit(AuditTypeIds.EVENT_DEFINITION_FIELD_UPDATED, me, target, "description", oldVal, newVal);
             }
         }
         if (body.category() != null) {
@@ -278,7 +274,7 @@ public class EventDefinitionsApiController {
             String newVal = body.category().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setCategory(newVal);
-                writeEventDefFieldAudit(auditDAO, me, study, target, "category", oldVal, newVal);
+                writeEventDefFieldAudit(AuditTypeIds.EVENT_DEFINITION_FIELD_UPDATED, me, target, "category", oldVal, newVal);
             }
         }
         if (body.type() != null) {
@@ -286,7 +282,7 @@ public class EventDefinitionsApiController {
             String newVal = body.type().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setType(newVal);
-                writeEventDefFieldAudit(auditDAO, me, study, target, "type", oldVal, newVal);
+                writeEventDefFieldAudit(AuditTypeIds.EVENT_DEFINITION_FIELD_UPDATED, me, target, "type", oldVal, newVal);
             }
         }
         if (body.repeating() != null) {
@@ -294,7 +290,7 @@ public class EventDefinitionsApiController {
             boolean newVal = body.repeating();
             if (oldVal != newVal) {
                 target.setRepeating(newVal);
-                writeEventDefFieldAudit(auditDAO, me, study, target, "repeating",
+                writeEventDefFieldAudit(AuditTypeIds.EVENT_DEFINITION_FIELD_UPDATED, me, target, "repeating",
                         Boolean.toString(oldVal), Boolean.toString(newVal));
             }
         }
@@ -350,8 +346,6 @@ public class EventDefinitionsApiController {
                     "orderedOids must contain exactly the OIDs of the study's currently-active event definitions"));
         }
 
-        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-
         int ordinal = 1;
         for (String oid : body.orderedOids()) {
             StudyEventDefinitionBean target = sedDao.findByOidAndStudy(oid, study.getId(), 0);
@@ -362,7 +356,7 @@ public class EventDefinitionsApiController {
                 target.setUpdater(me);
                 target.setUpdatedDate(new java.util.Date());
                 sedDao.update(target);
-                writeEventDefFieldAudit(auditDAO, me, study, target, "ordinal",
+                writeEventDefFieldAudit(AuditTypeIds.EVENT_DEFINITION_FIELD_UPDATED, me, target, "ordinal",
                         String.valueOf(oldOrdinal), String.valueOf(ordinal));
             }
             ordinal++;
@@ -412,21 +406,19 @@ public class EventDefinitionsApiController {
         // event_crf / item_data cascade is owned by the existing DB
         // trigger pattern; A8.3 will revisit if assignment cleanup is
         // needed at controller level.
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("study_event_definition");
-            ae.setEntityId(target.getId());
-            ae.setColumnName("status_id");
-            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getId()));
-            ae.setNewValue(String.valueOf(Status.DELETED.getId()));
-            ae.setActionMessage("study_event_definition_disable: " + sedOid
-                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
-                    + " → " + Status.DELETED.getName() + ") by " + me.getName());
-            new AuditEventDAO(dataSource).create(ae);
-        } catch (Exception e) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study_event_definition', ?, ?, ?, ?)")) {
+            ps.setInt(1, AuditTypeIds.EVENT_DEFINITION_DISABLED);
+            ps.setInt(2, me.getId());
+            ps.setInt(3, target.getId());
+            ps.setString(4, sedOid == null ? "" : sedOid);
+            ps.setString(5, oldStatus == null ? "" : oldStatus.getName());
+            ps.setString(6, Status.DELETED.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
             LOG.warn("Audit write failed for study_event_definition_disable oid={} (continuing): {}",
                     sedOid, e.getMessage());
         }
@@ -534,8 +526,8 @@ public class EventDefinitionsApiController {
             }
         }
 
-        writeLifecycleAudit(me, study, target, oldStatus, Status.AVAILABLE,
-                "study_event_definition_restore");
+        writeLifecycleAudit(AuditTypeIds.EVENT_DEFINITION_LIFECYCLE_CHANGED, me, study, target,
+                oldStatus, Status.AVAILABLE, "study_event_definition_restore");
 
         LOG.info("Restore event definition: oid={} study={} by admin={} (edc={} ev={} eventCrf={} item={})",
                 sedOid, studyOid, me.getName(),
@@ -588,8 +580,8 @@ public class EventDefinitionsApiController {
         Status oldStatus = target.getStatus();
         int affected = cascadeStatus(target, Status.LOCKED, me, /* onlyFlipAvailable */ true);
 
-        writeLifecycleAudit(me, study, target, oldStatus, Status.LOCKED,
-                "study_event_definition_lock");
+        writeLifecycleAudit(AuditTypeIds.EVENT_DEFINITION_LIFECYCLE_CHANGED, me, study, target,
+                oldStatus, Status.LOCKED, "study_event_definition_lock");
 
         LOG.info("Lock event definition: oid={} study={} by admin={} (child rows touched={})",
                 sedOid, studyOid, me.getName(), affected);
@@ -634,8 +626,8 @@ public class EventDefinitionsApiController {
         Status oldStatus = target.getStatus();
         int affected = cascadeStatus(target, Status.AVAILABLE, me, /* onlyFlipAvailable */ false);
 
-        writeLifecycleAudit(me, study, target, oldStatus, Status.AVAILABLE,
-                "study_event_definition_unlock");
+        writeLifecycleAudit(AuditTypeIds.EVENT_DEFINITION_LIFECYCLE_CHANGED, me, study, target,
+                oldStatus, Status.AVAILABLE, "study_event_definition_unlock");
 
         LOG.info("Unlock event definition: oid={} study={} by admin={} (child rows touched={})",
                 sedOid, studyOid, me.getName(), affected);
@@ -731,30 +723,35 @@ public class EventDefinitionsApiController {
      * and the SPA's audit-log view groups by parent entity. If review
      * demands per-row coverage, lift this to a future revision via the
      * existing {@code writeEventDefFieldAudit} helper.
+     *
+     * <p>Audit-table unification (slice C, 2026-06-12) — direct INSERT
+     * into {@code audit_log_event}. The {@code actionPrefix} argument
+     * is no longer persisted (the {@code auditTypeId} encodes the
+     * operation type) but is retained in the signature for symmetry
+     * with the other lifecycle writers across the unified surface.
      */
-    private void writeLifecycleAudit(UserAccountBean editor,
-                                     StudyBean study,
+    private void writeLifecycleAudit(int auditTypeId,
+                                     UserAccountBean editor,
+                                     @SuppressWarnings("unused") StudyBean study,
                                      StudyEventDefinitionBean target,
                                      Status oldStatus,
                                      Status newStatus,
-                                     String actionPrefix) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(editor.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("study_event_definition");
-            ae.setEntityId(target.getId());
-            ae.setColumnName("status_id");
-            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getId()));
-            ae.setNewValue(newStatus == null ? "" : String.valueOf(newStatus.getId()));
-            ae.setActionMessage(actionPrefix + ": " + (target.getOid() == null ? "?" : target.getOid())
-                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
-                    + " → " + (newStatus == null ? "?" : newStatus.getName()) + ") by " + editor.getName());
-            new AuditEventDAO(dataSource).create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for {} oid={} (continuing): {}",
-                    actionPrefix, target.getOid(), e.getMessage());
+                                     @SuppressWarnings("unused") String actionPrefix) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study_event_definition', ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, editor.getId());
+            ps.setInt(3, target.getId());
+            ps.setString(4, target.getOid() == null ? "" : target.getOid());
+            ps.setString(5, oldStatus == null ? "" : oldStatus.getName());
+            ps.setString(6, newStatus == null ? "" : newStatus.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for event_definition lifecycle oid={} (continuing): {}",
+                    target.getOid(), e.getMessage());
         }
     }
 
@@ -1190,29 +1187,33 @@ public class EventDefinitionsApiController {
         }
     }
 
-    private void writeEventDefFieldAudit(AuditEventDAO auditDAO,
+    /**
+     * Direct INSERT into {@code audit_log_event} for an event-definition
+     * field change. Audit-table unification (slice C, 2026-06-12) — the
+     * legacy {@code AuditEventDAO.create} path wrote to
+     * {@code audit_event} (invisible to the SPA Audit Log view); this
+     * writer targets the unified surface with type
+     * {@link AuditTypeIds#EVENT_DEFINITION_FIELD_UPDATED}.
+     */
+    private void writeEventDefFieldAudit(int auditTypeId,
                                          UserAccountBean editor,
-                                         StudyBean study,
                                          StudyEventDefinitionBean target,
                                          String columnName,
                                          String oldValue,
                                          String newValue) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(editor.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("study_event_definition");
-            ae.setEntityId(target.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("event_def_update: " + (target.getOid() == null ? "?" : target.getOid())
-                    + "." + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "'");
-            auditDAO.create(ae);
-        } catch (Exception e) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study_event_definition', ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, editor.getId());
+            ps.setInt(3, target.getId());
+            ps.setString(4, columnName);
+            ps.setString(5, oldValue == null ? "" : oldValue);
+            ps.setString(6, newValue == null ? "" : newValue);
+            ps.executeUpdate();
+        } catch (SQLException e) {
             LOG.warn("Audit write failed for event_def field {}={} (continuing): {}",
                     columnName, newValue, e.getMessage());
         }
