@@ -20,7 +20,6 @@ import java.util.Set;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
@@ -481,28 +480,18 @@ public class EventsApiController {
             try { seDao.update(ev); } catch (Exception ignored) { /* best-effort */ }
         }
 
-        // Audit row — best-effort. Mirrors SdvApiController's pattern
-        // (no audit_log_event_type_id setter on AuditEventDAO.create()).
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(ub.getId());
-            ae.setStudyId(currentStudy.getId());
-            ae.setSubjectId(ss.getId());
-            ae.setStudyName(currentStudy.getName() == null ? "" : currentStudy.getName());
-            ae.setSubjectName(ss.getLabel() == null ? "" : ss.getLabel());
-            ae.setAuditTable("event_crf");
-            ae.setEntityId(ecb.getId());
-            ae.setColumnName("event_crf_id");
-            ae.setOldValue("");
-            ae.setNewValue(String.valueOf(ecb.getId()));
-            ae.setActionMessage("event_crf_started: event=" + eventId
-                    + " edc=" + edcId + " version=" + crfVersionId);
-            auditDAO.create(ae);
-        } catch (Exception auditEx) {
-            LOG.warn("Audit write failed for event_crf_started id={} (continuing): {}",
-                    ecb.getId(), auditEx.getMessage());
-        }
+        // Audit row — routed through the unified
+        // {@link EventCrfsApiController#writeAuditEvent} helper so the
+        // event_crf_started row lands in audit_log_event (visible to
+        // the SPA Audit Log) instead of the legacy audit_event table.
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        EventCrfsApiController.writeAuditEvent(auditDAO,
+                AuditTypeIds.EVENT_CRF_STARTED,
+                ub, currentStudy, ss,
+                "event_crf_started: event=" + eventId
+                        + " edc=" + edcId + " version=" + crfVersionId,
+                "event_crf", ecb.getId(),
+                "event_crf_id", "", String.valueOf(ecb.getId()));
 
         LOG.info("event_crf_started: id={} event={} edc={} version={} by user={}",
                 ecb.getId(), eventId, edcId, crfVersionId, ub.getName());
@@ -1260,26 +1249,16 @@ public class EventsApiController {
                                              String columnName,
                                              String oldValue,
                                              String newValue) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(ub.getId());
-            ae.setStudyId(study.getId());
-            ae.setSubjectId(ss == null ? 0 : ss.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setSubjectName(ss != null && ss.getLabel() != null ? ss.getLabel() : "");
-            ae.setAuditTable("study_event");
-            ae.setEntityId(ev.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("study_event_update: " + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "'");
-            dao.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for study_event {} field {} (continuing): {}",
-                    ev.getId(), columnName, e.getMessage());
-        }
+        // Phase audit-unification — delegate to the canonical helper so
+        // study-event-update rows land in audit_log_event (visible to
+        // the SPA Audit Log view) instead of the legacy audit_event
+        // table.
+        EventCrfsApiController.writeAuditEvent(dao,
+                AuditTypeIds.STUDY_EVENT_UPDATED,
+                ub, study, ss,
+                "study_event_update",
+                "study_event", ev.getId(),
+                columnName, oldValue, newValue);
     }
 
     /* ----------------------------------------------------------------- */

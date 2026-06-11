@@ -32,7 +32,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDe
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
@@ -419,27 +418,16 @@ public class SdvApiController {
                 eventCrfDao.setSDVStatus(false, ub.getId(), id);
                 unverified.add(oid);
 
-                // Audit row capturing the un-verify + reason. Wrapped
-                // in try/catch so audit-write failures don't roll
-                // back the user-facing state change.
-                try {
-                    AuditEventBean ae = new AuditEventBean();
-                    ae.setUserId(ub.getId());
-                    ae.setStudyId(ss.getStudyId());
-                    ae.setSubjectId(ss.getId());
-                    ae.setStudyName(currentStudy.getName() == null ? "" : currentStudy.getName());
-                    ae.setSubjectName(ss.getLabel() == null ? "" : ss.getLabel());
-                    ae.setAuditTable("event_crf");
-                    ae.setEntityId(id);
-                    ae.setColumnName("sdv_status");
-                    ae.setOldValue("true");
-                    ae.setNewValue("false");
-                    ae.setActionMessage("event_crf_sdv_unverify: " + body.reason().trim());
-                    auditDAO.create(ae);
-                } catch (Exception auditEx) {
-                    LOG.warn("Audit write failed for unverify event_crf={} (continuing): {}",
-                            id, auditEx.getMessage());
-                }
+                // Audit row capturing the un-verify + reason. Routed
+                // through the unified writeAuditEvent helper (Phase
+                // audit-unification, 2026-06-12) so the row lands in
+                // audit_log_event (visible to the SPA Audit Log view).
+                EventCrfsApiController.writeAuditEvent(auditDAO,
+                        AuditTypeIds.EVENT_CRF_SDV_UNVERIFIED,
+                        ub, currentStudy, ss,
+                        "event_crf_sdv_unverify: " + body.reason().trim(),
+                        "event_crf", id,
+                        "sdv_status", "true", "false");
             } catch (Exception e) {
                 LOG.warn("Failed to flip sdv_status to false on event_crf id={}", id, e);
                 rejected.add(oid);
