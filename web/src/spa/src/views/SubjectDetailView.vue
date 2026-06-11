@@ -20,7 +20,7 @@ import { useEventsStore } from '@/stores/events'
 import { useAuthStore } from '@/stores/auth'
 import type { EventStatus, Gender, StudyEye, EyeTransitionDto, TransitionEyeRequest } from '@/types/subject'
 import { canManageSubjectLifecycle, canEditSubject } from '@/types/subject'
-import { roleSatisfies } from '@/router'
+import { roleSatisfies, userRolesFromAuth } from '@/router'
 import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
 
@@ -254,9 +254,23 @@ function canCancelEv(status: EventStatus): boolean {
 /* ------------------------------------------------------------- */
 
 const scheduleDialogOpen = ref(false)
+// 2026-06-11 — Phase E.6 M2 made activeStudy.roles[] the canonical
+// per-study role source; the top-level `auth.user.role` only carries
+// the highest single projection, so a user with `Data Manager` at the
+// top level but `Investigator` in this study used to see no schedule
+// button. Walk userRolesFromAuth (router-owned precedence: array →
+// singular → top-level) so the button surfaces for any binding role
+// that can plausibly schedule a visit. Data Manager is allowed too
+// — DMs configure the study calendar and frequently book subject
+// events in clinical-trial systems.
 const canScheduleEvent = computed(() => {
-  const role = auth.user?.role ?? null
-  return role === 'Investigator' || role === 'CRC' || role === 'Administrator'
+  const roles = userRolesFromAuth(auth)
+  return roles.some(
+    (r) => r === 'Investigator'
+      || r === 'CRC'
+      || r === 'Administrator'
+      || r === 'Data Manager',
+  )
 })
 const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
 
@@ -766,6 +780,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                 v-if="canScheduleEvent"
                 type="button"
                 class="px-2.5 py-1 text-xs border border-muw-blue-200 rounded-md bg-muw-blue-50 hover:bg-muw-blue-100 text-muw-blue inline-flex items-center gap-1.5"
+                data-testid="schedule-event-button"
                 @click="scheduleDialogOpen = true"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">

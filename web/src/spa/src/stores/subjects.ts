@@ -62,7 +62,9 @@ export const useSubjectsStore = defineStore('subjects', () => {
 
   // Filter state — persisted across navigation.
   const query = ref('')
-  const statusFilter = ref<'all' | 'open-events' | 'all-events-complete' | 'signed'>('all')
+  const statusFilter = ref<
+    'all' | 'open-events' | 'all-events-complete' | 'signed' | 'today' | 'ready-to-sign'
+  >('all')
   const onlyWithQueries = ref(false)
   /**
    * Phase E.6 subject-lifecycle — Show-removed toggle. Persisted
@@ -88,6 +90,24 @@ export const useSubjectsStore = defineStore('subjects', () => {
           return subject.events.every((e) => e.status === 'complete' || e.status === 'signed' || e.status === 'locked')
         case 'signed':
           return subject.signed
+        case 'today':
+          // HomeView's "Today's open CRFs" card lands here. The matrix
+          // list endpoint's EventCellDto carries status + label + open-
+          // query count but no per-event date (only the detail endpoint
+          // surfaces dateStart). Until the list endpoint grows a
+          // `dateScheduled` column, "today" is interpreted as "actively
+          // on the operator's plate": any event in 'scheduled' or
+          // 'in-progress' state (i.e. already-scheduled but not yet
+          // complete/signed/locked). `not-scheduled` is excluded —
+          // those have no date and can't be "today".
+          return subject.events.some((e) => e.status === 'scheduled' || e.status === 'in-progress')
+        case 'ready-to-sign':
+          // HomeView's "Ready to sign" card. Mirrors all-events-complete
+          // but additionally requires the subject not be signed yet —
+          // the Investigator sign-queue use case.
+          return !subject.signed && subject.events.length > 0
+            && subject.events.some((e) => e.status === 'complete')
+            && subject.events.every((e) => e.status === 'complete' || e.status === 'signed' || e.status === 'locked')
         case 'all':
         default:
           return true

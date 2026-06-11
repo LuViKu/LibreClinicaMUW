@@ -163,6 +163,8 @@
     },
     "filter": {
       "all": "All",
+      "today": "Today",
+      "readyToSign": "Ready to sign",
       "openEvents": "Open events",
       "allComplete": "All events complete",
       "signed": "Signed",

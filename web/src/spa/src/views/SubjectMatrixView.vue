@@ -126,13 +126,46 @@ function formatDate(iso: string | null | undefined): string {
   return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[mi] ?? '???'}-${y}`
 }
 
-type Filter = 'all' | 'open-events' | 'all-events-complete' | 'signed'
+type Filter =
+  | 'all'
+  | 'open-events'
+  | 'all-events-complete'
+  | 'signed'
+  | 'today'
+  | 'ready-to-sign'
 const filters: { id: Filter; label: () => string }[] = [
   { id: 'all',                 label: () => t('subjectMatrix.filter.all') },
+  // 2026-06-11 — HomeView's "Today's open CRFs" + "Ready to sign"
+  // operator cards deep-link to ?filter=today / ?filter=ready-to-sign.
+  // Keep these two chips adjacent to 'all' so the operator-facing
+  // filters cluster together; the data-shape filters
+  // (open-events / all-events-complete / signed) follow.
+  { id: 'today',               label: () => t('subjectMatrix.filter.today') },
+  { id: 'ready-to-sign',       label: () => t('subjectMatrix.filter.readyToSign') },
   { id: 'open-events',         label: () => t('subjectMatrix.filter.openEvents') },
   { id: 'all-events-complete', label: () => t('subjectMatrix.filter.allComplete') },
   { id: 'signed',              label: () => t('subjectMatrix.filter.signed') },
 ]
+
+/**
+ * Adopt `?filter=<id>` from the inbound URL once on mount. HomeView's
+ * "Today's open CRFs" + "Ready to sign" + (future) other operator
+ * cards deep-link here with the filter pre-set; we sync it into the
+ * store's persistent statusFilter so the chip UI highlights and
+ * `subjects.filtered` re-computes. Unknown values are ignored —
+ * bookmarks predating a chip rename shouldn't crash the view.
+ */
+const ALLOWED_FILTERS: ReadonlyArray<Filter> = [
+  'all', 'open-events', 'all-events-complete', 'signed', 'today', 'ready-to-sign',
+]
+function adoptFilterFromQuery() {
+  const raw = route.query.filter
+  if (typeof raw !== 'string') return
+  if ((ALLOWED_FILTERS as ReadonlyArray<string>).includes(raw)) {
+    subjects.statusFilter = raw as Filter
+  }
+}
+adoptFilterFromQuery()
 
 const ariaSortLabel = (subject: Subject) =>
   subject.signed ? t('subjectMatrix.ariaSigned', { id: subject.id }) : t('subjectMatrix.ariaUnsigned', { id: subject.id })
