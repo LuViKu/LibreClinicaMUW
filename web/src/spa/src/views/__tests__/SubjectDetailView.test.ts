@@ -146,6 +146,13 @@ function makeDetail(overrides: Partial<SubjectDetail> = {}): SubjectDetail {
 
 interface MountOptions {
   role?: UserRole | null
+  /**
+   * 2026-06-11 — multi-role per (user, study). When supplied, sets
+   * `activeStudy.roles[]`; the SPA's `userRolesFromAuth` walks the
+   * array first, so this overrides the top-level {@link role}
+   * projection at the per-study binding layer.
+   */
+  activeStudyRoles?: UserRole[]
   detail?: SubjectDetail
   activeStudyOid?: string
   activeStudyName?: string
@@ -173,6 +180,7 @@ async function mountAt(options: MountOptions = {}) {
         oid: options.activeStudyOid ?? 'S_DEFAULTS1',
         name: options.activeStudyName ?? 'iAMD',
         isSite: false,
+        roles: options.activeStudyRoles,
       },
     } as unknown as ReturnType<typeof useAuthStore>['user']['value']
   }
@@ -364,5 +372,49 @@ describe('SubjectDetailView — modality baselines block', () => {
     expect(w.find('[data-testid="modality-baselines-OS"]').exists()).toBe(false)
     // The block wrapper isn't rendered either when there's nothing to show.
     expect(w.find('[data-testid="modality-baselines-block"]').exists()).toBe(false)
+  })
+})
+
+describe('SubjectDetailView — Schedule-event button role gating (multi-role per study)', () => {
+  beforeEach(() => {
+    apiGetMock.mockReset()
+  })
+
+  // 2026-06-11 — Phase E.6 M2 made `activeStudy.roles[]` the canonical
+  // per-study role source. Before that, this view's `canScheduleEvent`
+  // computed read the top-level `auth.user.role` projection — which
+  // collapses to the single highest role. A user with `Data Manager`
+  // at top level but `Investigator` in *this* study used to lose the
+  // schedule button. The fix walks userRolesFromAuth (router-owned
+  // precedence), and Data Manager is added to the allowed set.
+
+  it('shows the schedule-event button when the top-level role is Data Manager (DM is permitted to schedule)', async () => {
+    const w = await mountAt({
+      role: 'Data Manager',
+      detail: makeDetail(),
+    })
+    expect(w.find('[data-testid="schedule-event-button"]').exists()).toBe(true)
+  })
+
+  it('shows the schedule-event button when activeStudy.roles carries Investigator even though top-level role is Data Manager', async () => {
+    // The Phase E.6 M2 regression: top-level user.role projects to
+    // 'Data Manager' (the highest role across all studies), but in
+    // *this* study the user is an Investigator. The view used to read
+    // user.role only and conclude "Data Manager — not allowed" → no
+    // button. userRolesFromAuth walks activeStudy.roles first.
+    const w = await mountAt({
+      role: 'Data Manager',
+      activeStudyRoles: ['Investigator'],
+      detail: makeDetail(),
+    })
+    expect(w.find('[data-testid="schedule-event-button"]').exists()).toBe(true)
+  })
+
+  it('hides the schedule-event button for a pure Monitor (no permitted role anywhere in the binding)', async () => {
+    const w = await mountAt({
+      role: 'Monitor',
+      detail: makeDetail(),
+    })
+    expect(w.find('[data-testid="schedule-event-button"]').exists()).toBe(false)
   })
 })

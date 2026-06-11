@@ -434,7 +434,7 @@ export function guard(
  * so the guard can intersect against the route's required-role list
  * without re-implementing the precedence logic at every call site.
  */
-function userRolesFromAuth(
+export function userRolesFromAuth(
   auth: ReturnType<typeof useAuthStore>,
 ): Array<'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'> {
   const u = auth.user

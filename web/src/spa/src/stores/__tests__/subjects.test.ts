@@ -191,6 +191,74 @@ describe('useSubjectsStore', () => {
     }
   })
 
+  it('statusFilter "today" keeps subjects with at least one scheduled or in-progress event and drops fully-complete subjects', async () => {
+    // 2026-06-11 — HomeView's "Today's open CRFs" card sends
+    // ?filter=today. Without per-event date columns on the matrix
+    // adapter, the operator-facing semantics are "actively on the
+    // operator's plate": any event currently 'scheduled' or
+    // 'in-progress' counts. Subjects whose only events are
+    // 'complete' / 'signed' / 'not-scheduled' drop out.
+    const store = useSubjectsStore()
+    await store.load()
+    store.statusFilter = 'today'
+    const ids = store.filtered.map((s) => s.id)
+    // M-001 has 'in-progress' V3, M-002 has 'in-progress' V2,
+    // M-004 has 'in-progress' V1, M-005 has 'scheduled' V3,
+    // M-007 has 'in-progress' V2 — all kept.
+    expect(ids).toEqual(expect.arrayContaining(['M-001', 'M-002', 'M-004', 'M-005', 'M-007']))
+    // M-003 (all complete) + M-006 (all signed) drop out.
+    expect(ids).not.toContain('M-003')
+    expect(ids).not.toContain('M-006')
+  })
+
+  it('statusFilter "ready-to-sign" keeps unsigned subjects whose events are all complete and drops already-signed ones', async () => {
+    // 2026-06-11 — HomeView's "Ready to sign" card sends
+    // ?filter=ready-to-sign. Mirrors all-events-complete but adds
+    // the not-signed-yet predicate (Investigator sign-queue use case).
+    // None of the canonical 7 fixture rows match this slice
+    // (the all-complete fixture rows are M-003/M-006, both already
+    // signed), so re-mock the GET with a small purpose-built fixture
+    // that exercises every branch.
+    const CUSTOM: Subject[] = [
+      {
+        // All events complete, not signed → IN the queue.
+        id: 'R-001', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'F', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: false, openQueries: 0, studyEye: null,
+        events: [
+          { eventDefinitionOid: 'SE_V1', label: 'V1', status: 'complete', openQueries: 0 },
+          { eventDefinitionOid: 'SE_V2', label: 'V2', status: 'complete', openQueries: 0 },
+        ],
+      },
+      {
+        // All events complete, signed → DROPPED (already done).
+        id: 'R-002', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'M', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: true, openQueries: 0, studyEye: null,
+        events: [
+          { eventDefinitionOid: 'SE_V1', label: 'V1', status: 'complete', openQueries: 0 },
+          { eventDefinitionOid: 'SE_V2', label: 'V2', status: 'complete', openQueries: 0 },
+        ],
+      },
+      {
+        // Has a still-open event, not signed → DROPPED (not ready).
+        id: 'R-003', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'F', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: false, openQueries: 0, studyEye: null,
+        events: [
+          { eventDefinitionOid: 'SE_V1', label: 'V1', status: 'complete', openQueries: 0 },
+          { eventDefinitionOid: 'SE_V2', label: 'V2', status: 'in-progress', openQueries: 0 },
+        ],
+      },
+    ]
+    vi.mocked(apiGet).mockResolvedValueOnce(CUSTOM)
+    const store = useSubjectsStore()
+    await store.load()
+    store.statusFilter = 'ready-to-sign'
+    const ids = store.filtered.map((s) => s.id)
+    expect(ids).toEqual(['R-001'])
+  })
+
   it('clearFilters resets query + statusFilter + onlyWithQueries', async () => {
     const store = useSubjectsStore()
     await store.load()

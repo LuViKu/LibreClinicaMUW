@@ -162,6 +162,8 @@
     },
     "filter": {
       "all": "Alle",
+      "today": "Heute",
+      "readyToSign": "Signaturfreigabe",
       "openEvents": "Mit offenen Visiten",
       "allComplete": "Alle Visiten abgeschlossen",
       "signed": "Signiert",
