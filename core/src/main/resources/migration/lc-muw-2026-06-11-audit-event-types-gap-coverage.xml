@@ -1,0 +1,121 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase audit-coverage (2026-06-11): twelve new audit_log_event_type
+        rows for the gap-fix sweep that closes the 11 confirmed § 11.10(e)
+        compliance gaps identified in the 2026-06-11 evaluation
+        (docs/development/audit-coverage-2026-06-11.md).
+
+        Pattern follows the lc-muw-*-audit-event-type-*.xml family seeded
+        for study-identity (51), user-profile (50), dataset-export (52-55),
+        discrepancy-export (56), eye-cohort-transition (57), and modality
+        CRUD (58-60). Every new gap-fix audit-write call site uses one of
+        these type ids via a direct PreparedStatement INSERT into
+        audit_log_event (modelled on StudiesApiController:860). The
+        legacy AuditEventDAO.create path (which writes to audit_event,
+        invisible to the SPA Audit Trail) is intentionally bypassed for
+        these new sites — see the gap analysis doc for the dual-table
+        architecture rationale.
+
+        Type-id allocation:
+          63 — crf_created                 — CrfsApiController.create
+          64 — crf_version_uploaded        — CrfsApiController.uploadVersion (XLS)
+          65 — crf_version_authored        — CrfsApiController.authorVersion (JSON)
+          66 — user_account_disabled       — UsersApiController.disable
+          67 — user_account_restored       — UsersApiController.restore
+          68 — user_password_reset_requested — RequestPasswordServlet (self-service "forgot password")
+          69 — user_password_expired_reset — ResetPasswordServlet (forced reset on login)
+          70 — event_definition_created    — EventDefinitionsApiController POST
+          71 — discrepancy_note_created    — DiscrepancyApiController.create (success-path companion to type 61 failure-only)
+          72 — discrepancy_thread_appended — DiscrepancyApiController.appendThread
+          73 — discrepancy_status_changed  — DiscrepancyApiController (resolution_status_id flip)
+          74 — discrepancy_reassigned      — DiscrepancyApiController (assigned_user_id flip)
+    -->
+    <changeSet id="2026-06-11-audit-event-types-gap-coverage"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id BETWEEN 63 AND 74;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the 12 new audit_log_event_type rows the gap-fix sweep
+            emits via direct INSERTs into audit_log_event.
+        </comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="63"/>
+            <column name="name" value="crf_created"/>
+            <column name="display_name" value="CRF created"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="64"/>
+            <column name="name" value="crf_version_uploaded"/>
+            <column name="display_name" value="CRF version uploaded (XLS)"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="65"/>
+            <column name="name" value="crf_version_authored"/>
+            <column name="display_name" value="CRF version authored (JSON)"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="66"/>
+            <column name="name" value="user_account_disabled"/>
+            <column name="display_name" value="User account disabled"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="67"/>
+            <column name="name" value="user_account_restored"/>
+            <column name="display_name" value="User account restored"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="68"/>
+            <column name="name" value="user_password_reset_requested"/>
+            <column name="display_name" value="User password reset requested (self-service)"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="69"/>
+            <column name="name" value="user_password_expired_reset"/>
+            <column name="display_name" value="User password expired reset (forced on login)"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="70"/>
+            <column name="name" value="event_definition_created"/>
+            <column name="display_name" value="Event definition created"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="71"/>
+            <column name="name" value="discrepancy_note_created"/>
+            <column name="display_name" value="Discrepancy note created"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="72"/>
+            <column name="name" value="discrepancy_thread_appended"/>
+            <column name="display_name" value="Discrepancy note — thread appended"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="73"/>
+            <column name="name" value="discrepancy_status_changed"/>
+            <column name="display_name" value="Discrepancy note — status changed"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="74"/>
+            <column name="name" value="discrepancy_reassigned"/>
+            <column name="display_name" value="Discrepancy note — reassigned"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id BETWEEN 63 AND 74</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
