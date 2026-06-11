@@ -381,9 +381,24 @@ public class CrfJsonToWorkbookAdapter {
 
         setStringCell(row, 0, nullSafe(item.name()));
         setStringCell(row, 1, nullSafe(item.descriptionLabel()));
-        setStringCell(row, 2, nullSafe(item.leftItemText()));
+        // LEFT_ITEM_TEXT is the load-bearing per-item label the CRF
+        // entry view renders above the input widget. The wizard's
+        // ItemEditor exposes it as a free-text field, but operators
+        // sometimes type only the laterality marker ("OD", "OS") —
+        // leaving the renderer with no measurement-name to display.
+        // synthesizeLeftItemText() detects that case and falls back to
+        // the operator-entered descriptionLabel (or item name) wrapped
+        // with the laterality marker if one is detectable from
+        // name/oid. Operator-typed real labels pass through unchanged.
+        setStringCell(row, 2, synthesizeLeftItemText(item));
         setStringCell(row, 3, nullSafe(item.units()));
-        setStringCell(row, 4, nullSafe(item.rightItemText()));
+        // RIGHT_ITEM_TEXT is the helper-hint shown below the input.
+        // When the operator leaves it blank we fall back to the units
+        // value so the renderer surfaces "mmHg" / "letters" / "dpt"
+        // automatically. Mirrors EventCrfsApiController.buildItemDto's
+        // read-side fallback chain — keeps render parity with what the
+        // backend would derive even if right_item_text were empty.
+        setStringCell(row, 4, synthesizeRightItemText(item));
         setStringCell(row, 5, nullSafe(section.label()));
         setStringCell(row, 6, nullSafe(item.groupLabel()));             // GROUP_LABEL (M-C)
         setStringCell(row, 7, nullSafe(item.header()));                 // HEADER (M-C)
@@ -652,6 +667,123 @@ public class CrfJsonToWorkbookAdapter {
 
     private static String nullSafe(String s) {
         return s == null ? "" : s;
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* LEFT_ITEM_TEXT / RIGHT_ITEM_TEXT label-synthesis fallback         */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Synthesise the {@code LEFT_ITEM_TEXT} cell — the per-item label
+     * the CRF entry view renders above each input widget.
+     *
+     * <p>The wizard's {@code ItemEditor.vue} exposes {@code leftItemText}
+     * as a free-text field, but operators sometimes type only the
+     * laterality marker ({@code "OD"}, {@code "OS"}, {@code "OU"}) and
+     * leave the measurement-name out — typically because they expect
+     * the laterality column header to carry the eye context and the
+     * row label to carry the measurement name, then forget to populate
+     * one of them. The fallback chain rescues the resulting per-side
+     * row by deriving a sensible label:
+     *
+     * <ol>
+     *   <li>If the operator typed a real label (not just an eye
+     *       marker) — pass through unchanged.</li>
+     *   <li>Otherwise fall back to the operator-entered
+     *       {@code descriptionLabel} (the wizard's required field), or
+     *       the item {@code name} if even descriptionLabel is blank.</li>
+     *   <li>If a laterality marker is detectable from the item's
+     *       {@code name}/{@code oid} tokens — or was typed verbatim
+     *       into {@code leftItemText} — append it in parentheses
+     *       ({@code "BCVA letters (OD)"}) so per-side rows still read
+     *       laterally without losing the measurement-name.</li>
+     * </ol>
+     */
+    static String synthesizeLeftItemText(CrfVersionAuthoringRequest.Item item) {
+        String left = item.leftItemText();
+        boolean leftIsBlank = left == null || left.trim().isEmpty();
+        boolean leftIsJustEyeMarker = !leftIsBlank && isJustEyeMarker(left);
+
+        if (!leftIsBlank && !leftIsJustEyeMarker) {
+            return left;
+        }
+
+        String base = firstNonBlank(item.descriptionLabel(), item.name());
+        if (base == null) {
+            // Nothing to synthesise from — return whatever was there
+            // (likely an empty string) so the parser sees an unchanged
+            // cell and decides for itself whether to reject the row.
+            return nullSafe(left);
+        }
+        String laterality = detectLaterality(item);
+        if (laterality != null) {
+            return base + " (" + laterality + ")";
+        }
+        return base;
+    }
+
+    /**
+     * Synthesise the {@code RIGHT_ITEM_TEXT} cell — the helper hint
+     * shown below the input widget (usually a unit like {@code "mmHg"}
+     * or a range hint like {@code "letters (0-100)"}). When the
+     * operator leaves it blank, fall back to the {@code units} field so
+     * the renderer still surfaces a unit hint. Mirrors the read-side
+     * fallback chain {@code EventCrfsApiController.buildItemDto}
+     * already applies.
+     */
+    static String synthesizeRightItemText(CrfVersionAuthoringRequest.Item item) {
+        String right = item.rightItemText();
+        if (right != null && !right.trim().isEmpty()) {
+            return right;
+        }
+        return nullSafe(item.units());
+    }
+
+    /**
+     * True if the string, ignoring case + surrounding whitespace, is
+     * exactly an eye marker token ({@code "OD"}, {@code "OS"},
+     * {@code "OU"}) and nothing else.
+     */
+    private static boolean isJustEyeMarker(String s) {
+        if (s == null) return false;
+        String t = s.trim();
+        return t.equalsIgnoreCase("OD") || t.equalsIgnoreCase("OS") || t.equalsIgnoreCase("OU");
+    }
+
+    /**
+     * Detect the laterality marker for an item by scanning its
+     * underscore-delimited {@code name} and {@code oid} tokens for an
+     * exact {@code OD}/{@code OS}/{@code OU} match. Falls back to an
+     * eye-marker-only {@code leftItemText} as a third source.
+     * Returns {@code null} if no marker is detectable.
+     *
+     * <p>Mirrors the SPA-side {@code parseEyePrefix} token scan in
+     * {@code components/bilateral.ts} so the synthesised label tracks
+     * the same laterality the bilateral row grouper detects.
+     */
+    private static String detectLaterality(CrfVersionAuthoringRequest.Item item) {
+        for (String source : List.of(nullSafe(item.name()), nullSafe(item.oid()))) {
+            if (source.isEmpty()) continue;
+            for (String token : source.split("_")) {
+                String up = token.toUpperCase(Locale.ROOT);
+                if (up.equals("OD") || up.equals("OS") || up.equals("OU")) {
+                    return up;
+                }
+            }
+        }
+        String left = item.leftItemText();
+        if (left != null && isJustEyeMarker(left)) {
+            return left.trim().toUpperCase(Locale.ROOT);
+        }
+        return null;
+    }
+
+    /** First non-blank string, or {@code null}. */
+    private static String firstNonBlank(String... candidates) {
+        for (String c : candidates) {
+            if (c != null && !c.trim().isEmpty()) return c;
+        }
+        return null;
     }
 
     private static int sectionCount(CrfVersionAuthoringRequest request) {

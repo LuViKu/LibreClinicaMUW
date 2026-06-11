@@ -412,4 +412,89 @@ class CrfJsonToWorkbookAdapterTest {
         assertEquals("MEDS", str(items.getRow(2), 6));
         assertEquals("ADVERSE", str(items.getRow(3), 6));
     }
+
+    /* ----------------------------------------------------------------- */
+    /* LEFT_ITEM_TEXT / RIGHT_ITEM_TEXT synthesis fallback               */
+    /* ----------------------------------------------------------------- */
+
+    private static CrfVersionAuthoringRequest.Item itemWithOid(
+            String name, String oid, String descriptionLabel,
+            String leftItemText, String units, String rightItemText) {
+        return new CrfVersionAuthoringRequest.Item(
+                name, oid, descriptionLabel, leftItemText, rightItemText, units,
+                "INTEGER", "", false, null, null,
+                null, null, null, null, false, null);
+    }
+
+    @Test
+    void synthesizeLeftItemText_passesThroughOperatorProvidedLabel() {
+        var item = itemWithOid("VA_OD", "I_OPHTH_OD_BCVA",
+                "BCVA letters", "Right eye — ETDRS letters", "letters", "");
+        assertEquals("Right eye — ETDRS letters",
+                CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeLeftItemText_replacesEyeMarkerOnlyLabelWithDescription_plusLaterality() {
+        // The wizard's CRF Library bug: the operator typed only "OD"
+        // for the laterality marker and left the measurement name
+        // unspecified. Synthesis fills in the description-label and
+        // wraps it with the eye marker detected from the OID tokens.
+        var item = itemWithOid("OD_BCVA_LETTERS", "I_OPHTH_OD_BCVA_LETTERS",
+                "BCVA letters", "OD", "letters", "");
+        assertEquals("BCVA letters (OD)",
+                CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeLeftItemText_handlesBlankLeftItemTextWithLateralityInOid() {
+        var item = itemWithOid("OS_IOP", "I_IOP_OS",
+                "Intraocular pressure", "", "mmHg", "");
+        assertEquals("Intraocular pressure (OS)",
+                CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeLeftItemText_fallsBackToNameWhenDescriptionLabelIsBlank() {
+        var item = itemWithOid("OD_BCVA", "I_VA_OD_ETDRS", "", "OD", "letters", "");
+        assertEquals("OD_BCVA (OD)",
+                CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeLeftItemText_returnsEmptyStringWhenNoSourcesAvailable() {
+        var item = itemWithOid("", "", "", "", "", "");
+        assertEquals("", CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeLeftItemText_skipsLateralityWrapperWhenOidHasNoEyeToken() {
+        // Non-ophth items have no laterality — synthesis should just
+        // return the description-label without the eye-marker suffix.
+        var item = itemWithOid("AGE", "I_AGE", "Age at enrollment", "", "years", "");
+        assertEquals("Age at enrollment",
+                CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeRightItemText_passesThroughOperatorProvidedHint() {
+        var item = itemWithOid("VA", "I_VA",
+                "BCVA letters", "BCVA letters", "letters", "letters (0-100)");
+        assertEquals("letters (0-100)",
+                CrfJsonToWorkbookAdapter.synthesizeRightItemText(item));
+    }
+
+    @Test
+    void synthesizeRightItemText_fallsBackToUnitsWhenBlank() {
+        var item = itemWithOid("VA", "I_VA",
+                "BCVA letters", "BCVA letters", "mmHg", "");
+        assertEquals("mmHg",
+                CrfJsonToWorkbookAdapter.synthesizeRightItemText(item));
+    }
+
+    @Test
+    void synthesizeRightItemText_returnsEmptyWhenBothBlank() {
+        var item = itemWithOid("X", "I_X", "X", "X label", "", "");
+        assertEquals("", CrfJsonToWorkbookAdapter.synthesizeRightItemText(item));
+    }
 }
