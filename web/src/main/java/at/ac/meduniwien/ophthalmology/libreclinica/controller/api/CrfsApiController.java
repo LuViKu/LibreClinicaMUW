@@ -29,13 +29,11 @@ import java.util.Map;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 
@@ -250,7 +248,8 @@ public class CrfsApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         crfDao.update(target);
-        writeLifecycleAudit(me, "crf", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_LIFECYCLE_CHANGED,
+                me, "crf", target.getId(), target.getOid(),
                 oldStatus, Status.DELETED, "crf_disable");
 
         LOG.info("Disable CRF: oid={} by user={}", crfOid, me.getName());
@@ -820,7 +819,8 @@ public class CrfsApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         versionDao.update(target);
-        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
+                me, "crf_version", target.getId(), target.getOid(),
                 oldStatus, Status.DELETED, "crf_version_disable");
 
         LOG.info("Disable CRF version: crfOid={} versionOid={} by user={}",
@@ -875,7 +875,8 @@ public class CrfsApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         versionDao.update(target);
-        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
+                me, "crf_version", target.getId(), target.getOid(),
                 oldStatus, Status.LOCKED, "crf_version_lock");
 
         LOG.info("Lock CRF version: crfOid={} versionOid={} by user={}",
@@ -919,7 +920,8 @@ public class CrfsApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         versionDao.update(target);
-        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
+                me, "crf_version", target.getId(), target.getOid(),
                 oldStatus, Status.AVAILABLE, "crf_version_unlock");
 
         LOG.info("Unlock CRF version: crfOid={} versionOid={} by user={}",
@@ -968,7 +970,8 @@ public class CrfsApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         versionDao.update(target);
-        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
+                me, "crf_version", target.getId(), target.getOid(),
                 oldStatus, Status.AVAILABLE, "crf_version_restore");
 
         LOG.info("Restore CRF version: crfOid={} versionOid={} by user={}",
@@ -1058,7 +1061,8 @@ public class CrfsApiController {
                     "Hard-remove failed: " + e.getMessage()));
         }
 
-        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
+                me, "crf_version", target.getId(), target.getOid(),
                 target.getStatus(), Status.DELETED, "crf_version_hard_remove");
 
         LOG.info("Hard-remove CRF version: crfOid={} versionOid={} by user={}",
@@ -1316,28 +1320,46 @@ public class CrfsApiController {
         }
     }
 
-    private void writeLifecycleAudit(UserAccountBean me,
+    /**
+     * Direct INSERT into {@code audit_log_event} for CRF / CRF-version
+     * lifecycle transitions. Mirrors
+     * {@code StudiesApiController.writeStudyFieldAudit} — bypasses the
+     * legacy {@code AuditEventDAO.create} path (writes to
+     * {@code audit_event}, invisible to the SPA Audit Log view). Type
+     * ids 75-76 seeded by
+     * {@code lc-muw-2026-06-12-audit-event-types-unification.xml}.
+     *
+     * @param auditTypeId {@link AuditTypeIds#CRF_LIFECYCLE_CHANGED} for
+     *                    CRFs, {@link AuditTypeIds#CRF_VERSION_LIFECYCLE_CHANGED}
+     *                    for CRF versions
+     * @param auditTable  symbolic table name — {@code 'crf'} or
+     *                    {@code 'crf_version'}
+     * @param entityOid   the resource's OID — recorded as {@code entity_name}
+     */
+    private void writeLifecycleAudit(int auditTypeId,
+                                     UserAccountBean me,
                                      String auditTable,
                                      int entityId,
                                      String entityOid,
                                      Status oldStatus,
                                      Status newStatus,
                                      String actionPrefix) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setAuditTable(auditTable);
-            ae.setEntityId(entityId);
-            ae.setColumnName("status_id");
-            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getId()));
-            ae.setNewValue(String.valueOf(newStatus.getId()));
-            ae.setActionMessage(actionPrefix + ": " + entityOid
-                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
-                    + " → " + newStatus.getName() + ") by " + me.getName());
-            new AuditEventDAO(dataSource).create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for {}={} (continuing): {}",
-                    actionPrefix, entityOid, e.getMessage());
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, me.getId());
+            ps.setString(3, auditTable);
+            ps.setInt(4, entityId);
+            ps.setString(5, entityOid == null ? "" : entityOid);
+            ps.setString(6, oldStatus == null ? "" : oldStatus.getName());
+            ps.setString(7, newStatus == null ? "" : newStatus.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for {} {} (continuing): {}",
+                    auditTable, entityId, e.getMessage());
         }
     }
 
