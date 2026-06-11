@@ -820,6 +820,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{oid}/build-status/acknowledge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["acknowledgeTask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sdv/verify": {
         parameters: {
             query?: never;
@@ -2830,6 +2846,26 @@ export interface components {
             /** Format: int32 */
             initialPrincipalInvestigatorUserId?: number;
         };
+        AcknowledgeRequest: {
+            taskId?: string;
+        };
+        StudyBuildDto: {
+            studyOid?: string;
+            studyName?: string;
+            studyVersion?: string;
+            /** Format: int32 */
+            sites?: number;
+            /** Format: int32 */
+            enrolledSubjects?: number;
+            tasks?: components["schemas"]["StudyBuildTaskDto"][];
+        };
+        StudyBuildTaskDto: {
+            id?: string;
+            /** Format: int32 */
+            count?: number;
+            status?: string;
+            to?: string;
+        };
         VerifyRequest: {
             eventCrfOids?: string[];
             verified?: boolean;
@@ -3503,23 +3539,6 @@ export interface components {
             sizeBytes?: number;
             generatedAt?: string;
             downloadUrl?: string;
-        };
-        StudyBuildDto: {
-            studyOid?: string;
-            studyName?: string;
-            studyVersion?: string;
-            /** Format: int32 */
-            sites?: number;
-            /** Format: int32 */
-            enrolledSubjects?: number;
-            tasks?: components["schemas"]["StudyBuildTaskDto"][];
-        };
-        StudyBuildTaskDto: {
-            id?: string;
-            /** Format: int32 */
-            count?: number;
-            status?: string;
-            to?: string;
         };
         SdvRowDto: {
             eventCrfOid?: string;
@@ -5500,6 +5519,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["StudyIdentityDto"];
+                };
+            };
+        };
+    };
+    acknowledgeTask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                oid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AcknowledgeRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyBuildDto"];
                 };
             };
         };
