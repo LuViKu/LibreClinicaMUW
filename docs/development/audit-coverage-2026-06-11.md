@@ -1,4 +1,4 @@
-# Audit-coverage evaluation — 2026-06-11
+# Audit-coverage evaluation — 2026-06-11 (+ 2026-06-12 unification)
 
 ## Why this doc exists
 
@@ -7,6 +7,65 @@ electronic records must reach an audit trail (21 CFR Part 11 § 11.10(e); GCP
 ALCOA+). This document captures the 2026-06-11 evaluation of that coverage,
 the dual-audit-table architecture finding, the 11 confirmed gaps, and the
 gap closures that landed in the same PR.
+
+## 2026-06-12 update — canonical-helper unification (audit_event → audit_log_event)
+
+The dual-table architecture identified in the 2026-06-11 evaluation has been
+resolved. **All in-tree audit writers now land in `audit_log_event`** with
+typed `audit_log_event_type_id` values. The legacy `audit_event` table is
+preserved read-only for one release cycle for safety, then dropped.
+
+What landed:
+
+- **34 new `audit_log_event_type` rows** seeded by
+  `lc-muw-2026-06-12-audit-event-types-unification.xml` (ids 75-108). Allocation
+  matrix in [`AuditTypeIds.java`](../../web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api/AuditTypeIds.java).
+- **Canonical helper `EventCrfsApiController.writeAuditEvent`** rewritten —
+  was `AuditEventDAO.create(ae)` → legacy table; now direct INSERT into
+  `audit_log_event` with `audit_log_event_type_id` as the second parameter.
+  Schema improvement: `column_name`, `old_value`, `new_value` are now real
+  columns instead of packed into `action_message`.
+- **Five sibling helpers** in `CrfsApiController`, `SitesApiController`,
+  `StudiesApiController`, `GroupClassesApiController`,
+  `EventDefinitionsApiController` migrated to the same direct-SQL pattern.
+- **12 direct-write call sites** in `RulesApiController`,
+  `RuleExpressionApiController`, `RulesImportApiController`,
+  `ImportApiController`, `CrfVersionMigrationService` rewritten with per-file
+  `writeXAudit` helpers.
+- **7 legacy `createRow*` helpers** on `AuditEventDAO` rewritten to write
+  directly to `audit_log_event` while keeping their public signatures intact
+  (so login servlets + Quartz job listeners need no changes).
+- **2 admin-action sites** in `UsersApiController` (`:1461` password reset,
+  `:1748+` profile field updates) migrated.
+- **`AuditEventDAO.create(AuditEventBean)` annotated `@Deprecated`** — kept
+  as a no-op-equivalent safety net for one release cycle for any out-of-tree
+  caller. Same for the `create` query in
+  `core/src/main/resources/properties/audit_event_dao.xml`.
+- **`AuditApiController.variantForType` extended** to map ids 75-108 (also
+  fills in 57-74 that previously fell through to `default → "data"`).
+- **Backfill changeset** `lc-muw-2026-06-12-audit-event-backfill.xml` copies
+  historical `audit_event` rows forward via a CASE expression mapping
+  `(audit_table, action_message)` → `audit_log_event_type_id`. Unmappable
+  rows go to type 108 `legacy_unmapped` (`is_user_visible=false`) for
+  out-of-band compliance review.
+- **`AuditTrailIT` rewritten** to assert against `audit_log_event` (type 101)
+  instead of legacy `audit_event` + `findAllByAuditTable("__user_account")`.
+
+Total scope: 1 Liquibase seed + 1 Liquibase backfill + 1 constants utility +
+~25 controller files touched + 1 IT rewrite + 1 doc update. Five Phase-2 slices
+ran in parallel sibling worktrees (`wt-unify-eventcrfs`, `wt-unify-crfs`,
+`wt-unify-studies-sites`, `wt-unify-rules-import`, `wt-unify-legacy-helpers`)
+on disjoint file sets and cherry-picked clean onto the integration branch.
+
+### Follow-up cleanup (next quarterly PR)
+
+- Physically delete `AuditEventDAO.create(AuditEventBean)` after one release
+  cycle.
+- Drop `audit_event` + `audit_event_values` + `audit_event_context` tables
+  via a `dropTable` Liquibase changeset after the backfill is verified
+  against production-deployment snapshots.
+- Delete `audit_event_dao.xml` (read queries are unused once the table is
+  dropped).
 
 ## TL;DR (compliance posture, 2026-06-11)
 

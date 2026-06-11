@@ -196,8 +196,25 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
     }
 
     /**
-     * Creates a new row in the audit_log_event table
+     * @deprecated Phase audit-unification (2026-06-12) — DO NOT CALL.
+     *     Writes to the legacy {@code audit_event} table, which is
+     *     INVISIBLE to the SPA Audit Log view (only {@code
+     *     audit_log_event} is read). All in-tree callers have been
+     *     migrated to direct INSERTs into {@code audit_log_event}
+     *     using the {@link at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AuditTypeIds}
+     *     constants. The method is kept as a no-op-equivalent for one
+     *     release cycle as a safety net for any out-of-tree caller;
+     *     it will be physically removed in the next quarterly
+     *     cleanup PR. See
+     *     {@code docs/development/audit-coverage-2026-06-11.md}.
+     *
+     *     The Javadoc claim that this writes to {@code audit_log_event}
+     *     is the original aspiration ("needs to change, tbh 02/2009"
+     *     inline comment); the actual SQL writes to {@code audit_event}.
+     *     This historical inconsistency is preserved as evidence in
+     *     the audit-coverage doc.
      */
+    @Deprecated
     public AuditEventBean create(AuditEventBean sb) {
         HashMap<Integer, Object> variables = new HashMap<Integer, Object>();
         // INSERT INTO audit_event
