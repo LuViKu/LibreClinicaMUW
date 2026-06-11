@@ -31,6 +31,7 @@ import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 import { useCrfEntryStore } from '@/stores/crfEntry'
 import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
+import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
 import type { NoteType, DiscrepancyNote } from '@/types/note'
@@ -41,6 +42,13 @@ const router = useRouter()
 const store = useCrfEntryStore()
 const advanced = useCrfEntryAdvancedStore()
 const auth = useAuthStore()
+// Phase E.6 ophth-field-catalog (2026-06-11): the per-item widget
+// renderer reads the catalog entry to decide between number-stepper /
+// snellen / segmented Ja-Nein / conditional reason chrome. Pre-load
+// the catalog on entry mount so the first paint already has the
+// matching widget hints; subsequent CRF entries reuse the cached
+// catalog (the store treats it as effectively immutable per session).
+const ophthCatalog = useOphthFieldCatalogStore()
 
 const eventCrfOid = computed(() => String(route.params.eventCrfOid))
 // Phase E.6: a CRF whose backing event_crf is SIGNED or LOCKED comes
@@ -73,6 +81,11 @@ const readOnlyLabel = computed(() => {
 onMounted(() => {
   void store.load(eventCrfOid.value)
   void advanced.loadAll(eventCrfOid.value)
+  // Fire-and-forget catalog load. The store is idempotent (no-op when
+  // already loaded), so revisiting a CRF doesn't re-fetch. Failures
+  // are swallowed inside the store — CrfItemWidget falls back to its
+  // OID heuristic when the catalog is empty.
+  void ophthCatalog.load()
   // Soft-lock heartbeat: do NOT start when the view is read-only
   // (Monitor view + signed/locked CRFs) — those sessions aren't
   // editing and don't need to claim presence.

@@ -13,9 +13,10 @@
  *  - OD-only / OS-only fallback layouts surface the corresponding tell
  *  - BL items render as a styled checkbox via the widget slot
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { createPinia, setActivePinia } from 'pinia'
 
 import BilateralItemGroup from '../BilateralItemGroup.vue'
 import CrfItemWidget from '../CrfItemWidget.vue'
@@ -204,6 +205,14 @@ describe('BilateralItemGroup — layout', () => {
 })
 
 describe('CrfItemWidget — BL rendering', () => {
+  // Phase E.6 ophth-field-catalog (2026-06-11): CrfItemWidget pulls
+  // its presentation hint through a Pinia-backed catalog store.
+  // Fresh empty Pinia per case → matcher returns null → heuristic
+  // fallback (what these BL tests assert) wins.
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
   it('renders a boolean item as a Yes/No segmented pill pair', async () => {
     // Phase E.6 ophth-bilateral-design (2026-06-11) — the boolean
     // renderer is now a segmented Ja/Nein pill control (button pair).
