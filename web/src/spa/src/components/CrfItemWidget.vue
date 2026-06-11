@@ -56,6 +56,14 @@ interface Props {
    * so the cell doesn't render a duplicate "OD …" line.
    */
   suppressLabel?: boolean
+  /**
+   * Phase E.6 ophth-bilateral-design (2026-06-11): switch to the
+   * compact 56×42 mini-input chrome used by compound-bilateral
+   * sub-fields (refraction Sph/Cyl/Axis/Vis). Numeric inputs drop
+   * the unit suffix + stepper buttons in compact mode so 4 sub-
+   * inputs fit on one eye-cell line.
+   */
+  compact?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -65,6 +73,7 @@ const props = withDefaults(defineProps<Props>(), {
   maxFileBytes: 0,
   fileExtensions: '',
   suppressLabel: false,
+  compact: false,
 })
 
 const emit = defineEmits<{
@@ -94,6 +103,34 @@ function onNumberInput(event: Event) {
 const booleanRadioName = computed(() => `bl-radio-${props.item.oid}`)
 const isBooleanYes = computed(() => props.modelValue === '1')
 const isBooleanNo = computed(() => props.modelValue === '0')
+
+/**
+ * Phase E.6 ophth-bilateral-design (2026-06-11): tokens for the
+ * segmented yes/no rendered on a non-boolean (select-one) item. The
+ * v2.0 OPHTH CRF authors {@code SPECTRALIS_DONE} as select-one with
+ * options like {@code ja|Ja,nein|Nein}; we read the option codes so
+ * the wire value matches whatever the CRF actually persists. Falls
+ * back to the canonical boolean tokens {@code '1'} / {@code '0'} when
+ * the item carries no options (the heuristic-only path).
+ */
+const yesNoYesToken = computed<string>(() => {
+  const opts = props.item.options
+  if (opts && opts.length > 0) return opts[0].code
+  return '1'
+})
+const yesNoNoToken = computed<string>(() => {
+  const opts = props.item.options
+  if (opts && opts.length > 1) return opts[1].code
+  return '0'
+})
+const isYesNoYes = computed(() => {
+  if (props.modelValue == null || props.modelValue === '') return false
+  return String(props.modelValue) === yesNoYesToken.value
+})
+const isYesNoNo = computed(() => {
+  if (props.modelValue == null || props.modelValue === '') return false
+  return String(props.modelValue) === yesNoNoToken.value
+})
 
 /**
  * Phase E.6 ophth-bilateral-design (2026-06-11): derive the
@@ -208,7 +245,65 @@ function fileRef(): { filename: string; bytes: number } | null {
       <slot name="label-extras" />
     </FieldLabel>
 
-    <template v-if="item.dataType === 'select-one' && item.options">
+    <!-- Phase E.6 ophth-bilateral-design (2026-06-11): ophthalmology
+         specialist branches go FIRST so the heuristic detector wins
+         even when the underlying dataType would otherwise route to
+         the generic select-one dropdown. Spectralis-OCT "durchgeführt"
+         is authored in v2.0 as select-one + ja/nein options, but the
+         OID's _DONE suffix should still produce the segmented Ja/Nein
+         pill — clinician-facing convention. -->
+    <template v-if="ophthPresentation.widget === 'segmented-yesno' && item.dataType !== 'boolean'">
+      <!-- MUW segmented Ja/Nein. Wire contract: value-of-Ja-option
+           token = 'ja' (or '1' if the item is canonical boolean,
+           handled by the dataType==='boolean' branch below). Reads
+           the first two options of a select-one item to decide which
+           token to emit; falls back to the legacy '1' / '0' boolean
+           tokens when no options are present. -->
+      <div
+        role="radiogroup"
+        :aria-invalid="hasError || undefined"
+        :aria-labelledby="suppressLabel ? undefined : `${inputId}-label`"
+        class="inline-flex gap-1 p-1 bg-slate-100 border border-slate-200 rounded-[13px]"
+        :class="{ 'opacity-60': disabled }"
+      >
+        <button
+          :id="`${inputId}-yes`"
+          type="button"
+          :name="booleanRadioName"
+          :disabled="disabled"
+          class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[9px] text-[14px] font-medium transition-colors"
+          :class="isYesNoYes
+            ? 'bg-white text-muw-teal-700 shadow-[0_1px_2px_rgba(17,29,78,0.14),0_0_0_1px_rgba(17,29,78,0.03)]'
+            : 'text-slate-600 hover:text-slate-900'"
+          @click="emit('update:modelValue', yesNoYesToken)"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-muw-teal-700 transition-opacity"
+            :class="isYesNoYes ? 'opacity-100' : 'opacity-0'"
+          ></span>
+          {{ t('crfEntry.boolean.yes') }}
+        </button>
+        <button
+          :id="`${inputId}-no`"
+          type="button"
+          :name="booleanRadioName"
+          :disabled="disabled"
+          class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[9px] text-[14px] font-medium transition-colors"
+          :class="isYesNoNo
+            ? 'bg-white text-muw-coral-700 shadow-[0_1px_2px_rgba(17,29,78,0.14),0_0_0_1px_rgba(17,29,78,0.03)]'
+            : 'text-slate-600 hover:text-slate-900'"
+          @click="emit('update:modelValue', yesNoNoToken)"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-muw-coral-700 transition-opacity"
+            :class="isYesNoNo ? 'opacity-100' : 'opacity-0'"
+          ></span>
+          {{ t('crfEntry.boolean.no') }}
+        </button>
+      </div>
+    </template>
+
+    <template v-else-if="item.dataType === 'select-one' && item.options">
       <SelectInput v-bind="textBindings">
         <option :value="undefined">— {{ t('common.search') }} —</option>
         <option v-for="opt in item.options" :key="opt.code" :value="opt.code">{{ opt.label }}</option>
@@ -244,6 +339,28 @@ function fileRef(): { filename: string; bytes: number } | null {
         :error="hasError"
         @upload="(f: File) => emit('upload-file', f)"
         @clear="emit('clear-file')"
+      />
+    </template>
+
+    <template v-else-if="compact && (item.dataType === 'integer' || item.dataType === 'real' || item.dataType === 'string')">
+      <!-- Phase E.6 ophth-bilateral-design (2026-06-11): compact mini
+           input used by compound-bilateral sub-fields (refraction
+           Sph/Cyl/Axis/Vis). 56×42 centred input, no stepper, no
+           unit suffix — the compound row's sub-label header already
+           encodes which value the operator is entering. -->
+      <input
+        :id="inputId"
+        :value="modelValue ?? ''"
+        :aria-invalid="hasError || undefined"
+        :type="item.dataType === 'integer' || item.dataType === 'real' ? 'number' : 'text'"
+        :inputmode="item.dataType === 'integer' ? 'numeric' : (item.dataType === 'real' ? 'decimal' : undefined)"
+        :step="item.dataType === 'integer' ? 1 : 0.1"
+        :disabled="disabled"
+        class="w-14 h-[42px] text-center bg-white border rounded-[10px] outline-none text-[14px] text-slate-900 tabular-nums [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none transition-colors"
+        :class="hasError
+          ? 'border-rose-400 focus:border-rose-500 focus:shadow-[0_0_0_3px_rgba(244,63,94,0.12)]'
+          : 'border-slate-300 hover:border-slate-400 focus:border-muw-blue focus:shadow-[0_0_0_3px_rgba(17,29,78,0.13)]'"
+        @input="item.dataType === 'string' ? emit('update:modelValue', ($event.target as HTMLInputElement).value) : onNumberInput($event)"
       />
     </template>
 
@@ -297,9 +414,11 @@ function fileRef(): { filename: string; bytes: number } | null {
 
     <template v-else-if="item.dataType === 'string' && ophthPresentation.widget === 'snellen'">
       <!-- MUW Snellen fraction widget. Two centered mini-inputs joined
-           by a stylised slash; the model-value serialises as "20/40". -->
+           by a stylised slash; the model-value serialises as "20/40".
+           Width 200px matches the number-stepper's footprint so the
+           bilateral table stays grid-aligned. -->
       <div
-        class="inline-flex items-center gap-2 h-[46px] px-4 bg-white border rounded-xl transition-colors"
+        class="inline-flex items-center gap-2 h-[46px] w-[200px] justify-center px-5 bg-white border rounded-xl transition-colors"
         :class="hasError
           ? 'border-rose-400 focus-within:border-rose-500 focus-within:shadow-[0_0_0_3px_rgba(244,63,94,0.12)]'
           : 'border-slate-300 hover:border-slate-400 focus-within:border-muw-blue focus-within:shadow-[0_0_0_3px_rgba(17,29,78,0.13)]'"
@@ -311,17 +430,17 @@ function fileRef(): { filename: string; bytes: number } | null {
           inputmode="numeric"
           placeholder="20"
           :disabled="disabled"
-          class="w-12 text-center bg-transparent border-0 outline-none text-[16px] text-slate-900 tabular-nums"
+          class="w-14 text-center bg-transparent border-0 outline-none text-[16px] text-slate-900 tabular-nums placeholder:text-slate-300"
           @input="(e) => onSnellenInput('n', e)"
         />
-        <span class="text-[24px] leading-none text-slate-300 font-light -translate-y-px">/</span>
+        <span class="text-[24px] leading-none text-slate-300 font-light -translate-y-px select-none">/</span>
         <input
           :value="snellenD"
           type="text"
           inputmode="numeric"
           placeholder="40"
           :disabled="disabled"
-          class="w-12 text-center bg-transparent border-0 outline-none text-[16px] text-slate-900 tabular-nums"
+          class="w-14 text-center bg-transparent border-0 outline-none text-[16px] text-slate-900 tabular-nums placeholder:text-slate-300"
           @input="(e) => onSnellenInput('d', e)"
         />
       </div>
@@ -442,7 +561,16 @@ function fileRef(): { filename: string; bytes: number } | null {
       <TextInput v-bind="textBindings" type="text" />
     </template>
 
-    <HelperText v-if="item.helper">{{ item.helper }}</HelperText>
+    <!-- Phase E.6 ophth-bilateral-design (2026-06-11): suppress the
+         per-item helper sentence whenever the ophth widget already
+         renders a unit suffix inline (number-stepper / snellen).
+         The seeded helper for v2.0 OPHTH items duplicates the unit
+         ("letters" / "mmHg") that the inline suffix already prints. -->
+    <HelperText
+      v-if="item.helper && ophthPresentation.widget !== 'number-stepper' && ophthPresentation.widget !== 'snellen'"
+    >
+      {{ item.helper }}
+    </HelperText>
     <ErrorText v-if="errorMessage">
       {{ errorMessage }}
       <button

@@ -129,43 +129,42 @@ const osOnly = computed(() => isBilateral.value && !od.value && os.value)
          each eye cell. Refraction is the canonical example — operators
          see "Sph Tor Ang Vis" on one line per eye, matching paper
          refraction forms. Each sub-input still binds to its own
-         OD_/OS_ item in the data model. -->
+         OD_/OS_ item in the data model.
+
+         Phase E.6 ophth-bilateral-design (2026-06-11): the slot
+         carries {@code compact: true} so CrfItemWidget can render a
+         56×42 mini input instead of the standard full-width number
+         frame — matches the design's .refrac compound row. -->
     <template v-else-if="isCompound">
       <div data-bilateral-cell="OD" class="bilateral-cell">
-        <div
-          class="grid gap-2"
-          :style="{ gridTemplateColumns: `repeat(${compoundSubFields.length}, minmax(0, 1fr))` }"
-        >
+        <div class="flex flex-wrap gap-2">
           <div
             v-for="sub in compoundSubFields"
             :key="`od-${sub.subKey}`"
-            class="space-y-1"
+            class="flex flex-col gap-1.5 items-center"
           >
-            <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+            <div class="text-[10px] uppercase tracking-[0.07em] text-slate-500 font-semibold">
               {{ sub.compactLabel }}
             </div>
             <template v-if="sub.od">
-              <slot name="widget" :item="sub.od" side="OD" />
+              <slot name="widget" :item="sub.od" side="OD" :compact="true" />
             </template>
             <div v-else class="text-[10px] text-slate-400 italic px-1">—</div>
           </div>
         </div>
       </div>
       <div data-bilateral-cell="OS" class="bilateral-cell">
-        <div
-          class="grid gap-2"
-          :style="{ gridTemplateColumns: `repeat(${compoundSubFields.length}, minmax(0, 1fr))` }"
-        >
+        <div class="flex flex-wrap gap-2">
           <div
             v-for="sub in compoundSubFields"
             :key="`os-${sub.subKey}`"
-            class="space-y-1"
+            class="flex flex-col gap-1.5 items-center"
           >
-            <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+            <div class="text-[10px] uppercase tracking-[0.07em] text-slate-500 font-semibold">
               {{ sub.compactLabel }}
             </div>
             <template v-if="sub.os">
-              <slot name="widget" :item="sub.os" side="OS" />
+              <slot name="widget" :item="sub.os" side="OS" :compact="true" />
             </template>
             <div v-else class="text-[10px] text-slate-400 italic px-1">—</div>
           </div>

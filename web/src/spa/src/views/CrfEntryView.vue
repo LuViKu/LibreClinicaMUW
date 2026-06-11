@@ -720,12 +720,13 @@ function onThreadUpdated(_parentId: string) {
                 :key="`compound-${row.key}`"
                 :row="row"
               >
-                <template #widget="{ item }">
+                <template #widget="{ item, compact }">
                   <CrfItemWidget
                     :item="item"
                     :model-value="store.values[item.oid]"
                     :error-message="showError(item)"
                     :disabled="isReadOnly"
+                    :compact="compact"
                     :file-busy="store.isSaving"
                     :max-file-bytes="store.entry?.maxFileBytes ?? 0"
                     :file-extensions="store.entry?.fileExtensions ?? ''"
