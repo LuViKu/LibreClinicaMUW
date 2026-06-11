@@ -209,8 +209,8 @@
             <column name="code" value="SPECTRALIS_OCT_REASON"/>
             <column name="label_de" value="Spectralis-OCT — Grund falls nicht durchgeführt"/>
             <column name="label_en" value="Spectralis OCT — reason if not performed"/>
-            <column name="hint_de" value="Aktiv, sobald „Nein" gewählt ist"/>
-            <column name="hint_en" value="Active once „No" is selected"/>
+            <column name="hint_de" value="Aktiv, sobald „Nein&#8220; gewählt ist"/>
+            <column name="hint_en" value="Active once „No&#8220; is selected"/>
             <column name="data_type" value="string"/>
             <column name="widget" value="text"/>
             <column name="placeholder_text" value="Grund angeben…"/>
@@ -271,8 +271,8 @@
             <column name="code" value="FUNDUS_REASON"/>
             <column name="label_de" value="Fundusfotografie — Grund falls nicht durchgeführt"/>
             <column name="label_en" value="Fundus photograph — reason if not performed"/>
-            <column name="hint_de" value="Aktiv, sobald „Nein" gewählt ist"/>
-            <column name="hint_en" value="Active once „No" is selected"/>
+            <column name="hint_de" value="Aktiv, sobald „Nein&#8220; gewählt ist"/>
+            <column name="hint_en" value="Active once „No&#8220; is selected"/>
             <column name="data_type" value="string"/>
             <column name="widget" value="text"/>
             <column name="placeholder_text" value="Grund angeben…"/>
