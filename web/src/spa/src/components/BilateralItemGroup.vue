@@ -95,14 +95,18 @@ const osOnly = computed(() => isBilateral.value && !od.value && os.value)
 
 <template>
   <div
-    class="bilateral-row grid items-start gap-3 py-3 border-t border-slate-100 first:border-t-0"
-    :class="isBothEyes ? 'grid-cols-[1fr_2fr]' : 'grid-cols-[1fr_1fr_1fr]'"
+    class="bilateral-row grid items-center gap-x-[30px] border-t border-slate-100 first:border-t-0 py-[17px] hover:bg-gradient-to-r hover:from-slate-50 hover:to-transparent"
+    :class="
+      isBothEyes
+        ? 'grid-cols-[minmax(210px,1.15fr)_minmax(248px,2.04fr)]'
+        : 'grid-cols-[minmax(210px,1.15fr)_minmax(248px,1fr)_minmax(248px,1fr)]'
+    "
     role="group"
     :aria-label="label"
   >
-    <!-- Column 1 — row label -->
-    <div class="text-xs font-medium text-slate-700 pt-2">
-      <span :class="{ req: required }">{{ label }}</span>
+    <!-- Column 1 — row label (design's .mlabel 14px/500 + .mhint 11.5px hint). -->
+    <div class="pr-2">
+      <div class="text-[14px] font-medium leading-[1.35] text-slate-800" :class="{ req: required }">{{ label }}</div>
       <div v-if="odOnly" class="mt-1 text-[10px] uppercase tracking-wide text-amber-700">
         {{ t('crfEntry.bilateral.odOnlyTell') }}
       </div>

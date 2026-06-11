@@ -18,7 +18,6 @@ import { useRoute, useRouter } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
-import FieldLabel from '@/components/FieldLabel.vue'
 import RepeatingGroupSection from '@/components/RepeatingGroupSection.vue'
 import SectionBadge from '@/components/SectionBadge.vue'
 import ConcurrentEditBanner from '@/components/ConcurrentEditBanner.vue'
@@ -531,29 +530,63 @@ function onThreadUpdated(_parentId: string) {
           v-for="section in store.schema!.sections"
           :id="section.oid"
           :key="section.oid"
-          class="bg-white border border-slate-200 rounded-muw p-5"
+          class="bg-white border border-slate-200 rounded-2xl overflow-hidden"
         >
-          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            {{ section.title }}
-          </h2>
-          <p v-if="section.instructions" class="text-[11px] text-slate-500 mb-4 leading-relaxed">
-            {{ section.instructions }}
-          </p>
+          <!-- Phase E.6 ophth-bilateral-design (2026-06-11): section
+               header lifted to the design's muw-rule accent + uppercase
+               tracking-wider title. Same content, repackaged so the
+               coral 32×2 rule sits flush against the muw-blue title and
+               instructions ride below in slate-500. -->
+          <header class="px-7 pt-6 pb-5 border-b border-slate-100">
+            <div class="flex items-center gap-2.5">
+              <span class="muw-rule"></span>
+              <h2 class="text-[13px] font-semibold uppercase tracking-[0.12em] text-muw-blue">
+                {{ section.title }}
+              </h2>
+            </div>
+            <p v-if="section.instructions" class="text-[11px] text-slate-500 mt-2 leading-relaxed">
+              {{ section.instructions }}
+            </p>
+          </header>
 
-          <!-- Phase E.6 ophth-bilateral: 3-column header row shown only
-               when the section contains at least one bilateral or
-               OU row. Renders inside the section so non-ophthalmology
-               sections stay a one-column form. OD on the LEFT, OS on
-               the RIGHT — clinician-facing convention. -->
+          <div class="px-7 pt-2 pb-6">
+
+          <!-- Phase E.6 ophth-bilateral-design (2026-06-11): R/L
+               colour-coded eye-column headers. Teal R (.muw-teal) for
+               OD, sky L (.muw-sky) for OS — clinician-facing convention
+               where the patient's right eye sits LEFT for the examiner.
+               Underline-rules drop the visual weight onto the per-eye
+               column without claiming the slate-500 weight of the OID
+               itself. Renders only when the section contains at least
+               one bilateral or OU row. -->
           <div
             v-if="hasBilateralRow(rowsForSection(section.items))"
-            class="grid grid-cols-[1fr_1fr_1fr] gap-3 pb-2 mb-2 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500 font-semibold"
+            class="grid grid-cols-[minmax(210px,1.15fr)_minmax(248px,1fr)_minmax(248px,1fr)] gap-x-[30px] pb-3 mb-2"
             role="row"
             data-testid="bilateral-header"
           >
-            <div data-bilateral-header="label">{{ t('crfEntry.bilateral.headerItem') }}</div>
-            <div data-bilateral-header="OD" class="text-muw-blue">{{ t('crfEntry.bilateral.headerOd') }}</div>
-            <div data-bilateral-header="OS" class="text-muw-blue">{{ t('crfEntry.bilateral.headerOs') }}</div>
+            <div
+              data-bilateral-header="label"
+              class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 self-end pb-1"
+            >
+              {{ t('crfEntry.bilateral.headerItem') }}
+            </div>
+            <div data-bilateral-header="OD" class="self-end">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-md bg-muw-teal-50 text-muw-teal-700 text-[11px] font-bold">R</span>
+                <span class="text-[13px] font-semibold text-slate-800">OD</span>
+                <span class="text-[12px] text-slate-400">{{ t('crfEntry.bilateral.headerOdEye') }}</span>
+              </div>
+              <div class="h-[2px] rounded-full bg-muw-teal-100 mt-2.5"></div>
+            </div>
+            <div data-bilateral-header="OS" class="self-end">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-md bg-muw-sky-50 text-muw-sky-700 text-[11px] font-bold">L</span>
+                <span class="text-[13px] font-semibold text-slate-800">OS</span>
+                <span class="text-[12px] text-slate-400">{{ t('crfEntry.bilateral.headerOsEye') }}</span>
+              </div>
+              <div class="h-[2px] rounded-full bg-muw-sky-100 mt-2.5"></div>
+            </div>
           </div>
 
           <!-- Phase E.6 polish-runtime — rows hidden by show-when are
@@ -562,16 +595,24 @@ function onThreadUpdated(_parentId: string) {
                gentle opacity transition (see .showwhen-row below). -->
           <div class="space-y-4">
             <template v-for="row in rowsForSection(section.items)">
-              <!-- Single (non-bilateral) row — original one-column layout. -->
-              <div v-if="row.kind === 'single'" :key="`single-${row.item.oid}`">
-                <FieldLabel :for="`item-${row.item.oid}`" :required="row.item.required">
+              <!-- Single (non-bilateral) row — one-column layout. The
+                   label adopts the bilateral row's 14px/500 typography
+                   so single-row and bilateral-row labels read at the
+                   same weight across the form (design continuity per
+                   ophthalmology-visit-bilateral.html). -->
+              <div v-if="row.kind === 'single'" :key="`single-${row.item.oid}`" class="border-t border-slate-100 first:border-t-0 py-[17px] hover:bg-gradient-to-r hover:from-slate-50 hover:to-transparent">
+                <label
+                  :for="`item-${row.item.oid}`"
+                  class="block text-[14px] font-medium leading-[1.35] text-slate-800 mb-2"
+                  :class="{ req: row.item.required }"
+                >
                   {{ row.item.label }}
                   <ItemNoteIndicator
                     :summary="advanced.noteSummaryByItemOid[row.item.oid] ?? null"
                     @open="onItemNoteOpen"
                     @create="onItemNoteCreate(row.item.oid, itemLabel(row.item))"
                   />
-                </FieldLabel>
+                </label>
                 <CrfItemWidget
                   :item="row.item"
                   :model-value="store.values[row.item.oid]"
@@ -680,6 +721,7 @@ function onThreadUpdated(_parentId: string) {
                 </template>
               </BilateralItemGroup>
             </template>
+          </div>
           </div>
         </section>
 

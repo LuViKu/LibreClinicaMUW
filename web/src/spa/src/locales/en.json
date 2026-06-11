@@ -600,6 +600,8 @@
       "headerItem": "Item",
       "headerOd": "OD (right eye)",
       "headerOs": "OS (left eye)",
+      "headerOdEye": "Right eye",
+      "headerOsEye": "Left eye",
       "odOnlyTell": "OD only",
       "osOnlyTell": "OS only",
       "bothEyesTell": "Both eyes",
