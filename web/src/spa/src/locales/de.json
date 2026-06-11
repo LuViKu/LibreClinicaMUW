@@ -599,6 +599,8 @@
       "headerItem": "Merkmal",
       "headerOd": "OD (rechtes Auge)",
       "headerOs": "OS (linkes Auge)",
+      "headerOdEye": "Rechtes Auge",
+      "headerOsEye": "Linkes Auge",
       "odOnlyTell": "nur OD",
       "osOnlyTell": "nur OS",
       "bothEyesTell": "Beide Augen",
