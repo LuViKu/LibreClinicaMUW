@@ -59,7 +59,11 @@ function blank(): Form {
     description: '',
     reproductionSteps: '',
     attachPageUrl: true,
-    attachConsoleEntries: true,
+    // PII guard: console output can carry subject IDs (M-001, DF-001),
+    // date-of-birth-shaped strings, or other PHI when a render path
+    // serialised patient data into an Error message. Default OFF — the
+    // operator opts in after scanning the preview disclosure.
+    attachConsoleEntries: false,
   }
 }
 
