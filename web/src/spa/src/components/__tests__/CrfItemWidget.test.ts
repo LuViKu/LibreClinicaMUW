@@ -50,6 +50,15 @@ function mkI18n(locale: 'en' | 'de' = 'en') {
 }
 
 describe('CrfItemWidget — BL Ja/Nein segmented control', () => {
+  // Phase E.6 ophth-field-catalog (2026-06-11): CrfItemWidget now
+  // resolves its presentation hint through a Pinia-backed catalog
+  // store. Tests mount with a fresh empty Pinia so the matcher
+  // returns null and the heuristic fallback (the path these BL
+  // tests already assert) keeps winning.
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
   // Phase E.6 ophth-bilateral-design (2026-06-11): the boolean
   // renderer was lifted from a radio pair to a segmented Ja/Nein
   // pill control (MUW design's .seg pattern). Wire contract holds:
@@ -152,6 +161,12 @@ describe('CrfItemWidget — BL Ja/Nein segmented control', () => {
 })
 
 describe('CrfItemWidget — DATE / PDATE rendering', () => {
+  // Fresh Pinia per case — CrfItemWidget depends on the catalog store
+  // (no-op for date-type items, but the store has to exist).
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
   it('renders a native date picker (input[type=date]) for dataType="date"', () => {
     const item = mkItem('I_DOB', 'Geburtsdatum', 'date')
     const wrapper = mount(CrfItemWidget, {

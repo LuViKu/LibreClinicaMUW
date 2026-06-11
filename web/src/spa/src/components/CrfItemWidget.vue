@@ -35,6 +35,7 @@ import CheckboxArrayInput from './CheckboxArrayInput.vue'
 import FileUploadInput from './FileUploadInput.vue'
 
 import type { CrfItem } from '@/types/crf'
+import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
 
 interface Props {
   item: CrfItem
@@ -88,6 +89,18 @@ const { t } = useI18n()
 const inputId = computed(() => `item-${props.item.oid}`)
 const hasError = computed(() => props.errorMessage != null)
 
+/**
+ * Phase E.6 ophth-field-catalog (2026-06-11): pull the matching
+ * catalog entry for this item. The store is loaded once per session
+ * via {@code useOphthFieldCatalogStore().load()} (mounted in main.ts
+ * + replayed by CrfEntryView on first mount); the resolver matches
+ * the item OID's de-lateralised tail against each catalog code.
+ * Returns null when no match — render path falls back to the
+ * OID-suffix heuristic below.
+ */
+const catalogStore = useOphthFieldCatalogStore()
+const catalogEntry = computed(() => catalogStore.entryForOid(props.item.oid))
+
 const textBindings = computed(() => ({
   id: inputId.value,
   modelValue: (props.modelValue == null ? '' : String(props.modelValue)) as string,
@@ -133,31 +146,57 @@ const isYesNoNo = computed(() => {
 })
 
 /**
- * Phase E.6 ophth-bilateral-design (2026-06-11): derive the
- * ophthalmology-specific presentation hint from the item's OID
- * token-tail. Pragmatic stepping-stone until the catalog wiring
- * (PR F1+) ships an explicit {@code item.widget} field; the
- * detection mirrors the catalog seed's planned OID convention:
+ * Phase E.6 ophth-field-catalog (2026-06-11): derive the ophthalmology
+ * specific presentation hint. The catalog is the primary source of
+ * truth — when an entry matches the item OID, its {@code widget} +
+ * {@code unit} fields drive the rendering. When no entry matches the
+ * OID falls back to the legacy heuristic so non-catalogued items
+ * (and CRFs from studies that pre-date the catalog) still render
+ * cleanly.
  *
- *   - {@code *_BCVA_LETTERS}  → number-stepper with "Buchst." unit
- *   - {@code *_BCVA_LOGMAR}   → number-stepper with "logMAR" unit
- *   - {@code *_BCVA_SNELLEN}  → snellen fraction
- *   - {@code *_IOP}           → number-stepper with "mmHg" unit
- *   - {@code *_CRT}           → number-stepper with "µm" unit
- *   - {@code *_ACD}           → number-stepper with "mm" unit
- *   - {@code *_*_DONE}        → segmented Ja/Nein
- *   - {@code *_*_DONE_REASON} → grayed conditional text input
+ * <p>Heuristic patterns (legacy fallback, matches the catalog seed's
+ * 12 entries verbatim):
  *
- * Items that don't match drop through to the existing renderers so
- * non-ophth CRFs keep their current visuals untouched.
+ * <ul>
+ *   <li>{@code *_BCVA_LETTERS}  → number-stepper with "Buchst." unit</li>
+ *   <li>{@code *_BCVA_LOGMAR}   → number-stepper with "logMAR" unit</li>
+ *   <li>{@code *_BCVA_SNELLEN}  → snellen fraction</li>
+ *   <li>{@code *_IOP}           → number-stepper with "mmHg" unit</li>
+ *   <li>{@code *_CRT}           → number-stepper with "µm" unit</li>
+ *   <li>{@code *_ACD}           → number-stepper with "mm" unit</li>
+ *   <li>{@code *_*_DONE}        → segmented Ja/Nein</li>
+ *   <li>{@code *_*_DONE_REASON} → grayed conditional text input</li>
+ * </ul>
  */
-const ophthPresentation = computed<{
+type OphthPresentation = {
   widget: 'standard' | 'number-stepper' | 'snellen' | 'segmented-yesno' | 'conditional-reason'
   unit?: string
-}>(() => {
-  const oid = props.item.oid || ''
-  // Split on _ to inspect the trailing tokens of the OID.
-  const tail = oid.toUpperCase()
+}
+const ophthPresentation = computed<OphthPresentation>(() => {
+  // Catalog-driven path (preferred). The catalog entry's widget value
+  // maps 1:1 to our local presentation taxonomy:
+  //   number-stepper → number-stepper (with unit)
+  //   snellen        → snellen
+  //   yesno          → segmented-yesno
+  //   text + conditional_on_code → conditional-reason
+  //   refraction / text / select-one → standard fall-through
+  const entry = catalogEntry.value
+  if (entry != null) {
+    if (entry.widget === 'number-stepper') {
+      return { widget: 'number-stepper', unit: entry.unit ?? undefined }
+    }
+    if (entry.widget === 'snellen') return { widget: 'snellen' }
+    if (entry.widget === 'yesno') return { widget: 'segmented-yesno' }
+    if (entry.widget === 'text' && entry.conditionalOnCode) {
+      return { widget: 'conditional-reason' }
+    }
+    return { widget: 'standard' }
+  }
+
+  // Heuristic fallback — only used when the catalog is offline OR the
+  // item's OID doesn't map to a catalog code (legacy CRFs, ad-hoc
+  // items, non-ophth sections).
+  const tail = (props.item.oid || '').toUpperCase()
   if (tail.endsWith('_BCVA_LETTERS') || tail.endsWith('BCVA_LETTERS')) {
     return { widget: 'number-stepper', unit: 'Buchst.' }
   }
