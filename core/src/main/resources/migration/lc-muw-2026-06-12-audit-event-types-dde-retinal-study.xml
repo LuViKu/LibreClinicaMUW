@@ -1,0 +1,95 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase audit-unification follow-up (2026-06-12): six additional
+        audit_log_event_type rows for callsites that were added to
+        DdeService, RetinalInferenceApiController, and StudiesApiController
+        in PRs that merged AFTER the canonical-helper unification sweep was
+        authored. The fixup commit (#188) that drops the 10-param
+        writeAuditEvent shim leaves these callers unable to compile.
+
+        Type-id allocation (mirrored in AuditTypeIds.java):
+
+         109 — dde_pass2_mismatch                 | discrepancy_note
+         110 — dde_pass2_committed                | event_crf
+         111 — dde_conflict_resolved              | item_data
+         112 — dde_reconciliation_complete        | event_crf
+         113 — retinal_inference_enqueued         | retinal_inference_job
+         114 — study_created                      | study
+
+        The 5 DDE callsites collapse into 4 type ids (DM "winner" pick +
+        DM RFC are both type 111, distinguished by `entity_name` carrying
+        the column key — itemOid vs reason_for_change). Type 110 covers
+        both the 0-mismatch "complete" branch and the "with conflicts"
+        branch — `entity_name` carries date_validate_completed vs
+        mismatch_count to distinguish in the timeline.
+
+        The study auto-bound COORDINATOR role-grant (StudiesApi:279) is
+        not allocated a new id — it reuses type 104
+        (user_account_admin_action) which UsersApi role grant/change/revoke
+        callers already use, per the fixup commit's documented allocation.
+    -->
+    <changeSet id="2026-06-12-audit-event-types-dde-retinal-study"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id BETWEEN 109 AND 114;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the 6 follow-up audit_log_event_type rows for the DDE +
+            retinal-inference + study-creation callsites that the
+            canonical-helper unification sweep missed.
+        </comment>
+
+        <!-- DDE pass-2 commit + conflict resolution (DdeService) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="109"/>
+            <column name="name" value="dde_pass2_mismatch"/>
+            <column name="display_name" value="DDE pass-2 mismatch (FAILEDVAL spawned)"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="110"/>
+            <column name="name" value="dde_pass2_committed"/>
+            <column name="display_name" value="DDE pass-2 committed"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="111"/>
+            <column name="name" value="dde_conflict_resolved"/>
+            <column name="display_name" value="DDE conflict resolved (DM pick)"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="112"/>
+            <column name="name" value="dde_reconciliation_complete"/>
+            <column name="display_name" value="DDE reconciliation complete"/>
+        </insert>
+
+        <!-- Retinal inference job enqueue (RetinalInferenceApiController) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="113"/>
+            <column name="name" value="retinal_inference_enqueued"/>
+            <column name="display_name" value="Retinal inference job enqueued"/>
+        </insert>
+
+        <!-- Study creation (StudiesApiController) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="114"/>
+            <column name="name" value="study_created"/>
+            <column name="display_name" value="Study created"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id BETWEEN 109 AND 114</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

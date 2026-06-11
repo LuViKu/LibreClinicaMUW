@@ -158,4 +158,42 @@ public final class AuditTypeIds {
     // ------------------------------------------------------------------
 
     public static final int LEGACY_UNMAPPED                  = 108;
+
+    // ------------------------------------------------------------------
+    // DDE pass-2 commit + DM conflict resolution (DdeService)
+    // ------------------------------------------------------------------
+
+    /** DDE pass-2 value differs from pass-1 — FAILEDVAL note spawned. */
+    public static final int DDE_PASS2_MISMATCH               = 109;
+
+    /**
+     * DDE pass-2 finalised. {@code entity_name} carries
+     * {@code date_validate_completed} when the CRF flipped to complete,
+     * or {@code mismatch_count} when conflicts remain open.
+     */
+    public static final int DDE_PASS2_COMMITTED              = 110;
+
+    /**
+     * Data manager picked a winner for a FAILEDVAL conflict. The
+     * follow-up reason-for-change row reuses this same id with
+     * {@code entity_name=reason_for_change}.
+     */
+    public static final int DDE_CONFLICT_RESOLVED            = 111;
+
+    /** Last FAILEDVAL closed — CRF flipped to dde-complete. */
+    public static final int DDE_RECONCILIATION_COMPLETE      = 112;
+
+    // ------------------------------------------------------------------
+    // Retinal inference (RetinalInferenceApiController)
+    // ------------------------------------------------------------------
+
+    public static final int RETINAL_INFERENCE_ENQUEUED       = 113;
+
+    // ------------------------------------------------------------------
+    // Study creation (StudiesApiController). Auto-bound COORDINATOR
+    // role-grant audit reuses USER_ACCOUNT_ADMIN_ACTION (104) — matches
+    // the UsersApi role grant/change/revoke convention.
+    // ------------------------------------------------------------------
+
+    public static final int STUDY_CREATED                    = 114;
 }

@@ -259,7 +259,9 @@ public class StudiesApiController {
         studyDao.update(persisted);
 
         AuditEventDAO auditEventDAO = new AuditEventDAO(dataSource);
-        EventCrfsApiController.writeAuditEvent(auditEventDAO, me, persisted, null,
+        EventCrfsApiController.writeAuditEvent(auditEventDAO,
+                AuditTypeIds.STUDY_CREATED,
+                me, persisted, null,
                 "Study created", "study", persisted.getId(),
                 "study_id", "", String.valueOf(persisted.getId()));
 
@@ -276,7 +278,9 @@ public class StudiesApiController {
             binding.setUserAccountId(me.getId());
             userDao.createStudyUserRole(me, binding);
 
-            EventCrfsApiController.writeAuditEvent(auditEventDAO, me, persisted, null,
+            EventCrfsApiController.writeAuditEvent(auditEventDAO,
+                    AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                    me, persisted, null,
                     "Study role granted (initial) — user=" + me.getName()
                             + " role=" + Role.COORDINATOR.getName(),
                     "study_user_role", 0, "role_id",

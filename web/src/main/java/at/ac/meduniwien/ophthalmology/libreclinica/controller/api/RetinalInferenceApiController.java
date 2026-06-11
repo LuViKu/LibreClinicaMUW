@@ -194,7 +194,8 @@ public class RetinalInferenceApiController {
         // ---- audit row on enqueue ----------------------------------------------
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
         EventCrfsApiController.writeAuditEvent(
-                auditDAO, currentUser, currentStudy, ss,
+                auditDAO, AuditTypeIds.RETINAL_INFERENCE_ENQUEUED,
+                currentUser, currentStudy, ss,
                 "Retinal inference enqueued — task=" + taskClean,
                 /* auditTable */ "retinal_inference_job",
                 /* entityId   */ eventCrfId,
