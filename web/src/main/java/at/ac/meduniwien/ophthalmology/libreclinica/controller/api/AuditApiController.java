@@ -677,12 +677,42 @@ public class AuditApiController {
             // administrative actions surface under the existing "Admin"
             // filter rather than the data-stream bucket so operators
             // reviewing the audit trail can pivot by intent.
-            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51, 52, 53, 54, 55, 56 -> "admin";
+            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51, 52, 53, 54, 55, 56,
+            // PR #186 gap-coverage admin actions: CRF library (63-65),
+            // user lifecycle (66-69), event definition create (70).
+                 63, 64, 65, 66, 67, 68, 69, 70,
+            // Modality CRUD (58-60) — configuration, admin-bucket.
+                 58, 59, 60,
+            // Operation / job failures (61-62) — sysadmin-only via
+            // is_user_visible=false, but route to "admin" when surfaced.
+                 61, 62,
+            // CRF-library + version lifecycle (75-76), version-migration
+            // (79), rule CRUD (81-89), site + study + study-status
+            // (90-93), event-definition lifecycle + field updates (95-97),
+            // group-class lifecycle + field updates (98-99). Phase
+            // audit-unification.
+                 75, 76, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89,
+                 90, 91, 92, 93, 95, 96, 97, 98, 99,
+            // User-account stream: login failed (101, hidden), login
+            // (102), legacy password (103), admin action (104), generic
+            // helper (105). Failed-login is hidden but the variant routes
+            // to "admin" for the sysadmin view's filter chips.
+                 101, 102, 103, 104, 105,
+            // Extract-job execution (106-107). Backfill catch-all (108,
+            // hidden) routes to admin for the sysadmin view.
+                 106, 107, 108 -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,
                  17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-                 30, 35, 40, 41 -> "data";
+                 30, 35, 40, 41,
+            // Eye-cohort transition (57) — per-subject clinical event,
+            // not admin config. Discrepancy-note threading + create
+            // (71-74) and the subject-demographics update (100) also
+            // belong with data-entry; the event_crf start (77),
+            // SDV unverification (78), bulk-import attempt (80),
+            // and study-event update (94) ride the same data-stream.
+                 57, 71, 72, 73, 74, 77, 78, 80, 94, 100 -> "data";
             default -> "data";
         };
     }

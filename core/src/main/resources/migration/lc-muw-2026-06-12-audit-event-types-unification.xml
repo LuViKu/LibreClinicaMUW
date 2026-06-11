@@ -1,0 +1,297 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase audit-unification (2026-06-12): thirty-four new
+        audit_log_event_type rows for the canonical-helper migration
+        that closes the 16-year-old "needs to change, tbh 02/2009"
+        TODO in AuditEventDAO.java:208.
+
+        Before this sweep, AuditEventDAO.create() wrote to the legacy
+        audit_event table — rows invisible to the SPA Audit Log view.
+        Phase E.6 migrated individual writers one at a time
+        (study identity 51, user profile 50, dataset export 52-55,
+        discrepancy export 56, eye-cohort 57, modality CRUD 58-60,
+        operation failed 61-62) and PR #186 closed the last eleven
+        §11.10(e) gaps with ids 63-74. This changeset seeds the rest:
+        every canonical helper (writeAuditEvent, writeLifecycleAudit×2,
+        writeEventDefFieldAudit) and every direct-write site that
+        still goes through AuditEventDAO.create() gets a typed id.
+
+        See docs/development/audit-coverage-2026-06-11.md and the
+        approved plan at .claude/plans/polished-jumping-swan.md for
+        the full architecture rationale + risk matrix.
+
+        Type-id allocation (also mirrored in AuditTypeIds.java):
+
+          75 — crf_lifecycle_changed             | crf
+          76 — crf_version_lifecycle_changed     | crf_version
+          77 — event_crf_started                 | event_crf
+          78 — event_crf_sdv_unverified          | event_crf
+          79 — crf_version_migrated              | event_definition_crf
+          80 — bulk_import_attempted             | item_data (reason)
+          81 — rule_created                      | rule
+          82 — rule_updated                      | rule
+          83 — rule_action_created               | rule_action
+          84 — rule_action_updated               | rule_action
+          85 — rule_set_created                  | rule_set
+          86 — rule_set_lifecycle_changed        | rule_set
+          87 — rule_set_schedule_updated         | rule_set
+          88 — rules_import_committed            | rule_set
+          89 — rule_set_rule_lifecycle_changed   | rule_set_rule
+          90 — site_lifecycle_changed            | study
+          91 — site_field_updated                | study
+          92 — study_lifecycle_changed           | study
+          93 — study_status_changed              | study (carries reason)
+          94 — study_event_updated               | study_event
+          95 — event_definition_lifecycle_changed| study_event_definition
+          96 — event_definition_disabled         | study_event_definition
+          97 — event_definition_field_updated    | study_event_definition
+          98 — group_class_lifecycle_changed     | study_group_class
+          99 — group_class_field_updated         | study_group_class
+         100 — subject_demographics_updated      | subject
+         101 — user_login_failed                 | user_account (hidden)
+         102 — user_logged_in                    | user_account
+         103 — user_password_request_legacy      | user_account
+         104 — user_account_admin_action         | user_account
+         105 — user_account_generic              | __user_account
+         106 — extract_job_succeeded             | dataset
+         107 — extract_job_failed                | dataset
+         108 — legacy_unmapped                   | (varies, backfill, hidden)
+
+        Ids 101 and 108 are seeded with is_user_visible=false so
+        sysadmin-only views surface them; investigators don't see
+        failure-attempt rows in per-study audit trails. Matches the
+        convention from lc-muw-2026-06-10-audit-event-type-operation-failed.xml
+        (ids 61-62).
+    -->
+    <changeSet id="2026-06-12-audit-event-types-unification"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id BETWEEN 75 AND 108;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the 34 new audit_log_event_type rows the canonical-helper
+            unification sweep emits via direct INSERTs into audit_log_event.
+        </comment>
+
+        <!-- CRF library lifecycle (helpers in CrfsApiController) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="75"/>
+            <column name="name" value="crf_lifecycle_changed"/>
+            <column name="display_name" value="CRF lifecycle changed"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="76"/>
+            <column name="name" value="crf_version_lifecycle_changed"/>
+            <column name="display_name" value="CRF version lifecycle changed"/>
+        </insert>
+
+        <!-- Event-CRF (writeAuditEvent + adjacent) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="77"/>
+            <column name="name" value="event_crf_started"/>
+            <column name="display_name" value="Event CRF started"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="78"/>
+            <column name="name" value="event_crf_sdv_unverified"/>
+            <column name="display_name" value="Event CRF SDV unverified"/>
+        </insert>
+
+        <!-- CRF version migration (CrfVersionMigrationService) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="79"/>
+            <column name="name" value="crf_version_migrated"/>
+            <column name="display_name" value="CRF version migrated"/>
+        </insert>
+
+        <!-- Bulk import (ImportApiController, carries reason_for_change) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="80"/>
+            <column name="name" value="bulk_import_attempted"/>
+            <column name="display_name" value="Bulk import attempted"/>
+        </insert>
+
+        <!-- Rule lifecycle + CRUD (RulesApiController, RuleExpressionApiController) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="81"/>
+            <column name="name" value="rule_created"/>
+            <column name="display_name" value="Rule created"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="82"/>
+            <column name="name" value="rule_updated"/>
+            <column name="display_name" value="Rule updated"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="83"/>
+            <column name="name" value="rule_action_created"/>
+            <column name="display_name" value="Rule action created"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="84"/>
+            <column name="name" value="rule_action_updated"/>
+            <column name="display_name" value="Rule action updated"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="85"/>
+            <column name="name" value="rule_set_created"/>
+            <column name="display_name" value="Rule set created"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="86"/>
+            <column name="name" value="rule_set_lifecycle_changed"/>
+            <column name="display_name" value="Rule set lifecycle changed"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="87"/>
+            <column name="name" value="rule_set_schedule_updated"/>
+            <column name="display_name" value="Rule set schedule updated"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="88"/>
+            <column name="name" value="rules_import_committed"/>
+            <column name="display_name" value="Rules import committed"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="89"/>
+            <column name="name" value="rule_set_rule_lifecycle_changed"/>
+            <column name="display_name" value="Rule set rule lifecycle changed"/>
+        </insert>
+
+        <!-- Site + Study (SitesApiController, StudiesApiController) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="90"/>
+            <column name="name" value="site_lifecycle_changed"/>
+            <column name="display_name" value="Site lifecycle changed"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="91"/>
+            <column name="name" value="site_field_updated"/>
+            <column name="display_name" value="Site field updated"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="92"/>
+            <column name="name" value="study_lifecycle_changed"/>
+            <column name="display_name" value="Study lifecycle changed"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="93"/>
+            <column name="name" value="study_status_changed"/>
+            <column name="display_name" value="Study status changed"/>
+        </insert>
+
+        <!-- Study event (EventsApiController) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="94"/>
+            <column name="name" value="study_event_updated"/>
+            <column name="display_name" value="Study event updated"/>
+        </insert>
+
+        <!-- Event definitions (EventDefinitionsApiController) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="95"/>
+            <column name="name" value="event_definition_lifecycle_changed"/>
+            <column name="display_name" value="Event definition lifecycle changed"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="96"/>
+            <column name="name" value="event_definition_disabled"/>
+            <column name="display_name" value="Event definition disabled"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="97"/>
+            <column name="name" value="event_definition_field_updated"/>
+            <column name="display_name" value="Event definition field updated"/>
+        </insert>
+
+        <!-- Group classes (GroupClassesApiController) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="98"/>
+            <column name="name" value="group_class_lifecycle_changed"/>
+            <column name="display_name" value="Group class lifecycle changed"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="99"/>
+            <column name="name" value="group_class_field_updated"/>
+            <column name="display_name" value="Group class field updated"/>
+        </insert>
+
+        <!-- Subject demographics (SubjectsApiController) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="100"/>
+            <column name="name" value="subject_demographics_updated"/>
+            <column name="display_name" value="Subject demographics updated"/>
+        </insert>
+
+        <!-- User account + login (UsersApiController, login servlets, legacy helpers) -->
+        <!-- Type 101 hidden (is_user_visible=false) — failed-login rows
+             belong in the sysadmin /api/v1/audit/system view, not the
+             per-study investigator audit trail. Matches type-61/62 pattern. -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="101"/>
+            <column name="name" value="user_login_failed"/>
+            <column name="display_name" value="User login failed"/>
+            <column name="is_user_visible" valueBoolean="false"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="102"/>
+            <column name="name" value="user_logged_in"/>
+            <column name="display_name" value="User logged in"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="103"/>
+            <column name="name" value="user_password_request_legacy"/>
+            <column name="display_name" value="User password request (legacy path)"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="104"/>
+            <column name="name" value="user_account_admin_action"/>
+            <column name="display_name" value="User account — admin action"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="105"/>
+            <column name="name" value="user_account_generic"/>
+            <column name="display_name" value="User account — generic"/>
+        </insert>
+
+        <!-- Background-job execution (XsltTransformJob + siblings) -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="106"/>
+            <column name="name" value="extract_job_succeeded"/>
+            <column name="display_name" value="Extract job succeeded"/>
+        </insert>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="107"/>
+            <column name="name" value="extract_job_failed"/>
+            <column name="display_name" value="Extract job failed"/>
+        </insert>
+
+        <!-- Backfill catch-all for ~80 historical action_message keys
+             that don't map cleanly to a typed id. Hidden from per-study
+             views; sysadmin can run a compliance report off this bucket
+             to escalate individual rows if needed. -->
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="108"/>
+            <column name="name" value="legacy_unmapped"/>
+            <column name="display_name" value="Legacy audit_event row (unmapped)"/>
+            <column name="is_user_visible" valueBoolean="false"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id BETWEEN 75 AND 108</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

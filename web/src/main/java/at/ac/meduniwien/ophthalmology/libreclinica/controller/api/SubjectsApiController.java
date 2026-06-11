@@ -37,7 +37,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBe
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
@@ -1662,26 +1661,18 @@ public class SubjectsApiController {
                                                String columnName,
                                                String oldValue,
                                                String newValue) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(ub.getId());
-            ae.setStudyId(study.getId());
-            ae.setSubjectId(ss.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setSubjectName(ss.getLabel() == null ? "" : ss.getLabel());
-            ae.setAuditTable("subject");
-            ae.setEntityId(ss.getSubjectId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("subject_demographics_update: " + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "'");
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for subject field {}={} (continuing): {}",
-                    columnName, newValue, e.getMessage());
-        }
+        // Phase audit-unification (2026-06-12) — delegate to the
+        // unified writeAuditEvent helper so the row lands in
+        // audit_log_event (visible to the SPA Audit Log view) with the
+        // proper SUBJECT_DEMOGRAPHICS_UPDATED type id.
+        EventCrfsApiController.writeAuditEvent(auditDAO,
+                AuditTypeIds.SUBJECT_DEMOGRAPHICS_UPDATED,
+                ub, study, ss,
+                "subject_demographics_update",
+                "subject", ss.getSubjectId(),
+                columnName,
+                oldValue == null ? "" : oldValue,
+                newValue == null ? "" : newValue);
     }
 
     /**

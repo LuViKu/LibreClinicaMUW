@@ -196,8 +196,25 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
     }
 
     /**
-     * Creates a new row in the audit_log_event table
+     * @deprecated Phase audit-unification (2026-06-12) — DO NOT CALL.
+     *     Writes to the legacy {@code audit_event} table, which is
+     *     INVISIBLE to the SPA Audit Log view (only {@code
+     *     audit_log_event} is read). All in-tree callers have been
+     *     migrated to direct INSERTs into {@code audit_log_event}
+     *     using the {@link at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AuditTypeIds}
+     *     constants. The method is kept as a no-op-equivalent for one
+     *     release cycle as a safety net for any out-of-tree caller;
+     *     it will be physically removed in the next quarterly
+     *     cleanup PR. See
+     *     {@code docs/development/audit-coverage-2026-06-11.md}.
+     *
+     *     The Javadoc claim that this writes to {@code audit_log_event}
+     *     is the original aspiration ("needs to change, tbh 02/2009"
+     *     inline comment); the actual SQL writes to {@code audit_event}.
+     *     This historical inconsistency is preserved as evidence in
+     *     the audit-coverage doc.
      */
+    @Deprecated
     public AuditEventBean create(AuditEventBean sb) {
         HashMap<Integer, Object> variables = new HashMap<Integer, Object>();
         // INSERT INTO audit_event
@@ -221,72 +238,222 @@ public class AuditEventDAO extends AuditableEntityDAO<AuditEventBean> {
         return sb;
     }
 
+    /**
+     * Phase audit-unification (2026-06-12) — job conclusion writer.
+     *
+     * <p>Direct INSERT into {@code audit_log_event} using the
+     * caller-supplied {@code eventTypeId}. Replaces a legacy path that
+     * went through {@link #create(AuditEventBean)} (legacy
+     * {@code audit_event}, invisible to the SPA Audit Log view).
+     *
+     * <p>{@code audit_table='dataset'} with {@code entity_id} set to the
+     * trigger's dataset id so the Audit Log view groups the row with
+     * other dataset lifecycle entries.
+     */
     public void createRowForJobConclusion(TriggerBean trigger, int eventTypeId) {
-        AuditEventBean auditEvent = new AuditEventBean();
-        auditEvent.setUserId(trigger.getUserAccount().getId());
-        auditEvent.setEntityId(trigger.getDataset().getId());
-        auditEvent.setAuditTable("datasets");
-        auditEvent.setName(trigger.getFullName());
-        auditEvent.setActionMessage("");
-        auditEvent.setOldValue("");
-        auditEvent.setNewValue("");
-        auditEvent.setReasonForChange("");
-        // need to set type_id either (success) or (failure), tbh
-        // use custom SQL here?
-        create(auditEvent);
+        int userId = trigger.getUserAccount() == null ? 0 : trigger.getUserAccount().getId();
+        int entityId = trigger.getDataset() == null ? 0 : trigger.getDataset().getId();
+        String entityName = trigger.getFullName() == null ? "" : trigger.getFullName();
+        try (Connection c = this.ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'dataset', ?, ?, '', '')")) {
+            ps.setInt(1, eventTypeId); // caller-supplied AuditTypeIds.*
+            ps.setInt(2, userId);
+            ps.setInt(3, entityId);
+            ps.setString(4, entityName);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warn("Audit write failed for job conclusion trigger={} type={} (continuing): {}",
+                    entityName, eventTypeId, e.getMessage());
+        }
     }
 
+    /**
+     * Phase audit-unification (2026-06-12) — user-account audit writer.
+     *
+     * <p>Direct INSERT into {@code audit_log_event} with
+     * {@code audit_log_event_type_id=105}
+     * ({@code AuditTypeIds.USER_ACCOUNT_GENERIC}). Replaces a legacy
+     * path that went through {@link #create(AuditEventBean)} (legacy
+     * {@code audit_event}, invisible to the SPA Audit Log view).
+     *
+     * <p>{@code reasonForChange} + {@code actionMessage} are packed into
+     * {@code new_value} as a pipe-separated pair so the Audit Log view
+     * can surface both fields without an extra column. {@code audit_table}
+     * is the literal {@code user_account} (the legacy quirk of storing
+     * the i18n key {@code __user_account} is dropped — direct writers
+     * across the audit-unification sweep all use the literal table name).
+     */
     public void createRowForUserAccount(UserAccountBean uab, String reasonForChange, String actionMessage) {
-        // creator method for making a row in the audit table
-        // for a user account, tbh
-        // TODO doesn't work -- set it up by adding rows to context and values
-        AuditEventBean aeb = new AuditEventBean();
-        aeb.setUserId(uab.getId());
-        aeb.setEntityId(uab.getId());
-        aeb.setAuditTable("__user_account");
-        aeb.setReasonForChange(reasonForChange);
-        aeb.setActionMessage(actionMessage);
-        create(aeb);
-
+        String reason = reasonForChange == null ? "" : reasonForChange;
+        String action = actionMessage == null ? "" : actionMessage;
+        try (Connection c = this.ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value, reason_for_change) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, '', ?, ?)")) {
+            ps.setInt(1, 105); // AuditTypeIds.USER_ACCOUNT_GENERIC
+            ps.setInt(2, uab.getId());
+            ps.setInt(3, uab.getId());
+            ps.setString(4, uab.getName() == null ? "" : uab.getName());
+            ps.setString(5, action);
+            ps.setString(6, reason);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warn("Audit write failed for user_account user={} action={} (continuing): {}",
+                    uab.getId(), action, e.getMessage());
+        }
     }
 
+    /**
+     * Phase audit-unification (2026-06-12) — failed-login audit writer.
+     *
+     * <p>Direct INSERT into {@code audit_log_event} with
+     * {@code audit_log_event_type_id=101}
+     * ({@code AuditTypeIds.USER_LOGIN_FAILED}). The type is hidden
+     * ({@code is_user_visible=false}) — surfaces only in the sysadmin
+     * {@code /api/v1/audit/system} view.
+     *
+     * <p>Drives the production failed-login filter
+     * ({@code OpenClinicaAuthenticationProcessingFilter.unsuccessfulAuthentication}).
+     */
     public void createRowForFailedLogin(UserAccountBean uab) {
-        createRowForUserAccount(uab, "__unsuccessful_login_attempt", "__failed_login");
+        try (Connection c = this.ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, '', '')")) {
+            ps.setInt(1, 101); // AuditTypeIds.USER_LOGIN_FAILED
+            ps.setInt(2, uab.getId());
+            ps.setInt(3, uab.getId());
+            ps.setString(4, uab.getName() == null ? "" : uab.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warn("Audit write failed for failed-login user={} (continuing): {}",
+                    uab.getId(), e.getMessage());
+        }
     }
 
+    /**
+     * Phase audit-unification (2026-06-12) — successful-login audit writer.
+     *
+     * <p>Direct INSERT into {@code audit_log_event} with
+     * {@code audit_log_event_type_id=102}
+     * ({@code AuditTypeIds.USER_LOGGED_IN}).
+     */
     public void createRowForLogin(UserAccountBean uab) {
-        createRowForUserAccount(uab, "__successful_login", "__logged_in");
+        try (Connection c = this.ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, '', '')")) {
+            ps.setInt(1, 102); // AuditTypeIds.USER_LOGGED_IN
+            ps.setInt(2, uab.getId());
+            ps.setInt(3, uab.getId());
+            ps.setString(4, uab.getName() == null ? "" : uab.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warn("Audit write failed for login user={} (continuing): {}",
+                    uab.getId(), e.getMessage());
+        }
     }
 
+    /**
+     * Phase audit-unification (2026-06-12) — legacy password-request
+     * audit writer.
+     *
+     * <p>Direct INSERT into {@code audit_log_event} with
+     * {@code audit_log_event_type_id=103}
+     * ({@code AuditTypeIds.USER_PASSWORD_REQUEST_LEGACY}). The legacy
+     * "request password" workflow has no callers in the current SPA
+     * surface; the helper is retained for the legacy servlet path that
+     * may still resolve it via reflection / Spring wiring.
+     */
     public void createRowForPasswordRequest(UserAccountBean uab) {
-        createRowForUserAccount(uab, "__requested_password", "__requested_password");
+        try (Connection c = this.ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, '', '')")) {
+            ps.setInt(1, 103); // AuditTypeIds.USER_PASSWORD_REQUEST_LEGACY
+            ps.setInt(2, uab.getId());
+            ps.setInt(3, uab.getId());
+            ps.setString(4, uab.getName() == null ? "" : uab.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warn("Audit write failed for password-request user={} (continuing): {}",
+                    uab.getId(), e.getMessage());
+        }
     }
 
+    /**
+     * Phase audit-unification (2026-06-12) — extract-job execution
+     * audit writer (shared body for success + failure overloads).
+     *
+     * <p>Direct INSERT into {@code audit_log_event} with the
+     * caller-supplied {@code eventTypeId} (106 for success, 107 for
+     * failure). {@code audit_table='dataset'} with {@code entity_id}
+     * set to the trigger's dataset id so the Audit Log view groups the
+     * row with other dataset lifecycle entries. The free-text
+     * {@code actionMessage} (job output excerpt) is preserved in
+     * {@code new_value}.
+     */
+    private void writeJobExecutionAudit(TriggerBean triggerBean, int eventTypeId,
+                                        String reasonForChange, String actionMessage) {
+        int userId = triggerBean.getUserAccount() == null ? 0 : triggerBean.getUserAccount().getId();
+        int entityId = triggerBean.getDataset() == null ? 0 : triggerBean.getDataset().getId();
+        String entityName = triggerBean.getFullName() == null ? "" : triggerBean.getFullName();
+        String reason = reasonForChange == null ? "" : reasonForChange;
+        String action = actionMessage == null ? "" : actionMessage;
+        try (Connection c = this.ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value, reason_for_change) "
+                             + "VALUES (?, now(), ?, 'dataset', ?, ?, '', ?, ?)")) {
+            ps.setInt(1, eventTypeId); // caller-supplied AuditTypeIds.EXTRACT_JOB_*
+            ps.setInt(2, userId);
+            ps.setInt(3, entityId);
+            ps.setString(4, entityName);
+            ps.setString(5, action);
+            ps.setString(6, reason);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            logger.warn("Audit write failed for job execution trigger={} type={} (continuing): {}",
+                    entityName, eventTypeId, e.getMessage());
+        }
+    }
+
+    /**
+     * Phase audit-unification (2026-06-12) — generic job-execution
+     * audit writer kept for the legacy callers that don't know the
+     * specific success/failure outcome. Defaults to
+     * {@code AuditTypeIds.EXTRACT_JOB_SUCCEEDED} (106) since the no-op
+     * "no failure observed" case is the conservative interpretation.
+     */
     public void createRowForJobExecution(TriggerBean triggerBean, String reasonForChange, String actionMessage) {
-        AuditEventBean auditEventBean = new AuditEventBean();
-        auditEventBean.setUserId(triggerBean.getUserAccount().getId());
-        auditEventBean.setEntityId(triggerBean.getDataset().getId());
-        auditEventBean.setAuditTable(triggerBean.getFullName());
-        // 
-        auditEventBean.setReasonForChange(reasonForChange);
-        auditEventBean.setActionMessage(actionMessage);
-        create(auditEventBean);
+        writeJobExecutionAudit(triggerBean, 106, reasonForChange, actionMessage);
     }
 
     public void createRowForExtractDataJobSuccess(TriggerBean triggerBean) {
-        createRowForJobExecution(triggerBean, "__job_fired_success", "__job_fired_success");
+        writeJobExecutionAudit(triggerBean, 106, // AuditTypeIds.EXTRACT_JOB_SUCCEEDED
+                "__job_fired_success", "__job_fired_success");
     }
 
-	public void createRowForExtractDataJobSuccess(TriggerBean triggerBean, String message) {
-		createRowForJobExecution(triggerBean, "__job_fired_success", message);
-	}
+    public void createRowForExtractDataJobSuccess(TriggerBean triggerBean, String message) {
+        writeJobExecutionAudit(triggerBean, 106, // AuditTypeIds.EXTRACT_JOB_SUCCEEDED
+                "__job_fired_success", message);
+    }
 
     public void createRowForExtractDataJobFailure(TriggerBean triggerBean) {
-        createRowForJobExecution(triggerBean, "__job_fired_fail", "__job_fired_fail");
+        writeJobExecutionAudit(triggerBean, 107, // AuditTypeIds.EXTRACT_JOB_FAILED
+                "__job_fired_fail", "__job_fired_fail");
     }
 
-	public void createRowForExtractDataJobFailure(TriggerBean triggerBean, String message) {
-        createRowForJobExecution(triggerBean, "__job_fired_fail", message);
+    public void createRowForExtractDataJobFailure(TriggerBean triggerBean, String message) {
+        writeJobExecutionAudit(triggerBean, 107, // AuditTypeIds.EXTRACT_JOB_FAILED
+                "__job_fired_fail", message);
     }
 
     public ArrayList<AuditEventBean> findAllByAuditTable(String tableName) {

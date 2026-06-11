@@ -53,5 +53,8 @@
   <include  file="migration/lc-muw-2026-06-11-build-study-task-ack.xml"/>
   <include  file="migration/lc-muw-2026-06-11-audit-event-types-gap-coverage.xml"/>
   <include  file="migration/lc-muw-2026-06-11-audit-event-type-bug-report.xml"/>
+  <include  file="migration/lc-muw-2026-06-12-audit-event-types-unification.xml"/>
+  <include  file="migration/lc-muw-2026-06-12-audit-event-types-dde-retinal-study.xml"/>
+  <include  file="migration/lc-muw-2026-06-12-audit-event-backfill.xml"/>
 </databaseChangeLog>
 

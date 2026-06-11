@@ -10,6 +10,9 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -20,7 +23,6 @@ import java.util.Set;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.GroupClassType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -28,7 +30,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyGroupBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyGroupClassBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupClassDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyGroupDAO;
@@ -252,14 +253,12 @@ public class GroupClassesApiController {
                     "Group class " + groupClassId + " is removed — restore before editing"));
         }
 
-        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-
         if (body.name() != null) {
             String oldVal = target.getName();
             String newVal = body.name().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setName(newVal);
-                writeAudit(auditDAO, me, study, target, "name", oldVal, newVal);
+                writeAudit(AuditTypeIds.GROUP_CLASS_FIELD_UPDATED, me, study, target, "name", oldVal, newVal);
             }
         }
         if (body.groupClassType() != null) {
@@ -267,7 +266,7 @@ public class GroupClassesApiController {
             int oldTypeId = target.getGroupClassTypeId();
             if (oldTypeId != newTypeId) {
                 target.setGroupClassTypeId(newTypeId);
-                writeAudit(auditDAO, me, study, target, "group_class_type_id",
+                writeAudit(AuditTypeIds.GROUP_CLASS_FIELD_UPDATED, me, study, target, "group_class_type_id",
                         String.valueOf(oldTypeId), String.valueOf(newTypeId));
             }
         }
@@ -276,7 +275,7 @@ public class GroupClassesApiController {
             String newVal = body.subjectAssignment().trim();
             if (!java.util.Objects.equals(nullToEmpty(oldVal), newVal)) {
                 target.setSubjectAssignment(newVal);
-                writeAudit(auditDAO, me, study, target, "subject_assignment", oldVal, newVal);
+                writeAudit(AuditTypeIds.GROUP_CLASS_FIELD_UPDATED, me, study, target, "subject_assignment", oldVal, newVal);
             }
         }
 
@@ -424,25 +423,8 @@ public class GroupClassesApiController {
         gc.setUpdatedDate(new java.util.Date());
         sgcDao.update(gc);
 
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("study_group_class");
-            ae.setEntityId(gc.getId());
-            ae.setColumnName("status_id");
-            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getId()));
-            ae.setNewValue(String.valueOf(target.getId()));
-            ae.setActionMessage("group_class_" + operation + ": id=" + gc.getId()
-                    + " name='" + (gc.getName() == null ? "" : gc.getName())
-                    + "' (" + (oldStatus == null ? "?" : oldStatus.getName())
-                    + " → " + target.getName() + ") by " + me.getName());
-            new AuditEventDAO(dataSource).create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for group_class_{} id={} (continuing): {}",
-                    operation, gc.getId(), e.getMessage());
-        }
+        writeLifecycleAudit(AuditTypeIds.GROUP_CLASS_LIFECYCLE_CHANGED, me, study, gc,
+                oldStatus, target, "group_class_" + operation);
 
         LOG.info("Group class {}: studyOid={} id={} by user={}",
                 operation, studyOid, gc.getId(), me.getName());
@@ -570,31 +552,70 @@ public class GroupClassesApiController {
         return "Other";
     }
 
-    private void writeAudit(AuditEventDAO auditDAO,
+    /**
+     * Direct INSERT into {@code audit_log_event} for a group-class
+     * field change. Audit-table unification (slice C, 2026-06-12) —
+     * the legacy {@code AuditEventDAO.create} path wrote to the
+     * {@code audit_event} table (invisible to the SPA Audit Log view);
+     * this writer targets the unified {@code audit_log_event} surface.
+     * SQL failures are logged WARN and swallowed so the operator
+     * action still succeeds (matches the pattern across the unified
+     * audit writers).
+     */
+    private void writeAudit(int auditTypeId,
                             UserAccountBean me,
                             StudyBean study,
                             StudyGroupClassBean target,
                             String columnName,
                             String oldVal,
                             String newVal) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("study_group_class");
-            ae.setEntityId(target.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldVal == null ? "" : oldVal);
-            ae.setNewValue(newVal == null ? "" : newVal);
-            ae.setActionMessage("group_class_update: id=" + target.getId()
-                    + "." + columnName
-                    + " '" + (oldVal == null ? "" : oldVal) + "' → '"
-                    + (newVal == null ? "" : newVal) + "'");
-            auditDAO.create(ae);
-        } catch (Exception e) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study_group_class', ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, me.getId());
+            ps.setInt(3, target.getId());
+            ps.setString(4, columnName);
+            ps.setString(5, oldVal == null ? "" : oldVal);
+            ps.setString(6, newVal == null ? "" : newVal);
+            ps.executeUpdate();
+        } catch (SQLException e) {
             LOG.warn("Audit write failed for group_class field {}={} (continuing): {}",
                     columnName, newVal, e.getMessage());
+        }
+    }
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for the group-class
+     * lifecycle (disable / restore) status flip. The {@code actionPrefix}
+     * argument is no longer persisted — the {@code auditTypeId} encodes
+     * the operation type — but is retained in the signature so callers
+     * can pass it for symmetry with the other lifecycle writers.
+     */
+    private void writeLifecycleAudit(int auditTypeId,
+                                     UserAccountBean me,
+                                     StudyBean study,
+                                     StudyGroupClassBean target,
+                                     Status oldStatus,
+                                     Status newStatus,
+                                     @SuppressWarnings("unused") String actionPrefix) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study_group_class', ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, me.getId());
+            ps.setInt(3, target.getId());
+            ps.setString(4, target.getName() == null ? "" : target.getName());
+            ps.setString(5, oldStatus == null ? "" : oldStatus.getName());
+            ps.setString(6, newStatus == null ? "" : newStatus.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for group_class lifecycle id={} (continuing): {}",
+                    target.getId(), e.getMessage());
         }
     }
 
