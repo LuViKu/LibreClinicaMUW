@@ -50,11 +50,26 @@ const eventCrfOid = computed(() => String(route.params.eventCrfOid))
 // the backend already 409s any write, but the legacy form let users
 // type into the fields and then surprised them at submit time. The
 // existing meta.readOnly path stays for the Monitor view-only mode.
+//
+// Phase E completed-crf-and-event-lock (2026-06-11): a completed CRF
+// (status === 'complete') is ALSO read-only by default. The legacy
+// behaviour left every input editable until the operator explicitly
+// hit "Mark complete" again, which let operators silently edit
+// abgeschlossene CRFs without the audit-trail-significant Reopen
+// event. Now: a complete CRF is read-only until the operator clicks
+// Reopen — that backend call flips status from 'complete' →
+// 'in-progress' and writes the reopen audit, after which this
+// computed naturally re-evaluates to false.
+const isCompleted = computed(() => store.status === 'complete')
 const isLocked = computed(() => store.status === 'locked')
-const isReadOnly = computed(() => route.meta?.readOnly === true || isLocked.value)
-const readOnlyLabel = computed(() => isLocked.value
-  ? t('crfEntry.lockedTell')
-  : t('crfEntry.readOnlyTell'))
+const isReadOnly = computed(
+  () => route.meta?.readOnly === true || isLocked.value || isCompleted.value,
+)
+const readOnlyLabel = computed(() => {
+  if (isLocked.value) return t('crfEntry.lockedTell')
+  if (isCompleted.value) return t('crfEntry.completedTell')
+  return t('crfEntry.readOnlyTell')
+})
 
 onMounted(() => {
   void store.load(eventCrfOid.value)
@@ -463,8 +478,26 @@ function onThreadUpdated(_parentId: string) {
         v-if="isLocked && store.entry && !store.isLoading"
         class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-4"
         role="status"
+        data-testid="crf-locked-banner"
       >
         {{ t('crfEntry.lockedBanner') }}
+      </div>
+
+      <!-- Phase E completed-crf-and-event-lock: same explanatory tell for
+           a CRF that is marked complete. Distinct copy from the
+           subject-signed banner above because the recovery path here is
+           different — the operator can self-serve via the existing
+           Reopen button below (canReopenCrf), whereas a fully-locked
+           CRF needs the study lead. The Reopen button hint inside the
+           message is conditional on canReopen so a non-privileged
+           operator doesn't get told to click a button they can't see. -->
+      <div
+        v-if="isCompleted && !isLocked && store.entry && !store.isLoading"
+        class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-4"
+        role="status"
+        data-testid="crf-completed-banner"
+      >
+        {{ canReopen ? t('crfEntry.completedBanner') : t('crfEntry.completedBannerNoReopen') }}
       </div>
 
       <!-- Phase E.6 dde — blind-second-pass banner. Rendered only when
@@ -682,9 +715,16 @@ function onThreadUpdated(_parentId: string) {
 
         </fieldset>
 
-        <!-- Save action row -->
+        <!-- Save action row.
+             Phase E completed-crf-and-event-lock: the row stays mounted
+             when the CRF is in the COMPLETED state so the Reopen
+             button remains reachable. For the deeper read-only modes
+             (Monitor view via meta.readOnly + subject-signed lock)
+             the row hides entirely — neither path offers Reopen here.
+             The save / mark-complete buttons still gate on isReadOnly
+             below so a completed CRF can't be silently re-saved. -->
         <div
-          v-if="!isReadOnly"
+          v-if="!isReadOnly || (isCompleted && !isLocked && canReopen)"
           class="flex items-center justify-between sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-200 -mx-8 px-8 py-3"
         >
           <div class="text-xs text-slate-500">
