@@ -10,20 +10,29 @@
  * eye → renders on the clinician's RIGHT. OU = oculus uterque = both
  * eyes (a single bilateral measurement, not differentiated).
  *
- * Detection rule. An item participates in a bilateral row iff its OID
- * matches `^(OD|OS|OU)_(.+)$`. Items are grouped by the suffix in
- * declaration order: the first OD/OS/OU item bearing a given suffix
- * opens a row; subsequent items with the same suffix join it. OU items
+ * Detection rule. An OID participates in a bilateral row iff one of its
+ * underscore-delimited tokens is exactly {@code OD}, {@code OS}, or
+ * {@code OU}. The "pair key" is the OID with the eye token removed, so
+ * {@code I_VA_OD_ETDRS} and {@code I_VA_OS_ETDRS} both reduce to
+ * {@code I_VA_ETDRS} and join the same row. Items are grouped in
+ * declaration order: the first OD/OS/OU item bearing a given pair key
+ * opens a row; subsequent items with the same key join it. OU items
  * collapse into a single-cell "Both eyes" row (so a study can drop in
  * a bilateral measurement without forcing a paired layout).
  *
- * Items that don't match the prefix fall through as a single row,
- * preserving the existing one-column layout for non-ophthalmology CRFs.
+ * The first form (laterality as the LEADING token, e.g. {@code OD_BCVA})
+ * was the original Phase E.6 convention and remains supported. The
+ * second form (laterality as an INFIX token, e.g. {@code I_VA_OD_ETDRS})
+ * matches the seeded Ophthalmology Visit CRF — both shapes resolve to
+ * the same pair key.
+ *
+ * Items without an eye token fall through as a single row, preserving
+ * the existing one-column layout for non-ophthalmology CRFs.
  */
 
 import type { CrfItem } from '@/types/crf'
 
-const EYE_PREFIX_RE = /^(OD|OS|OU)_(.+)$/
+const EYE_TOKEN_RE = /^(OD|OS|OU)$/
 
 /**
  * A row in the rendered section. Each row consumes one or more items
@@ -80,14 +89,35 @@ export type BilateralRow =
     }
 
 /**
- * Returns the {@code OD}/{@code OS}/{@code OU} prefix and shared
- * suffix for an item whose OID participates in the bilateral
- * convention, or {@code null} otherwise.
+ * Returns the {@code OD}/{@code OS}/{@code OU} marker and the pair key
+ * (the OID with the eye token removed) for an item whose OID
+ * participates in the bilateral convention, or {@code null} otherwise.
+ *
+ * <p>The {@code suffix} field is the pair key — two OIDs that produce
+ * the same key + differ only in eye token join a single bilateral row.
+ * The field is named "suffix" for backward compatibility with the
+ * original leading-prefix convention ({@code OD_BCVA} → suffix=
+ * {@code BCVA}); for an infix-token OID ({@code I_VA_OD_ETDRS}) the
+ * "suffix" is the surrounding tokens joined ({@code I_VA_ETDRS}).
+ *
+ * <p>If an OID carries more than one eye token (degenerate authoring)
+ * the FIRST occurrence is consumed.
  */
 export function parseEyePrefix(oid: string): { eye: 'OD' | 'OS' | 'OU'; suffix: string } | null {
-  const m = EYE_PREFIX_RE.exec(oid)
-  if (!m) return null
-  return { eye: m[1] as 'OD' | 'OS' | 'OU', suffix: m[2] }
+  const tokens = oid.split('_')
+  // Require at least 2 tokens overall — `OD` alone, `OS` alone, etc.
+  // shouldn't be treated as paired (matches the original
+  // `^(OD|OS|OU)_(.+)$` regex's "must have something after the eye").
+  if (tokens.length < 2) return null
+  const eyeIdx = tokens.findIndex((t) => EYE_TOKEN_RE.test(t))
+  if (eyeIdx === -1) return null
+  const eye = tokens[eyeIdx] as 'OD' | 'OS' | 'OU'
+  const remaining = [...tokens.slice(0, eyeIdx), ...tokens.slice(eyeIdx + 1)]
+  // No surviving tokens after eye removal — e.g. literally {@code OD_}
+  // — treat as non-paired so the empty key doesn't collide with other
+  // empty keys.
+  if (remaining.length === 0) return null
+  return { eye, suffix: remaining.join('_') }
 }
 
 /**
@@ -98,6 +128,19 @@ export function parseEyePrefix(oid: string): { eye: 'OD' | 'OS' | 'OU'; suffix: 
  */
 export function stripEyeMarker(label: string): string {
   return label
+    // Leading "Right eye (OD) — X", "Left eye (OS) - X", "Both eyes — X",
+    // and the German equivalents ("Rechtes Auge (OD)", "Linkes Auge (OS)",
+    // "Beide Augen"). Seeded Ophthalmology CRF labels use these forms
+    // verbatim — strip them so the row label collapses to the shared
+    // measurement name on both sides.
+    .replace(
+      /^\s*(Right\s+eye|Left\s+eye|Both\s+eyes|Rechtes\s+Auge|Linkes\s+Auge|Beide\s+Augen)\s*[(\[]?\s*(OD|OS|OU)?\s*[)\]]?\s*[—\-:]\s*/i,
+      '',
+    )
+    .replace(
+      /^\s*(Right\s+eye|Left\s+eye|Both\s+eyes|Rechtes\s+Auge|Linkes\s+Auge|Beide\s+Augen)\s*[(\[]?\s*(OD|OS|OU)?\s*[)\]]?\s+/i,
+      '',
+    )
     // Leading "OD ", "OD: ", "OD — ", "OD - ", "OD_"
     .replace(/^\s*(OD|OS|OU)\s*[—\-:_]?\s+/i, '')
     // Trailing " (OD)", " — OD", " - OS", " OS"
@@ -132,7 +175,12 @@ export function deriveRowLabel(
     return osClean
   }
 
-  return suffix.replace(/_/g, ' ').trim()
+  // Suffix fallback. Strip the conventional item-namespace prefix
+  // tokens ("I_", "I_OPHTH_", "I_VA_", etc.) so the surfaced label
+  // reads "BCVA LETTERS" rather than "I OPHTH BCVA LETTERS" — the
+  // user-facing row label should not leak the OID's authoring scheme.
+  const namespaceStrippedSuffix = suffix.replace(/^(I_)?(OPHTH_|VA_|REFRACT_|IOP_|LENS_|VISION_|TONO_)?/i, '')
+  return (namespaceStrippedSuffix || suffix).replace(/_/g, ' ').trim()
 }
 
 /**
@@ -160,6 +208,19 @@ const COMPOUND_PREFIX_REGISTRY: Record<
       ANGLE: 'Ang',
       AXIS: 'Ang',
       VISUS: 'Vis',
+    },
+  },
+  // Seeded Ophthalmology CRF uses the shorter REFRACT_OD_SPH /
+  // REFRACT_OS_CYL convention (lc-muw-2026-06-05-ophth-visit-crf-seed.xml).
+  // After parseEyePrefix strips the OD/OS token the pair key reads as
+  // I_REFRACT_SPH — the compound prefix that matches is therefore
+  // I_REFRACT (the leading I_ is part of the OID's "item" namespace).
+  I_REFRACT: {
+    mainLabel: 'Refraktion',
+    compactBySubKey: {
+      SPH: 'Sphäre',
+      CYL: 'Zylinder',
+      AXIS: 'Achse',
     },
   },
 }
