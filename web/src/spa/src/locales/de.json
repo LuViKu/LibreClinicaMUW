@@ -2267,6 +2267,15 @@
     "submit": "Senden",
     "cancel": "Abbrechen",
     "success": "Vielen Dank — Ticket {ticketId} wurde an die Administration gesendet.",
+    "attach": {
+      "heading": "Anhängen",
+      "pageUrl": "Aktuelle Seite mitsenden ({url})",
+      "console": "Letzte {n} Konsolen-Meldungen mitsenden",
+      "preview": {
+        "toggle": "Vorschau anzeigen",
+        "empty": "(keine Einträge)"
+      }
+    },
     "error": {
       "network": "Fehler beim Versand. Bitte versuchen Sie es erneut.",
       "recipientNotConfigured": "Bug-Report-Empfänger ist nicht konfiguriert. Bitte den Sysadmin kontaktieren."

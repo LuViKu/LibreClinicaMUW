@@ -8,6 +8,7 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
 import { useBugReportsStore } from '@/stores/bugReports'
+import { useClientLogsStore } from '@/stores/clientLogs'
 
 /**
  * Phase E — in-app bug-report dialog.
@@ -42,20 +43,64 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const store = useBugReportsStore()
+const clientLogs = useClientLogsStore()
 
 interface Form {
   title: string
   description: string
   reproductionSteps: string
+  attachPageUrl: boolean
+  attachConsoleEntries: boolean
 }
 
 function blank(): Form {
-  return { title: '', description: '', reproductionSteps: '' }
+  return {
+    title: '',
+    description: '',
+    reproductionSteps: '',
+    attachPageUrl: true,
+    // PII guard: clientLogs.push() runs a redactPii() pass on each
+    // message BEFORE storing, so subject IDs (M-001, DF-001), DOB
+    // strings (ISO + German formats), and email-shaped tokens are
+    // already replaced with [REDACTED:…] markers in the entries the
+    // operator can preview here. Default ON because the captured
+    // output (stack traces + warn messages) is genuinely useful for
+    // triage — and what's stored is already scrubbed at capture time.
+    attachConsoleEntries: true,
+  }
 }
 
 const form = ref<Form>(blank())
 /** Banner shown after a successful send — cleared next time the dialog opens. */
 const successTicketId = ref<string | null>(null)
+/** Controls the disclosure for the "preview attached console entries" block. */
+const showConsolePreview = ref(false)
+
+/**
+ * Snapshot of the current page URL the dialog renders inside the
+ * "attach page URL" label. Computed (not a one-shot read in setup) so a
+ * route change between dialog opens reflects in the label.
+ */
+const currentPageUrl = computed(() => {
+  if (typeof window === 'undefined' || !window.location) return ''
+  return window.location.pathname + (window.location.search ?? '')
+})
+
+/**
+ * The slice of console entries the dialog would attach on submit —
+ * capped at 50 per the brief. Read on render so the count + the
+ * preview block stay in sync with the live ring buffer.
+ */
+const attachableConsoleEntries = computed(() => clientLogs.recent(50))
+
+const consolePreviewLines = computed(() => {
+  if (attachableConsoleEntries.value.length === 0) return []
+  return attachableConsoleEntries.value.map((e) => {
+    const line = `[${e.timestamp}]  ${e.level}  ${e.message}`
+    // Visual cap only — wire payload still carries the full string.
+    return line.length > 200 ? line.slice(0, 200) + ' …' : line
+  })
+})
 
 // Re-seed form + clear the previous ticket banner every time the
 // dialog opens. Don't touch state while closed so a programmatic
@@ -66,6 +111,7 @@ watch(
     if (!isOpen) return
     form.value = blank()
     successTicketId.value = null
+    showConsolePreview.value = false
     store.reset()
   },
 )
@@ -95,6 +141,10 @@ async function submit() {
     title: form.value.title,
     description: form.value.description,
     reproductionSteps: form.value.reproductionSteps,
+    attachPageUrl: form.value.attachPageUrl,
+    consoleEntries: form.value.attachConsoleEntries
+      ? attachableConsoleEntries.value
+      : undefined,
   })
   if (ticketId !== null) {
     successTicketId.value = ticketId
@@ -184,6 +234,54 @@ function cancel() {
           :placeholder="t('bugReport.field.reproductionSteps.placeholder')"
           data-testid="bug-report-steps"
         />
+      </div>
+
+      <div
+        class="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 space-y-2"
+        data-testid="bug-report-attach-panel"
+      >
+        <div class="text-xs font-medium text-slate-700">
+          {{ t('bugReport.attach.heading') }}
+        </div>
+        <label class="flex items-start gap-2 text-xs text-slate-700">
+          <input
+            v-model="form.attachPageUrl"
+            type="checkbox"
+            class="mt-0.5"
+            data-testid="bug-report-attach-page-url"
+          />
+          <span data-testid="bug-report-attach-page-url-label">
+            {{ t('bugReport.attach.pageUrl', { url: currentPageUrl }) }}
+          </span>
+        </label>
+        <label class="flex items-start gap-2 text-xs text-slate-700">
+          <input
+            v-model="form.attachConsoleEntries"
+            type="checkbox"
+            class="mt-0.5"
+            data-testid="bug-report-attach-console"
+          />
+          <span>
+            {{ t('bugReport.attach.console', { n: attachableConsoleEntries.length }) }}
+          </span>
+        </label>
+        <div v-if="form.attachConsoleEntries">
+          <button
+            type="button"
+            class="text-xs text-muw-blue hover:underline"
+            data-testid="bug-report-attach-console-preview-toggle"
+            @click="showConsolePreview = !showConsolePreview"
+          >
+            {{ t('bugReport.attach.preview.toggle') }}
+          </button>
+          <pre
+            v-if="showConsolePreview"
+            class="mt-1 max-h-40 overflow-auto rounded border border-slate-200 bg-white p-2 text-[10px] font-mono whitespace-pre text-slate-700"
+            data-testid="bug-report-attach-console-preview"
+          >{{ consolePreviewLines.length === 0
+              ? t('bugReport.attach.preview.empty')
+              : consolePreviewLines.join('\n') }}</pre>
+        </div>
       </div>
 
       <ErrorText v-if="errorCopy" data-testid="bug-report-error">{{ errorCopy }}</ErrorText>

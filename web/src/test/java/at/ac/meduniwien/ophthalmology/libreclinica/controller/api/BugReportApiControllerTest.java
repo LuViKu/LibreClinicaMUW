@@ -173,6 +173,76 @@ class BugReportApiControllerTest extends AbstractApiControllerTest {
         verify(sender, never()).sendEmail(any(), any(), any(), any(), anyBoolean());
     }
 
+    /* ---------------------------------------------------------------------- */
+    /* Console-entry attachment                                                */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void bugReportEmailIncludesConsoleEntriesWhenSupplied() throws Exception {
+        OpenClinicaMailSender sender = Mockito.mock(OpenClinicaMailSender.class);
+        doNothing().when(sender).sendEmail(any(), any(), any(), any(), anyBoolean());
+
+        // Three captured lines spanning the supported levels.
+        String body = "{"
+                + "\"title\":\"console attach\","
+                + "\"description\":\"please see console\","
+                + "\"consoleEntries\":["
+                + "{\"level\":\"error\",\"message\":\"TypeError: x is undefined\",\"timestamp\":\"2026-06-11T09:00:00Z\"},"
+                + "{\"level\":\"warn\",\"message\":\"deprecated API foo\",\"timestamp\":\"2026-06-11T09:00:01Z\"},"
+                + "{\"level\":\"uncaught\",\"message\":\"Error in component setup\",\"timestamp\":\"2026-06-11T09:00:02Z\"}"
+                + "]}";
+
+        mockMvcWithRecipient("ops@example.org", sender)
+                .perform(post("/api/v1/bug-report")
+                        .contentType("application/json")
+                        .content(body)
+                        .session((MockHttpSession)
+                                authenticatedSessionWithoutStudy(7, "physician")))
+                .andExpect(status().isOk());
+
+        verify(sender).sendEmail(
+                eq("ops@example.org"),
+                any(),
+                any(),
+                Mockito.argThat(b -> b != null
+                        && b.contains("Recent console output (3):")
+                        && b.contains("[2026-06-11T09:00:00Z]  error  TypeError: x is undefined")
+                        && b.contains("[2026-06-11T09:00:01Z]  warn  deprecated API foo")
+                        && b.contains("[2026-06-11T09:00:02Z]  uncaught  Error in component setup")),
+                eq(false));
+    }
+
+    @Test
+    void bugReportEmailOmitsConsoleSectionWhenEntriesEmpty() throws Exception {
+        OpenClinicaMailSender sender = Mockito.mock(OpenClinicaMailSender.class);
+        doNothing().when(sender).sendEmail(any(), any(), any(), any(), anyBoolean());
+
+        // Explicit empty list — same shape the SPA emits when the operator
+        // unchecks the "attach console" toggle and the store still passes
+        // an empty array. The body must not gain the section header.
+        String body = "{"
+                + "\"title\":\"no console\","
+                + "\"description\":\"nothing interesting in the console\","
+                + "\"consoleEntries\":[]"
+                + "}";
+
+        mockMvcWithRecipient("ops@example.org", sender)
+                .perform(post("/api/v1/bug-report")
+                        .contentType("application/json")
+                        .content(body)
+                        .session((MockHttpSession)
+                                authenticatedSessionWithoutStudy(7, "physician")))
+                .andExpect(status().isOk());
+
+        verify(sender).sendEmail(
+                eq("ops@example.org"),
+                any(),
+                any(),
+                Mockito.argThat(b -> b != null
+                        && !b.contains("Recent console output")),
+                eq(false));
+    }
+
     @Test
     void submitReturns401WhenAnonymous() throws Exception {
         OpenClinicaMailSender sender = Mockito.mock(OpenClinicaMailSender.class);
