@@ -3437,6 +3437,12 @@ export interface components {
             reproductionSteps?: string;
             pageUrl?: string;
             userAgent?: string;
+            consoleEntries?: components["schemas"]["ConsoleEntry"][];
+        };
+        ConsoleEntry: {
+            level?: string;
+            message?: string;
+            timestamp?: string;
         };
         BugReportResponse: {
             delivered?: boolean;
