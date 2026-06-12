@@ -25,7 +25,6 @@ import java.util.regex.Pattern;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.RuleDao;
@@ -406,8 +405,7 @@ public class RuleExpressionApiController {
         if (guard != null) return guard;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit rule create"));
         }
@@ -646,8 +644,7 @@ public class RuleExpressionApiController {
         if (guard != null) return guard;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit rule edit"));
         }

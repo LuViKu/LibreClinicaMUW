@@ -1241,20 +1241,12 @@ public class CrfsApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
-        // Legacy parity: sysadmin OR director/coordinator on the active
+        // Legacy parity: sysadmin OR director/coordinator on ANY active
         // study (CreateCRFServlet:57-68). The site-level legality check
-        // doesn't apply here — CRFs are study-independent.
-        if (me.isSysAdmin()) return null;
-        at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean currentRole =
-                (at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean)
-                        session.getAttribute("userRole");
-        if (currentRole == null || currentRole.getRole() == null) {
-            return ResponseEntity.status(403).body(Map.of("message",
-                    "Your role does not permit managing CRFs"));
-        }
-        at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role r = currentRole.getRole();
-        if (r != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR
-                && r != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.COORDINATOR) {
+        // doesn't apply here — CRFs are study-independent. Phase E.6
+        // multi-role: walk all bindings via StudyAdminAuthorization
+        // instead of trusting the single session-attribute role.
+        if (!StudyAdminAuthorization.userMayManageCrfLibrary(me, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit managing CRFs — sysadmin or Director/Coordinator only"));
         }

@@ -25,7 +25,6 @@ import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.GroupClassType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyGroupBean;
@@ -461,8 +460,7 @@ public class GroupClassesApiController {
                     "Group classes may only be managed at the top-level study (got a site)"));
         }
         if (mutating) {
-            StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-            if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
                 return ResponseEntity.status(403).body(Map.of("message",
                         "Your role does not permit managing group classes on this study"));
             }

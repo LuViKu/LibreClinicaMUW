@@ -147,7 +147,7 @@ describe('UserRolesDialog — per-study multi-select', () => {
     await nextTick()
 
     // Untick Data Manager.
-    const dmBox = checkboxFor('Data Manager')!
+    const dmBox = checkboxFor('Study Director')!
     expect(dmBox.checked).toBe(true)
     dmBox.checked = false
     dmBox.dispatchEvent(new Event('change', { bubbles: true }))
@@ -212,7 +212,7 @@ describe('UserRolesDialog — per-study multi-select', () => {
     const buttons = () => Array.from(document.body.querySelectorAll('button')) as HTMLButtonElement[]
     expect(buttons().some((b) => b.textContent?.trim() === 'Save')).toBe(false)
 
-    const dmBox = checkboxFor('Data Manager')!
+    const dmBox = checkboxFor('Study Director')!
     dmBox.checked = false
     dmBox.dispatchEvent(new Event('change', { bubbles: true }))
     await nextTick()

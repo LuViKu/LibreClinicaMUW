@@ -359,8 +359,7 @@ public class StudiesApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
         }
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, target)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, target, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit editing this study"));
         }

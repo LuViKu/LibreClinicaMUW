@@ -24,7 +24,6 @@ import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.EventDefinitionCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -1099,8 +1098,14 @@ public class EventDefinitionsApiController {
                     "Event definitions may only be managed at the top-level study (got a site)"));
         }
         if (mutating) {
-            StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-            if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+            // Phase E.6 multi-role auth (2026-06-12): walk ALL of the
+            // caller's active bindings instead of the single session-
+            // attribute role. A user with both Investigator (data
+            // entry) AND STUDYDIRECTOR (study config) bindings on the
+            // same study would otherwise see a 403 whenever the
+            // session attribute happened to land on Investigator —
+            // non-deterministic per MeApiController#setActiveStudy.
+            if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
                 return ResponseEntity.status(403).body(Map.of("message",
                         "Your role does not permit managing event definitions on this study"));
             }

@@ -22,7 +22,6 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
@@ -456,8 +455,7 @@ public class RulesApiController {
         if (guard != null) return guard;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit rule_set schedule edit"));
         }
@@ -572,8 +570,7 @@ public class RulesApiController {
         if (guard != null) return guard;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit rule_set dry-run"));
         }
@@ -666,8 +663,7 @@ public class RulesApiController {
         if (guard != null) return guard;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit rule_set XML export"));
         }
@@ -799,8 +795,7 @@ public class RulesApiController {
         if (guard != null) return guard;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit rule_action edit"));
         }
@@ -1141,8 +1136,7 @@ public class RulesApiController {
         if (guard != null) return guard;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit rule_set create"));
         }
@@ -1367,8 +1361,7 @@ public class RulesApiController {
         if (guard != null) return guard;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit rule_action create"));
         }
@@ -1695,8 +1688,7 @@ public class RulesApiController {
         if (guard != null) return guard;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit rule_set " + operation));
         }
@@ -1735,8 +1727,7 @@ public class RulesApiController {
         if (guard != null) return guard;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit rule " + operation));
         }

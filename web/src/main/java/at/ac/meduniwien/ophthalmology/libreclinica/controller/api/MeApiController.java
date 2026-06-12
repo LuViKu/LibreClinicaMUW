@@ -26,6 +26,7 @@ import javax.sql.DataSource;
 import jakarta.servlet.ServletContext;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -256,18 +257,28 @@ public class MeApiController {
         // the legacy holdover from when admin was treated as a global
         // role. For multi-study switching we accept ANY active binding
         // including admin (root's most common binding), so iterate the
-        // full per-user role set and pick the first row with a
-        // matching study_id and status=AVAILABLE.
+        // full per-user role set and pick the row with a matching
+        // study_id, status=AVAILABLE, and the HIGHEST privilege rank —
+        // not the first row the DAO returns. With multi-role bindings
+        // (Phase E A7.5) a user can hold both Investigator + Study
+        // Director on the same study; a non-deterministic first-match
+        // pick used to leave them stuck on Investigator and seeing
+        // 403s on study-config writes that their Director binding
+        // would otherwise admit.
         ArrayList<StudyUserRoleBean> roles = userDAO.findAllRolesByUserName(ub.getName());
         StudyUserRoleBean grantedRole = null;
+        int bestRank = -1;
         for (StudyUserRoleBean r : roles) {
             if (r.getStudyId() != target.getId()) continue;
             if (r.getStatus() == null
                     || r.getStatus().getId() != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status.AVAILABLE.getId()) {
                 continue;
             }
-            grantedRole = r;
-            break;
+            int rank = privilegeRank(r.getRole());
+            if (rank > bestRank) {
+                bestRank = rank;
+                grantedRole = r;
+            }
         }
         if (grantedRole == null) {
             return ResponseEntity.status(403).body(Map.of("message",
@@ -432,6 +443,35 @@ public class MeApiController {
 
     private static String nullToEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    /**
+     * Phase E.6 multi-role (2026-06-12) — rank legacy {@link Role}
+     * constants by the breadth of operations they admit. Used by
+     * {@code setActiveStudy} when a user holds more than one binding
+     * on the same study; the strongest wins so the session attribute
+     * reflects the role with the widest authority for that session.
+     *
+     * <p>Returns -1 for null / unknown so callers can use a single
+     * {@code if (rank > bestRank)} loop without nulls leaking into
+     * the comparison.
+     *
+     * <p>Authorization decisions on multi-role users should NOT rely
+     * on this — they walk the full binding set via
+     * {@link StudyAdminAuthorization#userMayEditStudy}. The rank only
+     * influences which role shows in the TopBar / audit metadata
+     * for the active session.
+     */
+    private static int privilegeRank(Role role) {
+        if (role == null) return -1;
+        if (role.equals(Role.ADMIN)) return 100;
+        if (role.equals(Role.STUDYDIRECTOR)) return 80;
+        if (role.equals(Role.COORDINATOR)) return 70;
+        if (role.equals(Role.INVESTIGATOR)) return 50;
+        if (role.equals(Role.RESEARCHASSISTANT)) return 40;
+        if (role.equals(Role.RESEARCHASSISTANT2)) return 35;
+        if (role.equals(Role.MONITOR)) return 30;
+        return 0;
     }
 
     /* ----------------------------------------------------------------- */

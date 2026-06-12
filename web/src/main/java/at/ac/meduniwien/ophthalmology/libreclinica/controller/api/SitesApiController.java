@@ -389,8 +389,7 @@ public class SitesApiController {
                     "Sites may only be created under a top-level study (got a site)"));
         }
         if (mutating) {
-            StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-            if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, parent)) {
+            if (!StudyAdminAuthorization.userMayEditStudy(me, parent, dataSource)) {
                 return ResponseEntity.status(403).body(Map.of("message",
                         "Your role does not permit managing sites under this study"));
             }

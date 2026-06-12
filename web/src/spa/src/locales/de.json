@@ -58,9 +58,9 @@
     "role": {
       "Investigator": "Prüfarzt/-ärztin",
       "Monitor": "Monitor/-in",
-      "Data Manager": "Datenmanager/-in",
+      "Data Manager": "Studienleitung",
       "Administrator": "Administrator/-in",
-      "CRC": "Studienkoordination"
+      "CRC": "Koordinator/-in"
     },
     "cards": {
       "patientsOverview": {
@@ -1407,9 +1407,9 @@
       "all": "Alle Rollen",
       "Investigator": "Prüfarzt/-ärztin",
       "Monitor": "Monitor",
-      "Data Manager": "Datenmanager/-in",
+      "Data Manager": "Studienleitung",
       "Administrator": "Administrator/-in",
-      "CRC": "CRC"
+      "CRC": "Koordinator/-in"
     },
     "auth": {
       "all": "Alle Auth-Modi",
