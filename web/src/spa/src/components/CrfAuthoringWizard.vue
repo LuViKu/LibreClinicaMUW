@@ -8,6 +8,8 @@ import StatusPill from '@/components/StatusPill.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import OphthCatalogPicker from '@/components/OphthCatalogPicker.vue'
+import type { OphthFieldCatalogEntry } from '@/types/ophthFieldCatalog'
 import ItemEditor from '@/components/ItemEditor.vue'
 import PreviewCrfEntryView from '@/views/PreviewCrfEntryView.vue'
 
@@ -131,6 +133,55 @@ function onAddItem(sectionIndex: number): void {
     store.addBilateralPair(sectionIndex)
   } else {
     store.addItem(sectionIndex)
+  }
+}
+
+/**
+ * Phase E.6 ophth-field-catalog (2026-06-11): wizard catalog picker
+ * state — which section is currently soliciting a pick, and a modal-
+ * open flag the picker component v-models with.
+ */
+const catalogPickerOpen = ref(false)
+const catalogPickerSectionIndex = ref<number | null>(null)
+
+function openCatalogPicker(sectionIndex: number): void {
+  catalogPickerSectionIndex.value = sectionIndex
+  catalogPickerOpen.value = true
+}
+
+/**
+ * Convert the catalog entry's {@code dataType} into the wizard's
+ * legacy two-letter AuthoringDataType code. Catalog uses
+ * "integer" / "real" / "string" / "select-one"; the wizard uses
+ * "INT" / "REAL" / "ST" (select-one items also map to ST + a
+ * response set).
+ */
+function catalogDataTypeToAuthoring(t: OphthFieldCatalogEntry['dataType']): 'INT' | 'REAL' | 'ST' {
+  switch (t) {
+    case 'integer': return 'INT'
+    case 'real': return 'REAL'
+    case 'string':
+    case 'select-one':
+    default: return 'ST'
+  }
+}
+
+function onCatalogEntryPicked(entry: OphthFieldCatalogEntry): void {
+  const sectionIndex = catalogPickerSectionIndex.value
+  if (sectionIndex == null) return
+  store.addCatalogItem(sectionIndex, {
+    code: entry.code,
+    labelDe: entry.labelDe,
+    bilateral: entry.bilateral,
+    oidPrefix: entry.oidPrefix,
+    dataType: catalogDataTypeToAuthoring(entry.dataType),
+  })
+  catalogPickerSectionIndex.value = null
+  // Auto-expand the section so the operator sees the new items —
+  // mirrors the behaviour of {@link onAddItemAndExpand}.
+  const section = store.draft.sections[sectionIndex]
+  if (section) {
+    expandedSections.value = new Set([...expandedSections.value, section.uid])
   }
 }
 
@@ -878,6 +929,12 @@ function onAddItemAndExpand(sectionIndex: number): void {
                       :data-testid="`crf-author-add-item-${sIdx}`"
                       @click="onAddItemAndExpand(sIdx)"
                     >{{ t('crfLibrary.author.addItem') }}</button>
+                    <button
+                      type="button"
+                      class="text-xs text-muw-blue hover:underline"
+                      :data-testid="`crf-author-pick-catalog-${sIdx}`"
+                      @click="openCatalogPicker(sIdx)"
+                    >{{ t('crfLibrary.ophthCatalog.pickButton') }}</button>
                   </div>
                   <p v-if="section.items.length === 0" class="text-xs italic text-slate-500">
                     {{ t('crfLibrary.author.itemsEmpty') }}
@@ -1364,4 +1421,14 @@ function onAddItemAndExpand(sectionIndex: number): void {
   <Teleport to="body">
     <PreviewCrfEntryView as-overlay />
   </Teleport>
+
+  <!-- Phase E.6 ophth-field-catalog (2026-06-11) — picker modal. The
+       section step opens it via openCatalogPicker(sIdx); on pick the
+       store materialises 1 or 2 items into the targeted section, the
+       backend's CrfJsonToWorkbookAdapter then back-fills blank fields
+       from the catalog row at submit time. -->
+  <OphthCatalogPicker
+    v-model:open="catalogPickerOpen"
+    @add="onCatalogEntryPicked"
+  />
 </template>

@@ -1045,6 +1045,24 @@
       "failed": "Migration fehlgeschlagen: {message}"
     },
     "authorManually": "Manuell anlegen",
+    "ophthCatalog": {
+      "title": "Aus Ophthalmologie-Katalog hinzufügen",
+      "subtitle": "Vordefinierte Felder mit OID + Einheit + Modalitätsbindung — wählen Sie ein Feld, das in den aktuellen Abschnitt eingefügt werden soll.",
+      "searchPlaceholder": "Code, Label oder Hinweis suchen…",
+      "loading": "Katalog wird geladen…",
+      "empty": "Keine passenden Einträge.",
+      "pick": "Einfügen",
+      "pickButton": "+ Aus Katalog",
+      "modalityHint": "Verknüpft mit Modalität {code}",
+      "widget": {
+        "number-stepper": "Zahl",
+        "snellen": "Snellen",
+        "refraction": "Refraktion",
+        "yesno": "Ja/Nein",
+        "text": "Text",
+        "select-one": "Auswahl"
+      }
+    },
     "author": {
       "heading": "Neue Version von »{name}« anlegen",
       "subheading": "CRF-Definition erstellen",
