@@ -328,44 +328,25 @@ const rootClass = computed(() =>
                 :key="`${row.kind}-${row.key}`"
                 :row="row"
               >
-                <template #widget="{ item }">
-                  <template v-if="item.dataType === 'select-one' && item.options">
-                    <SelectInput v-bind="inputBindings(item)">
-                      <option :value="undefined">— {{ t('common.search') }} —</option>
-                      <option v-for="opt in item.options" :key="opt.code" :value="opt.code">
-                        {{ opt.label }}
-                      </option>
-                    </SelectInput>
-                  </template>
-                  <template v-else-if="item.dataType === 'boolean'">
-                    <CrfItemWidget
-                      :item="item"
-                      :model-value="store.values[item.oid]"
-                      :error-message="showError(item)"
-                      :suppress-label="true"
-                      @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
-                    />
-                  </template>
-                  <template v-else-if="item.dataType === 'integer' || item.dataType === 'real'">
-                    <input
-                      :id="`preview-item-${item.oid}`"
-                      :value="store.values[item.oid] ?? ''"
-                      :aria-invalid="showError(item) != null || undefined"
-                      type="number"
-                      :min="item.min"
-                      :max="item.max"
-                      :step="item.dataType === 'integer' ? 1 : 0.1"
-                      class="w-full px-2 py-1.5 text-sm border rounded-md focus:outline-none transition-colors muw-focus"
-                      :class="showError(item)
-                        ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
-                        : 'border-slate-300 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100'"
-                      @input="store.setValue(item.oid, ($event.target as HTMLInputElement).value === '' ? null : Number(($event.target as HTMLInputElement).value))"
-                    />
-                  </template>
-                  <template v-else>
-                    <TextInput v-bind="inputBindings(item)" type="text" />
-                  </template>
-                  <ErrorText v-if="showError(item)">{{ showError(item) }}</ErrorText>
+                <!-- Phase E.6 ophth-bilateral-design (2026-06-12): route
+                     every widget through CrfItemWidget so the catalog-
+                     driven chrome (number-stepper / segmented Ja-Nein /
+                     Snellen / conditional-reason / compact mini-input
+                     for compound sub-fields) is identical to the live
+                     CRF entry. The {@code compact} scope value comes
+                     from BilateralItemGroup's compound-bilateral
+                     renderer and tells CrfItemWidget to render the
+                     56×42 mini-input instead of a full-width stepper
+                     so all 4 refraction sub-fields fit inline. -->
+                <template #widget="{ item, compact }">
+                  <CrfItemWidget
+                    :item="item"
+                    :model-value="store.values[item.oid]"
+                    :error-message="showError(item)"
+                    :suppress-label="true"
+                    :compact="compact"
+                    @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
+                  />
                 </template>
               </BilateralItemGroup>
             </template>

@@ -325,10 +325,59 @@ function closeOphthPicker(): void {
   ophthTriggerSectionIndex.value = null
 }
 
+/**
+ * Phase E.6 ophth-bilateral-design (2026-06-12): the picker presents
+ * the refraction quartet (Sphäre / Torus / Winkel / Visus) as a single
+ * compound entry instead of four separate checkboxes. Clinicians
+ * always select all four together, so a single click is closer to the
+ * paper workflow + matches how the catalog binds the bilateral row
+ * via the {@code REFRACTION} compound prefix at render time.
+ *
+ * <p>The 4 underlying catalog entries stay in {@link OPHTH_PRESET_CATALOG}
+ * — they're still the unit of generation (the picker still produces
+ * 4 paired OD/OS items). Only the picker UI consolidates them.
+ */
+const VIRTUAL_REFRACTION_KEY = 'REFRACTION_COMPOUND'
+const REFRACTION_SUB_KEYS: ReadonlyArray<string> = [
+  'REFRACTION_SPHERE',
+  'REFRACTION_TORUS',
+  'REFRACTION_ANGLE',
+  'REFRACTION_VISUS',
+]
+type DisplayEntry =
+  | { kind: 'leaf'; entry: typeof OPHTH_PRESET_CATALOG[number] }
+  | { kind: 'compound'; key: string; subKeys: ReadonlyArray<string> }
+
+const displayedOphthCatalog = computed<DisplayEntry[]>(() => {
+  const out: DisplayEntry[] = []
+  let insertedCompound = false
+  for (const entry of OPHTH_PRESET_CATALOG) {
+    if (REFRACTION_SUB_KEYS.includes(entry.key)) {
+      if (!insertedCompound) {
+        out.push({ kind: 'compound', key: VIRTUAL_REFRACTION_KEY, subKeys: REFRACTION_SUB_KEYS })
+        insertedCompound = true
+      }
+      continue
+    }
+    out.push({ kind: 'leaf', entry })
+  }
+  return out
+})
+
+function isRefractionCompoundChecked(): boolean {
+  return REFRACTION_SUB_KEYS.every((k) => ophthSelection.value.has(k))
+}
+
 function toggleOphthEntry(key: string): void {
   const next = new Set(ophthSelection.value)
-  if (next.has(key)) next.delete(key)
-  else next.add(key)
+  if (key === VIRTUAL_REFRACTION_KEY) {
+    const allSelected = REFRACTION_SUB_KEYS.every((k) => next.has(k))
+    if (allSelected) for (const k of REFRACTION_SUB_KEYS) next.delete(k)
+    else for (const k of REFRACTION_SUB_KEYS) next.add(k)
+  } else {
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+  }
   ophthSelection.value = next
 }
 
@@ -340,7 +389,17 @@ function clearAllOphth(): void {
   ophthSelection.value = new Set()
 }
 
-const ophthSelectedCount = computed(() => ophthSelection.value.size)
+/**
+ * Picker badge count — collapses the 4 refraction sub-keys into a
+ * single virtual "Refraktion" slot so the count matches what the
+ * operator sees in the list (compound row counts once, sub-rows are
+ * hidden).
+ */
+const ophthSelectedCount = computed(() => {
+  const subRefractionPresent = REFRACTION_SUB_KEYS.filter((k) => ophthSelection.value.has(k)).length
+  // Subtract the n sub-keys, add back 1 for the compound row.
+  return Math.max(0, ophthSelection.value.size - subRefractionPresent) + (subRefractionPresent > 0 ? 1 : 0)
+})
 
 function confirmOphthPicker(): void {
   if (ophthSelection.value.size === 0) return
@@ -1361,32 +1420,60 @@ function onAddItemAndExpand(sectionIndex: number): void {
         class="max-h-96 overflow-y-auto rounded-md border border-slate-200 divide-y divide-slate-100"
         data-testid="ophth-preset-list"
       >
-        <li
-          v-for="entry in OPHTH_PRESET_CATALOG"
-          :key="entry.key"
-          class="flex items-start gap-3 px-3 py-2 hover:bg-slate-50"
-        >
-          <input
-            :id="`ophth-preset-${entry.key}`"
-            type="checkbox"
-            class="mt-0.5"
-            :checked="ophthSelection.has(entry.key)"
-            :data-testid="`ophth-preset-checkbox-${entry.key}`"
-            @change="toggleOphthEntry(entry.key)"
-          />
-          <label :for="`ophth-preset-${entry.key}`" class="flex-1 text-xs cursor-pointer">
-            <div class="font-medium text-slate-800">
-              {{ t(entry.labelKey) }}
-            </div>
-            <div class="text-[11px] text-slate-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
-              <span class="font-mono">{{ entry.dataType }}</span>
-              <span v-if="entry.range">
-                {{ t('ophthPreset.picker.range', { min: entry.range.min, max: entry.range.max }) }}
-              </span>
-              <span v-if="entry.unit">{{ entry.unit }}</span>
-            </div>
-          </label>
-        </li>
+        <template v-for="display in displayedOphthCatalog">
+          <li
+            v-if="display.kind === 'leaf'"
+            :key="display.entry.key"
+            class="flex items-start gap-3 px-3 py-2 hover:bg-slate-50"
+          >
+            <input
+              :id="`ophth-preset-${display.entry.key}`"
+              type="checkbox"
+              class="mt-0.5"
+              :checked="ophthSelection.has(display.entry.key)"
+              :data-testid="`ophth-preset-checkbox-${display.entry.key}`"
+              @change="toggleOphthEntry(display.entry.key)"
+            />
+            <label :for="`ophth-preset-${display.entry.key}`" class="flex-1 text-xs cursor-pointer">
+              <div class="font-medium text-slate-800">
+                {{ t(display.entry.labelKey) }}
+              </div>
+              <div class="text-[11px] text-slate-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                <span class="font-mono">{{ display.entry.dataType }}</span>
+                <span v-if="display.entry.range">
+                  {{ t('ophthPreset.picker.range', { min: display.entry.range.min, max: display.entry.range.max }) }}
+                </span>
+                <span v-if="display.entry.unit">{{ display.entry.unit }}</span>
+              </div>
+            </label>
+          </li>
+          <!-- Phase E.6 ophth-bilateral-design (2026-06-12) — compound
+               refraction row. One checkbox toggles all four sub-fields
+               (Sphäre / Torus / Winkel / Visus) at once; clinicians
+               always grab the quartet together. -->
+          <li
+            v-else
+            :key="display.key"
+            class="flex items-start gap-3 px-3 py-2 hover:bg-slate-50"
+          >
+            <input
+              :id="`ophth-preset-${display.key}`"
+              type="checkbox"
+              class="mt-0.5"
+              :checked="isRefractionCompoundChecked()"
+              :data-testid="`ophth-preset-checkbox-${display.key}`"
+              @change="toggleOphthEntry(display.key)"
+            />
+            <label :for="`ophth-preset-${display.key}`" class="flex-1 text-xs cursor-pointer">
+              <div class="font-medium text-slate-800">
+                {{ t('ophthPreset.entry.REFRACTION_COMPOUND.label') }}
+              </div>
+              <div class="text-[11px] text-slate-500 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                <span>{{ t('ophthPreset.entry.REFRACTION_COMPOUND.subFields') }}</span>
+              </div>
+            </label>
+          </li>
+        </template>
       </ul>
 
       <p class="text-[11px] text-slate-500 leading-snug">
