@@ -100,7 +100,7 @@ section() { printf '\n\033[1;36m=== %s ===\033[0m\n' "$*"; }
 # Generate a 32-char alphanumeric secret. Used once per host for the
 # Postgres password — written to /etc/libreclinica/env on first run and
 # never regenerated, so re-running this script doesn't lock the DB out.
-gen_secret() { tr -dc 'A-Za-z0-9' </dev/urandom | head -c 32; }
+gen_secret() { LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 32 || true; }
 
 # ----------------------------- preflight --------------------------------------
 
