@@ -1,13 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
+import GlobalErrorToast from '@/components/GlobalErrorToast.vue'
+import ConnectionBanner from '@/components/ConnectionBanner.vue'
+import BugReportDialog from '@/components/BugReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useInactivityStore } from '@/stores/inactivity'
+import type { UserRole } from '@/types/auth'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const inactivity = useInactivityStore()
 const { t } = useI18n()
 
 async function logout() {
@@ -17,9 +23,54 @@ async function logout() {
   // still sees state='authenticated' and refuses the redirect.
   // Symptom before this fix: clicking the top-bar logout button
   // appeared to do nothing until the user manually refreshed.
+  inactivity.stop()
   await auth.logout()
   router.push({ name: 'login' })
 }
+
+/**
+ * Phase E.6 inactivity-timeout (2026-06-12): when the watcher fires,
+ * log the operator out + bounce them to /login carrying the current
+ * route as the returnTo query param. The LoginView resolves
+ * returnTo to navigate the operator back to where they were after
+ * successful re-auth.
+ */
+async function onInactivityTimeout(): Promise<void> {
+  const fullPath = route.fullPath
+  inactivity.stop()
+  await auth.logout()
+  const safePath = fullPath && fullPath !== '/' && !fullPath.startsWith('/login')
+    ? fullPath
+    : null
+  router.push({
+    name: 'login',
+    query: safePath ? { returnTo: safePath } : undefined,
+  })
+}
+
+/**
+ * Start/stop the inactivity watcher in lockstep with auth state.
+ * When the operator is authenticated the watcher arms; when they
+ * sign out (manually OR via the watcher) it disarms so the
+ * /login mount doesn't churn the watcher needlessly.
+ */
+watch(
+  () => auth.isAuthenticated,
+  (authed) => {
+    if (authed) {
+      inactivity.start(onInactivityTimeout)
+      inactivity.touch()
+    } else {
+      inactivity.stop()
+    }
+  },
+  { immediate: false },
+)
+
+onMounted(() => {
+  if (auth.isAuthenticated) inactivity.start(onInactivityTimeout)
+})
+onUnmounted(() => inactivity.stop())
 
 interface Crumb { label: string; to?: string }
 
@@ -56,13 +107,34 @@ const breadcrumb = computed<Crumb[]>(() => {
 
 const displayUserName = computed(() => auth.user?.username ?? '')
 
-const userRole = computed<'Investigator' | 'Monitor' | 'Data Manager' | null>(() => {
-  if (!auth.user) return null
-  if (auth.user.role === 'Administrator' || auth.user.role === 'CRC') return null
-  return auth.user.role
+/**
+ * Full per-study role set the user holds on the bound study. Prefer
+ * the multi-role `activeStudy.roles` projection (M2 wire shape);
+ * fall back to the single-role legacy chain when the per-study array
+ * isn't populated yet. Drives both the inline chip / dots on the
+ * topbar trigger and the colour-coded role list inside the popover.
+ */
+const userRoles = computed<UserRole[]>(() => {
+  const active = auth.user?.activeStudy
+  if (active?.roles && active.roles.length > 0) return [...active.roles]
+  if (active?.role) return [active.role]
+  if (auth.user?.role) return [auth.user.role]
+  return []
 })
 
 const showTopBar = computed(() => route.name !== 'login' && route.name !== 'first-login')
+
+/**
+ * Bug-report dialog open state. The dialog itself is always mounted
+ * (cheap, no DOM in body until {@code open=true}) so the topbar's
+ * popover handler can flip it open without an additional v-if dance.
+ * Auth-gated alongside the TopBar — anonymous users have no way to
+ * trigger it.
+ */
+const bugReportOpen = ref(false)
+function openBugReport() {
+  bugReportOpen.value = true
+}
 </script>
 
 <template>
@@ -74,8 +146,9 @@ const showTopBar = computed(() => route.name !== 'login' && route.name !== 'firs
       v-if="showTopBar && auth.isAuthenticated"
       :breadcrumb="breadcrumb"
       :user-name="displayUserName"
-      :user-role="userRole"
+      :user-roles="userRoles"
       :on-logout="logout"
+      :on-report-bug="openBugReport"
     />
     <!-- Minimal "Sign in" affordance for anonymous routes that still want chrome. -->
     <header
@@ -95,8 +168,28 @@ const showTopBar = computed(() => route.name !== 'login' && route.name !== 'firs
         <RouterLink to="/login" class="text-xs text-muw-blue hover:underline">{{ t('a11y.signInLink') }}</RouterLink>
       </div>
     </header>
+
+    <!-- Phase E hardening — B4: offline banner mounted ABOVE <main> so
+         it takes layout space when visible. Hidden when connection is
+         healthy. -->
+    <ConnectionBanner />
+
     <main id="main-content" tabindex="-1" class="outline-none">
       <RouterView />
     </main>
+
+    <!-- Phase E hardening — A5: singleton global error toast. Mounted
+         once, outside any conditional, so uncaught errors from any
+         view (including login / first-login / NotFound) surface. -->
+    <GlobalErrorToast />
+
+    <!-- Phase E in-app bug-report. Dialog lives at the app shell so
+         every authenticated route can open it via the TopBar
+         user-menu entry; rendering is gated on auth state so the
+         splash / login chrome stays minimal. -->
+    <BugReportDialog
+      v-if="auth.isAuthenticated"
+      v-model:open="bugReportOpen"
+    />
   </div>
 </template>

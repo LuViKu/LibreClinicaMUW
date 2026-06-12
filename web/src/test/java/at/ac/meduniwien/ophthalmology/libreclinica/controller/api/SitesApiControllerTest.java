@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -90,7 +92,7 @@ class SitesApiControllerTest extends AbstractApiControllerTest {
     void createValidate_RequiresNameAndUniqueProtocolIdAndPi() {
         CreateSiteRequest body =
                 new CreateSiteRequest(null, null, null, null, null, null, null, null, null, null, null, null, null, null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         long nameErrors = errors.stream().filter(e -> "name".equals(e.field())).count();
         long uidErrors = errors.stream().filter(e -> "uniqueProtocolId".equals(e.field())).count();
@@ -105,7 +107,7 @@ class SitesApiControllerTest extends AbstractApiControllerTest {
         CreateSiteRequest body =
                 new CreateSiteRequest("Vienna", "has spaces!", null, "Dr. Smith",
                         null, null, null, null, null, null, null, null, null, null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateCreateShape(body);
         long uidErrors = errors.stream().filter(e -> "uniqueProtocolId".equals(e.field())).count();
         org.junit.jupiter.api.Assertions.assertEquals(1, uidErrors);
@@ -115,7 +117,7 @@ class SitesApiControllerTest extends AbstractApiControllerTest {
     void updateValidate_BlankNameRejected() {
         UpdateSiteRequest body =
                 new UpdateSiteRequest("   ", null, null, null, null, null, null, null, null, null, null, null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateUpdateShape(body);
         long nameErrors = errors.stream().filter(e -> "name".equals(e.field())).count();
         org.junit.jupiter.api.Assertions.assertEquals(1, nameErrors);
@@ -125,32 +127,32 @@ class SitesApiControllerTest extends AbstractApiControllerTest {
     void updateValidate_OmittedFieldsAreNoOps() {
         UpdateSiteRequest body =
                 new UpdateSiteRequest(null, null, null, null, null, null, null, null, null, null, null, null);
-        java.util.List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        java.util.List<ValidationErrorBody.FieldError> errors =
                 callValidateUpdateShape(body);
         org.junit.jupiter.api.Assertions.assertTrue(errors.isEmpty());
     }
 
     @SuppressWarnings("unchecked")
-    private static java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>
+    private static java.util.List<ValidationErrorBody.FieldError>
             callValidateCreateShape(CreateSiteRequest body) {
         try {
             java.lang.reflect.Method m = SitesApiController.class
                     .getDeclaredMethod("validateCreateShape", CreateSiteRequest.class);
             m.setAccessible(true);
-            return (java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>) m.invoke(null, body);
+            return (java.util.List<ValidationErrorBody.FieldError>) m.invoke(null, body);
         } catch (Exception e) {
             throw new AssertionError(e);
         }
     }
 
     @SuppressWarnings("unchecked")
-    private static java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>
+    private static java.util.List<ValidationErrorBody.FieldError>
             callValidateUpdateShape(UpdateSiteRequest body) {
         try {
             java.lang.reflect.Method m = SitesApiController.class
                     .getDeclaredMethod("validateUpdateShape", UpdateSiteRequest.class);
             m.setAccessible(true);
-            return (java.util.List<SubjectsApiController.ValidationErrorBody.FieldError>) m.invoke(null, body);
+            return (java.util.List<ValidationErrorBody.FieldError>) m.invoke(null, body);
         } catch (Exception e) {
             throw new AssertionError(e);
         }

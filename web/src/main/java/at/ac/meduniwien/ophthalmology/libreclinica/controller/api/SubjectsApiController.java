@@ -36,10 +36,11 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -53,8 +54,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -696,14 +699,80 @@ public class SubjectsApiController {
                     "Validation failed", errors));
         }
 
+        // Phase A1 (2026-06-10) — failure-audit wrap. Any Throwable that
+        // leaks out of the persistence block below lands in
+        // audit_log_event as an OPERATION_FAILED row (type 61) tagged
+        // with the actor, request id, and operation label before the
+        // exception propagates to Spring's default error handler. The
+        // DAO uses a separate JDBC connection so the row survives any
+        // rollback of the in-flight subject + study_subject inserts.
+        final SubjectBean existingByPersonIdRef = existingByPersonId;
+        final SubjectGroupAssignmentService groupServiceRef = groupService;
+        final String personIdRef = personId;
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    currentUser.getId(),
+                    "study_subject",
+                    null,
+                    "SubjectsApiController.create",
+                    reqId,
+                    () -> doCreatePersist(body, currentStudy, currentUser,
+                            studySubjectDAO, existingByPersonIdRef,
+                            groupServiceRef, personIdRef));
+        } catch (Exception e) {
+            // FailureAuditTemplate has already written the audit row.
+            // Surface the same 500 envelope existing callers expect.
+            LOG.error("SubjectsApiController.create failed for label={} study={}",
+                    body.id(), currentStudy.getOid(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to create subject — see server log."));
+        }
+    }
+
+    /**
+     * Phase A1 (2026-06-10) — the persistence block extracted from
+     * {@link #create} so {@link FailureAuditTemplate#runOrAudit} can
+     * wrap it cleanly. Throws on any failure so the template's catch
+     * lands an OPERATION_FAILED audit row. Returns the success
+     * ResponseEntity (201 + SubjectDetailDto) on the happy path.
+     */
+    private ResponseEntity<?> doCreatePersist(AddSubjectRequest body,
+                                              StudyBean currentStudy,
+                                              UserAccountBean currentUser,
+                                              StudySubjectDAO studySubjectDAO,
+                                              SubjectBean existingByPersonId,
+                                              SubjectGroupAssignmentService groupService,
+                                              String personId) throws Exception {
         // ----- Persist subject row (direct SQL to preserve O/U gender codes) -----
         String trimmedId = body.id().trim();
         String trimmedSecondary = body.secondaryId() == null ? null : body.secondaryId().trim();
         if (trimmedSecondary != null && trimmedSecondary.isEmpty()) trimmedSecondary = null;
         char genderChar = Character.toLowerCase(body.gender().charAt(0));
-        java.sql.Date dob = (body.yearOfBirth() == null) ? null
-                : java.sql.Date.valueOf(LocalDate.of(body.yearOfBirth(), 1, 1));
-        boolean dobCollected = body.yearOfBirth() != null;
+
+        // Phase E.6 retrospective-backfill — prefer the new ISO
+        // dateOfBirth field when present, fall back to the legacy
+        // yearOfBirth → Jan-1 conversion for back-compat with SPA
+        // call sites that haven't migrated to the new form yet.
+        java.sql.Date dob;
+        boolean dobCollected;
+        String rawDob = body.dateOfBirth() == null ? "" : body.dateOfBirth().trim();
+        if (!rawDob.isEmpty()) {
+            dob = java.sql.Date.valueOf(LocalDate.parse(rawDob));
+            dobCollected = true;
+        } else if (body.yearOfBirth() != null) {
+            dob = java.sql.Date.valueOf(LocalDate.of(body.yearOfBirth(), 1, 1));
+            dobCollected = false;
+        } else {
+            dob = null;
+            dobCollected = false;
+        }
+        String trimmedFirstName = body.firstName() == null ? null : body.firstName().trim();
+        if (trimmedFirstName != null && trimmedFirstName.isEmpty()) trimmedFirstName = null;
+        String trimmedLastName = body.lastName() == null ? null : body.lastName().trim();
+        if (trimmedLastName != null && trimmedLastName.isEmpty()) trimmedLastName = null;
+
         java.sql.Date enrolledOn = java.sql.Date.valueOf(LocalDate.parse(body.enrolledOn()));
 
         // Phase E.6 subject-lifecycle — Person-ID re-enrol branch.
@@ -716,14 +785,12 @@ public class SubjectsApiController {
             LOG.info("Person-ID re-enrol: reusing subject_id={} for personId={} study={}",
                     newSubjectId, personId, currentStudy.getOid());
         } else {
-            try {
-                newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId(),
-                        personId == null || personId.isEmpty() ? null : personId);
-            } catch (SQLException e) {
-                LOG.error("Failed to insert subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
-                return ResponseEntity.status(500).body(Map.of("message",
-                        "Failed to create subject — see server log."));
-            }
+            // Phase A1 — rethrow so FailureAuditTemplate writes the
+            // OPERATION_FAILED row. The outer create() catches Exception
+            // and surfaces the legacy 500 envelope.
+            newSubjectId = insertSubjectRow(genderChar, dob, dobCollected, currentUser.getId(),
+                    personId == null || personId.isEmpty() ? null : personId,
+                    trimmedFirstName, trimmedLastName);
         }
 
         // ----- Persist study_subject row via DAO (reuse OID generator) -----
@@ -748,17 +815,12 @@ public class SubjectsApiController {
             ssb.setScreeningDate(java.sql.Date.valueOf(LocalDate.parse(body.screeningDate().trim())));
         }
 
-        try {
-            ssb = studySubjectDAO.create(ssb);
-        } catch (Exception e) {
-            LOG.error("Failed to insert study_subject row for label={} study={}", trimmedId, currentStudy.getOid(), e);
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to enrol subject — see server log."));
-        }
+        // Phase A1 — rethrow on study_subject insert failure so
+        // FailureAuditTemplate audits the OPERATION_FAILED row.
+        ssb = studySubjectDAO.create(ssb);
         if (ssb == null || ssb.getId() == 0) {
-            LOG.error("study_subject insert returned no PK for label={} study={}", trimmedId, currentStudy.getOid());
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to enrol subject — no PK returned."));
+            throw new SQLException("study_subject insert returned no PK for label="
+                    + trimmedId + " study=" + currentStudy.getOid());
         }
 
         // Phase E.6 subject-lifecycle — apply the SPA's group-assignment
@@ -805,13 +867,324 @@ public class SubjectsApiController {
                 ssb.getStudyEye(),
                 formatIsoDate(ssb.getScreeningDate()),
                 mapStudySubjectStatus(ssb.getStatus()),
-                initialAssignments
+                initialAssignments,
+                /* eyeTransitions — fresh subject, none yet */ null
         );
 
         LOG.info("Add Subject: created study_subject id={} oid={} label={} (study {}, user {})",
                 ssb.getId(), ssb.getOid(), ssb.getLabel(), currentStudy.getOid(), currentUser.getName());
 
         return ResponseEntity.status(201).body(dto);
+    }
+
+    /* =============================================================== */
+    /* Phase E.6 — label-availability preflight                         */
+    /* =============================================================== */
+
+    /**
+     * Response shape for {@link #checkLabel}.
+     *
+     * <p>The SPA fires this on debounced input of the Study Subject ID
+     * field; a {@code false} {@code available} flag flips the inline
+     * error before the operator clicks submit, sparing the 400 round
+     * trip + the AddSubject's serverFieldErrors retry cycle. The
+     * structured shape (vs a plain HTTP status) keeps the response
+     * cacheable at the SPA layer and leaves room for surfacing the
+     * existing subject's OID for a "Open existing" affordance in
+     * a future iteration.
+     */
+    @Schema(name = "SubjectLabelAvailability")
+    public record SubjectLabelAvailability(
+            boolean available,
+            String existingSubjectOid
+    ) {}
+
+    /**
+     * Live label-availability check — does the operator-typed Study
+     * Subject ID already exist in the bound study?
+     *
+     * <p>{@code 200 + available=true} when no row matches; {@code 200
+     * + available=false + existingSubjectOid} when a row exists.
+     * {@code 400} for missing/blank label. {@code 401 / 4xx} when no
+     * study is bound. The SPA debounces input by ~350ms before
+     * firing.
+     */
+    @GetMapping("/check-label")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = SubjectLabelAvailability.class)))
+    public ResponseEntity<?> checkLabel(@org.springframework.web.bind.annotation.RequestParam("label") String labelRaw,
+                                        HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."));
+        }
+        String label = labelRaw == null ? "" : labelRaw.trim();
+        if (label.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "label is required."));
+        }
+        StudySubjectDAO dao = new StudySubjectDAO(dataSource);
+        StudySubjectBean existing = dao.findByLabelAndStudy(label, currentStudy);
+        if (existing == null || existing.getId() == 0) {
+            return ResponseEntity.ok(new SubjectLabelAvailability(true, null));
+        }
+        return ResponseEntity.ok(new SubjectLabelAvailability(false, existing.getOid()));
+    }
+
+    /* =============================================================== */
+    /* Phase E.6 retrospective-backfill — match-preflight              */
+    /* =============================================================== */
+
+    /**
+     * Request body for {@link #matchPreflight}.
+     *
+     * <p>Only the patient-identity triplet matters here — the form
+     * hasn't yet committed an enrolment, so no study-level fields
+     * accompany the lookup. The backend is liberal about partial
+     * fields (matches need all three) and renders a permissive 400
+     * with explicit reasons rather than leaking match counts.
+     */
+    public record SubjectMatchPreflightRequest(
+            String firstName,
+            String lastName,
+            String dateOfBirth
+    ) {}
+
+    /**
+     * Single match candidate row.
+     *
+     * <p>The frontend renders one card per candidate with the
+     * operator-typed PHI triplet pre-filled (no PHI leaks back from
+     * this DTO — the operator already typed it). {@code studies} is
+     * filtered to studies the operator can see; {@code otherStudyCount}
+     * surfaces the count of additional active enrolments in studies
+     * the operator lacks access to so the "this human is already in
+     * the system somewhere" signal isn't suppressed for privacy.
+     *
+     * <p>Phase E.6 follow-up 2026-06-10 — added {@code firstName},
+     * {@code lastName} (operator-confirmation aid: they just typed it
+     * on the form, so echoing the persisted spelling sanity-checks
+     * the match) and replaced the legacy {@code studyOids} list with
+     * a list of {@link StudyEnrollment} that carries the per-study
+     * subject-label too ("this patient is M-001 in default-study and
+     * GA-008 in GA"). {@link #studyOids()} stays as a derived view so
+     * older SPA bundles in the wild keep working during the rollout.
+     */
+    public record SubjectMatchCandidate(
+            int subjectId,
+            String uniqueIdentifier,
+            String gender,
+            String dateOfBirth,
+            /** Phase E.6 follow-up 2026-06-10 — operator-confirmation aid. */
+            String firstName,
+            String lastName,
+            /**
+             * Phase E.6 follow-up 2026-06-10 — visible study enrolments
+             * with the patient's per-study subject-id. Replaces the old
+             * studyOids list which carried only the study OID and missed
+             * the cross-reference operators need ("this patient is M-001
+             * in default-study and GA-008 in GA-Studie"). No backwards-
+             * compat shim — the SPA store update lands in the same PR,
+             * so the wire shape changes atomically.
+             */
+            List<StudyEnrollment> studies,
+            int otherStudyCount
+    ) {
+        /**
+         * One visible enrolment of the candidate subject in a study the
+         * operator can see. Carries both the institutional short-code
+         * ({@code study.unique_identifier}, e.g. {@code default-study} or
+         * {@code GA-Studie}) and the system OID ({@code study.oc_oid})
+         * so the SPA can format the operator-facing string and use the
+         * OID for navigation. {@code label} is the per-study subject-id
+         * ({@code study_subject.label}, e.g. {@code M-001}, {@code GA-008}).
+         */
+        public record StudyEnrollment(
+                /** Institutional protocol short-code (study.unique_identifier). */
+                String studyUniqueIdentifier,
+                /** System OID (study.oc_oid). */
+                String studyOid,
+                /** Display name (study.name). */
+                String studyName,
+                /** Per-study label (study_subject.label) — the operator-typed subject-ID in that study. */
+                String label
+        ) {}
+    }
+
+    /**
+     * Phase E.6 retrospective-backfill — dedup preflight before the
+     * SPA POSTs to {@link #create}.
+     *
+     * <p>Operator types first name + last name + DoB on the AddSubject
+     * form. The SPA fires this endpoint as the operator finishes the
+     * DoB field so the match candidates can render in a dialog before
+     * commit. Match strategy is exact, case-insensitive on the full
+     * triplet (locked 2026-06-08 with the user) — the dedup index on
+     * subject (LOWER(first_name), LOWER(last_name), date_of_birth)
+     * makes the lookup an index-only scan.
+     *
+     * <p>Returns 200 always (zero candidates → empty array). The 400
+     * branch only fires for missing fields, never for "no matches" —
+     * that's a normal flow.
+     *
+     * <p>The endpoint walks the full active-grant set the operator has
+     * (mirroring {@link StudiesApiController}'s list) to populate
+     * {@code studies}; non-visible enrolments only contribute to
+     * {@code otherStudyCount}. Soft-deleted (status_id=5) subjects are
+     * excluded by the partial dedup index. {@code studyOids()} remains
+     * as a derived view for backwards compat with older SPA bundles.
+     */
+    @PostMapping(value = "/match-preflight", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array",
+                         implementation = SubjectMatchCandidate.class)))
+    public ResponseEntity<?> matchPreflight(@RequestBody(required = false) SubjectMatchPreflightRequest body,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Request body is required."));
+        }
+        String firstName = body.firstName() == null ? "" : body.firstName().trim();
+        String lastName  = body.lastName()  == null ? "" : body.lastName().trim();
+        String dobRaw    = body.dateOfBirth() == null ? "" : body.dateOfBirth().trim();
+        if (firstName.isEmpty() || lastName.isEmpty() || dobRaw.isEmpty()) {
+            // Not an error per se — the SPA fires this once all three
+            // are populated, but a defensive 400 helps surface misuses.
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "firstName, lastName, dateOfBirth are all required."));
+        }
+        java.sql.Date dob;
+        try {
+            dob = java.sql.Date.valueOf(LocalDate.parse(dobRaw));
+        } catch (Exception ex) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "dateOfBirth must be an ISO date (yyyy-MM-dd)."));
+        }
+
+        // Build the visible-study OID set for this operator. Mirrors
+        // the patient-overview list endpoint's visibility model.
+        Set<String> visibleStudyOids = loadVisibleStudyOids(currentUser);
+
+        List<SubjectMatchCandidate> out = new ArrayList<>();
+        // Triplet match — partial index handles status_id != 5 + all
+        // three columns NOT NULL. study_subject is joined to surface
+        // active enrolments, and study contributes both the
+        // unique_identifier (protocol short-code, e.g. "default-study")
+        // and the oc_oid (system OID, e.g. "S_DEFAULTS1") so the SPA
+        // can render the operator-friendly short-code in the dialog
+        // and still navigate by OID. Phase E.6 follow-up 2026-06-10
+        // also projects first_name + last_name from subject — they
+        // were already in the WHERE clause but never echoed back.
+        String sql =
+                "WITH matched AS (" +
+                "  SELECT s.subject_id, s.unique_identifier, s.gender, " +
+                "         s.date_of_birth, s.first_name, s.last_name " +
+                "    FROM subject s " +
+                "   WHERE LOWER(s.first_name) = LOWER(?) " +
+                "     AND LOWER(s.last_name)  = LOWER(?) " +
+                "     AND s.date_of_birth     = ?         " +
+                "     AND s.status_id IS DISTINCT FROM 5  " +
+                ") " +
+                "SELECT m.subject_id, m.unique_identifier, m.gender, m.date_of_birth, " +
+                "       m.first_name, m.last_name, " +
+                "       st.unique_identifier AS study_unique_identifier, " +
+                "       st.oc_oid            AS study_oc_oid, " +
+                "       st.name              AS study_name, " +
+                "       ss.label             AS subject_label " +
+                "  FROM matched m " +
+                "  LEFT JOIN study_subject ss ON ss.subject_id = m.subject_id " +
+                "                            AND ss.status_id  IS DISTINCT FROM 5 " +
+                "  LEFT JOIN study st         ON st.study_id   = ss.study_id " +
+                " ORDER BY m.subject_id, st.unique_identifier";
+
+        // Mutable accumulator keyed by subject_id. The row stream
+        // joins study_subject many-to-one, so we fold per subject as
+        // we walk.
+        record Acc(String uniqueIdentifier, String gender, String dobIso,
+                   String firstNameOut, String lastNameOut,
+                   List<SubjectMatchCandidate.StudyEnrollment> visibleStudies,
+                   int[] otherCount) {}
+        java.util.LinkedHashMap<Integer, Acc> bySubject = new java.util.LinkedHashMap<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, firstName);
+            ps.setString(2, lastName);
+            ps.setDate(3, dob);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int subjectId = rs.getInt("subject_id");
+                    Acc acc = bySubject.get(subjectId);
+                    if (acc == null) {
+                        java.sql.Date d = rs.getDate("date_of_birth");
+                        acc = new Acc(
+                                rs.getString("unique_identifier"),
+                                rs.getString("gender"),
+                                d == null ? null : d.toLocalDate().toString(),
+                                rs.getString("first_name"),
+                                rs.getString("last_name"),
+                                new ArrayList<>(),
+                                new int[1]);
+                        bySubject.put(subjectId, acc);
+                    }
+                    String studyUid  = rs.getString("study_unique_identifier");
+                    String studyOcOid = rs.getString("study_oc_oid");
+                    String studyName = rs.getString("study_name");
+                    String label     = rs.getString("subject_label");
+                    if (studyUid != null || studyOcOid != null) {
+                        // visibleStudyOids is keyed on oc_oid (StudyBean.getOid);
+                        // hidden rows still contribute to otherCount.
+                        if (studyOcOid != null && visibleStudyOids.contains(studyOcOid)) {
+                            acc.visibleStudies().add(new SubjectMatchCandidate.StudyEnrollment(
+                                    studyUid, studyOcOid, studyName, label));
+                        } else {
+                            acc.otherCount()[0]++;
+                        }
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("Match-preflight lookup failed for user={}", currentUser.getName(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Match preflight failed — see server log."));
+        }
+        for (Map.Entry<Integer, Acc> e : bySubject.entrySet()) {
+            Acc a = e.getValue();
+            out.add(new SubjectMatchCandidate(
+                    e.getKey(),
+                    a.uniqueIdentifier(),
+                    a.gender(),
+                    a.dobIso(),
+                    a.firstNameOut(),
+                    a.lastNameOut(),
+                    a.visibleStudies(),
+                    a.otherCount()[0]));
+        }
+
+        LOG.info("Match-preflight: {} candidate(s) for user={}", out.size(), currentUser.getName());
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Cached helper — the visible-study OID set for this operator.
+     * Walks every active study_user_role binding (StudyDAO has the
+     * same lookup the patients-list controller uses).
+     */
+    private Set<String> loadVisibleStudyOids(UserAccountBean user) {
+        Set<String> oids = new java.util.HashSet<>();
+        ArrayList<StudyBean> studies = new StudyDAO(dataSource).findAllByUser(user.getName());
+        for (StudyBean s : studies) {
+            if (s != null && s.getOid() != null) oids.add(s.getOid());
+        }
+        return oids;
     }
 
     /**
@@ -1191,6 +1564,33 @@ public class SubjectsApiController {
         subj.setUpdatedDate(now);
         subjectDAO.update(subj);
 
+        // ---- studyEye (Phase E.6 Tier 1) — lives on study_subject ----
+        // 2026-06-10 — diverges from the secondaryId / yearOfBirth
+        // "null preserves" convention: the SPA's edit form emits
+        // `studyEye: null` when the operator picks "nicht gesetzt",
+        // and we want that to actively CLEAR the column so a missed
+        // pick at create time can be corrected (or wiped) post-hoc.
+        // Empty string is normalized to NULL identically to the
+        // create path (see line ~811). Validator above gated the
+        // value to {null, "", OD, OS, OU} (case-insensitive).
+        String oldEye = ss.getStudyEye();
+        String newEye;
+        if (body.studyEye() == null || body.studyEye().trim().isEmpty()) {
+            newEye = null;
+        } else {
+            newEye = body.studyEye().trim().toUpperCase();
+        }
+        if (!java.util.Objects.equals(oldEye, newEye)) {
+            ss.setStudyEye(newEye);
+            ss.setUpdater(currentUser);
+            ss.setUpdatedDate(now);
+            studySubjectDAO.update(ss);
+            writeSubjectFieldAudit(auditDAO, currentUser, currentStudy, ss,
+                    "study_eye",
+                    oldEye == null ? "" : oldEye,
+                    newEye == null ? "" : newEye);
+        }
+
         LOG.info("Subject demographics update: study_subject {} (label={}) by user={} role={}",
                 ss.getId(), ss.getLabel(), currentUser.getName(), roleId);
 
@@ -1238,6 +1638,19 @@ public class SubjectsApiController {
                         "Year of birth must be between 1900 and " + thisYear + "."));
             }
         }
+
+        // ---- studyEye (Phase E.6 Tier 1): optional; one of OD/OS/OU ----
+        // Mirrors the create-path rule verbatim (see validateAddSubject
+        // at line ~2170): null or empty string is acceptable (the
+        // controller treats both as "clear"); otherwise must be one
+        // of the three ophthalmology codes.
+        if (body.studyEye() != null) {
+            String eye = body.studyEye().trim().toUpperCase();
+            if (!eye.isEmpty() && !eye.equals("OD") && !eye.equals("OS") && !eye.equals("OU")) {
+                errors.add(new ValidationErrorBody.FieldError("studyEye",
+                        "'" + body.studyEye() + "' is not a valid study-eye code (OD / OS / OU)."));
+            }
+        }
         return errors;
     }
 
@@ -1248,26 +1661,18 @@ public class SubjectsApiController {
                                                String columnName,
                                                String oldValue,
                                                String newValue) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(ub.getId());
-            ae.setStudyId(study.getId());
-            ae.setSubjectId(ss.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setSubjectName(ss.getLabel() == null ? "" : ss.getLabel());
-            ae.setAuditTable("subject");
-            ae.setEntityId(ss.getSubjectId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("subject_demographics_update: " + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "'");
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for subject field {}={} (continuing): {}",
-                    columnName, newValue, e.getMessage());
-        }
+        // Phase audit-unification (2026-06-12) — delegate to the
+        // unified writeAuditEvent helper so the row lands in
+        // audit_log_event (visible to the SPA Audit Log view) with the
+        // proper SUBJECT_DEMOGRAPHICS_UPDATED type id.
+        EventCrfsApiController.writeAuditEvent(auditDAO,
+                AuditTypeIds.SUBJECT_DEMOGRAPHICS_UPDATED,
+                ub, study, ss,
+                "subject_demographics_update",
+                "subject", ss.getSubjectId(),
+                columnName,
+                oldValue == null ? "" : oldValue,
+                newValue == null ? "" : newValue);
     }
 
     /**
@@ -1902,11 +2307,11 @@ public class SubjectsApiController {
      * convention of {@code getLatestPK} after the insert.
      */
     private int insertSubjectRow(char gender, java.sql.Date dob, boolean dobCollected, int ownerId,
-                                 String personId)
+                                 String personId, String firstName, String lastName)
             throws SQLException {
         String sql = "INSERT INTO subject (status_id, date_of_birth, gender, unique_identifier, "
-                + "owner_id, date_created, dob_collected) "
-                + "VALUES (?, ?, ?, ?, ?, NOW(), ?)";
+                + "owner_id, date_created, dob_collected, first_name, last_name) "
+                + "VALUES (?, ?, ?, ?, ?, NOW(), ?, ?, ?)";
         try (Connection conn = dataSource.getConnection();
              PreparedStatement ps = conn.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, Status.AVAILABLE.getId());
@@ -1927,6 +2332,20 @@ public class SubjectsApiController {
             }
             ps.setInt(5, ownerId);
             ps.setBoolean(6, dobCollected);
+            // Phase E.6 retrospective-backfill — PHI captured at
+            // enrolment time. Null when omitted (legacy SPA calls
+            // pre-dating the form expansion); the subject row stays
+            // valid without it.
+            if (firstName == null || firstName.isEmpty()) {
+                ps.setNull(7, Types.VARCHAR);
+            } else {
+                ps.setString(7, firstName);
+            }
+            if (lastName == null || lastName.isEmpty()) {
+                ps.setNull(8, Types.VARCHAR);
+            } else {
+                ps.setString(8, lastName);
+            }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) {
@@ -1980,18 +2399,31 @@ public class SubjectsApiController {
             String studyEye,
             String screeningDate,
             String personId,
-            List<UpdateSubjectGroupsRequest.Assignment> groupAssignments
+            List<UpdateSubjectGroupsRequest.Assignment> groupAssignments,
+            /*
+             * Phase E.6 retrospective-backfill — operator-supplied
+             * patient identity. The MUW workflow captures the full
+             * triplet on every new enrolment so the dedup query can
+             * find an existing subject regardless of which study they
+             * were first entered in. All three fields are optional on
+             * the wire (legacy SPA call sites still post without them),
+             * but the SPA enforces required=true at the form layer.
+             *
+             * dateOfBirth (ISO yyyy-MM-dd) is the canonical DoB. When
+             * present it overrides the legacy yearOfBirth → Jan-1
+             * mapping; when absent the controller falls back to the
+             * yearOfBirth path so old payloads still work.
+             *
+             * acknowledgeMatchSubjectId: when the SPA's match-preflight
+             * surfaced a duplicate and the operator picked "different
+             * person, create new anyway", the SPA echoes the seen
+             * subject_id(s) so the backend can audit the decision.
+             */
+            String firstName,
+            String lastName,
+            String dateOfBirth,
+            Integer acknowledgeMatchSubjectId
     ) {}
-
-    /**
-     * 400-response body shape for validation failures. Matches the
-     * SPA's existing {@code AddSubjectError} TS shape byte-for-byte:
-     * an {@code errors} array of {field, message} pairs plus a
-     * top-level {@code message} summary.
-     */
-    public record ValidationErrorBody(String message, List<FieldError> errors) {
-        public record FieldError(String field, String message) {}
-    }
 
     private SubjectDetailDto toDetailDto(StudySubjectBean ss, SubjectBean subj, StudyBean study,
                                          StudyEventDAO studyEventDAO,
@@ -2058,6 +2490,13 @@ public class SubjectsApiController {
         // which can defer the per-row fetch via the N+1 mitigation).
         List<GroupAssignmentSnapshot> groupAssignments = loadActiveGroupAssignments(ss.getId());
 
+        // Phase E.6 eye-cohort transition — flatten the per-eye
+        // hand-off history so the SPA's banner renders in a single
+        // call (no extra round trip to /eye-transitions on first
+        // load). Returns null when the subject has no transitions.
+        List<SubjectDetailDto.EyeTransitionSummary> eyeTransitions =
+                loadEyeTransitionSummaries(ss);
+
         return new SubjectDetailDto(
                 ss.getLabel(),
                 secondaryId,
@@ -2076,8 +2515,80 @@ public class SubjectsApiController {
                 ss.getStudyEye(),
                 formatIsoDate(ss.getScreeningDate()),
                 mapStudySubjectStatus(ss.getStatus()),
-                groupAssignments
+                groupAssignments,
+                eyeTransitions
         );
+    }
+
+    /**
+     * Phase E.6 eye-cohort transition — load per-eye transition history
+     * for embedding on {@link SubjectDetailDto}. Walks both directions:
+     * a row where the subject is the source becomes
+     * {@code side='source'} (the subject GAVE the eye away — typically
+     * iAMD downgrading on transition to GA), and a row where the
+     * subject is the target becomes {@code side='target'} (the subject
+     * RECEIVED the eye — typically GA on the receiving side of an iAMD
+     * hand-off).
+     *
+     * <p>Returns {@code null} when the subject has no transitions on
+     * record so the SPA can branch banner rendering on null vs empty;
+     * a present but empty array would suggest "explicitly empty" which
+     * may confuse front-end caching.
+     *
+     * <p>Best-effort: any SQLException is logged + suppressed; we
+     * return null rather than failing the whole detail load. Losing
+     * the cross-reference banner is annoying but not as bad as
+     * refusing to render the subject at all.
+     */
+    private List<SubjectDetailDto.EyeTransitionSummary> loadEyeTransitionSummaries(StudySubjectBean ss) {
+        if (ss == null || ss.getId() == 0) return null;
+        String sql = "SELECT t.transition_id, t.eye, "
+                + "       CASE WHEN t.source_study_subject_id = ? THEN 'source' ELSE 'target' END AS side, "
+                + "       partner_study.oc_oid AS partner_study_oid, "
+                + "       partner_study.name AS partner_study_name, "
+                + "       partner_ss.label AS partner_label, "
+                + "       t.transitioned_at, t.reason "
+                + "  FROM eye_cohort_transition t "
+                + "  JOIN study_subject partner_ss "
+                + "    ON partner_ss.study_subject_id = CASE WHEN t.source_study_subject_id = ? "
+                + "                                          THEN t.target_study_subject_id "
+                + "                                          ELSE t.source_study_subject_id END "
+                + "  JOIN study partner_study "
+                + "    ON partner_study.study_id = CASE WHEN t.source_study_subject_id = ? "
+                + "                                     THEN t.target_study_id "
+                + "                                     ELSE t.source_study_id END "
+                + " WHERE t.source_study_subject_id = ? OR t.target_study_subject_id = ? "
+                + " ORDER BY t.transitioned_at ASC, t.transition_id ASC";
+        List<SubjectDetailDto.EyeTransitionSummary> out = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            int ssId = ss.getId();
+            ps.setInt(1, ssId);
+            ps.setInt(2, ssId);
+            ps.setInt(3, ssId);
+            ps.setInt(4, ssId);
+            ps.setInt(5, ssId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    java.sql.Timestamp ts = rs.getTimestamp("transitioned_at");
+                    out.add(new SubjectDetailDto.EyeTransitionSummary(
+                            rs.getInt("transition_id"),
+                            rs.getString("eye"),
+                            rs.getString("side"),
+                            rs.getString("partner_study_oid"),
+                            rs.getString("partner_study_name"),
+                            rs.getString("partner_label"),
+                            ts == null ? null : ts.toInstant().toString(),
+                            rs.getString("reason")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            LOG.warn("Failed to load eye_cohort_transition history for study_subject_id={}: {}",
+                    ss.getId(), e.getMessage());
+            return null;
+        }
+        return out.isEmpty() ? null : out;
     }
 
     /**

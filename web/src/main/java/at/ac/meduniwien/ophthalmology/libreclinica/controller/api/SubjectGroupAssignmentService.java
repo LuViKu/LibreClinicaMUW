@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.SQLException;
@@ -77,7 +79,7 @@ import org.slf4j.LoggerFactory;
  * {@code groupId} for the "not picked" branch.
  *
  * <p>Validation errors are reported as a list of
- * {@link SubjectsApiController.ValidationErrorBody.FieldError} so the
+ * {@link ValidationErrorBody.FieldError} so the
  * caller can short-circuit with a 400 without persisting anything.
  */
 final class SubjectGroupAssignmentService {
@@ -108,12 +110,12 @@ final class SubjectGroupAssignmentService {
      *   <li>No duplicate {@code groupClassId} entries.</li>
      * </ul>
      */
-    List<SubjectsApiController.ValidationErrorBody.FieldError> validate(
+    List<ValidationErrorBody.FieldError> validate(
             StudyBean study,
             List<UpdateSubjectGroupsRequest.Assignment> assignments) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> errors = new ArrayList<>();
         if (study == null || study.getId() == 0) {
-            errors.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            errors.add(new ValidationErrorBody.FieldError(
                     "study", "No active study bound"));
             return errors;
         }
@@ -126,7 +128,7 @@ final class SubjectGroupAssignmentService {
         for (UpdateSubjectGroupsRequest.Assignment a : desired) {
             if (a == null) continue;
             if (!seenClassIds.add(a.groupClassId())) {
-                errors.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                errors.add(new ValidationErrorBody.FieldError(
                         "assignments[" + a.groupClassId() + "]",
                         "Duplicate group class in the request"));
             }
@@ -142,20 +144,20 @@ final class SubjectGroupAssignmentService {
             if (a == null) continue;
             StudyGroupClassBean gc = classById.get(a.groupClassId());
             if (gc == null) {
-                errors.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                errors.add(new ValidationErrorBody.FieldError(
                         "assignments[" + a.groupClassId() + "].groupClassId",
                         "No active group class with id " + a.groupClassId() + " in this study"));
                 continue;
             }
             if (gc.getStatus() == null || !Status.AVAILABLE.equals(gc.getStatus())) {
-                errors.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                errors.add(new ValidationErrorBody.FieldError(
                         "assignments[" + a.groupClassId() + "].groupClassId",
                         "Group class " + a.groupClassId() + " is not available"));
                 continue;
             }
             boolean required = "REQUIRED".equalsIgnoreCase(gc.getSubjectAssignment());
             if (required && a.groupId() == null) {
-                errors.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                errors.add(new ValidationErrorBody.FieldError(
                         "assignments[" + a.groupClassId() + "].groupId",
                         "Group class '" + gc.getName() + "' is REQUIRED — pick a group"));
             }
@@ -165,7 +167,7 @@ final class SubjectGroupAssignmentService {
                         || sg.getStudyGroupClassId() != gc.getId()
                         || sg.getStatus() == null
                         || !Status.AVAILABLE.equals(sg.getStatus())) {
-                    errors.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    errors.add(new ValidationErrorBody.FieldError(
                             "assignments[" + a.groupClassId() + "].groupId",
                             "Group " + a.groupId() + " not found in class " + gc.getId()));
                 }
@@ -181,7 +183,7 @@ final class SubjectGroupAssignmentService {
                 if (a != null && a.groupClassId() == gc.getId()) { present = true; break; }
             }
             if (!present) {
-                errors.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                errors.add(new ValidationErrorBody.FieldError(
                         "assignments[" + gc.getId() + "]",
                         "REQUIRED group class '" + gc.getName() + "' must be assigned"));
             }

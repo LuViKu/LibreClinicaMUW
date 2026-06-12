@@ -8,12 +8,17 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -24,13 +29,11 @@ import java.util.Map;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 
@@ -164,16 +167,16 @@ public class CrfsApiController {
         ResponseEntity<?> guard = preflightWrite(session);
         if (guard != null) return guard;
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateCreateShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -185,9 +188,9 @@ public class CrfsApiController {
         // CreateCRFServlet:101–105 uses findByName as the gate).
         CRFBean existing = (CRFBean) crfDao.findByName(body.name().trim());
         if (existing != null && existing.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "name", "A CRF named '" + body.name() + "' already exists"))));
         }
 
@@ -208,6 +211,9 @@ public class CrfsApiController {
 
         LOG.info("Create CRF: oid={} name={} by user={}",
                 persisted.getOid(), persisted.getName(), me.getName());
+
+        writeCrfLibraryAudit(AUDIT_TYPE_CRF_CREATED, me, "crf",
+                persisted.getId(), persisted.getName());
 
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         return ResponseEntity.status(201).body(toDto(persisted, versionDao));
@@ -242,7 +248,8 @@ public class CrfsApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         crfDao.update(target);
-        writeLifecycleAudit(me, "crf", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_LIFECYCLE_CHANGED,
+                me, "crf", target.getId(), target.getOid(),
                 oldStatus, Status.DELETED, "crf_disable");
 
         LOG.info("Disable CRF: oid={} by user={}", crfOid, me.getName());
@@ -333,9 +340,9 @@ public class CrfsApiController {
 
         String versionNameTrim = versionName == null ? "" : versionName.trim();
         if (versionNameTrim.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "versionName", "versionName is required"))));
         }
 
@@ -353,9 +360,9 @@ public class CrfsApiController {
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         CRFVersionBean dupCheck = versionDao.findByFullName(versionNameTrim, crf.getName());
         if (dupCheck != null && dupCheck.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "versionName",
                             "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"))));
         }
@@ -389,10 +396,10 @@ public class CrfsApiController {
             // can grab it from <filePath>/crf/original/<storedFilename>
             // and feed it to the legacy parser via the JSP path if
             // they need to compare error messages.
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Spreadsheet parse failed — see errors[].message for the rejected rows / cells",
                     result.errors().stream()
-                            .map(e -> new SubjectsApiController.ValidationErrorBody.FieldError("file", e))
+                            .map(e -> new ValidationErrorBody.FieldError("file", e))
                             .toList()));
         }
 
@@ -428,6 +435,9 @@ public class CrfsApiController {
 
         LOG.info("Upload CRF version (parsed): crfOid={} versionOid={} versionName={} file={} by user={}",
                 crfOid, persisted.getOid(), versionNameTrim, storedFilename, me.getName());
+
+        writeCrfLibraryAudit(AUDIT_TYPE_CRF_VERSION_UPLOADED, me, "crf_version",
+                persisted.getId(), persisted.getName());
 
         return ResponseEntity.status(201).body(toVersionDto(persisted));
     }
@@ -486,14 +496,14 @@ public class CrfsApiController {
         if (guard != null) return guard;
 
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
+        List<ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -512,9 +522,9 @@ public class CrfsApiController {
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         CRFVersionBean dupCheck = versionDao.findByFullName(versionNameTrim, crf.getName());
         if (dupCheck != null && dupCheck.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "versionName",
                             "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"))));
         }
@@ -547,10 +557,10 @@ public class CrfsApiController {
         }
 
         if (!result.ok()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Authoring request rejected — see errors[].message",
                     result.errors().stream()
-                            .map(e -> new SubjectsApiController.ValidationErrorBody.FieldError("body", e))
+                            .map(e -> new ValidationErrorBody.FieldError("body", e))
                             .toList()));
         }
 
@@ -582,6 +592,9 @@ public class CrfsApiController {
                 body.sections() == null ? 0 : body.sections().size(),
                 countItems(body), me.getName());
 
+        writeCrfLibraryAudit(AUDIT_TYPE_CRF_VERSION_AUTHORED, me, "crf_version",
+                persisted.getId(), persisted.getName());
+
         return ResponseEntity.status(201).body(toVersionDto(persisted));
     }
 
@@ -612,7 +625,7 @@ public class CrfsApiController {
      *       summary (sections + items count + uniqueness echo) when
      *       validation passes</li>
      *   <li>{@code 400 Bad Request} with a
-     *       {@link SubjectsApiController.ValidationErrorBody} carrying
+     *       {@link ValidationErrorBody} carrying
      *       the per-field errors when validation fails</li>
      * </ul>
      *
@@ -632,18 +645,18 @@ public class CrfsApiController {
         if (guard != null) return guard;
 
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
 
         // Shape-level validation first — short-circuits before hitting
         // any DAO so missing/malformed payloads surface as 400 even when
         // the DataSource is a Mockito mock (test parity) or when the
         // CRF lookup would fail for other reasons.
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
+        List<ValidationErrorBody.FieldError> errors = jsonValidator.validate(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -666,9 +679,9 @@ public class CrfsApiController {
         CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
         CRFVersionBean dupCheck = versionDao.findByFullName(versionNameTrim, crf.getName());
         if (dupCheck != null && dupCheck.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "versionName",
                             "Version '" + versionNameTrim + "' already exists on CRF '" + crf.getName() + "'"))));
         }
@@ -747,17 +760,17 @@ public class CrfsApiController {
         if (guard != null) return guard;
 
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError("body", "missing"))));
+                    List.of(new ValidationErrorBody.FieldError("body", "missing"))));
         }
         if (body.expression() == null) {
             // null vs empty: the validator catches empty in-body
             // (returns valid:false). null body fields are a shape failure
             // — the SPA is required to send the field even if blank.
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "expression", "expression is required"))));
         }
 
@@ -806,7 +819,8 @@ public class CrfsApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         versionDao.update(target);
-        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
+                me, "crf_version", target.getId(), target.getOid(),
                 oldStatus, Status.DELETED, "crf_version_disable");
 
         LOG.info("Disable CRF version: crfOid={} versionOid={} by user={}",
@@ -861,7 +875,8 @@ public class CrfsApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         versionDao.update(target);
-        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
+                me, "crf_version", target.getId(), target.getOid(),
                 oldStatus, Status.LOCKED, "crf_version_lock");
 
         LOG.info("Lock CRF version: crfOid={} versionOid={} by user={}",
@@ -905,7 +920,8 @@ public class CrfsApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         versionDao.update(target);
-        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
+                me, "crf_version", target.getId(), target.getOid(),
                 oldStatus, Status.AVAILABLE, "crf_version_unlock");
 
         LOG.info("Unlock CRF version: crfOid={} versionOid={} by user={}",
@@ -954,7 +970,8 @@ public class CrfsApiController {
         target.setUpdater(me);
         target.setUpdatedDate(new java.util.Date());
         versionDao.update(target);
-        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
+                me, "crf_version", target.getId(), target.getOid(),
                 oldStatus, Status.AVAILABLE, "crf_version_restore");
 
         LOG.info("Restore CRF version: crfOid={} versionOid={} by user={}",
@@ -1044,7 +1061,8 @@ public class CrfsApiController {
                     "Hard-remove failed: " + e.getMessage()));
         }
 
-        writeLifecycleAudit(me, "crf_version", target.getId(), target.getOid(),
+        writeLifecycleAudit(AuditTypeIds.CRF_VERSION_LIFECYCLE_CHANGED,
+                me, "crf_version", target.getId(), target.getOid(),
                 target.getStatus(), Status.DELETED, "crf_version_hard_remove");
 
         LOG.info("Hard-remove CRF version: crfOid={} versionOid={} by user={}",
@@ -1223,29 +1241,21 @@ public class CrfsApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
-        // Legacy parity: sysadmin OR director/coordinator on the active
+        // Legacy parity: sysadmin OR director/coordinator on ANY active
         // study (CreateCRFServlet:57-68). The site-level legality check
-        // doesn't apply here — CRFs are study-independent.
-        if (me.isSysAdmin()) return null;
-        at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean currentRole =
-                (at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean)
-                        session.getAttribute("userRole");
-        if (currentRole == null || currentRole.getRole() == null) {
-            return ResponseEntity.status(403).body(Map.of("message",
-                    "Your role does not permit managing CRFs"));
-        }
-        at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role r = currentRole.getRole();
-        if (r != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR
-                && r != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.COORDINATOR) {
+        // doesn't apply here — CRFs are study-independent. Phase E.6
+        // multi-role: walk all bindings via StudyAdminAuthorization
+        // instead of trusting the single session-attribute role.
+        if (!StudyAdminAuthorization.userMayManageCrfLibrary(me, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit managing CRFs — sysadmin or Director/Coordinator only"));
         }
         return null;
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreateShape(
+    private static List<ValidationErrorBody.FieldError> validateCreateShape(
             CreateCrfRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         String name = body.name() == null ? "" : body.name().trim();
         if (name.isEmpty()) out.add(fe("name", "CRF name is required"));
         else if (name.length() > 255) out.add(fe("name", "CRF name must be 255 characters or fewer"));
@@ -1255,32 +1265,93 @@ public class CrfsApiController {
         return out;
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError fe(String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    private static ValidationErrorBody.FieldError fe(String field, String msg) {
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
-    private void writeLifecycleAudit(UserAccountBean me,
+    /**
+     * Type ids for the CRF-library §11.10(e) audit-coverage gaps closed
+     * by {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
+     * Mapped to the "admin" variant in {@code AuditApiController.
+     * variantForType}.
+     */
+    private static final int AUDIT_TYPE_CRF_CREATED            = 63;
+    private static final int AUDIT_TYPE_CRF_VERSION_UPLOADED   = 64;
+    private static final int AUDIT_TYPE_CRF_VERSION_AUTHORED   = 65;
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for CRF-library actions.
+     * Mirrors {@code StudiesApiController.writeStudyFieldAudit} — bypasses
+     * the legacy {@code AuditEventDAO.create} path (writes to
+     * {@code audit_event}, invisible to the SPA Audit Log view). Type
+     * ids 63-65 seeded by
+     * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
+     *
+     * @param auditTable  symbolic table name — {@code 'crf'} or
+     *                    {@code 'crf_version'}
+     * @param entityName  the resource's human-readable handle (CRF name
+     *                    or version label)
+     */
+    private void writeCrfLibraryAudit(int auditTypeId, UserAccountBean actor,
+                                      String auditTable, int entityId,
+                                      String entityName) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, '', '')")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, actor.getId());
+            ps.setString(3, auditTable);
+            ps.setInt(4, entityId);
+            ps.setString(5, entityName == null ? "" : entityName);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for {} {} (continuing): {}",
+                    auditTable, entityId, e.getMessage());
+        }
+    }
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for CRF / CRF-version
+     * lifecycle transitions. Mirrors
+     * {@code StudiesApiController.writeStudyFieldAudit} — bypasses the
+     * legacy {@code AuditEventDAO.create} path (writes to
+     * {@code audit_event}, invisible to the SPA Audit Log view). Type
+     * ids 75-76 seeded by
+     * {@code lc-muw-2026-06-12-audit-event-types-unification.xml}.
+     *
+     * @param auditTypeId {@link AuditTypeIds#CRF_LIFECYCLE_CHANGED} for
+     *                    CRFs, {@link AuditTypeIds#CRF_VERSION_LIFECYCLE_CHANGED}
+     *                    for CRF versions
+     * @param auditTable  symbolic table name — {@code 'crf'} or
+     *                    {@code 'crf_version'}
+     * @param entityOid   the resource's OID — recorded as {@code entity_name}
+     */
+    private void writeLifecycleAudit(int auditTypeId,
+                                     UserAccountBean me,
                                      String auditTable,
                                      int entityId,
                                      String entityOid,
                                      Status oldStatus,
                                      Status newStatus,
                                      String actionPrefix) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setAuditTable(auditTable);
-            ae.setEntityId(entityId);
-            ae.setColumnName("status_id");
-            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getId()));
-            ae.setNewValue(String.valueOf(newStatus.getId()));
-            ae.setActionMessage(actionPrefix + ": " + entityOid
-                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
-                    + " → " + newStatus.getName() + ") by " + me.getName());
-            new AuditEventDAO(dataSource).create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for {}={} (continuing): {}",
-                    actionPrefix, entityOid, e.getMessage());
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, me.getId());
+            ps.setString(3, auditTable);
+            ps.setInt(4, entityId);
+            ps.setString(5, entityOid == null ? "" : entityOid);
+            ps.setString(6, oldStatus == null ? "" : oldStatus.getName());
+            ps.setString(7, newStatus == null ? "" : newStatus.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for {} {} (continuing): {}",
+                    auditTable, entityId, e.getMessage());
         }
     }
 

@@ -103,7 +103,11 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        # Phase E-hardening B1 (2026-06-10): expose /actuator/prometheus
+        # for institutional Prometheus scrape. Endpoint is permitAll-ed
+        # in SecurityConfig — the institutional reverse-proxy is the
+        # canonical gate preventing public exposure.
+        include: health,info,prometheus
   endpoint:
     health:
       show-details: when-authorized
@@ -148,6 +152,14 @@ libreclinica:
     reauth:
       enabled: ${LIBRECLINICA_SSO_REAUTH:false}
       url-template: ${LIBRECLINICA_SSO_REAUTH_URL_TEMPLATE:/Shibboleth.sso/Login?forceAuthn=true&target={target}}
+  # In-app bug-report mail destination. Operator clicks "Fehler melden"
+  # in the SPA's TopBar, the BugReportApiController formats a plain-text
+  # email and dispatches via OpenClinicaMailSender to this recipient.
+  # Safe default: empty — the endpoint returns 503 + a ValidationErrorBody
+  # asking the operator to contact the sysadmin if no recipient is wired
+  # at deploy time. Override via LIBRECLINICA_BUG_REPORT_RECIPIENT.
+  bugReport:
+    recipient: ${LIBRECLINICA_BUG_REPORT_RECIPIENT:}
 
 # Phase E.5 follow-up (2026-06-01): springdoc properties intentionally
 # left at default (api-docs.path = /v3/api-docs). The OpenApiResource

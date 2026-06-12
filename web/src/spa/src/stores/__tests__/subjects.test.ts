@@ -191,6 +191,101 @@ describe('useSubjectsStore', () => {
     }
   })
 
+  it('statusFilter "today" keeps subjects with at least one scheduled or in-progress event and drops fully-complete subjects', async () => {
+    // 2026-06-11 — HomeView's "Today's open CRFs" card sends
+    // ?filter=today. Without per-event date columns on the matrix
+    // adapter, the operator-facing semantics are "actively on the
+    // operator's plate": any event currently 'scheduled' or
+    // 'in-progress' counts. Subjects whose only events are
+    // 'complete' / 'signed' / 'not-scheduled' drop out.
+    const store = useSubjectsStore()
+    await store.load()
+    store.statusFilter = 'today'
+    const ids = store.filtered.map((s) => s.id)
+    // M-001 has 'in-progress' V3, M-002 has 'in-progress' V2,
+    // M-004 has 'in-progress' V1, M-005 has 'scheduled' V3,
+    // M-007 has 'in-progress' V2 — all kept.
+    expect(ids).toEqual(expect.arrayContaining(['M-001', 'M-002', 'M-004', 'M-005', 'M-007']))
+    // M-003 (all complete) + M-006 (all signed) drop out.
+    expect(ids).not.toContain('M-003')
+    expect(ids).not.toContain('M-006')
+  })
+
+  it('statusFilter "ready-to-sign" keeps unsigned subjects whose events are all complete and drops already-signed ones', async () => {
+    // 2026-06-11 — HomeView's "Ready to sign" card sends
+    // ?filter=ready-to-sign. Mirrors all-events-complete but adds
+    // the not-signed-yet predicate (Investigator sign-queue use case).
+    // None of the canonical 7 fixture rows match this slice
+    // (the all-complete fixture rows are M-003/M-006, both already
+    // signed), so re-mock the GET with a small purpose-built fixture
+    // that exercises every branch.
+    const CUSTOM: Subject[] = [
+      {
+        // All events complete, not signed → IN the queue.
+        id: 'R-001', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'F', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: false, openQueries: 0, studyEye: null,
+        events: [
+          { eventDefinitionOid: 'SE_V1', label: 'V1', status: 'complete', openQueries: 0 },
+          { eventDefinitionOid: 'SE_V2', label: 'V2', status: 'complete', openQueries: 0 },
+        ],
+      },
+      {
+        // All events complete, signed → DROPPED (already done).
+        id: 'R-002', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'M', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: true, openQueries: 0, studyEye: null,
+        events: [
+          { eventDefinitionOid: 'SE_V1', label: 'V1', status: 'complete', openQueries: 0 },
+          { eventDefinitionOid: 'SE_V2', label: 'V2', status: 'complete', openQueries: 0 },
+        ],
+      },
+      {
+        // Has a still-open event, not signed → DROPPED (not ready).
+        id: 'R-003', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'F', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: false, openQueries: 0, studyEye: null,
+        events: [
+          { eventDefinitionOid: 'SE_V1', label: 'V1', status: 'complete', openQueries: 0 },
+          { eventDefinitionOid: 'SE_V2', label: 'V2', status: 'in-progress', openQueries: 0 },
+        ],
+      },
+    ]
+    vi.mocked(apiGet).mockResolvedValueOnce(CUSTOM)
+    const store = useSubjectsStore()
+    await store.load()
+    store.statusFilter = 'ready-to-sign'
+    const ids = store.filtered.map((s) => s.id)
+    expect(ids).toEqual(['R-001'])
+  })
+
+  it('statusFilter "all-events-complete" drops patients with zero events (no vacuous .every() truth)', async () => {
+    // 2026-06-11 — `events.every(...)` returns true on an empty array,
+    // so a patient with no visits would silently land in the
+    // "alle Visiten abgeschlossen" bucket. The filter now requires
+    // events.length > 0 as well.
+    const CUSTOM: Subject[] = [
+      {
+        id: 'NOVISITS', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'F', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: false, openQueries: 0, studyEye: null, events: [],
+      },
+      {
+        id: 'DONE', secondaryId: null, siteOid: 'TDS0004', siteLabel: 'München',
+        gender: 'M', yearOfBirth: 1970, groupLabel: null, enrolledOn: '2026-01-01',
+        signed: false, openQueries: 0, studyEye: null,
+        events: [
+          { eventDefinitionOid: 'SE_V1', label: 'V1', status: 'complete', openQueries: 0 },
+        ],
+      },
+    ]
+    vi.mocked(apiGet).mockResolvedValueOnce(CUSTOM)
+    const store = useSubjectsStore()
+    await store.load()
+    store.statusFilter = 'all-events-complete'
+    expect(store.filtered.map((s) => s.id)).toEqual(['DONE'])
+  })
+
   it('clearFilters resets query + statusFilter + onlyWithQueries', async () => {
     const store = useSubjectsStore()
     await store.load()
@@ -457,5 +552,95 @@ describe('useSubjectsStore — fetchOne() reconciles matrix row (Y3)', () => {
     await store.fetchOne('M-999')
     expect(store.rows).toEqual([])
     expect(store.selected?.id).toBe('M-999')
+  })
+})
+
+describe('useSubjectsStore — transitionEye() (Phase E.6 per-eye cohort)', () => {
+  // Phase E.6 per-eye cohort transition workflow — the dialog posts
+  // a single-eye downgrade to the backend and the store refetches
+  // the active-study subject so the new eyeTransitions cross-ref
+  // banner lands without a manual reload.
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.mocked(apiGet).mockReset()
+    vi.mocked(apiPost).mockReset()
+  })
+
+  it('POSTs to /pages/api/v1/subjects/{label}/eyes/{eye}/transition with the right body and refetches the subject detail on success', async () => {
+    const store = useSubjectsStore()
+    // The store calls fetchOne after the POST resolves; stub it.
+    vi.mocked(apiPost).mockResolvedValueOnce({ transitionId: 99 })
+    const refreshed: SubjectDetail = {
+      id: 'M-001',
+      secondaryId: null,
+      siteOid: 'TDS0004',
+      siteLabel: 'München',
+      studyOid: 'TDS0004',
+      studyName: 'München',
+      gender: 'F',
+      yearOfBirth: 1962,
+      groupLabel: null,
+      enrolledOn: '2020-10-06',
+      signed: false,
+      locked: false,
+      openQueries: 0,
+      studyEye: 'OS',
+      screeningDate: null,
+      events: [],
+      eyeTransitions: [
+        {
+          transitionId: 99,
+          eye: 'OD',
+          side: 'source',
+          partnerStudyOid: 'S_GA001',
+          partnerStudyName: 'GA',
+          partnerLabel: 'M-101',
+          transitionedAt: '2026-06-07T09:00:00Z',
+          reason: 'Progression to GA',
+        },
+      ],
+    }
+    vi.mocked(apiGet).mockResolvedValueOnce(refreshed)
+
+    const result = await store.transitionEye('M-001', 'OD', {
+      targetStudyOid: 'S_GA001',
+      targetLabel: 'M-101',
+      reason: 'Progression to GA',
+    })
+
+    expect(apiPost).toHaveBeenCalledWith(
+      '/pages/api/v1/subjects/M-001/eyes/OD/transition',
+      {
+        targetStudyOid: 'S_GA001',
+        targetLabel: 'M-101',
+        reason: 'Progression to GA',
+      },
+    )
+    // The store delegates to fetchOne, which keys lookups by the
+    // SS_-prefixed OID derived from the label.
+    expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/subjects/SS_M001')
+    // selected was updated from the refetch — the source banner data
+    // is now reachable to the view.
+    expect(store.selected?.eyeTransitions?.[0]?.transitionId).toBe(99)
+    // Returns the parsed POST body so the dialog can use it (e.g. for
+    // the toast partner-label rendering).
+    expect(result).toEqual({ transitionId: 99 })
+  })
+
+  it('rethrows on 4xx so the calling dialog can surface the error inline', async () => {
+    const { ApiError } = await import('@/api/client')
+    const store = useSubjectsStore()
+    vi.mocked(apiPost).mockRejectedValueOnce(
+      new ApiError(409, 'Eye already transitioned', { message: 'Eye already transitioned' }),
+    )
+
+    await expect(
+      store.transitionEye('M-001', 'OD', {
+        targetStudyOid: 'S_GA001',
+        reason: 'Progression to GA',
+      }),
+    ).rejects.toThrow(/Eye already transitioned/)
+    // No refetch attempted when the POST itself failed.
+    expect(apiGet).not.toHaveBeenCalled()
   })
 })

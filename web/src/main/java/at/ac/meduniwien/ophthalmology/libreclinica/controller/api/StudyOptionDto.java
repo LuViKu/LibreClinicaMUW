@@ -22,6 +22,16 @@ import io.swagger.v3.oas.annotations.media.Schema;
 public record StudyOptionDto(
         String oid,
         String name,
+        /**
+         * Institutional protocol short-code (DB column
+         * {@code study.unique_identifier}). Distinct from {@link #oid}
+         * (system-assigned API handle). Used by the SPA's eye-transition
+         * dialog to prefill the target subject-ID with a
+         * "{uniqueIdentifier}-" prefix when the patient is being newly
+         * enrolled into the target study. Phase E.6 follow-up
+         * 2026-06-10.
+         */
+        String uniqueIdentifier,
         /** OID of the parent study if this is a site, null otherwise. */
         String parentOid,
         /** Display name of the parent study (denormalised for the picker). */

@@ -1,0 +1,276 @@
+# Builds the production images and pushes them to the GitHub Container
+# Registry (ghcr.io). Two images are produced in parallel:
+#
+#   ghcr.io/luviku/libreclinicamuw                     — the Tomcat WAR
+#   ghcr.io/luviku/libreclinicamuw/retinal-inference   — the FastAPI sidecar
+#
+# Both share the same tag matrix so an operator picks one release tag
+# (e.g. `v1.4.0-muw`) and both images move together. They can also be
+# re-built independently via manual `workflow_dispatch` if a single
+# component needs a refresh.
+#
+# Primary trigger is GitHub release **publication** — the canonical
+# release flow is:
+#   1. CI green on lc-develop
+#   2. lc-develop merged into main (manual gate)
+#   3. Maintainer creates a GitHub Release from `main` (the release
+#      page handles tag creation; the tag points at the main tip
+#      commit at the time of publish)
+#   4. This workflow fires automatically, builds BOTH images from that
+#      tag, and pushes them tagged with the release's version (plus
+#      semver families, `latest`, and `sha-<short>`)
+#   5. After both image builds succeed, a long-lived
+#      `locked/<release-tag>` branch is created pointing at the released
+#      commit. (Idempotent — re-publishing the same release leaves the
+#      existing branch alone.)
+#
+# `workflow_dispatch` is kept as a safety net so images can be rebuilt
+# off main or a tag without cutting a fresh release (e.g. transitive
+# dep CVE rebuild, a sidecar-only refresh after a placeholder/Mirage
+# adapter swap). `latest` is set for release publications and for
+# manual dispatches that target main.
+#
+# This build differs from the smoke-test build in build.yml: that one
+# passes `-DskipSpa=true` (via the Dockerfile default ARG) for speed;
+# the app build here passes `SKIP_SPA=false` so the SPA bundle is
+# included in LibreClinica-web.war and the resulting image is
+# deployable as-is. The retinal-inference image has no equivalent
+# fast-path — its build is already a few minutes.
+#
+# Visibility / permissions on each package are managed in the repo's
+# Settings → Packages page. First successful run from this workflow
+# creates each package — they inherit the repository's visibility
+# unless overridden.
+
+name: Release image
+
+on:
+  # Fires when a maintainer hits "Publish release" in the GitHub UI.
+  # `github.ref` for this event is the tag ref (`refs/tags/<tag>`), so
+  # the metadata-action's `type=ref,event=tag` + `type=semver,*` rules
+  # below pick up the version automatically.
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional raw tag to publish in addition to latest/sha (e.g. "1.4.0-muw" or "rc-2026-06-10"). Leave blank to publish only the default tag set. Ignored on release-publish triggers — the release tag is used directly.'
+        required: false
+        type: string
+      images:
+        description: 'Which images to build (manual dispatch only). Release-publish events always build both.'
+        required: false
+        type: choice
+        default: both
+        options:
+          - both
+          - app
+          - retinal-inference
+
+# Don't cancel an in-flight release build — half-pushed images are
+# worse than queued ones. Group by ref so dispatches against different
+# refs (main + a release tag) don't fight.
+concurrency:
+  group: release-image-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  # ------------------------------------------------------------------
+  # Build + push both images in parallel via a matrix. Each matrix leg
+  # owns its own GHA cache scope so a slow app build never evicts the
+  # sidecar's cache (and vice-versa). fail-fast=true (default) means a
+  # failing app build cancels the in-flight sidecar build — release
+  # publication should be all-or-nothing.
+  # ------------------------------------------------------------------
+  build-and-push:
+    name: Build & push (${{ matrix.target.name }})
+    runs-on: ubuntu-latest
+    # 45 min covers the app build (cold-cache Maven + SPA bundle, ~25-30
+    # min). The sidecar build is ~2-3 min — the timeout is shared but
+    # the matrix legs run in parallel so the slower one sets the wall
+    # clock, not the sum.
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: true
+      matrix:
+        target:
+          - name: app
+            image: luviku/libreclinicamuw
+            context: .
+            dockerfile: Dockerfile
+            # Override the Dockerfile's smoke-test-friendly default
+            # (SKIP_SPA=true) so the SPA bundle lands in the WAR.
+            build_args: |
+              SKIP_SPA=false
+            cache_scope: release-image-app
+            title: LibreClinica MUW Ophthalmology
+            description: Electronic Data Capture for the Department of Ophthalmology and Optometry, Medical University of Vienna — institutional build of LibreClinica.
+          - name: retinal-inference
+            image: luviku/libreclinicamuw/retinal-inference
+            context: retinal-inference
+            dockerfile: retinal-inference/Dockerfile
+            build_args: ''
+            cache_scope: release-image-retinal-inference
+            title: LibreClinica MUW — Retinal inference sidecar
+            description: FastAPI + Pydantic sidecar for retinal OCT/SLO inference. v1 ships the deterministic PlaceholderAdapter (task=ga) — task-agnostic contract for future MIRAGE-based decoders.
+    steps:
+      # Skip a matrix leg if the operator picked "app" or
+      # "retinal-inference" on a manual dispatch and this leg isn't it.
+      # Release events run both unconditionally.
+      - name: Decide whether this matrix leg runs
+        id: gate
+        run: |
+          choice='${{ github.event.inputs.images }}'
+          this='${{ matrix.target.name }}'
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "$choice" ] && [ "$choice" != "both" ] && [ "$choice" != "$this" ]; then
+            echo "Skipping $this — manual dispatch selected '$choice'."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - name: Set up Docker Buildx
+        if: steps.gate.outputs.run == 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ${{ env.REGISTRY }}
+        if: steps.gate.outputs.run == 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Generates the tag matrix + OCI annotation labels. Same tag
+      # rules for both images so the operator can pin both with a
+      # single release tag in /etc/libreclinica/env. Tag rules:
+      #   - `latest`                → release-publish, OR manual dispatch
+      #                               against main
+      #   - `sha-<short-sha>`       → every build (immutable handle)
+      #   - `<branch-name>`         → when dispatched against a branch
+      #   - `<git-tag>` raw         → release events and tag refs
+      #   - semver families         → tag refs of vX.Y.Z form get
+      #                               `X.Y.Z`, `X.Y`, and `X` tags
+      #   - `<inputs.version>` raw  → only when the optional `version`
+      #                               input is populated (manual only)
+      - name: Extract image metadata
+        if: steps.gate.outputs.run == 'true'
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ matrix.target.image }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
+            type=sha,prefix=sha-,format=short
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+          labels: |
+            org.opencontainers.image.title=${{ matrix.target.title }}
+            org.opencontainers.image.description=${{ matrix.target.description }}
+            org.opencontainers.image.vendor=Department of Ophthalmology and Optometry, Medical University of Vienna
+            org.opencontainers.image.licenses=LGPL-2.1-or-later
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Build and push ${{ matrix.target.name }} image
+        if: steps.gate.outputs.run == 'true'
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.target.context }}
+          file: ${{ matrix.target.dockerfile }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ matrix.target.build_args }}
+          # Per-image cache scopes so the slow app build can't evict
+          # the fast sidecar's cache, and vice-versa. mode=min keeps the
+          # cache transfer small at the cost of cold-cache dep downloads
+          # each run (same trade-off as build.yml smoke-test).
+          cache-from: type=gha,scope=${{ matrix.target.cache_scope }}
+          cache-to: type=gha,scope=${{ matrix.target.cache_scope }},mode=min
+
+      - name: Summarise pushed image
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          {
+            echo "### ${{ matrix.target.name }} — pushed"
+            echo ''
+            echo '```'
+            echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo ''
+            echo "Digest: \`${{ steps.build.outputs.digest }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ------------------------------------------------------------------
+  # Locked-branch step. Runs once per release-publish event, after BOTH
+  # image builds succeed (the matrix dependency in `needs` enforces
+  # this). Creates `locked/<release-tag>` pointing at the released
+  # commit. Idempotent — re-running against the same release tag
+  # leaves the existing branch alone.
+  #
+  # Skipped entirely on workflow_dispatch (manual rebuilds shouldn't
+  # mint new locked branches).
+  # ------------------------------------------------------------------
+  lock-branch:
+    name: Create locked version branch
+    needs: build-and-push
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    permissions:
+      # The branch step uses the REST API to create a ref. The build
+      # job only needed `packages: write`; this job needs
+      # `contents: write` for the ref-create.
+      contents: write
+    steps:
+      - name: Create locked/<release-tag> branch
+        id: lockbranch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # GitHub branch refs reject ' ', '~', '^', ':', '?', '*', '[',
+          # '\', and consecutive '..'. Release tags almost always come
+          # from the `v1.2.3-muw` family so this is belt-and-braces.
+          SAFE_TAG=$(printf '%s' "$TAG_NAME" | sed 's#[ ~^:?*\[\\]#-#g')
+          BRANCH="locked/${SAFE_TAG}"
+          if gh api "repos/${GITHUB_REPOSITORY}/branches/${BRANCH}" >/dev/null 2>&1; then
+            echo "Branch ${BRANCH} already exists — leaving as-is."
+            echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+            echo "created=false" >> "$GITHUB_OUTPUT"
+          else
+            gh api -X POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+              -f "ref=refs/heads/${BRANCH}" \
+              -f "sha=${COMMIT_SHA}"
+            echo "Created branch ${BRANCH} at ${COMMIT_SHA}"
+            echo "branch=${BRANCH}" >> "$GITHUB_OUTPUT"
+            echo "created=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Summarise locked branch
+        run: |
+          {
+            echo "### Locked version branch"
+            echo ''
+            if [ "${{ steps.lockbranch.outputs.created }}" = "true" ]; then
+              echo "Created \`${{ steps.lockbranch.outputs.branch }}\` at \`${{ github.sha }}\`."
+            else
+              echo "Branch \`${{ steps.lockbranch.outputs.branch }}\` already existed; left as-is."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

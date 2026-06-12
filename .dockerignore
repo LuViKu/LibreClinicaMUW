@@ -16,3 +16,10 @@
 
 # ignore build files
 /*/target
+
+# ignore SPA dependency artifacts — host pnpm install pulls in
+# platform-specific native binaries (rollup, esbuild) that mismatch
+# the linux/arm64 builder image. Let the container's `pnpm install`
+# step inside the Docker build resolve them fresh for the right OS.
+/web/src/spa/node_modules
+/web/src/spa/dist

@@ -110,8 +110,30 @@ export interface ProfileFieldError {
  *
  * Phase E.5 follow-up (TODO #7) — derived from
  * {@code components['schemas']['ActiveStudyDto']}.
+ *
+ * <p>Multi-role per (user, study) — M2 (2026-06-08): {@code roles}
+ * carries the full set of role bindings the user holds in the active
+ * study. The singular {@code role} field is preserved for backward
+ * compatibility with callers that still read the highest-priority
+ * projection. New consumers should prefer {@code roles}; the SPA
+ * falls back to the singular value when {@code roles} is undefined.
+ * The hand-written extension lives here because the api.ts generator
+ * has not yet been re-run against the M1 backend changes.
  */
-export type ActiveStudySummary = Required<components['schemas']['ActiveStudyDto']>
+export type ActiveStudySummary =
+  Required<components['schemas']['ActiveStudyDto']>
+  & {
+    /**
+     * Single-role projection of the binding the user holds in this
+     * study. Optional because the M1 wire shape does not yet emit it
+     * — the top-level {@link AuthenticatedUser.role} carries the same
+     * value during the M1 → M2 transition. Callers should prefer
+     * {@link roles} and only fall back to this singular value when
+     * the array is absent.
+     */
+    role?: UserRole
+    roles?: UserRole[]
+  }
 
 /**
  * Phase E.4 M1 — one row in the user's available-studies list,
@@ -131,6 +153,14 @@ export type StudyOption =
     role: UserRole
     parentOid: string | null
     parentName: string | null
+    /**
+     * Multi-role per (user, study) — M2 (2026-06-08): full set of
+     * role bindings the user holds in this study. Optional for
+     * backward compatibility with the M1 backend wire shape, which
+     * still emits {@code role} only. Picker rows fall back to the
+     * singular value when undefined.
+     */
+    roles?: UserRole[]
   }
 
 /**

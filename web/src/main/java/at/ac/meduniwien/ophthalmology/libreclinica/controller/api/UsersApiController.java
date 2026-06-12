@@ -8,6 +8,12 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -21,7 +27,6 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
@@ -31,6 +36,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager;
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.AuthoritiesDao;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
@@ -39,6 +45,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -324,26 +331,26 @@ public class UsersApiController {
                     "Your role does not permit user administration — sysadmin only"));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
         // Shape-level validation (no DAO calls) — pinned by MockMvc tests.
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = validateCreateUserShape(body);
+        List<ValidationErrorBody.FieldError> errors = validateCreateUserShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
         // DAO-bound validation — uniqueness + study existence + role legality.
         UserAccountDAO userDao = new UserAccountDAO(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
-        List<SubjectsApiController.ValidationErrorBody.FieldError> daoErrors =
+        List<ValidationErrorBody.FieldError> daoErrors =
                 validateCreateUserAgainstDb(body, userDao, studyDao);
         if (!daoErrors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", daoErrors));
         }
 
@@ -357,9 +364,9 @@ public class UsersApiController {
             String eppn = body.externalId().trim();
             UserAccountBean clash = userDao.findByExternalIdentity(provider, eppn);
             if (clash != null && clash.getId() != 0) {
-                return ResponseEntity.status(409).body(new SubjectsApiController.ValidationErrorBody(
+                return ResponseEntity.status(409).body(new ValidationErrorBody(
                         "An account is already bound to that institutional principal",
-                        List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                        List.of(new ValidationErrorBody.FieldError(
                                 "externalId",
                                 "User '" + clash.getName()
                                         + "' is already bound to this SSO principal"))));
@@ -485,20 +492,20 @@ public class UsersApiController {
         return ResponseEntity.status(201).body(response);
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreateUserShape(
+    private static List<ValidationErrorBody.FieldError> validateCreateUserShape(
             CreateUserRequest body) {
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
 
         String username = body.username() == null ? "" : body.username().trim();
         if (username.isEmpty()) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "username", "Username is required"));
         } else if (username.length() > 64) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "username", "Username must be 64 characters or fewer"));
         } else if (!username.matches("[A-Za-z0-9_]+")) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "username", "Username may contain only letters, digits, and underscores"));
         }
 
@@ -507,13 +514,13 @@ public class UsersApiController {
 
         String email = body.email() == null ? "" : body.email().trim();
         if (email.isEmpty()) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "email", "Email is required"));
         } else if (email.length() > 120) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "email", "Email must be 120 characters or fewer"));
         } else if (!email.matches(".+@.+\\..*")) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "email", "Email format is invalid"));
         }
 
@@ -521,17 +528,17 @@ public class UsersApiController {
                 "Institutional affiliation", out);
 
         if (body.studyId() == null || body.studyId() <= 0) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "studyId", "Initial studyId is required"));
         }
 
         if (RoleMapper.fromSpaRole(body.role()) == null) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "role", "Unknown role — expected Administrator / Data Manager / CRC / Monitor / Investigator"));
         }
 
         if ("ldap".equalsIgnoreCase(body.userSource())) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "userSource", "LDAP user provisioning is not supported via this endpoint"));
         }
 
@@ -548,11 +555,11 @@ public class UsersApiController {
                 // handler's ssoBound branch only fires on non-blank,
                 // so this is OK; surface no error.
             } else if (trimmed.length() > 255) {
-                out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                out.add(new ValidationErrorBody.FieldError(
                         "externalId",
                         "External identifier must be 255 characters or fewer"));
             } else if (!trimmed.contains("@")) {
-                out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                out.add(new ValidationErrorBody.FieldError(
                         "externalId",
                         "External identifier must look like an institutional principal (e.g. user@meduniwien.ac.at)"));
             }
@@ -561,26 +568,26 @@ public class UsersApiController {
         return out;
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreateUserAgainstDb(
+    private static List<ValidationErrorBody.FieldError> validateCreateUserAgainstDb(
             CreateUserRequest body, UserAccountDAO userDao, StudyDAO studyDao) {
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
 
         UserAccountBean existing = (UserAccountBean) userDao.findByUserName(body.username().trim());
         if (existing != null && existing.getId() != 0) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "username", "Username already exists"));
         }
 
         StudyBean study = (StudyBean) studyDao.findByPK(body.studyId());
         if (study == null || study.getId() == 0) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     "studyId", "No study with that id"));
         } else {
             Role legacyRole = RoleMapper.fromSpaRole(body.role());
             if (legacyRole != null
                     && !UserAdminAuthorization.roleAssignmentIsLegal(legacyRole, study)) {
-                out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+                out.add(new ValidationErrorBody.FieldError(
                         "role", "Role '" + body.role()
                                 + "' cannot be granted at site level — assign at the parent study"));
             }
@@ -590,13 +597,13 @@ public class UsersApiController {
     }
 
     private static void requireNonBlank(String v, String field, int max, String label,
-            List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+            List<ValidationErrorBody.FieldError> out) {
         String s = v == null ? "" : v.trim();
         if (s.isEmpty()) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     field, label + " is required"));
         } else if (s.length() > max) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     field, label + " must be " + max + " characters or fewer"));
         }
     }
@@ -657,6 +664,8 @@ public class UsersApiController {
 
         target.setUpdater(me);
         userDao.delete(target);
+
+        emitLifecycleAudit(AUDIT_TYPE_USER_ACCOUNT_DISABLED, me.getId(), target.getId(), username);
 
         LOG.info("Disable user: username={} by admin={}", username, me.getName());
         // Re-load so the bean reflects the post-cascade state.
@@ -725,6 +734,8 @@ public class UsersApiController {
         target.setUpdater(me);
         userDao.restore(target);
 
+        emitLifecycleAudit(AUDIT_TYPE_USER_ACCOUNT_RESTORED, me.getId(), target.getId(), username);
+
         LOG.info("Restore user: username={} by admin={} directoryOwned={}",
                 username, me.getName(), isDirectoryOwned);
 
@@ -784,8 +795,19 @@ public class UsersApiController {
     /*    (Phase E A7.5 — study-user-role assignments)                    */
     /* ----------------------------------------------------------------- */
 
+    /**
+     * Body of POST /users/{username}/roles and PUT
+     * /users/{username}/roles/{studyOid}.
+     *
+     * <p>Multi-role: callers may submit either a single SPA role via
+     * {@code role}, or a bulk set-replace via {@code roles}. PUT
+     * accepts both shapes ({@code roles} wins when both are present);
+     * POST treats them as additive grants (one row per role). When
+     * neither {@code role} nor {@code roles} is provided the call
+     * fails validation.
+     */
     @Schema(name = "RoleAssignmentRequest")
-    public record RoleAssignmentRequest(String studyOid, String role) {}
+    public record RoleAssignmentRequest(String studyOid, String role, List<String> roles) {}
 
     /**
      * List every study/role binding owned by {@code username},
@@ -830,14 +852,16 @@ public class UsersApiController {
     }
 
     /**
-     * Grant a fresh study/role binding to {@code username}. Mirrors
+     * Grant a study/role binding to {@code username}. Mirrors
      * {@code SetUserRoleServlet:206} — the legacy gate (sysadmin
      * only) and the site-level role legality check (Coordinator /
      * StudyDirector cannot be granted at site level) are preserved.
      *
-     * <p>Refuses 409 when a non-DELETED binding already exists for
-     * the {@code (user, study)} pair: the SPA should call the PUT
-     * endpoint to update an existing binding instead.
+     * <p>Multi-role: the endpoint is now additive. A user may hold
+     * multiple roles on the same study (e.g. CRC + Investigator);
+     * each POST inserts a fresh row. 409 is reserved for the strict
+     * idempotency case where the EXACT SAME (user, study, role)
+     * triple is already an active grant.
      */
     @PostMapping("/{username}/roles")
     @ApiResponse(responseCode = "201",
@@ -848,9 +872,9 @@ public class UsersApiController {
         ResponseEntity<?> guard = preflightLifecycle(session, username);
         if (guard != null) return guard;
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
@@ -858,10 +882,10 @@ public class UsersApiController {
         UserAccountDAO userDao = new UserAccountDAO(dataSource);
         StudyDAO studyDao = new StudyDAO(dataSource);
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> shapeErrors =
+        List<ValidationErrorBody.FieldError> shapeErrors =
                 validateRoleAssignmentShape(body);
         if (!shapeErrors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", shapeErrors));
         }
 
@@ -877,51 +901,150 @@ public class UsersApiController {
         }
         Role legacyRole = RoleMapper.fromSpaRole(body.role());
         if (!UserAdminAuthorization.roleAssignmentIsLegal(legacyRole, study)) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "role", "Role '" + body.role()
                                     + "' cannot be granted at site level — assign at the parent study"))));
         }
 
-        StudyUserRoleBean existing = userDao.findRoleByUserNameAndStudyId(username, study.getId());
-        if (existing != null && existing.getId() != 0 && existing.isActive()) {
+        // Multi-role idempotency: refuse only when an ACTIVE row already
+        // exists for the EXACT (user, study, role) triple. Other active
+        // grants for the same (user, study) — e.g. user already has CRC,
+        // caller is granting Investigator — pass through as a new row.
+        if (hasActiveGrantWithRole(userDao, username, study.getId(), legacyRole.getName())) {
             return ResponseEntity.status(409).body(Map.of("message",
-                    "User '" + username + "' already has a role on study " + body.studyOid()
-                            + " — use PUT to change it"));
+                    "User '" + username + "' already has role '" + body.role()
+                            + "' on study " + body.studyOid()));
         }
 
-        StudyUserRoleBean sur = new StudyUserRoleBean();
-        sur.setStudyId(study.getId());
-        sur.setRoleName(legacyRole.getName());
-        sur.setStatus(Status.AVAILABLE);
-        sur.setOwner(me);
-        sur.setUserName(username);
-        sur.setUserAccountId(target.getId());
-        userDao.createStudyUserRole(target, sur);
+        // Phase B2 (2026-06-10) — failure-audit wrap on the role-binding
+        // insert + the per-grant success audit_log row. Access-control
+        // mutations are GxP-critical — a silent failure here means a
+        // user-role grant request looked successful but didn't land,
+        // or landed without the matching success audit row. The wrap
+        // catches any Throwable into an OPERATION_FAILED row keyed by
+        // the target user's id; entity_id stays the user id because
+        // the study_user_role row's PK isn't known until after insert.
+        final StudyUserRoleBean surTemplate;
+        {
+            StudyUserRoleBean sur = new StudyUserRoleBean();
+            sur.setStudyId(study.getId());
+            sur.setRoleName(legacyRole.getName());
+            sur.setStatus(Status.AVAILABLE);
+            sur.setOwner(me);
+            sur.setUserName(username);
+            sur.setUserAccountId(target.getId());
+            surTemplate = sur;
+        }
+        final UserAccountBean targetRef = target;
+        final UserAccountBean meRef = me;
+        final StudyBean studyRef = study;
+        final StudyDAO studyDaoRef = studyDao;
+        final UserAccountDAO userDaoRef = userDao;
+        final String usernameRef = username;
+        final String studyOidRef = body.studyOid();
+        final Role legacyRoleRef = legacyRole;
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    me.getId(),
+                    "study_user_role",
+                    target.getId(),
+                    "ASSIGN_ROLE",
+                    reqId,
+                    () -> {
+                        userDaoRef.createStudyUserRole(targetRef, surTemplate);
 
-        LOG.info("Grant role: username={} studyOid={} role={} by admin={}",
-                username, body.studyOid(), legacyRole.getName(), me.getName());
+                        LOG.info("Grant role: username={} studyOid={} role={} by admin={}",
+                                usernameRef, studyOidRef, legacyRoleRef.getName(), meRef.getName());
 
-        StudyUserRoleBean refreshed = userDao.findRoleByUserNameAndStudyId(username, study.getId());
+                        StudyUserRoleBean refreshed = userDaoRef.findRoleByUserNameAndStudyId(
+                                usernameRef, studyRef.getId());
 
-        String oldRoleName = existing != null && existing.getRole() != null
-                ? existing.getRole().getName() : "";
-        String newRoleName = refreshed != null && refreshed.getRole() != null
-                ? refreshed.getRole().getName() : legacyRole.getName();
-        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
-                "User role granted — user=" + username + " role=" + newRoleName,
-                "study_user_role",
-                refreshed != null ? refreshed.getId() : 0,
-                "role_id", oldRoleName, newRoleName);
+                        String newRoleName = legacyRoleRef.getName();
+                        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
+                                AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                                meRef, studyRef, null,
+                                "User role granted — user=" + usernameRef + " role=" + newRoleName,
+                                "study_user_role",
+                                refreshed != null ? refreshed.getId() : 0,
+                                "role_id", "", newRoleName);
 
-        return ResponseEntity.status(201).body(toRoleBindingDto(refreshed, studyDao));
+                        return ResponseEntity.status(201).body(toRoleBindingDto(refreshed, studyDaoRef));
+                    });
+        } catch (Exception e) {
+            LOG.error("assignRole failed for username={} studyOid={} by admin={}",
+                    username, body.studyOid(), me.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to assign role — see server log."));
+        }
     }
 
     /**
-     * Change the role on an existing binding (without revoking).
-     * Mirrors {@code EditStudyUserRoleServlet}. Sysadmin-only, same
+     * Multi-role check: walk every grant the user has, return true
+     * if any active row matches both {@code studyId} and
+     * {@code legacyRoleName}. {@link UserAccountDAO#findRoleByUserNameAndStudyId}
+     * only returns the FIRST match per (user, study) which is no
+     * longer sufficient now that the same pair can host multiple
+     * role rows.
+     */
+    /**
+     * Map a SPA UserRole string to the LITERAL DB role_name string —
+     * mirrors {@link Role}'s declared {@code name} field for each
+     * constant (e.g. Investigator → "Investigator", Monitor → "monitor",
+     * Data Manager → "director"). The legacy {@link Role#getName()}
+     * routes through ResourceBundleProvider and returns a localized
+     * display value, so it's NOT safe to use for SQL WHERE clauses or
+     * for set-replace diff keys.
+     */
+    private static String rawDbRoleNameFor(String spaRole) {
+        if (spaRole == null) return "";
+        return switch (spaRole) {
+            case "Administrator" -> "admin";
+            case "Data Manager" -> "director";
+            case "CRC" -> "coordinator";
+            case "Monitor" -> "monitor";
+            case "Investigator" -> "Investigator";
+            default -> "";
+        };
+    }
+
+    private static boolean hasActiveGrantWithRole(UserAccountDAO userDao,
+                                                  String username,
+                                                  int studyId,
+                                                  String legacyRoleName) {
+        for (StudyUserRoleBean r : userDao.findAllRolesByUserName(username)) {
+            if (r == null || r.getStudyId() != studyId) continue;
+            if (r.getStatus() == null
+                    || r.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            if (r.getRole() != null
+                    && legacyRoleName != null
+                    && legacyRoleName.equalsIgnoreCase(r.getRole().getName())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Change the role(s) on an existing binding. Mirrors
+     * {@code EditStudyUserRoleServlet}. Sysadmin-only, same
      * site-level legality check.
+     *
+     * <p>Two shapes:
+     * <ul>
+     *   <li>{@code roles}: atomic set-replace. The submitted list
+     *       becomes the new active role set for (user, study);
+     *       missing roles are soft-deleted (status_id = 5), new
+     *       roles are inserted. No-op on roles already active.</li>
+     *   <li>{@code role}: legacy single-role overwrite — kept for
+     *       back-compat with callers that haven't migrated yet.
+     *       Mutates the first active binding row in place.</li>
+     * </ul>
+     *
+     * <p>Returns the refreshed role-binding list for (user, study).
      */
     @PutMapping("/{username}/roles/{studyOid}")
     @ApiResponse(responseCode = "200",
@@ -932,18 +1055,33 @@ public class UsersApiController {
                                         HttpSession session) {
         ResponseEntity<?> guard = preflightLifecycle(session, username);
         if (guard != null) return guard;
-        if (body == null || body.role() == null || body.role().isBlank()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
-                    "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
-                            "role", "Role is required"))));
-        }
-        Role legacyRole = RoleMapper.fromSpaRole(body.role());
-        if (legacyRole == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
-                    "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
-                            "role", "Unknown role — expected Administrator / Data Manager / CRC / Monitor / Investigator"))));
+
+        boolean bulkMode = body != null && body.roles() != null && !body.roles().isEmpty();
+        if (!bulkMode) {
+            if (body == null || body.role() == null || body.role().isBlank()) {
+                return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                        "Validation failed",
+                        List.of(new ValidationErrorBody.FieldError(
+                                "role", "Role is required"))));
+            }
+        } else {
+            // Bulk path — pre-validate every requested role name before
+            // we touch the DAOs. An unknown role short-circuits to 400
+            // here so the test path doesn't hit findByOid against a
+            // mock DataSource (and so real callers get a fast 400
+            // instead of a needless DB round-trip).
+            List<ValidationErrorBody.FieldError> pre = new ArrayList<>();
+            for (String spaRole : body.roles()) {
+                if (spaRole == null || spaRole.isBlank()) continue;
+                if (RoleMapper.fromSpaRole(spaRole) == null) {
+                    pre.add(fieldError("roles",
+                            "Unknown role '" + spaRole + "' — expected Administrator / Data Manager / CRC / Monitor / Investigator"));
+                }
+            }
+            if (!pre.isEmpty()) {
+                return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                        "Validation failed", pre));
+            }
         }
 
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
@@ -955,10 +1093,23 @@ public class UsersApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
         }
-        if (!UserAdminAuthorization.roleAssignmentIsLegal(legacyRole, study)) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+
+        if (bulkMode) {
+            return updateRolesBulk(username, body.roles(), study, studyOid, me, userDao, studyDao);
+        }
+
+        // Legacy single-role overwrite path.
+        Role legacyRole = RoleMapper.fromSpaRole(body.role());
+        if (legacyRole == null) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
+                            "role", "Unknown role — expected Administrator / Data Manager / CRC / Monitor / Investigator"))));
+        }
+        if (!UserAdminAuthorization.roleAssignmentIsLegal(legacyRole, study)) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Validation failed",
+                    List.of(new ValidationErrorBody.FieldError(
                             "role", "Role '" + body.role()
                                     + "' cannot be granted at site level — assign at the parent study"))));
         }
@@ -983,13 +1134,182 @@ public class UsersApiController {
 
         String newRoleName = refreshed != null && refreshed.getRole() != null
                 ? refreshed.getRole().getName() : legacyRole.getName();
-        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
+        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
+                AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                me, study, null,
                 "User role changed — user=" + username + " role=" + newRoleName,
                 "study_user_role",
                 refreshed != null ? refreshed.getId() : existing.getId(),
                 "role_id", oldRoleName, newRoleName);
 
         return ResponseEntity.ok(toRoleBindingDto(refreshed, studyDao));
+    }
+
+    /**
+     * Bulk set-replace for the multi-role PUT path. Reads the current
+     * active grants for (user, study), diffs against the requested
+     * roles, then in one logical transaction:
+     *
+     * <ul>
+     *   <li>Inserts a fresh row per role in {@code requested - current}.</li>
+     *   <li>Soft-deletes (status_id → 5) the existing row per role in
+     *       {@code current - requested}.</li>
+     *   <li>Leaves untouched any role that appears in both sets.</li>
+     * </ul>
+     *
+     * <p>Audit: one {@code writeAuditEvent} row per inserted or
+     * soft-deleted role, packing the username + role name into the
+     * action-message text so the audit-log view can render the diff.
+     */
+    private ResponseEntity<?> updateRolesBulk(String username,
+                                              List<String> requestedSpaRoles,
+                                              StudyBean study,
+                                              String studyOid,
+                                              UserAccountBean me,
+                                              UserAccountDAO userDao,
+                                              StudyDAO studyDao) {
+        // Validate every requested role; reject the bulk request if
+        // any single role is unknown or illegal at the study tier.
+        // The map key is the RAW DB role_name string (not Role.getName()
+        // which goes through the term bundle and returns a localized
+        // display value). Hardcoded mapping is the simplest correct
+        // option — Role.name is a protected EntityBean field, not
+        // accessible from outside the bean's package.
+        List<ValidationErrorBody.FieldError> errors = new ArrayList<>();
+        LinkedHashMap<String, Role> resolved = new LinkedHashMap<>();
+        for (String spaRole : requestedSpaRoles) {
+            if (spaRole == null || spaRole.isBlank()) continue;
+            Role legacy = RoleMapper.fromSpaRole(spaRole);
+            if (legacy == null) {
+                errors.add(fieldError("roles",
+                        "Unknown role '" + spaRole + "' — expected Administrator / Data Manager / CRC / Monitor / Investigator"));
+                continue;
+            }
+            if (!UserAdminAuthorization.roleAssignmentIsLegal(legacy, study)) {
+                errors.add(fieldError("roles", "Role '" + spaRole
+                        + "' cannot be granted at site level — assign at the parent study"));
+                continue;
+            }
+            resolved.put(rawDbRoleNameFor(spaRole), legacy);
+        }
+        if (!errors.isEmpty()) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Validation failed", errors));
+        }
+        if (resolved.isEmpty()) {
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
+                    "Validation failed",
+                    List.of(fieldError("roles", "At least one role is required"))));
+        }
+
+        UserAccountBean target = (UserAccountBean) userDao.findByUserName(username);
+        if (target == null || target.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No user with username '" + username + "'"));
+        }
+
+        // Snapshot the current active grants for (user, study), keyed by
+        // the RAW DB role_name string. The legacy DAO routes role_name
+        // through ResourceBundleProvider.getString(...) (Term.getName)
+        // which returns the LOCALIZED display value, not the literal —
+        // so we can't trust StudyUserRoleBean.getRoleName() for diff or
+        // WHERE-clause keys. Read the raw column directly.
+        LinkedHashMap<String, Integer> currentByRawRole = new LinkedHashMap<>();
+        try (Connection conn = dataSource.getConnection();
+             PreparedStatement ps = conn.prepareStatement(
+                     "SELECT role_name FROM study_user_role "
+                             + "WHERE study_id = ? AND user_name = ? AND status_id = 1")) {
+            ps.setInt(1, study.getId());
+            ps.setString(2, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    String raw = rs.getString(1);
+                    if (raw != null) currentByRawRole.putIfAbsent(raw, 1);
+                }
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("Failed to snapshot current grants for (study={}, user={}): {}",
+                    study.getId(), username, sqlEx.getMessage());
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load current role grants"));
+        }
+
+        AuditEventDAO auditDao = new AuditEventDAO(dataSource);
+        int adds = 0;
+        int removes = 0;
+
+        // Adds: anything in resolved that isn't already active.
+        for (Map.Entry<String, Role> e : resolved.entrySet()) {
+            String rawRoleName = e.getKey();
+            if (currentByRawRole.containsKey(rawRoleName)) continue;
+            StudyUserRoleBean sur = new StudyUserRoleBean();
+            sur.setStudyId(study.getId());
+            sur.setRoleName(rawRoleName);
+            sur.setStatus(Status.AVAILABLE);
+            sur.setOwner(me);
+            sur.setUserName(username);
+            sur.setUserAccountId(target.getId());
+            userDao.createStudyUserRole(target, sur);
+            EventCrfsApiController.writeAuditEvent(auditDao,
+                    AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                    me, study, null,
+                    "User role granted (bulk) — user=" + username + " role=" + rawRoleName,
+                    "study_user_role", 0,
+                    "role_id", "", rawRoleName);
+            adds++;
+        }
+
+        // Removes: anything currently active but absent from resolved.
+        //
+        // CANNOT use userDao.updateStudyUserRole(row, username) — that
+        // SQL keys on (study_id, user_name) only, which mutates EVERY
+        // row for that (user, study) pair and clobbers the rows we
+        // intend to keep. The table has no PK column (legacy schema —
+        // see migration/2.5/changeLogCreateTables.xml), so the per-row
+        // discriminator is (study_id, user_name, role_name) and we
+        // additionally pin status_id=1 to avoid resurrecting an
+        // already-deleted row with the same role-name.
+        for (Map.Entry<String, Integer> e : currentByRawRole.entrySet()) {
+            String rawRoleName = e.getKey();
+            if (resolved.containsKey(rawRoleName)) continue;
+            try (Connection conn = dataSource.getConnection();
+                 PreparedStatement ps = conn.prepareStatement(
+                         "UPDATE study_user_role SET status_id = ?, date_updated = NOW(), "
+                                 + "update_id = ? WHERE study_id = ? AND user_name = ? "
+                                 + "AND role_name = ? AND status_id = 1")) {
+                ps.setInt(1, Status.DELETED.getId());
+                ps.setInt(2, me.getId());
+                ps.setInt(3, study.getId());
+                ps.setString(4, username);
+                ps.setString(5, rawRoleName);
+                ps.executeUpdate();
+            } catch (SQLException sqlEx) {
+                LOG.warn("Soft-delete failed for (study={}, user={}, role={}) — continuing: {}",
+                        study.getId(), username, rawRoleName, sqlEx.getMessage());
+                continue;
+            }
+            EventCrfsApiController.writeAuditEvent(auditDao,
+                    AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                    me, study, null,
+                    "User role revoked (bulk) — user=" + username + " role=" + rawRoleName,
+                    "study_user_role", 0,
+                    "role_id", rawRoleName, "");
+            removes++;
+        }
+
+        LOG.info("Bulk role update: username={} studyOid={} adds={} removes={} by admin={}",
+                username, studyOid, adds, removes, me.getName());
+
+        // Response: refreshed binding list for (user, study). Includes
+        // soft-deleted rows so the SPA can see the full history if it
+        // wants to render a per-role active/inactive badge.
+        ArrayList<StudyUserRoleBean> refreshed = userDao.findAllRolesByUserName(username);
+        List<RoleBindingDto> bindings = new ArrayList<>();
+        for (StudyUserRoleBean r : refreshed) {
+            if (r == null || r.getStudyId() != study.getId()) continue;
+            bindings.add(toRoleBindingDto(r, studyDao));
+        }
+        return ResponseEntity.ok(bindings);
     }
 
     /**
@@ -1031,7 +1351,9 @@ public class UsersApiController {
         LOG.info("Revoke role: username={} studyOid={} by admin={}",
                 username, studyOid, me.getName());
 
-        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource), me, study, null,
+        EventCrfsApiController.writeAuditEvent(new AuditEventDAO(dataSource),
+                AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                me, study, null,
                 "User role revoked — user=" + username + " role=" + oldRoleName,
                 "study_user_role", existing.getId(),
                 "role_id", oldRoleName, "");
@@ -1039,9 +1361,9 @@ public class UsersApiController {
         return ResponseEntity.ok(toRoleBindingDto(existing, studyDao));
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateRoleAssignmentShape(
+    private static List<ValidationErrorBody.FieldError> validateRoleAssignmentShape(
             RoleAssignmentRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         if (body.studyOid() == null || body.studyOid().isBlank()) {
             out.add(fieldError("studyOid", "studyOid is required"));
         }
@@ -1144,22 +1466,14 @@ public class UsersApiController {
         // Audit row: log the event WITHOUT either side of the password.
         // Mirrors SubjectsApiController's sign-endpoint redaction
         // pattern — passwords never enter the audit_log_event columns.
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setAuditTable("user_account");
-            ae.setEntityId(target.getId());
-            ae.setColumnName("passwd");
-            ae.setOldValue("");
-            ae.setNewValue("");
-            ae.setActionMessage("password_reset by admin " + me.getName()
-                    + " for user " + target.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for password_reset username={} (continuing): {}",
-                    username, e.getMessage());
-        }
+        // Phase audit-unification (2026-06-12): direct INSERT with
+        // type_id=104 (AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION) instead
+        // of routing through AuditEventDAO.create (legacy audit_event
+        // table, invisible to SPA Audit Log view).
+        emitAdminActionAudit(me.getId(), target.getId(), target.getName(),
+                "passwd",
+                "password_reset by admin " + me.getName()
+                        + " for user " + target.getName());
 
         LOG.info("Reset password: username={} by admin={}", username, me.getName());
 
@@ -1257,28 +1571,16 @@ public class UsersApiController {
         userDao.update(target);
 
         // Audit row: keyed on account_non_locked (the column the admin
-        // flipped) — NOT a literal copy of the resetPassword audit
-        // block. Reviewer flag from §4: columnName + value swap, not
-        // a "passwd" copy. We emit a single row for the lock-state
-        // change; the OTP rotation is implicit (no audit_log_event row
-        // for passwd values, ever — same redaction policy as
-        // resetPassword).
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setAuditTable("user_account");
-            ae.setEntityId(target.getId());
-            ae.setColumnName("account_non_locked");
-            ae.setOldValue("false");
-            ae.setNewValue("true");
-            ae.setActionMessage("unlock by admin " + me.getName()
-                    + " for user " + target.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for unlock username={} (continuing): {}",
-                    username, e.getMessage());
-        }
+        // flipped). Phase E.6.ci: write straight to audit_log_event
+        // instead of routing through {@link AuditEventDAO#create},
+        // which only persists {@code audit_table / user_id / entity_id
+        // / reason_for_change / action_message} and drops the typed
+        // {@code old_value / new_value / entity_name / audit_log_event_type_id}
+        // fields the SPA's Audit Log view + the unlock IT both read.
+        // Same shape as {@link MeApiController#emitProfileAudit} — column
+        // name rides in {@code entity_name} (audit_log_event has no
+        // {@code column_name} column, that's audit_event_values).
+        emitUnlockAudit(me.getId(), target.getId());
 
         LOG.info("Unlock user: username={} by admin={}", username, me.getName());
 
@@ -1287,6 +1589,83 @@ public class UsersApiController {
         response.put("user", projectToStudyUserDto(target, currentStudy));
         response.put("generatedPassword", returnPassword ? generatedPassword : null);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Phase E.6.ci — emit a typed {@code audit_log_event} row for the
+     * unlock action. Same SQL shape as
+     * {@link MeApiController#emitProfileAudit}: column name lands in
+     * {@code entity_name} (audit_log_event has no {@code column_name}
+     * column), pre/post values land in {@code old_value / new_value}.
+     *
+     * <p>Reuses {@code audit_log_event_type_id = 50}
+     * ({@code user_account_profile_updated}) — the unlock is a
+     * user_account state mutation, lifecycle-adjacent to the SPA's
+     * own profile-edit audit rows, and the existing dictionary row
+     * already carries a sensible display name for the Audit Log view.
+     * Minting a dedicated type id would force a Liquibase changeset
+     * for cosmetic differentiation.
+     *
+     * <p>Failures are swallowed: the unlock itself has already
+     * persisted (account_non_locked = true), so a missed audit row
+     * should NOT roll back the admin's lifecycle change.
+     */
+    /**
+     * Type ids for the user-account lifecycle §11.10(e) audit-coverage
+     * gaps closed by
+     * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
+     * Disable/restore previously went straight through {@code
+     * UserAccountDAO.delete/restore} with no audit emission.
+     */
+    private static final int AUDIT_TYPE_USER_ACCOUNT_DISABLED = 66;
+    private static final int AUDIT_TYPE_USER_ACCOUNT_RESTORED = 67;
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for user-account
+     * lifecycle (disable / restore). Mirrors {@link #emitUnlockAudit}
+     * — uses {@code audit_table='user_account'} with the username in
+     * {@code entity_name} so the SPA Audit Log view groups the row
+     * with other lifecycle entries for the same user.
+     *
+     * <p>Failures are swallowed: the lifecycle mutation has already
+     * persisted, so a missed audit row should NOT roll back the
+     * admin's action.
+     */
+    private void emitLifecycleAudit(int auditTypeId, int adminUserId,
+                                    int targetUserId, String targetUsername) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, '', '')")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, adminUserId);
+            ps.setInt(3, targetUserId);
+            ps.setString(4, targetUsername == null ? "" : targetUsername);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Failed to write audit_log_event row for user_account lifecycle target={} admin={} type={}: {}",
+                    targetUserId, adminUserId, auditTypeId, e.getMessage());
+        }
+    }
+
+    private void emitUnlockAudit(int adminUserId, int targetUserId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, ?, ?)")) {
+            ps.setInt(1, 50); // user_account_profile_updated
+            ps.setInt(2, adminUserId);
+            ps.setInt(3, targetUserId);
+            ps.setString(4, "account_non_locked");
+            ps.setString(5, "false");
+            ps.setString(6, "true");
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Failed to write audit_log_event row for unlock target={} admin={}: {}",
+                    targetUserId, adminUserId, e.getMessage());
+        }
     }
 
     /* ----------------------------------------------------------------- */
@@ -1341,15 +1720,15 @@ public class UsersApiController {
                     "Your role does not permit user administration — sysadmin only"));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors = validateUpdateUserShape(body);
+        List<ValidationErrorBody.FieldError> errors = validateUpdateUserShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -1460,9 +1839,9 @@ public class UsersApiController {
         return ResponseEntity.ok(projectToStudyUserDto(target, currentStudy));
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateUpdateUserShape(
+    private static List<ValidationErrorBody.FieldError> validateUpdateUserShape(
             UpdateUserRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
 
         // Each field is optional (null = unchanged); if present, run the
         // same length/format rules as create.
@@ -1496,8 +1875,8 @@ public class UsersApiController {
         return out;
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError fieldError(String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    private static ValidationErrorBody.FieldError fieldError(String field, String msg) {
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
     /**
@@ -1513,28 +1892,88 @@ public class UsersApiController {
         return UserType.USER;
     }
 
-    private void writeUserFieldAudit(AuditEventDAO auditDAO,
+    /**
+     * Type id for admin-initiated user-account actions (admin password
+     * reset, admin profile edit). Hardcoded as a magic number with a
+     * sibling comment — see {@link AuditTypeIds#USER_ACCOUNT_ADMIN_ACTION}
+     * for the canonical declaration. A DAO-layer import of the
+     * controller package would be a layering violation; controllers
+     * import AuditTypeIds directly elsewhere, but here we keep the
+     * direct-INSERT writers self-contained for readability.
+     */
+    private static final int AUDIT_TYPE_USER_ACCOUNT_ADMIN_ACTION = 104;
+
+    /**
+     * Phase audit-unification (2026-06-12) — admin profile-edit per-field
+     * audit writer.
+     *
+     * <p>Direct INSERT into {@code audit_log_event} with
+     * {@code audit_log_event_type_id=104}
+     * ({@code AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION}). Replaces the
+     * previous routing through {@code AuditEventDAO.create} (legacy
+     * {@code audit_event} table, invisible to the SPA Audit Log view).
+     *
+     * <p>Column name rides in {@code entity_name} (parity with
+     * {@link #emitUnlockAudit} / {@code MeApiController#emitProfileAudit}
+     * — {@code audit_log_event} has no {@code column_name} column).
+     */
+    private void writeUserFieldAudit(@SuppressWarnings("unused") AuditEventDAO auditDAO,
                                      UserAccountBean editor,
                                      UserAccountBean target,
                                      String columnName,
                                      String oldValue,
                                      String newValue) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(editor.getId());
-            ae.setAuditTable("user_account");
-            ae.setEntityId(target.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("user_profile_update: " + (target.getName() == null ? "" : target.getName())
-                    + "." + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "'");
-            auditDAO.create(ae);
-        } catch (Exception e) {
+        String oldVal = oldValue == null ? "" : oldValue;
+        String newVal = newValue == null ? "" : newValue;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, ?, ?)")) {
+            ps.setInt(1, AUDIT_TYPE_USER_ACCOUNT_ADMIN_ACTION);
+            ps.setInt(2, editor.getId());
+            ps.setInt(3, target.getId());
+            ps.setString(4, columnName == null ? "" : columnName);
+            ps.setString(5, oldVal);
+            ps.setString(6, newVal);
+            ps.executeUpdate();
+        } catch (SQLException e) {
             LOG.warn("Audit write failed for user field {}={} (continuing): {}",
                     columnName, newValue, e.getMessage());
+        }
+    }
+
+    /**
+     * Phase audit-unification (2026-06-12) — admin-initiated user-account
+     * action audit writer (currently password reset; future: account
+     * unlock variants, sysadmin-issued OTP refreshes).
+     *
+     * <p>Direct INSERT into {@code audit_log_event} with
+     * {@code audit_log_event_type_id=104}
+     * ({@code AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION}). The action
+     * message rides in {@code new_value} so the SPA Audit Log view can
+     * surface the full human-readable description without an extra
+     * column. Sensitive payloads (passwords, tokens) MUST NOT enter the
+     * {@code old_value / new_value} columns — mirrors
+     * {@code SubjectsApiController} sign-endpoint redaction.
+     */
+    private void emitAdminActionAudit(int adminUserId, int targetUserId,
+                                      String targetUsername, String columnName,
+                                      String actionMessage) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'user_account', ?, ?, '', ?)")) {
+            ps.setInt(1, AUDIT_TYPE_USER_ACCOUNT_ADMIN_ACTION);
+            ps.setInt(2, adminUserId);
+            ps.setInt(3, targetUserId);
+            ps.setString(4, targetUsername == null ? "" : targetUsername);
+            ps.setString(5, actionMessage == null ? "" : actionMessage);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for admin action target={} admin={} column={} (continuing): {}",
+                    targetUserId, adminUserId, columnName, e.getMessage());
         }
     }
 

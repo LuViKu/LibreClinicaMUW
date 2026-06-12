@@ -29,6 +29,9 @@ services:
       LIBRECLINICA_SSO_BUTTON_LABEL: "${LIBRECLINICA_SSO_BUTTON_LABEL:-Sign in with Institutional Account}"
       LIBRECLINICA_SSO_DELEGATE_MFA: "${LIBRECLINICA_SSO_DELEGATE_MFA:-true}"
       LIBRECLINICA_SSO_REAUTH: "${LIBRECLINICA_SSO_REAUTH:-false}"
+      # In-app bug-report mail destination (Phase E). Empty by default;
+      # set on the host to wire BugReportApiController to a real inbox.
+      LIBRECLINICA_BUG_REPORT_RECIPIENT: "${LIBRECLINICA_BUG_REPORT_RECIPIENT:-}"
       # Phase E.5 chronic CI fix (2026-06-03): runs the demo-data
       # Liquibase changesets (M-001..M-007 subjects + CRFs +
       # discrepancy notes + demo users physician/monitor) on dev
@@ -73,6 +76,36 @@ services:
     image: docker.io/marlonb/mailcrab:v1.1.0
     ports:
       - "127.0.0.1:1080:1080"
+
+  # Phase E.7 (2026-06-10): retinal inference sidecar.
+  # FastAPI sync /screen + Postgres-as-queue background worker (single
+  # container, two sibling processes). v1 ships the deterministic
+  # PlaceholderAdapter — flip RETINAL_INFERENCE_ADAPTER=mirage once the
+  # real MIRAGE-based model lands. Task-agnostic by design; v1 enables
+  # task='ga' only (geographic atrophy / cRORA segmentation).
+  retinal-inference:
+    build: ./retinal-inference
+    # Explicit `image:` tag — without it `docker compose up --no-build`
+    # looks up the auto-generated `<project_name>-<service_name>:latest`
+    # (`libreclinica-muw-retinal-inference:latest`) but `docker buildx
+    # bake` only stores the build output by digest unless the target has
+    # a name. Mirrors what the `libreclinica` service already has
+    # (`image: libreclinica-muw:dev` above) so the CI workflow's bake
+    # step can pre-load both images for `compose up --no-build`.
+    image: libreclinica-muw-retinal-inference:latest
+    container_name: libreclinica-muw-retinal-inference-1
+    depends_on:
+      - db
+    environment:
+      RETINAL_INFERENCE_INFERENCE_ADAPTER: ${RETINAL_INFERENCE_ADAPTER:-placeholder}
+      RETINAL_INFERENCE_DB_URL: postgresql://clinica:clinica@db:5432/libreclinica
+      RETINAL_INFERENCE_SHARED_STORAGE_PATH: /var/lib/libreclinica/segmentation-output
+      RETINAL_INFERENCE_E2E_UPLOADS_PATH: /var/lib/libreclinica/e2e-uploads
+    volumes:
+      - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
+    cpus: "4.0"
+    mem_limit: 4g
 
 volumes:
   libreclinica-db-data:

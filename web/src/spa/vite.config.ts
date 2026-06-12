@@ -3,6 +3,49 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath, URL } from 'node:url'
+import { execSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
+
+/**
+ * Phase E.6 — version + build constants surfaced in the SideRail
+ * footer. Read at config-load time:
+ *   - APP_VERSION ← SPA package.json's `version`
+ *   - BUILD_HASH  ← short git SHA (best-effort; falls back to "dev")
+ *   - BUILD_DATE  ← ISO yyyy-MM-dd (today)
+ */
+function readPackageVersion(): string {
+  try {
+    const raw = readFileSync(
+      fileURLToPath(new URL('./package.json', import.meta.url)),
+      'utf-8',
+    )
+    return (JSON.parse(raw).version as string | undefined) ?? 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+function gitShortSha(): string {
+  try {
+    return execSync('git rev-parse --short HEAD', {
+      cwd: fileURLToPath(new URL('.', import.meta.url)),
+      stdio: ['ignore', 'pipe', 'ignore'],
+    })
+      .toString()
+      .trim() || 'dev'
+  } catch {
+    return 'dev'
+  }
+}
+function todayIso(): string {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+const APP_VERSION = readPackageVersion()
+const BUILD_HASH = gitShortSha()
+const BUILD_DATE = todayIso()
 
 /**
  * Phase E.1 (2026-05-30): Vue 3 + Vite + Tailwind v4.
@@ -20,6 +63,11 @@ import { fileURLToPath, URL } from 'node:url'
  * without CORS noise.
  */
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __BUILD_HASH__: JSON.stringify(BUILD_HASH),
+    __BUILD_DATE__: JSON.stringify(BUILD_DATE),
+  },
   plugins: [
     vue(),
     tailwindcss(),
@@ -76,5 +124,10 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/setupTests.ts'],
+    // tests/a11y/spa-routes.spec.ts is a Playwright spec that pulls in
+    // @playwright/test (a non-vitest runner). When vitest's default
+    // include picks it up the file fails to collect. Exclude it here;
+    // Playwright runs out-of-band.
+    exclude: ['**/node_modules/**', '**/dist/**', 'tests/a11y/spa-routes.spec.ts'],
   },
 })

@@ -95,14 +95,18 @@ const osOnly = computed(() => isBilateral.value && !od.value && os.value)
 
 <template>
   <div
-    class="bilateral-row grid items-start gap-3 py-3 border-t border-slate-100 first:border-t-0"
-    :class="isBothEyes ? 'grid-cols-[1fr_2fr]' : 'grid-cols-[1fr_1fr_1fr]'"
+    class="bilateral-row grid items-center gap-x-5 border-t border-slate-100 first:border-t-0 py-[17px] hover:bg-gradient-to-r hover:from-slate-50 hover:to-transparent"
+    :class="
+      isBothEyes
+        ? 'grid-cols-[minmax(160px,1.15fr)_minmax(200px,2.04fr)]'
+        : 'grid-cols-[minmax(160px,1.15fr)_minmax(200px,1fr)_minmax(200px,1fr)]'
+    "
     role="group"
     :aria-label="label"
   >
-    <!-- Column 1 — row label -->
-    <div class="text-xs font-medium text-slate-700 pt-2">
-      <span :class="{ req: required }">{{ label }}</span>
+    <!-- Column 1 — row label (design's .mlabel 14px/500 + .mhint 11.5px hint). -->
+    <div class="pr-2">
+      <div class="text-[14px] font-medium leading-[1.35] text-slate-800" :class="{ req: required }">{{ label }}</div>
       <div v-if="odOnly" class="mt-1 text-[10px] uppercase tracking-wide text-amber-700">
         {{ t('crfEntry.bilateral.odOnlyTell') }}
       </div>
@@ -125,45 +129,65 @@ const osOnly = computed(() => isBilateral.value && !od.value && os.value)
          each eye cell. Refraction is the canonical example — operators
          see "Sph Tor Ang Vis" on one line per eye, matching paper
          refraction forms. Each sub-input still binds to its own
-         OD_/OS_ item in the data model. -->
+         OD_/OS_ item in the data model.
+
+         Phase E.6 ophth-bilateral-design (2026-06-11): the slot
+         carries {@code compact: true} so CrfItemWidget can render a
+         56×42 mini input instead of the standard full-width number
+         frame — matches the design's .refrac compound row. -->
     <template v-else-if="isCompound">
       <div data-bilateral-cell="OD" class="bilateral-cell">
-        <div
-          class="grid gap-2"
-          :style="{ gridTemplateColumns: `repeat(${compoundSubFields.length}, minmax(0, 1fr))` }"
-        >
+        <div class="flex flex-wrap gap-2">
           <div
             v-for="sub in compoundSubFields"
             :key="`od-${sub.subKey}`"
-            class="space-y-1"
+            class="flex flex-col gap-1.5 items-center"
           >
-            <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+            <div class="text-[10px] uppercase tracking-[0.07em] text-slate-500 font-semibold">
               {{ sub.compactLabel }}
             </div>
             <template v-if="sub.od">
-              <slot name="widget" :item="sub.od" side="OD" />
+              <slot name="widget" :item="sub.od" side="OD" :compact="true" />
             </template>
-            <div v-else class="text-[10px] text-slate-400 italic px-1">—</div>
+            <!-- Phase E.6 ophth-bilateral-design (2026-06-11): empty
+                 sub-slot still renders a disabled mini-input so the
+                 row visually presents all canonical sub-fields. The
+                 design's quartet (SPH/TOR/ANG/VIS) reads as a stable
+                 row even when an authoring seed elided one sub-field. -->
+            <input
+              v-else
+              type="text"
+              disabled
+              tabindex="-1"
+              :aria-label="t('crfEntry.bilateral.compoundSlotMissing', { subKey: sub.subKey })"
+              class="w-14 h-[42px] text-center bg-slate-50 border border-dashed border-slate-200 rounded-[10px] text-slate-300 text-[14px] cursor-not-allowed"
+              placeholder="—"
+            />
           </div>
         </div>
       </div>
       <div data-bilateral-cell="OS" class="bilateral-cell">
-        <div
-          class="grid gap-2"
-          :style="{ gridTemplateColumns: `repeat(${compoundSubFields.length}, minmax(0, 1fr))` }"
-        >
+        <div class="flex flex-wrap gap-2">
           <div
             v-for="sub in compoundSubFields"
             :key="`os-${sub.subKey}`"
-            class="space-y-1"
+            class="flex flex-col gap-1.5 items-center"
           >
-            <div class="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+            <div class="text-[10px] uppercase tracking-[0.07em] text-slate-500 font-semibold">
               {{ sub.compactLabel }}
             </div>
             <template v-if="sub.os">
-              <slot name="widget" :item="sub.os" side="OS" />
+              <slot name="widget" :item="sub.os" side="OS" :compact="true" />
             </template>
-            <div v-else class="text-[10px] text-slate-400 italic px-1">—</div>
+            <input
+              v-else
+              type="text"
+              disabled
+              tabindex="-1"
+              :aria-label="t('crfEntry.bilateral.compoundSlotMissing', { subKey: sub.subKey })"
+              class="w-14 h-[42px] text-center bg-slate-50 border border-dashed border-slate-200 rounded-[10px] text-slate-300 text-[14px] cursor-not-allowed"
+              placeholder="—"
+            />
           </div>
         </div>
       </div>

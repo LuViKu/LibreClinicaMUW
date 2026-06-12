@@ -10,6 +10,8 @@ import type {
   StudyEye,
   Subject,
   SubjectDetail,
+  TransitionEyeRequest,
+  TransitionPreflight,
 } from '@/types/subject'
 
 /**
@@ -60,7 +62,9 @@ export const useSubjectsStore = defineStore('subjects', () => {
 
   // Filter state — persisted across navigation.
   const query = ref('')
-  const statusFilter = ref<'all' | 'open-events' | 'all-events-complete' | 'signed'>('all')
+  const statusFilter = ref<
+    'all' | 'open-events' | 'all-events-complete' | 'signed' | 'today' | 'ready-to-sign'
+  >('all')
   const onlyWithQueries = ref(false)
   /**
    * Phase E.6 subject-lifecycle — Show-removed toggle. Persisted
@@ -83,9 +87,33 @@ export const useSubjectsStore = defineStore('subjects', () => {
         case 'open-events':
           return subject.events.some((e) => e.status === 'scheduled' || e.status === 'in-progress' || e.status === 'not-scheduled')
         case 'all-events-complete':
-          return subject.events.every((e) => e.status === 'complete' || e.status === 'signed' || e.status === 'locked')
+          // Patients with zero events vacuously satisfy `.every()` and
+          // would silently land in this filter. Require at least one
+          // event so "alle Visiten abgeschlossen" reads as "this
+          // subject has visits AND every one of them is done", not "no
+          // visits = nothing left to do".
+          return subject.events.length > 0
+            && subject.events.every((e) => e.status === 'complete' || e.status === 'signed' || e.status === 'locked')
         case 'signed':
           return subject.signed
+        case 'today':
+          // HomeView's "Today's open CRFs" card lands here. The matrix
+          // list endpoint's EventCellDto carries status + label + open-
+          // query count but no per-event date (only the detail endpoint
+          // surfaces dateStart). Until the list endpoint grows a
+          // `dateScheduled` column, "today" is interpreted as "actively
+          // on the operator's plate": any event in 'scheduled' or
+          // 'in-progress' state (i.e. already-scheduled but not yet
+          // complete/signed/locked). `not-scheduled` is excluded —
+          // those have no date and can't be "today".
+          return subject.events.some((e) => e.status === 'scheduled' || e.status === 'in-progress')
+        case 'ready-to-sign':
+          // HomeView's "Ready to sign" card. Mirrors all-events-complete
+          // but additionally requires the subject not be signed yet —
+          // the Investigator sign-queue use case.
+          return !subject.signed && subject.events.length > 0
+            && subject.events.some((e) => e.status === 'complete')
+            && subject.events.every((e) => e.status === 'complete' || e.status === 'signed' || e.status === 'locked')
         case 'all':
         default:
           return true
@@ -273,6 +301,14 @@ export const useSubjectsStore = defineStore('subjects', () => {
         // them on the legacy enrolment path.
         personId: input.personId?.trim() || null,
         groupAssignments: input.groupAssignments ?? null,
+        // Phase E.6 retrospective-backfill — PHI triplet (full DoB
+        // wins over yearOfBirth when both present) + the
+        // match-prompt acknowledgement when operator confirmed
+        // create-new against a candidate.
+        firstName: input.firstName?.trim() || null,
+        lastName: input.lastName?.trim() || null,
+        dateOfBirth: input.dateOfBirth?.trim() || null,
+        acknowledgeMatchSubjectId: input.acknowledgeMatchSubjectId ?? null,
       }
       const detail = await apiPost<SubjectDetail>('/pages/api/v1/subjects', payload)
 
@@ -480,7 +516,18 @@ export const useSubjectsStore = defineStore('subjects', () => {
    */
   async function updateSubject(
     subjectId: string,
-    body: { secondaryId: string | null; gender: 'F' | 'M' | 'O' | 'U'; yearOfBirth: number | null },
+    body: {
+      secondaryId: string | null
+      gender: 'F' | 'M' | 'O' | 'U'
+      yearOfBirth: number | null
+      /**
+       * 2026-06-10 — null clears the study-eye scope; 'OD' / 'OS' /
+       * 'OU' set it. Omit (undefined) when the caller doesn't surface
+       * the field at all — the backend's null-preserves-current
+       * convention applies in that case.
+       */
+      studyEye?: StudyEye | null
+    },
   ): Promise<{ ok: true; detail: SubjectDetail }
               | { ok: false; fieldErrors: Record<string, string>; message?: string }> {
     try {
@@ -496,6 +543,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
           gender: detail.gender,
           secondaryId: detail.secondaryId,
           yearOfBirth: detail.yearOfBirth,
+          studyEye: detail.studyEye,
         }
       }
       return { ok: true, detail }
@@ -717,6 +765,126 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
+   * Phase E.6 per-eye cohort transition workflow — POST a
+   * single-eye downgrade / upgrade transition to the backend.
+   *
+   * The active-study subject is the source side; the backend
+   * resolves (or creates) the matching target subject in the
+   * partner study per the clinical rules:
+   *   1. OU sources downgrade to the partner eye on the source
+   *      row; the transitioned eye lives on a new target row.
+   *   2. Single-eye sources are stubbed to NULL on the source
+   *      row when their lone eye transitions out.
+   *   3. Bilateral GA: a second eye progressing into an existing
+   *      target row upgrades OD→OU on that row (no new row).
+   *
+   * On success the store re-fetches the subject detail so both the
+   * source banner (this view) and `eyeTransitions` rendering reflect
+   * the new cross-reference without a manual refresh. Returns the
+   * parsed response body for callers (the dialog uses it for the
+   * success toast text — partner label, partner study, etc.).
+   *
+   * 4xx / 5xx are rethrown verbatim so the calling dialog can
+   * surface the error inline without competing with the store's
+   * banner-level error ref.
+   */
+  async function transitionEye(
+    label: string,
+    eye: 'OD' | 'OS',
+    body: TransitionEyeRequest,
+  ): Promise<unknown> {
+    const response = await apiPost<unknown>(
+      `/pages/api/v1/subjects/${encodeURIComponent(label)}/eyes/${eye}/transition`,
+      body,
+    )
+    // Re-fetch the subject detail so eyeTransitions on the active-
+    // study subject reflects the brand-new source-side cross-
+    // reference. The detail endpoint is authoritative; no need to
+    // push the response shape onto selected.value manually.
+    await fetchOne(label)
+    return response
+  }
+
+  /**
+   * 2026-06-10 — preflight the TransitionEyeDialog calls when the
+   * operator picks a target study (and again, debounced, while typing
+   * a candidate target-study label).
+   *
+   * <p>Two questions in one call:
+   * <ul>
+   *   <li>Is the subject already enrolled in the target study? Drives
+   *       the dialog's "Patient ist bereits angelegt" info line + lets
+   *       the dialog drop the targetLabel input.</li>
+   *   <li>If a candidate {@code targetLabel} was passed, is it free in
+   *       the target study? Surfaces inline beneath the input.</li>
+   * </ul>
+   *
+   * <p>Failures bubble — the dialog treats network errors as
+   * "unknown / let backend gate at submit" so a transient hiccup
+   * never blocks the transition flow.
+   */
+  async function transitionPreflight(
+    label: string,
+    eye: 'OD' | 'OS',
+    targetStudyOid: string,
+    targetLabel: string | null,
+  ): Promise<TransitionPreflight> {
+    const params = new URLSearchParams({ targetStudyOid })
+    if (targetLabel !== null && targetLabel !== '') {
+      params.set('targetLabel', targetLabel)
+    }
+    return apiGet<TransitionPreflight>(
+      `/pages/api/v1/subjects/${encodeURIComponent(label)}/eyes/${eye}`
+        + `/transition/preflight?${params.toString()}`,
+    )
+  }
+
+  /**
+   * Phase E.6 retrospective-backfill — duplicate-patient lookup.
+   *
+   * <p>Fires from the AddSubject form once the operator has filled
+   * first name + last name + DoB. The backend returns the list of
+   * matching subjects (exact, case-insensitive); the SPA renders a
+   * dialog when the list is non-empty so the operator can either
+   * link to an existing subject or confirm "different person".
+   *
+   * <p>The endpoint is read-only; failures bubble up as ApiError
+   * (rare — 5xx from a DB issue) and the form treats "no candidates"
+   * as the success path so a backend hiccup never blocks enrolment.
+   */
+  async function preflightMatch(
+    firstName: string,
+    lastName: string,
+    dateOfBirth: string,
+  ): Promise<SubjectMatchCandidate[]> {
+    return apiPost<SubjectMatchCandidate[]>(
+      '/pages/api/v1/subjects/match-preflight',
+      { firstName, lastName, dateOfBirth },
+    )
+  }
+
+  /**
+   * Phase E.6 — live Study-Subject-ID availability check.
+   *
+   * <p>Fires from the AddSubject form on debounced input of the
+   * Study Subject ID field; surfaces "already taken" inline before
+   * the operator clicks submit (the backend's submit-time check
+   * still fires as the authoritative gate, but the live check
+   * trades a 4xx round-trip for instant feedback).
+   *
+   * <p>Failures bubble — the form treats network errors as
+   * "unknown / pass through to submit" so a transient backend
+   * hiccup never blocks enrolment.
+   */
+  async function checkLabelAvailability(
+    label: string,
+  ): Promise<SubjectLabelAvailability> {
+    return apiGet<SubjectLabelAvailability>(
+      `/pages/api/v1/subjects/check-label?label=${encodeURIComponent(label)}`,
+    )
+  }
+
+  /**
    * Phase E.6 — clear every piece of study-scoped state so the store
    * doesn't bleed subjects from study A into the matrix after the
    * user switches to study B. Called by {@link useAuthStore.pickStudy}
@@ -773,9 +941,74 @@ export const useSubjectsStore = defineStore('subjects', () => {
     updateSubject,
     lockSubject,
     unlockSubject,
+    transitionEye,
+    transitionPreflight,
+    preflightMatch,
+    checkLabelAvailability,
     reset,
   }
 })
+
+/**
+ * Phase E.6 retrospective-backfill — single match-preflight result.
+ *
+ * Mirrors the backend `SubjectMatchCandidate` record. `studies` lists
+ * the operator-visible enrolments with the per-study subject label
+ * ("this patient is M-001 in default-study, GA-008 in GA-Studie").
+ * `otherStudyCount` carries the count of additional enrolments in
+ * studies the operator can't see — surfaced so the dialog can show
+ * "Bekannt in {n} weiteren Studien (kein Zugriff)" without leaking
+ * the study identities.
+ *
+ * Phase E.6 follow-up 2026-06-10 — added {@link firstName} +
+ * {@link lastName} (operator-confirmation aid: the operator typed
+ * these on the form, so echoing the persisted spelling sanity-checks
+ * the match), and replaced the bare {@link studyOids} list with the
+ * richer {@link studies} shape. {@link studyOids} stays for a brief
+ * transition window because the backend still emits it as a derived
+ * view.
+ */
+export interface SubjectMatchCandidate {
+  subjectId: number
+  uniqueIdentifier: string | null
+  gender: string | null
+  dateOfBirth: string | null
+  /** Phase E.6 follow-up 2026-06-10 — operator-confirmation aid. */
+  firstName: string | null
+  /** Phase E.6 follow-up 2026-06-10 — operator-confirmation aid. */
+  lastName: string | null
+  /** Phase E.6 follow-up 2026-06-10 — visible enrolments + per-study label. */
+  studies: PatientMatchStudyEnrollment[]
+  otherStudyCount: number
+}
+
+/**
+ * Phase E.6 follow-up 2026-06-10 — one visible enrolment surfaced by
+ * the match-preflight endpoint. {@link studyUniqueIdentifier} is the
+ * operator-facing protocol short-code ({@code default-study}); the
+ * {@link studyOid} carries the system OID for navigation; {@link label}
+ * is the operator-typed per-study subject-id ({@code M-001}).
+ */
+export interface PatientMatchStudyEnrollment {
+  studyUniqueIdentifier: string
+  studyOid: string
+  studyName: string
+  label: string
+}
+
+/**
+ * Phase E.6 — response shape for `GET /api/v1/subjects/check-label`.
+ *
+ * <p>{@code available} is the operator-facing answer: true → safe
+ * to submit, false → the typed label is already taken in the bound
+ * study. {@code existingSubjectOid} carries the colliding row's OID
+ * when {@code available=false} so the SPA can later surface an
+ * "Open existing" affordance.
+ */
+export interface SubjectLabelAvailability {
+  available: boolean
+  existingSubjectOid: string | null
+}
 
 /**
  * Convert a SPA subject identifier (the human-readable `M-001`-style
@@ -829,6 +1062,23 @@ export interface AddSubjectInput {
    * enrolment so the SPA doesn't need a second round trip.
    */
   groupAssignments?: GroupAssignmentInput[] | null
+  /**
+   * Phase E.6 retrospective-backfill — patient identity captured on
+   * the AddSubject form. `dateOfBirth` is the canonical DoB (ISO
+   * `YYYY-MM-DD`); when present the backend uses it directly and
+   * flips `dob_collected` to true. Legacy callers that only have a
+   * year still post `yearOfBirth` for back-compat.
+   */
+  firstName?: string | null
+  lastName?: string | null
+  dateOfBirth?: string | null
+  /**
+   * Set when the operator clicked "Different person, create new" on
+   * a match-preflight dialog. Carries the subject_id(s) of the
+   * candidates they explicitly rejected so the backend can audit
+   * the override.
+   */
+  acknowledgeMatchSubjectId?: number | null
 }
 
 export type AddSubjectErrorField =
@@ -838,6 +1088,9 @@ export type AddSubjectErrorField =
   | 'gender'
   | 'yearOfBirth'
   | 'personId'
+  | 'firstName'
+  | 'lastName'
+  | 'dateOfBirth'
 
 export interface AddSubjectError {
   field: AddSubjectErrorField

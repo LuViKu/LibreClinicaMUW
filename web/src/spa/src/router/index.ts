@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory, type RouteLocationNormalized } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useErrorsStore } from '@/stores/errors'
 
 /**
  * Phase E.1 (2026-05-30): minimal vue-router scaffold.
@@ -42,13 +43,13 @@ const router = createRouter({
       path: '/subjects/new',
       name: 'subject-new',
       component: () => import('@/views/AddSubjectView.vue'),
-      meta: { title: 'Add Subject', role: 'Investigator' as const },
+      meta: { title: 'Add Subject', role: ['Investigator', 'Administrator'] as const },
     },
     {
       path: '/event-crfs/:eventCrfOid',
       name: 'crf-entry',
       component: () => import('@/views/CrfEntryView.vue'),
-      meta: { title: 'CRF Entry', role: 'Investigator' as const },
+      meta: { title: 'CRF Entry', role: ['Investigator', 'Administrator'] as const },
     },
     {
       // Phase E.6 dde — reconcile view; DM / Admin / Investigator only.
@@ -65,7 +66,7 @@ const router = createRouter({
       path: '/sdv',
       name: 'sdv',
       component: () => import('@/views/SdvView.vue'),
-      meta: { title: 'Source Data Verification', role: 'Monitor' as const },
+      meta: { title: 'Source Data Verification', role: ['Monitor', 'Administrator'] as const },
     },
     {
       path: '/notes',
@@ -79,19 +80,28 @@ const router = createRouter({
       component: () => import('@/views/StudyAuditLogView.vue'),
       meta: { title: 'Study Audit Log', role: ['Monitor', 'Data Manager', 'Administrator'] as const },
     },
+    /* Phase E hardening B — sysadmin-only system-wide audit trail
+       (surfaces OPERATION_FAILED + JOB_FAILED §11.10(e) rows that
+       the per-study endpoint hides). */
+    {
+      path: '/system/audit-log',
+      name: 'system-audit-log',
+      component: () => import('@/views/SystemAuditLogView.vue'),
+      meta: { title: 'System Audit Log', role: 'Administrator' as const },
+    },
     /* Phase E.6 carry-over — Read-only CRF (Monitor's "View Within Record" path). */
     {
       path: '/event-crfs/:eventCrfOid/readonly',
       name: 'crf-readonly',
       component: () => import('@/views/CrfEntryView.vue'),
-      meta: { title: 'Read-only CRF', role: 'Monitor' as const, readOnly: true },
+      meta: { title: 'Read-only CRF', role: ['Monitor', 'Administrator'] as const, readOnly: true },
     },
     /* Phase E.7 — Data Manager workflow. */
     {
       path: '/build-study',
       name: 'build-study',
       component: () => import('@/views/BuildStudyView.vue'),
-      meta: { title: 'Build Study', role: 'Data Manager' as const },
+      meta: { title: 'Build Study', role: ['Data Manager', 'Administrator'] as const },
     },
     /* Phase E A8.1 — Study identity create/edit (sysadmin only). */
     {
@@ -118,14 +128,14 @@ const router = createRouter({
       path: '/event-definitions',
       name: 'event-definitions',
       component: () => import('@/views/EventDefinitionsView.vue'),
-      meta: { title: 'Event definitions', role: 'Data Manager' as const },
+      meta: { title: 'Event definitions', role: ['Data Manager', 'Administrator'] as const },
     },
     /* Phase E A8.3 — CRF library + version upload. */
     {
       path: '/crf-library',
       name: 'crf-library',
       component: () => import('@/views/CrfLibraryView.vue'),
-      meta: { title: 'CRF Library', role: 'Data Manager' as const },
+      meta: { title: 'CRF Library', role: ['Data Manager', 'Administrator'] as const },
     },
     /* Phase E A8.4 — sites / multi-center setup. */
     {
@@ -139,14 +149,14 @@ const router = createRouter({
       path: '/group-classes',
       name: 'group-classes',
       component: () => import('@/views/GroupClassesView.vue'),
-      meta: { title: 'Group classes', role: 'Data Manager' as const },
+      meta: { title: 'Group classes', role: ['Data Manager', 'Administrator'] as const },
     },
     /* Phase E RX.1 — read-only rules viewer. */
     {
       path: '/rules',
       name: 'rules',
       component: () => import('@/views/RulesView.vue'),
-      meta: { title: 'Rules', role: 'Data Manager' as const },
+      meta: { title: 'Rules', role: ['Data Manager', 'Administrator'] as const },
     },
     {
       path: '/manage-users',
@@ -184,19 +194,19 @@ const router = createRouter({
       path: '/import-crf-data',
       name: 'import-crf-data',
       component: () => import('@/views/ImportCrfDataView.vue'),
-      meta: { title: 'Import CRF Data', role: 'Data Manager' as const },
+      meta: { title: 'Import CRF Data', role: ['Data Manager', 'Administrator'] as const },
     },
     {
       path: '/subjects/:subjectId/sign',
       name: 'sign-subject',
       component: () => import('@/views/SignSubjectView.vue'),
-      meta: { title: 'Sign Subject', role: 'Investigator' as const },
+      meta: { title: 'Sign Subject', role: ['Investigator', 'Administrator'] as const },
     },
     {
       path: '/subjects/:subjectId',
       name: 'subject-detail',
       component: () => import('@/views/SubjectDetailView.vue'),
-      meta: { title: 'Subject', role: 'Investigator' as const },
+      meta: { title: 'Subject', role: ['Investigator', 'Administrator'] as const },
     },
     /* Phase E.6 — standalone Event Detail (replaces the legacy
        /pages/EnterDataForStudyEvent JSP that SubjectDetailView used
@@ -265,7 +275,56 @@ const router = createRouter({
         role: ['Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
+    {
+      path: '/modalities',
+      name: 'modalities',
+      component: () => import('@/views/ModalitiesView.vue'),
+      meta: { title: 'Modalitäten', role: 'Administrator' as const },
+    },
+    /* Phase E.6 — Patient Overview (cross-study, keyed on the underlying
+       patient rather than the active-study study-subject label). */
+    {
+      path: '/patients',
+      name: 'patients-overview',
+      component: () => import('@/views/PatientsOverviewView.vue'),
+      meta: { title: 'Patientenübersicht', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
+    },
+    /**
+     * Phase E hardening — A5 (2026-06-10): catch-all "Seite nicht
+     * gefunden" route. Must remain the LAST entry — vue-router
+     * matches top-to-bottom and any subsequent named route would be
+     * shadowed by `:pathMatch(.*)*`.
+     */
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'not-found',
+      component: () => import('@/views/NotFound.vue'),
+      meta: { title: 'Seite nicht gefunden', public: true },
+    },
   ],
+})
+
+/**
+ * Phase E hardening — A5 (2026-06-10): router error trap.
+ *
+ *   - "Failed to fetch dynamically imported module" is Vite's signal
+ *     that the manifest the browser remembers no longer matches the
+ *     bundle on the server (mid-session redeploy). A hard reload
+ *     refetches the manifest and resolves the import on the next
+ *     navigation. This is the only auto-recovery path; everything
+ *     else is logged for the operator to act on.
+ *   - All other router errors flow through the errors store so
+ *     GlobalErrorToast surfaces them with the standard "Fehler-ID"
+ *     pill (post-A4).
+ */
+router.onError((e) => {
+  if (e instanceof Error && e.message.includes('Failed to fetch dynamically imported')) {
+    if (typeof window !== 'undefined') {
+      window.location.reload()
+    }
+    return
+  }
+  useErrorsStore().push(e, 'router.onError')
 })
 
 router.afterEach((to) => {
@@ -284,7 +343,7 @@ router.beforeEach((to, _from) => {
 export function guard(
   auth: ReturnType<typeof useAuthStore>,
   to: RouteLocationNormalized,
-): boolean | { name: string } {
+): boolean | { name: string; query?: Record<string, string> } {
   const isPublic = to.meta.public === true
 
   // First-login wizard requires an authenticated-but-incomplete identity.
@@ -326,7 +385,20 @@ export function guard(
 
   if (isPublic) return true
 
-  if (auth.isAnonymous) return { name: 'login' }
+  if (auth.isAnonymous) {
+    // Phase E.6 inactivity-timeout + return-to-page (2026-06-12):
+    // capture the URL the operator was trying to reach so the login
+    // flow can forward them back after re-auth instead of dumping
+    // them on /home. Skip the capture for the login route itself
+    // (would loop) and for paths that are obviously transient
+    // (root, query-only). The login view's resolveReturnTo()
+    // validates the value before navigating.
+    const target = to.fullPath
+    if (target && target !== '/' && !target.startsWith('/login')) {
+      return { name: 'login', query: { returnTo: target } }
+    }
+    return { name: 'login' }
+  }
   if (auth.needsProfile) return { name: 'first-login' }
   // Phase E.4 M1: a bound study is required for every protected route.
   // If the user lacks one, send them through the picker first.
@@ -351,11 +423,39 @@ export function guard(
     | undefined
   if (roleMeta) {
     const required = Array.isArray(roleMeta) ? roleMeta : [roleMeta]
-    const ok = required.some((r) => roleSatisfies(auth.user?.role, r))
+    // Multi-role per (user, study) — M2 (2026-06-08): collect every
+    // role the active binding carries (array → singular projection →
+    // top-level fallback) and accept the navigation if any of them
+    // satisfies any required entry. The CRC → Investigator
+    // inheritance survives unchanged.
+    const actualRoles = userRolesFromAuth(auth)
+    const ok = required.some((r) =>
+      actualRoles.some((actual) => roleSatisfies(actual, r)),
+    )
     if (!ok) return { name: 'home' }
   }
 
   return true
+}
+
+/**
+ * Multi-role per (user, study) — M2 (2026-06-08).
+ *
+ * Reads the active study binding's role set with the same precedence
+ * the rest of the SPA uses ({@code activeStudy.roles} → {@code
+ * activeStudy.role} → top-level {@code user.role}). Returns an array
+ * so the guard can intersect against the route's required-role list
+ * without re-implementing the precedence logic at every call site.
+ */
+export function userRolesFromAuth(
+  auth: ReturnType<typeof useAuthStore>,
+): Array<'Investigator' | 'Monitor' | 'Data Manager' | 'Administrator' | 'CRC'> {
+  const u = auth.user
+  if (!u) return []
+  const active = u.activeStudy
+  if (active?.roles && active.roles.length > 0) return [...active.roles]
+  if (active?.role) return [active.role]
+  return u.role ? [u.role] : []
 }
 
 /**

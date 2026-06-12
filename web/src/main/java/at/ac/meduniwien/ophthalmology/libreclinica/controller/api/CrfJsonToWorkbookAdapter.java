@@ -13,10 +13,18 @@ import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
+import javax.sql.DataSource;
 
 import org.apache.poi.hssf.usermodel.HSSFCell;
 import org.apache.poi.hssf.usermodel.HSSFRow;
@@ -24,6 +32,8 @@ import org.apache.poi.hssf.usermodel.HSSFSheet;
 import org.apache.poi.hssf.usermodel.HSSFWorkbook;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
@@ -163,6 +173,34 @@ public class CrfJsonToWorkbookAdapter {
             "calculation", "instant-calculation", "group-calculation");
 
     /**
+     * Phase E.6 ophth-field-catalog (2026-06-11): the adapter loads the
+     * catalog once per {@link #synthesize} call so any
+     * {@code catalogCode}-keyed items can be materialised against the
+     * current institution-wide field set. Injected lazily — the unit
+     * tests that exercise free-form items only continue to use the
+     * no-arg constructor (DataSource is null) + materialisation
+     * short-circuits when {@code catalogCode} is null.
+     */
+    private final DataSource dataSource;
+
+    /** Production wiring — Spring autowires the application DataSource. */
+    @Autowired
+    public CrfJsonToWorkbookAdapter(@Qualifier("dataSource") DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    /**
+     * Test wiring — keeps the legacy no-arg constructor working for
+     * the in-memory test cases that don't exercise catalog
+     * materialisation. {@link #synthesize} treats a null dataSource as
+     * "no catalog available" and short-circuits the materialisation
+     * pass.
+     */
+    public CrfJsonToWorkbookAdapter() {
+        this.dataSource = null;
+    }
+
+    /**
      * Synthesise the workbook and persist it to a fresh temp file the
      * parser can re-open. Returns the path so the caller can hand it to
      * {@link CrfSpreadsheetParserService#parseAndPersist}.
@@ -177,11 +215,18 @@ public class CrfJsonToWorkbookAdapter {
         // close() method (added in POI 4); the workbook + its
         // POIFSFileSystem are GC-managed. We only need to flush the
         // bytes through the output stream.
+
+        // Phase E.6 ophth-field-catalog (2026-06-11): pre-materialise
+        // any catalogCode-keyed items against the live catalog so the
+        // workbook writers operate on enriched items only — keeps the
+        // sheet-emitting code free of catalog awareness.
+        CrfVersionAuthoringRequest enriched = materializeCatalogItems(request);
+
         HSSFWorkbook wb = new HSSFWorkbook();
-        writeCrfSheet(wb, crf.getName(), request);
-        writeSectionsSheet(wb, request);
-        writeGroupsSheet(wb, request);
-        writeItemsSheet(wb, request);
+        writeCrfSheet(wb, crf.getName(), enriched);
+        writeSectionsSheet(wb, enriched);
+        writeGroupsSheet(wb, enriched);
+        writeItemsSheet(wb, enriched);
         // Phase E.6 (2026-06-05): repeating parser reads
         // wb.getSheetAt(4).getRow(1).getCell(0) for the version number
         // (SpreadSheetTableRepeating.java:191). The canonical XLS
@@ -195,8 +240,248 @@ public class CrfJsonToWorkbookAdapter {
             wb.write(out);
         }
         LOG.debug("Synthesised CRF authoring workbook at {} (sections={}, items={})",
-                target, sectionCount(request), itemCount(request));
+                target, sectionCount(enriched), itemCount(enriched));
         return target;
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Catalog materialization                                           */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Phase E.6 ophth-field-catalog (2026-06-11): walk the request's
+     * sections + items, swapping any {@code catalogCode}-keyed item for
+     * a fully materialised one that pulls its blank fields
+     * (descriptionLabel, leftItemText, rightItemText, units, dataType,
+     * responseSet) from the matching catalog row. Caller-supplied
+     * fields always win over catalog defaults; null means the operator
+     * authored the item free-form (legacy path, no catalog).
+     *
+     * <p>When the DataSource is null (no-arg constructor — test wiring)
+     * OR no items reference a catalog code, the request passes through
+     * unchanged so the existing workbook-emit path stays bytewise
+     * identical to the pre-F3 behaviour.
+     */
+    private CrfVersionAuthoringRequest materializeCatalogItems(CrfVersionAuthoringRequest request) {
+        if (request.sections() == null) return request;
+        // Cheap scan — short-circuit when no item carries a catalog code.
+        boolean anyCatalogRef = false;
+        for (CrfVersionAuthoringRequest.Section s : request.sections()) {
+            if (s.items() == null) continue;
+            for (CrfVersionAuthoringRequest.Item it : s.items()) {
+                if (it.catalogCode() != null && !it.catalogCode().isBlank()) {
+                    anyCatalogRef = true;
+                    break;
+                }
+            }
+            if (anyCatalogRef) break;
+        }
+        if (!anyCatalogRef) return request;
+
+        Map<String, CatalogRow> catalog = loadCatalogByCode();
+        // No catalog available (DataSource null or DB error) — pass
+        // through. The downstream writers will treat the item as
+        // free-form, which is the legacy behaviour.
+        if (catalog.isEmpty()) return request;
+
+        List<CrfVersionAuthoringRequest.Section> outSections = new ArrayList<>(request.sections().size());
+        for (CrfVersionAuthoringRequest.Section section : request.sections()) {
+            if (section.items() == null) {
+                outSections.add(section);
+                continue;
+            }
+            List<CrfVersionAuthoringRequest.Item> outItems = new ArrayList<>(section.items().size());
+            for (CrfVersionAuthoringRequest.Item it : section.items()) {
+                outItems.add(materializeItem(it, catalog));
+            }
+            outSections.add(new CrfVersionAuthoringRequest.Section(
+                    section.label(), section.title(), section.instructions(),
+                    section.ordinal(), outItems));
+        }
+        return new CrfVersionAuthoringRequest(
+                request.versionName(), request.versionDescription(),
+                request.revisionNotes(), outSections);
+    }
+
+    /**
+     * Build a {@link CrfVersionAuthoringRequest.Item} that inherits
+     * blank fields from the catalog entry referenced by
+     * {@code item.catalogCode()}. Pass-through when no catalog code OR
+     * no matching catalog row.
+     */
+    static CrfVersionAuthoringRequest.Item materializeItem(
+            CrfVersionAuthoringRequest.Item item, Map<String, CatalogRow> catalog) {
+        String code = item.catalogCode();
+        if (code == null || code.isBlank()) return item;
+        CatalogRow row = catalog.get(code);
+        if (row == null) {
+            LOG.warn("CrfJsonToWorkbookAdapter: item references unknown catalog code '{}' — "
+                    + "leaving free-form fields unchanged (downstream validation may reject the row).", code);
+            return item;
+        }
+
+        String descriptionLabel = preferAuthored(item.descriptionLabel(), row.labelDe);
+        String leftItemText = preferAuthored(item.leftItemText(), row.labelDe);
+        String rightItemText = preferAuthored(item.rightItemText(), row.unit);
+        String units = preferAuthored(item.units(), row.unit);
+        String dataType = preferAuthored(item.dataType(), row.dataType);
+
+        // Synthesize a ResponseSet from the catalog's response_options
+        // when the operator hasn't authored one + the catalog defines
+        // options (yesno / select-one widgets).
+        CrfVersionAuthoringRequest.ResponseSet responseSet = item.responseSet();
+        if (responseSet == null && row.responseOptions != null && !row.responseOptions.isEmpty()) {
+            List<CrfVersionAuthoringRequest.Option> opts = new ArrayList<>(row.responseOptions.size());
+            for (CatalogResponseOption ro : row.responseOptions) {
+                opts.add(new CrfVersionAuthoringRequest.Option(ro.label, ro.value));
+            }
+            String responseType = "yesno".equalsIgnoreCase(row.widget) ? "radio" : "single-select";
+            responseSet = new CrfVersionAuthoringRequest.ResponseSet(
+                    responseType, code.toLowerCase(Locale.ROOT), opts, /* ref */ null);
+        }
+
+        // show-when wiring from conditional_on_code / conditional_show_when_value
+        String showItem = item.showItem();
+        String parentItemOid = item.parentItemOid();
+        if ((showItem == null || showItem.isBlank())
+                && row.conditionalOnCode != null && !row.conditionalOnCode.isBlank()
+                && row.conditionalShowWhenValue != null && !row.conditionalShowWhenValue.isBlank()) {
+            // The wizard is responsible for sending parentItemOid (the
+            // sibling _DONE item's OID) — the catalog only knows the
+            // parent's catalog code, not the OID that the section
+            // assigned to it. Leave parentItemOid as the operator
+            // authored it; the validator catches the mismatch.
+            showItem = row.conditionalShowWhenValue + "|"
+                    + row.conditionalOnCode + " == " + row.conditionalShowWhenValue;
+        }
+
+        return new CrfVersionAuthoringRequest.Item(
+                item.name(),
+                item.oid(),
+                descriptionLabel,
+                leftItemText,
+                rightItemText,
+                units,
+                dataType,
+                item.defaultValue(),
+                item.required(),
+                responseSet,
+                item.validation(),
+                showItem,
+                parentItemOid,
+                item.header(),
+                item.subHeader(),
+                item.pageBreak(),
+                item.groupLabel(),
+                item.catalogCode()
+        );
+    }
+
+    /** Operator-authored value wins over catalog default. */
+    private static String preferAuthored(String authored, String catalogValue) {
+        if (authored != null && !authored.isBlank()) return authored;
+        return catalogValue;
+    }
+
+    /**
+     * Internal projection of one catalog row — the subset of fields
+     * the materialisation logic consumes. Smaller surface than
+     * {@link OphthFieldCatalogDto} so the adapter doesn't need to
+     * import the DTO + drag in its Swagger annotations.
+     */
+    static final class CatalogRow {
+        final String code;
+        final String labelDe;
+        final String unit;
+        final String dataType;
+        final String widget;
+        final String conditionalOnCode;
+        final String conditionalShowWhenValue;
+        final List<CatalogResponseOption> responseOptions;
+
+        CatalogRow(String code, String labelDe, String unit, String dataType,
+                   String widget, String conditionalOnCode, String conditionalShowWhenValue,
+                   List<CatalogResponseOption> responseOptions) {
+            this.code = code;
+            this.labelDe = labelDe;
+            this.unit = unit;
+            this.dataType = dataType;
+            this.widget = widget;
+            this.conditionalOnCode = conditionalOnCode;
+            this.conditionalShowWhenValue = conditionalShowWhenValue;
+            this.responseOptions = responseOptions;
+        }
+    }
+
+    /** Internal projection of one {@code response_options} entry. */
+    static final class CatalogResponseOption {
+        final String value;
+        final String label;
+
+        CatalogResponseOption(String value, String label) {
+            this.value = value;
+            this.label = label;
+        }
+    }
+
+    /**
+     * Read the catalog from the DB into a {@code code → CatalogRow}
+     * map. Returns an empty map when the DataSource is null (test
+     * wiring) OR on any SQL error — materialisation then short-circuits
+     * to "no catalog" and items pass through unchanged.
+     */
+    private Map<String, CatalogRow> loadCatalogByCode() {
+        if (dataSource == null) return Map.of();
+        Map<String, CatalogRow> out = new HashMap<>();
+        String sql = "SELECT code, label_de, unit, data_type, widget, "
+                + "       conditional_on_code, conditional_show_when_value, response_options "
+                + "  FROM ophth_field_catalog "
+                + " WHERE status_id = 1";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                List<CatalogResponseOption> opts = parseResponseOptions(rs.getString("response_options"));
+                out.put(rs.getString("code"), new CatalogRow(
+                        rs.getString("code"),
+                        rs.getString("label_de"),
+                        rs.getString("unit"),
+                        rs.getString("data_type"),
+                        rs.getString("widget"),
+                        rs.getString("conditional_on_code"),
+                        rs.getString("conditional_show_when_value"),
+                        opts));
+            }
+        } catch (SQLException e) {
+            LOG.warn("CrfJsonToWorkbookAdapter: failed to load ophth_field_catalog ({}); items pass through free-form.",
+                    e.getMessage());
+            return Map.of();
+        }
+        return out;
+    }
+
+    /**
+     * Parse the {@code value|label,value|label,…} storage format into
+     * the projected list. Mirrors the parser in
+     * {@link OphthFieldCatalogApiController#parseResponseOptions}.
+     */
+    static List<CatalogResponseOption> parseResponseOptions(String raw) {
+        List<CatalogResponseOption> out = new ArrayList<>();
+        if (raw == null || raw.trim().isEmpty()) return out;
+        for (String token : raw.split(",")) {
+            String t = token.trim();
+            if (t.isEmpty()) continue;
+            int pipe = t.indexOf('|');
+            if (pipe < 0) {
+                out.add(new CatalogResponseOption(t, t));
+            } else {
+                String value = t.substring(0, pipe).trim();
+                String label = t.substring(pipe + 1).trim();
+                if (value.isEmpty()) continue;
+                out.add(new CatalogResponseOption(value, label.isEmpty() ? value : label));
+            }
+        }
+        return out;
     }
 
     /* ----------------------------------------------------------------- */
@@ -381,9 +666,24 @@ public class CrfJsonToWorkbookAdapter {
 
         setStringCell(row, 0, nullSafe(item.name()));
         setStringCell(row, 1, nullSafe(item.descriptionLabel()));
-        setStringCell(row, 2, nullSafe(item.leftItemText()));
+        // LEFT_ITEM_TEXT is the load-bearing per-item label the CRF
+        // entry view renders above the input widget. The wizard's
+        // ItemEditor exposes it as a free-text field, but operators
+        // sometimes type only the laterality marker ("OD", "OS") —
+        // leaving the renderer with no measurement-name to display.
+        // synthesizeLeftItemText() detects that case and falls back to
+        // the operator-entered descriptionLabel (or item name) wrapped
+        // with the laterality marker if one is detectable from
+        // name/oid. Operator-typed real labels pass through unchanged.
+        setStringCell(row, 2, synthesizeLeftItemText(item));
         setStringCell(row, 3, nullSafe(item.units()));
-        setStringCell(row, 4, nullSafe(item.rightItemText()));
+        // RIGHT_ITEM_TEXT is the helper-hint shown below the input.
+        // When the operator leaves it blank we fall back to the units
+        // value so the renderer surfaces "mmHg" / "letters" / "dpt"
+        // automatically. Mirrors EventCrfsApiController.buildItemDto's
+        // read-side fallback chain — keeps render parity with what the
+        // backend would derive even if right_item_text were empty.
+        setStringCell(row, 4, synthesizeRightItemText(item));
         setStringCell(row, 5, nullSafe(section.label()));
         setStringCell(row, 6, nullSafe(item.groupLabel()));             // GROUP_LABEL (M-C)
         setStringCell(row, 7, nullSafe(item.header()));                 // HEADER (M-C)
@@ -652,6 +952,123 @@ public class CrfJsonToWorkbookAdapter {
 
     private static String nullSafe(String s) {
         return s == null ? "" : s;
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* LEFT_ITEM_TEXT / RIGHT_ITEM_TEXT label-synthesis fallback         */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * Synthesise the {@code LEFT_ITEM_TEXT} cell — the per-item label
+     * the CRF entry view renders above each input widget.
+     *
+     * <p>The wizard's {@code ItemEditor.vue} exposes {@code leftItemText}
+     * as a free-text field, but operators sometimes type only the
+     * laterality marker ({@code "OD"}, {@code "OS"}, {@code "OU"}) and
+     * leave the measurement-name out — typically because they expect
+     * the laterality column header to carry the eye context and the
+     * row label to carry the measurement name, then forget to populate
+     * one of them. The fallback chain rescues the resulting per-side
+     * row by deriving a sensible label:
+     *
+     * <ol>
+     *   <li>If the operator typed a real label (not just an eye
+     *       marker) — pass through unchanged.</li>
+     *   <li>Otherwise fall back to the operator-entered
+     *       {@code descriptionLabel} (the wizard's required field), or
+     *       the item {@code name} if even descriptionLabel is blank.</li>
+     *   <li>If a laterality marker is detectable from the item's
+     *       {@code name}/{@code oid} tokens — or was typed verbatim
+     *       into {@code leftItemText} — append it in parentheses
+     *       ({@code "BCVA letters (OD)"}) so per-side rows still read
+     *       laterally without losing the measurement-name.</li>
+     * </ol>
+     */
+    static String synthesizeLeftItemText(CrfVersionAuthoringRequest.Item item) {
+        String left = item.leftItemText();
+        boolean leftIsBlank = left == null || left.trim().isEmpty();
+        boolean leftIsJustEyeMarker = !leftIsBlank && isJustEyeMarker(left);
+
+        if (!leftIsBlank && !leftIsJustEyeMarker) {
+            return left;
+        }
+
+        String base = firstNonBlank(item.descriptionLabel(), item.name());
+        if (base == null) {
+            // Nothing to synthesise from — return whatever was there
+            // (likely an empty string) so the parser sees an unchanged
+            // cell and decides for itself whether to reject the row.
+            return nullSafe(left);
+        }
+        String laterality = detectLaterality(item);
+        if (laterality != null) {
+            return base + " (" + laterality + ")";
+        }
+        return base;
+    }
+
+    /**
+     * Synthesise the {@code RIGHT_ITEM_TEXT} cell — the helper hint
+     * shown below the input widget (usually a unit like {@code "mmHg"}
+     * or a range hint like {@code "letters (0-100)"}). When the
+     * operator leaves it blank, fall back to the {@code units} field so
+     * the renderer still surfaces a unit hint. Mirrors the read-side
+     * fallback chain {@code EventCrfsApiController.buildItemDto}
+     * already applies.
+     */
+    static String synthesizeRightItemText(CrfVersionAuthoringRequest.Item item) {
+        String right = item.rightItemText();
+        if (right != null && !right.trim().isEmpty()) {
+            return right;
+        }
+        return nullSafe(item.units());
+    }
+
+    /**
+     * True if the string, ignoring case + surrounding whitespace, is
+     * exactly an eye marker token ({@code "OD"}, {@code "OS"},
+     * {@code "OU"}) and nothing else.
+     */
+    private static boolean isJustEyeMarker(String s) {
+        if (s == null) return false;
+        String t = s.trim();
+        return t.equalsIgnoreCase("OD") || t.equalsIgnoreCase("OS") || t.equalsIgnoreCase("OU");
+    }
+
+    /**
+     * Detect the laterality marker for an item by scanning its
+     * underscore-delimited {@code name} and {@code oid} tokens for an
+     * exact {@code OD}/{@code OS}/{@code OU} match. Falls back to an
+     * eye-marker-only {@code leftItemText} as a third source.
+     * Returns {@code null} if no marker is detectable.
+     *
+     * <p>Mirrors the SPA-side {@code parseEyePrefix} token scan in
+     * {@code components/bilateral.ts} so the synthesised label tracks
+     * the same laterality the bilateral row grouper detects.
+     */
+    private static String detectLaterality(CrfVersionAuthoringRequest.Item item) {
+        for (String source : List.of(nullSafe(item.name()), nullSafe(item.oid()))) {
+            if (source.isEmpty()) continue;
+            for (String token : source.split("_")) {
+                String up = token.toUpperCase(Locale.ROOT);
+                if (up.equals("OD") || up.equals("OS") || up.equals("OU")) {
+                    return up;
+                }
+            }
+        }
+        String left = item.leftItemText();
+        if (left != null && isJustEyeMarker(left)) {
+            return left.trim().toUpperCase(Locale.ROOT);
+        }
+        return null;
+    }
+
+    /** First non-blank string, or {@code null}. */
+    private static String firstNonBlank(String... candidates) {
+        for (String c : candidates) {
+            if (c != null && !c.trim().isEmpty()) return c;
+        }
+        return null;
     }
 
     private static int sectionCount(CrfVersionAuthoringRequest request) {

@@ -1,0 +1,164 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase audit-unification (2026-06-12) — historical-row backfill.
+
+        After the canonical-helper migration in
+        lc-muw-2026-06-12-audit-event-types-unification.xml (types
+        75-108) and the Java-side caller updates, runtime writers no
+        longer emit rows into the legacy `audit_event` table. Existing
+        production deployments accumulated audit_event rows over the
+        years that the SPA Audit Log view can't see (the view reads
+        only audit_log_event). This changeset copies them forward.
+
+        Strategy:
+          1. Map each (audit_table, action_message) pair to one of the
+             allocated audit_log_event_type_ids via a CASE expression.
+             The mapping is exhaustive over the ~80 keys found by code
+             grep + production-log spot-checks.
+          2. Anything that doesn't match falls through to type 108
+             (legacy_unmapped, is_user_visible=false). Sysadmins can
+             review the bucket and escalate individual rows out-of-band.
+          3. The original audit_event rows are NOT deleted — they stay
+             for one release cycle of safety. Drop in a follow-up after
+             the backfill is verified against production-deployment
+             snapshots.
+
+        Idempotency: preCondition checks that no rows of type 108 exist
+        yet (this changeset is the only path that emits 108; if any
+        exist, we've already run).
+
+        Rollback: drops every row in audit_log_event with type 75-108.
+        Safe because runtime writers also emit 75-107, but this is a
+        backfill — if you need a clean rollback you'd re-run the seed
+        changeset to repopulate. In practice, rolling back this
+        changeset alone is rare; the prior changeset (types seed) is
+        the natural rollback companion.
+    -->
+    <changeSet id="2026-06-12-audit-event-backfill"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="audit_event"/>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM audit_log_event
+                    WHERE audit_log_event_type_id = 108
+                </sqlCheck>
+            </and>
+        </preConditions>
+        <comment>
+            Copy historical audit_event rows forward into
+            audit_log_event with inferred audit_log_event_type_id.
+        </comment>
+
+        <sql splitStatements="false"><![CDATA[
+            INSERT INTO audit_log_event
+              (audit_log_event_type_id, audit_date, user_id,
+               audit_table, entity_id, entity_name,
+               reason_for_change, old_value, new_value)
+            SELECT
+              CASE
+                -- Login flow (types 101-103)
+                WHEN ae.audit_table = '__user_account' AND ae.action_message = '__failed_login' THEN 101
+                WHEN ae.audit_table = '__user_account' AND ae.action_message = '__logged_in'    THEN 102
+                WHEN ae.audit_table = '__user_account' AND ae.action_message = '__requested_password' THEN 103
+                -- User-account admin actions (type 104) and generic (105)
+                WHEN ae.audit_table = 'user_account' AND ae.action_message LIKE '%user_profile_update%' THEN 104
+                WHEN ae.audit_table = 'user_account' AND ae.action_message LIKE '%password_reset%'     THEN 104
+                WHEN ae.audit_table = '__user_account' THEN 105
+                WHEN ae.audit_table = 'user_account'   THEN 105
+                -- CRF lifecycle (types 75-76, 79)
+                WHEN ae.audit_table = 'crf'                  THEN 75
+                WHEN ae.audit_table = 'crf_version'          THEN 76
+                WHEN ae.audit_table = 'event_definition_crf' THEN 79
+                -- Event CRF (types 77-78) + legacy data-entry types still in audit_event
+                WHEN ae.audit_table = 'event_crf' AND ae.action_message LIKE '%event_crf_started%'       THEN 77
+                WHEN ae.audit_table = 'event_crf' AND ae.action_message LIKE '%sdv_unverify%'            THEN 78
+                WHEN ae.audit_table = 'event_crf' AND ae.action_message LIKE '%event_crf_mark_complete%' THEN 8
+                WHEN ae.audit_table = 'event_crf' AND ae.action_message LIKE '%event_crf_reopen%'        THEN 11
+                WHEN ae.audit_table = 'event_crf' AND ae.action_message LIKE '%event_crf_restore%'       THEN 11
+                -- Item data — legacy type 1 (item data updated)
+                WHEN ae.audit_table = 'item_data' AND ae.action_message LIKE '%bulk_import%' THEN 80
+                WHEN ae.audit_table = 'item_data'                                            THEN 1
+                -- Rules + sets + actions (types 81-89)
+                WHEN ae.audit_table = 'rule' AND ae.action_message LIKE '%rule_create%' THEN 81
+                WHEN ae.audit_table = 'rule' AND ae.action_message LIKE '%rule_update%' THEN 82
+                WHEN ae.audit_table = 'rule_action' AND ae.action_message LIKE '%create%' THEN 83
+                WHEN ae.audit_table = 'rule_action' AND ae.action_message LIKE '%update%' THEN 84
+                WHEN ae.audit_table = 'rule_set'  AND ae.action_message LIKE '%create%'            THEN 85
+                WHEN ae.audit_table = 'rule_set'  AND ae.action_message LIKE '%schedule_update%'   THEN 87
+                WHEN ae.audit_table = 'rule_set'  AND ae.action_message LIKE '%rules_import_commit%' THEN 88
+                WHEN ae.audit_table = 'rule_set'                                                   THEN 86
+                WHEN ae.audit_table = 'rule_set_rule'                                              THEN 89
+                -- Site + study (types 90-93)
+                WHEN ae.audit_table = 'study' AND ae.action_message LIKE 'site_%_update%' THEN 91
+                WHEN ae.audit_table = 'study' AND ae.action_message LIKE 'site_%'         THEN 90
+                WHEN ae.audit_table = 'study' AND ae.action_message LIKE '%study_status_change%' THEN 93
+                WHEN ae.audit_table = 'study'                                                    THEN 92
+                -- Study event (type 94) + legacy event lifecycle (types 17-26)
+                WHEN ae.audit_table = 'study_event' AND ae.action_message LIKE '%study_event_update%' THEN 94
+                WHEN ae.audit_table = 'study_event' AND ae.action_message LIKE '%scheduled%'  THEN 17
+                WHEN ae.audit_table = 'study_event' AND ae.action_message LIKE '%completed%'  THEN 19
+                WHEN ae.audit_table = 'study_event' AND ae.action_message LIKE '%removed%'    THEN 23
+                WHEN ae.audit_table = 'study_event'                                           THEN 17
+                -- Event definitions (types 95-97)
+                WHEN ae.audit_table = 'study_event_definition' AND ae.action_message LIKE '%event_def_update%' THEN 97
+                WHEN ae.audit_table = 'study_event_definition' AND ae.action_message LIKE '%disable%'          THEN 96
+                WHEN ae.audit_table = 'study_event_definition'                                                 THEN 95
+                -- Group classes (types 98-99)
+                WHEN ae.audit_table = 'study_group_class' AND ae.action_message LIKE '%group_class_update%' THEN 99
+                WHEN ae.audit_table = 'study_group_class'                                                   THEN 98
+                -- Subject (type 100) + legacy subject types (5-7)
+                WHEN ae.audit_table = 'subject' AND ae.action_message LIKE '%subject_demographics%' THEN 100
+                WHEN ae.audit_table = 'subject' AND ae.action_message LIKE '%enrolled%'             THEN 5
+                WHEN ae.audit_table = 'subject' AND ae.action_message LIKE '%status_change%'        THEN 6
+                WHEN ae.audit_table = 'subject'                                                     THEN 5
+                -- Study subjects (legacy types 2-4, 27-29)
+                WHEN ae.audit_table = 'study_subject' AND ae.action_message LIKE '%group%'      THEN 28
+                WHEN ae.audit_table = 'study_subject' AND ae.action_message LIKE '%site%'       THEN 27
+                WHEN ae.audit_table = 'study_subject' AND ae.action_message LIKE '%status%'    THEN 3
+                WHEN ae.audit_table = 'study_subject'                                          THEN 2
+                -- Discrepancy notes (types 71-74)
+                WHEN ae.audit_table = 'discrepancy_note' AND ae.action_message LIKE '%status%'    THEN 73
+                WHEN ae.audit_table = 'discrepancy_note' AND ae.action_message LIKE '%assigned%'  THEN 74
+                WHEN ae.audit_table = 'discrepancy_note' AND ae.action_message LIKE '%thread%'    THEN 72
+                WHEN ae.audit_table = 'discrepancy_note'                                          THEN 71
+                -- Background-job execution (types 106-107)
+                WHEN ae.action_message LIKE '__job_fired_success%' THEN 106
+                WHEN ae.action_message LIKE '__job_fired_fail%'    THEN 107
+                -- Catch-all
+                ELSE 108
+              END                                                  AS audit_log_event_type_id,
+              ae.audit_date,
+              ae.user_id,
+              ae.audit_table,
+              ae.entity_id,
+              COALESCE(aev.column_name, '')                        AS entity_name,
+              COALESCE(ae.reason_for_change, '')                   AS reason_for_change,
+              COALESCE(aev.old_value, '')                          AS old_value,
+              COALESCE(aev.new_value, COALESCE(ae.action_message, '')) AS new_value
+            FROM audit_event ae
+            LEFT JOIN audit_event_values aev ON ae.audit_id = aev.audit_id;
+        ]]></sql>
+
+        <rollback>
+            <!--
+                Roll back the backfill by deleting every audit_log_event
+                row in the 75-108 range. This DOES wipe runtime writes
+                of types 75-107 as a side effect; in practice
+                rolling back this changeset alone is a development-time
+                action, not a production-recovery action.
+            -->
+            <delete tableName="audit_log_event">
+                <where>audit_log_event_type_id BETWEEN 75 AND 108</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

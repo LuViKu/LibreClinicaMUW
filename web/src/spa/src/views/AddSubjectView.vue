@@ -1,15 +1,16 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
-import SelectInput from '@/components/SelectInput.vue'
+import DateInput from '@/components/DateInput.vue'
 import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import StatusPill from '@/components/StatusPill.vue'
+import PatientMatchDialog from '@/components/PatientMatchDialog.vue'
 
 import {
   useSubjectsStore,
@@ -18,28 +19,54 @@ import {
   type AddSubjectError,
   type AddSubjectErrorField,
   type AddSubjectInput,
+  type SubjectMatchCandidate,
 } from '@/stores/subjects'
+import { useAuthStore } from '@/stores/auth'
 import type { Gender, StudyEye } from '@/types/subject'
 
 const { t } = useI18n()
 const router = useRouter()
 const subjects = useSubjectsStore()
+const auth = useAuthStore()
 
 const todayIso = computed(() => new Date().toISOString().slice(0, 10))
 
+/**
+ * Phase E.6 follow-up 2026-06-10 — institutional protocol short-code
+ * for the active study (DB column {@code study.unique_identifier} —
+ * shown in the SPA as "Eindeutige Protokoll-ID"). When set, the
+ * subject-ID input prefills with "{uniqueIdentifier}-" so a new
+ * enrolment in the GA study starts as "GA-…". The operator is free
+ * to edit or clear it.
+ */
+const subjectIdPrefix = computed(() => {
+  const ident = auth.user?.activeStudy?.uniqueIdentifier?.trim()
+  return ident ? `${ident}-` : ''
+})
+
 const form = reactive<AddSubjectInput>({
-  id: '',
+  id: subjectIdPrefix.value,
   secondaryId: '',
-  siteOid: 'TDS0004',
-  siteLabel: 'München',
+  // Site context is derived from the session-bound active study.
+  // The backend infers site from the session and ignores siteOid /
+  // siteLabel in the body; these mirror auth.user.activeStudy for
+  // breadcrumb display only. Empty defaults are replaced when
+  // activeStudy resolves.
+  siteOid: auth.user?.activeStudy?.oid ?? '',
+  siteLabel: auth.user?.activeStudy?.name ?? '',
   gender: '' as Gender, // empty until user picks
   yearOfBirth: null,
-  groupLabel: null,
+  groupLabel: null, // retained for type compat; UI dropdown removed (no real group_class wiring)
   enrolledOn: todayIso.value,
   // Phase E.6 Tier 1 — ophthalmology domain fields. Both optional;
   // null keeps non-ophth studies free of forced eye scope.
   studyEye: null,
   screeningDate: '',
+  // Phase E.6 retrospective-backfill — PHI triplet for dedup.
+  firstName: '',
+  lastName: '',
+  dateOfBirth: '',
+  acknowledgeMatchSubjectId: null,
 })
 
 const submitAttempted = ref(false)
@@ -52,6 +79,55 @@ const serverFieldErrors = ref<AddSubjectError[] | null>(null)
 
 const liveErrors = computed(() => validateAddSubject(form, subjects.rows, { today: todayIso.value }))
 
+/* ----------------------------------------------------------------- */
+/* Phase E.6 — live Study-Subject-ID availability check (label-taken)*/
+/*                                                                    */
+/* Debounced watch on form.id fires the backend's check-label preflight*/
+/* — surfaces "already taken" as an inline error before the operator  */
+/* clicks submit. The submit-time backend validation stays as the     */
+/* authoritative gate; the live check is purely UX.                  */
+/* ----------------------------------------------------------------- */
+
+const labelTakenError = ref<string | null>(null)
+const labelCheckDebounce = ref<number | null>(null)
+
+function maybeCheckLabel() {
+  if (labelCheckDebounce.value !== null) {
+    window.clearTimeout(labelCheckDebounce.value)
+    labelCheckDebounce.value = null
+  }
+  const value = form.id.trim()
+  if (value === '') {
+    labelTakenError.value = null
+    return
+  }
+  // Reset between debounce window and the actual check so the inline
+  // error doesn't flash stale state during typing.
+  labelTakenError.value = null
+  labelCheckDebounce.value = window.setTimeout(() => {
+    void runLabelCheck(value)
+  }, 350)
+}
+
+async function runLabelCheck(value: string) {
+  try {
+    const result = await subjects.checkLabelAvailability(value)
+    // Drop the result if the operator has typed something else since.
+    if (form.id.trim() !== value) return
+    if (!result.available) {
+      labelTakenError.value = t('addSubject.error.labelTaken', { id: value })
+    } else {
+      labelTakenError.value = null
+    }
+  } catch {
+    // Backend hiccup — clear the inline marker; the submit-time
+    // check is the authoritative gate.
+    labelTakenError.value = null
+  }
+}
+
+watch(() => form.id, maybeCheckLabel)
+
 function errorFor(field: AddSubjectErrorField): string | null {
   // Server-side errors take precedence (authoritative): if the latest
   // submit returned a structured 400, surface those per-field messages.
@@ -59,6 +135,9 @@ function errorFor(field: AddSubjectErrorField): string | null {
     const fromServer = serverFieldErrors.value.find((e) => e.field === field)
     if (fromServer) return fromServer.message
   }
+  // Live label-taken check rides on the `id` field error slot so the
+  // existing red-ring + ErrorText wiring renders it for free.
+  if (field === 'id' && labelTakenError.value) return labelTakenError.value
   if (!submitAttempted.value) return null
   return liveErrors.value.find((e) => e.field === field)?.message ?? null
 }
@@ -85,20 +164,115 @@ function clearServerErrorFor(field: AddSubjectErrorField) {
   if (serverFieldErrors.value.length === 0) serverFieldErrors.value = null
 }
 
+/* -------------------------------------------------------------- */
+/* Phase E.6 retrospective-backfill — match-preflight + dialog.   */
+/*                                                                 */
+/* Fires once the operator has filled all three of first/last/DoB. */
+/* If the backend returns at least one candidate, the dialog opens */
+/* and the form's submit is gated until the operator either picks  */
+/* "Use existing" (route to existing subject's detail) or "Create  */
+/* new anyway" (which records the acknowledgement on the form so   */
+/* the backend's audit log can see the operator chose to override).*/
+/* -------------------------------------------------------------- */
+
+const matchCandidates = ref<SubjectMatchCandidate[]>([])
+const matchDialogOpen = ref(false)
+const isPreflighting = ref(false)
+const preflightDebounce = ref<number | null>(null)
+
+/**
+ * Debounced preflight — when all three PHI fields are populated, fire
+ * the lookup. The 350ms window keeps keypress-by-keypress noise off
+ * the wire without making the UX feel laggy.
+ */
+function maybePreflight() {
+  if (preflightDebounce.value !== null) {
+    window.clearTimeout(preflightDebounce.value)
+    preflightDebounce.value = null
+  }
+  const first = (form.firstName ?? '').trim()
+  const last = (form.lastName ?? '').trim()
+  const dob = (form.dateOfBirth ?? '').trim()
+  if (!first || !last || !/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
+    matchCandidates.value = []
+    matchDialogOpen.value = false
+    return
+  }
+  // The operator may already have acknowledged; if they edit the
+  // triplet, drop the acknowledgement so the next match is fresh.
+  form.acknowledgeMatchSubjectId = null
+  preflightDebounce.value = window.setTimeout(() => {
+    void runPreflight(first, last, dob)
+  }, 350)
+}
+
+async function runPreflight(first: string, last: string, dob: string) {
+  isPreflighting.value = true
+  try {
+    const candidates = await subjects.preflightMatch(first, last, dob)
+    matchCandidates.value = candidates
+    matchDialogOpen.value = candidates.length > 0
+  } catch {
+    // Preflight is best-effort — never block enrolment on a 5xx.
+    matchCandidates.value = []
+    matchDialogOpen.value = false
+  } finally {
+    isPreflighting.value = false
+  }
+}
+
+watch(() => form.firstName, maybePreflight)
+watch(() => form.lastName, maybePreflight)
+watch(() => form.dateOfBirth, maybePreflight)
+
+function onMatchLink(candidate: SubjectMatchCandidate) {
+  matchDialogOpen.value = false
+  if (candidate.uniqueIdentifier) {
+    router.push({ path: `/subjects/${encodeURIComponent(candidate.uniqueIdentifier)}` })
+  }
+}
+
+function onMatchCreateNew() {
+  // Echo the first candidate's id back on submit so the backend audit
+  // captures which match the operator overrode. A multi-candidate
+  // override only echoes the topmost — the dialog already lists them.
+  form.acknowledgeMatchSubjectId = matchCandidates.value[0]?.subjectId ?? null
+  matchDialogOpen.value = false
+}
+
+function onMatchCancel() {
+  matchDialogOpen.value = false
+}
+
 async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
   submitAttempted.value = true
   serverError.value = null
   // Re-running submit invalidates any stale server-side errors.
   serverFieldErrors.value = null
   if (liveErrors.value.length > 0) return
+  // Phase E.6 — short-circuit the submit when the live label check
+  // has already surfaced a collision. The backend submit-time check
+  // still owns the authoritative gate (a transient backend hiccup
+  // would clear the inline marker but the 400 path catches it), but
+  // surfacing the same field error inline saves the operator a
+  // failed POST round trip.
+  if (labelTakenError.value) return
+  // Block the submit if a match dialog is open and the operator
+  // hasn't acknowledged.
+  if (matchCandidates.value.length > 0 && form.acknowledgeMatchSubjectId == null) {
+    matchDialogOpen.value = true
+    return
+  }
 
   try {
     const subject = await subjects.add({ ...form })
     if (redirect === 'matrix') {
       router.push({ name: 'subject-matrix' })
     } else if (redirect === 'addNext') {
-      // Reset for next subject; preserve site context.
-      form.id = ''
+      // Reset for next subject; preserve site context. Re-apply the
+      // protocol-ID prefix prefill so the operator doesn't retype it
+      // for every consecutive enrolment.
+      form.id = subjectIdPrefix.value
       form.secondaryId = ''
       form.gender = '' as Gender
       form.yearOfBirth = null
@@ -131,8 +305,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
   { code: 'U', label: () => t('addSubject.gender.unknown') },
 ]
 
-const yearMin = 1900
-const yearMax = computed(() => Number(todayIso.value.slice(0, 4)))
 </script>
 
 <template>
@@ -239,13 +411,12 @@ const yearMax = computed(() => Number(todayIso.value.slice(0, 4)))
           <div class="grid grid-cols-2 gap-x-6 gap-y-4">
             <div>
               <FieldLabel for="enrolled-on" required>{{ t('addSubject.field.enrolledOn') }}</FieldLabel>
-              <TextInput
+              <DateInput
                 id="enrolled-on"
                 v-model="form.enrolledOn"
-                type="text"
-                placeholder="YYYY-MM-DD"
+                required
+                :max="todayIso"
                 :error="errorFor('enrolledOn') != null"
-                inputmode="numeric"
               />
               <ErrorText v-if="errorFor('enrolledOn')">{{ errorFor('enrolledOn') }}</ErrorText>
             </div>
@@ -281,32 +452,51 @@ const yearMax = computed(() => Number(todayIso.value.slice(0, 4)))
               <ErrorText v-if="errorFor('gender')">{{ errorFor('gender') }}</ErrorText>
             </div>
 
+            <!-- Phase E.6 retrospective-backfill — PHI triplet. Both
+                 names + the full DoB drive the cross-study dedup
+                 match-preflight; the operator can still submit with
+                 them blank for legacy non-retrospective flows. -->
             <div>
-              <FieldLabel for="year-of-birth">{{ t('addSubject.field.yearOfBirth') }}</FieldLabel>
-              <input
-                id="year-of-birth"
-                v-model.number="form.yearOfBirth"
-                type="number"
-                :min="yearMin"
-                :max="yearMax"
-                :placeholder="t('addSubject.placeholder.yearOfBirth')"
-                class="w-full px-3 py-2 border rounded-md focus:outline-none transition-colors muw-focus"
-                :class="errorFor('yearOfBirth')
-                  ? 'border-rose-400 bg-rose-50/40 focus:border-rose-500 focus:ring-2 focus:ring-rose-100'
-                  : 'border-slate-300 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100'"
+              <FieldLabel for="first-name">{{ t('addSubject.field.firstName') }}</FieldLabel>
+              <TextInput
+                id="first-name"
+                v-model="form.firstName"
+                :placeholder="t('addSubject.placeholder.firstName')"
+                data-testid="add-subject-first-name"
               />
-              <HelperText>{{ t('addSubject.helper.yearOfBirth') }}</HelperText>
-              <ErrorText v-if="errorFor('yearOfBirth')">{{ errorFor('yearOfBirth') }}</ErrorText>
+              <ErrorText v-if="errorFor('firstName')">{{ errorFor('firstName') }}</ErrorText>
+            </div>
+            <div>
+              <FieldLabel for="last-name">{{ t('addSubject.field.lastName') }}</FieldLabel>
+              <TextInput
+                id="last-name"
+                v-model="form.lastName"
+                :placeholder="t('addSubject.placeholder.lastName')"
+                data-testid="add-subject-last-name"
+              />
+              <ErrorText v-if="errorFor('lastName')">{{ errorFor('lastName') }}</ErrorText>
+            </div>
+            <div>
+              <FieldLabel for="date-of-birth">{{ t('addSubject.field.dateOfBirth') }}</FieldLabel>
+              <DateInput
+                id="date-of-birth"
+                v-model="form.dateOfBirth"
+                :max="todayIso"
+                data-testid="add-subject-date-of-birth"
+              />
+              <HelperText>{{ t('addSubject.helper.dateOfBirth') }}</HelperText>
+              <ErrorText v-if="errorFor('dateOfBirth')">{{ errorFor('dateOfBirth') }}</ErrorText>
             </div>
 
-            <div>
-              <FieldLabel for="group-label">{{ t('addSubject.field.groupLabel') }}</FieldLabel>
-              <SelectInput id="group-label" v-model="form.groupLabel">
-                <option :value="null">{{ t('addSubject.group.notAssigned') }}</option>
-                <option value="Arm A">Arm A</option>
-                <option value="Arm B">Arm B</option>
-              </SelectInput>
-            </div>
+            <!-- Group assignment dropdown is deliberately omitted.
+                 The historical hardcoded "Arm A / Arm B" stub
+                 (pre-Phase-E.6) never read from the active study's
+                 actual group_class definitions, and MUW's iAMD/GA
+                 cohorts are observational — no randomisation arm.
+                 The proper group_class-driven UI surfaces on the
+                 SubjectDetailView per-group picker for studies that
+                 declare groups; the AddSubject form posts
+                 groupAssignments=null which the backend accepts. -->
           </div>
         </section>
 
@@ -348,11 +538,9 @@ const yearMax = computed(() => Number(todayIso.value.slice(0, 4)))
 
             <div>
               <FieldLabel for="screening-date">{{ t('ophth.screeningDate.label') }}</FieldLabel>
-              <TextInput
+              <DateInput
                 id="screening-date"
                 v-model="form.screeningDate"
-                type="date"
-                placeholder="YYYY-MM-DD"
                 autocomplete="off"
               />
               <HelperText>{{ t('ophth.screeningDate.helper') }}</HelperText>
@@ -424,5 +612,14 @@ const yearMax = computed(() => Number(todayIso.value.slice(0, 4)))
         <p class="leading-relaxed">{{ t('addSubject.modesHelp') }}</p>
       </div>
     </main>
+
+    <!-- Phase E.6 retrospective-backfill — match-preflight prompt. -->
+    <PatientMatchDialog
+      :open="matchDialogOpen"
+      :candidates="matchCandidates"
+      @link="onMatchLink"
+      @create-new="onMatchCreateNew"
+      @cancel="onMatchCancel"
+    />
   </div>
 </template>

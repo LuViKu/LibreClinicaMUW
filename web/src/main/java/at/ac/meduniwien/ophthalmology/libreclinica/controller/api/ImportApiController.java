@@ -14,6 +14,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,7 +28,6 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
@@ -37,7 +39,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.ODMContai
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.StudyEventDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.crfdata.SubjectDataBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.internal.ImportPreviewSession;
-import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.i18n.util.ResourceBundleProvider;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.xml.OdmJaxbContext;
@@ -625,24 +626,30 @@ public class ImportApiController {
                                        ImportPreviewSession parked, String overwriteMode,
                                        String reasonForChange) {
         if (dataSource == null) return; // test-only path
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(study.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setAuditTable("item_data");
-            ae.setEntityId(0);
-            ae.setColumnName("bulk_import_attempt");
-            ae.setOldValue("");
-            ae.setNewValue("token=" + token
-                    + " file=" + parked.originalFilename()
-                    + " rows=" + parked.allRows().size()
-                    + " overwriteMode=" + overwriteMode
-                    + " rfc=" + (reasonForChange == null ? "" : reasonForChange));
-            ae.setActionMessage("bulk_import_attempt by " + me.getName() + " (persistence pending)");
-            auditDAO.create(ae);
-        } catch (Exception e) {
+        String summary = "token=" + token
+                + " file=" + parked.originalFilename()
+                + " rows=" + parked.allRows().size()
+                + " overwriteMode=" + overwriteMode;
+        // 9-column INSERT — bulk import is the one site that carries
+        // operator-supplied reason_for_change (21 CFR Part 11 §11.10),
+        // so it goes inline rather than through the shared 8-column
+        // writer used by the other audit-unification sweep sites.
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, "
+                             + "reason_for_change, old_value, new_value) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, AuditTypeIds.BULK_IMPORT_ATTEMPTED);
+            ps.setInt(2, me.getId());
+            ps.setString(3, "item_data");
+            ps.setInt(4, 0);
+            ps.setString(5, "bulk_import_attempt");
+            ps.setString(6, reasonForChange == null ? "" : reasonForChange);
+            ps.setString(7, "");
+            ps.setString(8, summary);
+            ps.executeUpdate();
+        } catch (SQLException e) {
             LOG.warn("Audit write failed for bulk_import_attempt (token={}, continuing): {}",
                     token, e.getMessage());
         }

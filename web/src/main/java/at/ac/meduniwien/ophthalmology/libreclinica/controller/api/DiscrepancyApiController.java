@@ -35,13 +35,19 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.DiscrepancyNoteBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventDefinitionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.DiscrepancyNoteDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
@@ -51,6 +57,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.discrepancy.Discrepan
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
@@ -298,33 +305,57 @@ public class DiscrepancyApiController {
         Map<Integer, EventCRFBean> eventCrfCache = new HashMap<>();
         Map<Integer, StudySubjectBean> studySubjectCache = new HashMap<>();
         Map<Integer, ItemBean> itemCache = new HashMap<>();
+        Map<Integer, StudyEventBean> studyEventCache = new HashMap<>();
+        Map<Integer, StudyEventDefinitionBean> seDefCache = new HashMap<>();
 
         ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
         EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
         StudySubjectDAO studySubjectDao = new StudySubjectDAO(dataSource);
         ItemDAO itemDao = new ItemDAO(dataSource);
+        StudyEventDAO studyEventDao = new StudyEventDAO(dataSource);
+        StudyEventDefinitionDAO seDefDao = new StudyEventDefinitionDAO(dataSource);
 
         List<DiscrepancyNoteDto> out = new ArrayList<>(notes.size());
         for (DiscrepancyNoteBean n : notes) {
             String subjectLabel = "";
             String itemOid = "";
+            // notes-deeplink (2026-06-11) — additional context the SPA row needs
+            // to render the value the DM is asking about + deep-link to the CRF.
+            String itemLabel = null;
+            String itemValue = null;
+            String eventCrfOid = null;
+            String eventName = null;
 
             if ("itemData".equalsIgnoreCase(n.getEntityType()) && n.getEntityId() > 0) {
                 ItemDataBean idb = itemDataCache.computeIfAbsent(n.getEntityId(),
                         id -> (ItemDataBean) itemDataDao.findByPK(id));
                 if (idb != null && idb.getId() > 0) {
+                    itemValue = idb.getValue();
                     ItemBean item = itemCache.computeIfAbsent(idb.getItemId(),
                             id -> (ItemBean) itemDao.findByPK(id));
                     if (item != null && item.getId() > 0) {
                         itemOid = nullToEmpty(item.getOid());
+                        itemLabel = pickItemLabel(item);
                     }
                     EventCRFBean ec = eventCrfCache.computeIfAbsent(idb.getEventCRFId(),
                             id -> (EventCRFBean) eventCrfDao.findByPK(id));
                     if (ec != null && ec.getId() > 0) {
+                        eventCrfOid = String.valueOf(ec.getId());
                         StudySubjectBean ss = studySubjectCache.computeIfAbsent(ec.getStudySubjectId(),
                                 id -> (StudySubjectBean) studySubjectDao.findByPK(id));
                         if (ss != null && ss.getId() > 0) {
                             subjectLabel = nullToEmpty(ss.getLabel());
+                        }
+                        // event_crf → study_event → study_event_definition.name
+                        StudyEventBean se = studyEventCache.computeIfAbsent(ec.getStudyEventId(),
+                                id -> (StudyEventBean) studyEventDao.findByPK(id));
+                        if (se != null && se.getId() > 0) {
+                            StudyEventDefinitionBean def = seDefCache.computeIfAbsent(
+                                    se.getStudyEventDefinitionId(),
+                                    id -> (StudyEventDefinitionBean) seDefDao.findByPK(id));
+                            if (def != null && def.getId() > 0) {
+                                eventName = def.getName();
+                            }
                         }
                     }
                 }
@@ -364,7 +395,12 @@ public class DiscrepancyApiController {
                     nullToEmpty(n.getDescription()),
                     assignedTo,
                     daysOpen,
-                    lastActivityAt));
+                    lastActivityAt,
+                    List.of(),
+                    itemLabel,
+                    itemValue,
+                    eventCrfOid,
+                    eventName));
         }
 
         return out;
@@ -490,46 +526,85 @@ public class DiscrepancyApiController {
                     "Your role does not permit creating notes of type '" + typeName + "'"));
         }
 
-        DiscrepancyNoteBean note = new DiscrepancyNoteBean();
-        note.setDescription(body.description().trim());
-        note.setDiscrepancyNoteTypeId(typeId);
-        note.setResolutionStatusId(ResolutionStatus.OPEN.getId());
-        note.setStudyId(currentStudy.getId());
-        note.setEntityType("itemData");
-        note.setEntityId(target.getId());
-        note.setColumn("value");
-        note.setOwner(ub);
+        // Phase B2 (2026-06-10) — failure-audit wrap on the parent
+        // discrepancy_note insert + mapping + (best-effort) email
+        // notification. The row doesn't exist yet on entry so entity_id
+        // is the attached item_data id — the closest stable anchor for
+        // post-mortem correlation. Email-failure exceptions are
+        // intentionally caught downstream so an SMTP blip won't
+        // surface as a 500 here; THIS wrap only fires when the DAO
+        // write or mapping insert fails.
+        final DiscrepancyNoteBean noteRef;
+        {
+            DiscrepancyNoteBean note = new DiscrepancyNoteBean();
+            note.setDescription(body.description().trim());
+            note.setDiscrepancyNoteTypeId(typeId);
+            note.setResolutionStatusId(ResolutionStatus.OPEN.getId());
+            note.setStudyId(currentStudy.getId());
+            note.setEntityType("itemData");
+            note.setEntityId(target.getId());
+            note.setColumn("value");
+            note.setOwner(ub);
 
-        Integer assignedUserId = resolveAssignee(body.assignedTo());
-        if (assignedUserId != null && assignedUserId > 0) {
-            note.setAssignedUserId(assignedUserId);
+            Integer assignedUserId = resolveAssignee(body.assignedTo());
+            if (assignedUserId != null && assignedUserId > 0) {
+                note.setAssignedUserId(assignedUserId);
+            }
+            noteRef = note;
         }
+        final Integer assignedUserIdRef = noteRef.getAssignedUserId() > 0
+                ? noteRef.getAssignedUserId() : null;
+        final StudyBean studyRef = currentStudy;
+        final UserAccountBean ubRef = ub;
+        final AddQueryRequest bodyRef = body;
+        final String typeNameRef = typeName;
+        final int itemDataId = target.getId();
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    ub.getId(),
+                    "discrepancy_note",
+                    itemDataId,
+                    "CREATE_DISCREPANCY",
+                    reqId,
+                    () -> {
+                        DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
+                        DiscrepancyNoteBean saved = dnDao.create(noteRef);
+                        dnDao.createMapping(saved);
+                        writeDnAudit(AUDIT_TYPE_DN_CREATED, ubRef, saved, "", "");
 
-        DiscrepancyNoteDAO dnDao = new DiscrepancyNoteDAO(dataSource);
-        DiscrepancyNoteBean saved = dnDao.create(note);
-        dnDao.createMapping(saved);
+                        LOG.info("Created discrepancy_note id={} type={} subject={} item={} by user={}",
+                                saved.getId(), typeNameRef, bodyRef.subjectId(), bodyRef.itemOid(),
+                                ubRef.getName());
 
-        LOG.info("Created discrepancy_note id={} type={} subject={} item={} by user={}",
-                saved.getId(), typeName, body.subjectId(), body.itemOid(), ub.getName());
+                        // Phase E.6 — email notification on create
+                        // (when an assignee is set). Best-effort.
+                        if (emailNotifier != null && assignedUserIdRef != null && assignedUserIdRef > 0) {
+                            UserAccountBean assignee =
+                                    new UserAccountDAO(dataSource).findByPK(assignedUserIdRef);
+                            emailNotifier.notifyCreated(saved, assignee, studyRef);
+                        }
 
-        // Phase E.6 — email notification on create (when an assignee is set).
-        if (emailNotifier != null && assignedUserId != null && assignedUserId > 0) {
-            UserAccountBean assignee = new UserAccountDAO(dataSource).findByPK(assignedUserId);
-            emailNotifier.notifyCreated(saved, assignee, currentStudy);
+                        DiscrepancyNoteDto dto = new DiscrepancyNoteDto(
+                                String.valueOf(saved.getId()),
+                                typeToSpa(saved.getDiscrepancyNoteTypeId()),
+                                statusToSpa(saved.getResolutionStatusId()),
+                                bodyRef.subjectId(),
+                                bodyRef.itemOid(),
+                                saved.getDescription(),
+                                resolveUsername(assignedUserIdRef),
+                                0,
+                                Instant.now().truncatedTo(ChronoUnit.SECONDS).toString());
+
+                        return ResponseEntity.status(201).body(dto);
+                    });
+        } catch (Exception e) {
+            LOG.error("Discrepancy create failed for subject={} item={} user={}",
+                    body.subjectId(), body.itemOid(), ub.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to create discrepancy note — see server log."));
         }
-
-        DiscrepancyNoteDto dto = new DiscrepancyNoteDto(
-                String.valueOf(saved.getId()),
-                typeToSpa(saved.getDiscrepancyNoteTypeId()),
-                statusToSpa(saved.getResolutionStatusId()),
-                body.subjectId(),
-                body.itemOid(),
-                saved.getDescription(),
-                resolveUsername(assignedUserId),
-                0,
-                Instant.now().truncatedTo(ChronoUnit.SECONDS).toString());
-
-        return ResponseEntity.status(201).body(dto);
     }
 
     /**
@@ -554,9 +629,17 @@ public class DiscrepancyApiController {
      * with {@code parent_dn_id = parentId}; updates the parent's
      * {@code resolution_status_id}; optionally updates the parent's
      * {@code assigned_user_id} when {@code body.assignedTo} is
-     * present. Audit-event rows are written by the table trigger
-     * {@code discrepancy_note_trigger}; no controller-side audit
-     * emission is required.
+     * present. Each side effect emits one {@code audit_log_event}
+     * row via {@link #writeDnAudit} (types 72/73/74), seeded by
+     * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}
+     * and closing the §11.10(e) gaps catalogued in
+     * {@code docs/development/audit-coverage-2026-06-11.md}.
+     *
+     * <p>Earlier revisions of this docstring claimed audit rows were
+     * written by a {@code discrepancy_note_trigger} — that trigger
+     * has never existed in the migrations. The misleading comment
+     * was a regulatory landmine and was removed when this method
+     * was wired to {@link #writeDnAudit} directly.
      */
     @PostMapping("/{parentId}/thread")
     @ApiResponse(responseCode = "200",
@@ -654,6 +737,7 @@ public class DiscrepancyApiController {
             child.setAssignedUserId(assignedUserId);
         }
         dnDao.create(child);
+        writeDnAudit(AUDIT_TYPE_DN_THREAD_APPENDED, ub, parent, "", "");
 
         // Update the parent's resolution_status_id in place. DAO.update
         // writes description / type / status / detailed_notes —
@@ -661,11 +745,20 @@ public class DiscrepancyApiController {
         // so we only change the status column.
         parent.setResolutionStatusId(newStatusId);
         dnDao.update(parent);
+        if (previousStatusId != newStatusId) {
+            writeDnAudit(AUDIT_TYPE_DN_STATUS_CHANGED, ub, parent,
+                    statusToSpa(previousStatusId), statusToSpa(newStatusId));
+        }
 
         // Optional reassignment on the parent.
         if (assignedUserId != null && assignedUserId > 0) {
             parent.setAssignedUserId(assignedUserId);
             dnDao.updateAssignedUser(parent);
+            if (previousAssignedUserId != assignedUserId.intValue()) {
+                writeDnAudit(AUDIT_TYPE_DN_REASSIGNED, ub, parent,
+                        previousAssignedUserId > 0 ? resolveUsername(previousAssignedUserId) : "",
+                        resolveUsername(assignedUserId));
+            }
         }
 
         LOG.info("Appended thread entry to discrepancy_note id={} status={} by user={} role={}",
@@ -753,7 +846,10 @@ public class DiscrepancyApiController {
             }
         }
 
-        // Re-project with the populated thread field.
+        // Re-project with the populated thread field. Preserve the
+        // notes-deeplink context fields (itemLabel / itemValue /
+        // eventCrfOid / eventName) so the SPA thread modal keeps the
+        // same context the list row already showed.
         DiscrepancyNoteDto hydrated = new DiscrepancyNoteDto(
                 parentDto.id(),
                 parentDto.type(),
@@ -764,7 +860,11 @@ public class DiscrepancyApiController {
                 parentDto.assignedTo(),
                 parentDto.daysOpen(),
                 parentDto.lastActivityAt(),
-                entries);
+                entries,
+                parentDto.itemLabel(),
+                parentDto.itemValue(),
+                parentDto.eventCrfOid(),
+                parentDto.eventName());
         return ResponseEntity.ok(hydrated);
     }
 
@@ -803,23 +903,40 @@ public class DiscrepancyApiController {
     private DiscrepancyNoteDto projectParentDto(DiscrepancyNoteBean n) {
         String subjectLabel = "";
         String itemOid = "";
+        String itemLabel = null;
+        String itemValue = null;
+        String eventCrfOid = null;
+        String eventName = null;
 
         if ("itemData".equalsIgnoreCase(n.getEntityType()) && n.getEntityId() > 0) {
             ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
             ItemDataBean idb = (ItemDataBean) itemDataDao.findByPK(n.getEntityId());
             if (idb != null && idb.getId() > 0) {
+                itemValue = idb.getValue();
                 ItemDAO itemDao = new ItemDAO(dataSource);
                 ItemBean item = (ItemBean) itemDao.findByPK(idb.getItemId());
                 if (item != null && item.getId() > 0) {
                     itemOid = nullToEmpty(item.getOid());
+                    itemLabel = pickItemLabel(item);
                 }
                 EventCRFDAO eventCrfDao = new EventCRFDAO(dataSource);
                 EventCRFBean ec = (EventCRFBean) eventCrfDao.findByPK(idb.getEventCRFId());
                 if (ec != null && ec.getId() > 0) {
+                    eventCrfOid = String.valueOf(ec.getId());
                     StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
                     StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ec.getStudySubjectId());
                     if (ss != null && ss.getId() > 0) {
                         subjectLabel = nullToEmpty(ss.getLabel());
+                    }
+                    StudyEventDAO studyEventDao = new StudyEventDAO(dataSource);
+                    StudyEventBean se = (StudyEventBean) studyEventDao.findByPK(ec.getStudyEventId());
+                    if (se != null && se.getId() > 0) {
+                        StudyEventDefinitionDAO seDefDao = new StudyEventDefinitionDAO(dataSource);
+                        StudyEventDefinitionBean def =
+                                (StudyEventDefinitionBean) seDefDao.findByPK(se.getStudyEventDefinitionId());
+                        if (def != null && def.getId() > 0) {
+                            eventName = def.getName();
+                        }
                     }
                 }
             }
@@ -843,7 +960,28 @@ public class DiscrepancyApiController {
                 nullToEmpty(n.getDescription()),
                 assignedTo,
                 daysOpen,
-                lastActivityAt);
+                lastActivityAt,
+                List.of(),
+                itemLabel,
+                itemValue,
+                eventCrfOid,
+                eventName);
+    }
+
+    /**
+     * notes-deeplink (2026-06-11) — pick the operator-facing item label.
+     * {@code item.description} is the human-readable label captured at
+     * CRF build time (see the demo seed: "Height (cm)", "Weight (kg)",
+     * …); {@code item.name} is the OID-shaped identifier the operator
+     * already sees. Falls back to the OID-ish name when description is
+     * empty, then to {@code null} so the SPA renders the bare OID.
+     */
+    private static String pickItemLabel(ItemBean item) {
+        String desc = item.getDescription();
+        if (desc != null && !desc.isBlank()) return desc;
+        String name = item.getName();
+        if (name != null && !name.isBlank()) return name;
+        return null;
     }
 
 
@@ -972,6 +1110,63 @@ public class DiscrepancyApiController {
         if (subjectId != null && !subjectId.isBlank()) sb.append(" subjectId=").append(subjectId);
         if (assignedTo != null && !assignedTo.isBlank()) sb.append(" assignedTo=").append(assignedTo);
         return sb.toString();
+    }
+
+    /**
+     * Type ids for the DN-threading §11.10(e) audit-coverage gaps
+     * closed by
+     * {@code lc-muw-2026-06-11-audit-event-types-gap-coverage.xml}.
+     *
+     * <p>Type 71 (DN created) is the SUCCESS-path companion to the
+     * existing FailureAuditTemplate (type 61) wrapper around the
+     * DN-create lambda. Before this row, success-path DN creation
+     * was silent; only failures were audited.
+     */
+    private static final int AUDIT_TYPE_DN_CREATED         = 71;
+    private static final int AUDIT_TYPE_DN_THREAD_APPENDED = 72;
+    private static final int AUDIT_TYPE_DN_STATUS_CHANGED  = 73;
+    private static final int AUDIT_TYPE_DN_REASSIGNED      = 74;
+
+    /**
+     * Direct INSERT into {@code audit_log_event} for discrepancy-note
+     * state mutations. Mirrors {@link #emitExportAudit} and
+     * {@code StudiesApiController.writeStudyFieldAudit} — bypasses the
+     * legacy {@code AuditEventDAO.create} path which writes to
+     * {@code audit_event} (invisible to the SPA Audit Log view).
+     *
+     * <p>{@code oldValue} / {@code newValue} carry the meaningful diff
+     * per type:
+     * <ul>
+     *   <li>{@code 71} DN created — both empty.</li>
+     *   <li>{@code 72} thread appended — both empty (the child's content
+     *       is captured in the row's {@code entity_id} pointer).</li>
+     *   <li>{@code 73} status changed — old / new SPA-form status name.</li>
+     *   <li>{@code 74} reassigned — old / new username; either may be
+     *       empty when there was no prior or new assignee.</li>
+     * </ul>
+     *
+     * <p>Failures are swallowed: the DN mutation has already persisted,
+     * so a missed audit row should NOT roll back the user's action.
+     */
+    private void writeDnAudit(int auditTypeId, UserAccountBean actor,
+                              DiscrepancyNoteBean dn,
+                              String oldValue, String newValue) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'discrepancy_note', ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, actor.getId());
+            ps.setInt(3, dn.getId());
+            ps.setString(4, dn.getDescription() == null ? "" : dn.getDescription());
+            ps.setString(5, oldValue == null ? "" : oldValue);
+            ps.setString(6, newValue == null ? "" : newValue);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Failed to write audit_log_event row for discrepancy_note id={} type={}: {}",
+                    dn.getId(), auditTypeId, e.getMessage());
+        }
     }
 
     /**

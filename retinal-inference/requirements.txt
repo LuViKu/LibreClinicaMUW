@@ -1,0 +1,8 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic==2.10.4
+pydantic-settings==2.7.0
+psycopg2-binary==2.9.10
+pillow==11.0.0
+# Placeholder period: no torch / oct-converter / eyepy needed.
+# When MirageAdapter ships: + torch==2.5.1 + einops + huggingface_hub + safetensors + oct-converter + eyepy

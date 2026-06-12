@@ -10,10 +10,12 @@ package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -50,5 +52,245 @@ class SubjectsApiControllerDatabaseIT extends AbstractApiControllerDatabaseIT {
                 .andExpect(jsonPath("$[?(@.id == 'M-006')]").exists())
                 .andExpect(jsonPath("$[?(@.signed == true)].id")
                         .value(containsInAnyOrder("M-003", "M-006")));
+    }
+
+    /* ====================================================================== */
+    /* Phase E.6 retrospective-backfill — match-preflight (dedup lookup)     */
+    /* ====================================================================== */
+
+    /**
+     * No seeded subject carries the (first_name, last_name, dob) triplet
+     * out of the box, so a fresh preflight should return an empty list
+     * and HTTP 200.
+     */
+    @Test
+    void matchPreflightReturnsEmptyArrayWhenNoMatch() throws Exception {
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Nobody\",\"lastName\":\"Unknown\","
+                        + "\"dateOfBirth\":\"1900-01-01\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    /**
+     * Seed a subject with the triplet then call preflight — the match
+     * comes back with the subject's identifying fields and the visible
+     * studies they're in (lookup is case-insensitive: lowercase input
+     * still finds an uppercase-typed name).
+     */
+    @Test
+    void matchPreflightReturnsCandidateCaseInsensitive() throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "UPDATE subject SET first_name = ?, last_name = ?, "
+                             + "date_of_birth = ?, dob_collected = true "
+                             + "WHERE subject_id = 1")) {
+            ps.setString(1, "Maria");
+            ps.setString(2, "Müller");
+            ps.setDate(3, java.sql.Date.valueOf("1965-04-12"));
+            ps.executeUpdate();
+        }
+
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        // Lowercase the operator's input; partial index on
+        // LOWER(first_name)/LOWER(last_name) still hits the row.
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"maria\",\"lastName\":\"müller\","
+                        + "\"dateOfBirth\":\"1965-04-12\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].subjectId").value(1))
+                .andExpect(jsonPath("$[0].dateOfBirth").value("1965-04-12"));
+    }
+
+    /**
+     * Soft-deleted (status_id=5) subjects are excluded by the partial
+     * dedup index — even with an exact PHI match they must not appear
+     * in the candidate list so a tombstoned record can't shadow a real
+     * re-enrolment.
+     */
+    @Test
+    void matchPreflightSkipsSoftDeletedSubjects() throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "UPDATE subject SET first_name = ?, last_name = ?, "
+                             + "date_of_birth = ?, dob_collected = true, "
+                             + "status_id = 5 WHERE subject_id = 2")) {
+            ps.setString(1, "Karl");
+            ps.setString(2, "Tombstone");
+            ps.setDate(3, java.sql.Date.valueOf("1950-01-01"));
+            ps.executeUpdate();
+        }
+
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Karl\",\"lastName\":\"Tombstone\","
+                        + "\"dateOfBirth\":\"1950-01-01\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    /**
+     * Phase E.6 follow-up 2026-06-10 — the candidate row echoes back
+     * {@code firstName} + {@code lastName} as persisted (operator
+     * confirmation aid: they just typed it). The seeded subject #1
+     * has visible enrolment as M-001 in default-study (oc_oid
+     * S_DEFAULTS1) → the {@code studies} array carries the protocol
+     * short-code, the system OID, the display name, and the per-study
+     * subject label.
+     */
+    @Test
+    void matchPreflightReturnsNameAndStudyEnrolments() throws Exception {
+        try (java.sql.Connection c = DATA_SOURCE.getConnection();
+             java.sql.PreparedStatement ps = c.prepareStatement(
+                     "UPDATE subject SET first_name = ?, last_name = ?, "
+                             + "date_of_birth = ?, dob_collected = true "
+                             + "WHERE subject_id = 1")) {
+            ps.setString(1, "Anna");
+            ps.setString(2, "Schmidt");
+            ps.setDate(3, java.sql.Date.valueOf("1970-03-15"));
+            ps.executeUpdate();
+        }
+
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Anna\",\"lastName\":\"Schmidt\","
+                        + "\"dateOfBirth\":\"1970-03-15\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].subjectId").value(1))
+                .andExpect(jsonPath("$[0].firstName").value("Anna"))
+                .andExpect(jsonPath("$[0].lastName").value("Schmidt"))
+                .andExpect(jsonPath("$[0].studies").isArray())
+                .andExpect(jsonPath("$[0].studies.length()").value(1))
+                .andExpect(jsonPath("$[0].studies[0].studyUniqueIdentifier")
+                        .value("default-study"))
+                .andExpect(jsonPath("$[0].studies[0].studyOid").value("S_DEFAULTS1"))
+                .andExpect(jsonPath("$[0].studies[0].label").value("M-001"));
+    }
+
+    /**
+     * Phase E.6 follow-up 2026-06-10 — enrolments in studies the
+     * operator can't see are suppressed from {@code studies} but still
+     * counted in {@code otherStudyCount}. The seeded subject #2 has a
+     * visible enrolment in default-study (study_id=1) which the operator
+     * CAN see; flipping its study_id to a hidden study id (=2, absent
+     * from the seed) hides the enrolment row instead. The candidate is
+     * still returned but {@code studies} is empty and
+     * {@code otherStudyCount} is 1.
+     */
+    @Test
+    void matchPreflightHidesEnrolmentsInInaccessibleStudies() throws Exception {
+        // Insert a FRESH subject (id=99) + enrolment instead of mutating
+        // the seed. The IT suite has no per-test rollback (raw JDBC, no
+        // @Transactional); mutating seed rows breaks sibling tests like
+        // listReturnsSevenSeededSubjects which assert the count of 7.
+        final int HIDDEN_SUBJECT_ID = 99;
+        final int HIDDEN_STUDY_ID = 2;
+        try (java.sql.Connection c = DATA_SOURCE.getConnection()) {
+            // Hidden study (top-level, no parent — NULL).
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO study (study_id, name, unique_identifier, oc_oid, "
+                            + "type_id, status_id, owner_id, date_created, parent_study_id) "
+                            + "VALUES (?, 'Hidden Study', 'hidden-study', 'S_HIDDEN', "
+                            + "1, 1, 1, NOW(), NULL) ON CONFLICT (study_id) DO NOTHING")) {
+                ps.setInt(1, HIDDEN_STUDY_ID);
+                ps.executeUpdate();
+            }
+            // Fresh subject row — distinct PII so the match-preflight
+            // SELECT finds exactly this one + nothing else.
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO subject (subject_id, first_name, last_name, "
+                            + "date_of_birth, dob_collected, gender, unique_identifier, "
+                            + "status_id, date_created, owner_id) "
+                            + "VALUES (?, ?, ?, ?, true, 'f', ?, 1, NOW(), 1) "
+                            + "ON CONFLICT (subject_id) DO NOTHING")) {
+                ps.setInt(1, HIDDEN_SUBJECT_ID);
+                ps.setString(2, "Hidden");
+                ps.setString(3, "Enrolment");
+                ps.setDate(4, java.sql.Date.valueOf("1980-06-20"));
+                ps.setString(5, "PERSON_" + HIDDEN_SUBJECT_ID);
+                ps.executeUpdate();
+            }
+            // Enrolment in the hidden study. "root" has no
+            // study_user_role grant on study_id=HIDDEN_STUDY_ID →
+            // loadVisibleStudyOids excludes it, the candidate row is
+            // returned but its enrolment is hidden + otherStudyCount=1.
+            try (java.sql.PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO study_subject (study_subject_id, label, subject_id, "
+                            + "study_id, status_id, date_created, owner_id, oc_oid, study_eye) "
+                            + "VALUES (?, ?, ?, ?, 1, NOW(), 1, ?, NULL) "
+                            + "ON CONFLICT (study_subject_id) DO NOTHING")) {
+                ps.setInt(1, 999);
+                ps.setString(2, "HIDDEN-001");
+                ps.setInt(3, HIDDEN_SUBJECT_ID);
+                ps.setInt(4, HIDDEN_STUDY_ID);
+                ps.setString(5, "SS_HIDDEN_001");
+                ps.executeUpdate();
+            }
+        }
+
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Hidden\",\"lastName\":\"Enrolment\","
+                        + "\"dateOfBirth\":\"1980-06-20\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].subjectId").value(HIDDEN_SUBJECT_ID))
+                .andExpect(jsonPath("$[0].studies").isArray())
+                .andExpect(jsonPath("$[0].studies.length()").value(0))
+                .andExpect(jsonPath("$[0].otherStudyCount").value(1));
+    }
+
+    /**
+     * Missing fields → 400 with an explicit message. The SPA waits
+     * until all three are populated before firing, but defensive
+     * rejection here keeps the contract clean.
+     */
+    @Test
+    void matchPreflightReturns400WhenAnyFieldMissing() throws Exception {
+        SubjectsApiController controller = buildSubjectsController();
+        MockMvc mockMvc = MockMvcBuilders.standaloneSetup(controller)
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+
+        mockMvc.perform(post("/api/v1/subjects/match-preflight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"firstName\":\"Maria\",\"lastName\":\"\","
+                        + "\"dateOfBirth\":\"1965-04-12\"}")
+                .session(authenticatedSession()))
+                .andExpect(status().isBadRequest());
     }
 }

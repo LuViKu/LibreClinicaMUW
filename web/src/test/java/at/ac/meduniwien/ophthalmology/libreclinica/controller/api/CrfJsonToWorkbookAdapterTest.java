@@ -412,4 +412,234 @@ class CrfJsonToWorkbookAdapterTest {
         assertEquals("MEDS", str(items.getRow(2), 6));
         assertEquals("ADVERSE", str(items.getRow(3), 6));
     }
+
+    /* ----------------------------------------------------------------- */
+    /* LEFT_ITEM_TEXT / RIGHT_ITEM_TEXT synthesis fallback               */
+    /* ----------------------------------------------------------------- */
+
+    private static CrfVersionAuthoringRequest.Item itemWithOid(
+            String name, String oid, String descriptionLabel,
+            String leftItemText, String units, String rightItemText) {
+        return new CrfVersionAuthoringRequest.Item(
+                name, oid, descriptionLabel, leftItemText, rightItemText, units,
+                "INTEGER", "", false, null, null,
+                null, null, null, null, false, null);
+    }
+
+    @Test
+    void synthesizeLeftItemText_passesThroughOperatorProvidedLabel() {
+        var item = itemWithOid("VA_OD", "I_OPHTH_OD_BCVA",
+                "BCVA letters", "Right eye — ETDRS letters", "letters", "");
+        assertEquals("Right eye — ETDRS letters",
+                CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeLeftItemText_replacesEyeMarkerOnlyLabelWithDescription_plusLaterality() {
+        // The wizard's CRF Library bug: the operator typed only "OD"
+        // for the laterality marker and left the measurement name
+        // unspecified. Synthesis fills in the description-label and
+        // wraps it with the eye marker detected from the OID tokens.
+        var item = itemWithOid("OD_BCVA_LETTERS", "I_OPHTH_OD_BCVA_LETTERS",
+                "BCVA letters", "OD", "letters", "");
+        assertEquals("BCVA letters (OD)",
+                CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeLeftItemText_handlesBlankLeftItemTextWithLateralityInOid() {
+        var item = itemWithOid("OS_IOP", "I_IOP_OS",
+                "Intraocular pressure", "", "mmHg", "");
+        assertEquals("Intraocular pressure (OS)",
+                CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeLeftItemText_fallsBackToNameWhenDescriptionLabelIsBlank() {
+        var item = itemWithOid("OD_BCVA", "I_VA_OD_ETDRS", "", "OD", "letters", "");
+        assertEquals("OD_BCVA (OD)",
+                CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeLeftItemText_returnsEmptyStringWhenNoSourcesAvailable() {
+        var item = itemWithOid("", "", "", "", "", "");
+        assertEquals("", CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeLeftItemText_skipsLateralityWrapperWhenOidHasNoEyeToken() {
+        // Non-ophth items have no laterality — synthesis should just
+        // return the description-label without the eye-marker suffix.
+        var item = itemWithOid("AGE", "I_AGE", "Age at enrollment", "", "years", "");
+        assertEquals("Age at enrollment",
+                CrfJsonToWorkbookAdapter.synthesizeLeftItemText(item));
+    }
+
+    @Test
+    void synthesizeRightItemText_passesThroughOperatorProvidedHint() {
+        var item = itemWithOid("VA", "I_VA",
+                "BCVA letters", "BCVA letters", "letters", "letters (0-100)");
+        assertEquals("letters (0-100)",
+                CrfJsonToWorkbookAdapter.synthesizeRightItemText(item));
+    }
+
+    @Test
+    void synthesizeRightItemText_fallsBackToUnitsWhenBlank() {
+        var item = itemWithOid("VA", "I_VA",
+                "BCVA letters", "BCVA letters", "mmHg", "");
+        assertEquals("mmHg",
+                CrfJsonToWorkbookAdapter.synthesizeRightItemText(item));
+    }
+
+    @Test
+    void synthesizeRightItemText_returnsEmptyWhenBothBlank() {
+        var item = itemWithOid("X", "I_X", "X", "X label", "", "");
+        assertEquals("", CrfJsonToWorkbookAdapter.synthesizeRightItemText(item));
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* Catalog materialization (F3)                                      */
+    /* ----------------------------------------------------------------- */
+
+    private static CrfVersionAuthoringRequest.Item catalogItem(String name, String oid, String catalogCode) {
+        return new CrfVersionAuthoringRequest.Item(
+                name, oid,
+                /* descriptionLabel */ null,
+                /* leftItemText     */ null,
+                /* rightItemText    */ null,
+                /* units            */ null,
+                /* dataType         */ null,
+                /* defaultValue     */ "",
+                /* required         */ false,
+                /* responseSet      */ null,
+                /* validation       */ null,
+                /* showItem         */ null,
+                /* parentItemOid    */ null,
+                /* header           */ null,
+                /* subHeader        */ null,
+                /* pageBreak        */ false,
+                /* groupLabel       */ null,
+                /* catalogCode      */ catalogCode);
+    }
+
+    private static java.util.Map<String, CrfJsonToWorkbookAdapter.CatalogRow> miniCatalog() {
+        var iop = new CrfJsonToWorkbookAdapter.CatalogRow(
+                "IOP", "Augeninnendruck (IOP)", "mmHg", "integer", "number-stepper",
+                null, null, java.util.List.of());
+        var done = new CrfJsonToWorkbookAdapter.CatalogRow(
+                "SPECTRALIS_OCT_DONE", "Spectralis-OCT durchgeführt", null, "select-one", "yesno",
+                null, null,
+                java.util.List.of(
+                        new CrfJsonToWorkbookAdapter.CatalogResponseOption("ja", "Ja"),
+                        new CrfJsonToWorkbookAdapter.CatalogResponseOption("nein", "Nein")));
+        var reason = new CrfJsonToWorkbookAdapter.CatalogRow(
+                "SPECTRALIS_OCT_REASON", "Spectralis-OCT — Grund falls nicht durchgeführt",
+                null, "string", "text",
+                "SPECTRALIS_OCT_DONE", "nein",
+                java.util.List.of());
+        return java.util.Map.of(
+                "IOP", iop,
+                "SPECTRALIS_OCT_DONE", done,
+                "SPECTRALIS_OCT_REASON", reason);
+    }
+
+    @Test
+    void materializeItem_passesThroughWhenNoCatalogCodeSet() {
+        var item = new CrfVersionAuthoringRequest.Item(
+                "AGE", "I_AGE", "Age", "Age", "", "yrs",
+                "INTEGER", "", false, null, null,
+                null, null, null, null, false, null);
+        var out = CrfJsonToWorkbookAdapter.materializeItem(item, miniCatalog());
+        assertEquals(item, out);
+    }
+
+    @Test
+    void materializeItem_passesThroughWhenCatalogCodeUnknown() {
+        var item = catalogItem("X", "I_OPHTH_OD_X", "DOES_NOT_EXIST");
+        var out = CrfJsonToWorkbookAdapter.materializeItem(item, miniCatalog());
+        assertEquals(item, out);
+    }
+
+    @Test
+    void materializeItem_fillsBlankFieldsFromCatalogForNumericEntry() {
+        // The wizard sends only the catalog code + OID; everything else
+        // back-fills from the catalog row.
+        var item = catalogItem("OD_IOP", "I_OPHTH_OD_IOP", "IOP");
+        var out = CrfJsonToWorkbookAdapter.materializeItem(item, miniCatalog());
+
+        assertEquals("Augeninnendruck (IOP)", out.descriptionLabel());
+        assertEquals("Augeninnendruck (IOP)", out.leftItemText());
+        assertEquals("mmHg", out.rightItemText());
+        assertEquals("mmHg", out.units());
+        assertEquals("integer", out.dataType());
+        // Catalog code pass-through so the downstream layer (validator,
+        // audit) can still inspect it.
+        assertEquals("IOP", out.catalogCode());
+        // No response options on a number-stepper.
+        assertEquals(null, out.responseSet());
+    }
+
+    @Test
+    void materializeItem_authoredFieldsBeatCatalogDefaults() {
+        // Operator typed a custom label — catalog must NOT overwrite it.
+        var item = new CrfVersionAuthoringRequest.Item(
+                "OD_IOP", "I_OPHTH_OD_IOP",
+                /* descriptionLabel */ "Custom IOP label",
+                /* leftItemText     */ null,
+                /* rightItemText    */ null,
+                /* units            */ null,
+                /* dataType         */ null,
+                "", false, null, null,
+                null, null, null, null, false, null, "IOP");
+        var out = CrfJsonToWorkbookAdapter.materializeItem(item, miniCatalog());
+        assertEquals("Custom IOP label", out.descriptionLabel());
+        // Other blank fields still fill from catalog.
+        assertEquals("Augeninnendruck (IOP)", out.leftItemText());
+        assertEquals("mmHg", out.units());
+    }
+
+    @Test
+    void materializeItem_synthesizesResponseSetFromCatalogYesNoOptions() {
+        var item = catalogItem("OD_SPECTRALIS", "I_OPHTH_OD_SPECTRALIS_OCT_DONE", "SPECTRALIS_OCT_DONE");
+        var out = CrfJsonToWorkbookAdapter.materializeItem(item, miniCatalog());
+
+        assertNotNull(out.responseSet());
+        assertEquals("radio", out.responseSet().type());
+        assertEquals(2, out.responseSet().options().size());
+        // Order: (text, value) — text first per the record's contract.
+        assertEquals("Ja", out.responseSet().options().get(0).text());
+        assertEquals("ja", out.responseSet().options().get(0).value());
+        assertEquals("Nein", out.responseSet().options().get(1).text());
+        assertEquals("nein", out.responseSet().options().get(1).value());
+    }
+
+    @Test
+    void materializeItem_emitsShowItemTripleWhenCatalogDeclaresConditional() {
+        var item = catalogItem("OD_REASON", "I_OPHTH_OD_SPECTRALIS_OCT_REASON", "SPECTRALIS_OCT_REASON");
+        var out = CrfJsonToWorkbookAdapter.materializeItem(item, miniCatalog());
+        // Format: "{showWhenValue}|{conditionalOnCode} == {showWhenValue}".
+        assertEquals("nein|SPECTRALIS_OCT_DONE == nein", out.showItem());
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* parseResponseOptions storage format                               */
+    /* ----------------------------------------------------------------- */
+
+    @Test
+    void parseResponseOptions_canonicalPipePair() {
+        var opts = CrfJsonToWorkbookAdapter.parseResponseOptions("ja|Ja,nein|Nein");
+        assertEquals(2, opts.size());
+        assertEquals("ja", opts.get(0).value);
+        assertEquals("Ja", opts.get(0).label);
+        assertEquals("nein", opts.get(1).value);
+        assertEquals("Nein", opts.get(1).label);
+    }
+
+    @Test
+    void parseResponseOptions_handlesNullAndBlankInput() {
+        assertEquals(0, CrfJsonToWorkbookAdapter.parseResponseOptions(null).size());
+        assertEquals(0, CrfJsonToWorkbookAdapter.parseResponseOptions("").size());
+        assertEquals(0, CrfJsonToWorkbookAdapter.parseResponseOptions("   ").size());
+    }
 }

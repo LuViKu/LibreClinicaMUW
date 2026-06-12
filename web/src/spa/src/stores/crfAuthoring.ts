@@ -174,6 +174,18 @@ export interface AuthoringItem {
    * {@link ShowWhenRule} for the shape contract.
    */
   showWhen?: ShowWhenRule
+  /**
+   * Phase E.6 ophth-field-catalog (2026-06-11): when set, the backend
+   * adapter (see {@code CrfJsonToWorkbookAdapter.materializeCatalogItems})
+   * back-fills any blank item fields (descriptionLabel, leftItemText,
+   * rightItemText, units, dataType, responseSet) from the matching
+   * {@code ophth_field_catalog} row before synthesising the workbook.
+   * The wizard populates this when the operator drops an item via the
+   * "Pick from catalog" picker — the picker still stages the item with
+   * a canonical OID + name so the operator can edit afterwards if
+   * they want to drift from the catalog defaults.
+   */
+  catalogCode?: string
 }
 
 export interface AuthoringSection {
@@ -495,6 +507,70 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   }
 
   /**
+   * Phase E.6 ophth-field-catalog (2026-06-11): drop a catalog entry
+   * into a section as one or two pre-filled items (one for non-
+   * bilateral entries, OD + OS for bilateral). Each item carries
+   * {@code catalogCode} so the backend materialises blank fields
+   * from the catalog row.
+   *
+   * <p>The wizard's picker is the only caller — it knows the catalog
+   * entry's {@code bilateral} flag + {@code oidPrefix} + {@code code}
+   * so it can pass them in here.
+   */
+  function addCatalogItem(
+    sectionIndex: number,
+    opts: {
+      code: string
+      labelDe: string
+      bilateral: boolean
+      oidPrefix: string
+      dataType: AuthoringDataType
+    },
+  ): void {
+    const section = draft.value.sections[sectionIndex]
+    if (!section) return
+    const namespace = opts.oidPrefix && opts.oidPrefix.trim().length > 0 ? opts.oidPrefix.trim() : 'OPHTH'
+    if (opts.bilateral) {
+      const odOid = `I_${namespace}_OD_${opts.code}`
+      const osOid = `I_${namespace}_OS_${opts.code}`
+      section.items.push({
+        ...emptyItem(),
+        name: `OD_${opts.code}`,
+        oid: odOid,
+        descriptionLabel: opts.labelDe,
+        leftItemText: opts.labelDe,
+        dataType: opts.dataType,
+        laterality: 'OD',
+        bilateralPair: osOid,
+        catalogCode: opts.code,
+      })
+      section.items.push({
+        ...emptyItem(),
+        name: `OS_${opts.code}`,
+        oid: osOid,
+        descriptionLabel: opts.labelDe,
+        leftItemText: opts.labelDe,
+        dataType: opts.dataType,
+        laterality: 'OS',
+        bilateralPair: odOid,
+        catalogCode: opts.code,
+      })
+    } else {
+      const ouOid = `I_${namespace}_OU_${opts.code}`
+      section.items.push({
+        ...emptyItem(),
+        name: `OU_${opts.code}`,
+        oid: ouOid,
+        descriptionLabel: opts.labelDe,
+        leftItemText: opts.labelDe,
+        dataType: opts.dataType,
+        laterality: 'OU',
+        catalogCode: opts.code,
+      })
+    }
+  }
+
+  /**
    * Append a new section to the draft and populate it with paired
    * OD / OS items generated from the Ophthalmology bilateral preset.
    * Mirrors {@code addItem} for callers that want to append several
@@ -631,6 +707,13 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     if (v) out.validation = v
     const sw = buildShowWhenPayload(it)
     if (sw) out.showWhen = sw
+    // Phase E.6 ophth-field-catalog (2026-06-11): the backend adapter
+    // back-fills blank fields from the matching catalog row when
+    // catalogCode is present. Pass-through verbatim; the wizard's
+    // picker is responsible for setting this on items it materialises.
+    if (it.catalogCode && it.catalogCode.trim() !== '') {
+      out.catalogCode = it.catalogCode.trim()
+    }
     return out
   }
 
@@ -897,6 +980,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     setSectionBilateral,
     addItem,
     addBilateralPair,
+    addCatalogItem,
     addOphthPresetSection,
     setItemField,
     removeItem,

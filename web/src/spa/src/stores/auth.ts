@@ -3,7 +3,7 @@ import { computed, ref } from 'vue'
 import { apiGet, apiPost, apiPut, ApiError, ApiNetworkError } from '@/api/client'
 import type {
   AuthState, AuthenticatedUser, PasswordChangeFieldError, PasswordChangeRequest,
-  ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption,
+  ProfileFieldError, ProfileUpdateRequest, SsoConfig, StudyOption, UserRole,
 } from '@/types/auth'
 import { useSubjectsStore } from './subjects'
 import { useEventsStore } from './events'
@@ -18,6 +18,7 @@ import { useUsersStore } from './users'
 import { useStudyStore } from './study'
 import { useDatasetsStore } from './datasets'
 import { useImportCrfStore } from './importCrf'
+import { usePatientsOverviewStore } from './patientsOverview'
 
 /**
  * Thrown by {@link useAuthStore.completeProfile} on a 400 from
@@ -257,6 +258,7 @@ export const useAuthStore = defineStore('auth', () => {
     useStudyStore().reset()
     useDatasetsStore().reset()
     useImportCrfStore().reset()
+    usePatientsOverviewStore().reset()
   }
 
   /**
@@ -338,6 +340,28 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  /**
+   * Multi-role per (user, study) — M2 (2026-06-08).
+   *
+   * <p>Returns true when the active study binding grants the given
+   * role. Reads the array form first (M2+ wire shape) and falls back
+   * to the singular projection (current /me responses where {@code
+   * roles} is still undefined). Used by HomeView's catalogue filter,
+   * the router guard, and TopBar / breadcrumb chips that adapt their
+   * label to the set the operator carries.
+   */
+  function hasRole(role: UserRole): boolean {
+    const u = user.value
+    if (!u) return false
+    const active = u.activeStudy
+    if (active?.roles && active.roles.length > 0) return active.roles.includes(role)
+    if (active?.role) return active.role === role
+    // Last-resort fallback for callers that already projected the
+    // single binding onto the top-level AuthenticatedUser.role (the
+    // M1 wire shape).
+    return u.role === role
+  }
+
   async function logout(): Promise<void> {
     try {
       await fetch('/LibreClinica/Logout', { method: 'GET', credentials: 'include' })
@@ -366,6 +390,7 @@ export const useAuthStore = defineStore('auth', () => {
     ssoBounce,
     completeProfile,
     changePassword,
+    hasRole,
     logout,
   }
 })

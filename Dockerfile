@@ -1,5 +1,13 @@
 FROM docker.io/library/maven:3-eclipse-temurin-21 AS builder
 
+# SKIP_SPA gates the frontend-maven-plugin SPA build (web/pom.xml:23
+# `<skipSpa>false</skipSpa>` is the maven default). Default `true` here
+# preserves the fast-path used by `docker compose up` and the smoke-test
+# job in .github/workflows/build.yml. The release-image workflow
+# (.github/workflows/release-image.yml) passes --build-arg SKIP_SPA=false
+# so production WARs contain the SPA bundle.
+ARG SKIP_SPA=true
+
 WORKDIR /app
 
 # ----- Dependency layer -----
@@ -35,7 +43,7 @@ COPY . .
 
 RUN --mount=type=cache,target=/root/.m2 \
     set -eux; \
-    mvn package -DskipSpa=true -DskipTests=true -Dmdep.analyze.skip=true; \
+    mvn package -DskipSpa=${SKIP_SPA} -DskipTests=true -Dmdep.analyze.skip=true; \
     # Maven's default WAR name is ${artifactId}-${version}.war, so this is
     # LibreClinica-web-1.4.0rc1-muw.war today and will keep changing as the
     # project version moves. Glob it and rename to a stable name for the
@@ -107,3 +115,21 @@ COPY \
 COPY --from=builder \
     /LibreClinica-web.war \
     /usr/local/tomcat/webapps/LibreClinica.war
+
+# Phase B/A7 hardening (2026-06): healthcheck so `docker compose up` and the
+# cluster orchestrator can block on the WAR actually serving rather than the
+# JVM merely being up. Boot's actuator/health endpoint returns {"status":"UP"}
+# only after Liquibase has applied pending changesets AND the Spring context
+# has finished refreshing (Quartz has @DependsOn("liquibase") in
+# core/.../config/QuartzConfig.java:63, so Quartz init is in the gate too).
+#
+# Timing budget for start-period: Liquibase changelog apply ~20-30 s on a
+# steady-state schema, Quartz scheduler init ~5 s, Tomcat WAR deploy
+# ~30-40 s. 90 s gives the orchestrator a clean signal without false
+# negatives on a cold start. interval/timeout/retries match the
+# retinal-inference sidecar (retinal-inference/Dockerfile:12-13).
+#
+# curl is preinstalled in the tomcat:10-jdk21 (Debian) base — verified
+# 2026-06-10 — so no apt-get layer needed.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
+  CMD curl -fsS http://localhost:8080/LibreClinica/actuator/health || exit 1

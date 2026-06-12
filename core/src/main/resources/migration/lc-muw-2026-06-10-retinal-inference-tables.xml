@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.7 — Retinal inference sidecar tables.
+
+        Two new tables backing the FastAPI sidecar's sync + async paths:
+
+        retinal_inference_job     — one row per OCT upload. Inserted in
+                                    'queued' state by the Java side's
+                                    POST /pages/api/v1/event-crfs/{oid}/oct-upload
+                                    multipart endpoint. The controller
+                                    flips it to 'screening' and calls the
+                                    sidecar's /screen route synchronously;
+                                    on success it lands as 'screened' and
+                                    the background worker picks the row
+                                    up for the slower full-volume pass
+                                    via SELECT … FOR UPDATE SKIP LOCKED.
+
+        retinal_inference_result  — one row per completed job. Holds the
+                                    structured per-task payload as JSONB
+                                    plus a denormalised primary metric
+                                    pair for dashboard rendering without
+                                    JSONB parsing on the read path.
+
+        The `task` column is the discriminator on both tables — v1 ships
+        with 'ga' as the only enabled task; no CHECK constraint is added
+        so enabling 'fluid' / 'layers' is decoder-only (no schema
+        migration).
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-10-retinal-inference-tables">
+        <createTable tableName="retinal_inference_job">
+            <column autoIncrement="true" name="job_id" type="BIGSERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="event_crf_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="task" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="e2e_path" type="VARCHAR(500)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="eye_laterality" type="VARCHAR(2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status_message" type="TEXT"/>
+            <column name="enqueued_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="screened_at" type="TIMESTAMP"/>
+            <column name="segmenting_at" type="TIMESTAMP"/>
+            <column name="completed_at" type="TIMESTAMP"/>
+            <column name="model_version" type="VARCHAR(50)"/>
+            <column name="model_git_sha" type="VARCHAR(40)"/>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="retinal_inference_job" baseColumnNames="event_crf_id"
+                                 constraintName="fk_retinal_inference_job_event_crf"
+                                 referencedTableName="event_crf" referencedColumnNames="event_crf_id"
+                                 onDelete="RESTRICT" onUpdate="RESTRICT"/>
+        <createIndex tableName="retinal_inference_job" indexName="idx_retinal_inference_job_status">
+            <column name="status"/>
+        </createIndex>
+        <createIndex tableName="retinal_inference_job" indexName="idx_retinal_inference_job_task">
+            <column name="task"/>
+        </createIndex>
+
+        <createTable tableName="retinal_inference_result">
+            <column autoIncrement="true" name="result_id" type="BIGSERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="job_id" type="BIGINT">
+                <constraints nullable="false" unique="true"/>
+            </column>
+            <column name="task" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="output_payload" type="JSONB">
+                <constraints nullable="false"/>
+            </column>
+            <column name="primary_metric_value" type="NUMERIC(12,4)"/>
+            <column name="primary_metric_unit" type="VARCHAR(16)"/>
+            <column name="en_face_mask_path" type="VARCHAR(500)"/>
+            <column name="bscan_masks_dir" type="VARCHAR(500)"/>
+            <column name="pixel_scale_mm" type="NUMERIC(10,8)"/>
+            <column name="confidence" type="NUMERIC(5,4)"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint baseTableName="retinal_inference_result" baseColumnNames="job_id"
+                                 constraintName="fk_retinal_inference_result_job"
+                                 referencedTableName="retinal_inference_job" referencedColumnNames="job_id"
+                                 onDelete="CASCADE" onUpdate="RESTRICT"/>
+
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="retinal_inference_result" constraintName="fk_retinal_inference_result_job"/>
+            <dropTable tableName="retinal_inference_result"/>
+            <dropForeignKeyConstraint baseTableName="retinal_inference_job" constraintName="fk_retinal_inference_job_event_crf"/>
+            <dropIndex tableName="retinal_inference_job" indexName="idx_retinal_inference_job_status"/>
+            <dropIndex tableName="retinal_inference_job" indexName="idx_retinal_inference_job_task"/>
+            <dropTable tableName="retinal_inference_job"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

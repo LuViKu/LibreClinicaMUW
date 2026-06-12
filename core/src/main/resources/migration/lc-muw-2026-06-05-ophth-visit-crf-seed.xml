@@ -59,7 +59,7 @@
         dropdown.
     -->
 
-    <changeSet author="muw-ophthalmology" id="2026-06-05-ophth-visit-crf-metadata">
+    <changeSet author="muw-ophthalmology" id="2026-06-05-ophth-visit-crf-metadata" context="demo">
         <comment>OPHTH_VISIT CRF v1.0 — 1 crf + 1 crf_version + 4 sections + 15 items + 5 response_sets + 15 item_form_metadata.</comment>
 
         <!-- ============================================================

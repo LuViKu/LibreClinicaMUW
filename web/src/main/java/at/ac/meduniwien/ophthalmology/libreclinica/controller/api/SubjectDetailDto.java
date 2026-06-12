@@ -98,8 +98,45 @@ public record SubjectDetailDto(
          * this (unlike the matrix shape, which may carry null pending
          * the N+1 mitigation decision).
          */
-        java.util.List<GroupAssignmentSnapshot> groupAssignments
+        java.util.List<GroupAssignmentSnapshot> groupAssignments,
+        /**
+         * Phase E.6 eye-cohort transition — per-eye history of cohort
+         * hand-offs (iAMD → GA, etc.) that touch this subject. One
+         * entry per direction (source or target) so the SPA's banner
+         * can render both "transitioned OD to GA-001" and "received OD
+         * from iAMD-001" in a single call without a second fetch.
+         *
+         * <p>{@code null} when the subject has no transitions on
+         * record; the SPA treats {@code null} the same as an empty
+         * list for the no-banner branch. Created subjects + the legacy
+         * unit-test fixtures pass {@code null} explicitly.
+         */
+        java.util.List<EyeTransitionSummary> eyeTransitions
 ) {
+
+    /**
+     * Phase E.6 eye-cohort transition — inner record mirroring
+     * {@link EyeTransitionDto} so a single
+     * {@code GET /api/v1/subjects/{label}} call populates the SPA's
+     * banner without forcing a second round-trip to the dedicated
+     * {@code /eye-transitions} endpoint.
+     *
+     * <p>Wire shape identical to {@link EyeTransitionDto}; kept as a
+     * separate type so the SPA can import it from the SubjectDetailDto
+     * schema without coupling its banner code to the standalone
+     * endpoint's DTO.
+     */
+    @Schema(name = "EyeTransitionSummary")
+    public record EyeTransitionSummary(
+            int transitionId,
+            String eye,
+            String side,
+            String partnerStudyOid,
+            String partnerStudyName,
+            String partnerLabel,
+            String transitionedAt,
+            String reason
+    ) {}
 
     /**
      * Detail-view event cell — superset of {@link SubjectListItemDto.EventCellDto}.

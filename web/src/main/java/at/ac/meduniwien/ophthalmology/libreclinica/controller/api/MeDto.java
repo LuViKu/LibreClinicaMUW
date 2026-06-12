@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.util.List;
+
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
@@ -17,6 +19,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
  * (web/src/spa/src/types/auth.ts). The `role` field is mapped from
  * the legacy `Role.id` taxonomy into the SPA's 5-value union
  * (Investigator / Monitor / Data Manager / Administrator / CRC).
+ *
+ * <p>Multi-role (M1 backend): {@code roles} carries EVERY active SPA-
+ * projected role the user holds on the active study, sorted highest-
+ * to-lowest by priority (Administrator > Data Manager > Monitor > CRC
+ * > Investigator). {@code role} continues to carry the
+ * highest-priority value for back-compat with code paths that only
+ * cared about the dominant role. Both fields are always populated.
  *
  * <p>`activeStudy` is null when the user hasn't picked a study yet
  * (legacy SecureController binds it from `ub.getActiveStudyId()` on
@@ -55,6 +64,7 @@ public record MeDto(
         String displayName,
         String email,
         String role,
+        List<String> roles,
         String siteLabel,
         String source,
         boolean mfaSatisfied,
@@ -78,6 +88,32 @@ public record MeDto(
      * the SPA needs to dispatch those calls against the active study without
      * a separate {@code /studies?oid=} lookup.
      */
+    /**
+     * <p>Multi-role per (user, study) — M2 (2026-06-08): {@code roles}
+     * carries the full set of SPA-mapped role bindings the user holds
+     * in this active study. The HomeView's catalogue filter reads this
+     * to render every card the user can reach via ANY of their role
+     * grants on the bound study — without it, the SPA collapses to the
+     * top-level {@code MeDto.role} highest-priority projection and a
+     * dual-role user (e.g. Investigator + Data Manager) loses access
+     * to the lower-priority lane's cards.
+     */
     @Schema(name = "ActiveStudyDto")
-    public record ActiveStudyDto(int id, String oid, String name, boolean isSite) {}
+    public record ActiveStudyDto(
+            int id,
+            String oid,
+            String name,
+            /**
+             * Institutional protocol short-code (DB column
+             * {@code study.unique_identifier}). Distinct from {@link #oid}
+             * (system-assigned API handle, e.g. {@code S_GA}) and
+             * {@link #name} (display label). Used by the SPA to prefill
+             * subject-ID fields with a "{uniqueIdentifier}-" prefix when
+             * adding a new subject or transitioning an eye into a study
+             * where the patient is not yet enrolled. Phase E.6 follow-up
+             * 2026-06-10.
+             */
+            String uniqueIdentifier,
+            boolean isSite,
+            List<String> roles) {}
 }

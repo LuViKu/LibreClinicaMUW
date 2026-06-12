@@ -20,7 +20,6 @@ import java.util.Set;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.CRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.SubjectEventStatus;
@@ -34,6 +33,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubject
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemDataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefinitionCRFDAO;
@@ -48,6 +48,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -479,28 +480,18 @@ public class EventsApiController {
             try { seDao.update(ev); } catch (Exception ignored) { /* best-effort */ }
         }
 
-        // Audit row — best-effort. Mirrors SdvApiController's pattern
-        // (no audit_log_event_type_id setter on AuditEventDAO.create()).
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(ub.getId());
-            ae.setStudyId(currentStudy.getId());
-            ae.setSubjectId(ss.getId());
-            ae.setStudyName(currentStudy.getName() == null ? "" : currentStudy.getName());
-            ae.setSubjectName(ss.getLabel() == null ? "" : ss.getLabel());
-            ae.setAuditTable("event_crf");
-            ae.setEntityId(ecb.getId());
-            ae.setColumnName("event_crf_id");
-            ae.setOldValue("");
-            ae.setNewValue(String.valueOf(ecb.getId()));
-            ae.setActionMessage("event_crf_started: event=" + eventId
-                    + " edc=" + edcId + " version=" + crfVersionId);
-            auditDAO.create(ae);
-        } catch (Exception auditEx) {
-            LOG.warn("Audit write failed for event_crf_started id={} (continuing): {}",
-                    ecb.getId(), auditEx.getMessage());
-        }
+        // Audit row — routed through the unified
+        // {@link EventCrfsApiController#writeAuditEvent} helper so the
+        // event_crf_started row lands in audit_log_event (visible to
+        // the SPA Audit Log) instead of the legacy audit_event table.
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        EventCrfsApiController.writeAuditEvent(auditDAO,
+                AuditTypeIds.EVENT_CRF_STARTED,
+                ub, currentStudy, ss,
+                "event_crf_started: event=" + eventId
+                        + " edc=" + edcId + " version=" + crfVersionId,
+                "event_crf", ecb.getId(),
+                "event_crf_id", "", String.valueOf(ecb.getId()));
 
         LOG.info("event_crf_started: id={} event={} edc={} version={} by user={}",
                 ecb.getId(), eventId, edcId, crfVersionId, ub.getName());
@@ -702,35 +693,65 @@ public class EventsApiController {
         ev.setOwner(ub);
         ev.setStatus(Status.AVAILABLE);
 
+        // Phase B2 (2026-06-10) — failure-audit wrap on the
+        // study_event.create persistence. entity_id is null at entry
+        // (the row doesn't exist yet); the audit row records the
+        // attempt with the subject + definition that motivated it via
+        // the operation label + new_value's reqId.
+        final StudyEventBean evRef = ev;
+        final StudyEventDAO seDaoRef = seDao;
+        final ScheduleEventRequest bodyRef = body;
+        final StudyEventDefinitionBean defRef = def;
+        final StudySubjectBean ssRef = ss;
+        final UserAccountBean ubRef = ub;
+        final int nextOrdinalRef = nextOrdinal;
+        final Date startDateRef = startDate;
+        final String reqId = MDC.get("reqId");
         try {
-            ev = (StudyEventBean) seDao.create(ev);
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    ub.getId(),
+                    "study_event",
+                    /* entityId */ null,
+                    "CREATE_EVENT",
+                    reqId,
+                    () -> {
+                        StudyEventBean created;
+                        try {
+                            created = (StudyEventBean) seDaoRef.create(evRef);
+                        } catch (Exception e) {
+                            LOG.error("Failed to schedule study_event for subject={} def={} start={}",
+                                    bodyRef.subjectId(), bodyRef.eventDefinitionOid(),
+                                    bodyRef.dateStarted(), e);
+                            throw e;
+                        }
+                        if (created == null || created.getId() == 0) {
+                            throw new IllegalStateException(
+                                    "Failed to schedule event — DAO returned no id");
+                        }
+
+                        LOG.info("Scheduled study_event id={} subject={} def={} ordinal={} start={} by user={}",
+                                created.getId(), bodyRef.subjectId(), defRef.getOid(),
+                                nextOrdinalRef, bodyRef.dateStarted(), ubRef.getName());
+
+                        StudyEventDto dto = new StudyEventDto(
+                                String.valueOf(created.getId()),
+                                ssRef.getLabel(),
+                                defRef.getOid(),
+                                defRef.getName(),
+                                nextOrdinalRef,
+                                ISO_DATE.format(startDateRef),
+                                null,
+                                blankToNull(created.getLocation()),
+                                "scheduled",
+                                defRef.isRepeating());
+
+                        return ResponseEntity.status(201).body(dto);
+                    });
         } catch (Exception e) {
-            LOG.error("Failed to schedule study_event for subject={} def={} start={}",
-                    body.subjectId(), body.eventDefinitionOid(), body.dateStarted(), e);
             return ResponseEntity.status(500).body(Map.of("message",
                     "Failed to schedule event: " + e.getMessage()));
         }
-        if (ev == null || ev.getId() == 0) {
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to schedule event — DAO returned no id"));
-        }
-
-        LOG.info("Scheduled study_event id={} subject={} def={} ordinal={} start={} by user={}",
-                ev.getId(), body.subjectId(), def.getOid(), nextOrdinal, body.dateStarted(), ub.getName());
-
-        StudyEventDto dto = new StudyEventDto(
-                String.valueOf(ev.getId()),
-                ss.getLabel(),
-                def.getOid(),
-                def.getName(),
-                nextOrdinal,
-                ISO_DATE.format(startDate),
-                null,
-                blankToNull(ev.getLocation()),
-                "scheduled",
-                def.isRepeating());
-
-        return ResponseEntity.status(201).body(dto);
     }
 
     /**
@@ -861,74 +882,109 @@ public class EventsApiController {
                             + " — edit blocked until un-signed / unlocked"));
         }
 
-        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-        java.util.Date now = new java.util.Date();
+        // Phase B2 (2026-06-10) — failure-audit wrap on the update +
+        // audit-emit block. Field-level audit_log_event rows for each
+        // changed column flow through unchanged; if anything in the
+        // block throws (DAO update fails, audit DAO write fails, …) an
+        // OPERATION_FAILED row keyed by study_event id captures the
+        // failure before the 500 surfaces to the SPA.
+        final StudyEventBean evRef = ev;
+        final StudyEventDAO seDaoRef = seDao;
+        final UpdateEventRequest bodyRef = body;
+        final StudySubjectBean ssRef = ss;
+        final StudyBean studyRef = currentStudy;
+        final UserAccountBean ubRef = ub;
+        final int roleIdRef = roleId;
+        final Date newStartRef = newStart;
+        final boolean clearStartRef = clearStart;
+        final Date newEndRef = newEnd;
+        final boolean clearEndRef = clearEnd;
+        final Integer newStatusIdRef = newStatusId;
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    ub.getId(),
+                    "study_event",
+                    ev.getId(),
+                    "UPDATE_EVENT",
+                    reqId,
+                    () -> {
+                        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+                        java.util.Date now = new java.util.Date();
 
-        if (body.dateStarted() != null) {
-            Date oldStart = ev.getDateStarted();
-            Date target = clearStart ? null : newStart;
-            if (!java.util.Objects.equals(oldStart, target)) {
-                ev.setDateStarted(target);
-                writeEventFieldAudit(auditDAO, ub, currentStudy, ss, ev,
-                        "date_start",
-                        oldStart == null ? "" : ISO_DATE.format(oldStart),
-                        target == null ? "" : ISO_DATE.format(target));
-            }
-        }
-        if (body.dateEnded() != null) {
-            Date oldEnd = ev.getDateEnded();
-            Date target = clearEnd ? null : newEnd;
-            if (!java.util.Objects.equals(oldEnd, target)) {
-                ev.setDateEnded(target);
-                writeEventFieldAudit(auditDAO, ub, currentStudy, ss, ev,
-                        "date_end",
-                        oldEnd == null ? "" : ISO_DATE.format(oldEnd),
-                        target == null ? "" : ISO_DATE.format(target));
-            }
-        }
-        if (body.location() != null) {
-            String oldLoc = ev.getLocation() == null ? "" : ev.getLocation();
-            String newLoc = body.location().trim();
-            if (!oldLoc.equals(newLoc)) {
-                ev.setLocation(newLoc);
-                writeEventFieldAudit(auditDAO, ub, currentStudy, ss, ev,
-                        "location", oldLoc, newLoc);
-            }
-        }
-        if (newStatusId != null) {
-            int oldStatusId = ev.getSubjectEventStatus() == null
-                    ? 0 : ev.getSubjectEventStatus().getId();
-            if (oldStatusId != newStatusId) {
-                ev.setSubjectEventStatus(SubjectEventStatus.get(newStatusId));
-                writeEventFieldAudit(auditDAO, ub, currentStudy, ss, ev,
-                        "subject_event_status_id",
-                        String.valueOf(oldStatusId), String.valueOf(newStatusId));
-            }
-        }
+                        if (bodyRef.dateStarted() != null) {
+                            Date oldStart = evRef.getDateStarted();
+                            Date target = clearStartRef ? null : newStartRef;
+                            if (!java.util.Objects.equals(oldStart, target)) {
+                                evRef.setDateStarted(target);
+                                writeEventFieldAudit(auditDAO, ubRef, studyRef, ssRef, evRef,
+                                        "date_start",
+                                        oldStart == null ? "" : ISO_DATE.format(oldStart),
+                                        target == null ? "" : ISO_DATE.format(target));
+                            }
+                        }
+                        if (bodyRef.dateEnded() != null) {
+                            Date oldEnd = evRef.getDateEnded();
+                            Date target = clearEndRef ? null : newEndRef;
+                            if (!java.util.Objects.equals(oldEnd, target)) {
+                                evRef.setDateEnded(target);
+                                writeEventFieldAudit(auditDAO, ubRef, studyRef, ssRef, evRef,
+                                        "date_end",
+                                        oldEnd == null ? "" : ISO_DATE.format(oldEnd),
+                                        target == null ? "" : ISO_DATE.format(target));
+                            }
+                        }
+                        if (bodyRef.location() != null) {
+                            String oldLoc = evRef.getLocation() == null ? "" : evRef.getLocation();
+                            String newLoc = bodyRef.location().trim();
+                            if (!oldLoc.equals(newLoc)) {
+                                evRef.setLocation(newLoc);
+                                writeEventFieldAudit(auditDAO, ubRef, studyRef, ssRef, evRef,
+                                        "location", oldLoc, newLoc);
+                            }
+                        }
+                        if (newStatusIdRef != null) {
+                            int oldStatusId = evRef.getSubjectEventStatus() == null
+                                    ? 0 : evRef.getSubjectEventStatus().getId();
+                            if (oldStatusId != newStatusIdRef) {
+                                evRef.setSubjectEventStatus(SubjectEventStatus.get(newStatusIdRef));
+                                writeEventFieldAudit(auditDAO, ubRef, studyRef, ssRef, evRef,
+                                        "subject_event_status_id",
+                                        String.valueOf(oldStatusId), String.valueOf(newStatusIdRef));
+                            }
+                        }
 
-        ev.setUpdater(ub);
-        ev.setUpdatedDate(now);
-        seDao.update(ev);
+                        evRef.setUpdater(ubRef);
+                        evRef.setUpdatedDate(now);
+                        seDaoRef.update(evRef);
 
-        LOG.info("Study event update: id={} subject={} by user={} role={}",
-                ev.getId(), ss.getLabel(), ub.getName(), roleId);
+                        LOG.info("Study event update: id={} subject={} by user={} role={}",
+                                evRef.getId(), ssRef.getLabel(), ubRef.getName(), roleIdRef);
 
-        StudyEventBean refreshed = (StudyEventBean) seDao.findByPK(ev.getId());
-        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
-        StudyEventDefinitionBean def =
-                (StudyEventDefinitionBean) sedDao.findByPK(refreshed.getStudyEventDefinitionId());
-        StudyEventDto dto = new StudyEventDto(
-                String.valueOf(refreshed.getId()),
-                ss.getLabel(),
-                def == null ? "" : def.getOid(),
-                def == null ? "" : def.getName(),
-                refreshed.getSampleOrdinal(),
-                refreshed.getDateStarted() == null ? null : ISO_DATE.format(refreshed.getDateStarted()),
-                refreshed.getDateEnded() == null ? null : ISO_DATE.format(refreshed.getDateEnded()),
-                blankToNull(refreshed.getLocation()),
-                statusForSubjectEventStatus(refreshed.getSubjectEventStatus()),
-                def != null && def.isRepeating());
-        return ResponseEntity.ok(dto);
+                        StudyEventBean refreshed = (StudyEventBean) seDaoRef.findByPK(evRef.getId());
+                        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+                        StudyEventDefinitionBean def =
+                                (StudyEventDefinitionBean) sedDao.findByPK(refreshed.getStudyEventDefinitionId());
+                        StudyEventDto dto = new StudyEventDto(
+                                String.valueOf(refreshed.getId()),
+                                ssRef.getLabel(),
+                                def == null ? "" : def.getOid(),
+                                def == null ? "" : def.getName(),
+                                refreshed.getSampleOrdinal(),
+                                refreshed.getDateStarted() == null ? null : ISO_DATE.format(refreshed.getDateStarted()),
+                                refreshed.getDateEnded() == null ? null : ISO_DATE.format(refreshed.getDateEnded()),
+                                blankToNull(refreshed.getLocation()),
+                                statusForSubjectEventStatus(refreshed.getSubjectEventStatus()),
+                                def != null && def.isRepeating());
+                        return ResponseEntity.ok(dto);
+                    });
+        } catch (Exception e) {
+            LOG.error("study_event update failed for id={} user={}",
+                    ev.getId(), ub.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to update study event — see server log."));
+        }
     }
 
     /**
@@ -995,36 +1051,63 @@ public class EventsApiController {
                             + " — un-sign / unlock before cancelling"));
         }
 
-        // Parent: study_event → DELETED. Children: event_crf +
-        // item_data → AUTO_DELETED. Mirrors RemoveStudyEventServlet.
-        ev.setStatus(Status.DELETED);
-        ev.setUpdater(ub);
-        ev.setUpdatedDate(new java.util.Date());
-        seDao.update(ev);
+        // Phase B2 (2026-06-10) — failure-audit wrap on the cascading
+        // soft-delete. study_event flips to DELETED then the
+        // event_crf + item_data children cascade to AUTO_DELETED;
+        // any throw lands an OPERATION_FAILED audit row keyed by
+        // study_event id before propagating as 500.
+        final StudyEventBean evRef = ev;
+        final StudyEventDAO seDaoRef = seDao;
+        final StudySubjectBean ssRef = ss;
+        final UserAccountBean ubRef = ub;
+        final int roleIdRef = roleId;
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    ub.getId(),
+                    "study_event",
+                    ev.getId(),
+                    "DELETE_EVENT",
+                    reqId,
+                    () -> {
+                        // Parent: study_event → DELETED. Children: event_crf +
+                        // item_data → AUTO_DELETED. Mirrors RemoveStudyEventServlet.
+                        evRef.setStatus(Status.DELETED);
+                        evRef.setUpdater(ubRef);
+                        evRef.setUpdatedDate(new java.util.Date());
+                        seDaoRef.update(evRef);
 
-        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
-        ItemDataDAO idDao = new ItemDataDAO(dataSource);
-        java.util.ArrayList<EventCRFBean> ecs = ecDao.findAllByStudyEvent(ev);
-        for (EventCRFBean ec : ecs) {
-            if (ec.getStatus() != null && ec.getStatus().equals(Status.DELETED)) continue;
-            ec.setStatus(Status.AUTO_DELETED);
-            ec.setUpdater(ub);
-            ec.setUpdatedDate(new java.util.Date());
-            ecDao.update(ec);
+                        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+                        ItemDataDAO idDao = new ItemDataDAO(dataSource);
+                        java.util.ArrayList<EventCRFBean> ecs = ecDao.findAllByStudyEvent(evRef);
+                        for (EventCRFBean ec : ecs) {
+                            if (ec.getStatus() != null && ec.getStatus().equals(Status.DELETED)) continue;
+                            ec.setStatus(Status.AUTO_DELETED);
+                            ec.setUpdater(ubRef);
+                            ec.setUpdatedDate(new java.util.Date());
+                            ecDao.update(ec);
 
-            java.util.ArrayList<ItemDataBean> items = idDao.findAllByEventCRFId(ec.getId());
-            for (ItemDataBean it : items) {
-                if (it.getStatus() != null && it.getStatus().equals(Status.DELETED)) continue;
-                it.setStatus(Status.AUTO_DELETED);
-                it.setUpdater(ub);
-                it.setUpdatedDate(new java.util.Date());
-                idDao.update(it);
-            }
+                            java.util.ArrayList<ItemDataBean> items = idDao.findAllByEventCRFId(ec.getId());
+                            for (ItemDataBean it : items) {
+                                if (it.getStatus() != null && it.getStatus().equals(Status.DELETED)) continue;
+                                it.setStatus(Status.AUTO_DELETED);
+                                it.setUpdater(ubRef);
+                                it.setUpdatedDate(new java.util.Date());
+                                idDao.update(it);
+                            }
+                        }
+
+                        LOG.info("Study event cancel: id={} subject={} by user={} role={}",
+                                evRef.getId(), ssRef.getLabel(), ubRef.getName(), roleIdRef);
+                        return ResponseEntity.noContent().build();
+                    });
+        } catch (Exception e) {
+            LOG.error("study_event cancel failed for id={} user={}",
+                    ev.getId(), ub.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to cancel study event — see server log."));
         }
-
-        LOG.info("Study event cancel: id={} subject={} by user={} role={}",
-                ev.getId(), ss.getLabel(), ub.getName(), roleId);
-        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -1166,26 +1249,16 @@ public class EventsApiController {
                                              String columnName,
                                              String oldValue,
                                              String newValue) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(ub.getId());
-            ae.setStudyId(study.getId());
-            ae.setSubjectId(ss == null ? 0 : ss.getId());
-            ae.setStudyName(study.getName() == null ? "" : study.getName());
-            ae.setSubjectName(ss != null && ss.getLabel() != null ? ss.getLabel() : "");
-            ae.setAuditTable("study_event");
-            ae.setEntityId(ev.getId());
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            ae.setActionMessage("study_event_update: " + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "'");
-            dao.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for study_event {} field {} (continuing): {}",
-                    ev.getId(), columnName, e.getMessage());
-        }
+        // Phase audit-unification — delegate to the canonical helper so
+        // study-event-update rows land in audit_log_event (visible to
+        // the SPA Audit Log view) instead of the legacy audit_event
+        // table.
+        EventCrfsApiController.writeAuditEvent(dao,
+                AuditTypeIds.STUDY_EVENT_UPDATED,
+                ub, study, ss,
+                "study_event_update",
+                "study_event", ev.getId(),
+                columnName, oldValue, newValue);
     }
 
     /* ----------------------------------------------------------------- */

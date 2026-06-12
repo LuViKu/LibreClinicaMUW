@@ -12,12 +12,15 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
+import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
+import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
 
 import { useSubjectsStore } from '@/stores/subjects'
 import { useEventsStore } from '@/stores/events'
 import { useAuthStore } from '@/stores/auth'
-import type { EventStatus, Gender } from '@/types/subject'
+import type { EventStatus, Gender, StudyEye, EyeTransitionDto, TransitionEyeRequest } from '@/types/subject'
 import { canManageSubjectLifecycle, canEditSubject } from '@/types/subject'
+import { roleSatisfies, userRolesFromAuth } from '@/router'
 import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
 
@@ -65,10 +68,17 @@ interface EditForm {
   secondaryId: string
   gender: Gender
   yearOfBirth: string
+  /**
+   * 2026-06-10 — null-aware study-eye field. Mirrors the AddSubjectView
+   * pattern: native <select> with an empty-string option that projects
+   * to `null` at the v-model boundary so the StudyEye union stays
+   * narrow ('OD' | 'OS' | 'OU').
+   */
+  studyEye: StudyEye | null
 }
 const editing = ref(false)
 const isSaving = ref(false)
-const form = ref<EditForm>({ secondaryId: '', gender: 'F', yearOfBirth: '' })
+const form = ref<EditForm>({ secondaryId: '', gender: 'F', yearOfBirth: '', studyEye: null })
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref<string | null>(null)
 
@@ -79,6 +89,7 @@ function startEdit() {
     gender: subject.value.gender as Gender,
     yearOfBirth:
       subject.value.yearOfBirth != null ? String(subject.value.yearOfBirth) : '',
+    studyEye: subject.value.studyEye ?? null,
   }
   fieldErrors.value = {}
   formError.value = null
@@ -89,6 +100,16 @@ function cancelEdit() {
   editing.value = false
   fieldErrors.value = {}
   formError.value = null
+}
+
+/**
+ * 2026-06-10 — mirrors AddSubjectView's onStudyEyeChange: translate the
+ * empty-string select value into `null` so the StudyEye union stays
+ * narrow.
+ */
+function onStudyEyeChange(e: Event) {
+  const v = (e.target as HTMLSelectElement).value
+  form.value.studyEye = v === '' ? null : (v as StudyEye)
 }
 
 async function submitEdit() {
@@ -107,6 +128,7 @@ async function submitEdit() {
       secondaryId: form.value.secondaryId.trim() === '' ? null : form.value.secondaryId.trim(),
       gender: form.value.gender,
       yearOfBirth: parsedYob,
+      studyEye: form.value.studyEye,
     })
     if (result.ok) {
       editing.value = false
@@ -136,10 +158,45 @@ interface EditEventState {
   location: string
   status: StudyEventStatus
   fieldError: string | null
+  /**
+   * Phase E completed-crf-and-event-lock (2026-06-11) — the visit's
+   * status at the moment the composer was opened. Drives the
+   * read-only banner + the explicit Bearbeiten unlock step.
+   *
+   * `canEditEvent` already refuses to show the edit affordance for
+   * 'signed' / 'locked' events, so in practice this is either
+   * 'completed' (the only case the unlock-confirm exists for) or
+   * one of the directly-editable statuses (scheduled / stopped /
+   * skipped). We keep the field general so a future role/state
+   * change can't silently bypass the read-only default.
+   */
+  openedFrom: EventStatus
+  /**
+   * True when the operator has explicitly confirmed they want to
+   * edit a previously-completed visit. Local-only state — events
+   * have no backend "reopen" step (unlike CRFs), so the unlock is
+   * purely defensive UX. Save still POSTs PUT /events/{id}; the
+   * server is the source of truth for whether the edit is allowed.
+   */
+  unlocked: boolean
 }
 
 const editEvent = ref<EditEventState | null>(null)
 const isSavingEvent = ref(false)
+
+/**
+ * Phase E completed-crf-and-event-lock — true while the composer is
+ * showing a previously-completed visit and the operator hasn't yet
+ * clicked "Bearbeiten" to flip into edit mode. Used by the template
+ * to disable inputs + the Save button + show the banner.
+ */
+const editEventLocked = computed(() => {
+  if (!editEvent.value) return false
+  // EventStatus uses 'complete' (not 'completed' — StudyEventStatus's
+  // synonym). Both spellings show up in the codebase because the two
+  // enums model different concerns (per-cell roll-up vs. per-event row).
+  return editEvent.value.openedFrom === 'complete' && !editEvent.value.unlocked
+})
 
 function openEditEvent(ev: {
   eventId: string
@@ -164,7 +221,15 @@ function openEditEvent(ev: {
     location: ev.location ?? '',
     status: editable,
     fieldError: null,
+    openedFrom: ev.status,
+    unlocked: false,
   }
+}
+
+function unlockEditEvent() {
+  if (!editEvent.value) return
+  if (!confirm(t('subjectDetail.event.editConfirm'))) return
+  editEvent.value.unlocked = true
 }
 
 function cancelEditEvent() {
@@ -173,6 +238,13 @@ function cancelEditEvent() {
 
 async function submitEditEvent() {
   if (!editEvent.value || !subject.value) return
+  // Phase E completed-crf-and-event-lock — defensive guard. The
+  // template already hides the Save button while editEventLocked
+  // is true, but a stale form submission (e.g. an Enter keypress
+  // on a focused field) could still land here without the
+  // operator's Bearbeiten confirm. Refuse silently — the banner
+  // tells the operator what to do.
+  if (editEventLocked.value) return
   // ISO date sanity check at the form layer; the backend does the
   // authoritative parse + 400.
   const date = editEvent.value.dateStart.trim()
@@ -232,9 +304,23 @@ function canCancelEv(status: EventStatus): boolean {
 /* ------------------------------------------------------------- */
 
 const scheduleDialogOpen = ref(false)
+// 2026-06-11 — Phase E.6 M2 made activeStudy.roles[] the canonical
+// per-study role source; the top-level `auth.user.role` only carries
+// the highest single projection, so a user with `Data Manager` at the
+// top level but `Investigator` in this study used to see no schedule
+// button. Walk userRolesFromAuth (router-owned precedence: array →
+// singular → top-level) so the button surfaces for any binding role
+// that can plausibly schedule a visit. Data Manager is allowed too
+// — DMs configure the study calendar and frequently book subject
+// events in clinical-trial systems.
 const canScheduleEvent = computed(() => {
-  const role = auth.user?.role ?? null
-  return role === 'Investigator' || role === 'CRC' || role === 'Administrator'
+  const roles = userRolesFromAuth(auth)
+  return roles.some(
+    (r) => r === 'Investigator'
+      || r === 'CRC'
+      || r === 'Administrator'
+      || r === 'Data Manager',
+  )
 })
 const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? '')
 
@@ -258,6 +344,118 @@ async function onLock() {
 async function onUnlock() {
   if (!subject.value) return
   await subjects.unlockSubject(subject.value.id)
+}
+
+/* ------------------------------------------------------------- */
+/* Phase E.6 — per-eye cohort transition workflow.                */
+/*                                                                */
+/* The per-eye block under the identity card shows OD + OS rows.  */
+/* Each row carries a Transition button gated on:                 */
+/*   1. operator's role (Investigator / Data Manager /            */
+/*      Administrator — CRC inherits via roleSatisfies)            */
+/*   2. eye scope: OD button hidden when studyEye is 'OS',        */
+/*      OS button hidden when studyEye is 'OD'. 'OU' shows both;  */
+/*      null hides both (no enrolled eye to transition).          */
+/*                                                                */
+/* The banners above the events table render from                 */
+/* subject.eyeTransitions with side === 'source' / 'target'.      */
+/* ------------------------------------------------------------- */
+
+const canTransitionEye = computed(() => {
+  const role = auth.user?.role ?? null
+  if (!role) return false
+  return (
+    roleSatisfies(role, 'Investigator') ||
+    roleSatisfies(role, 'Data Manager') ||
+    roleSatisfies(role, 'Administrator')
+  )
+})
+
+function eyeInScope(eye: 'OD' | 'OS'): boolean {
+  const studyEye = subject.value?.studyEye ?? null
+  if (studyEye === null) return false
+  if (studyEye === 'OU') return true
+  return studyEye === eye
+}
+
+interface TransitionDialogState {
+  eye: 'OD' | 'OS'
+}
+const dialogState = ref<TransitionDialogState | null>(null)
+const transitionError = ref<string | null>(null)
+const transitionSuccess = ref<string | null>(null)
+const transitionSubmitting = ref(false)
+
+function openTransitionDialog(eye: 'OD' | 'OS') {
+  transitionError.value = null
+  transitionSuccess.value = null
+  dialogState.value = { eye }
+  // auth.availableStudies is only auto-populated by StudyPickerView. If
+  // the operator landed on this view via a deep link / post-login
+  // redirect that skipped the picker, the list is empty and the
+  // dialog's target-study dropdown renders zero options. Refresh now
+  // so the picker shows every study the operator has access to.
+  if ((auth.availableStudies ?? []).length === 0) {
+    void auth.loadStudies()
+  }
+}
+
+const otherStudies = computed<{ oid: string; name: string; uniqueIdentifier?: string | null }[]>(() => {
+  const currentOid = auth.user?.activeStudy?.oid ?? null
+  return (auth.availableStudies ?? [])
+    .filter((s) => s.oid !== currentOid)
+    .map((s) => ({
+      oid: s.oid,
+      name: s.name,
+      // Phase E.6 follow-up 2026-06-10 — pass the protocol short-code
+      // through so the TransitionEyeDialog can prefill the new-
+      // enrollment label with "{uniqueIdentifier}-".
+      uniqueIdentifier: s.uniqueIdentifier,
+    }))
+})
+
+async function onTransitionSubmit(payload: TransitionEyeRequest) {
+  if (!dialogState.value || !subject.value) return
+  transitionError.value = null
+  transitionSubmitting.value = true
+  try {
+    await subjects.transitionEye(subject.value.id, dialogState.value.eye, payload)
+    transitionSuccess.value = t('subjectDetail.eyeTransition.success')
+    dialogState.value = null
+  } catch (e) {
+    transitionError.value =
+      e instanceof Error ? e.message : t('subjectDetail.eyeTransition.error.network')
+  } finally {
+    transitionSubmitting.value = false
+  }
+}
+
+/**
+ * Source / target banner row partitioning. `side === 'source'` rows
+ * mean THIS subject sent an eye elsewhere; `target` rows mean THIS
+ * subject was created from a downgrade elsewhere.
+ */
+const sourceTransitions = computed<EyeTransitionDto[]>(() =>
+  (subject.value?.eyeTransitions ?? []).filter((t) => t.side === 'source'),
+)
+const targetTransitions = computed<EyeTransitionDto[]>(() =>
+  (subject.value?.eyeTransitions ?? []).filter((t) => t.side === 'target'),
+)
+
+/**
+ * Open the partner subject by switching the active study first,
+ * then routing to the standard /subjects/:label page. We push only
+ * after pickStudy resolves so the destination view's onMounted /me
+ * lookups see the new active study.
+ */
+async function openPartner(row: EyeTransitionDto) {
+  try {
+    await auth.pickStudy(row.partnerStudyOid)
+    router.push(`/subjects/${row.partnerLabel}`)
+  } catch {
+    // pickStudy surfaces the error on auth.error; we leave the user
+    // on this page so they can see it. No additional inline state.
+  }
 }
 
 const subjectId = computed(() => String(route.params.subjectId))
@@ -311,6 +509,37 @@ function dataEntryStageLabel(stage: string | null): string {
   if (!stage) return '—'
   return t(`subjectDetail.dataEntryStage.${stage}`)
 }
+
+/* ------------------------------------------------------------- */
+/* Phase E.6 — modality-baselines panel mounting.                 */
+/*                                                                */
+/* One panel per eye that's either:                               */
+/*   1. In scope: subject.studyEye includes the eye (OD/OS/OU)    */
+/*   2. Transitioned-away: out of scope but eyeTransitions has    */
+/*      at least one entry for this eye, so historic baselines    */
+/*      may still exist and be diagnostically useful.             */
+/* Skip eyes with neither — nothing to show.                      */
+/* ------------------------------------------------------------- */
+
+interface EyePanelDescriptor {
+  eye: 'OD' | 'OS'
+  inScope: boolean
+}
+
+const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
+  const s = subject.value
+  if (!s) return []
+  const transitions = s.eyeTransitions ?? []
+  const descriptors: EyePanelDescriptor[] = []
+  for (const eye of ['OD', 'OS'] as const) {
+    const inScope = eyeInScope(eye)
+    const hasTransition = transitions.some((row) => row.eye === eye)
+    if (inScope || hasTransition) {
+      descriptors.push({ eye, inScope })
+    }
+  }
+  return descriptors
+})
 </script>
 
 <template>
@@ -385,13 +614,35 @@ function dataEntryStageLabel(stage: string | null): string {
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.yearOfBirth') }}</dt><dd class="font-medium">{{ subject.yearOfBirth ?? '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.groupLabel') }}</dt><dd class="font-medium">{{ subject.groupLabel ?? '—' }}</dd></div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('addSubject.field.enrolledOn') }}</dt><dd class="font-medium font-mono text-xs">{{ formatDate(subject.enrolledOn) }}</dd></div>
-            <!-- Phase E.6 Tier 1 — ophthalmology study-eye + screening date.
-                 Read-only here; editing arrives in a later milestone
-                 along with the eye-scope per-arm overrides. -->
-            <div class="flex justify-between"><dt class="text-slate-500">{{ t('ophth.studyEye.label') }}</dt>
-              <dd class="font-medium">
-                <span v-if="subject.studyEye" class="font-mono text-xs px-1.5 py-0.5 rounded bg-muw-blue-50 text-muw-blue border border-muw-blue-100">{{ subject.studyEye }}</span>
-                <span v-else class="text-slate-400">—</span>
+            <!-- Phase E.6 Tier 1 + per-eye cohort transition workflow —
+                 ophthalmology study-eye block. Each eye row carries a
+                 Transition button when the operator role permits AND
+                 the eye is in scope (studyEye === eye | OU). The
+                 status pill shows the active study's name since we're
+                 already inside it. -->
+            <div class="col-span-2">
+              <dt class="text-slate-500 text-xs uppercase tracking-wider mb-2">{{ t('ophth.studyEye.label') }}</dt>
+              <dd class="space-y-1.5">
+                <div
+                  v-for="eye in (['OD', 'OS'] as const)"
+                  :key="eye"
+                  class="flex items-center gap-3"
+                >
+                  <span class="font-mono text-xs text-slate-500 w-7">{{ eye }}:</span>
+                  <span v-if="eyeInScope(eye)" class="inline-flex items-center">
+                    <StatusPill variant="info">{{ auth.user?.activeStudy?.name ?? '—' }}</StatusPill>
+                  </span>
+                  <span v-else class="text-slate-400 text-xs italic">—</span>
+                  <button
+                    v-if="canTransitionEye && eyeInScope(eye)"
+                    type="button"
+                    class="text-xs text-muw-blue hover:underline ml-3"
+                    :data-testid="`transition-${eye}`"
+                    @click="openTransitionDialog(eye)"
+                  >
+                    {{ t('subjectDetail.eyeTransition.action.transition') }} →
+                  </button>
+                </div>
               </dd>
             </div>
             <div class="flex justify-between"><dt class="text-slate-500">{{ t('ophth.screeningDate.label') }}</dt><dd class="font-medium font-mono text-xs">{{ subject.screeningDate ? formatDate(subject.screeningDate) : '—' }}</dd></div>
@@ -453,6 +704,28 @@ function dataEntryStageLabel(stage: string | null): string {
               <ErrorText v-if="fieldErrors.yearOfBirth">{{ fieldErrors.yearOfBirth }}</ErrorText>
             </div>
 
+            <!-- 2026-06-10 — Studienauge editable post-creation.
+                 Reuses the AddSubjectView pattern (null-aware native
+                 select with an empty option that projects to null at
+                 the v-model boundary). i18n keys are shared from the
+                 ophth.studyEye.* namespace. -->
+            <div>
+              <FieldLabel for="edit-study-eye">{{ t('ophth.studyEye.label') }}</FieldLabel>
+              <select
+                id="edit-study-eye"
+                data-testid="edit-study-eye"
+                :value="form.studyEye ?? ''"
+                class="w-full px-3 py-2 rounded-md text-sm border border-slate-300 bg-white focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-100 muw-focus appearance-none cursor-pointer pr-8"
+                @change="onStudyEyeChange"
+              >
+                <option value="">{{ t('ophth.studyEye.notSet') }}</option>
+                <option value="OD">{{ t('ophth.studyEye.od') }}</option>
+                <option value="OS">{{ t('ophth.studyEye.os') }}</option>
+                <option value="OU">{{ t('ophth.studyEye.ou') }}</option>
+              </select>
+              <ErrorText v-if="fieldErrors.studyEye">{{ fieldErrors.studyEye }}</ErrorText>
+            </div>
+
             <p v-if="formError" class="col-span-2 text-xs text-rose-600">{{ formError }}</p>
 
             <div class="col-span-2 flex justify-end gap-2 pt-2">
@@ -471,6 +744,77 @@ function dataEntryStageLabel(stage: string | null): string {
           </form>
         </section>
 
+        <!-- Phase E.6 per-eye cohort transition — cross-reference
+             banners. The target banner reads "we were created from a
+             downgrade elsewhere — open the original record"; the
+             source banner reads "we sent an eye elsewhere — open the
+             follow-up record". Each opens the partner subject in its
+             own study by calling pickStudy → router.push. -->
+        <div
+          v-for="row in targetTransitions"
+          :key="`tgt-${row.transitionId}`"
+          class="mb-3 rounded-muw border border-muw-blue-200 bg-muw-blue-50 px-4 py-3 text-xs text-muw-blue-800"
+          data-testid="eye-transition-banner-target"
+        >
+          <div class="font-medium mb-1">
+            {{ t('subjectDetail.eyeTransition.banner.target', {
+              eye: row.eye,
+              study: row.partnerStudyName,
+              label: row.partnerLabel,
+            }) }}
+          </div>
+          <button
+            type="button"
+            class="underline hover:no-underline"
+            @click="openPartner(row)"
+          >
+            {{ t('subjectDetail.eyeTransition.action.openPartner') }}
+          </button>
+        </div>
+
+        <div
+          v-for="row in sourceTransitions"
+          :key="`src-${row.transitionId}`"
+          class="mb-3 rounded-muw border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+          data-testid="eye-transition-banner-source"
+        >
+          <div class="font-medium mb-1">
+            {{ t('subjectDetail.eyeTransition.banner.source', {
+              eye: row.eye,
+              date: formatDate(row.transitionedAt.slice(0, 10)),
+              study: row.partnerStudyName,
+              label: row.partnerLabel,
+              reason: row.reason,
+            }) }}
+          </div>
+          <button
+            type="button"
+            class="underline hover:no-underline"
+            @click="openPartner(row)"
+          >
+            {{ t('subjectDetail.eyeTransition.action.openPartner') }}
+          </button>
+        </div>
+
+        <!-- Phase E.6 — transient success/error banners for the
+             transition action itself. The error variant only renders
+             when the dialog rejected (4xx/5xx); the success is
+             cleared on the next dialog open. -->
+        <div
+          v-if="transitionSuccess"
+          class="mb-3 rounded-muw border border-emerald-200 bg-emerald-50 px-4 py-3 text-xs text-emerald-800"
+          data-testid="eye-transition-success"
+        >
+          {{ transitionSuccess }}
+        </div>
+        <div
+          v-if="transitionError"
+          class="mb-3 rounded-muw border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800"
+          data-testid="eye-transition-error"
+        >
+          {{ transitionError }}
+        </div>
+
         <!-- Events / casebook -->
         <!-- Phase E.6 polish — `#events` anchor target for post-
              markComplete navigation from CrfEntryView. The natural
@@ -486,6 +830,7 @@ function dataEntryStageLabel(stage: string | null): string {
                 v-if="canScheduleEvent"
                 type="button"
                 class="px-2.5 py-1 text-xs border border-muw-blue-200 rounded-md bg-muw-blue-50 hover:bg-muw-blue-100 text-muw-blue inline-flex items-center gap-1.5"
+                data-testid="schedule-event-button"
                 @click="scheduleDialogOpen = true"
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -534,6 +879,7 @@ function dataEntryStageLabel(stage: string | null): string {
                     v-if="ev.eventId && canEditEv(ev.status)"
                     type="button"
                     class="text-muw-blue hover:underline"
+                    data-testid="event-row-edit-button"
                     @click="openEditEvent(ev)"
                   >{{ t('subjectDetail.event.edit') }}</button>
                   <button
@@ -561,16 +907,32 @@ function dataEntryStageLabel(stage: string | null): string {
               </tr>
 
               <!-- Phase E A4: inline edit composer (only the row matching
-                   the open editEvent state shows this). -->
+                   the open editEvent state shows this).
+                   Phase E completed-crf-and-event-lock (2026-06-11): a
+                   visit opened from the 'completed' state renders the
+                   form read-only by default with a banner + explicit
+                   Bearbeiten confirm to flip into edit mode. The
+                   defensive guard mirrors the CRF-entry pattern so
+                   accidental keystrokes can't silently mutate
+                   abgeschlossene Visiten. -->
               <tr v-if="editEvent && editEvent.eventId === ev.eventId" class="bg-slate-50">
                 <td :colspan="6" class="px-5 py-3">
-                  <div class="grid grid-cols-3 gap-3">
+                  <div
+                    v-if="editEventLocked"
+                    class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-3"
+                    role="status"
+                    data-testid="event-completed-banner"
+                  >
+                    {{ t('subjectDetail.event.lockedBanner') }}
+                  </div>
+                  <fieldset :disabled="editEventLocked" class="grid grid-cols-3 gap-3">
                     <div>
                       <FieldLabel for="edit-event-date">{{ t('subjectDetail.column.dateStart') }}</FieldLabel>
                       <TextInput
                         id="edit-event-date"
                         v-model="editEvent.dateStart"
                         placeholder="YYYY-MM-DD"
+                        :disabled="editEventLocked"
                       />
                     </div>
                     <div>
@@ -578,6 +940,7 @@ function dataEntryStageLabel(stage: string | null): string {
                       <TextInput
                         id="edit-event-location"
                         v-model="editEvent.location"
+                        :disabled="editEventLocked"
                       />
                     </div>
                     <div>
@@ -585,13 +948,14 @@ function dataEntryStageLabel(stage: string | null): string {
                       <SelectInput
                         id="edit-event-status"
                         v-model="editEvent.status"
+                        :disabled="editEventLocked"
                       >
                         <option value="scheduled">{{ t('subjectMatrix.status.scheduled') }}</option>
                         <option value="stopped">{{ t('subjectDetail.event.status.stopped') }}</option>
                         <option value="skipped">{{ t('subjectDetail.event.status.skipped') }}</option>
                       </SelectInput>
                     </div>
-                  </div>
+                  </fieldset>
                   <ErrorText v-if="editEvent.fieldError" class="mt-2">{{ editEvent.fieldError }}</ErrorText>
                   <div class="flex justify-end gap-2 mt-3">
                     <button
@@ -601,6 +965,14 @@ function dataEntryStageLabel(stage: string | null): string {
                       @click="cancelEditEvent"
                     >{{ t('common.cancel') }}</button>
                     <button
+                      v-if="editEventLocked"
+                      type="button"
+                      class="px-3 py-1.5 text-xs border border-amber-300 bg-amber-50 text-amber-800 rounded-md hover:bg-amber-100"
+                      data-testid="event-unlock-button"
+                      @click="unlockEditEvent"
+                    >{{ t('subjectDetail.event.editButton') }}</button>
+                    <button
+                      v-else
                       type="button"
                       class="px-3 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 disabled:opacity-50"
                       :disabled="isSavingEvent"
@@ -612,6 +984,26 @@ function dataEntryStageLabel(stage: string | null): string {
             </template>
           </DenseTable>
         </section>
+
+        <!-- Phase E.6 — per-eye modality baselines. One panel per
+             in-scope eye (subject.studyEye includes the eye) and per
+             transitioned-away eye that still has historic baselines
+             worth surfacing. The inner panel renders its own heading
+             with the eye letter; we add a faint top divider per panel
+             so OD vs OS stay visually distinct without an extra label
+             row. -->
+        <div
+          v-if="baselinePanelEyes.length"
+          data-testid="modality-baselines-block"
+        >
+          <ModalityBaselinesPanel
+            v-for="panel in baselinePanelEyes"
+            :key="`baseline-${panel.eye}`"
+            :subject-label="subject.id"
+            :eye="panel.eye"
+            i18n-locale="de"
+          />
+        </div>
 
         <!-- Action row -->
         <div class="flex items-center justify-between flex-wrap gap-3">
@@ -691,6 +1083,22 @@ function dataEntryStageLabel(stage: string | null): string {
       :subject-id="subject.id"
       :study-oid="activeStudyOid"
       @scheduled="onEventScheduled"
+    />
+
+    <!-- Phase E.6 per-eye cohort transition — dialog. Sibling
+         worktree owns the real component implementation; the contract
+         is fixed: subject-label + eye + current study + available
+         partner studies + an open flag, emits submit + cancel. -->
+    <TransitionEyeDialog
+      v-if="dialogState && subject"
+      :open="true"
+      :subject-label="subject.id"
+      :eye="dialogState.eye"
+      :current-study-oid="auth.user?.activeStudy?.oid ?? ''"
+      :available-studies="otherStudies"
+      :is-submitting="transitionSubmitting"
+      @submit="onTransitionSubmit"
+      @cancel="dialogState = null"
     />
   </div>
 </template>

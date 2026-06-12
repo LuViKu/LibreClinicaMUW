@@ -151,6 +151,13 @@ public class SecurityConfig {
                         "/actuator/health",
                         "/actuator/health/**",
                         "/actuator/info",
+                        // Phase E-hardening B1 (2026-06-10): Prometheus scrape
+                        // endpoint. The institutional reverse-proxy is the
+                        // canonical gate preventing public exposure — the
+                        // permitAll here lets the metrics endpoint be readable
+                        // from inside the deployment network (Prometheus +
+                        // node-exporter sidecar) without requiring a session.
+                        "/actuator/prometheus",
                         // Phase D.10 (DR-014): e-signature re-auth
                         // scaffolding endpoint. Always permits — the
                         // reverse proxy may strip the existing session
@@ -227,7 +234,21 @@ public class SecurityConfig {
                         // the SPA's LoginView ever loaded — the SPA's own
                         // login screen was unreachable in production builds
                         // and only visible via the Vite dev server.
-                        "/app/**"
+                        "/app/**",
+                        // Phase E hardening (A2): GlobalErrorServlet is
+                        // mapped at /error in web.xml and is the target of
+                        // every <error-page> entry. Without an explicit
+                        // permitAll, the catch-all hasRole("USER") below
+                        // 302s anonymous failure paths to the login page —
+                        // hiding the German error JSP from unauthenticated
+                        // callers and breaking the SPA's JSON-500 contract
+                        // for the un-logged-in case. Safe to expose
+                        // anonymously: the servlet renders ONLY the
+                        // Tomcat-supplied javax.servlet.error.* request
+                        // attributes (status, exception class+message,
+                        // request URI), never DB contents nor session
+                        // state.
+                        "/error"
                 )).permitAll()
                 .anyRequest().hasRole("USER")
             )

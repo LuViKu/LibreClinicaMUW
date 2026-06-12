@@ -46,7 +46,8 @@ export interface ThreadEntry {
 
 export type DiscrepancyNote =
   Omit<Required<components['schemas']['DiscrepancyNoteDto']>,
-    'type' | 'status' | 'assignedTo' | 'thread'>
+    'type' | 'status' | 'assignedTo' | 'thread'
+    | 'itemLabel' | 'itemValue' | 'eventCrfOid' | 'eventName'>
   & {
     type: NoteType
     status: NoteStatus
@@ -57,6 +58,16 @@ export type DiscrepancyNote =
      * list endpoint; populated after a successful {@code loadThread}.
      */
     thread: ThreadEntry[]
+    /**
+     * notes-deeplink (2026-06-11) — context the row needs to render
+     * "what value is this query about" without leaving the list. Null
+     * when the note isn't anchored to an item_data row (or the walk
+     * fails on orphaned legacy data).
+     */
+    itemLabel: string | null
+    itemValue: string | null
+    eventCrfOid: string | null
+    eventName: string | null
   }
 
 /* ------------------------------------------------------------------ */

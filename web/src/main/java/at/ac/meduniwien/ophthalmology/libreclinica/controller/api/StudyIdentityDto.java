@@ -42,5 +42,11 @@ public record StudyIdentityDto(
         String phase,
         String status,
         String parentStudyOid,
-        String parentStudyName
+        String parentStudyName,
+        /*
+         * Phase E.6 — SubjectMatrixView footer card surfaces the
+         * planned start date next to PI + status. ISO yyyy-MM-dd
+         * string (null when unset on the study row).
+         */
+        String datePlannedStart
 ) {}

@@ -30,10 +30,25 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *                    (case-insensitive).
  * @param yearOfBirth optional. {@code null} preserves the current
  *                    value. Must be 1900..currentYear when present.
+ * @param studyEye    optional ophthalmology study-eye scope (Phase
+ *                    E.6 Tier 1). Mirrors the create endpoint:
+ *                    one of {@code OD | OS | OU} (case-insensitive)
+ *                    when set; {@code null} or empty clears the
+ *                    scope. Diverges from {@code secondaryId} —
+ *                    {@code null} here is "no eye picked" (the
+ *                    add-subject form's emit when the operator
+ *                    leaves the select on "nicht gesetzt"), and
+ *                    we treat that as a clear so the SPA can
+ *                    correct an earlier omission. Operator-side
+ *                    guardrails for clearing studyEye on a
+ *                    subject that already has eye-scoped CRF data
+ *                    are NOT enforced here (matches the create
+ *                    path's permissive stance).
  */
 @Schema(name = "UpdateSubjectRequest")
 public record UpdateSubjectRequest(
         String secondaryId,
         String gender,
-        Integer yearOfBirth
+        Integer yearOfBirth,
+        String studyEye
 ) {}

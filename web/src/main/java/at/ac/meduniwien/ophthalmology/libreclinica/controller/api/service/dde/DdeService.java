@@ -20,6 +20,7 @@ import java.util.Map;
 
 import javax.sql.DataSource;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.AuditTypeIds;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.DiscrepancyNoteType;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.ResolutionStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
@@ -162,7 +163,9 @@ public class DdeService {
                         saved.getId(), mapEx.getMessage());
             }
 
-            EventCrfsApiController.writeAuditEvent(auditDAO, ddeClerk, study, ss,
+            EventCrfsApiController.writeAuditEvent(auditDAO,
+                    AuditTypeIds.DDE_PASS2_MISMATCH,
+                    ddeClerk, study, ss,
                     "dde_mismatch_spawn", "discrepancy_note", saved.getId(),
                     itemOid, pass1, pass2);
         }
@@ -175,7 +178,9 @@ public class DdeService {
             ecb.setUpdatedDate(new Date());
             ecDAO.update(ecb);
 
-            EventCrfsApiController.writeAuditEvent(auditDAO, ddeClerk, study, ss,
+            EventCrfsApiController.writeAuditEvent(auditDAO,
+                    AuditTypeIds.DDE_PASS2_COMMITTED,
+                    ddeClerk, study, ss,
                     "dde_commit_complete", "event_crf", ecb.getId(),
                     "date_validate_completed", "", Instant.now().toString());
 
@@ -184,7 +189,9 @@ public class DdeService {
                     Instant.now().toString());
         }
 
-        EventCrfsApiController.writeAuditEvent(auditDAO, ddeClerk, study, ss,
+        EventCrfsApiController.writeAuditEvent(auditDAO,
+                AuditTypeIds.DDE_PASS2_COMMITTED,
+                ddeClerk, study, ss,
                 "dde_commit_with_conflicts", "event_crf", ecb.getId(),
                 "mismatch_count", "0", String.valueOf(mismatch));
 
@@ -312,10 +319,14 @@ public class DdeService {
         note.setResolutionStatusId(ResolutionStatus.CLOSED.getId());
         dnDAO.update(note);
 
-        EventCrfsApiController.writeAuditEvent(auditDAO, dmUser, study, ss,
+        EventCrfsApiController.writeAuditEvent(auditDAO,
+                AuditTypeIds.DDE_CONFLICT_RESOLVED,
+                dmUser, study, ss,
                 "dde_resolve_" + body.winner(), "item_data", idb.getId(),
                 itemOid, oldValue, newValue);
-        EventCrfsApiController.writeAuditEvent(auditDAO, dmUser, study, ss,
+        EventCrfsApiController.writeAuditEvent(auditDAO,
+                AuditTypeIds.DDE_CONFLICT_RESOLVED,
+                dmUser, study, ss,
                 "dde_rfc", "item_data", idb.getId(),
                 "reason_for_change", "", body.reasonForChange() == null
                         ? "" : body.reasonForChange());
@@ -326,7 +337,9 @@ public class DdeService {
         if (remaining == 0) {
             EventCRFDAO ecDAO = new EventCRFDAO(dataSource);
             ecDAO.markComplete(ecb, /* ide */ false);
-            EventCrfsApiController.writeAuditEvent(auditDAO, dmUser, study, ss,
+            EventCrfsApiController.writeAuditEvent(auditDAO,
+                    AuditTypeIds.DDE_RECONCILIATION_COMPLETE,
+                    dmUser, study, ss,
                     "dde_reconciliation_complete", "event_crf", ecb.getId(),
                     "date_validate_completed", "", Instant.now().toString());
             return null;

@@ -18,7 +18,6 @@ import { useRoute, useRouter } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
-import FieldLabel from '@/components/FieldLabel.vue'
 import RepeatingGroupSection from '@/components/RepeatingGroupSection.vue'
 import SectionBadge from '@/components/SectionBadge.vue'
 import ConcurrentEditBanner from '@/components/ConcurrentEditBanner.vue'
@@ -32,6 +31,7 @@ import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 import { useCrfEntryStore } from '@/stores/crfEntry'
 import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
+import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
 import type { NoteType, DiscrepancyNote } from '@/types/note'
@@ -42,6 +42,48 @@ const router = useRouter()
 const store = useCrfEntryStore()
 const advanced = useCrfEntryAdvancedStore()
 const auth = useAuthStore()
+// Phase E.6 ophth-field-catalog (2026-06-11): the per-item widget
+// renderer reads the catalog entry to decide between number-stepper /
+// snellen / segmented Ja-Nein / conditional reason chrome. Pre-load
+// the catalog on entry mount so the first paint already has the
+// matching widget hints; subsequent CRF entries reuse the cached
+// catalog (the store treats it as effectively immutable per session).
+const ophthCatalog = useOphthFieldCatalogStore()
+
+/**
+ * Phase E.6 ophth-field-catalog (2026-06-12): derive the parent
+ * item's current value for a conditional-reason input. The catalog
+ * entry tells us the parent's catalogCode + the show-when literal;
+ * the parent's OID is the current item's OID with the trailing
+ * catalog-code tokens swapped for the parent's catalog-code tokens.
+ *
+ * <p>Example: current item {@code I_OPHTH_OD_SPECTRALIS_OCT_REASON}
+ * with catalogCode {@code SPECTRALIS_OCT_REASON} +
+ * conditionalOnCode {@code SPECTRALIS_OCT_DONE} → parent OID
+ * {@code I_OPHTH_OD_SPECTRALIS_OCT_DONE}.
+ *
+ * <p>Returns undefined when the item isn't conditional OR no parent
+ * code is bound — CrfItemWidget then renders the input in the
+ * inactive state.
+ */
+function parentValueFor(item: CrfItem): unknown {
+  const entry = ophthCatalog.entryForOid(item.oid)
+  if (entry == null) return undefined
+  const parentCode = entry.conditionalOnCode
+  const currentCode = entry.code
+  if (parentCode == null || parentCode === '' || currentCode == null || currentCode === '') return undefined
+  const oidTokens = item.oid.split('_')
+  const currentTokens = currentCode.split('_')
+  if (oidTokens.length < currentTokens.length) return undefined
+  for (let i = 0; i < currentTokens.length; i++) {
+    if (oidTokens[oidTokens.length - currentTokens.length + i] !== currentTokens[i]) {
+      return undefined
+    }
+  }
+  const prefix = oidTokens.slice(0, oidTokens.length - currentTokens.length)
+  const parentOid = [...prefix, ...parentCode.split('_')].join('_')
+  return store.values[parentOid]
+}
 
 const eventCrfOid = computed(() => String(route.params.eventCrfOid))
 // Phase E.6: a CRF whose backing event_crf is SIGNED or LOCKED comes
@@ -50,15 +92,35 @@ const eventCrfOid = computed(() => String(route.params.eventCrfOid))
 // the backend already 409s any write, but the legacy form let users
 // type into the fields and then surprised them at submit time. The
 // existing meta.readOnly path stays for the Monitor view-only mode.
+//
+// Phase E completed-crf-and-event-lock (2026-06-11): a completed CRF
+// (status === 'complete') is ALSO read-only by default. The legacy
+// behaviour left every input editable until the operator explicitly
+// hit "Mark complete" again, which let operators silently edit
+// abgeschlossene CRFs without the audit-trail-significant Reopen
+// event. Now: a complete CRF is read-only until the operator clicks
+// Reopen — that backend call flips status from 'complete' →
+// 'in-progress' and writes the reopen audit, after which this
+// computed naturally re-evaluates to false.
+const isCompleted = computed(() => store.status === 'complete')
 const isLocked = computed(() => store.status === 'locked')
-const isReadOnly = computed(() => route.meta?.readOnly === true || isLocked.value)
-const readOnlyLabel = computed(() => isLocked.value
-  ? t('crfEntry.lockedTell')
-  : t('crfEntry.readOnlyTell'))
+const isReadOnly = computed(
+  () => route.meta?.readOnly === true || isLocked.value || isCompleted.value,
+)
+const readOnlyLabel = computed(() => {
+  if (isLocked.value) return t('crfEntry.lockedTell')
+  if (isCompleted.value) return t('crfEntry.completedTell')
+  return t('crfEntry.readOnlyTell')
+})
 
 onMounted(() => {
   void store.load(eventCrfOid.value)
   void advanced.loadAll(eventCrfOid.value)
+  // Fire-and-forget catalog load. The store is idempotent (no-op when
+  // already loaded), so revisiting a CRF doesn't re-fetch. Failures
+  // are swallowed inside the store — CrfItemWidget falls back to its
+  // OID heuristic when the catalog is empty.
+  void ophthCatalog.load()
   // Soft-lock heartbeat: do NOT start when the view is read-only
   // (Monitor view + signed/locked CRFs) — those sessions aren't
   // editing and don't need to claim presence.
@@ -66,6 +128,34 @@ onMounted(() => {
     advanced.startHeartbeat(eventCrfOid.value)
   }
 })
+
+/* -------------------------------------------------------------------- */
+/* notes-deeplink (2026-06-11): if the route carries ?item=<oid>, scroll  */
+/* the matching item element into view + flash-highlight it briefly so   */
+/* the operator who clicked through from the notes list lands on the     */
+/* exact item the query is about. Watch store.schema rather than mount   */
+/* because the items don't render until the schema arrives.              */
+/* -------------------------------------------------------------------- */
+function applyItemDeepLink(): void {
+  const raw = route.query.item
+  if (typeof raw !== 'string' || raw === '') return
+  const targetId = `item-${raw}`
+  // requestAnimationFrame to let the schema-driven DOM settle before we
+  // try to find the element.
+  requestAnimationFrame(() => {
+    const el = document.getElementById(targetId)
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('flash-highlight')
+    window.setTimeout(() => el.classList.remove('flash-highlight'), 1500)
+  })
+}
+
+watch(
+  () => store.schema,
+  (s) => { if (s) applyItemDeepLink() },
+  { immediate: false },
+)
 
 watch(eventCrfOid, (oid) => {
   void store.load(oid)
@@ -435,8 +525,26 @@ function onThreadUpdated(_parentId: string) {
         v-if="isLocked && store.entry && !store.isLoading"
         class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-4"
         role="status"
+        data-testid="crf-locked-banner"
       >
         {{ t('crfEntry.lockedBanner') }}
+      </div>
+
+      <!-- Phase E completed-crf-and-event-lock: same explanatory tell for
+           a CRF that is marked complete. Distinct copy from the
+           subject-signed banner above because the recovery path here is
+           different — the operator can self-serve via the existing
+           Reopen button below (canReopenCrf), whereas a fully-locked
+           CRF needs the study lead. The Reopen button hint inside the
+           message is conditional on canReopen so a non-privileged
+           operator doesn't get told to click a button they can't see. -->
+      <div
+        v-if="isCompleted && !isLocked && store.entry && !store.isLoading"
+        class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 mb-4"
+        role="status"
+        data-testid="crf-completed-banner"
+      >
+        {{ canReopen ? t('crfEntry.completedBanner') : t('crfEntry.completedBannerNoReopen') }}
       </div>
 
       <!-- Phase E.6 dde — blind-second-pass banner. Rendered only when
@@ -470,29 +578,80 @@ function onThreadUpdated(_parentId: string) {
           v-for="section in store.schema!.sections"
           :id="section.oid"
           :key="section.oid"
-          class="bg-white border border-slate-200 rounded-muw p-5"
+          class="bg-white border border-slate-200 rounded-2xl overflow-hidden"
         >
-          <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">
-            {{ section.title }}
-          </h2>
-          <p v-if="section.instructions" class="text-[11px] text-slate-500 mb-4 leading-relaxed">
-            {{ section.instructions }}
-          </p>
+          <!-- Phase E.6 ophth-bilateral-design (2026-06-11): section
+               header lifted to the design's muw-rule accent + uppercase
+               tracking-wider title. Same content, repackaged so the
+               coral 32×2 rule sits flush against the muw-blue title and
+               instructions ride below in slate-500. -->
+          <header class="px-7 pt-6 pb-5 border-b border-slate-100">
+            <div class="flex items-center gap-2.5">
+              <span class="muw-rule"></span>
+              <h2 class="text-[13px] font-semibold uppercase tracking-[0.12em] text-muw-blue">
+                {{ section.title }}
+              </h2>
+            </div>
+            <!-- Phase E.6 ophth-bilateral-design (2026-06-11): suppress
+                 section.instructions whenever the section already carries
+                 a bilateral header — the OD/OS column header with the
+                 R/L badges communicates the same "OD links, OS rechts"
+                 convention more concisely than a hint sentence. Keeps
+                 instructions on sections that genuinely have author-
+                 supplied context (procedure notes, eligibility tells). -->
+            <p
+              v-if="section.instructions && !hasBilateralRow(rowsForSection(section.items))"
+              class="text-[11px] text-slate-500 mt-2 leading-relaxed"
+            >
+              {{ section.instructions }}
+            </p>
+          </header>
 
-          <!-- Phase E.6 ophth-bilateral: 3-column header row shown only
-               when the section contains at least one bilateral or
-               OU row. Renders inside the section so non-ophthalmology
-               sections stay a one-column form. OD on the LEFT, OS on
-               the RIGHT — clinician-facing convention. -->
+          <div class="px-7 pt-2 pb-6">
+
+          <!-- Phase E.6 ophth-bilateral-design (2026-06-11): R/L
+               colour-coded eye-column headers. Teal R (.muw-teal) for
+               OD, sky L (.muw-sky) for OS — clinician-facing convention
+               where the patient's right eye sits LEFT for the examiner.
+               Underline-rules drop the visual weight onto the per-eye
+               column without claiming the slate-500 weight of the OID
+               itself. Renders only when the section contains at least
+               one bilateral or OU row.
+
+               minmax(160px, …) / minmax(200px, …) min-widths keep the
+               table flush inside the wizard's preview modal (max-w-xl
+               on a tablet viewport) — the original design's 210/248
+               min-widths bled past the modal edge under narrower
+               panels. Desktop CRF entry still fills the available
+               width via the fr ratio. -->
           <div
             v-if="hasBilateralRow(rowsForSection(section.items))"
-            class="grid grid-cols-[1fr_1fr_1fr] gap-3 pb-2 mb-2 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500 font-semibold"
+            class="grid grid-cols-[minmax(160px,1.15fr)_minmax(200px,1fr)_minmax(200px,1fr)] gap-x-5 pb-3 mb-2"
             role="row"
             data-testid="bilateral-header"
           >
-            <div data-bilateral-header="label">{{ t('crfEntry.bilateral.headerItem') }}</div>
-            <div data-bilateral-header="OD" class="text-muw-blue">{{ t('crfEntry.bilateral.headerOd') }}</div>
-            <div data-bilateral-header="OS" class="text-muw-blue">{{ t('crfEntry.bilateral.headerOs') }}</div>
+            <div
+              data-bilateral-header="label"
+              class="text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400 self-end pb-1"
+            >
+              {{ t('crfEntry.bilateral.headerItem') }}
+            </div>
+            <div data-bilateral-header="OD" class="self-end">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-md bg-muw-teal-50 text-muw-teal-700 text-[11px] font-bold">R</span>
+                <span class="text-[13px] font-semibold text-slate-800">OD</span>
+                <span class="text-[12px] text-slate-400">{{ t('crfEntry.bilateral.headerOdEye') }}</span>
+              </div>
+              <div class="h-[2px] rounded-full bg-muw-teal-100 mt-2.5"></div>
+            </div>
+            <div data-bilateral-header="OS" class="self-end">
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center justify-center w-6 h-6 rounded-md bg-muw-sky-50 text-muw-sky-700 text-[11px] font-bold">L</span>
+                <span class="text-[13px] font-semibold text-slate-800">OS</span>
+                <span class="text-[12px] text-slate-400">{{ t('crfEntry.bilateral.headerOsEye') }}</span>
+              </div>
+              <div class="h-[2px] rounded-full bg-muw-sky-100 mt-2.5"></div>
+            </div>
           </div>
 
           <!-- Phase E.6 polish-runtime — rows hidden by show-when are
@@ -501,16 +660,24 @@ function onThreadUpdated(_parentId: string) {
                gentle opacity transition (see .showwhen-row below). -->
           <div class="space-y-4">
             <template v-for="row in rowsForSection(section.items)">
-              <!-- Single (non-bilateral) row — original one-column layout. -->
-              <div v-if="row.kind === 'single'" :key="`single-${row.item.oid}`">
-                <FieldLabel :for="`item-${row.item.oid}`" :required="row.item.required">
+              <!-- Single (non-bilateral) row — one-column layout. The
+                   label adopts the bilateral row's 14px/500 typography
+                   so single-row and bilateral-row labels read at the
+                   same weight across the form (design continuity per
+                   ophthalmology-visit-bilateral.html). -->
+              <div v-if="row.kind === 'single'" :key="`single-${row.item.oid}`" class="border-t border-slate-100 first:border-t-0 py-[17px] hover:bg-gradient-to-r hover:from-slate-50 hover:to-transparent">
+                <label
+                  :for="`item-${row.item.oid}`"
+                  class="block text-[14px] font-medium leading-[1.35] text-slate-800 mb-2"
+                  :class="{ req: row.item.required }"
+                >
                   {{ row.item.label }}
                   <ItemNoteIndicator
                     :summary="advanced.noteSummaryByItemOid[row.item.oid] ?? null"
                     @open="onItemNoteOpen"
                     @create="onItemNoteCreate(row.item.oid, itemLabel(row.item))"
                   />
-                </FieldLabel>
+                </label>
                 <CrfItemWidget
                   :item="row.item"
                   :model-value="store.values[row.item.oid]"
@@ -520,6 +687,7 @@ function onThreadUpdated(_parentId: string) {
                   :max-file-bytes="store.entry?.maxFileBytes ?? 0"
                   :file-extensions="store.entry?.fileExtensions ?? ''"
                   :suppress-label="true"
+                  :parent-value="parentValueFor(row.item)"
                   @update:model-value="(v: unknown) => store.setValue(row.item.oid, v)"
                   @upload-file="(f: File) => onUploadFile(row.item.oid, f)"
                   @clear-file="() => onClearFile(row.item.oid)"
@@ -554,6 +722,7 @@ function onThreadUpdated(_parentId: string) {
                     :max-file-bytes="store.entry?.maxFileBytes ?? 0"
                     :file-extensions="store.entry?.fileExtensions ?? ''"
                     :suppress-label="true"
+                    :parent-value="parentValueFor(item)"
                     :data-bilateral-side="side"
                     @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
                     @upload-file="(f: File) => onUploadFile(item.oid, f)"
@@ -601,12 +770,13 @@ function onThreadUpdated(_parentId: string) {
                 :key="`compound-${row.key}`"
                 :row="row"
               >
-                <template #widget="{ item }">
+                <template #widget="{ item, compact }">
                   <CrfItemWidget
                     :item="item"
                     :model-value="store.values[item.oid]"
                     :error-message="showError(item)"
                     :disabled="isReadOnly"
+                    :compact="compact"
                     :file-busy="store.isSaving"
                     :max-file-bytes="store.entry?.maxFileBytes ?? 0"
                     :file-extensions="store.entry?.fileExtensions ?? ''"
@@ -619,6 +789,7 @@ function onThreadUpdated(_parentId: string) {
                 </template>
               </BilateralItemGroup>
             </template>
+          </div>
           </div>
         </section>
 
@@ -654,9 +825,16 @@ function onThreadUpdated(_parentId: string) {
 
         </fieldset>
 
-        <!-- Save action row -->
+        <!-- Save action row.
+             Phase E completed-crf-and-event-lock: the row stays mounted
+             when the CRF is in the COMPLETED state so the Reopen
+             button remains reachable. For the deeper read-only modes
+             (Monitor view via meta.readOnly + subject-signed lock)
+             the row hides entirely — neither path offers Reopen here.
+             The save / mark-complete buttons still gate on isReadOnly
+             below so a completed CRF can't be silently re-saved. -->
         <div
-          v-if="!isReadOnly"
+          v-if="!isReadOnly || (isCompleted && !isLocked && canReopen)"
           class="flex items-center justify-between sticky bottom-0 bg-white/95 backdrop-blur border-t border-slate-200 -mx-8 px-8 py-3"
         >
           <div class="text-xs text-slate-500">
@@ -729,3 +907,18 @@ function onThreadUpdated(_parentId: string) {
     />
   </div>
 </template>
+
+<style scoped>
+/* notes-deeplink (2026-06-11) — applied transiently by applyItemDeepLink
+   when the operator follows a /event-crfs/<id>?item=<oid> link from the
+   notes list. The animation is one-shot and removes itself after 1.5s,
+   so the highlight tells the operator "this is the item you came for"
+   without lingering as a permanent visual artefact. */
+:deep(.flash-highlight) {
+  animation: flash-highlight 1.5s ease-out;
+}
+@keyframes flash-highlight {
+  0%   { background-color: rgb(252 211 77); }   /* yellow-300 */
+  100% { background-color: transparent; }
+}
+</style>

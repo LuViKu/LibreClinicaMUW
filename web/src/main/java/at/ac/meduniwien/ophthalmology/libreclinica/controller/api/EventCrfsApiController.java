@@ -62,6 +62,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.EventDefiniti
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDefinitionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.audit.FailureAuditTemplate;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.ReasonForChangeWriter;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
@@ -81,6 +82,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.crf.EventCrfPresenceR
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
@@ -619,7 +621,8 @@ public class EventCrfsApiController {
                 itemDataIdAfter = createdRow != null ? createdRow.getId() : idb.getId();
             }
 
-            writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+            writeAuditEvent(auditDAO, /* type=1 Item value updated */ 1,
+                    currentUser, currentStudy, ss,
                     isCreate ? "item_data_create" : "item_data_update",
                     "item_data", itemDataIdAfter,
                     itemOid, oldValue, newValue);
@@ -638,7 +641,8 @@ public class EventCrfsApiController {
                         // Also emit an audit_event row tagged item_data_rfc so
                         // the audit-log view (M10) can correlate the RFC with
                         // the item_data update.
-                        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                        writeAuditEvent(auditDAO, /* type=27 Discrepancy note added */ 27,
+                                currentUser, currentStudy, ss,
                                 "item_data_rfc", "item_data", itemDataIdAfter,
                                 itemOid, oldValue, newValue);
                     }
@@ -697,7 +701,8 @@ public class EventCrfsApiController {
                         idDAO.create(idb);
                         isCreate = true;
                     }
-                    writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+                    writeAuditEvent(auditDAO, /* type=1 Item value updated */ 1,
+                            currentUser, currentStudy, ss,
                             isCreate ? "item_data_create" : "item_data_update",
                             "item_data", existing != null ? existing.getId() : 0,
                             itemOid + "[" + ordinal + "]", oldValue, newValue);
@@ -774,39 +779,65 @@ public class EventCrfsApiController {
                     "event_crf " + eventCrfId + " is already locked"));
         }
 
-        // Already complete (date_completed set) → return idempotently —
-        // but still run the cascade. Operators who completed CRFs before
-        // the cascade shipped need a way to reconcile their visit pill,
-        // and the cascade helper is idempotent (it early-returns on
-        // COMPLETED / SIGNED / LOCKED) so re-running it on already-
-        // cascaded visits costs one StudyEventDAO.findByPK.
-        if (ecb.getDateCompleted() == null) {
-            eventCrfDAO.markComplete(ecb, /* ide */ true);
+        // Phase B2 (2026-06-10) — failure-audit wrap. Any Throwable from
+        // the markComplete cascade lands an OPERATION_FAILED (type 61)
+        // row keyed by event_crf id + reqId before the exception
+        // surfaces to the SPA as the same 500 envelope existing callers
+        // expect. Validation guards above (401/400/403/404/409) bypass
+        // the wrap and flow through unchanged.
+        final UserAccountBean userRef = currentUser;
+        final StudyBean studyRef = currentStudy;
+        final StudySubjectBean ssRef = ss;
+        final EventCRFBean ecbRef = ecb;
+        final EventCRFDAO eventCrfDAORef = eventCrfDAO;
+        final String reqId = MDC.get("reqId");
+        try {
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    currentUser.getId(),
+                    "event_crf",
+                    ecb.getId(),
+                    "MARK_COMPLETE",
+                    reqId,
+                    () -> {
+                        // Already complete (date_completed set) → return
+                        // idempotently — but still run the cascade. Operators
+                        // who completed CRFs before the cascade shipped need
+                        // a way to reconcile their visit pill, and the
+                        // cascade helper is idempotent (it early-returns on
+                        // COMPLETED / SIGNED / LOCKED).
+                        if (ecbRef.getDateCompleted() == null) {
+                            eventCrfDAORef.markComplete(ecbRef, /* ide */ true);
 
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
-                    "event_crf_mark_complete", "event_crf", ecb.getId(),
-                    /* columnName */ "date_completed", /* old */ "",
-                    /* new */ Instant.now().toString());
+                            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+                            writeAuditEvent(auditDAO, /* type=8 CRF marked complete */ 8,
+                                    userRef, studyRef, ssRef,
+                                    "event_crf_mark_complete", "event_crf", ecbRef.getId(),
+                                    /* columnName */ "date_completed", /* old */ "",
+                                    /* new */ Instant.now().toString());
+                        }
+
+                        cascadeEventStatusIfAllCrfsComplete(ecbRef.getStudyEventId(), userRef);
+
+                        EventCRFBean refreshed = eventCrfDAORef.findByPK(ecbRef.getId());
+
+                        Map<String, Object> out = new LinkedHashMap<>();
+                        out.put("eventCrfOid", String.valueOf(refreshed.getId()));
+                        out.put("status", computeStatus(refreshed, true));
+                        out.put("lastSavedAt", formatIsoInstant(latestUpdate(refreshed)));
+
+                        LOG.info("CRF markComplete: event_crf {} status now {}; user {} study {}",
+                                refreshed.getId(), out.get("status"), userRef.getName(),
+                                studyRef.getOid());
+
+                        return ResponseEntity.ok(out);
+                    });
+        } catch (Exception e) {
+            LOG.error("event_crf markComplete failed for id={} user={}",
+                    ecb.getId(), currentUser.getName(), e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to mark CRF complete — see server log."));
         }
-
-        // Cascade unconditionally — covers both the fresh-complete and
-        // already-complete paths. The legacy DataEntryServlet never
-        // bumped subject_event_status, leaving visits pinned at
-        // DATA_ENTRY_STARTED forever; we reconcile on every mark.
-        cascadeEventStatusIfAllCrfsComplete(ecb.getStudyEventId(), currentUser);
-
-        EventCRFBean refreshed = eventCrfDAO.findByPK(ecb.getId());
-
-        Map<String, Object> out = new LinkedHashMap<>();
-        out.put("eventCrfOid", String.valueOf(refreshed.getId()));
-        out.put("status", computeStatus(refreshed, true));
-        out.put("lastSavedAt", formatIsoInstant(latestUpdate(refreshed)));
-
-        LOG.info("CRF markComplete: event_crf {} status now {}; user {} study {}",
-                refreshed.getId(), out.get("status"), currentUser.getName(), currentStudy.getOid());
-
-        return ResponseEntity.ok(out);
     }
 
     /**
@@ -895,7 +926,8 @@ public class EventCrfsApiController {
         eventCrfDAO.markIncomplete(ecb);
 
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+        writeAuditEvent(auditDAO, /* type=11 CRF unlocked / reopened */ 11,
+                currentUser, currentStudy, ss,
                 "event_crf_reopen", "event_crf", ecb.getId(),
                 /* columnName */ "date_completed",
                 /* old */ previousCompletedAt,
@@ -1374,7 +1406,8 @@ public class EventCrfsApiController {
         }
 
         AuditEventDAO auditDao = new AuditEventDAO(dataSource);
-        writeAuditEvent(auditDao, currentUser, currentStudy, ss,
+        writeAuditEvent(auditDao, /* type=11 CRF unlocked / restored */ 11,
+                currentUser, currentStudy, ss,
                 "event_crf_restore", "event_crf", ecb.getId(),
                 "status_id", "AUTO_DELETED", "AVAILABLE");
 
@@ -1384,57 +1417,67 @@ public class EventCrfsApiController {
     }
 
     /**
-     * Single audit-event row capturing the change. The legacy
-     * {@link AuditEventDAO#create} only persists the {@code audit_table /
-     * user_id / entity_id / reason_for_change / action_message} columns
-     * — the richer {@code old_value / new_value / column_name} fields
-     * exist on {@link AuditEventBean} but the DAO never writes them
-     * (per the comment block in AuditEventDAO line 200ff: "new query
-     * needs to be …" — never landed). We pack the before/after pair
-     * into {@code actionMessage} so the Audit Log view (M10) can still
-     * surface the diff once the DAO is extended.
+     * Single {@code audit_log_event} row capturing the change. Phase
+     * audit-unification (2026-06-12) — migrated from the legacy
+     * {@link AuditEventDAO#create} path (which wrote to
+     * {@code audit_event}, a table the SPA Audit Log view never
+     * surfaced) to a direct JDBC INSERT into {@code audit_log_event}.
+     *
+     * <p>The {@code auditTypeId} is a constant from
+     * {@link AuditTypeIds} (or one of the legacy 1-35 ids documented
+     * in {@link AuditApiController#variantForType}); it routes the row
+     * into the right filter bucket on the SPA Audit Log view and
+     * controls the user-facing label.
+     *
+     * <p>The {@code AuditEventDAO dao} parameter is kept (instead of
+     * being replaced with {@code DataSource}) purely so the dozen
+     * existing callers don't need to swap their constructor pattern;
+     * the body no longer calls {@code dao.create()} but uses
+     * {@link org.akaza.openclinica.dao.core.EntityDAO#getDs()} to reach
+     * the DataSource the DAO already holds.
      *
      * <p>Wrapped in try/catch because audit-write failures must not
      * roll back the user-facing save — losing an audit row is annoying
-     * but losing the data is worse.
+     * but losing the data is worse. Mirrors the convention used by
+     * {@code StudiesApiController.writeStudyFieldAudit}.
      */
     // Phase E.6 dde — promoted from `private` to `public static` so
     // {@code controller.api.service.dde.DdeService} (sub-package) can
-    // emit the same packed-actionMessage audit rows when committing
-    // pass-2 and resolving conflicts. Java doesn't model package
-    // hierarchy so package-private isn't visible across sub-packages;
-    // public is the minimum that compiles. Stable API for sibling
-    // services going forward.
-    public static void writeAuditEvent(AuditEventDAO dao, UserAccountBean user,
+    // emit the same audit rows when committing pass-2 and resolving
+    // conflicts. Java doesn't model package hierarchy so
+    // package-private isn't visible across sub-packages; public is the
+    // minimum that compiles. Stable API for sibling services going
+    // forward.
+    public static void writeAuditEvent(AuditEventDAO dao, int auditTypeId,
+                                        UserAccountBean user,
                                         StudyBean study, StudySubjectBean ss,
                                         String actionMessage, String auditTable,
                                         int entityId, String columnName,
                                         String oldValue, String newValue) {
-        try {
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(user.getId());
-            ae.setStudyId(study.getId());
-            ae.setSubjectId(ss == null ? 0 : ss.getId());
-            ae.setStudyName(study.getName() != null ? study.getName() : "");
-            ae.setSubjectName(ss != null && ss.getLabel() != null ? ss.getLabel() : "");
-            ae.setAuditTable(auditTable);
-            ae.setEntityId(entityId);
-            ae.setColumnName(columnName);
-            ae.setOldValue(oldValue == null ? "" : oldValue);
-            ae.setNewValue(newValue == null ? "" : newValue);
-            // Pack the before/after into actionMessage so the diff is
-            // discoverable even though the legacy DAO drops the
-            // old_value / new_value / column_name columns. Format:
-            //   "<actionMessage>: <columnName> '<old>' → '<new>'"
-            String packed = actionMessage + ": " + columnName
-                    + " '" + (oldValue == null ? "" : oldValue) + "' → '"
-                    + (newValue == null ? "" : newValue) + "'";
-            ae.setActionMessage(packed);
-            ae.setAuditDate(new Date());
-            dao.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit-write failed for {}.{} entity {} — continuing without audit row: {}",
-                    auditTable, columnName, entityId, e.getMessage());
+        // `study`/`ss` are accepted (and intentionally unused on the
+        // write path) so callers can keep their existing signatures —
+        // study + subject context is reconstructed at read time by
+        // AuditApiController.resolveSubjectLabel from auditTable +
+        // entityId. `actionMessage` is similarly preserved as a
+        // human-readable hint logged on failure but not persisted —
+        // the audit_log_event vocabulary keys on auditTypeId instead.
+        DataSource ds = dao.getDs();
+        try (Connection c = ds.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, user.getId());
+            ps.setString(3, auditTable);
+            ps.setInt(4, entityId);
+            ps.setString(5, columnName == null ? "" : columnName);
+            ps.setString(6, oldValue == null ? "" : oldValue);
+            ps.setString(7, newValue == null ? "" : newValue);
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit-write failed for {} ({}.{} entity {}) — continuing without audit row: {}",
+                    actionMessage, auditTable, columnName, entityId, e.getMessage());
         }
     }
 
@@ -1995,7 +2038,8 @@ public class EventCrfsApiController {
         // DB free of orphan empty rows when a user clicks Add then
         // cancels via deleteGroupRow.
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+        writeAuditEvent(auditDAO, /* type=1 Item value updated */ 1,
+                currentUser, currentStudy, ss,
                 "item_group_row_create", "item_data", ecb.getId(),
                 groupOid + "[ordinal]", "", String.valueOf(nextOrd));
 
@@ -2081,7 +2125,8 @@ public class EventCrfsApiController {
             idDAO.update(idb);
             ItemBean ib = (ItemBean) itemDAO.findByPK(ifm.getItemId());
             String itemOid = ib != null ? ib.getOid() : "";
-            writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+            writeAuditEvent(auditDAO, /* type=13 Item value deleted */ 13,
+                    currentUser, currentStudy, ss,
                     "item_group_row_delete", "item_data", idb.getId(),
                     itemOid + "[" + ordinal + "]", oldValue, "");
             deleted++;
@@ -2326,7 +2371,8 @@ public class EventCrfsApiController {
         }
 
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+        writeAuditEvent(auditDAO, /* type=1 Item value updated */ 1,
+                currentUser, currentStudy, ss,
                 isCreate ? "item_data_file_upload" : "item_data_file_replace",
                 "item_data", existing.getId(),
                 itemOid + "[" + ordinal + "]", oldValue, absolutePath);
@@ -2469,7 +2515,8 @@ public class EventCrfsApiController {
         idDAO.update(idb);
 
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-        writeAuditEvent(auditDAO, currentUser, currentStudy, ss,
+        writeAuditEvent(auditDAO, /* type=13 Item value deleted */ 13,
+                currentUser, currentStudy, ss,
                 "item_data_file_delete", "item_data", idb.getId(),
                 itemOid + "[" + Math.max(1, rowOrdinal) + "]", oldValue, "");
 
@@ -2597,11 +2644,31 @@ public class EventCrfsApiController {
             return ResponseEntity.status(403).body(Map.of(
                     "message", "You entered Pass 1 — a different clerk must perform Pass 2"));
         }
-        // Delegate to DdeService for the diff + spawn + commit work.
+        // Phase B2 (2026-06-10) — failure-audit wrap. DDE Pass-2 commit
+        // is the load-bearing GxP write for double-data-entry studies;
+        // a silent failure here means the reconciliation step left
+        // item_data + audit_log out of sync. The wrap captures any
+        // Throwable into an OPERATION_FAILED audit row keyed by
+        // event_crf id before the 500 propagates to the SPA.
+        final EventCRFBean ecbRef = ecb;
+        final StudySubjectBean ssRef = ss;
+        final StudyBean studyRef = currentStudy;
+        final UserAccountBean userRef = currentUser;
+        final Map<String, Object> valuesRef = body.values();
+        final String reqId = MDC.get("reqId");
         try {
-            DdeCommitResponse resp = ddeService().commitPass2(
-                    ecb, ss, currentStudy, currentUser, body.values());
-            return ResponseEntity.ok(resp);
+            return FailureAuditTemplate.runOrAudit(
+                    new AuditEventDAO(dataSource),
+                    currentUser.getId(),
+                    "event_crf",
+                    ecb.getId(),
+                    "DDE_COMMIT",
+                    reqId,
+                    () -> {
+                        DdeCommitResponse resp = ddeService().commitPass2(
+                                ecbRef, ssRef, studyRef, userRef, valuesRef);
+                        return ResponseEntity.ok(resp);
+                    });
         } catch (Exception svcEx) {
             LOG.error("DDE commit failed for event_crf {} (user {})",
                     eventCrfId, currentUser.getName(), svcEx);

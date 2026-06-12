@@ -1,18 +1,58 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
 <configuration>
-  
+
  <contextListener class="at.ac.meduniwien.ophthalmology.libreclinica.log.LoggerStartupListener"/>
- 
-  
+
+  <!--
+    Phase E hardening A4 (2026-06-10): shared reqId fragment surfaces the
+    request-correlation id populated by RequestIdFilter. The "-" default
+    keeps the brackets visible but empty for startup logs / background
+    threads with no inbound HTTP request. All patterns below that include
+    %logger or %thread must include ${reqIdField} so the SPA console →
+    server log → audit row chain stays unbroken.
+  -->
+  <property name="reqIdField" value="[%X{reqId:-}]"/>
+  <property name="consolePattern"
+            value="%date{MM/dd HH:mm:ss.SSS} [%thread] ${reqIdField} %-5level %logger{35}:%L - %msg %n %ex{full}"/>
+  <property name="filePatternBase"
+            value="%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] ${reqIdField}"/>
+  <property name="syslogSuffixPattern"
+            value="[%mdc{WEBAPP}] ${reqIdField} %mdc{USERNAME} %logger %msg"/>
+
   <!-- APPENDERS -->
   <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
      <encoder>
-      <pattern>%date{MM/dd HH:mm:ss.SSS} [%thread] %-5level %logger{35}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${consolePattern}</pattern>
     </encoder>
   </appender>
- 
- <!-- @pgawade 19-NOV-2010 commented out this file appender as it will not be used any where; instead new file appeders added will be used 
+
+  <!--
+    Phase E hardening (adjacent gap, 2026-06-10): structured JSON appender
+    for SIEM / institutional log aggregation. Sits ALONGSIDE the existing
+    20+ text appenders — sysadmins keep grep-able text, SIEM gets JSON.
+    LogstashEncoder picks up Phase A4's RequestIdFilter MDC field so each
+    event carries the reqId that ties SPA console → server log → audit row.
+  -->
+  <appender name="JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <!-- ${log.dir} resolves to ${catalina.home}/logs/openclinica at
+         deploy time, matching the existing text-pattern appenders so
+         SIEM and grep targets stay siblings under the same logs/ dir.
+         The build-time unit-test JVM has no catalina.home set, so
+         logback falls back to "catalina.home_IS_UNDEFINED/..." and
+         aborts the appender init with FileNotFoundException — same
+         non-fatal warning the LOGFILE-* text appenders already emit. -->
+    <file>${log.dir}.json</file>
+    <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+      <includeMdcKeyName>reqId</includeMdcKeyName>
+    </encoder>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>${log.dir}.json.%d{yyyy-MM-dd}.gz</fileNamePattern>
+      <maxHistory>30</maxHistory>
+    </rollingPolicy>
+  </appender>
+
+ <!-- @pgawade 19-NOV-2010 commented out this file appender as it will not be used any where; instead new file appeders added will be used
   <appender name="LOGFILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
     <file>${log.dir}.log</file>
     <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy"> -->
@@ -35,7 +75,7 @@
       <maxHistory>30</maxHistory>
     </rollingPolicy>
     <encoder>
-      <pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}]  LPR %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${filePatternBase}  LPR %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
     </encoder>
   </appender>
   
@@ -48,7 +88,7 @@
       <maxHistory>30</maxHistory>
     </rollingPolicy>
     <encoder>
-      <pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${filePatternBase} NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
     </encoder>
   </appender>
   
@@ -61,7 +101,7 @@
       <maxHistory>30</maxHistory>
     </rollingPolicy>
     <encoder>
-      <pattern>%date{MM/dd HH:mm:ss}  [%mdc{WEBAPP}] FTP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+      <pattern>${filePatternBase} FTP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
     </encoder>
   </appender>
     	
@@ -76,7 +116,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] LPR %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} LPR %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file USER facility -->
@@ -89,7 +129,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] USER %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} USER %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file MAIL facility -->
@@ -103,7 +143,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] MAIL %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} MAIL %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file AUTH facility -->
@@ -116,7 +156,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] AUTH %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} AUTH %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file UUCP facility -->
@@ -129,7 +169,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] UUCP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} UUCP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file CRON facility -->
@@ -142,7 +182,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] CRON %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} CRON %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file AUTHPRIV facility -->
@@ -155,7 +195,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] AUTHPRIV %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} AUTHPRIV %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file DAEMON facility -->
@@ -169,7 +209,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] DAEMON %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} DAEMON %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file NEWS facility -->
@@ -181,7 +221,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} NEWS %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Local file FTP facility - to get logs excluded from other defined facilities -->
@@ -194,7 +234,7 @@
 			<maxHistory>30</maxHistory>
 		</rollingPolicy>
 		<encoder>
-			<pattern>%date{MM/dd HH:mm:ss} [%mdc{WEBAPP}] FTP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
+			<pattern>${filePatternBase} FTP %-5level %mdc{USERNAME} %logger{25}:%L - %msg %n %ex{full}</pattern>
 		</encoder>
 	</appender>
 	<!-- Syslog LPR facility -->
@@ -203,7 +243,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>		
 		<Facility>LPR</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>  
 	<!-- Syslog USER facility -->
 	<appender name="SYSLOG-USER" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -211,7 +251,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>USER</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>	
 	<!-- Syslog MAIL facility -->
 	<appender name="SYSLOG-MAIL" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -219,7 +259,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>MAIL</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog AUTH facility -->
 	<appender name="SYSLOG-AUTH" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -227,7 +267,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>AUTH</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog UUCP facility -->
 	<appender name="SYSLOG-UUCP" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -235,7 +275,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>UUCP</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog CRON facility -->
 	<appender name="SYSLOG-CRON" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -243,7 +283,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>CRON</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog AUTHPRIV facility -->
 	<appender name="SYSLOG-AUTHPRIV" class="ch.qos.logback.classic.net.SyslogAppender">
@@ -251,7 +291,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>AUTHPRIV</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog DAEMON facility -->
 	<appender name="SYSLOG-DAEMON" class="ch.qos.logback.classic.net.SyslogAppender">		
@@ -259,14 +299,14 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>DAEMON</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog NEWS facility -->
 	<appender name="SYSLOG-NEWS" class="ch.qos.logback.classic.net.SyslogAppender">		
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>NEWS</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	<!-- Syslog FTP facility - to get logs excluded from other defined facilities -->
 	<appender name="SYSLOG-OTHER" class="ch.qos.logback.classic.net.SyslogAppender">		
@@ -274,7 +314,7 @@
 		<SyslogHost>${syslog.host}</SyslogHost>
 		<port>${syslog.port}</port>
 		<Facility>FTP</Facility>
-		<SuffixPattern>[%mdc{WEBAPP}] %mdc{USERNAME} %logger %msg</SuffixPattern>
+		<SuffixPattern>${syslogSuffixPattern}</SuffixPattern>
 	</appender>
 	
 	<!-- LOGGERS -->
@@ -454,29 +494,35 @@
 	</logger>
 	<!-- LibreClinica logs -->
 	<logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica">
-		<level value="${logLevel}" />	
+		<level value="${logLevel}" />
 			<if condition='property("logLocation").equalsIgnoreCase("local") || property("logLocation").equalsIgnoreCase("both")'>
 				<then>
-					<appender-ref ref="LOGFILE-OTHER"/>					
+					<appender-ref ref="LOGFILE-OTHER"/>
 					<appender-ref ref="LOGFILE-LPR"/>
 					<appender-ref ref="LOGFILE-USER"/>
 					<appender-ref ref="LOGFILE-MAIL"/>
 					<appender-ref ref="LOGFILE-AUTH"/>
-					<appender-ref ref="LOGFILE-UUCP"/>				
-					<appender-ref ref="LOGFILE-AUTHPRIV"/>									
+					<appender-ref ref="LOGFILE-UUCP"/>
+					<appender-ref ref="LOGFILE-AUTHPRIV"/>
 				</then>
 			</if>
-			<if condition='property("logLocation").equalsIgnoreCase("syslog") || property("logLocation").equalsIgnoreCase("both")'>			
+			<if condition='property("logLocation").equalsIgnoreCase("syslog") || property("logLocation").equalsIgnoreCase("both")'>
 				<then>
-					<appender-ref ref="SYSLOG-OTHER"/>					
+					<appender-ref ref="SYSLOG-OTHER"/>
 					<appender-ref ref="SYSLOG-LPR"/>
 					<appender-ref ref="SYSLOG-USER"/>
 					<appender-ref ref="SYSLOG-MAIL"/>
 					<appender-ref ref="SYSLOG-AUTH"/>
-					<appender-ref ref="SYSLOG-UUCP"/>		
-					<appender-ref ref="SYSLOG-AUTHPRIV"/>									
+					<appender-ref ref="SYSLOG-UUCP"/>
+					<appender-ref ref="SYSLOG-AUTHPRIV"/>
 				</then>
-			</if>			
+			</if>
+			<!-- Phase E hardening (adjacent gap, 2026-06-10): JSON_FILE wired
+			     unconditionally — SIEM feed should not depend on the
+			     logLocation property (which gates local-text vs syslog).
+			     additivity="false" on this logger blocks events from
+			     reaching root's JSON_FILE, so we attach JSON_FILE here too. -->
+			<appender-ref ref="JSON_FILE"/>
 	</logger>
 	<!-- application exceptions -->	
 	<logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.exception">
@@ -510,5 +556,13 @@
   <root>
     <level value="INFO"/>
     <appender-ref ref="CONSOLE"/>
+    <!-- Phase E hardening (adjacent gap, 2026-06-10): JSON_FILE on root so
+         framework + third-party events (Spring, Hibernate at WARN/ERROR,
+         Tomcat, Liquibase startup) reach the SIEM feed. The main app
+         logger 'at.ac.meduniwien.ophthalmology.libreclinica' below has
+         additivity="false", so JSON_FILE is also referenced there to
+         capture app events; SIEM gets one event per logged line, not
+         duplicates. -->
+    <appender-ref ref="JSON_FILE"/>
   </root>
 </configuration>

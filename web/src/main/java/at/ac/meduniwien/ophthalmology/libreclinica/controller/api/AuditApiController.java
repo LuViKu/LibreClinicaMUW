@@ -118,6 +118,32 @@ public class AuditApiController {
      * a single site grant under a multi-site study now sees only that
      * site's rows.
      */
+    /**
+     * Phase E hardening B (sysadmin audit UI) — system-wide audit SQL.
+     *
+     * <p>Same shape as {@link #STUDY_SCOPED_AUDIT_SQL_TEMPLATE} but
+     * <strong>without</strong> the {@code is_user_visible=true} filter
+     * (so {@code OPERATION_FAILED(61)} + {@code JOB_FAILED(62)} rows are
+     * returned for §11.10(e) compliance review) and without the
+     * per-study scoping IN clauses (so all studies are surfaced — this
+     * endpoint is sysadmin-only). LIMIT 500 newest rows mirrors the
+     * per-study endpoint's volume cap.
+     */
+    private static final String SYSTEM_WIDE_AUDIT_SQL = """
+            SELECT
+              a.audit_id, a.audit_date, a.audit_table, a.entity_id,
+              a.entity_name, a.reason_for_change, a.audit_log_event_type_id,
+              a.old_value, a.new_value, a.event_crf_id, a.study_event_id,
+              a.user_id, ua.user_name, alet.name AS type_name,
+              alet.display_name AS type_display_name
+            FROM audit_log_event a
+            LEFT JOIN user_account ua ON ua.user_id = a.user_id
+            LEFT JOIN audit_log_event_type alet
+              ON alet.audit_log_event_type_id = a.audit_log_event_type_id
+            ORDER BY a.audit_date DESC, a.audit_id DESC
+            LIMIT 500
+            """;
+
     private static final String STUDY_SCOPED_AUDIT_SQL_TEMPLATE = """
             SELECT
               a.audit_id, a.audit_date, a.audit_table, a.entity_id,
@@ -129,7 +155,17 @@ public class AuditApiController {
             LEFT JOIN user_account ua ON ua.user_id = a.user_id
             LEFT JOIN audit_log_event_type alet
               ON alet.audit_log_event_type_id = a.audit_log_event_type_id
-            WHERE
+            -- Phase A1 (2026-06-10) — hide OPERATION_FAILED / JOB_FAILED
+            -- rows from the per-study investigator view. They are
+            -- recorded for §11.10(e) compliance + sysadmin / compliance
+            -- review but are operational noise for a study coordinator.
+            -- Legacy event types default to is_user_visible=true via
+            -- the Liquibase column add. A future sysadmin / compliance
+            -- audit-log endpoint drops this clause to see everything.
+            -- COALESCE keeps the historical rows that pre-date the
+            -- audit_log_event_type lookup join (NULL type id) visible.
+            WHERE COALESCE(alet.is_user_visible, true) = true
+            AND (
               ( a.audit_table = 'item_data' AND a.entity_id IN (
                   SELECT id.item_data_id FROM item_data id
                     JOIN event_crf ec ON ec.event_crf_id = id.event_crf_id
@@ -164,6 +200,16 @@ public class AuditApiController {
               -- on that join rather than on the entity_id itself.
               OR ( a.audit_table = 'dataset' AND a.entity_id IN (
                   SELECT dataset_id FROM dataset WHERE study_id IN __IN__))
+              -- Phase E.6 follow-up 2026-06-11 — include eye-cohort
+              -- transitions. The row appears in BOTH the source-study
+              -- AND target-study audit logs (a transition affects
+              -- both) so the per-study reviewer sees the move from
+              -- either side.
+              OR ( a.audit_table = 'eye_cohort_transition' AND a.entity_id IN (
+                  SELECT transition_id FROM eye_cohort_transition
+                  WHERE source_study_id IN __IN__
+                     OR target_study_id IN __IN__))
+            )
             ORDER BY a.audit_date DESC, a.audit_id DESC
             LIMIT 500
             """;
@@ -304,6 +350,152 @@ public class AuditApiController {
     }
 
     /**
+     * Phase E hardening B (sysadmin audit UI) — system-wide audit-log
+     * read.
+     *
+     * <p>The per-study {@link #list} handler filters rows where
+     * {@code audit_log_event_type.is_user_visible = true}, which hides
+     * the failure-class audit rows ({@code OPERATION_FAILED(61)} +
+     * {@code JOB_FAILED(62)}) from study coordinators. This handler
+     * drops that filter so sysadmins can review §11.10(e) failure
+     * rows. It also drops the per-study scoping so the entire
+     * institution's audit trail is visible.
+     *
+     * <p>Gate: sysadmin / techadmin only via
+     * {@link UserAdminAuthorization#roleMayAdministerUsers}. Matches
+     * the convention used by every other admin-only endpoint in this
+     * controller family (UsersApiController create / disable / etc.).
+     *
+     * <p>Same query parameters as {@link #list} so the SPA filter
+     * components can drop in without bespoke wiring.
+     */
+    @GetMapping("/system")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(type = "array", implementation = AuditEventDto.class)))
+    public ResponseEntity<?> listSystem(
+            @RequestParam(value = "actor", required = false) String actorFilter,
+            @RequestParam(value = "variant", required = false) String variantFilter,
+            @RequestParam(value = "subjectId", required = false) String subjectIdFilter,
+            HttpSession session) {
+
+        UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
+        if (ub == null || ub.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (!UserAdminAuthorization.roleMayAdministerUsers(ub)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit system audit-log access — sysadmin only"));
+        }
+        try {
+            return ResponseEntity.ok(
+                    collectSystemWideRows(actorFilter, variantFilter, subjectIdFilter));
+        } catch (SQLException e) {
+            LOG.error("Failed to load system-wide audit-log rows for user_id={}",
+                    ub.getId(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to load system audit log: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Phase E hardening B — read every audit row (no
+     * {@code is_user_visible} filter, no per-study scoping). Mirrors
+     * {@link #collectFilteredRows} for everything else (subject /
+     * scope hydration, actor / variant / subject filters, prettify,
+     * details derivation).
+     */
+    private List<AuditEventDto> collectSystemWideRows(
+            String actorFilter, String variantFilter, String subjectIdFilter)
+            throws SQLException {
+
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        ItemDataDAO itemDataDao = new ItemDataDAO(dataSource);
+        ItemDAO itemDao = new ItemDAO(dataSource);
+        Map<Integer, String> ssLabelCache = new HashMap<>();
+        Map<Integer, Integer> subjectToStudySubjectCache = new HashMap<>();
+        Map<Integer, EventCRFBean> ecCache = new HashMap<>();
+        Map<Integer, ItemDataBean> itemDataCache = new HashMap<>();
+        Map<Integer, ItemBean> itemCache = new HashMap<>();
+
+        List<AuditEventDto> out = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(SYSTEM_WIDE_AUDIT_SQL);
+             ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                Integer auditId = rs.getInt("audit_id");
+                Timestamp ts = rs.getTimestamp("audit_date");
+                String auditTable = rs.getString("audit_table");
+                int entityId = rs.getInt("entity_id");
+                String entityName = rs.getString("entity_name");
+                int eventCrfId = rs.getInt("event_crf_id");
+                int typeId = rs.getInt("audit_log_event_type_id");
+                String oldVal = rs.getString("old_value");
+                String newVal = rs.getString("new_value");
+                String reason = rs.getString("reason_for_change");
+                String userName = rs.getString("user_name");
+                String typeName = rs.getString("type_name");
+                String typeDisplay = rs.getString("type_display_name");
+
+                String variant = variantForType(typeId, reason);
+                String actor = (userName == null || userName.isBlank()) ? "system" : userName;
+                String title;
+                if (typeDisplay != null && !typeDisplay.isBlank()) {
+                    title = typeDisplay;
+                } else if (typeName != null && !typeName.isBlank()) {
+                    title = typeName;
+                } else {
+                    title = "Audit event #" + auditId;
+                }
+
+                String subjectLabel = resolveSubjectLabel(
+                        auditTable, entityId, eventCrfId,
+                        ssDao, ecDao, ssLabelCache, subjectToStudySubjectCache, ecCache);
+                String scope = resolveScope(
+                        auditTable, entityId, eventCrfId,
+                        itemDataDao, itemDao, itemDataCache, itemCache);
+
+                if (actorFilter != null && !actorFilter.isBlank()
+                        && !actorFilter.equalsIgnoreCase(actor)) continue;
+                if (variantFilter != null && !variantFilter.isBlank()
+                        && !variantFilter.equalsIgnoreCase(variant)) continue;
+                if (subjectIdFilter != null && !subjectIdFilter.isBlank()
+                        && (subjectLabel == null || !subjectIdFilter.equalsIgnoreCase(subjectLabel)))
+                    continue;
+
+                String occurredAt = ts == null ? null
+                        : ts.toInstant().atZone(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toInstant().toString();
+
+                String prettyOld = prettifyValue(auditTable, typeName, oldVal);
+                String prettyNew = prettifyValue(auditTable, typeName, newVal);
+
+                String details = null;
+                if (("study".equalsIgnoreCase(auditTable)
+                        || "user_account".equalsIgnoreCase(auditTable)
+                        || "dataset".equalsIgnoreCase(auditTable))
+                        && entityName != null && !entityName.isBlank()) {
+                    details = entityName;
+                }
+
+                out.add(new AuditEventDto(
+                        String.valueOf(auditId),
+                        occurredAt,
+                        variant,
+                        actor,
+                        /* actorRole */ null,
+                        title,
+                        subjectLabel,
+                        scope,
+                        details,
+                        blankToNull(prettyOld),
+                        blankToNull(prettyNew),
+                        blankToNull(reason)));
+            }
+        }
+        return out;
+    }
+
+    /**
      * Shared row collection — used by both {@link #list} and
      * {@link #exportXlsx}. Pulls the SQL pass through the per-site
      * visibility filter, hydrates the per-row subject / scope
@@ -343,13 +535,17 @@ public class AuditApiController {
         List<AuditEventDto> out = new ArrayList<>();
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
-            // 7 IN clauses × n ids each (item_data, event_crf,
-            // study_subject, subject, study_event, study, dataset —
+            // 9 IN-clause slots × n ids each (item_data, event_crf,
+            // study_subject, subject, study_event, study, dataset,
+            // eye_cohort_transition[source], eye_cohort_transition[target]) —
             // the study branch was added Phase E.6 / 2026-06-03 for
             // identity edits, dataset added Phase E.6 / 2026-06-05
-            // for dataset-export audit events).
+            // for dataset-export audit events, eye_cohort_transition
+            // added Phase E.6 follow-up 2026-06-11 (two slots — the
+            // row is visible from BOTH source-study and target-study
+            // side, so the WHERE clause ORs the two IN tests).
             int bindIdx = 1;
-            for (int branch = 0; branch < 7; branch++) {
+            for (int branch = 0; branch < 9; branch++) {
                 for (Integer sid : visibleStudyIds) {
                     ps.setInt(bindIdx++, sid);
                 }
@@ -481,12 +677,42 @@ public class AuditApiController {
             // administrative actions surface under the existing "Admin"
             // filter rather than the data-stream bucket so operators
             // reviewing the audit trail can pivot by intent.
-            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51, 52, 53, 54, 55, 56 -> "admin";
+            case 2, 3, 4, 5, 6, 7, 9, 27, 33, 50, 51, 52, 53, 54, 55, 56,
+            // PR #186 gap-coverage admin actions: CRF library (63-65),
+            // user lifecycle (66-69), event definition create (70).
+                 63, 64, 65, 66, 67, 68, 69, 70,
+            // Modality CRUD (58-60) — configuration, admin-bucket.
+                 58, 59, 60,
+            // Operation / job failures (61-62) — sysadmin-only via
+            // is_user_visible=false, but route to "admin" when surfaced.
+                 61, 62,
+            // CRF-library + version lifecycle (75-76), version-migration
+            // (79), rule CRUD (81-89), site + study + study-status
+            // (90-93), event-definition lifecycle + field updates (95-97),
+            // group-class lifecycle + field updates (98-99). Phase
+            // audit-unification.
+                 75, 76, 79, 81, 82, 83, 84, 85, 86, 87, 88, 89,
+                 90, 91, 92, 93, 95, 96, 97, 98, 99,
+            // User-account stream: login failed (101, hidden), login
+            // (102), legacy password (103), admin action (104), generic
+            // helper (105). Failed-login is hidden but the variant routes
+            // to "admin" for the sysadmin view's filter chips.
+                 101, 102, 103, 104, 105,
+            // Extract-job execution (106-107). Backfill catch-all (108,
+            // hidden) routes to admin for the sysadmin view.
+                 106, 107, 108 -> "admin";
             // Item-data + event-crf + study-event lifecycle — actual
             // data movement.
             case 1, 8, 10, 11, 12, 13, 14, 15, 16,
                  17, 18, 19, 20, 21, 22, 23, 24, 25, 26,
-                 30, 35, 40, 41 -> "data";
+                 30, 35, 40, 41,
+            // Eye-cohort transition (57) — per-subject clinical event,
+            // not admin config. Discrepancy-note threading + create
+            // (71-74) and the subject-demographics update (100) also
+            // belong with data-entry; the event_crf start (77),
+            // SDV unverification (78), bulk-import attempt (80),
+            // and study-event update (94) ride the same data-stream.
+                 57, 71, 72, 73, 74, 77, 78, 80, 94, 100 -> "data";
             default -> "data";
         };
     }

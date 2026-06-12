@@ -61,7 +61,13 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
     public void setTypesExpected() {
         // SERIAL, NUMERIC, NUMERIC, NUMERIC,
         // DATE, CHAR(1), VARCHAR(255),DATE,
-        // NUMERIC, DATE, NUMERIC
+        // NUMERIC, DATE, NUMERIC, BOOL, VARCHAR
+        // Phase E.6 retrospective-backfill (lc-muw-2026-06-08-subject-phi.xml)
+        // appended first_name + last_name VARCHAR(120) at positions 14-15;
+        // every `SELECT * FROM subject` query in subject_dao.xml now
+        // returns 15 columns, so the type map must declare all 15
+        // — otherwise EntityDAO.getColumnType rejects index 14 with
+        // "not within the allowed range of [1,13]".
         this.unsetTypeExpected();
         this.setTypeExpected(1, TypeNames.INT);
         this.setTypeExpected(2, TypeNames.INT);
@@ -76,6 +82,8 @@ public class SubjectDAO extends AuditableEntityDAO<SubjectBean> {
         this.setTypeExpected(11, TypeNames.INT);
         this.setTypeExpected(12, TypeNames.BOOL);
         this.setTypeExpected(13, TypeNames.STRING);
+        this.setTypeExpected(14, TypeNames.STRING);
+        this.setTypeExpected(15, TypeNames.STRING);
     }
 
     /**

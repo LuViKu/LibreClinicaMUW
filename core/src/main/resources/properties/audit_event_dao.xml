@@ -1,4 +1,22 @@
 <?xml version="1.0"?>
+<!--
+    Phase audit-unification (2026-06-12): the `create` write query
+    below is DEAD. AuditEventDAO.create(AuditEventBean) is @Deprecated
+    as of this phase; all in-tree callers have been migrated to direct
+    INSERTs into audit_log_event with typed ids from
+    AuditTypeIds.java. The read queries (findByPK, findAll,
+    findAllByAuditTable, findAggregatesByTableName,
+    findEventStatusLogByStudySubject, findAllByUserId,
+    findAllByStudyId, findAllByStudyIdAndLimit) remain READABLE for
+    compliance archaeology — historical audit_event rows are
+    backfilled forward into audit_log_event by
+    lc-muw-2026-06-12-audit-event-backfill.xml but the legacy table
+    is preserved for one release cycle.
+
+    Drop both the file and the audit_event/audit_event_values/
+    audit_event_context tables in the next quarterly cleanup PR
+    after the backfill is verified against production snapshots.
+-->
 <queries>
 	<query>
 		<name>findByPK</name>

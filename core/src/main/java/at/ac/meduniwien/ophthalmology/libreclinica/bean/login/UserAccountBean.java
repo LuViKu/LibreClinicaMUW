@@ -578,15 +578,33 @@ public class UserAccountBean extends AuditableEntityBean {
 		this.enableApiKey = enableApiKey;
 	}
 
+    /**
+     * Returns the raw {@code authtype} value as persisted in
+     * {@code user_account.authtype}. Historically this getter coerced
+     * any non-{@link AuthType} value to {@link AuthType#STANDARD} on
+     * read, which silently erased the legacy {@code "ldap"} marker and
+     * broke directory-owned credential gates in the admin REST API
+     * (resetPassword / unlock) — the bean would round-trip
+     * {@code "ldap"} → {@code "STANDARD"} the moment the DAO populated
+     * it. The 2FA helpers ({@link #isTwoFactorActivated},
+     * {@link #isTwoFactorMarked}, {@link #isTwoFactorDeactivated}) use
+     * exact string equality against {@link AuthType} names, so
+     * preserving non-enum values here is safe — they keep returning
+     * {@code false} for {@code "ldap"} which is the correct semantics
+     * (an LDAP user has no 2FA enrollment state).
+     */
     public String getAuthtype() {
-        if (!AuthType.isValid(this.authtype)) {
-            this.authtype = STANDARD.name();
-        }
         return authtype;
     }
 
     public void setAuthtype(String authtype) {
-        if (!AuthType.isValid(authtype)) {
+        // Preserve null + blank as the legacy STANDARD default — empty
+        // columns shouldn't drift into a runtime NPE in
+        // isTwoFactorDeactivated(). Any other non-null value (incl. the
+        // legacy {@code "ldap"} marker the auth-source matrix at
+        // UsersApiController#authForUser checks for) is stored verbatim
+        // so the directory-owned gate works on read-back.
+        if (authtype == null || authtype.isEmpty()) {
             this.authtype = STANDARD.name();
             return;
         }

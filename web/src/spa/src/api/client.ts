@@ -28,12 +28,24 @@
 export class ApiError extends Error {
   readonly status: number
   readonly body: unknown
+  /**
+   * Phase E hardening A4 — request-correlation id.
+   *
+   * Populated from the server's echoed `X-Request-Id` response header
+   * when present, or the client-generated UUIDv4 used for the request
+   * when the server omitted the echo. A5's `GlobalErrorToast` surfaces
+   * this as "Fehler-ID: 7f3e..." so operators can quote it in bug
+   * reports — the same id appears in server logs (via logback's
+   * `[%X{reqId:-}]` MDC field) and the A1 failure-audit row.
+   */
+  readonly reqId: string
 
-  constructor(status: number, message: string, body: unknown = null) {
+  constructor(status: number, message: string, body: unknown = null, reqId: string = '') {
     super(message)
     this.name = 'ApiError'
     this.status = status
     this.body = body
+    this.reqId = reqId
   }
 
   get isUnauthorized(): boolean { return this.status === 401 }
@@ -51,10 +63,19 @@ export class ApiError extends Error {
  */
 export class ApiNetworkError extends Error {
   readonly cause: unknown
-  constructor(message: string, cause: unknown) {
+  /**
+   * Phase E hardening A4 — client-generated UUIDv4 used for the failed
+   * request. The server never returned a response so we cannot read its
+   * echoed header; the id we sent is still useful for cross-referencing
+   * Tomcat access logs (if the request reached the container at all) and
+   * for the operator's bug report.
+   */
+  readonly reqId: string
+  constructor(message: string, cause: unknown, reqId: string = '') {
     super(message)
     this.name = 'ApiNetworkError'
     this.cause = cause
+    this.reqId = reqId
   }
 }
 
@@ -78,32 +99,117 @@ interface RequestOptions {
  */
 const CONTEXT_PATH = '/LibreClinica'
 
+/**
+ * Phase E hardening A4 — request-correlation header name. Backend's
+ * `RequestIdFilter` reads + echoes the same name. Mirrored in the
+ * Vitest spec so a rename only needs to touch one constant.
+ */
+const REQUEST_ID_HEADER = 'X-Request-Id'
+
+/**
+ * Generate a UUIDv4 for the outgoing request. `crypto.randomUUID()` is
+ * the canonical Vite+modern-browser path; the explicit fallback covers
+ * the jsdom environment that Vitest uses, which historically lacks
+ * `crypto.randomUUID` on Node < 19 and on older jsdom builds. The
+ * fallback is RFC4122-shaped UUIDv4 (15 random bytes + a fixed version
+ * nibble) — good enough for trace ids, not for crypto secrets.
+ */
+function generateRequestId(): string {
+  const c: { randomUUID?: () => string } | undefined =
+    typeof globalThis !== 'undefined'
+      ? (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
+      : undefined
+  if (c && typeof c.randomUUID === 'function') {
+    return c.randomUUID()
+  }
+  // Fallback — Math.random is fine for correlation ids, never for auth.
+  const bytes = new Array(16)
+  for (let i = 0; i < 16; i++) bytes[i] = Math.floor(Math.random() * 256)
+  bytes[6] = (bytes[6] & 0x0f) | 0x40 // version 4
+  bytes[8] = (bytes[8] & 0x3f) | 0x80 // variant 10xx
+  const hex = bytes.map((b: number) => b.toString(16).padStart(2, '0')).join('')
+  return (
+    hex.substring(0, 8) + '-' +
+    hex.substring(8, 12) + '-' +
+    hex.substring(12, 16) + '-' +
+    hex.substring(16, 20) + '-' +
+    hex.substring(20, 32)
+  )
+}
+
 async function request<T>(
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH',
   path: string,
   body: unknown,
   opts: RequestOptions = {},
 ): Promise<T> {
+  const reqId = generateRequestId()
   const headers: Record<string, string> = {
     Accept: 'application/json',
+    [REQUEST_ID_HEADER]: reqId,
     ...opts.headers,
   }
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   const url = path.startsWith(CONTEXT_PATH) ? path : `${CONTEXT_PATH}${path}`
 
+  const fetchInit: RequestInit = {
+    method,
+    credentials: 'include',
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: opts.signal,
+  }
+
   let response: Response
   try {
-    response = await fetch(url, {
-      method,
-      credentials: 'include',
-      headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: opts.signal,
-    })
+    response = await fetch(url, fetchInit)
   } catch (cause) {
-    throw new ApiNetworkError(`Network failure calling ${method} ${url}`, cause)
+    // Phase E hardening — B4 (2026-06-10): flip the connection store
+    // to offline. Covers the captive-portal / DNS-fail / transient-
+    // router-drop case where `navigator.onLine` still reports `true`
+    // but our fetch already failed; the browser's `offline` event
+    // never fires for these. We deliberately do NOT call markOnline()
+    // on the happy path — that's left to the browser `online` event
+    // so a single successful retry on a flaky network doesn't
+    // prematurely dismiss the banner.
+    //
+    // Lazy import to avoid a circular dep: stores/connection ->
+    // (future) anywhere that imports the api client.
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = await import('@/stores/connection')
+      mod.useConnectionStore().markOffline()
+    } catch {
+      // Pinia may not be active in a corner case (e.g. unit test
+      // exercising request() in isolation). Ignore — the network
+      // error surfaces below regardless.
+    }
+    // Phase E hardening B3 — single retry on transient network failure
+    // for idempotent GETs only. Mutations (POST/PUT/DELETE/PATCH) must
+    // NEVER retry: a flaky network could otherwise duplicate a clinical
+    // save or leave the server in a partially-written state. ApiError
+    // (server reachable, error response) deliberately stays outside the
+    // retry path — only `fetch` itself throwing triggers the backoff.
+    if (method === 'GET') {
+      await new Promise((r) => setTimeout(r, 500))
+      try {
+        response = await fetch(url, fetchInit)
+      } catch (retryCause) {
+        throw new ApiNetworkError(`Network failure calling ${method} ${url}`, retryCause, reqId)
+      }
+    } else {
+      // No response arrived — surface the client-generated id so the
+      // operator can still cross-reference Tomcat access logs.
+      throw new ApiNetworkError(`Network failure calling ${method} ${url}`, cause, reqId)
+    }
   }
+
+  // Prefer the server's echoed id; fall back to the one we sent if the
+  // backend filter ever fails to populate the response header (e.g. an
+  // error response from a layer that bypasses RequestIdFilter — A2 is
+  // the explicit fix for that case but we want belt+suspenders here).
+  const echoedReqId = response.headers.get(REQUEST_ID_HEADER) ?? reqId
 
   if (response.status === 204) return undefined as T
 
@@ -116,7 +222,7 @@ async function request<T>(
       (isJson && parsed && typeof parsed === 'object' && 'message' in parsed
         ? String((parsed as { message: unknown }).message)
         : undefined) ?? `${method} ${url} → ${response.status}`
-    throw new ApiError(response.status, message, parsed)
+    throw new ApiError(response.status, message, parsed, echoedReqId)
   }
 
   // Spring's LoginUrlAuthenticationEntryPoint 302-redirects unauthenticated
@@ -129,6 +235,7 @@ async function request<T>(
       401,
       `${method} ${url}: expected application/json but got ${contentType || '<unset>'} — likely auth redirect`,
       parsed,
+      echoedReqId,
     )
   }
 

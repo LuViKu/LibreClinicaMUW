@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -16,7 +18,6 @@ import java.util.Map;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.admin.AuditEventBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -125,6 +126,9 @@ public class StudiesApiController {
             StudyOptionDto candidate = new StudyOptionDto(
                     s.getOid(),
                     s.getName(),
+                    // Phase E.6 follow-up 2026-06-10 — institutional protocol
+                    // short-code for the SPA's subject-ID prefix prefill.
+                    s.getIdentifier(),
                     parent == null ? null : parent.getOid(),
                     parent == null ? null : parent.getName(),
                     spaRole,
@@ -187,17 +191,17 @@ public class StudiesApiController {
                     "Your role does not permit creating studies — sysadmin only"));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
         // Shape-level validation (no DAO calls).
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateCreateStudyShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -205,18 +209,18 @@ public class StudiesApiController {
         StudyDAO studyDao = new StudyDAO(dataSource);
         StudyBean uidCollision = studyDao.findByUniqueIdentifier(body.uniqueProtocolId().trim());
         if (uidCollision != null && uidCollision.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "uniqueProtocolId",
                             "Unique protocol id '" + body.uniqueProtocolId()
                                     + "' is already taken"))));
         }
         StudyBean nameCollision = studyDao.findByName(body.name().trim());
         if (nameCollision != null && nameCollision.getId() != 0) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "name", "Study name '" + body.name() + "' is already taken"))));
         }
 
@@ -255,7 +259,9 @@ public class StudiesApiController {
         studyDao.update(persisted);
 
         AuditEventDAO auditEventDAO = new AuditEventDAO(dataSource);
-        EventCrfsApiController.writeAuditEvent(auditEventDAO, me, persisted, null,
+        EventCrfsApiController.writeAuditEvent(auditEventDAO,
+                AuditTypeIds.STUDY_CREATED,
+                me, persisted, null,
                 "Study created", "study", persisted.getId(),
                 "study_id", "", String.valueOf(persisted.getId()));
 
@@ -272,7 +278,9 @@ public class StudiesApiController {
             binding.setUserAccountId(me.getId());
             userDao.createStudyUserRole(me, binding);
 
-            EventCrfsApiController.writeAuditEvent(auditEventDAO, me, persisted, null,
+            EventCrfsApiController.writeAuditEvent(auditEventDAO,
+                    AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
+                    me, persisted, null,
                     "Study role granted (initial) — user=" + me.getName()
                             + " role=" + Role.COORDINATOR.getName(),
                     "study_user_role", 0, "role_id",
@@ -332,16 +340,16 @@ public class StudiesApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateUpdateStudyShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -351,8 +359,7 @@ public class StudiesApiController {
             return ResponseEntity.status(404).body(Map.of("message",
                     "No study with oid '" + studyOid + "'"));
         }
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, target)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, target, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit editing this study"));
         }
@@ -536,9 +543,9 @@ public class StudiesApiController {
                     "Your role does not permit study status transitions — sysadmin only"));
         }
         if (body == null || body.targetStatus() == null || body.targetStatus().isBlank()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "targetStatus", "targetStatus is required"))));
         }
 
@@ -546,9 +553,9 @@ public class StudiesApiController {
         try {
             target = resolveTargetStatus(body.targetStatus());
         } catch (IllegalArgumentException iae) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "targetStatus",
                             "targetStatus must be one of AVAILABLE / PENDING / LOCKED / FROZEN "
                                     + "(use /disable + /restore for the removed state)"))));
@@ -582,9 +589,9 @@ public class StudiesApiController {
         boolean reasonRequired = currentStatus.equals(Status.AVAILABLE)
                 && (target.equals(Status.LOCKED) || target.equals(Status.FROZEN));
         if (reasonRequired && (body.reason() == null || body.reason().isBlank())) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "reason",
                             "reason is required for AVAILABLE → " + target.getName() + " transitions"))));
         }
@@ -602,25 +609,27 @@ public class StudiesApiController {
                     studyOid, e.getMessage());
         }
 
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(target_.getId());
-            ae.setStudyName(target_.getName() == null ? "" : target_.getName());
-            ae.setAuditTable("study");
-            ae.setEntityId(target_.getId());
-            ae.setColumnName("status_id");
-            ae.setOldValue(String.valueOf(currentStatus.getId()));
-            ae.setNewValue(String.valueOf(target.getId()));
-            String reason = body.reason() == null ? "" : body.reason().trim();
-            ae.setActionMessage("study_status_change: " + studyOid
-                    + " (" + currentStatus.getName() + " → " + target.getName() + ")"
-                    + (reason.isEmpty() ? "" : " reason: \"" + reason + "\"")
-                    + " by " + me.getName());
-            ae.setReasonForChange(reason);
-            auditDAO.create(ae);
-        } catch (Exception e) {
+        // Audit-table unification (slice C, 2026-06-12): direct INSERT
+        // into audit_log_event with type STUDY_STATUS_CHANGED. Carries
+        // the caller-supplied reasonForChange (the only lifecycle event
+        // that does — disable / restore have no operator-supplied
+        // rationale beyond the status flip itself).
+        String reason = body.reason() == null ? "" : body.reason().trim();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, "
+                             + "reason_for_change, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, AuditTypeIds.STUDY_STATUS_CHANGED);
+            ps.setInt(2, me.getId());
+            ps.setInt(3, target_.getId());
+            ps.setString(4, studyOid == null ? "" : studyOid);
+            ps.setString(5, reason);
+            ps.setString(6, currentStatus.getName());
+            ps.setString(7, target.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
             LOG.warn("Audit write failed for study_status_change oid={} (continuing): {}",
                     studyOid, e.getMessage());
         }
@@ -717,25 +726,8 @@ public class StudiesApiController {
         }
 
         // One audit row per lifecycle transition.
-        try {
-            AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
-            AuditEventBean ae = new AuditEventBean();
-            ae.setUserId(me.getId());
-            ae.setStudyId(target.getId());
-            ae.setStudyName(target.getName() == null ? "" : target.getName());
-            ae.setAuditTable("study");
-            ae.setEntityId(target.getId());
-            ae.setColumnName("status_id");
-            ae.setOldValue(oldStatus == null ? "" : String.valueOf(oldStatus.getId()));
-            ae.setNewValue(String.valueOf(targetStatus.getId()));
-            ae.setActionMessage("study_" + operation + ": " + studyOid
-                    + " (" + (oldStatus == null ? "?" : oldStatus.getName())
-                    + " → " + targetStatus.getName() + ") by " + me.getName());
-            auditDAO.create(ae);
-        } catch (Exception e) {
-            LOG.warn("Audit write failed for study_{} oid={} (continuing): {}",
-                    operation, studyOid, e.getMessage());
-        }
+        writeLifecycleAudit(AuditTypeIds.STUDY_LIFECYCLE_CHANGED, me,
+                target.getId(), studyOid, oldStatus, targetStatus, "study_" + operation);
 
         LOG.info("Study {}: oid={} by admin={}", operation, studyOid, me.getName());
         return ResponseEntity.ok(toIdentityDto(target, studyDao));
@@ -745,9 +737,9 @@ public class StudiesApiController {
     /* Helpers                                                           */
     /* ----------------------------------------------------------------- */
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateCreateStudyShape(
+    private static List<ValidationErrorBody.FieldError> validateCreateStudyShape(
             CreateStudyRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         requireNonBlank(body.name(), "name", 100, "Study name", out);
         requireNonBlank(body.uniqueProtocolId(), "uniqueProtocolId", 30,
                 "Unique protocol id", out);
@@ -770,9 +762,9 @@ public class StudiesApiController {
         return out;
     }
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateUpdateStudyShape(
+    private static List<ValidationErrorBody.FieldError> validateUpdateStudyShape(
             UpdateStudyRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         if (body.name() != null) {
             String s = body.name().trim();
             if (s.isEmpty()) out.add(fieldError("name", "Study name cannot be blank"));
@@ -803,21 +795,21 @@ public class StudiesApiController {
     }
 
     private static void requireNonBlank(String v, String field, int max, String label,
-            List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+            List<ValidationErrorBody.FieldError> out) {
         String s = v == null ? "" : v.trim();
         if (s.isEmpty()) out.add(fieldError(field, label + " is required"));
         else if (s.length() > max) out.add(fieldError(field, label + " must be " + max + " characters or fewer"));
     }
 
     private static void maxLengthOptional(String v, String field, int max, String label,
-            List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+            List<ValidationErrorBody.FieldError> out) {
         if (v == null) return;
         String s = v.trim();
         if (s.length() > max) out.add(fieldError(field, label + " must be " + max + " characters or fewer"));
     }
 
-    private static SubjectsApiController.ValidationErrorBody.FieldError fieldError(String field, String msg) {
-        return new SubjectsApiController.ValidationErrorBody.FieldError(field, msg);
+    private static ValidationErrorBody.FieldError fieldError(String field, String msg) {
+        return new ValidationErrorBody.FieldError(field, msg);
     }
 
     /**
@@ -868,6 +860,41 @@ public class StudiesApiController {
         }
     }
 
+    /**
+     * Direct INSERT into {@code audit_log_event} for the study lifecycle
+     * (disable / restore) status flip. Audit-table unification (slice C,
+     * 2026-06-12) — the legacy {@code AuditEventDAO.create} path wrote
+     * to {@code audit_event} (invisible to the SPA Audit Log view); this
+     * writer targets the unified surface with type
+     * {@link AuditTypeIds#STUDY_LIFECYCLE_CHANGED}. The
+     * {@code actionPrefix} argument is no longer persisted but is kept
+     * in the signature for symmetry with the other lifecycle writers.
+     */
+    private void writeLifecycleAudit(int auditTypeId,
+                                     UserAccountBean me,
+                                     int entityId,
+                                     String oid,
+                                     Status oldStatus,
+                                     Status newStatus,
+                                     @SuppressWarnings("unused") String actionPrefix) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), ?, 'study', ?, ?, ?, ?)")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, me.getId());
+            ps.setInt(3, entityId);
+            ps.setString(4, oid == null ? "" : oid);
+            ps.setString(5, oldStatus == null ? "" : oldStatus.getName());
+            ps.setString(6, newStatus == null ? "" : newStatus.getName());
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("Audit write failed for study lifecycle oid={} (continuing): {}",
+                    oid, e.getMessage());
+        }
+    }
+
     private StudyIdentityDto toIdentityDto(StudyBean s, StudyDAO studyDao) {
         StudyBean parent = s.getParentStudyId() > 0
                 ? studyDao.findByPK(s.getParentStudyId()) : null;
@@ -887,7 +914,11 @@ public class StudiesApiController {
                 nullToEmpty(s.getPhase()),
                 s.getStatus() == null ? "" : s.getStatus().getName(),
                 parent == null ? null : parent.getOid(),
-                parent == null ? null : parent.getName());
+                parent == null ? null : parent.getName(),
+                s.getDatePlannedStart() == null ? null
+                        : java.time.Instant.ofEpochMilli(s.getDatePlannedStart().getTime())
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .toLocalDate().toString());
     }
 
     private static String nullToEmpty(String s) {

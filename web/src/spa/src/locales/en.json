@@ -18,20 +18,59 @@
     "manageUsers": "Manage Users",
     "importCrfData": "Import CRF Data",
     "dataExport": "Data Export",
-    "changePassword": "Change password"
+    "changePassword": "Change password",
+    "patientsOverview": "Patient Overview",
+    "modalities": "Modalities"
   },
   "a11y": {
     "skipToMain": "Skip to main content",
     "signInLink": "Sign in"
   },
+  "topBar": {
+    "profile": {
+      "rolesLabel": "Roles",
+      "rolesAriaLabel": "Assigned roles",
+      "signOut": "Sign out"
+    },
+    "error": {
+      "title": "An error occurred",
+      "dismiss": "Dismiss error message",
+      "reqIdLabel": "Error ID"
+    },
+    "systemAuditLog": "System audit"
+  },
+  "network": {
+    "offline": {
+      "title": "Connection lost",
+      "body": "You are offline. Submissions will save only after the connection is restored.",
+      "dismiss": "Dismiss"
+    }
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "The address you entered does not exist or the page has moved. Please use the navigation to return to the desired view.",
+    "cta": "Go to home"
+  },
   "home": {
     "eyebrow": "Welcome",
+    "sectionLabel": "Your workflows for {study}",
+    "roleDotsAria": "Granting roles",
     "role": {
       "Investigator": "Investigator",
       "Monitor": "Monitor",
-      "Data Manager": "Data Manager",
+      "Data Manager": "Study Director",
       "Administrator": "Administrator",
-      "CRC": "CRC"
+      "CRC": "Coordinator"
+    },
+    "cards": {
+      "patientsOverview": {
+        "title": "Patient Overview",
+        "description": "Cross-study view of every patient you can access."
+      },
+      "modalities": {
+        "title": "Modalities",
+        "description": "Manage exam modalities and their item OIDs."
+      }
     },
     "investigator": {
       "sectionLabel": "Investigator workflows",
@@ -79,7 +118,8 @@
       "sitesDesc": "Site identity + activation + per-site user roles.",
       "auditLogDesc": "Platform audit trail with diff cards on every change.",
       "dataExportTitle": "Data Export",
-      "dataExportDesc": "Saved datasets for the active study — trigger exports and download generated files."
+      "dataExportDesc": "Saved datasets for the active study — trigger exports and download generated files.",
+      "modalitiesDesc": "Manage measurement modalities + their per-eye item OIDs."
     },
     "switchStudySectionLabel": "Switch active study",
     "switchStudyTitle": "Switch active study",
@@ -110,7 +150,7 @@
     "openSubject": "Open →",
     "signed": "Signed",
     "scheduleHint": "Pick a subject below to schedule the next visit.",
-    "scheduleVisitCta": "+ Schedule visit",
+    "metricsLink": "Study statistics details",
     "openQueriesTooltip": "{count} open query/queries",
     "ariaSigned": "Subject {id}, signed",
     "ariaUnsigned": "Subject {id}, not signed",
@@ -123,6 +163,8 @@
     },
     "filter": {
       "all": "All",
+      "today": "Today",
+      "readyToSign": "Ready to sign",
       "openEvents": "Open events",
       "allComplete": "All events complete",
       "signed": "Signed",
@@ -150,6 +192,31 @@
       "active": "Active"
     }
   },
+  "studyMetrics": {
+    "title": "Study metrics",
+    "close": "Close",
+    "empty": "No data available.",
+    "footer": "Aggregated from {n} study subjects.",
+    "kpi": {
+      "subjects": "Subjects",
+      "subjectsShort": "n = {n}",
+      "medianAge": "Median age (years)",
+      "medianFollowUp": "Median follow-up (months)"
+    },
+    "sex": {
+      "title": "Sex distribution",
+      "female": "Female",
+      "male": "Male",
+      "other": "Other"
+    },
+    "age": {
+      "title": "Age distribution"
+    },
+    "followUp": {
+      "title": "Follow-up duration",
+      "context": "Median {median} months · range {range}"
+    }
+  },
   "addSubject": {
     "title": "Add Study Subject",
     "subTrail": "subject enrolment",
@@ -164,16 +231,37 @@
       "enrolledOn": "Date of Enrolment",
       "gender": "Gender",
       "yearOfBirth": "Year of Birth",
-      "groupLabel": "Group assignment"
+      "groupLabel": "Group assignment",
+      "firstName": "First name",
+      "lastName": "Last name",
+      "dateOfBirth": "Date of birth"
     },
     "placeholder": {
       "subjectId": "e.g. M-042",
       "secondaryId": "Optional",
-      "yearOfBirth": "yyyy"
+      "yearOfBirth": "yyyy",
+      "firstName": "e.g. Maria",
+      "lastName": "e.g. Müller"
     },
     "helper": {
       "subjectId": "The identifier used in source documents. Cannot be edited after save.",
-      "yearOfBirth": "Optional — depends on study configuration."
+      "yearOfBirth": "Optional — depends on study configuration.",
+      "dateOfBirth": "Full date of birth. Used for cross-study duplicate detection."
+    },
+    "matchDialog": {
+      "title": "Possible existing patient ({n})",
+      "description": "This patient triplet matches one or more existing subjects. Link to the existing record or confirm this is a different person.",
+      "actionLink": "Use this patient",
+      "actionCreateNew": "Different person — create new",
+      "actionCancel": "Edit input",
+      "noStudies": "No active enrolment",
+      "studiesVisible": "Active in: {list}",
+      "studiesHiddenOnly": "Known in {n} other studies (no access)",
+      "studiesMixed": "Active in: {list} (+ {n} more without access)",
+      "studyEnrolment": "{study} ({label})",
+      "nameLine": "{lastName}, {firstName}",
+      "nameLineUnknown": "Name unknown",
+      "unnamedSubject": "— no study ID —"
     },
     "phiWarning": "Never include name, hospital ID, social security number, or any other identifying data.",
     "gender": {
@@ -184,6 +272,9 @@
     },
     "group": {
       "notAssigned": "— Not assigned —"
+    },
+    "error": {
+      "labelTaken": "Study Subject ID '{id}' is already taken in this study."
     },
     "preview": "Live preview:",
     "cancelLink": "Cancel and return to Subject Matrix",
@@ -311,6 +402,10 @@
       "daysOpen": "Days open",
       "actions": "Actions"
     },
+    "row": {
+      "currentValue": "Current value: {value}",
+      "valueEmpty": "empty"
+    },
     "actions": {
       "respond": "Respond",
       "resolve": "Mark resolved",
@@ -383,6 +478,10 @@
     },
     "error": {
       "exportFailed": "Audit log export failed"
+    },
+    "systemTrail": {
+      "title": "System audit trail",
+      "subtitle": "All audit events including operation failures and job failures."
     }
   },
   "crfEntry": {
@@ -391,6 +490,9 @@
     "readOnlyTell": "Read-only · Monitor view",
     "lockedTell": "Locked · Subject signed",
     "lockedBanner": "This CRF is locked because the subject is signed. No edits are accepted. Contact the study lead to reopen.",
+    "completedTell": "Completed · Read-only",
+    "completedBanner": "This CRF is completed. Fields are read-only. Click «Reopen CRF» to edit.",
+    "completedBannerNoReopen": "This CRF is completed. Fields are read-only. Contact the study lead to reopen.",
     "unsaved": "Unsaved changes",
     "saving": "Auto-saving…",
     "lastSaved": "Last saved at {at}",
@@ -498,15 +600,27 @@
       "headerItem": "Item",
       "headerOd": "OD (right eye)",
       "headerOs": "OS (left eye)",
+      "headerOdEye": "Right eye",
+      "headerOsEye": "Left eye",
       "odOnlyTell": "OD only",
       "osOnlyTell": "OS only",
       "bothEyesTell": "Both eyes",
       "odMissing": "—",
-      "osMissing": "—"
+      "osMissing": "—",
+      "compoundSlotMissing": "Sub-field {subKey} is not defined on this CRF"
     },
     "boolean": {
       "yes": "Yes",
       "no": "No"
+    },
+    "stepper": {
+      "increment": "Increment",
+      "decrement": "Decrement"
+    },
+    "conditionalReason": {
+      "placeholder": "Give a reason…",
+      "requiredTag": "Reason required",
+      "inactiveHint": "Active once \"{value}\" is selected"
     }
   },
   "dde": {
@@ -585,6 +699,10 @@
       "in-progress": "In progress",
       "complete": "Complete",
       "optional": "Optional"
+    },
+    "taskAck": {
+      "button": "Mark as complete",
+      "success": "Step marked complete."
     },
     "task": {
       "create-study": { "title": "Create study", "summary": "{count} active", "description": "Study metadata, version, OID, sponsor + protocol number." },
@@ -933,6 +1051,24 @@
       "failed": "Migration failed: {message}"
     },
     "authorManually": "Manually author",
+    "ophthCatalog": {
+      "title": "Add from ophthalmology catalog",
+      "subtitle": "Pre-defined fields with OID + unit + modality binding — pick one to insert into the current section.",
+      "searchPlaceholder": "Search code, label or hint…",
+      "loading": "Loading catalog…",
+      "empty": "No matching entries.",
+      "pick": "Add",
+      "pickButton": "+ From catalog",
+      "modalityHint": "Linked to modality {code}",
+      "widget": {
+        "number-stepper": "Number",
+        "snellen": "Snellen",
+        "refraction": "Refraction",
+        "yesno": "Yes/No",
+        "text": "Text",
+        "select-one": "Select"
+      }
+    },
     "author": {
       "heading": "Author new version of \"{name}\"",
       "subheading": "Create CRF definition",
@@ -1120,6 +1256,10 @@
       "REFRACTION_TORUS": { "label": "Refraction — Torus" },
       "REFRACTION_ANGLE": { "label": "Refraction — Angle" },
       "REFRACTION_VISUS": { "label": "Refraction — Visus" },
+      "REFRACTION_COMPOUND": {
+        "label": "Refraction (Sphere / Torus / Angle / Visus)",
+        "subFields": "four sub-fields per eye — inserted together"
+      },
       "CCT": { "label": "Central corneal thickness" },
       "CRT": { "label": "Central retinal thickness" },
       "FUNDUS_PHOTO_DONE": { "label": "Fundus photograph done" },
@@ -1254,7 +1394,7 @@
   },
   "manageUsers": {
     "title": "Manage Users",
-    "subTrail": "LCDemo · all roles",
+    "subTrail": "Platform user management",
     "searchPlaceholder": "Find user by name, username or email…",
     "showingCount": "{visible} of {total} shown",
     "empty": "No users match the current filter.",
@@ -1268,9 +1408,9 @@
       "all": "All roles",
       "Investigator": "Investigator",
       "Monitor": "Monitor",
-      "Data Manager": "Data Manager",
+      "Data Manager": "Study Director",
       "Administrator": "Administrator",
-      "CRC": "CRC"
+      "CRC": "Coordinator"
     },
     "auth": {
       "all": "All auth modes",
@@ -1354,6 +1494,8 @@
       "title": "Manage role bindings",
       "currentHeading": "Current bindings",
       "grantHeading": "Grant a new role",
+      "addStudyHeading": "Add study",
+      "addStudy": "Add study",
       "empty": "No active role bindings on visible studies.",
       "study": "Study",
       "studyPlaceholder": "Select a study…",
@@ -1362,12 +1504,115 @@
       "revoke": "Revoke",
       "revoked": "Revoked",
       "revokeConfirm": "Revoke {username}'s role on study {study}? Their access to that study is removed; their data on the study is unaffected. The action is recorded in the audit trail.",
+      "removeStudy": "Remove study",
+      "removeStudyAria": "Remove all roles on study {study}",
+      "removeStudyConfirm": "Remove every role of {username} on study {study}? Their access to that study is fully revoked; their data on the study is unaffected. The action is recorded in the audit trail.",
+      "rolesForStudy": "Roles on study {study}",
+      "rolesForNewStudy": "Roles for the new study",
+      "saveError": "Saving roles failed. Please try again.",
+      "savedToast": "Roles updated.",
       "auditNote": "All grants, role changes, and revocations are recorded in the audit trail."
+    }
+  },
+  "modalities": {
+    "title": "Modalities",
+    "subTitle": "Map exam modalities to per-eye item OIDs.",
+    "columns": {
+      "code": "Code",
+      "labelDe": "Label DE",
+      "labelEn": "Label EN",
+      "oidOd": "OD OID",
+      "oidOs": "OS OID",
+      "type": "Type",
+      "unit": "Unit",
+      "ordinal": "Ordinal",
+      "actions": ""
+    },
+    "action": {
+      "new": "New modality",
+      "edit": "Edit",
+      "delete": "Remove",
+      "deleteConfirm": "Remove modality {code}? Existing baselines stay; the panel will no longer surface this row."
+    },
+    "dialog": {
+      "titleNew": "New modality",
+      "titleEdit": "Edit modality",
+      "field": {
+        "code": "Code",
+        "labelEn": "Label EN",
+        "labelDe": "Label DE",
+        "ordinal": "Ordinal (sort key)",
+        "itemOidOd": "OD item OID (e.g. I_VA_OD_LOGMAR)",
+        "itemOidOs": "OS item OID (e.g. I_VA_OS_LOGMAR)",
+        "dataType": "Type",
+        "dataType.numeric": "Numeric (chartable)",
+        "dataType.categorical": "Categorical",
+        "unit": "Unit (optional)"
+      },
+      "action": {
+        "save": "Save",
+        "cancel": "Cancel"
+      }
+    },
+    "error": {
+      "duplicateCode": "A modality with this code already exists.",
+      "unknownOid": "Item OID '{oid}' not found in any active CRF version.",
+      "missingOid": "Provide at least one of OD OID / OS OID.",
+      "network": "Could not save the modality — please try again."
+    }
+  },
+  "patientDetail": {
+    "heading": "Patient",
+    "close": "Close",
+    "emptyTimeline": "No transitions for this eye.",
+    "timeline": {
+      "heading": "Study path per eye",
+      "eyeLabel": "{eye}",
+      "enrolmentPill": "Enrolled",
+      "transitionPill": "Transferred",
+      "currentBadge": "current"
+    },
+    "charts": {
+      "title": "Measurements over time",
+      "heading": "Measurements over time",
+      "modalityPicker": "Modalities",
+      "empty": "No measurements available.",
+      "categoricalRow": "{modality} — categorical timeline"
+    }
+  },
+  "patients": {
+    "list": {
+      "title": "Patient Overview",
+      "subtitle": "Cross-study list of every patient with an active enrolment you can see.",
+      "searchPlaceholder": "Search by ID or identifier…",
+      "empty": "No patients match your access.",
+      "rowAria": "Patient {label}, born {yearOfBirth}",
+      "rangeLabel": "{start}–{end} of {total}",
+      "pageOfTotal": "Page {page} of {total}",
+      "prev": "Previous",
+      "next": "Next",
+      "open": "Open →",
+      "pagination": {
+        "label": "{from}–{to} of {total}"
+      },
+      "columns": {
+        "lastName": "Last name",
+        "firstName": "First name",
+        "dateOfBirth": "Date of birth",
+        "yearOfBirth": "Year of birth",
+        "gender": "Sex",
+        "studies": "Studies",
+        "lastVisit": "Last visit",
+        "actions": "Action"
+      },
+      "action": {
+        "openDetail": "Open →"
+      }
     }
   },
   "importCrf": {
     "title": "Import CRF Data",
-    "subTrail": "LCDemo · bulk-load existing data",
+    "subTrail": "Bulk data import",
     "intro": "Bulk-load completed CRFs from CDISC ODM XML. The import is staged — nothing is committed until you confirm at the final step.",
     "step": {
       "upload": "Upload",
@@ -1680,9 +1925,67 @@
       "location": "Location",
       "dateInvalid": "Date must be in YYYY-MM-DD format.",
       "cancelConfirm": "Cancel event \"{label}\"? Associated CRFs and items will be marked deleted. The action is recorded in the audit trail.",
+      "lockedBanner": "This visit is completed. Click «Edit» to make changes.",
+      "editConfirm": "This visit is completed. Do you really want to edit it?",
+      "editButton": "Edit",
       "status": {
         "stopped": "Stopped",
         "skipped": "Skipped"
+      }
+    },
+    "eyeTransition": {
+      "title": "Transfer {eye} on {subjectLabel} to another study",
+      "panelHeading": "Study eye",
+      "field": {
+        "targetStudy": "Target study",
+        "targetLabel": "Subject ID in target study (optional)",
+        "reason": "Reason",
+        "transitionedAt": "Date of transfer"
+      },
+      "action": {
+        "transition": "Transfer to another study",
+        "confirm": "Save transfer",
+        "cancel": "Cancel",
+        "openPartner": "Open linked enrollment →"
+      },
+      "error": {
+        "reasonRequired": "A reason is required.",
+        "eyeAlreadyTracked": "The eye is already tracked in the target study.",
+        "unknownStudy": "Target study not found.",
+        "network": "Could not save the transfer — please try again.",
+        "transitionedAtFuture": "Date must not be in the future."
+      },
+      "banner": {
+        "source": "{eye} transferred to {study} ({label}) on {date}",
+        "target": "{eye} previously tracked in {study} as {label}"
+      },
+      "newEnrollment": {
+        "title": "Subject will be newly enrolled in {study}",
+        "targetLabel": {
+          "label": "Subject ID in target study",
+          "required": "Please enter a subject ID",
+          "taken": "This subject ID is already taken in {study}",
+          "available": "Available"
+        }
+      },
+      "alreadyEnrolled": "Subject is already in {study} as {label}",
+      "success": "Transfer saved."
+    },
+    "modalityBaselines": {
+      "title": "{eye} baselines",
+      "loading": "Loading baselines…",
+      "empty": "No baselines available.",
+      "columns": {
+        "modality": "Modality",
+        "baselineDateGlobal": "First (global)",
+        "baselineValueGlobal": "Value (global)",
+        "baselineDatePerStudy": "First (this study)",
+        "baselineValuePerStudy": "Value (this study)",
+        "count": "n"
+      },
+      "error": {
+        "network": "Could not load baselines — please try again.",
+        "retry": "Retry"
       }
     },
     "locked": "Locked"
@@ -1974,6 +2277,43 @@
     "confirm": {
       "heading": "Confirm",
       "placeholder": "Confirmation surface lands with Phase 2."
+    }
+  },
+  "bugReport": {
+    "title": "Report a bug",
+    "dialog": {
+      "title": "Report a bug",
+      "description": "Describe the bug as clearly as possible — what you expected, what you saw instead, and any details that may help us reproduce it."
+    },
+    "field": {
+      "title": {
+        "label": "Title",
+        "placeholder": "Short summary, e.g. 'Subjects list empty after filter'"
+      },
+      "description": {
+        "label": "Description",
+        "placeholder": "What did you expect, and what did you see instead?"
+      },
+      "reproductionSteps": {
+        "label": "Reproduction steps (optional)",
+        "placeholder": "1) Open Subjects 2) Pick OD filter 3) …"
+      }
+    },
+    "submit": "Send",
+    "cancel": "Cancel",
+    "success": "Thanks — ticket {ticketId} sent to the administrator.",
+    "attach": {
+      "heading": "Attach",
+      "pageUrl": "Include current page ({url})",
+      "console": "Include the last {n} console messages",
+      "preview": {
+        "toggle": "Show preview",
+        "empty": "(no entries)"
+      }
+    },
+    "error": {
+      "network": "Could not send the report. Please try again.",
+      "recipientNotConfigured": "Bug-report recipient is not configured. Please contact your sysadmin."
     }
   }
 }

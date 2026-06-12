@@ -10,20 +10,29 @@
  * eye → renders on the clinician's RIGHT. OU = oculus uterque = both
  * eyes (a single bilateral measurement, not differentiated).
  *
- * Detection rule. An item participates in a bilateral row iff its OID
- * matches `^(OD|OS|OU)_(.+)$`. Items are grouped by the suffix in
- * declaration order: the first OD/OS/OU item bearing a given suffix
- * opens a row; subsequent items with the same suffix join it. OU items
+ * Detection rule. An OID participates in a bilateral row iff one of its
+ * underscore-delimited tokens is exactly {@code OD}, {@code OS}, or
+ * {@code OU}. The "pair key" is the OID with the eye token removed, so
+ * {@code I_VA_OD_ETDRS} and {@code I_VA_OS_ETDRS} both reduce to
+ * {@code I_VA_ETDRS} and join the same row. Items are grouped in
+ * declaration order: the first OD/OS/OU item bearing a given pair key
+ * opens a row; subsequent items with the same key join it. OU items
  * collapse into a single-cell "Both eyes" row (so a study can drop in
  * a bilateral measurement without forcing a paired layout).
  *
- * Items that don't match the prefix fall through as a single row,
- * preserving the existing one-column layout for non-ophthalmology CRFs.
+ * The first form (laterality as the LEADING token, e.g. {@code OD_BCVA})
+ * was the original Phase E.6 convention and remains supported. The
+ * second form (laterality as an INFIX token, e.g. {@code I_VA_OD_ETDRS})
+ * matches the seeded Ophthalmology Visit CRF — both shapes resolve to
+ * the same pair key.
+ *
+ * Items without an eye token fall through as a single row, preserving
+ * the existing one-column layout for non-ophthalmology CRFs.
  */
 
 import type { CrfItem } from '@/types/crf'
 
-const EYE_PREFIX_RE = /^(OD|OS|OU)_(.+)$/
+const EYE_TOKEN_RE = /^(OD|OS|OU)$/
 
 /**
  * A row in the rendered section. Each row consumes one or more items
@@ -80,14 +89,35 @@ export type BilateralRow =
     }
 
 /**
- * Returns the {@code OD}/{@code OS}/{@code OU} prefix and shared
- * suffix for an item whose OID participates in the bilateral
- * convention, or {@code null} otherwise.
+ * Returns the {@code OD}/{@code OS}/{@code OU} marker and the pair key
+ * (the OID with the eye token removed) for an item whose OID
+ * participates in the bilateral convention, or {@code null} otherwise.
+ *
+ * <p>The {@code suffix} field is the pair key — two OIDs that produce
+ * the same key + differ only in eye token join a single bilateral row.
+ * The field is named "suffix" for backward compatibility with the
+ * original leading-prefix convention ({@code OD_BCVA} → suffix=
+ * {@code BCVA}); for an infix-token OID ({@code I_VA_OD_ETDRS}) the
+ * "suffix" is the surrounding tokens joined ({@code I_VA_ETDRS}).
+ *
+ * <p>If an OID carries more than one eye token (degenerate authoring)
+ * the FIRST occurrence is consumed.
  */
 export function parseEyePrefix(oid: string): { eye: 'OD' | 'OS' | 'OU'; suffix: string } | null {
-  const m = EYE_PREFIX_RE.exec(oid)
-  if (!m) return null
-  return { eye: m[1] as 'OD' | 'OS' | 'OU', suffix: m[2] }
+  const tokens = oid.split('_')
+  // Require at least 2 tokens overall — `OD` alone, `OS` alone, etc.
+  // shouldn't be treated as paired (matches the original
+  // `^(OD|OS|OU)_(.+)$` regex's "must have something after the eye").
+  if (tokens.length < 2) return null
+  const eyeIdx = tokens.findIndex((t) => EYE_TOKEN_RE.test(t))
+  if (eyeIdx === -1) return null
+  const eye = tokens[eyeIdx] as 'OD' | 'OS' | 'OU'
+  const remaining = [...tokens.slice(0, eyeIdx), ...tokens.slice(eyeIdx + 1)]
+  // No surviving tokens after eye removal — e.g. literally {@code OD_}
+  // — treat as non-paired so the empty key doesn't collide with other
+  // empty keys.
+  if (remaining.length === 0) return null
+  return { eye, suffix: remaining.join('_') }
 }
 
 /**
@@ -98,6 +128,19 @@ export function parseEyePrefix(oid: string): { eye: 'OD' | 'OS' | 'OU'; suffix: 
  */
 export function stripEyeMarker(label: string): string {
   return label
+    // Leading "Right eye (OD) — X", "Left eye (OS) - X", "Both eyes — X",
+    // and the German equivalents ("Rechtes Auge (OD)", "Linkes Auge (OS)",
+    // "Beide Augen"). Seeded Ophthalmology CRF labels use these forms
+    // verbatim — strip them so the row label collapses to the shared
+    // measurement name on both sides.
+    .replace(
+      /^\s*(Right\s+eye|Left\s+eye|Both\s+eyes|Rechtes\s+Auge|Linkes\s+Auge|Beide\s+Augen)\s*[(\[]?\s*(OD|OS|OU)?\s*[)\]]?\s*[—\-:]\s*/i,
+      '',
+    )
+    .replace(
+      /^\s*(Right\s+eye|Left\s+eye|Both\s+eyes|Rechtes\s+Auge|Linkes\s+Auge|Beide\s+Augen)\s*[(\[]?\s*(OD|OS|OU)?\s*[)\]]?\s+/i,
+      '',
+    )
     // Leading "OD ", "OD: ", "OD — ", "OD - ", "OD_"
     .replace(/^\s*(OD|OS|OU)\s*[—\-:_]?\s+/i, '')
     // Trailing " (OD)", " — OD", " - OS", " OS"
@@ -132,7 +175,12 @@ export function deriveRowLabel(
     return osClean
   }
 
-  return suffix.replace(/_/g, ' ').trim()
+  // Suffix fallback. Strip the conventional item-namespace prefix
+  // tokens ("I_", "I_OPHTH_", "I_VA_", etc.) so the surfaced label
+  // reads "BCVA LETTERS" rather than "I OPHTH BCVA LETTERS" — the
+  // user-facing row label should not leak the OID's authoring scheme.
+  const namespaceStrippedSuffix = suffix.replace(/^(I_)?(OPHTH_|VA_|REFRACT_|IOP_|LENS_|VISION_|TONO_)?/i, '')
+  return (namespaceStrippedSuffix || suffix).replace(/_/g, ' ').trim()
 }
 
 /**
@@ -149,10 +197,23 @@ export function deriveRowLabel(
  */
 const COMPOUND_PREFIX_REGISTRY: Record<
   string,
-  { mainLabel: string; compactBySubKey: Record<string, string> }
+  {
+    mainLabel: string
+    /**
+     * Phase E.6 ophth-bilateral-design (2026-06-11): canonical sub-key
+     * order for this compound. {@link groupBilateralItems} pre-populates
+     * every row scaffold with one slot per canonical sub-key so the
+     * rendered row always presents the full set — slots without a
+     * matching item render an empty placeholder, mirroring the design's
+     * "every refraction row shows Sph · Cyl · Axis · Vis" convention.
+     */
+    canonicalSubKeys: string[]
+    compactBySubKey: Record<string, string>
+  }
 > = {
   REFRACTION: {
     mainLabel: 'Refraction',
+    canonicalSubKeys: ['SPHERE', 'TORUS', 'ANGLE', 'VISUS'],
     compactBySubKey: {
       SPHERE: 'Sph',
       TORUS: 'Tor',
@@ -160,6 +221,40 @@ const COMPOUND_PREFIX_REGISTRY: Record<
       ANGLE: 'Ang',
       AXIS: 'Ang',
       VISUS: 'Vis',
+    },
+  },
+  // Seeded Ophthalmology CRF uses the shorter REFRACT_OD_SPH /
+  // REFRACT_OS_CYL convention (lc-muw-2026-06-05-ophth-visit-crf-seed.xml).
+  // After parseEyePrefix strips the OD/OS token the pair key reads as
+  // I_REFRACT_SPH — the compound prefix that matches is therefore
+  // I_REFRACT (the leading I_ is part of the OID's "item" namespace).
+  I_REFRACT: {
+    mainLabel: 'Refraktion',
+    canonicalSubKeys: ['SPH', 'CYL', 'AXIS', 'VIS'],
+    compactBySubKey: {
+      SPH: 'Sphäre',
+      CYL: 'Zylinder',
+      AXIS: 'Achse',
+      VIS: 'Visus',
+    },
+  },
+  // OPHTH v2.0 CRF (runtime-authored) uses I_OPHTH_OD_REFRACTION_SPHERE.
+  // After eye-token removal the pair key is I_OPHTH_REFRACTION_SPHERE;
+  // the matching compound prefix is therefore I_OPHTH_REFRACTION.
+  // Canonical sub-keys mirror the design's SPH/TOR/ANG/VIS quartet —
+  // the v2.0 seed only ships SPHERE/TORUS/ANGLE, so the VISUS slot
+  // renders an empty placeholder until the catalog migration backfills
+  // a {@code REFRACTION_VISUS} item.
+  I_OPHTH_REFRACTION: {
+    mainLabel: 'Refraktion',
+    canonicalSubKeys: ['SPHERE', 'TORUS', 'ANGLE', 'VISUS'],
+    compactBySubKey: {
+      SPHERE: 'Sphäre',
+      TORUS: 'Zylinder',
+      CYLINDER: 'Zylinder',
+      ANGLE: 'Achse',
+      AXIS: 'Achse',
+      VISUS: 'Visus',
     },
   },
 }
@@ -200,20 +295,41 @@ export function groupBilateralItems(items: CrfItem[]): BilateralRow[] {
       let rowIdx = compoundRowIndexByPrefix.get(prefix)
       if (rowIdx === undefined) {
         const registry = COMPOUND_PREFIX_REGISTRY[prefix]!
+        // Pre-populate the row with one slot per canonical sub-key so
+        // the rendered row always shows the full set — empty slots
+        // render an "—" placeholder so the operator sees what the
+        // compound expects even when the seed elided a sub-field.
+        const seededSubFields = registry.canonicalSubKeys.map((canonicalSubKey) => ({
+          subKey: canonicalSubKey,
+          compactLabel: registry.compactBySubKey[canonicalSubKey] ?? canonicalSubKey,
+          od: null as CrfItem | null,
+          os: null as CrfItem | null,
+        }))
         rows.push({
           kind: 'compound-bilateral',
           key: prefix,
           label: registry.mainLabel,
-          subFields: [],
+          subFields: seededSubFields,
         })
         rowIdx = rows.length - 1
         compoundRowIndexByPrefix.set(prefix, rowIdx)
       }
       const row = rows[rowIdx] as Extract<BilateralRow, { kind: 'compound-bilateral' }>
-      const compactLabel = COMPOUND_PREFIX_REGISTRY[prefix]!.compactBySubKey[subKey] ?? subKey
+      // Find the canonical sub-slot matching this item's sub-key. The
+      // registry's compactBySubKey may map several legacy spellings to
+      // the same canonical slot (e.g. CYLINDER → TORUS); we map the
+      // item's sub-key onto a canonical sub-key via the registry's
+      // compactLabel match.
+      const targetCompactLabel = COMPOUND_PREFIX_REGISTRY[prefix]!.compactBySubKey[subKey]
       let sub = row.subFields.find((s) => s.subKey === subKey)
+      if (!sub && targetCompactLabel) {
+        sub = row.subFields.find((s) => s.compactLabel === targetCompactLabel)
+      }
       if (!sub) {
-        sub = { subKey, compactLabel, od: null, os: null }
+        // Item carries a sub-key the registry doesn't recognise (e.g.
+        // an authoring CRF that added a 5th sub-field). Append the
+        // ad-hoc slot rather than silently drop it.
+        sub = { subKey, compactLabel: subKey, od: null, os: null }
         row.subFields.push(sub)
       }
       if (eye === 'OD' && !sub.od) sub.od = item

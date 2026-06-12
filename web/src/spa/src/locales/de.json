@@ -18,20 +18,59 @@
     "manageUsers": "Nutzer verwalten",
     "importCrfData": "CRF-Daten importieren",
     "dataExport": "Datenexport",
-    "changePassword": "Passwort ändern"
+    "changePassword": "Passwort ändern",
+    "patientsOverview": "Patientenübersicht",
+    "modalities": "Modalitäten"
   },
   "a11y": {
     "skipToMain": "Zum Hauptinhalt springen",
     "signInLink": "Anmelden"
   },
+  "topBar": {
+    "profile": {
+      "rolesLabel": "Rollen",
+      "rolesAriaLabel": "Zugewiesene Rollen",
+      "signOut": "Abmelden"
+    },
+    "error": {
+      "title": "Ein Fehler ist aufgetreten",
+      "dismiss": "Fehlermeldung schließen",
+      "reqIdLabel": "Fehler-ID"
+    },
+    "systemAuditLog": "System-Audit"
+  },
+  "network": {
+    "offline": {
+      "title": "Verbindung unterbrochen",
+      "body": "Sie sind offline. Eingaben werden erst gespeichert, sobald die Verbindung zurück ist.",
+      "dismiss": "Schließen"
+    }
+  },
+  "notFound": {
+    "title": "Seite nicht gefunden",
+    "body": "Die aufgerufene Adresse existiert nicht oder die Seite wurde verschoben. Bitte über die Navigation zur gewünschten Ansicht zurückkehren.",
+    "cta": "Zur Startseite"
+  },
   "home": {
     "eyebrow": "Willkommen",
+    "sectionLabel": "Ihre Arbeitsabläufe für {study}",
+    "roleDotsAria": "Berechtigende Rollen",
     "role": {
       "Investigator": "Prüfarzt/-ärztin",
       "Monitor": "Monitor/-in",
-      "Data Manager": "Datenmanager/-in",
+      "Data Manager": "Studienleitung",
       "Administrator": "Administrator/-in",
-      "CRC": "Studienkoordination"
+      "CRC": "Koordinator/-in"
+    },
+    "cards": {
+      "patientsOverview": {
+        "title": "Patientenübersicht",
+        "description": "Studienübergreifende Sicht auf alle erreichbaren Patient/innen."
+      },
+      "modalities": {
+        "title": "Modalitäten",
+        "description": "Untersuchungsmodalitäten und ihre Item-OIDs verwalten."
+      }
     },
     "investigator": {
       "sectionLabel": "Arbeitsabläufe Prüfarzt/-ärztin",
@@ -110,7 +149,7 @@
     "openSubject": "Öffnen →",
     "signed": "Signiert",
     "scheduleHint": "Bitte unten eine/n Teilnehmer/-in auswählen, um die nächste Visite zu planen.",
-    "scheduleVisitCta": "+ Visite planen",
+    "metricsLink": "Studien-Statistik Details",
     "openQueriesTooltip": "{count} offene Rückfrage(n)",
     "ariaSigned": "Teilnehmer {id}, signiert",
     "ariaUnsigned": "Teilnehmer {id}, nicht signiert",
@@ -123,6 +162,8 @@
     },
     "filter": {
       "all": "Alle",
+      "today": "Heute",
+      "readyToSign": "Signaturfreigabe",
       "openEvents": "Mit offenen Visiten",
       "allComplete": "Alle Visiten abgeschlossen",
       "signed": "Signiert",
@@ -150,6 +191,31 @@
       "active": "Aktiv"
     }
   },
+  "studyMetrics": {
+    "title": "Studien-Metriken",
+    "close": "Schließen",
+    "empty": "Keine Daten verfügbar.",
+    "footer": "Aggregiert aus {n} Studienteilnehmer/-innen.",
+    "kpi": {
+      "subjects": "Teilnehmer",
+      "subjectsShort": "n = {n}",
+      "medianAge": "Median-Alter (Jahre)",
+      "medianFollowUp": "Median Follow-up (Monate)"
+    },
+    "sex": {
+      "title": "Geschlechterverteilung",
+      "female": "Weiblich",
+      "male": "Männlich",
+      "other": "Sonstiges"
+    },
+    "age": {
+      "title": "Altersverteilung"
+    },
+    "followUp": {
+      "title": "Follow-up-Dauer",
+      "context": "Median {median} Monate · Spanne {range}"
+    }
+  },
   "addSubject": {
     "title": "Studienteilnehmer aufnehmen",
     "subTrail": "Teilnehmer-Aufnahme",
@@ -164,16 +230,37 @@
       "enrolledOn": "Aufnahmedatum",
       "gender": "Geschlecht",
       "yearOfBirth": "Geburtsjahr",
-      "groupLabel": "Gruppenzuordnung"
+      "groupLabel": "Gruppenzuordnung",
+      "firstName": "Vorname",
+      "lastName": "Nachname",
+      "dateOfBirth": "Geburtsdatum"
     },
     "placeholder": {
       "subjectId": "z. B. M-042",
       "secondaryId": "Optional",
-      "yearOfBirth": "JJJJ"
+      "yearOfBirth": "JJJJ",
+      "firstName": "z. B. Maria",
+      "lastName": "z. B. Müller"
     },
     "helper": {
       "subjectId": "Die in den Quelldokumenten verwendete Kennung. Nach dem Speichern nicht mehr änderbar.",
-      "yearOfBirth": "Optional — abhängig von der Studienkonfiguration."
+      "yearOfBirth": "Optional — abhängig von der Studienkonfiguration.",
+      "dateOfBirth": "Vollständiges Geburtsdatum (TT.MM.JJJJ). Wird zur studienübergreifenden Dublettenprüfung verwendet."
+    },
+    "matchDialog": {
+      "title": "Patient ggf. bereits erfasst ({n})",
+      "description": "Diese Person ist bereits im System unter dem angegebenen Geburtsdatum/Namen vorhanden. Bestehende Erfassung übernehmen oder als neue Person fortfahren.",
+      "actionLink": "Diesen Patienten verwenden",
+      "actionCreateNew": "Andere Person — trotzdem neu anlegen",
+      "actionCancel": "Eingabe ändern",
+      "noStudies": "Keine aktive Erfassung",
+      "studiesVisible": "Aktiv in: {list}",
+      "studiesHiddenOnly": "Bekannt in {n} weiteren Studien (kein Zugriff)",
+      "studiesMixed": "Aktiv in: {list} (+ {n} weitere ohne Zugriff)",
+      "studyEnrolment": "{study} ({label})",
+      "nameLine": "{lastName}, {firstName}",
+      "nameLineUnknown": "Name unbekannt",
+      "unnamedSubject": "— ohne Studien-ID —"
     },
     "phiWarning": "Niemals Name, Krankenhaus-ID, Sozialversicherungsnummer oder andere identifizierende Daten verwenden.",
     "gender": {
@@ -184,6 +271,9 @@
     },
     "group": {
       "notAssigned": "— Nicht zugewiesen —"
+    },
+    "error": {
+      "labelTaken": "Studien-Teilnehmer-ID '{id}' ist in dieser Studie bereits vergeben."
     },
     "preview": "Live-Vorschau:",
     "cancelLink": "Abbrechen — zurück zur Übersicht",
@@ -311,6 +401,10 @@
       "daysOpen": "Offene Tage",
       "actions": "Aktionen"
     },
+    "row": {
+      "currentValue": "Aktueller Wert: {value}",
+      "valueEmpty": "leer"
+    },
     "actions": {
       "respond": "Antworten",
       "resolve": "Als gelöst markieren",
@@ -383,6 +477,10 @@
     },
     "error": {
       "exportFailed": "Audit-Log-Export fehlgeschlagen"
+    },
+    "systemTrail": {
+      "title": "System-Audit-Protokoll",
+      "subtitle": "Alle Audit-Ereignisse einschließlich Operationsfehler und Job-Fehler."
     }
   },
   "crfEntry": {
@@ -391,6 +489,9 @@
     "readOnlyTell": "Schreibgeschützt · Monitor-Ansicht",
     "lockedTell": "Gesperrt · Teilnehmer signiert",
     "lockedBanner": "Dieses CRF ist gesperrt, weil der Teilnehmer signiert hat. Eingaben sind nicht mehr möglich. Zur Wiedereröffnung wenden Sie sich an die Studienleitung.",
+    "completedTell": "Abgeschlossen · Schreibgeschützt",
+    "completedBanner": "Dieses CRF ist abgeschlossen. Felder sind schreibgeschützt. Klicken Sie «CRF erneut öffnen», um Änderungen zu erfassen.",
+    "completedBannerNoReopen": "Dieses CRF ist abgeschlossen. Felder sind schreibgeschützt. Für Änderungen wenden Sie sich an die Studienleitung.",
     "unsaved": "Ungespeicherte Änderungen",
     "saving": "Automatisches Speichern…",
     "lastSaved": "Zuletzt gespeichert um {at}",
@@ -498,15 +599,27 @@
       "headerItem": "Merkmal",
       "headerOd": "OD (rechtes Auge)",
       "headerOs": "OS (linkes Auge)",
+      "headerOdEye": "Rechtes Auge",
+      "headerOsEye": "Linkes Auge",
       "odOnlyTell": "nur OD",
       "osOnlyTell": "nur OS",
       "bothEyesTell": "Beide Augen",
       "odMissing": "—",
-      "osMissing": "—"
+      "osMissing": "—",
+      "compoundSlotMissing": "Unterfeld {subKey} im CRF nicht hinterlegt"
     },
     "boolean": {
       "yes": "Ja",
       "no": "Nein"
+    },
+    "stepper": {
+      "increment": "Erhöhen",
+      "decrement": "Verringern"
+    },
+    "conditionalReason": {
+      "placeholder": "Grund angeben…",
+      "requiredTag": "Grund erforderlich",
+      "inactiveHint": "Aktiv, sobald „{value}\" gewählt ist"
     }
   },
   "dde": {
@@ -585,6 +698,10 @@
       "in-progress": "In Bearbeitung",
       "complete": "Abgeschlossen",
       "optional": "Optional"
+    },
+    "taskAck": {
+      "button": "Als abgeschlossen markieren",
+      "success": "Schritt als abgeschlossen markiert."
     },
     "task": {
       "create-study": { "title": "Studie anlegen", "summary": "{count} aktiv", "description": "Studien-Metadaten, Version, OID, Sponsor + Protokollnummer." },
@@ -933,6 +1050,24 @@
       "failed": "Migration fehlgeschlagen: {message}"
     },
     "authorManually": "Manuell anlegen",
+    "ophthCatalog": {
+      "title": "Aus Ophthalmologie-Katalog hinzufügen",
+      "subtitle": "Vordefinierte Felder mit OID + Einheit + Modalitätsbindung — wählen Sie ein Feld, das in den aktuellen Abschnitt eingefügt werden soll.",
+      "searchPlaceholder": "Code, Label oder Hinweis suchen…",
+      "loading": "Katalog wird geladen…",
+      "empty": "Keine passenden Einträge.",
+      "pick": "Einfügen",
+      "pickButton": "+ Aus Katalog",
+      "modalityHint": "Verknüpft mit Modalität {code}",
+      "widget": {
+        "number-stepper": "Zahl",
+        "snellen": "Snellen",
+        "refraction": "Refraktion",
+        "yesno": "Ja/Nein",
+        "text": "Text",
+        "select-one": "Auswahl"
+      }
+    },
     "author": {
       "heading": "Neue Version von »{name}« anlegen",
       "subheading": "CRF-Definition erstellen",
@@ -1120,6 +1255,10 @@
       "REFRACTION_TORUS": { "label": "Refraktion — Torus" },
       "REFRACTION_ANGLE": { "label": "Refraktion — Winkel" },
       "REFRACTION_VISUS": { "label": "Refraktion — Visus" },
+      "REFRACTION_COMPOUND": {
+        "label": "Refraktion (Sphäre / Torus / Winkel / Visus)",
+        "subFields": "vier Unterfelder pro Auge — werden gemeinsam eingefügt"
+      },
       "CCT": { "label": "Zentrale Hornhautdicke" },
       "CRT": { "label": "Zentrale Netzhautdicke" },
       "FUNDUS_PHOTO_DONE": { "label": "Fundusfotografie durchgeführt" },
@@ -1254,7 +1393,7 @@
   },
   "manageUsers": {
     "title": "Nutzerverwaltung",
-    "subTrail": "LCDemo · alle Rollen",
+    "subTrail": "Plattform-Nutzerverwaltung",
     "searchPlaceholder": "Nutzer/-in nach Name, Username oder E-Mail suchen…",
     "showingCount": "{visible} von {total} sichtbar",
     "empty": "Keine Nutzer/-innen für den aktuellen Filter.",
@@ -1268,9 +1407,9 @@
       "all": "Alle Rollen",
       "Investigator": "Prüfarzt/-ärztin",
       "Monitor": "Monitor",
-      "Data Manager": "Datenmanager/-in",
+      "Data Manager": "Studienleitung",
       "Administrator": "Administrator/-in",
-      "CRC": "CRC"
+      "CRC": "Koordinator/-in"
     },
     "auth": {
       "all": "Alle Auth-Modi",
@@ -1354,6 +1493,8 @@
       "title": "Rollenzuweisungen verwalten",
       "currentHeading": "Aktuelle Zuweisungen",
       "grantHeading": "Neue Rolle vergeben",
+      "addStudyHeading": "Studie hinzufügen",
+      "addStudy": "Studie hinzufügen",
       "empty": "Keine aktiven Rollenzuweisungen auf sichtbaren Studien.",
       "study": "Studie",
       "studyPlaceholder": "Studie auswählen…",
@@ -1362,12 +1503,115 @@
       "revoke": "Entziehen",
       "revoked": "Entzogen",
       "revokeConfirm": "Rolle von {username} in Studie {study} entziehen? Der Studienzugriff wird entfernt; bestehende Daten bleiben unverändert. Die Aktion wird im Audit Trail dokumentiert.",
+      "removeStudy": "Studie entfernen",
+      "removeStudyAria": "Alle Rollen in Studie {study} entfernen",
+      "removeStudyConfirm": "Alle Rollen von {username} in Studie {study} entfernen? Der Studienzugriff wird vollständig entzogen; bestehende Daten bleiben unverändert. Die Aktion wird im Audit Trail dokumentiert.",
+      "rolesForStudy": "Rollen in Studie {study}",
+      "rolesForNewStudy": "Rollen für die neue Studie",
+      "saveError": "Speichern der Rollen fehlgeschlagen. Bitte erneut versuchen.",
+      "savedToast": "Rollen aktualisiert.",
       "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert."
+    }
+  },
+  "modalities": {
+    "title": "Modalitäten",
+    "subTitle": "Untersuchungsmodalitäten den eye-spezifischen Item-OIDs zuordnen.",
+    "columns": {
+      "code": "Code",
+      "labelDe": "Label DE",
+      "labelEn": "Label EN",
+      "oidOd": "OD-OID",
+      "oidOs": "OS-OID",
+      "type": "Typ",
+      "unit": "Einheit",
+      "ordinal": "Reihenfolge",
+      "actions": ""
+    },
+    "action": {
+      "new": "Neue Modalität",
+      "edit": "Bearbeiten",
+      "delete": "Entfernen",
+      "deleteConfirm": "Modalität {code} entfernen? Bestehende Erstmessungen bleiben erhalten; die Modalität erscheint nicht mehr im Panel."
+    },
+    "dialog": {
+      "titleNew": "Neue Modalität",
+      "titleEdit": "Modalität bearbeiten",
+      "field": {
+        "code": "Code",
+        "labelEn": "Label EN",
+        "labelDe": "Label DE",
+        "ordinal": "Reihenfolge",
+        "itemOidOd": "OD-Item-OID (z. B. I_VA_OD_LOGMAR)",
+        "itemOidOs": "OS-Item-OID (z. B. I_VA_OS_LOGMAR)",
+        "dataType": "Typ",
+        "dataType.numeric": "Numerisch (graphisch darstellbar)",
+        "dataType.categorical": "Kategorisch",
+        "unit": "Einheit (optional)"
+      },
+      "action": {
+        "save": "Speichern",
+        "cancel": "Abbrechen"
+      }
+    },
+    "error": {
+      "duplicateCode": "Eine Modalität mit diesem Code existiert bereits.",
+      "unknownOid": "Item-OID „{oid}\" wurde in keiner aktiven CRF-Version gefunden.",
+      "missingOid": "Mindestens eine OD- oder OS-OID erforderlich.",
+      "network": "Modalität konnte nicht gespeichert werden — bitte erneut versuchen."
+    }
+  },
+  "patientDetail": {
+    "heading": "Patient",
+    "close": "Schließen",
+    "emptyTimeline": "Keine Verlagerungen für dieses Auge.",
+    "timeline": {
+      "heading": "Studienverlauf pro Auge",
+      "eyeLabel": "{eye}",
+      "enrolmentPill": "Aufnahme",
+      "transitionPill": "Verlagert",
+      "currentBadge": "aktuell"
+    },
+    "charts": {
+      "title": "Messungen über Zeit",
+      "heading": "Messungen über Zeit",
+      "modalityPicker": "Modalitäten",
+      "empty": "Keine Messungen vorhanden.",
+      "categoricalRow": "{modality} — kategorische Verlaufsanzeige"
+    }
+  },
+  "patients": {
+    "list": {
+      "title": "Patientenübersicht",
+      "subtitle": "Studienübergreifende Übersicht aller Patient/innen mit aktiver Erfassung.",
+      "searchPlaceholder": "Suchen nach ID oder Identifier…",
+      "empty": "Keine Patient/innen in Ihrer Zugriffsliste.",
+      "rowAria": "Patient {label}, geboren {yearOfBirth}",
+      "rangeLabel": "{start}–{end} von {total}",
+      "pageOfTotal": "Seite {page} von {total}",
+      "prev": "Zurück",
+      "next": "Weiter",
+      "open": "Öffnen →",
+      "pagination": {
+        "label": "{from}–{to} von {total}"
+      },
+      "columns": {
+        "lastName": "Nachname",
+        "firstName": "Vorname",
+        "dateOfBirth": "Geburtsdatum",
+        "yearOfBirth": "Geburtsjahr",
+        "gender": "Geschlecht",
+        "studies": "Studien",
+        "lastVisit": "Letzte Visite",
+        "actions": "Aktion"
+      },
+      "action": {
+        "openDetail": "Öffnen →"
+      }
     }
   },
   "importCrf": {
     "title": "CRF-Daten importieren",
-    "subTrail": "LCDemo · Massendaten-Import",
+    "subTrail": "Massendaten-Import",
     "intro": "Bestehende CRF-Daten aus CDISC ODM XML laden. Der Import wird gestaged — nichts wird committed, bis Sie im letzten Schritt bestätigen.",
     "step": {
       "upload": "Hochladen",
@@ -1680,9 +1924,67 @@
       "location": "Ort",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
       "cancelConfirm": "Visite »{label}« stornieren? Verbundene CRFs und Items werden als gelöscht markiert. Die Aktion wird im Audit Trail dokumentiert.",
+      "lockedBanner": "Diese Visite ist abgeschlossen. Klicken Sie «Bearbeiten», um Änderungen zu erfassen.",
+      "editConfirm": "Diese Visite ist abgeschlossen. Möchten Sie sie wirklich bearbeiten?",
+      "editButton": "Bearbeiten",
       "status": {
         "stopped": "Abgebrochen",
         "skipped": "Übersprungen"
+      }
+    },
+    "eyeTransition": {
+      "title": "{eye} bei {subjectLabel} in andere Studie verlagern",
+      "panelHeading": "Studienauge",
+      "field": {
+        "targetStudy": "Zielstudie",
+        "targetLabel": "Teilnehmer-ID in Zielstudie (optional)",
+        "reason": "Begründung",
+        "transitionedAt": "Datum der Verlagerung"
+      },
+      "action": {
+        "transition": "In andere Studie verlagern",
+        "confirm": "Verlagerung speichern",
+        "cancel": "Abbrechen",
+        "openPartner": "Verknüpfte Erfassung öffnen →"
+      },
+      "error": {
+        "reasonRequired": "Eine Begründung ist erforderlich.",
+        "eyeAlreadyTracked": "Das Auge wird in der Zielstudie bereits geführt.",
+        "unknownStudy": "Zielstudie nicht gefunden.",
+        "network": "Verlagerung konnte nicht gespeichert werden — bitte erneut versuchen.",
+        "transitionedAtFuture": "Datum darf nicht in der Zukunft liegen."
+      },
+      "banner": {
+        "source": "{eye} am {date} in {study} ({label}) verlagert",
+        "target": "{eye} zuvor in {study} geführt als {label}"
+      },
+      "newEnrollment": {
+        "title": "Patient wird neu angelegt in {study}",
+        "targetLabel": {
+          "label": "Subject-ID in der Zielstudie",
+          "required": "Bitte Subject-ID eingeben",
+          "taken": "Diese Subject-ID ist in {study} bereits vergeben",
+          "available": "Verfügbar"
+        }
+      },
+      "alreadyEnrolled": "Patient ist bereits in {study} als {label} angelegt",
+      "success": "Verlagerung gespeichert."
+    },
+    "modalityBaselines": {
+      "title": "{eye} Erstmessungen",
+      "loading": "Erstmessungen werden geladen…",
+      "empty": "Keine Erstmessungen vorhanden.",
+      "columns": {
+        "modality": "Modalität",
+        "baselineDateGlobal": "Erstmessung (global)",
+        "baselineValueGlobal": "Wert (global)",
+        "baselineDatePerStudy": "Erstmessung (diese Studie)",
+        "baselineValuePerStudy": "Wert (diese Studie)",
+        "count": "n"
+      },
+      "error": {
+        "network": "Erstmessungen konnten nicht geladen werden — bitte erneut versuchen.",
+        "retry": "Erneut versuchen"
       }
     },
     "locked": "Gesperrt"
@@ -1974,6 +2276,43 @@
     "confirm": {
       "heading": "Bestätigen",
       "placeholder": "Bestätigungsoberfläche folgt mit Phase 2."
+    }
+  },
+  "bugReport": {
+    "title": "Fehler melden",
+    "dialog": {
+      "title": "Fehler melden",
+      "description": "Beschreiben Sie den Fehler so genau wie möglich — was Sie erwartet, was Sie stattdessen gesehen haben, und alle Details, die uns helfen, das Problem nachzustellen."
+    },
+    "field": {
+      "title": {
+        "label": "Titel",
+        "placeholder": "Kurze Zusammenfassung, z. B. 'Probanden-Liste leer nach Filter'"
+      },
+      "description": {
+        "label": "Beschreibung",
+        "placeholder": "Was haben Sie erwartet, und was haben Sie stattdessen gesehen?"
+      },
+      "reproductionSteps": {
+        "label": "Schritte zur Reproduktion (optional)",
+        "placeholder": "1) Probanden öffnen 2) OD-Filter wählen 3) …"
+      }
+    },
+    "submit": "Senden",
+    "cancel": "Abbrechen",
+    "success": "Vielen Dank — Ticket {ticketId} wurde an die Administration gesendet.",
+    "attach": {
+      "heading": "Anhängen",
+      "pageUrl": "Aktuelle Seite mitsenden ({url})",
+      "console": "Letzte {n} Konsolen-Meldungen mitsenden",
+      "preview": {
+        "toggle": "Vorschau anzeigen",
+        "empty": "(keine Einträge)"
+      }
+    },
+    "error": {
+      "network": "Fehler beim Versand. Bitte versuchen Sie es erneut.",
+      "recipientNotConfigured": "Bug-Report-Empfänger ist nicht konfiguriert. Bitte den Sysadmin kontaktieren."
     }
   }
 }

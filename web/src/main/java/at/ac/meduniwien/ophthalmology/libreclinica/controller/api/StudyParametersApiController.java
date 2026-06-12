@@ -8,6 +8,8 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.controller.api.dto.ValidationErrorBody;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -23,7 +25,6 @@ import java.util.Set;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -187,19 +188,19 @@ public class StudyParametersApiController {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
         if (body == null) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Request body is required",
-                    List.of(new SubjectsApiController.ValidationErrorBody.FieldError(
+                    List.of(new ValidationErrorBody.FieldError(
                             "body", "missing"))));
         }
 
         // Shape validation runs before any DB I/O so an invalid payload
         // surfaces as 400 even when the downstream lookup would throw
         // (the existing tests cover the chaos/blank handle cases).
-        List<SubjectsApiController.ValidationErrorBody.FieldError> errors =
+        List<ValidationErrorBody.FieldError> errors =
                 validateUpdateShape(body);
         if (!errors.isEmpty()) {
-            return ResponseEntity.badRequest().body(new SubjectsApiController.ValidationErrorBody(
+            return ResponseEntity.badRequest().body(new ValidationErrorBody(
                     "Validation failed", errors));
         }
 
@@ -210,8 +211,7 @@ public class StudyParametersApiController {
                     "No study with oid '" + studyOid + "'"));
         }
 
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, target)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, target, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit editing this study's parameters"));
         }
@@ -417,9 +417,9 @@ public class StudyParametersApiController {
     /* Validation                                                         */
     /* ----------------------------------------------------------------- */
 
-    private static List<SubjectsApiController.ValidationErrorBody.FieldError> validateUpdateShape(
+    private static List<ValidationErrorBody.FieldError> validateUpdateShape(
             UpdateStudyParametersRequest body) {
-        List<SubjectsApiController.ValidationErrorBody.FieldError> out = new ArrayList<>();
+        List<ValidationErrorBody.FieldError> out = new ArrayList<>();
         // Allow-list each handle. Reject empty strings (use null to
         // leave unchanged). The catalogue follows the legacy JSP and
         // CreateSubStudyServlet validation cases.
@@ -445,16 +445,16 @@ public class StudyParametersApiController {
     }
 
     private static void checkEnum(String v, String field, Set<String> allowed,
-                                  List<SubjectsApiController.ValidationErrorBody.FieldError> out) {
+                                  List<ValidationErrorBody.FieldError> out) {
         if (v == null) return;
         String trimmed = v.trim();
         if (trimmed.isEmpty()) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     field, field + " cannot be blank (use null to leave unchanged)"));
             return;
         }
         if (!allowed.contains(trimmed)) {
-            out.add(new SubjectsApiController.ValidationErrorBody.FieldError(
+            out.add(new ValidationErrorBody.FieldError(
                     field, field + " must be one of " + allowed));
         }
     }
