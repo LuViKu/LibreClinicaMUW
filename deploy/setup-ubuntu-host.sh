@@ -428,6 +428,12 @@ else
   fi
 fi
 
+# The active Postgres password drives both the DB container (POSTGRES_PASSWORD
+# above) and the app's datainfo.properties dbPass below — they must match or the
+# app can't authenticate. On first run it's the freshly-generated secret; on
+# re-run, read it back from the preserved env file.
+DB_PASSWORD="${pg_password:-$(grep -E '^POSTGRES_PASSWORD=' "$ENV_FILE" | cut -d= -f2-)}"
+
 # ----------------------------- runtime config ---------------------------------
 
 section "Runtime config (datainfo.properties)"
@@ -444,6 +450,22 @@ if [[ ! -d "$RUNTIME_CONFIG" ]]; then
   warn "  institutional MUW SMTP relay before sending production email."
 else
   log "Runtime config exists at $RUNTIME_CONFIG (left untouched)"
+fi
+
+# Keep the app's dbPass in lockstep with the DB container's POSTGRES_PASSWORD.
+# The repo's datainfo.properties ships dbPass=clinica (the dev default), but
+# production runs Postgres with the host-generated secret — without this sync
+# the app fails to authenticate and the Spring context dies on startup
+# (FATAL: password authentication failed for user "clinica"). Re-asserted on
+# every run so a rotated secret propagates. gen_secret output is [A-Za-z0-9],
+# so it is safe to drop straight into the sed replacement unescaped.
+DATAINFO_FILE="${RUNTIME_CONFIG}/datainfo.properties"
+if [[ -f "$DATAINFO_FILE" ]]; then
+  sed -i "s|^dbPass=.*|dbPass=${DB_PASSWORD}|" "$DATAINFO_FILE"
+  chown libreclinica:libreclinica "$DATAINFO_FILE"
+  log "Synced datainfo.properties dbPass to the DB password"
+else
+  warn "  $DATAINFO_FILE not found — could not sync dbPass to POSTGRES_PASSWORD"
 fi
 
 # ----------------------------- systemd unit -----------------------------------
