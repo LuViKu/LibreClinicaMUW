@@ -59,6 +59,22 @@ set -euo pipefail
 : "${LIBRECLINICA_GHCR_USER:=LuViKu}"    # GitHub username the PAT belongs to
 : "${LIBRECLINICA_GHCR_TOKEN:=}"         # classic PAT with 'repo' + 'read:packages' scopes (GHCR needs a classic token). See deploy/README.md for minting instructions.
 
+# Production mail (SMTP). Stamped into datainfo.properties so a fresh deploy can
+# send email out of the box — the repo's dev default points mailHost at the
+# absent mailcrab 'smtp' host, which 500s the first-login root password change
+# (UnknownHostException: smtp). Defaults target the MUW *internal* outgoing
+# relay, which requires NO authentication. For an authenticated/external relay
+# (e.g. smtpa.meduniwien.ac.at:587 from outside the MUW net) set these via env
+# before invocation: LIBRECLINICA_MAIL_HOST/PORT/SMTP_AUTH/STARTTLS/USERNAME/PASSWORD.
+: "${LIBRECLINICA_MAIL_HOST:=smtpi.meduniwien.ac.at}"
+: "${LIBRECLINICA_MAIL_PORT:=25}"
+: "${LIBRECLINICA_MAIL_SMTP_AUTH:=false}"
+: "${LIBRECLINICA_MAIL_STARTTLS:=false}"
+: "${LIBRECLINICA_MAIL_USERNAME:=}"
+: "${LIBRECLINICA_MAIL_PASSWORD:=}"
+: "${LIBRECLINICA_MAIL_CONNECTION_TIMEOUT:=10000}"   # ms — the repo's 100ms default is too short for a real relay
+: "${LIBRECLINICA_ADMIN_EMAIL:=}"                    # From/reply-to on system mail; empty keeps the seeded value
+
 INSTALL_PREFIX=/opt/libreclinica
 CONFIG_DIR=/etc/libreclinica
 ENV_FILE=${CONFIG_DIR}/env
@@ -479,8 +495,42 @@ if [[ -f "$DATAINFO_FILE" ]]; then
   sed -i "s|^dbPass=.*|dbPass=${DB_PASSWORD}|" "$DATAINFO_FILE"
   chown libreclinica:libreclinica "$DATAINFO_FILE"
   log "Synced datainfo.properties dbPass to the DB password"
+
+  # Configure the SMTP settings ONLY if they haven't been set yet. The repo
+  # ships mailHost=smtp (the mailcrab dev catcher), which is unreachable in
+  # production and 500s the first-login password change. We treat mailHost
+  # still being the placeholder 'smtp' as "not yet configured": on a fresh
+  # deploy we set the MUW relay defaults (overridable via LIBRECLINICA_MAIL_*);
+  # once mailHost has been moved off the placeholder — by us on an earlier run,
+  # or by the operator — re-runs leave the mail config untouched so hand edits
+  # survive. Values are simple tokens (host/port/bool), safe in sed unescaped.
+  if grep -q '^mailHost=smtp$' "$DATAINFO_FILE"; then
+    sed -i \
+      -e "s|^mailHost=.*|mailHost=${LIBRECLINICA_MAIL_HOST}|" \
+      -e "s|^mailPort=.*|mailPort=${LIBRECLINICA_MAIL_PORT}|" \
+      -e "s|^mailSmtpAuth=.*|mailSmtpAuth=${LIBRECLINICA_MAIL_SMTP_AUTH}|" \
+      -e "s|^mailSmtpStarttls\.enable=.*|mailSmtpStarttls.enable=${LIBRECLINICA_MAIL_STARTTLS}|" \
+      -e "s|^mailUsername=.*|mailUsername=${LIBRECLINICA_MAIL_USERNAME}|" \
+      -e "s|^mailPassword=.*|mailPassword=${LIBRECLINICA_MAIL_PASSWORD}|" \
+      -e "s|^mailSmtpConnectionTimeout=.*|mailSmtpConnectionTimeout=${LIBRECLINICA_MAIL_CONNECTION_TIMEOUT}|" \
+      "$DATAINFO_FILE"
+    log "Configured datainfo.properties mail (host=${LIBRECLINICA_MAIL_HOST}:${LIBRECLINICA_MAIL_PORT}, auth=${LIBRECLINICA_MAIL_SMTP_AUTH})"
+
+    # adminEmail (From/reply-to). Only override when given, so we don't blank a
+    # value the operator may have set.
+    if [[ -n "$LIBRECLINICA_ADMIN_EMAIL" ]]; then
+      sed -i "s|^adminEmail=.*|adminEmail=${LIBRECLINICA_ADMIN_EMAIL}|" "$DATAINFO_FILE"
+      log "Set datainfo.properties adminEmail=${LIBRECLINICA_ADMIN_EMAIL}"
+    elif grep -q '^adminEmail=admin@example.com' "$DATAINFO_FILE"; then
+      warn "  adminEmail is still admin@example.com — set LIBRECLINICA_ADMIN_EMAIL"
+      warn "  to a real MUW address (or edit datainfo.properties) so system mail"
+      warn "  isn't dropped as a bogus sender."
+    fi
+  else
+    log "datainfo.properties mail already configured (mailHost off the 'smtp' default) — leaving as-is"
+  fi
 else
-  warn "  $DATAINFO_FILE not found — could not sync dbPass to POSTGRES_PASSWORD"
+  warn "  $DATAINFO_FILE not found — could not sync dbPass / mail config"
 fi
 
 # ----------------------------- systemd unit -----------------------------------
