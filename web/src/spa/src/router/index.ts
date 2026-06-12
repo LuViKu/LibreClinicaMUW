@@ -343,7 +343,7 @@ router.beforeEach((to, _from) => {
 export function guard(
   auth: ReturnType<typeof useAuthStore>,
   to: RouteLocationNormalized,
-): boolean | { name: string } {
+): boolean | { name: string; query?: Record<string, string> } {
   const isPublic = to.meta.public === true
 
   // First-login wizard requires an authenticated-but-incomplete identity.
@@ -385,7 +385,20 @@ export function guard(
 
   if (isPublic) return true
 
-  if (auth.isAnonymous) return { name: 'login' }
+  if (auth.isAnonymous) {
+    // Phase E.6 inactivity-timeout + return-to-page (2026-06-12):
+    // capture the URL the operator was trying to reach so the login
+    // flow can forward them back after re-auth instead of dumping
+    // them on /home. Skip the capture for the login route itself
+    // (would loop) and for paths that are obviously transient
+    // (root, query-only). The login view's resolveReturnTo()
+    // validates the value before navigating.
+    const target = to.fullPath
+    if (target && target !== '/' && !target.startsWith('/login')) {
+      return { name: 'login', query: { returnTo: target } }
+    }
+    return { name: 'login' }
+  }
   if (auth.needsProfile) return { name: 'first-login' }
   // Phase E.4 M1: a bound study is required for every protected route.
   // If the user lacks one, send them through the picker first.

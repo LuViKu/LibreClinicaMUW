@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 
 import FieldLabel from '@/components/FieldLabel.vue'
 import TextInput from '@/components/TextInput.vue'
@@ -10,16 +10,44 @@ import { useAuthStore } from '@/stores/auth'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 
 const username = ref('')
 const password = ref('')
+
+/**
+ * Phase E.6 inactivity-timeout + return-to-page (2026-06-12): the
+ * router guard + the idle-timeout watcher capture the URL the user
+ * tried to reach when their session was anonymous (or expired) into
+ * the {@code returnTo} query param. On successful login we forward
+ * the operator there instead of dumping them on /home.
+ *
+ * <p>Defensive parsing: only honour relative-path returnTo values
+ * (must start with {@code /}) so a hostile login link can't
+ * redirect to an external site via {@code ?returnTo=https://evil}.
+ * Empty / external values fall back to the default home / pick-study
+ * navigation.
+ */
+function resolveReturnTo(): string | null {
+  const raw = route.query.returnTo
+  if (typeof raw !== 'string' || raw === '') return null
+  if (!raw.startsWith('/')) return null
+  // Don't loop: a returnTo pointing back at /login would infinite-redirect.
+  if (raw.startsWith('/login')) return null
+  return raw
+}
 
 async function onLocalLogin() {
   await auth.localLogin(username.value, password.value)
   if (!auth.isAuthenticated && !auth.needsProfile) return // error already in auth.error
   if (auth.needsProfile) {
     router.push({ name: 'first-login' })
+    return
+  }
+  const returnTo = resolveReturnTo()
+  if (returnTo) {
+    router.push(returnTo)
     return
   }
   if (!auth.user?.activeStudy) router.push({ name: 'pick-study' })
