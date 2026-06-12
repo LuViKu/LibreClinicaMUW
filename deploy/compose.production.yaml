@@ -75,3 +75,10 @@ services:
       # script creates and chowns to libreclinica:libreclinica.
       - /var/lib/libreclinica/retinal-inference:/var/lib/libreclinica/segmentation-output
       - /var/lib/libreclinica/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
+    # The base compose.yaml pins cpus: "4.0" for local dev boxes. The
+    # production VM is a 2-CPU host, and Docker rejects a cpus limit above
+    # the physical core count outright ("range of CPUs is from 0.01 to
+    # 2.00"). Override down to a value that fits and still leaves headroom
+    # for Postgres + the Tomcat app; the placeholder sidecar is near-idle.
+    # Bump this if the sidecar is moved to a larger VM or a real model lands.
+    cpus: "${LIBRECLINICA_RETINAL_CPUS:-1.5}"
