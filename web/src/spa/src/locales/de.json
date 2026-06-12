@@ -1255,6 +1255,10 @@
       "REFRACTION_TORUS": { "label": "Refraktion — Torus" },
       "REFRACTION_ANGLE": { "label": "Refraktion — Winkel" },
       "REFRACTION_VISUS": { "label": "Refraktion — Visus" },
+      "REFRACTION_COMPOUND": {
+        "label": "Refraktion (Sphäre / Torus / Winkel / Visus)",
+        "subFields": "vier Unterfelder pro Auge — werden gemeinsam eingefügt"
+      },
       "CCT": { "label": "Zentrale Hornhautdicke" },
       "CRT": { "label": "Zentrale Netzhautdicke" },
       "FUNDUS_PHOTO_DONE": { "label": "Fundusfotografie durchgeführt" },
