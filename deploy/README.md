@@ -29,31 +29,44 @@ the host like a managed config target, not a hand-crafted server.
   the whole stack.)
 - Outbound HTTPS to `ghcr.io`, `download.docker.com`, `archive.ubuntu.com`,
   `security.ubuntu.com`, `github.com`.
-- A **fine-grained GitHub PAT** with read on the private repo + private GHCR
-  packages — see § "Provisioning the GHCR token" below.
+- A **classic GitHub PAT** with the `repo` + `read:packages` scopes. It must be
+  a *classic* token — GHCR (ghcr.io) does not accept fine-grained PATs. See
+  § "Provisioning the GHCR token" below.
 
 ## Provisioning the GHCR token
 
-Both the repo (private) and the GHCR packages (private) require auth. The
-setup script uses one fine-grained PAT for both: the same token authenticates
-the sparse-clone and the `docker login ghcr.io` step that the systemd unit
-relies on for image pulls.
+Both the repo (private) and the GHCR packages (private) require auth, and the
+setup script uses **one token for both** — the same token authenticates the
+sparse-clone and the `docker login ghcr.io` step the systemd unit relies on for
+image pulls.
 
-**Mint the token** at <https://github.com/settings/personal-access-tokens/new>:
+It must be a **classic** PAT, not a fine-grained one. GitHub's container
+registry (ghcr.io) only authenticates classic tokens — a fine-grained PAT has
+no permission that works against the container registry, so `docker login
+ghcr.io` / image pulls will fail with one. (Ref:
+[GitHub Docs — Working with the container registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).)
+A classic token's `repo` scope also covers the private-repo clone, so a single
+classic PAT does both jobs.
 
-1. **Token name** — `libreclinica-muw-deploy-<host>` (so the rotation log is
+**Mint the token** at <https://github.com/settings/tokens/new> (the *classic*
+token page — not `/personal-access-tokens/new`):
+
+1. **Note** — `libreclinica-muw-deploy-<host>` (so the rotation log is
    self-documenting).
 2. **Expiration** — pick 90 or 365 days; set a calendar reminder for rotation.
-3. **Resource owner** — `LuViKu` (the account that owns the repo + packages).
-4. **Repository access** — *Only select repositories* → `LuViKu/LibreClinicaMUW`.
-5. **Repository permissions**:
-   - **Contents** → **Read-only** *(authorises the sparse-clone)*
-   - **Metadata** → **Read-only** *(automatically required when Contents is granted)*
-6. **Account / organization permissions** *(for the GHCR pulls)*:
-   - **Packages** → **Read-only** *(authorises `docker pull` from
+3. **Scopes** — tick exactly two:
+   - **`repo`** (full control of private repositories) *(authorises the
+     sparse-clone; classic tokens have no read-only or per-repo variant)*
+   - **`read:packages`** *(authorises `docker pull` from
      `ghcr.io/luviku/libreclinicamuw` + `…/retinal-inference`)*
-7. Click *Generate token* and copy the `github_pat_…` value once — GitHub
-   won't show it again.
+4. Click *Generate token* and copy the `ghp_…` value once — GitHub won't show
+   it again.
+
+> **Least-privilege note:** classic `repo` grants read/write to *all* repos the
+> token owner can access — there is no narrower scope that still authorises a
+> private-repo clone on a classic token. On a dedicated deploy host this is the
+> accepted trade-off; the token lives only in `/etc/libreclinica/env` (mode
+> 0640) and `/root/.docker/config.json`. Rotate it on the schedule below.
 
 Pass it to the setup script via `--ghcr-token` *(see § One-shot setup)*. The
 script persists it to `/etc/libreclinica/env` (mode 0640) so re-runs and

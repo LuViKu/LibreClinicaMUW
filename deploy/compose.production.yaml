@@ -30,10 +30,15 @@ services:
     pull_policy: always
     restart: unless-stopped
     ports:
-      # Override the dev "127.0.0.1:8080:8080" with the same — explicit
-      # so future edits to the base compose port mapping don't silently
-      # expose the container on 0.0.0.0.
-      - "127.0.0.1:8080:8080"
+      # The institutional reverse proxy runs on a SEPARATE host and forwards
+      # to this VM's internal IP, so 8080 must be published on a routable
+      # interface — a loopback-only bind makes the app unreachable to the
+      # proxy (and to any in-network smoke test). Defaults to 0.0.0.0; access
+      # control is the campus perimeter's responsibility, as this host has no
+      # local firewall by design (see deploy/README.md § Prerequisites).
+      # Narrow the bind to the VM's internal IP by setting
+      # LIBRECLINICA_BIND_ADDR=<vm-internal-ip> in /etc/libreclinica/env.
+      - "${LIBRECLINICA_BIND_ADDR:-0.0.0.0}:8080:8080"
     environment:
       # Skip the demo Liquibase context (subjects + CRFs + dn_item_data
       # seed) — production starts on a clean schema.

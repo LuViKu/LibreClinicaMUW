@@ -57,7 +57,7 @@ set -euo pipefail
 : "${LIBRECLINICA_REPO_REF:=main}"       # branch/tag the deploy tree clones to /opt/libreclinica
 : "${LIBRECLINICA_BACKUP_RETENTION_DAYS:=30}"
 : "${LIBRECLINICA_GHCR_USER:=LuViKu}"    # GitHub username the PAT belongs to
-: "${LIBRECLINICA_GHCR_TOKEN:=}"         # fine-grained PAT: 'Contents: read' on the repo + 'Packages: read' on the org. See deploy/README.md for minting instructions.
+: "${LIBRECLINICA_GHCR_TOKEN:=}"         # classic PAT with 'repo' + 'read:packages' scopes (GHCR needs a classic token). See deploy/README.md for minting instructions.
 
 INSTALL_PREFIX=/opt/libreclinica
 CONFIG_DIR=/etc/libreclinica
@@ -127,7 +127,7 @@ fi
 # `docker pull` will fail without auth. Fail loud now rather than
 # 15 minutes into the build.
 if [[ -z "$LIBRECLINICA_GHCR_TOKEN" ]]; then
-  die "No --ghcr-token set (and none in ${ENV_FILE}). The private repo + GHCR pulls require a fine-grained PAT — see deploy/README.md § 'Provisioning the GHCR token' for the minting recipe."
+  die "No --ghcr-token set (and none in ${ENV_FILE}). The private repo + GHCR pulls require a classic PAT (scopes: repo + read:packages) — see deploy/README.md § 'Provisioning the GHCR token' for the minting recipe."
 fi
 
 # Validate the PAT against the GitHub API before we burn time on
@@ -142,8 +142,8 @@ http_code=$(curl -fsS -o /dev/null -w '%{http_code}' \
 case "$http_code" in
   200) log "PAT validated (HTTP 200)" ;;
   401) die "PAT validation failed: HTTP 401 Unauthorized. Token is invalid or expired. Mint a new one (deploy/README.md)." ;;
-  403) die "PAT validation failed: HTTP 403 Forbidden. Token lacks 'Contents: read' permission on the repo. Re-mint with the correct repo permission." ;;
-  404) die "PAT validation failed: HTTP 404. Either the token can't see the repo (missing repository access on the fine-grained PAT) or the repo URL is wrong (got ${LIBRECLINICA_REPO_URL})." ;;
+  403) die "PAT validation failed: HTTP 403 Forbidden. Token lacks repo read access. Re-mint a classic PAT with the 'repo' scope." ;;
+  404) die "PAT validation failed: HTTP 404. Either the token can't see the repo (missing the 'repo' scope on the classic PAT) or the repo URL is wrong (got ${LIBRECLINICA_REPO_URL})." ;;
   *)   die "PAT validation failed: HTTP ${http_code} from api.github.com. Check network access + token validity." ;;
 esac
 
@@ -263,7 +263,7 @@ if printf '%s\n' "$LIBRECLINICA_GHCR_TOKEN" \
      | docker login ghcr.io --username "$LIBRECLINICA_GHCR_USER" --password-stdin >/dev/null; then
   log "Logged in as ${LIBRECLINICA_GHCR_USER} on ghcr.io (config: /root/.docker/config.json)"
 else
-  die "docker login ghcr.io failed. Check token + 'Packages: read' org permission."
+  die "docker login ghcr.io failed. Check token + 'read:packages' scope (must be a classic PAT — GHCR rejects fine-grained tokens)."
 fi
 
 # ----------------------------- deploy user ------------------------------------
@@ -385,14 +385,19 @@ LIBRECLINICA_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
 # in lockstep. Override only when you need to pin the sidecar at a
 # different version than the app.
 #LIBRECLINICA_RETINAL_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
+# Host interface the app's port 8080 publishes on. Defaults to 0.0.0.0 so the
+# separate-host institutional reverse proxy (and in-network smoke tests) can
+# reach it over the internal network. Narrow to the VM's internal IP if you
+# want to restrict the bind.
+#LIBRECLINICA_BIND_ADDR=0.0.0.0
 POSTGRES_PASSWORD=${pg_password}
 
-# Fine-grained GitHub PAT used for:
+# Classic GitHub PAT used for:
 #   (a) the private-repo clone of /opt/libreclinica (compose + config seed)
 #   (b) docker pulls from ghcr.io for the libreclinica + retinal-inference images
-# Required scopes on the fine-grained PAT:
-#   - Repository: LuViKu/LibreClinicaMUW — Contents: read
-#   - Organization: LuViKu (or user account) — Packages: read
+# Required scopes on the classic PAT (GHCR does not accept fine-grained tokens):
+#   - repo          — authorises the private-repo clone
+#   - read:packages — authorises the ghcr.io image pulls
 # See deploy/README.md § "Provisioning the GHCR token" for the minting recipe.
 LIBRECLINICA_GHCR_USER=${LIBRECLINICA_GHCR_USER}
 LIBRECLINICA_GHCR_TOKEN=${LIBRECLINICA_GHCR_TOKEN}
