@@ -2,7 +2,6 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import RoleDots from '@/components/RoleDots.vue'
 import type { UserRole } from '@/types/auth'
 
 interface BreadcrumbItem {
@@ -259,15 +258,13 @@ function onReportBugClick() {
             {{ userInitials }}
           </span>
           <span class="text-slate-700">{{ userName }}</span>
-          <template v-if="roles.length > 1">
-            <RoleDots :roles="roles" />
-          </template>
           <span
-            v-else-if="primaryRole"
+            v-for="r in roles"
+            :key="r"
             class="rounded-full text-[10px] px-1.5 py-0.5 font-medium"
-            :class="triggerPalette.chip"
+            :class="ROLE_PALETTE[r]?.chip ?? NEUTRAL_PALETTE.chip"
           >
-            {{ primaryRole }}
+            {{ t(`manageUsers.role.${r}`) }}
           </span>
           <svg
             class="w-3 h-3 text-slate-400 transition-transform"
@@ -313,7 +310,7 @@ function onReportBugClick() {
               class="flex items-center gap-2 py-0.5"
             >
               <span class="w-2.5 h-2.5 rounded-full ring-1 ring-white inline-block" :class="paletteFor(r).swatch" />
-              <span class="text-slate-700">{{ r }}</span>
+              <span class="text-slate-700">{{ t(`manageUsers.role.${r}`) }}</span>
             </li>
           </ul>
 
