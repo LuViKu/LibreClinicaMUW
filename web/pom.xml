@@ -603,6 +603,15 @@
                              Boot's version pinning. -->
                         <ignoredUsedUndeclaredDependency>org.junit.jupiter:junit-jupiter-api</ignoredUsedUndeclaredDependency>
                         <ignoredUsedUndeclaredDependency>org.hamcrest:hamcrest</ignoredUsedUndeclaredDependency>
+                        <!-- Phase E.6 multi-role auth test (2026-06-12):
+                             StudyAdminAuthorizationTest uses AssertJ's
+                             fluent assertThat for the per-binding
+                             contract assertions. AssertJ lands
+                             transitively via spring-boot-starter-test
+                             (same path as junit-jupiter-api above);
+                             declaring it explicitly would duplicate
+                             Boot's version pinning. -->
+                        <ignoredUsedUndeclaredDependency>org.assertj:assertj-core</ignoredUsedUndeclaredDependency>
                         <!-- Phase E.5 B3: OpenApiConfig imports GroupedOpenApi
                              from springdoc-openapi-starter-common and the
                              10 controllers import @Tag from
