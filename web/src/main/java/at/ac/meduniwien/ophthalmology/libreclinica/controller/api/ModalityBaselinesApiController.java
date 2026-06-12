@@ -151,19 +151,30 @@ public class ModalityBaselinesApiController {
             List<ModalityBaselineDto> out = new ArrayList<>(modalities.size());
             for (ModalityRow m : modalities) {
                 String itemOid = "OD".equals(eye) ? m.itemOidOd : m.itemOidOs;
-                if (itemOid == null || itemOid.isEmpty()) {
+                String itemOidAlias = "OD".equals(eye) ? m.itemOidOdAlias : m.itemOidOsAlias;
+                if ((itemOid == null || itemOid.isEmpty())
+                        && (itemOidAlias == null || itemOidAlias.isEmpty())) {
                     // This modality doesn't track the requested eye —
                     // surface an empty row so the SPA can render "no
                     // data" rather than silently omit the modality.
                     out.add(emptyRow(m, ""));
                     continue;
                 }
+                // Phase E.6 modality OID aliases (2026-06-12): query the
+                // union of primary + alias OIDs so the baselines panel
+                // resolves observations entered against either CRF
+                // version (v1.0 seed OID OR v2.0 runtime OID).
+                List<String> oidsForEye = resolveOidsForEye(itemOid, itemOidAlias);
                 ModalityBaselineDto.Aggregate global =
-                        aggregate(c, itemOid, globalStudySubjectIds);
+                        aggregate(c, oidsForEye, globalStudySubjectIds);
                 ModalityBaselineDto.Aggregate perStudy =
-                        aggregate(c, itemOid, perStudyStudySubjectIds);
+                        aggregate(c, oidsForEye, perStudyStudySubjectIds);
+                // Surface the primary OID in the response when present;
+                // otherwise fall back to the alias so the SPA still has
+                // a non-null OID to display in tooling.
+                String reportedOid = itemOid != null && !itemOid.isEmpty() ? itemOid : itemOidAlias;
                 out.add(new ModalityBaselineDto(
-                        m.code, m.labelEn, m.labelDe, itemOid,
+                        m.code, m.labelEn, m.labelDe, reportedOid,
                         m.dataType, m.unit, global, perStudy));
             }
             return ResponseEntity.ok(out);
@@ -255,24 +266,32 @@ public class ModalityBaselinesApiController {
      * supplied {@code study_subject_id}s. Returns null-fields when no
      * observations are in scope.
      */
-    private ModalityBaselineDto.Aggregate aggregate(Connection c, String itemOid,
+    private ModalityBaselineDto.Aggregate aggregate(Connection c, List<String> itemOids,
                                                     Set<Integer> studySubjectIds)
             throws SQLException {
-        if (studySubjectIds.isEmpty()) {
+        // Phase E.6 modality OID aliases (2026-06-12): the registry's
+        // primary {@code item_oid_od/_os} column carries the v1.0 OPHTH
+        // OID; the new alias columns carry the v2.0 OID convention. The
+        // caller passes both (de-duplicated, non-null) so this method
+        // resolves an observation regardless of which CRF version the
+        // operator entered the value on. Each non-null OID is an
+        // additional placeholder in the IN clause.
+        if (studySubjectIds.isEmpty() || itemOids.isEmpty()) {
             return new ModalityBaselineDto.Aggregate(null, null, 0);
         }
         // Use a single query to find earliest date + count, then a
         // tiebreak on min(item_data_id) to pick a deterministic value
         // when two rows share the earliest date.
         String inList = inPlaceholders(studySubjectIds.size());
+        String oidList = inPlaceholders(itemOids.size());
         String sql = "WITH eligible AS ( "
                 + "  SELECT id_.value AS value, id_.item_data_id AS item_data_id, "
                 + "         ec.date_completed AS date_completed "
                 + "    FROM item_data id_ "
                 + "    JOIN item it ON it.item_id = id_.item_id "
                 + "    JOIN event_crf ec ON ec.event_crf_id = id_.event_crf_id "
-                + "   WHERE it.oc_oid = ? "
-                + "     AND ec.study_subject_id IN " + inList
+                + "   WHERE it.oc_oid IN " + oidList + " "
+                + "     AND ec.study_subject_id IN " + inList + " "
                 + "     AND id_.value IS NOT NULL AND id_.value <> '' "
                 + "     AND id_.status_id NOT IN (5, 7) "
                 + ") "
@@ -283,7 +302,9 @@ public class ModalityBaselinesApiController {
                 + "         ORDER BY item_data_id ASC LIMIT 1) AS earliest_value";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
             int i = 1;
-            ps.setString(i++, itemOid);
+            for (String oid : itemOids) {
+                ps.setString(i++, oid);
+            }
             for (Integer ssId : studySubjectIds) {
                 ps.setInt(i++, ssId);
             }
@@ -300,12 +321,29 @@ public class ModalityBaselinesApiController {
         return new ModalityBaselineDto.Aggregate(null, null, 0);
     }
 
+    /**
+     * Build the list of OIDs to query for a given eye. De-dupes nulls
+     * and same-as-primary aliases so the prepared statement's IN clause
+     * stays minimal. The order is primary-first so the row's reported
+     * {@code itemOid} (when needed elsewhere) still surfaces the
+     * primary registry value.
+     */
+    private static List<String> resolveOidsForEye(String primary, String alias) {
+        List<String> out = new ArrayList<>(2);
+        if (primary != null && !primary.isBlank()) out.add(primary);
+        if (alias != null && !alias.isBlank() && !alias.equals(primary)) out.add(alias);
+        return out;
+    }
+
     private List<ModalityRow> loadActiveModalities(Connection c) throws SQLException {
         List<ModalityRow> out = new ArrayList<>();
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT code, label_en, label_de, item_oid_od, item_oid_os, data_type, unit "
-                        + "FROM modality WHERE status_id = 1 "
-                        + "ORDER BY ordinal ASC, code ASC")) {
+                "SELECT code, label_en, label_de, "
+                        + "       item_oid_od, item_oid_os, "
+                        + "       item_oid_od_alias, item_oid_os_alias, "
+                        + "       data_type, unit "
+                        + "  FROM modality WHERE status_id = 1 "
+                        + "  ORDER BY ordinal ASC, code ASC")) {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     out.add(new ModalityRow(
@@ -314,6 +352,8 @@ public class ModalityBaselinesApiController {
                             rs.getString("label_de"),
                             rs.getString("item_oid_od"),
                             rs.getString("item_oid_os"),
+                            rs.getString("item_oid_od_alias"),
+                            rs.getString("item_oid_os_alias"),
                             rs.getString("data_type"),
                             rs.getString("unit")));
                 }
@@ -342,6 +382,14 @@ public class ModalityBaselinesApiController {
     private record ModalityRow(
             String code, String labelEn, String labelDe,
             String itemOidOd, String itemOidOs,
+            String itemOidOdAlias, String itemOidOsAlias,
             String dataType, String unit
-    ) {}
+    ) {
+
+        /** Accessor names the call sites expect (camelCase, no parens). */
+        @Override public String itemOidOd() { return itemOidOd; }
+        @Override public String itemOidOs() { return itemOidOs; }
+        @Override public String itemOidOdAlias() { return itemOidOdAlias; }
+        @Override public String itemOidOsAlias() { return itemOidOsAlias; }
+    }
 }

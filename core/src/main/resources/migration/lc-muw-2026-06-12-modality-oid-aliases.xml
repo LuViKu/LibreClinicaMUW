@@ -1,0 +1,108 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 ophth-field-catalog modality OID aliases (2026-06-12):
+        adds nullable {@code item_oid_od_alias} + {@code item_oid_os_alias}
+        columns to the modality registry so a single modality can resolve
+        to either the v1.0 seeded OPHTH CRF OIDs (e.g. I_IOP_OD, used by
+        integration test fixtures) OR the v2.0 runtime-authored OIDs
+        (e.g. I_OPHTH_OD_IOP, the canonical convention production now
+        uses).
+
+        Why aliases instead of repointing the primary column. The original
+        approach — UPDATE-ing modality.item_oid_od/_os to the v2.0 OIDs —
+        broke ModalityBaselinesApiControllerDatabaseIT +
+        PatientsApiControllerDatabaseIT because the test seed CRF is v1.0
+        and the ITs assert against the v1.0 OIDs. An alias column is the
+        minimal change that lets the primary column keep its v1.0 binding
+        (so tests stay green) while production picks up v2.0 (so the
+        Erstmessungen panel surfaces GA-001's actual saved data via the
+        new alias OID).
+
+        ModalityBaselinesApiController.aggregate is updated in the same
+        PR to query {@code WHERE it.oc_oid IN (item_oid_od, item_oid_od_alias)}
+        so either side wins. Both ITs continue to find their v1.0 fixtures
+        without modification; the prod query now resolves the v2.0 items
+        through the alias.
+
+        Future-proof: when the OPHTH v3.0 ships (presumably with its own
+        OID convention), the alias columns get repointed again — no schema
+        change needed.
+    -->
+    <changeSet id="2026-06-12-modality-add-oid-alias-columns"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <columnExists tableName="modality" columnName="item_oid_od_alias"/>
+            </not>
+        </preConditions>
+        <comment>Add nullable item_oid_od_alias + item_oid_os_alias columns.</comment>
+
+        <addColumn tableName="modality">
+            <column name="item_oid_od_alias" type="VARCHAR(64)"/>
+            <column name="item_oid_os_alias" type="VARCHAR(64)"/>
+        </addColumn>
+
+        <rollback>
+            <dropColumn tableName="modality" columnName="item_oid_od_alias"/>
+            <dropColumn tableName="modality" columnName="item_oid_os_alias"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet id="2026-06-12-modality-seed-v2-aliases"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <!-- Idempotent guard: only run when the aliases are still
+                 null (initial population). -->
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM modality
+                 WHERE code = 'BCVA_ETDRS'
+                   AND item_oid_od_alias IS NOT NULL;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the v2.0 OPHTH OIDs as aliases so the baselines query
+            can resolve production data through either the primary
+            (v1.0) or alias (v2.0) column.
+        </comment>
+
+        <sql>
+            UPDATE modality
+               SET item_oid_od_alias = 'I_OPHTH_OD_BCVA_LETTERS',
+                   item_oid_os_alias = 'I_OPHTH_OS_BCVA_LETTERS'
+             WHERE code = 'BCVA_ETDRS';
+
+            UPDATE modality
+               SET item_oid_od_alias = 'I_OPHTH_OD_IOP',
+                   item_oid_os_alias = 'I_OPHTH_OS_IOP'
+             WHERE code = 'IOP';
+
+            UPDATE modality
+               SET item_oid_od_alias = 'I_OPHTH_OD_REFRACTION_SPHERE',
+                   item_oid_os_alias = 'I_OPHTH_OS_REFRACTION_SPHERE'
+             WHERE code = 'REFRACTION_SPH';
+
+            UPDATE modality
+               SET item_oid_od_alias = 'I_OPHTH_OD_REFRACTION_TORUS',
+                   item_oid_os_alias = 'I_OPHTH_OS_REFRACTION_TORUS'
+             WHERE code = 'REFRACTION_CYL';
+        </sql>
+
+        <rollback>
+            <sql>
+                UPDATE modality
+                   SET item_oid_od_alias = NULL,
+                       item_oid_os_alias = NULL
+                 WHERE code IN ('BCVA_ETDRS','IOP','REFRACTION_SPH','REFRACTION_CYL');
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

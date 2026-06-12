@@ -58,5 +58,6 @@
   <include  file="migration/lc-muw-2026-06-12-audit-event-backfill.xml"/>
   <include  file="migration/lc-muw-2026-06-11-ophth-field-catalog.xml"/>
   <include  file="migration/lc-muw-2026-06-12-ophth-v2-catalog-alignment.xml"/>
+  <include  file="migration/lc-muw-2026-06-12-modality-oid-aliases.xml"/>
 </databaseChangeLog>
 
