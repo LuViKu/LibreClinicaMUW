@@ -164,28 +164,58 @@ above for the host-hardening scope split.
 
 ## After the script
 
-### 1. Fill in `datainfo.properties`
+### 1. Mail is pre-configured for the MUW internal relay
 
-The dev defaults point `mailHost=smtp` at the (now-absent) mailcrab service.
-Production must point at the institutional MUW SMTP relay:
+The setup script **sets the SMTP config in `datainfo.properties` if it hasn't
+been configured yet** — i.e. while `mailHost` is still the repo's `smtp` dev
+placeholder (which points at the absent mailcrab container and otherwise 500s
+the first-login root password change). Once `mailHost` is set, re-runs leave
+the mail config alone, so hand edits survive. The first-run defaults target the
+MUW **internal** outgoing relay, which needs no auth:
+
+| Knob | Default | datainfo key |
+|------|---------|--------------|
+| `LIBRECLINICA_MAIL_HOST` | `smtpi.meduniwien.ac.at` | `mailHost` |
+| `LIBRECLINICA_MAIL_PORT` | `25` | `mailPort` |
+| `LIBRECLINICA_MAIL_SMTP_AUTH` | `false` | `mailSmtpAuth` |
+| `LIBRECLINICA_MAIL_STARTTLS` | `false` | `mailSmtpStarttls.enable` |
+| `LIBRECLINICA_MAIL_CONNECTION_TIMEOUT` | `10000` (ms) | `mailSmtpConnectionTimeout` |
+| `LIBRECLINICA_ADMIN_EMAIL` | *(unset → keeps seeded value)* | `adminEmail` |
+
+For an **authenticated/external** relay (e.g. `smtpa.meduniwien.ac.at:587` from
+outside the MUW net), set the knobs via env before running setup:
 
 ```sh
-sudo -u libreclinica vim /opt/libreclinica/config/datainfo.properties
-# mailHost=relay.meduniwien.ac.at        # confirm with MUW netops
-# mailPort=587
-# mailUsername=<institutional service account>
-# mailPassword=<institutional service account password>
-# mailSmtpAuth=true
-# mailSmtpStarttls.enable=true
+LIBRECLINICA_MAIL_HOST=smtpa.meduniwien.ac.at \
+LIBRECLINICA_MAIL_PORT=587 \
+LIBRECLINICA_MAIL_SMTP_AUTH=true \
+LIBRECLINICA_MAIL_STARTTLS=true \
+LIBRECLINICA_MAIL_USERNAME=<MUWUserID> \
+LIBRECLINICA_MAIL_PASSWORD=<password> \
+LIBRECLINICA_ADMIN_EMAIL=<real MUW sender> \
+  sudo -E bash /opt/libreclinica/deploy/setup-ubuntu-host.sh --ghcr-token <token> …
 ```
 
-Any other production-only overrides (SSO entry URL, study-specific
-parameters, debug log levels) belong in this file too. Restart the stack
-after edits:
+> These are **first-run defaults**, not re-stamped values: the script only
+> writes them while `mailHost` is still the `smtp` placeholder. After that,
+> edit the mail keys directly in `datainfo.properties` (hand edits are
+> preserved across re-runs) — or, to re-apply the `LIBRECLINICA_MAIL_*` env
+> defaults, reset `mailHost=smtp` and re-run setup. Set `LIBRECLINICA_ADMIN_EMAIL`
+> (or edit `adminEmail`) to a real MUW address; the seeded `admin@example.com`
+> may be dropped as a bogus sender.
+
+Restart the stack after any config change:
 
 ```sh
 sudo systemctl restart libreclinica
 ```
+
+> **Re-running setup:** always use **`/opt/libreclinica/deploy/setup-ubuntu-host.sh`**
+> (kept current by `git reset --hard` on each run), *not* the
+> `/root/libreclinica-setup/` bootstrap copy you `curl`'d for the first run.
+> The bootstrap copy is frozen at first-run and will silently skip later fixes
+> (dbPass sync, bind address, mail config) even though it still pulls fresh
+> compose files into `/opt/libreclinica`.
 
 ### 2. Wire the institutional reverse proxy
 
@@ -219,6 +249,19 @@ curl -I http://<vm-ip>:8080/LibreClinica/
 curl -I http://<vm-ip>:8080/LibreClinica/pages/login/login
 # expect: 200
 ```
+
+> The published bind comes from `LIBRECLINICA_BIND_ADDR` (set to `0.0.0.0` by
+> setup; narrow to the VM internal IP to restrict it). `docker port
+> libreclinica-muw-libreclinica-1` should show exactly **one** mapping — if it
+> shows two, or none, the bind got double-defined (do not add a `ports:` entry
+> in the overlay; Compose concatenates them).
+
+> **Known issue — container shows `(unhealthy)`:** the image's healthcheck
+> probes `/LibreClinica/actuator/health`, which currently returns 404 (Spring
+> Boot Actuator's web endpoints aren't exposed in the WAR deployment). This is
+> **cosmetic** — the app serves normally (302 on `/LibreClinica/`). Fixing it
+> properly means exposing the actuator health endpoint (app config) or
+> overriding the healthcheck; tracked separately, not a blocker for go-live.
 
 ## Day-2 operations
 
@@ -302,7 +345,10 @@ scope for this script).
 
 **Why is mailcrab gone?**
 It's a dev SMTP catcher. Production sends through the institutional MUW
-relay; configure it in `/opt/libreclinica/config/datainfo.properties`.
+relay, which the setup script bakes into `datainfo.properties` by default
+(internal relay `smtpi.meduniwien.ac.at:25`, no auth) — see § "After the
+script" → "Mail is pre-configured" to override for an authenticated/external
+relay.
 
 **What happens if I re-run setup-ubuntu-host.sh?**
 Every block is idempotent. The env file's Postgres secret is preserved
