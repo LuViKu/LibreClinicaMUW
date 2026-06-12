@@ -1,0 +1,106 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 ophth-field-catalog modality binding (2026-06-12):
+        repoint the modality registry's per-eye OID columns from the
+        original v1.0 OPHTH item OIDs (I_VA_OD_ETDRS, I_IOP_OD, etc.)
+        to the v2.0 OIDs that actually carry institutional data
+        (I_OPHTH_OD_BCVA_LETTERS, I_OPHTH_OD_IOP, etc.).
+
+        Background. The modality table was seeded by
+        lc-muw-2026-06-08-modality.xml when the original
+        lc-muw-2026-06-05-ophth-visit-crf-seed.xml CRF (v1.0) was the
+        only OPHTH visit form. v2.0 of the CRF was authored at runtime
+        via the wizard with a different OID convention; v1.0 was never
+        deployed to a study, so all production item_data rows live on
+        v2.0 OIDs that the modality registry doesn't know about. The
+        Erstmessungen baselines panel reads via
+        {@code ModalityBaselinesApiController.aggregate} which joins
+        on {@code item.oc_oid = modality.item_oid_od/os}, so the panel
+        comes up empty for GA-001 even though the data is there.
+
+        After this patch:
+
+           BCVA_ETDRS     → I_OPHTH_OD_BCVA_LETTERS / I_OPHTH_OS_BCVA_LETTERS
+           IOP            → I_OPHTH_OD_IOP / I_OPHTH_OS_IOP
+           REFRACTION_SPH → I_OPHTH_OD_REFRACTION_SPHERE / I_OPHTH_OS_REFRACTION_SPHERE
+           REFRACTION_CYL → I_OPHTH_OD_REFRACTION_TORUS / I_OPHTH_OS_REFRACTION_TORUS
+
+        BCVA_LOGMAR + LENS_STATUS stay pointed at the v1.0 OIDs — v2.0
+        doesn't carry those measurements, so leaving the modality
+        registry pointed at the v1.0 OIDs keeps the door open for a
+        future v3.0 that adds them without a follow-up migration. The
+        baselines panel will simply show "—" for those rows on GA-001
+        until v3.0 ships them.
+    -->
+    <changeSet id="2026-06-12-modality-v2-oid-binding"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <!-- Guard: only run while the modality registry still
+                 points at the original v1.0 OIDs. Idempotent on rerun. -->
+            <sqlCheck expectedResult="1">
+                SELECT COUNT(*) FROM modality
+                 WHERE code = 'BCVA_ETDRS'
+                   AND item_oid_od = 'I_VA_OD_ETDRS';
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Repoint modality.item_oid_od/_os to the v2.0 OPHTH OIDs so
+            the Erstmessungen baselines panel can read GA-001's saved
+            data.
+        </comment>
+
+        <sql>
+            UPDATE modality
+               SET item_oid_od = 'I_OPHTH_OD_BCVA_LETTERS',
+                   item_oid_os = 'I_OPHTH_OS_BCVA_LETTERS'
+             WHERE code = 'BCVA_ETDRS';
+
+            UPDATE modality
+               SET item_oid_od = 'I_OPHTH_OD_IOP',
+                   item_oid_os = 'I_OPHTH_OS_IOP'
+             WHERE code = 'IOP';
+
+            UPDATE modality
+               SET item_oid_od = 'I_OPHTH_OD_REFRACTION_SPHERE',
+                   item_oid_os = 'I_OPHTH_OS_REFRACTION_SPHERE'
+             WHERE code = 'REFRACTION_SPH';
+
+            UPDATE modality
+               SET item_oid_od = 'I_OPHTH_OD_REFRACTION_TORUS',
+                   item_oid_os = 'I_OPHTH_OS_REFRACTION_TORUS'
+             WHERE code = 'REFRACTION_CYL';
+        </sql>
+
+        <rollback>
+            <sql>
+                UPDATE modality
+                   SET item_oid_od = 'I_VA_OD_ETDRS',
+                       item_oid_os = 'I_VA_OS_ETDRS'
+                 WHERE code = 'BCVA_ETDRS';
+
+                UPDATE modality
+                   SET item_oid_od = 'I_IOP_OD',
+                       item_oid_os = 'I_IOP_OS'
+                 WHERE code = 'IOP';
+
+                UPDATE modality
+                   SET item_oid_od = 'I_REFRACT_OD_SPH',
+                       item_oid_os = 'I_REFRACT_OS_SPH'
+                 WHERE code = 'REFRACTION_SPH';
+
+                UPDATE modality
+                   SET item_oid_od = 'I_REFRACT_OD_CYL',
+                       item_oid_os = 'I_REFRACT_OS_CYL'
+                 WHERE code = 'REFRACTION_CYL';
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
