@@ -65,6 +65,25 @@ interface Props {
    * inputs fit on one eye-cell line.
    */
   compact?: boolean
+  /**
+   * Phase E.6 ophth-field-catalog (2026-06-12): when this item is a
+   * conditional-reason input (catalog widget {@code text} +
+   * non-blank {@code conditional_on_code}), the parent's current
+   * value drives the input's three visual states:
+   *
+   *  - parent matches {@code conditional_show_when_value} +
+   *    reason is empty → "Grund erforderlich" coral border + tag
+   *  - parent matches {@code conditional_show_when_value} +
+   *    reason is filled → standard slate border
+   *  - parent doesn't match (or is unanswered) → grayed-out
+   *    disabled input with the "Aktiv, sobald X gewählt ist" hint
+   *
+   * Caller responsibility: CrfEntryView passes the parent item's
+   * value (looked up via the catalog's {@code conditionalOnCode} +
+   * the local OID-substitution helper). Undefined leaves the
+   * widget in the inactive state.
+   */
+  parentValue?: unknown
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -75,6 +94,7 @@ const props = withDefaults(defineProps<Props>(), {
   fileExtensions: '',
   suppressLabel: false,
   compact: false,
+  parentValue: undefined,
 })
 
 const emit = defineEmits<{
@@ -239,6 +259,59 @@ function step(delta: number) {
   if (props.item.max != null && next > Number(props.item.max)) next = Number(props.item.max)
   emit('update:modelValue', next)
 }
+
+/**
+ * Phase E.6 ophth-field-catalog (2026-06-12): three-state for the
+ * conditional-reason widget driven by the catalog entry's
+ * {@code conditional_show_when_value} + the parent item's current
+ * value (passed in via {@code parentValue} from CrfEntryView).
+ *
+ *  - {@code active-empty}  — parent matches the show-when value AND
+ *    this input is empty. Red coral border + "Grund erforderlich"
+ *    tag below.
+ *  - {@code active-filled} — parent matches but a reason has been
+ *    typed. Standard slate border.
+ *  - {@code inactive}      — parent value doesn't match (yet).
+ *    Input disabled, grey background, "Aktiv, sobald X gewählt ist"
+ *    hint.
+ *
+ * Falls back to {@code inactive} when no catalog entry is bound OR
+ * the entry doesn't declare a show-when — keeps the widget safe to
+ * mount on items that aren't actually conditional.
+ */
+type ConditionalReasonState = 'active-empty' | 'active-filled' | 'inactive'
+const conditionalReasonState = computed<ConditionalReasonState>(() => {
+  if (ophthPresentation.value.widget !== 'conditional-reason') return 'inactive'
+  const entry = catalogEntry.value
+  const expected = entry?.conditionalShowWhenValue
+  if (expected == null || expected === '') return 'inactive'
+  const parent = props.parentValue
+  if (parent == null) return 'inactive'
+  const parentMatches = String(parent) === expected
+  if (!parentMatches) return 'inactive'
+  const own = props.modelValue
+  const ownIsEmpty = own == null || String(own).trim() === ''
+  return ownIsEmpty ? 'active-empty' : 'active-filled'
+})
+
+/**
+ * Display value for the "Aktiv, sobald {value} gewählt ist" hint.
+ * When the catalog defines a yesno parent with a localized label
+ * (e.g. "nein" → "Nein"), look it up in the parent's options. Falls
+ * back to the raw token if no options are present (defensive only —
+ * the catalog seed always carries options for yesno widgets).
+ */
+const conditionalActivationLabel = computed<string>(() => {
+  const entry = catalogEntry.value
+  if (entry?.conditionalShowWhenValue == null) return ''
+  // Localized label is hosted on the parent's catalog row, not this
+  // item's. CrfEntryView passes both via the parentValue helper, but
+  // we don't have the parent's catalog entry here — fall back to the
+  // raw token, capitalised so "nein" reads as "Nein". German-style
+  // ASCII labels only at this layer.
+  const raw = entry.conditionalShowWhenValue
+  return raw.charAt(0).toUpperCase() + raw.slice(1)
+})
 
 /**
  * Snellen widget state — model-value is stored as `"20/40"`. Two
@@ -447,6 +520,49 @@ function fileRef(): { filename: string; bytes: number } | null {
           >
             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
           </button>
+        </div>
+      </div>
+    </template>
+
+    <template v-else-if="item.dataType === 'string' && ophthPresentation.widget === 'conditional-reason'">
+      <!-- Phase E.6 ophth-field-catalog (2026-06-12): conditional
+           reason input. Three visual states driven by the catalog
+           entry's conditional_show_when_value + the parent item's
+           current value (parentValue prop). Wire contract on the
+           model-value is plain string — the input is disabled in the
+           inactive state, so the empty value naturally stays empty.
+           Caller (CrfEntryView) is responsible for clearing the
+           value when the parent flips from active → inactive. -->
+      <div data-conditional-reason-state="state">
+        <input
+          :id="inputId"
+          :value="(modelValue == null ? '' : String(modelValue))"
+          :aria-invalid="hasError || conditionalReasonState === 'active-empty' || undefined"
+          type="text"
+          :placeholder="t('crfEntry.conditionalReason.placeholder')"
+          :disabled="disabled || conditionalReasonState === 'inactive'"
+          class="w-full h-[46px] px-3.5 text-[15px] text-slate-900 border rounded-xl outline-none transition-colors muw-focus"
+          :class="conditionalReasonState === 'active-empty'
+            ? 'border-muw-coral-600 bg-[#fffdfc] focus:border-muw-coral-600 focus:shadow-[0_0_0_3px_rgba(217,104,73,0.16)]'
+            : conditionalReasonState === 'active-filled'
+              ? 'border-slate-300 hover:border-slate-400 bg-white focus:border-muw-blue focus:shadow-[0_0_0_3px_rgba(17,29,78,0.13)]'
+              : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'"
+          @input="(e) => emit('update:modelValue', (e.target as HTMLInputElement).value)"
+        />
+        <div
+          v-if="conditionalReasonState === 'active-empty'"
+          class="inline-flex items-center gap-1.5 mt-1.5 text-[11.5px] font-medium text-muw-coral-700"
+          data-testid="conditional-reason-required-tag"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75"><circle cx="12" cy="12" r="10" /><path d="M12 8v5M12 16h.01" /></svg>
+          {{ t('crfEntry.conditionalReason.requiredTag') }}
+        </div>
+        <div
+          v-else-if="conditionalReasonState === 'inactive'"
+          class="mt-1.5 text-[11.5px] text-slate-400"
+          data-testid="conditional-reason-inactive-hint"
+        >
+          {{ t('crfEntry.conditionalReason.inactiveHint', { value: conditionalActivationLabel }) }}
         </div>
       </div>
     </template>

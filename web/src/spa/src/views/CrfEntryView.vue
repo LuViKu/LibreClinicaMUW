@@ -50,6 +50,41 @@ const auth = useAuthStore()
 // catalog (the store treats it as effectively immutable per session).
 const ophthCatalog = useOphthFieldCatalogStore()
 
+/**
+ * Phase E.6 ophth-field-catalog (2026-06-12): derive the parent
+ * item's current value for a conditional-reason input. The catalog
+ * entry tells us the parent's catalogCode + the show-when literal;
+ * the parent's OID is the current item's OID with the trailing
+ * catalog-code tokens swapped for the parent's catalog-code tokens.
+ *
+ * <p>Example: current item {@code I_OPHTH_OD_SPECTRALIS_OCT_REASON}
+ * with catalogCode {@code SPECTRALIS_OCT_REASON} +
+ * conditionalOnCode {@code SPECTRALIS_OCT_DONE} → parent OID
+ * {@code I_OPHTH_OD_SPECTRALIS_OCT_DONE}.
+ *
+ * <p>Returns undefined when the item isn't conditional OR no parent
+ * code is bound — CrfItemWidget then renders the input in the
+ * inactive state.
+ */
+function parentValueFor(item: CrfItem): unknown {
+  const entry = ophthCatalog.entryForOid(item.oid)
+  if (entry == null) return undefined
+  const parentCode = entry.conditionalOnCode
+  const currentCode = entry.code
+  if (parentCode == null || parentCode === '' || currentCode == null || currentCode === '') return undefined
+  const oidTokens = item.oid.split('_')
+  const currentTokens = currentCode.split('_')
+  if (oidTokens.length < currentTokens.length) return undefined
+  for (let i = 0; i < currentTokens.length; i++) {
+    if (oidTokens[oidTokens.length - currentTokens.length + i] !== currentTokens[i]) {
+      return undefined
+    }
+  }
+  const prefix = oidTokens.slice(0, oidTokens.length - currentTokens.length)
+  const parentOid = [...prefix, ...parentCode.split('_')].join('_')
+  return store.values[parentOid]
+}
+
 const eventCrfOid = computed(() => String(route.params.eventCrfOid))
 // Phase E.6: a CRF whose backing event_crf is SIGNED or LOCKED comes
 // back as wire status 'locked'. Treat it as read-only on the SPA so
@@ -652,6 +687,7 @@ function onThreadUpdated(_parentId: string) {
                   :max-file-bytes="store.entry?.maxFileBytes ?? 0"
                   :file-extensions="store.entry?.fileExtensions ?? ''"
                   :suppress-label="true"
+                  :parent-value="parentValueFor(row.item)"
                   @update:model-value="(v: unknown) => store.setValue(row.item.oid, v)"
                   @upload-file="(f: File) => onUploadFile(row.item.oid, f)"
                   @clear-file="() => onClearFile(row.item.oid)"
@@ -686,6 +722,7 @@ function onThreadUpdated(_parentId: string) {
                     :max-file-bytes="store.entry?.maxFileBytes ?? 0"
                     :file-extensions="store.entry?.fileExtensions ?? ''"
                     :suppress-label="true"
+                    :parent-value="parentValueFor(item)"
                     :data-bilateral-side="side"
                     @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
                     @upload-file="(f: File) => onUploadFile(item.oid, f)"

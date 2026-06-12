@@ -616,6 +616,11 @@
     "stepper": {
       "increment": "Increment",
       "decrement": "Decrement"
+    },
+    "conditionalReason": {
+      "placeholder": "Give a reason…",
+      "requiredTag": "Reason required",
+      "inactiveHint": "Active once \"{value}\" is selected"
     }
   },
   "dde": {
