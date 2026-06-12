@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 /**
@@ -32,6 +32,7 @@ import CrfItemWidget from '@/components/CrfItemWidget.vue'
 import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
 
 import { useCrfPreviewStore } from '@/stores/crfPreview'
+import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 
 interface Props {
@@ -51,6 +52,48 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const store = useCrfPreviewStore()
+const ophthCatalog = useOphthFieldCatalogStore()
+
+onMounted(() => {
+  // Idempotent — the catalog stays warm once loaded. Mirrors
+  // CrfEntryView's mount so the preview's CrfItemWidgets get the same
+  // catalog-driven chrome (segmented Ja/Nein, conditional-reason
+  // active/inactive states, number-stepper units…) without depending
+  // on the operator having opened the OPHTH picker first this session.
+  void ophthCatalog.load()
+})
+
+/**
+ * Resolve the parent-item value for a conditional-reason child by
+ * walking the catalog: takes the item's catalog code (matched by OID
+ * tail), reads its conditionalOnCode, swaps the child's code tokens
+ * for the parent's tokens at the same OID position, then reads the
+ * preview store's value for that synthesised parent OID. Mirrors
+ * {@code CrfEntryView.parentValueFor} so the preview's active/empty
+ * / active/filled / inactive states react identically to the runtime.
+ *
+ * <p>Returns undefined when the item isn't catalog-bound or has no
+ * conditionalOnCode — CrfItemWidget then renders the input in the
+ * inactive state.
+ */
+function parentValueFor(item: CrfItem): unknown {
+  const entry = ophthCatalog.entryForOid(item.oid)
+  if (entry == null) return undefined
+  const parentCode = entry.conditionalOnCode
+  const currentCode = entry.code
+  if (parentCode == null || parentCode === '' || currentCode == null || currentCode === '') return undefined
+  const oidTokens = item.oid.split('_')
+  const currentTokens = currentCode.split('_')
+  if (oidTokens.length < currentTokens.length) return undefined
+  for (let i = 0; i < currentTokens.length; i++) {
+    if (oidTokens[oidTokens.length - currentTokens.length + i] !== currentTokens[i]) {
+      return undefined
+    }
+  }
+  const prefix = oidTokens.slice(0, oidTokens.length - currentTokens.length)
+  const parentOid = [...prefix, ...parentCode.split('_')].join('_')
+  return store.values[parentOid]
+}
 
 function statusVariant(s: CrfEntryStatus): 'success' | 'info' | 'warning' | 'neutral' {
   switch (s) {
@@ -279,6 +322,7 @@ const rootClass = computed(() =>
                       :model-value="store.values[row.item.oid]"
                       :error-message="showError(row.item)"
                       :suppress-label="true"
+                      :parent-value="parentValueFor(row.item)"
                       @update:model-value="(v: unknown) => store.setValue(row.item.oid, v)"
                     />
                   </template>
@@ -345,6 +389,7 @@ const rootClass = computed(() =>
                     :error-message="showError(item)"
                     :suppress-label="true"
                     :compact="compact"
+                    :parent-value="parentValueFor(item)"
                     @update:model-value="(v: unknown) => store.setValue(item.oid, v)"
                   />
                 </template>
