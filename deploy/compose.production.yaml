@@ -29,16 +29,15 @@ services:
     image: ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG:-latest}
     pull_policy: always
     restart: unless-stopped
-    ports:
-      # The institutional reverse proxy runs on a SEPARATE host and forwards
-      # to this VM's internal IP, so 8080 must be published on a routable
-      # interface — a loopback-only bind makes the app unreachable to the
-      # proxy (and to any in-network smoke test). Defaults to 0.0.0.0; access
-      # control is the campus perimeter's responsibility, as this host has no
-      # local firewall by design (see deploy/README.md § Prerequisites).
-      # Narrow the bind to the VM's internal IP by setting
-      # LIBRECLINICA_BIND_ADDR=<vm-internal-ip> in /etc/libreclinica/env.
-      - "${LIBRECLINICA_BIND_ADDR:-0.0.0.0}:8080:8080"
+    # NOTE: the host bind for 8080 is owned entirely by the base compose.yaml
+    # via ${LIBRECLINICA_BIND_ADDR}. We deliberately do NOT set `ports:` here —
+    # Compose concatenates ports lists across files, so a second entry would
+    # double-bind 8080 and fail to publish. Production sets
+    # LIBRECLINICA_BIND_ADDR=0.0.0.0 in /etc/libreclinica/env (written by
+    # setup-ubuntu-host.sh) so the separate-host reverse proxy can reach it;
+    # narrow it to the VM's internal IP there if you want a tighter bind.
+    # Access control is the campus perimeter's job (no local firewall by
+    # design — see deploy/README.md § Prerequisites).
     environment:
       # Skip the demo Liquibase context (subjects + CRFs + dn_item_data
       # seed) — production starts on a clean schema.
