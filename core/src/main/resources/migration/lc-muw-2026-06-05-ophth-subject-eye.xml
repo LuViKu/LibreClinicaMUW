@@ -47,7 +47,7 @@
              to administrative dating differences. Java + SPA enforce
              the validator-friendly version of the rule.
     -->
-    <changeSet author="muw-ophthalmology" id="2026-06-05-ophth-subject-eye-and-screening-date" context="demo">
+    <changeSet author="muw-ophthalmology" id="2026-06-05-ophth-subject-eye-and-screening-date">
         <preConditions onFail="MARK_RAN">
             <and>
                 <not><columnExists tableName="study_subject" columnName="study_eye"/></not>
