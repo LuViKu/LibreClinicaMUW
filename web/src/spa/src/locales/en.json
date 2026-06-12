@@ -1046,6 +1046,24 @@
       "failed": "Migration failed: {message}"
     },
     "authorManually": "Manually author",
+    "ophthCatalog": {
+      "title": "Add from ophthalmology catalog",
+      "subtitle": "Pre-defined fields with OID + unit + modality binding — pick one to insert into the current section.",
+      "searchPlaceholder": "Search code, label or hint…",
+      "loading": "Loading catalog…",
+      "empty": "No matching entries.",
+      "pick": "Add",
+      "pickButton": "+ From catalog",
+      "modalityHint": "Linked to modality {code}",
+      "widget": {
+        "number-stepper": "Number",
+        "snellen": "Snellen",
+        "refraction": "Refraction",
+        "yesno": "Yes/No",
+        "text": "Text",
+        "select-one": "Select"
+      }
+    },
     "author": {
       "heading": "Author new version of \"{name}\"",
       "subheading": "Create CRF definition",

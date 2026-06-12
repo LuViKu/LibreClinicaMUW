@@ -114,8 +114,53 @@ public record CrfVersionAuthoringRequest(
             String header,
             String subHeader,
             boolean pageBreak,
-            String groupLabel
-    ) {}
+            String groupLabel,
+            /**
+             * Phase E.6 ophth-field-catalog (2026-06-11): optional
+             * reference into {@code ophth_field_catalog.code}. When set,
+             * the backend's {@link CrfJsonToWorkbookAdapter} loads the
+             * matching catalog entry and back-fills any blank item
+             * fields (descriptionLabel, leftItemText, rightItemText,
+             * units, dataType, responseSet) from the catalog row before
+             * synthesising the workbook. Caller-supplied fields always
+             * win over catalog defaults; null means the operator
+             * authored the item free-form (legacy path, no catalog).
+             */
+            String catalogCode
+    ) {
+        /**
+         * Backward-compat constructor — keeps the 17-arg callers (most
+         * of the existing test suite + every {@code new
+         * CrfVersionAuthoringRequest.Item(…)} site that pre-dates F3)
+         * compiling without surgery. {@code catalogCode} defaults to
+         * {@code null} which routes the item through the legacy
+         * free-form path.
+         */
+        public Item(
+                String name,
+                String oid,
+                String descriptionLabel,
+                String leftItemText,
+                String rightItemText,
+                String units,
+                String dataType,
+                String defaultValue,
+                boolean required,
+                ResponseSet responseSet,
+                Validation validation,
+                String showItem,
+                String parentItemOid,
+                String header,
+                String subHeader,
+                boolean pageBreak,
+                String groupLabel
+        ) {
+            this(name, oid, descriptionLabel, leftItemText, rightItemText, units,
+                    dataType, defaultValue, required, responseSet, validation,
+                    showItem, parentItemOid, header, subHeader, pageBreak, groupLabel,
+                    /* catalogCode */ null);
+        }
+    }
 
     /**
      * Inline or by-reference response set on an item.

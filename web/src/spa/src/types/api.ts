@@ -3383,6 +3383,7 @@ export interface components {
             subHeader?: string;
             pageBreak?: boolean;
             groupLabel?: string;
+            catalogCode?: string;
         };
         "CrfVersionAuthoringRequest.ResponseSet": {
             type?: string;
