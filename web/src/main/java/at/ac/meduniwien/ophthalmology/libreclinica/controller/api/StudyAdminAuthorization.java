@@ -127,6 +127,39 @@ public final class StudyAdminAuthorization {
     }
 
     /**
+     * Study-independent variant — admits when the caller holds an
+     * AVAILABLE {@link Role#STUDYDIRECTOR} or {@link Role#COORDINATOR}
+     * binding on ANY study. Used for resources that are not scoped to
+     * a single study (CRF library, response sets) but still want the
+     * same Director/Coordinator-level gate.
+     *
+     * <p>Sysadmin shortcuts as always. RA / RA2 / Investigator /
+     * Monitor bindings don't count — same role taxonomy as
+     * {@link #roleMayEditStudy}, just without the target check.
+     */
+    static boolean userMayManageCrfLibrary(UserAccountBean me, DataSource dataSource) {
+        if (me == null) return false;
+        if (me.isSysAdmin()) return true;
+        if (dataSource == null) return false;
+        ArrayList<StudyUserRoleBean> bindings;
+        try {
+            UserAccountDAO dao = new UserAccountDAO(dataSource);
+            bindings = dao.findAllRolesByUserName(me.getName());
+        } catch (RuntimeException e) {
+            return false;
+        }
+        if (bindings == null) return false;
+        for (StudyUserRoleBean b : bindings) {
+            if (b == null || b.getRole() == null) continue;
+            if (b.getStatus() == null
+                    || b.getStatus().getId() != Status.AVAILABLE.getId()) continue;
+            Role r = b.getRole();
+            if (r == Role.STUDYDIRECTOR || r == Role.COORDINATOR) return true;
+        }
+        return false;
+    }
+
+    /**
      * DAO-aware overload — loads the caller's full binding set via
      * {@link UserAccountDAO#findAllRolesByUserName(String)} and
      * delegates to {@link #userMayEditStudy(UserAccountBean, List, StudyBean)}.

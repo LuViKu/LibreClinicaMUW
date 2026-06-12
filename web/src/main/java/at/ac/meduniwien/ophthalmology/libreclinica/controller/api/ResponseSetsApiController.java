@@ -147,16 +147,9 @@ public class ResponseSetsApiController {
         if (me == null || me.getId() == 0) {
             return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
         }
-        if (!me.isSysAdmin()) {
-            at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean currentRole =
-                    (at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean)
-                            session.getAttribute("userRole");
-            if (currentRole == null || currentRole.getRole() == null
-                    || (currentRole.getRole() != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.STUDYDIRECTOR
-                        && currentRole.getRole() != at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.COORDINATOR)) {
-                return ResponseEntity.status(403).body(Map.of("message",
-                        "Your role does not permit managing response sets — sysadmin or Director/Coordinator only"));
-            }
+        if (!StudyAdminAuthorization.userMayManageCrfLibrary(me, dataSource)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit managing response sets — sysadmin or Director/Coordinator only"));
         }
         if (body == null) {
             return ResponseEntity.badRequest().body(new ValidationErrorBody(
