@@ -58,9 +58,9 @@
     "role": {
       "Investigator": "Investigator",
       "Monitor": "Monitor",
-      "Data Manager": "Data Manager",
+      "Data Manager": "Study Director",
       "Administrator": "Administrator",
-      "CRC": "CRC"
+      "CRC": "Coordinator"
     },
     "cards": {
       "patientsOverview": {
@@ -1404,9 +1404,9 @@
       "all": "All roles",
       "Investigator": "Investigator",
       "Monitor": "Monitor",
-      "Data Manager": "Data Manager",
+      "Data Manager": "Study Director",
       "Administrator": "Administrator",
-      "CRC": "CRC"
+      "CRC": "Coordinator"
     },
     "auth": {
       "all": "All auth modes",

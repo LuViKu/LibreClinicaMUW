@@ -27,7 +27,6 @@ import java.util.UUID;
 
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.rule.XmlSchemaValidationHelper;
@@ -654,13 +653,12 @@ public class RulesImportApiController {
      * {@link StudyAdminAuthorization#roleMayEditStudy} — sysadmin OR
      * Director / Coordinator bound to the active study.
      */
-    private static ResponseEntity<?> preflightWrite(HttpSession session) {
+    private ResponseEntity<?> preflightWrite(HttpSession session) {
         ResponseEntity<?> base = preflightAnyAuthenticated(session);
         if (base != null) return base;
         UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
         StudyBean study = (StudyBean) session.getAttribute("study");
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, study)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, study, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit importing rules — sysadmin or Director/Coordinator on the active study only"));
         }

@@ -25,7 +25,6 @@ import java.util.Set;
 import javax.sql.DataSource;
 import jakarta.servlet.http.HttpSession;
 
-import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
@@ -212,8 +211,7 @@ public class StudyParametersApiController {
                     "No study with oid '" + studyOid + "'"));
         }
 
-        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
-        if (!StudyAdminAuthorization.roleMayEditStudy(me, currentRole, target)) {
+        if (!StudyAdminAuthorization.userMayEditStudy(me, target, dataSource)) {
             return ResponseEntity.status(403).body(Map.of("message",
                     "Your role does not permit editing this study's parameters"));
         }
