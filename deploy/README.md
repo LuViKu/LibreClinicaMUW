@@ -29,17 +29,66 @@ the host like a managed config target, not a hand-crafted server.
   the whole stack.)
 - Outbound HTTPS to `ghcr.io`, `download.docker.com`, `archive.ubuntu.com`,
   `security.ubuntu.com`, `github.com`.
+- A **fine-grained GitHub PAT** with read on the private repo + private GHCR
+  packages — see § "Provisioning the GHCR token" below.
+
+## Provisioning the GHCR token
+
+Both the repo (private) and the GHCR packages (private) require auth. The
+setup script uses one fine-grained PAT for both: the same token authenticates
+the sparse-clone and the `docker login ghcr.io` step that the systemd unit
+relies on for image pulls.
+
+**Mint the token** at <https://github.com/settings/personal-access-tokens/new>:
+
+1. **Token name** — `libreclinica-muw-deploy-<host>` (so the rotation log is
+   self-documenting).
+2. **Expiration** — pick 90 or 365 days; set a calendar reminder for rotation.
+3. **Resource owner** — `LuViKu` (the account that owns the repo + packages).
+4. **Repository access** — *Only select repositories* → `LuViKu/LibreClinicaMUW`.
+5. **Repository permissions**:
+   - **Contents** → **Read-only** *(authorises the sparse-clone)*
+   - **Metadata** → **Read-only** *(automatically required when Contents is granted)*
+6. **Account / organization permissions** *(for the GHCR pulls)*:
+   - **Packages** → **Read-only** *(authorises `docker pull` from
+     `ghcr.io/luviku/libreclinicamuw` + `…/retinal-inference`)*
+7. Click *Generate token* and copy the `github_pat_…` value once — GitHub
+   won't show it again.
+
+Pass it to the setup script via `--ghcr-token` *(see § One-shot setup)*. The
+script persists it to `/etc/libreclinica/env` (mode 0640) so re-runs and
+post-restart pulls don't need it re-passed.
+
+**Rotation** — when the token nears expiry:
+
+```sh
+sudo bash /opt/libreclinica/deploy/setup-ubuntu-host.sh \
+  --ghcr-token <new-token>
+# Re-run is idempotent; every other knob keeps its current value. The
+# script overwrites the LIBRECLINICA_GHCR_TOKEN line in /etc/libreclinica/env
+# and re-runs `docker login ghcr.io` so the cached creds at
+# /root/.docker/config.json are refreshed.
+sudo systemctl restart libreclinica
+```
 
 ## One-shot setup
 
 On a fresh VM, as root:
 
 ```sh
-# Pull the deploy tree once via curl (the setup script itself will then clone
-# /opt/libreclinica from the same repo so updates are git-managed).
+# Pull the deploy tree once via curl. raw.githubusercontent.com requires
+# the PAT for a private repo — same token as the one the setup script
+# itself will use for the sparse-clone. Mint per § "Provisioning the
+# GHCR token" above and stash it in ~/libreclinica-deploy.pat before
+# this step.
 mkdir -p /root/libreclinica-setup
 cd /root/libreclinica-setup
-curl -fsSLO https://raw.githubusercontent.com/LuViKu/LibreClinicaMUW/main/deploy/setup-ubuntu-host.sh
+PAT=$(cat ~/libreclinica-deploy.pat)
+curl -fsSL \
+  -H "Authorization: Bearer ${PAT}" \
+  -H "Accept: application/vnd.github.raw" \
+  -o setup-ubuntu-host.sh \
+  "https://api.github.com/repos/LuViKu/LibreClinicaMUW/contents/deploy/setup-ubuntu-host.sh"
 
 # Inspect the script before running it. This installs Docker, creates a
 # system user, drops files under /opt/libreclinica + /etc/libreclinica +
@@ -51,7 +100,9 @@ less setup-ubuntu-host.sh
 # Run it.
 bash setup-ubuntu-host.sh \
   --image-tag v1.4.0-muw \
-  --trusted-cidrs '128.131.0.0/16,10.0.0.0/8'
+  --trusted-cidrs '128.131.0.0/16,10.0.0.0/8' \
+  --ghcr-user 'LuViKu' \
+  --ghcr-token "$(cat ~/libreclinica-deploy.pat)"
 ```
 
 The script's summary section at the end lists the manual steps left — read
