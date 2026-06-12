@@ -7,7 +7,13 @@ services:
     build: .
     image: libreclinica-muw:dev
     ports:
-      - "127.0.0.1:8080:8080"
+      # Dev binds loopback (default). Production publishes on a routable
+      # interface for the separate-host reverse proxy by setting
+      # LIBRECLINICA_BIND_ADDR=0.0.0.0 in /etc/libreclinica/env. This is the
+      # SINGLE source of truth for the bind — do NOT add a second ports entry
+      # in an overlay file: Compose *concatenates* ports lists across files,
+      # which produces a conflicting double-bind on 8080 and publishes nothing.
+      - "${LIBRECLINICA_BIND_ADDR:-127.0.0.1}:8080:8080"
     depends_on:
       - db
     # Phase D.3 (DR-014): forward libreclinica.sso.* env vars from the

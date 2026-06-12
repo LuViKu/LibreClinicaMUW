@@ -385,11 +385,12 @@ LIBRECLINICA_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
 # in lockstep. Override only when you need to pin the sidecar at a
 # different version than the app.
 #LIBRECLINICA_RETINAL_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
-# Host interface the app's port 8080 publishes on. Defaults to 0.0.0.0 so the
+# Host interface the app's port 8080 publishes on. Set to 0.0.0.0 so the
 # separate-host institutional reverse proxy (and in-network smoke tests) can
-# reach it over the internal network. Narrow to the VM's internal IP if you
-# want to restrict the bind.
-#LIBRECLINICA_BIND_ADDR=0.0.0.0
+# reach it over the internal network — the base compose.yaml defaults to
+# loopback (dev), so production MUST set this for the proxy to connect.
+# Narrow to the VM's internal IP if you want to restrict the bind.
+LIBRECLINICA_BIND_ADDR=0.0.0.0
 POSTGRES_PASSWORD=${pg_password}
 
 # Classic GitHub PAT used for:
@@ -418,6 +419,15 @@ else
   log "$ENV_FILE already exists; preserving secrets"
   # Update the image-tag pin on re-runs if --image-tag changed.
   sed -i "s|^LIBRECLINICA_IMAGE_TAG=.*|LIBRECLINICA_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}|" "$ENV_FILE"
+  # Ensure the host bind is set. The base compose.yaml defaults to loopback,
+  # so without an active LIBRECLINICA_BIND_ADDR=0.0.0.0 here the app is
+  # unreachable to the separate-host reverse proxy. Add it if missing (older
+  # env files, or ones that pre-date this knob); never clobber an operator's
+  # explicit value (e.g. a narrowed internal-IP bind).
+  if ! grep -q '^LIBRECLINICA_BIND_ADDR=' "$ENV_FILE"; then
+    printf '\n# Host interface for port 8080 (added on setup re-run). 0.0.0.0 so the\n# separate-host reverse proxy can reach it; narrow to the VM internal IP.\nLIBRECLINICA_BIND_ADDR=0.0.0.0\n' >> "$ENV_FILE"
+    log "Added LIBRECLINICA_BIND_ADDR=0.0.0.0 to $ENV_FILE"
+  fi
   # Update the GHCR token if --ghcr-token was explicitly passed (rotation
   # path). Insert the line if it wasn't there yet (env file pre-dates
   # this feature).
