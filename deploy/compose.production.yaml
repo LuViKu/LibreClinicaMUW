@@ -69,6 +69,13 @@ services:
     restart: unless-stopped
     environment:
       RETINAL_INFERENCE_ADAPTER: ${RETINAL_INFERENCE_ADAPTER:-placeholder}
+      # The base compose.yaml hard-codes clinica:clinica in the DB URL, which
+      # is the dev default. Production runs Postgres with the host-generated
+      # secret (POSTGRES_PASSWORD from /etc/libreclinica/env, exposed to compose
+      # via the systemd EnvironmentFile), so override the URL to use it. Harmless
+      # for the placeholder adapter (no DB connection), but prevents an auth
+      # failure the moment a real adapter that talks to Postgres lands.
+      RETINAL_INFERENCE_DB_URL: postgresql://clinica:${POSTGRES_PASSWORD:-clinica}@db:5432/libreclinica
     volumes:
       # Move the two retinal-inference bind mounts off the dev-tree
       # ./docker/ paths and onto /var/lib/libreclinica/ paths the setup
