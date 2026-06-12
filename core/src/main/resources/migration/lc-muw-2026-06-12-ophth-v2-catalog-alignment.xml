@@ -1,0 +1,264 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Phase E.6 ophth-field-catalog hot-patch (2026-06-12, F4):
+        align the runtime-authored OPHTH Visit v2.0 CRF (crf_version_id=3)
+        with the catalog's canonical codes + labels so:
+
+         1. The Erstmessungen baselines panel can read GA-001's saved
+            VA / IOP values without an OID translation layer.
+         2. CrfItemWidget's catalog-driven resolver finds a matching
+            entry for SPECTRALIS_DONE / SPECTRALIS_DONE_REASON instead
+            of falling through to the legacy OID heuristic.
+         3. Per-item labels surface proper measurement names instead of
+            the bare "OD" / "OS" laterality marker the wizard-author
+            originally typed in.
+
+        Two related changes:
+
+          A. RENAME the SPECTRALIS_DONE family of OIDs (4 items) to the
+             canonical SPECTRALIS_OCT_DONE / SPECTRALIS_OCT_REASON
+             codes so the catalog matcher resolves them. Targets
+             item_id 25-28 by exact oc_oid match (precondition guards
+             rerun safety).
+
+          B. REWRITE item_form_metadata.left_item_text + right_item_text
+             for all 14 v2.0 OPHTH items so the per-item label reads
+             the catalog's German measurement name + unit instead of
+             "OD" / "OS". Targets crf_version_id=3 only — non-OPHTH
+             CRFs are untouched.
+
+        Out of scope (follow-up): adding the missing VISUS refraction
+        sub-field items to v2.0 (requires item_id allocation + section
+        ordinal shift). Refraction items keep their existing SPHERE /
+        TORUS / ANGLE OIDs since the catalog binds the REFRACTION
+        compound at the row level, not the sub-field level.
+    -->
+
+    <!-- =========================================================
+         A. Rename SPECTRALIS_DONE → SPECTRALIS_OCT_DONE OIDs
+         ========================================================= -->
+    <changeSet id="2026-06-12-ophth-v2-rename-spectralis-oid"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <!-- Guard: only run when the legacy OID form is still in
+                 place. Prevents accidental re-run after an admin has
+                 since renamed manually. -->
+            <sqlCheck expectedResult="4">
+                SELECT COUNT(*) FROM item
+                WHERE oc_oid IN (
+                    'I_OPHTH_OD_SPECTRALIS_DONE',
+                    'I_OPHTH_OS_SPECTRALIS_DONE',
+                    'I_OPHTH_OD_SPECTRALIS_DONE_REASON',
+                    'I_OPHTH_OS_SPECTRALIS_DONE_REASON');
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Align SPECTRALIS_DONE OIDs with catalog codes
+            SPECTRALIS_OCT_DONE and SPECTRALIS_OCT_REASON.
+        </comment>
+
+        <sql>
+            UPDATE item SET oc_oid = 'I_OPHTH_OD_SPECTRALIS_OCT_DONE',
+                            name   = 'OD_SPECTRALIS_OCT_DONE'
+             WHERE oc_oid = 'I_OPHTH_OD_SPECTRALIS_DONE';
+
+            UPDATE item SET oc_oid = 'I_OPHTH_OS_SPECTRALIS_OCT_DONE',
+                            name   = 'OS_SPECTRALIS_OCT_DONE'
+             WHERE oc_oid = 'I_OPHTH_OS_SPECTRALIS_DONE';
+
+            UPDATE item SET oc_oid = 'I_OPHTH_OD_SPECTRALIS_OCT_REASON',
+                            name   = 'OD_SPECTRALIS_OCT_REASON'
+             WHERE oc_oid = 'I_OPHTH_OD_SPECTRALIS_DONE_REASON';
+
+            UPDATE item SET oc_oid = 'I_OPHTH_OS_SPECTRALIS_OCT_REASON',
+                            name   = 'OS_SPECTRALIS_OCT_REASON'
+             WHERE oc_oid = 'I_OPHTH_OS_SPECTRALIS_DONE_REASON';
+        </sql>
+
+        <rollback>
+            <sql>
+                UPDATE item SET oc_oid = 'I_OPHTH_OD_SPECTRALIS_DONE',
+                                name   = 'OD_SPECTRALIS_DONE'
+                 WHERE oc_oid = 'I_OPHTH_OD_SPECTRALIS_OCT_DONE';
+
+                UPDATE item SET oc_oid = 'I_OPHTH_OS_SPECTRALIS_DONE',
+                                name   = 'OS_SPECTRALIS_DONE'
+                 WHERE oc_oid = 'I_OPHTH_OS_SPECTRALIS_OCT_DONE';
+
+                UPDATE item SET oc_oid = 'I_OPHTH_OD_SPECTRALIS_DONE_REASON',
+                                name   = 'OD_SPECTRALIS_DONE_REASON'
+                 WHERE oc_oid = 'I_OPHTH_OD_SPECTRALIS_OCT_REASON';
+
+                UPDATE item SET oc_oid = 'I_OPHTH_OS_SPECTRALIS_DONE_REASON',
+                                name   = 'OS_SPECTRALIS_DONE_REASON'
+                 WHERE oc_oid = 'I_OPHTH_OS_SPECTRALIS_OCT_REASON';
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <!-- =========================================================
+         B. Rewrite per-item labels (item_form_metadata)
+         ========================================================= -->
+    <changeSet id="2026-06-12-ophth-v2-rewrite-item-labels"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <!-- Guard: only run when the v2.0 form still has the bare
+                 "OD" / "OS" laterality markers as left_item_text. -->
+            <sqlCheck expectedResult="14">
+                SELECT COUNT(*) FROM item_form_metadata
+                 WHERE crf_version_id = 3
+                   AND (left_item_text IN ('OD', 'OS')
+                        OR left_item_text IS NULL);
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Backfill descriptive labels + unit hints for the 14 OPHTH
+            v2.0 CRF items so the per-item label reads the catalog's
+            measurement name instead of the bare laterality marker.
+        </comment>
+
+        <sql>
+            -- BCVA Letters (ETDRS)
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Rechtes Auge (OD) — BCVA Buchstaben',
+                   right_item_text = 'letters (0–100)'
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OD_BCVA_LETTERS';
+
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Linkes Auge (OS) — BCVA Buchstaben',
+                   right_item_text = 'letters (0–100)'
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OS_BCVA_LETTERS';
+
+            -- Augeninnendruck (IOP)
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Rechtes Auge (OD) — Augeninnendruck',
+                   right_item_text = 'mmHg (10–21)'
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OD_IOP';
+
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Linkes Auge (OS) — Augeninnendruck',
+                   right_item_text = 'mmHg (10–21)'
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OS_IOP';
+
+            -- Spectralis OCT durchgeführt (Ja/Nein)
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Rechtes Auge (OD) — Spectralis-OCT durchgeführt',
+                   right_item_text = ''
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OD_SPECTRALIS_OCT_DONE';
+
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Linkes Auge (OS) — Spectralis-OCT durchgeführt',
+                   right_item_text = ''
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OS_SPECTRALIS_OCT_DONE';
+
+            -- Spectralis OCT — Grund falls nicht durchgeführt
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Rechtes Auge (OD) — Spectralis-OCT Grund',
+                   right_item_text = ''
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OD_SPECTRALIS_OCT_REASON';
+
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Linkes Auge (OS) — Spectralis-OCT Grund',
+                   right_item_text = ''
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OS_SPECTRALIS_OCT_REASON';
+
+            -- Refraktion: Sphäre
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Rechtes Auge (OD) — Sphäre',
+                   right_item_text = 'dpt'
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OD_REFRACTION_SPHERE';
+
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Linkes Auge (OS) — Sphäre',
+                   right_item_text = 'dpt'
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OS_REFRACTION_SPHERE';
+
+            -- Refraktion: Zylinder (Torus)
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Rechtes Auge (OD) — Zylinder',
+                   right_item_text = 'dpt'
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OD_REFRACTION_TORUS';
+
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Linkes Auge (OS) — Zylinder',
+                   right_item_text = 'dpt'
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OS_REFRACTION_TORUS';
+
+            -- Refraktion: Achse (Angle)
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Rechtes Auge (OD) — Achse',
+                   right_item_text = '°'
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OD_REFRACTION_ANGLE';
+
+            UPDATE item_form_metadata ifm
+               SET left_item_text  = 'Linkes Auge (OS) — Achse',
+                   right_item_text = '°'
+              FROM item i
+             WHERE ifm.item_id = i.item_id
+               AND ifm.crf_version_id = 3
+               AND i.oc_oid = 'I_OPHTH_OS_REFRACTION_ANGLE';
+        </sql>
+
+        <rollback>
+            <sql>
+                UPDATE item_form_metadata ifm
+                   SET left_item_text  = CASE
+                           WHEN i.oc_oid LIKE 'I_OPHTH_OD_%' THEN 'OD'
+                           WHEN i.oc_oid LIKE 'I_OPHTH_OS_%' THEN 'OS'
+                           ELSE ifm.left_item_text END,
+                       right_item_text = ''
+                  FROM item i
+                 WHERE ifm.item_id = i.item_id
+                   AND ifm.crf_version_id = 3;
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
