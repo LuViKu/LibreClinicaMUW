@@ -615,6 +615,11 @@
     "stepper": {
       "increment": "Erhöhen",
       "decrement": "Verringern"
+    },
+    "conditionalReason": {
+      "placeholder": "Grund angeben…",
+      "requiredTag": "Grund erforderlich",
+      "inactiveHint": "Aktiv, sobald „{value}\" gewählt ist"
     }
   },
   "dde": {
