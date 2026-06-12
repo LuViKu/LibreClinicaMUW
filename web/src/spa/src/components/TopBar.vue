@@ -258,14 +258,6 @@ function onReportBugClick() {
             {{ userInitials }}
           </span>
           <span class="text-slate-700">{{ userName }}</span>
-          <span
-            v-for="r in roles"
-            :key="r"
-            class="rounded-full text-[10px] px-1.5 py-0.5 font-medium"
-            :class="ROLE_PALETTE[r]?.chip ?? NEUTRAL_PALETTE.chip"
-          >
-            {{ t(`manageUsers.role.${r}`) }}
-          </span>
           <svg
             class="w-3 h-3 text-slate-400 transition-transform"
             :class="popoverOpen ? 'rotate-180' : ''"
