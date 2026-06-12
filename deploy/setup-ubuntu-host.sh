@@ -56,6 +56,8 @@ set -euo pipefail
 : "${LIBRECLINICA_REPO_URL:=https://github.com/LuViKu/LibreClinicaMUW.git}"
 : "${LIBRECLINICA_REPO_REF:=main}"       # branch/tag the deploy tree clones to /opt/libreclinica
 : "${LIBRECLINICA_BACKUP_RETENTION_DAYS:=30}"
+: "${LIBRECLINICA_GHCR_USER:=LuViKu}"    # GitHub username the PAT belongs to
+: "${LIBRECLINICA_GHCR_TOKEN:=}"         # fine-grained PAT: 'Contents: read' on the repo + 'Packages: read' on the org. See deploy/README.md for minting instructions.
 
 INSTALL_PREFIX=/opt/libreclinica
 CONFIG_DIR=/etc/libreclinica
@@ -75,6 +77,8 @@ while [[ $# -gt 0 ]]; do
     --host-port)        LIBRECLINICA_HOST_PORT="$2"; shift 2 ;;
     --repo-ref)         LIBRECLINICA_REPO_REF="$2"; shift 2 ;;
     --backup-days)      LIBRECLINICA_BACKUP_RETENTION_DAYS="$2"; shift 2 ;;
+    --ghcr-user)        LIBRECLINICA_GHCR_USER="$2"; shift 2 ;;
+    --ghcr-token)       LIBRECLINICA_GHCR_TOKEN="$2"; shift 2 ;;
     -h|--help)
       sed -n '/^# ---/,/^# ---/p' "$0" | sed 's/^# \{0,1\}//'
       exit 0
@@ -110,8 +114,42 @@ if ! grep -q '^VERSION_ID="24\.' /etc/os-release; then
   warn "Proceed with caution."
 fi
 
+# On a re-run, the env file already has the GHCR creds — re-read them
+# so the operator doesn't have to pass --ghcr-token every time.
+if [[ -z "$LIBRECLINICA_GHCR_TOKEN" && -s "$ENV_FILE" ]]; then
+  set +u
+  # shellcheck disable=SC1090
+  source <(grep -E '^LIBRECLINICA_GHCR_(USER|TOKEN)=' "$ENV_FILE")
+  set -u
+fi
+
+# Hard requirement: the repo + GHCR are private. Both git clone and
+# `docker pull` will fail without auth. Fail loud now rather than
+# 15 minutes into the build.
+if [[ -z "$LIBRECLINICA_GHCR_TOKEN" ]]; then
+  die "No --ghcr-token set (and none in ${ENV_FILE}). The private repo + GHCR pulls require a fine-grained PAT — see deploy/README.md § 'Provisioning the GHCR token' for the minting recipe."
+fi
+
+# Validate the PAT against the GitHub API before we burn time on
+# `apt upgrade`. Cheap call, surfaces typo / expired-token / wrong-scope
+# errors with a clear message.
+log "Validating GitHub PAT against api.github.com/repos/LuViKu/LibreClinicaMUW …"
+http_code=$(curl -fsS -o /dev/null -w '%{http_code}' \
+  -H "Authorization: Bearer ${LIBRECLINICA_GHCR_TOKEN}" \
+  -H "Accept: application/vnd.github+json" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  "https://api.github.com/repos/LuViKu/LibreClinicaMUW" 2>/dev/null || true)
+case "$http_code" in
+  200) log "PAT validated (HTTP 200)" ;;
+  401) die "PAT validation failed: HTTP 401 Unauthorized. Token is invalid or expired. Mint a new one (deploy/README.md)." ;;
+  403) die "PAT validation failed: HTTP 403 Forbidden. Token lacks 'Contents: read' permission on the repo. Re-mint with the correct repo permission." ;;
+  404) die "PAT validation failed: HTTP 404. Either the token can't see the repo (missing repository access on the fine-grained PAT) or the repo URL is wrong (got ${LIBRECLINICA_REPO_URL})." ;;
+  *)   die "PAT validation failed: HTTP ${http_code} from api.github.com. Check network access + token validity." ;;
+esac
+
 log "OS:                $(grep PRETTY_NAME /etc/os-release | cut -d= -f2- | tr -d '"')"
 log "Image tag:         ghcr.io/luviku/libreclinicamuw:${LIBRECLINICA_IMAGE_TAG}"
+log "GHCR user:         ${LIBRECLINICA_GHCR_USER}"
 log "Trusted CIDRs (SSO): ${LIBRECLINICA_TRUSTED_CIDRS:-<none>}"
 log "Timezone:          ${LIBRECLINICA_TIMEZONE}"
 
@@ -213,6 +251,21 @@ fi
 # next container restart. live-restore tweaks the daemon process itself.
 systemctl restart docker.service
 
+# ----------------------------- GHCR login -------------------------------------
+
+section "GHCR login (ghcr.io)"
+
+# Pipe via stdin so the token never lands in /proc/<pid>/cmdline or in
+# `ps auxe`. Stored on disk only in /root/.docker/config.json (mode 0600
+# by docker convention) — the systemd unit runs as root so it consumes
+# this config when pulling the libreclinica + retinal-inference images.
+if printf '%s\n' "$LIBRECLINICA_GHCR_TOKEN" \
+     | docker login ghcr.io --username "$LIBRECLINICA_GHCR_USER" --password-stdin >/dev/null; then
+  log "Logged in as ${LIBRECLINICA_GHCR_USER} on ghcr.io (config: /root/.docker/config.json)"
+else
+  die "docker login ghcr.io failed. Check token + 'Packages: read' org permission."
+fi
+
 # ----------------------------- deploy user ------------------------------------
 
 section "Deploy user"
@@ -256,25 +309,63 @@ install -d -m 0755 -o libreclinica -g libreclinica "$RETINAL_OUTPUT_DIR"
 # defer blob downloads for any path not currently checked out. With both
 # in place a `sparse-checkout add` later would lazy-fetch only the newly
 # needed blobs.
+# Auth for the private-repo clone. Use a per-process GIT_ASKPASS helper
+# so the token NEVER lands in /opt/libreclinica/.git/config (which is
+# world-readable on most setups, and persists across runs). The URL
+# embeds the username so git only asks for the password — the askpass
+# helper supplies it from the env var that GIT inherits.
+#
+# Belt-and-braces: GIT_TERMINAL_PROMPT=0 makes git fail loud rather
+# than hanging on a TTY prompt if the askpass mechanism breaks.
+ASKPASS_HELPER=$(mktemp /tmp/libreclinica-askpass.XXXXXX.sh)
+trap 'rm -f "$ASKPASS_HELPER"' EXIT
+cat >"$ASKPASS_HELPER" <<'EOF'
+#!/usr/bin/env bash
+printf '%s' "${LIBRECLINICA_GHCR_TOKEN}"
+EOF
+chmod 0700 "$ASKPASS_HELPER"
+chown libreclinica:libreclinica "$ASKPASS_HELPER"
+
+# Strip any inline credentials the operator may have passed and inject
+# the username only; git asks for password → askpass returns the token.
+REPO_URL_WITH_USER=$(echo "$LIBRECLINICA_REPO_URL" \
+  | sed -E "s#^https://([^@/]*@)?#https://${LIBRECLINICA_GHCR_USER}@#")
+
 SPARSE_PATHS=(deploy docker/config)
 if [[ ! -d "${INSTALL_PREFIX}/.git" ]]; then
   log "Sparse-cloning ${LIBRECLINICA_REPO_URL} → ${INSTALL_PREFIX} (paths: ${SPARSE_PATHS[*]})"
-  sudo -u libreclinica git clone \
-    --branch "$LIBRECLINICA_REPO_REF" \
-    --depth 1 \
-    --filter=blob:none \
-    --sparse \
-    "$LIBRECLINICA_REPO_URL" "$INSTALL_PREFIX"
+  sudo -u libreclinica \
+    LIBRECLINICA_GHCR_TOKEN="$LIBRECLINICA_GHCR_TOKEN" \
+    GIT_ASKPASS="$ASKPASS_HELPER" \
+    GIT_TERMINAL_PROMPT=0 \
+    git clone \
+      --branch "$LIBRECLINICA_REPO_REF" \
+      --depth 1 \
+      --filter=blob:none \
+      --sparse \
+      "$REPO_URL_WITH_USER" "$INSTALL_PREFIX"
   sudo -u libreclinica git -C "$INSTALL_PREFIX" sparse-checkout set "${SPARSE_PATHS[@]}"
+  # Rewrite the persisted remote URL so the username isn't embedded
+  # on disk (it'd be re-supplied on every fetch by GIT_ASKPASS anyway).
+  sudo -u libreclinica git -C "$INSTALL_PREFIX" remote set-url origin "$LIBRECLINICA_REPO_URL"
 else
   log "Updating ${INSTALL_PREFIX} (${LIBRECLINICA_REPO_REF})"
   # Re-assert the sparse-checkout pattern on every run. If this dir was
   # ever a full clone (e.g. created by an older version of this script),
   # this trims it down on the next reset.
   sudo -u libreclinica git -C "$INSTALL_PREFIX" sparse-checkout set "${SPARSE_PATHS[@]}"
-  sudo -u libreclinica git -C "$INSTALL_PREFIX" fetch --depth 1 origin "$LIBRECLINICA_REPO_REF"
+  sudo -u libreclinica \
+    LIBRECLINICA_GHCR_TOKEN="$LIBRECLINICA_GHCR_TOKEN" \
+    GIT_ASKPASS="$ASKPASS_HELPER" \
+    GIT_TERMINAL_PROMPT=0 \
+    git -C "$INSTALL_PREFIX" \
+      -c "credential.helper=" \
+      -c "url.${REPO_URL_WITH_USER}.insteadOf=${LIBRECLINICA_REPO_URL}" \
+      fetch --depth 1 origin "$LIBRECLINICA_REPO_REF"
   sudo -u libreclinica git -C "$INSTALL_PREFIX" reset --hard "FETCH_HEAD"
 fi
+rm -f "$ASKPASS_HELPER"
+trap - EXIT
 
 # ----------------------------- env file (secrets) -----------------------------
 
@@ -296,6 +387,16 @@ LIBRECLINICA_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
 #LIBRECLINICA_RETINAL_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
 POSTGRES_PASSWORD=${pg_password}
 
+# Fine-grained GitHub PAT used for:
+#   (a) the private-repo clone of /opt/libreclinica (compose + config seed)
+#   (b) docker pulls from ghcr.io for the libreclinica + retinal-inference images
+# Required scopes on the fine-grained PAT:
+#   - Repository: LuViKu/LibreClinicaMUW — Contents: read
+#   - Organization: LuViKu (or user account) — Packages: read
+# See deploy/README.md § "Provisioning the GHCR token" for the minting recipe.
+LIBRECLINICA_GHCR_USER=${LIBRECLINICA_GHCR_USER}
+LIBRECLINICA_GHCR_TOKEN=${LIBRECLINICA_GHCR_TOKEN}
+
 # Phase D SSO (DR-014). Defaults are safe-off; flip when the institutional
 # reverse proxy is wired and forwarding the right headers.
 LIBRECLINICA_SSO_ENABLED=false
@@ -307,11 +408,24 @@ RETINAL_INFERENCE_ADAPTER=placeholder
 EOF
   chown libreclinica:libreclinica "$ENV_FILE"
   chmod 0640 "$ENV_FILE"
-  log "Generated $ENV_FILE (Postgres password rolled, 32 chars)"
+  log "Generated $ENV_FILE (Postgres password rolled, 32 chars; GHCR token persisted)"
 else
   log "$ENV_FILE already exists; preserving secrets"
   # Update the image-tag pin on re-runs if --image-tag changed.
   sed -i "s|^LIBRECLINICA_IMAGE_TAG=.*|LIBRECLINICA_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}|" "$ENV_FILE"
+  # Update the GHCR token if --ghcr-token was explicitly passed (rotation
+  # path). Insert the line if it wasn't there yet (env file pre-dates
+  # this feature).
+  if grep -q '^LIBRECLINICA_GHCR_TOKEN=' "$ENV_FILE"; then
+    sed -i "s|^LIBRECLINICA_GHCR_TOKEN=.*|LIBRECLINICA_GHCR_TOKEN=${LIBRECLINICA_GHCR_TOKEN}|" "$ENV_FILE"
+    sed -i "s|^LIBRECLINICA_GHCR_USER=.*|LIBRECLINICA_GHCR_USER=${LIBRECLINICA_GHCR_USER}|" "$ENV_FILE"
+  else
+    {
+      printf '\n# GHCR credentials (added on setup re-run)\n'
+      printf 'LIBRECLINICA_GHCR_USER=%s\n' "$LIBRECLINICA_GHCR_USER"
+      printf 'LIBRECLINICA_GHCR_TOKEN=%s\n' "$LIBRECLINICA_GHCR_TOKEN"
+    } >> "$ENV_FILE"
+  fi
 fi
 
 # ----------------------------- runtime config ---------------------------------
