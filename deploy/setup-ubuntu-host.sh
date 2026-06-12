@@ -385,6 +385,11 @@ LIBRECLINICA_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
 # in lockstep. Override only when you need to pin the sidecar at a
 # different version than the app.
 #LIBRECLINICA_RETINAL_IMAGE_TAG=${LIBRECLINICA_IMAGE_TAG}
+# Host interface the app's port 8080 publishes on. Defaults to 0.0.0.0 so the
+# separate-host institutional reverse proxy (and in-network smoke tests) can
+# reach it over the internal network. Narrow to the VM's internal IP if you
+# want to restrict the bind.
+#LIBRECLINICA_BIND_ADDR=0.0.0.0
 POSTGRES_PASSWORD=${pg_password}
 
 # Fine-grained GitHub PAT used for:
