@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import TopBar from '@/components/TopBar.vue'
@@ -7,11 +7,13 @@ import GlobalErrorToast from '@/components/GlobalErrorToast.vue'
 import ConnectionBanner from '@/components/ConnectionBanner.vue'
 import BugReportDialog from '@/components/BugReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
+import { useInactivityStore } from '@/stores/inactivity'
 import type { UserRole } from '@/types/auth'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const inactivity = useInactivityStore()
 const { t } = useI18n()
 
 async function logout() {
@@ -21,9 +23,54 @@ async function logout() {
   // still sees state='authenticated' and refuses the redirect.
   // Symptom before this fix: clicking the top-bar logout button
   // appeared to do nothing until the user manually refreshed.
+  inactivity.stop()
   await auth.logout()
   router.push({ name: 'login' })
 }
+
+/**
+ * Phase E.6 inactivity-timeout (2026-06-12): when the watcher fires,
+ * log the operator out + bounce them to /login carrying the current
+ * route as the returnTo query param. The LoginView resolves
+ * returnTo to navigate the operator back to where they were after
+ * successful re-auth.
+ */
+async function onInactivityTimeout(): Promise<void> {
+  const fullPath = route.fullPath
+  inactivity.stop()
+  await auth.logout()
+  const safePath = fullPath && fullPath !== '/' && !fullPath.startsWith('/login')
+    ? fullPath
+    : null
+  router.push({
+    name: 'login',
+    query: safePath ? { returnTo: safePath } : undefined,
+  })
+}
+
+/**
+ * Start/stop the inactivity watcher in lockstep with auth state.
+ * When the operator is authenticated the watcher arms; when they
+ * sign out (manually OR via the watcher) it disarms so the
+ * /login mount doesn't churn the watcher needlessly.
+ */
+watch(
+  () => auth.isAuthenticated,
+  (authed) => {
+    if (authed) {
+      inactivity.start(onInactivityTimeout)
+      inactivity.touch()
+    } else {
+      inactivity.stop()
+    }
+  },
+  { immediate: false },
+)
+
+onMounted(() => {
+  if (auth.isAuthenticated) inactivity.start(onInactivityTimeout)
+})
+onUnmounted(() => inactivity.stop())
 
 interface Crumb { label: string; to?: string }
 
