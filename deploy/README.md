@@ -7,13 +7,19 @@ the host like a managed config target, not a hand-crafted server.
 ## Prerequisites
 
 - Ubuntu 24.04 LTS (Noble Numbat), fully patched, dedicated VM.
-- Root SSH access (initially via password or an existing key — the setup script
-  will harden SSH to key-only).
-- An SSH public key for the operator/admin account that will keep working after
-  hardening.
-- One or more CIDRs the institutional reverse proxy lives on (so UFW can scope
-  port 8080 to just those sources). Today's MUW campus CIDRs: ask
-  netops/infrastructure.
+- Root or `sudo` access for the operator running this script.
+- **Host-level access hardening and network ACLs are out of scope** for this
+  script. The production VM is expected to live on the internal MUW network
+  behind the institutional reverse proxy / campus firewall; SSH hardening,
+  UFW, fail2ban, and similar host-hardening are the campus admin team's
+  responsibility and should be applied before you run this script. The
+  script focuses only on the LibreClinicaMUW stack — Docker, the deploy
+  user, the systemd unit, and the backup timer.
+- One or more CIDRs the institutional reverse proxy / campus subnets occupy.
+  These feed `LIBRECLINICA_SSO_TRUSTED_CIDRS` (the SSO header-trust filter
+  the application uses to decide which incoming request headers it'll trust
+  for upstream-provided identity), NOT any host firewall — there isn't one.
+  Today's MUW campus CIDRs: ask netops/infrastructure.
 - Published release images at both
   `ghcr.io/luviku/libreclinicamuw:<tag>` and
   `ghcr.io/luviku/libreclinicamuw/retinal-inference:<tag>`. One workflow
@@ -35,16 +41,17 @@ mkdir -p /root/libreclinica-setup
 cd /root/libreclinica-setup
 curl -fsSLO https://raw.githubusercontent.com/LuViKu/LibreClinicaMUW/main/deploy/setup-ubuntu-host.sh
 
-# Inspect the script before running it. This installs Docker, hardens SSH,
-# opens a firewall port, and creates a system user. Read the comments at the
-# top before pasting anything below.
+# Inspect the script before running it. This installs Docker, creates a
+# system user, drops files under /opt/libreclinica + /etc/libreclinica +
+# /var/lib/libreclinica, installs a systemd unit, and wires a nightly
+# backup timer. Read the comments at the top before pasting anything
+# below.
 less setup-ubuntu-host.sh
 
 # Run it.
 bash setup-ubuntu-host.sh \
   --image-tag v1.4.0-muw \
-  --trusted-cidrs '128.131.0.0/16,10.0.0.0/8' \
-  --admin-ssh-key "$(cat ~/admin-key.pub)"
+  --trusted-cidrs '128.131.0.0/16,10.0.0.0/8'
 ```
 
 The script's summary section at the end lists the manual steps left — read
@@ -52,22 +59,19 @@ that, don't skip it.
 
 ## What the script does
 
-1. **Preflight** — root, OS version, network sanity.
+The script focuses on the application stack only — see the **Prerequisites**
+above for the host-hardening scope split.
+
+1. **Preflight** — root + OS check.
 2. **System packages + unattended-upgrades** — security updates apply nightly,
    no auto-reboot (reboot windows are operator-scheduled).
 3. **Timezone** — `Europe/Vienna` (override with `--timezone`).
-4. **SSH hardening** — drop-in at `/etc/ssh/sshd_config.d/10-libreclinica.conf`.
-   Key-only, no root password, no agent/X11/TCP forwarding, 3 auth tries.
-5. **UFW firewall** — deny incoming by default. Open `22/tcp` (rate-limited)
-   and `8080/tcp` only to `--trusted-cidrs`. Refuses to leave a wide-open
-   `8080/0.0.0.0` unless you didn't pass any CIDRs at all.
-6. **fail2ban** — sshd jail, 5 retries in 10 min → 1 h ban.
-7. **Docker Engine + Compose v2** — installs from the official Docker apt
+4. **Docker Engine + Compose v2** — installs from the official Docker apt
    repo, configures `daemon.json` (log rotation 50 MB × 5, live-restore,
    default address pool moved off 172.17/16 to dodge MUW lab subnet clashes).
-8. **Deploy user** — `libreclinica`, system account, no shell, member of
+5. **Deploy user** — `libreclinica`, system account, no shell, member of
    `docker`. Stack owned by this user.
-9. **Stack directory** — **sparse + shallow** clone of the repo to
+6. **Stack directory** — **sparse + shallow** clone of the repo to
    `/opt/libreclinica` (only `compose.yaml`, top-level files,
    `deploy/`, and `docker/config/`; the Java/SPA/Python source dirs
    stay on the build host where they belong — a few MB instead of
@@ -77,22 +81,22 @@ that, don't skip it.
    `/var/backups/libreclinica/`. The sparse-checkout pattern is
    re-asserted on every re-run, so an older full clone gets trimmed
    on the next setup pass.
-10. **Env file** — `/etc/libreclinica/env`. On first run it generates a 32-char
-    Postgres password; on re-run it preserves the existing secret and only
-    updates the image-tag pin.
-11. **systemd unit** — `libreclinica.service`. Uses
-    `compose.yaml` + `deploy/compose.production.yaml`. Both `libreclinica`
-    and `retinal-inference` images are pulled from ghcr.io on every start
-    (`pull_policy: always` on both services), so the VM never builds —
-    it just pulls and runs. The sidecar tag defaults to the app tag so
-    one `LIBRECLINICA_IMAGE_TAG` roll moves both; pin the sidecar
-    independently by setting `LIBRECLINICA_RETINAL_IMAGE_TAG` in
-    `/etc/libreclinica/env`. The `smtp` mailcrab dev service is
-    intentionally not started.
-12. **Backups** — `libreclinica-backup-db.timer` fires nightly at 03:00 local
-    (with 30 min jitter). Output goes to `/var/backups/libreclinica/`,
-    gzipped, retention 30 days (`--backup-days`).
-13. **logrotate** — safety net for the backup directory.
+7. **Env file** — `/etc/libreclinica/env`. On first run it generates a 32-char
+   Postgres password; on re-run it preserves the existing secret and only
+   updates the image-tag pin.
+8. **systemd unit** — `libreclinica.service`. Uses
+   `compose.yaml` + `deploy/compose.production.yaml`. Both `libreclinica`
+   and `retinal-inference` images are pulled from ghcr.io on every start
+   (`pull_policy: always` on both services), so the VM never builds —
+   it just pulls and runs. The sidecar tag defaults to the app tag so
+   one `LIBRECLINICA_IMAGE_TAG` roll moves both; pin the sidecar
+   independently by setting `LIBRECLINICA_RETINAL_IMAGE_TAG` in
+   `/etc/libreclinica/env`. The `smtp` mailcrab dev service is
+   intentionally not started.
+9. **Backups** — `libreclinica-backup-db.timer` fires nightly at 03:00 local
+   (with 30 min jitter). Output goes to `/var/backups/libreclinica/`,
+   gzipped, retention 30 days (`--backup-days`).
+10. **logrotate** — safety net for the backup directory.
 
 ## After the script
 
@@ -123,8 +127,9 @@ sudo systemctl restart libreclinica
 
 The VM exposes Tomcat on `127.0.0.1:8080` only. The MUW reverse proxy is
 expected to terminate TLS, do Shibboleth SP auth, and forward to
-`http://<vm-internal-ip>:8080/LibreClinica/`. UFW already allows the
-trusted CIDRs you set during setup.
+`http://<vm-internal-ip>:8080/LibreClinica/`. Network-level access control
+(which sources can reach port 8080) is handled at the institutional
+perimeter, not on the VM itself — see the **Prerequisites** scope split.
 
 When the reverse proxy is in place and forwarding the SSO headers, flip
 `LIBRECLINICA_SSO_ENABLED=true` in `/etc/libreclinica/env` and restart.
@@ -236,6 +241,7 @@ It's a dev SMTP catcher. Production sends through the institutional MUW
 relay; configure it in `/opt/libreclinica/config/datainfo.properties`.
 
 **What happens if I re-run setup-ubuntu-host.sh?**
-Every block is idempotent. UFW gets fully reset and re-applied (so adding
-new trusted CIDRs is a re-run). The env file's Postgres secret is
-preserved across re-runs — only the image tag pin gets refreshed.
+Every block is idempotent. The env file's Postgres secret is preserved
+across re-runs — only the image tag pin gets refreshed. Re-running is the
+canonical path for bumping `--image-tag` or refreshing `--trusted-cidrs`
+(which feeds `LIBRECLINICA_SSO_TRUSTED_CIDRS`).
