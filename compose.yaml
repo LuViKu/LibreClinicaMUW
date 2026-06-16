@@ -112,6 +112,10 @@ services:
       RETINAL_INFERENCE_RUNNER_FLUID_URL: ${RETINAL_INFERENCE_RUNNER_FLUID_URL:-http://retinal-runner-fluid:8000}
       RETINAL_INFERENCE_RUNNER_ONL_URL: ${RETINAL_INFERENCE_RUNNER_ONL_URL:-http://retinal-runner-onl:8000}
       RETINAL_INFERENCE_RUNNER_BMEIS_URL: ${RETINAL_INFERENCE_RUNNER_BMEIS_URL:-http://retinal-runner-bmeis:8000}
+      # GA is gated: empty by default so OptimaAdapter.supports('ga') is False.
+      # Set it (+ start the retinal-runner-ga service via the `ga` profile) only
+      # on a GPU host with the IOWA binary + .sif available.
+      RETINAL_INFERENCE_RUNNER_GA_URL: ${RETINAL_INFERENCE_RUNNER_GA_URL:-}
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
       - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
@@ -170,6 +174,26 @@ services:
       - ${RETINAL_BMEIS_WEIGHTS_DIR:-./docker/retinal-weights/bmeis}:/weights:ro
     cpus: "4.0"
     mem_limit: 6g
+
+  # GA model-runner (sese_ga RPEL -> GA area). GATED: separate `ga` profile + a
+  # GPU host. Needs the proprietary IOWA OCTLayerSeg binary, the ~10 GB .sif, the
+  # vendor code (runners/ga/code/), and the checkpoints — none in git. Running
+  # the .sif in-container needs a privileged/GPU setup; often easier to run this
+  # runner directly on a GPU host. See runners/ga/README.md.
+  retinal-runner-ga:
+    build: ./retinal-inference/runners/ga
+    image: libreclinica-muw-retinal-runner-ga:latest
+    container_name: libreclinica-muw-retinal-runner-ga-1
+    profiles: ["ga"]
+    # gpus: all          # uncomment on an NVIDIA host (compose GPU passthrough)
+    depends_on:
+      - db
+    volumes:
+      - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      - ${RETINAL_GA_WEIGHTS_DIR:-./docker/retinal-weights/ga}:/weights:ro
+      - ${RETINAL_GA_IOWA_BINARY:-./docker/iowa/OCTLayerSeg3.6}:/opt/iowa/OCTLayerSeg3.6:ro
+      - ${RETINAL_GA_SIF:-./docker/sese_ga/pytorch_optima_dl.v4.sif}:/opt/sese_ga/pytorch_optima_dl.v4.sif:ro
+    mem_limit: 12g
 
 volumes:
   libreclinica-db-data:

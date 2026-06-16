@@ -87,6 +87,7 @@ services:
       RETINAL_INFERENCE_RUNNER_FLUID_URL: ${RETINAL_INFERENCE_RUNNER_FLUID_URL:-}
       RETINAL_INFERENCE_RUNNER_ONL_URL: ${RETINAL_INFERENCE_RUNNER_ONL_URL:-}
       RETINAL_INFERENCE_RUNNER_BMEIS_URL: ${RETINAL_INFERENCE_RUNNER_BMEIS_URL:-}
+      RETINAL_INFERENCE_RUNNER_GA_URL: ${RETINAL_INFERENCE_RUNNER_GA_URL:-}
     volumes:
       # Move the two retinal-inference bind mounts off the dev-tree
       # ./docker/ paths and onto /var/lib/libreclinica/ paths the setup
