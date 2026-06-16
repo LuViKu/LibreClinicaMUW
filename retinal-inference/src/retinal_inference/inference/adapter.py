@@ -46,7 +46,17 @@ class RetinalInferenceAdapter(ABC):
         task: TaskName,
         e2e_path: Path,
         laterality: Literal["OD", "OS"],
-    ) -> FullVolumeResult: ...
+        out_dir_override: Path | None = None,
+    ) -> FullVolumeResult:
+        """Run full-volume inference and return the structured result.
+
+        ``out_dir_override`` (DR-022) — when set, the adapter writes runner
+        outputs into this directory instead of its default
+        ``shared_storage_path`` layout. The stateless ``POST /run`` endpoint
+        passes a per-request ``TemporaryDirectory`` so nothing persists past
+        the response. Adapters that don't touch the filesystem (placeholder,
+        future mirage) should silently ignore the argument.
+        """
 
     @property
     @abstractmethod

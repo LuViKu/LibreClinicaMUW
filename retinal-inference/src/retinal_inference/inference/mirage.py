@@ -40,5 +40,6 @@ class MirageAdapter(RetinalInferenceAdapter):
         task: TaskName,
         e2e_path: Path,
         laterality: Literal["OD", "OS"],
+        out_dir_override: Path | None = None,
     ) -> FullVolumeResult:
         raise NotImplementedError("MirageAdapter is not implemented yet.")
