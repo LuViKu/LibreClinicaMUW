@@ -37,6 +37,18 @@ RUN pip install --no-cache-dir /tmp/wheels/dlfwdata-*.whl \
 RUN pip install --no-cache-dir "fastapi<0.104" "uvicorn[standard]<0.22" "pydicom<3"
 
 COPY app.py /workdir/app.py
+# fluidseg → dlfwconfig.version imports gitpython at module load. The
+# pytorch:1.9.0 base ships no git binary, so gitpython aborts the import
+# with "Bad git executable" before fluidseg ever starts inference. The
+# error message itself documents this escape hatch.
+ENV GIT_PYTHON_REFRESH=quiet
+# pytorch:1.9.0-cuda10.2-cudnn7-runtime ships a CUDA-built torch, but
+# there is no NVIDIA driver inside the container. fluidseg's vendor
+# config (01_spectralis_patch_brunet.py) eagerly initializes a CUDA
+# tensor at import time — even with --cpu — and crashes on
+# torch._C._cuda_init(). CUDA_VISIBLE_DEVICES=-1 tells CUDA to ignore
+# every device and is the standard workaround for the import-time path.
+ENV CUDA_VISIBLE_DEVICES=-1
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://localhost:8000/health || exit 1

@@ -48,6 +48,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -123,8 +124,8 @@ public class RetinalInferenceApiController {
                  produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> octUpload(@PathVariable("eventCrfId") int eventCrfId,
                                        @RequestPart("file") MultipartFile file,
-                                       @RequestPart("task") String task,
-                                       @RequestPart("laterality") String laterality,
+                                       @RequestParam("task") String task,
+                                       @RequestParam("laterality") String laterality,
                                        HttpSession session) {
 
         // ---- auth + study guards ------------------------------------------------

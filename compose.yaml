@@ -46,6 +46,12 @@ services:
       # leave it unset so legacy DBUnit DAO tests aren't blocked by
       # the seed's dn_item_data_map FK rows.
       LIQUIBASE_CONTEXTS: "${LIQUIBASE_CONTEXTS:-demo}"
+    volumes:
+      # E2E uploads — the Java RetinalInferenceApiController writes the
+      # received .e2e here, and the retinal-inference sidecar reads it
+      # back through the same in-container path. The host bind makes
+      # the two containers share the file via ./docker/e2e-uploads/.
+      - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads
     develop:
       watch:
         # restart on config file changes
