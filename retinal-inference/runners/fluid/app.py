@@ -1,23 +1,24 @@
-"""Fluid model-runner (RetInsight ``fluidseg``) — IRF / SRF / PED.
+"""Fluid model-runner (RetInsight fluidseg 1.3.0) — IRF / SRF / PED.
 
-Thin FastAPI wrapper around the RetInsight ``fluidseg`` CLI (installed from the
-vendor wheels in this image). On ``/infer`` it runs ``fluidseg`` on the shared
-``bscan.dcm``, reads back the label volume, and derives per-biomarker volumes
-in mm³ from the DICOM voxel size.
+Thin FastAPI wrapper around the RetInsight ``fluidseg`` CLI (1.3.0 wheels +
+weights baked into the image at /workdir/model-weights-1-3-0, exactly like the
+vendor code_for_1_3 Docker image). On ``/infer`` it runs ``fluidseg`` on the
+shared ``bscan.dcm`` from /workdir (so the default weights resolve — no
+``--weights`` needed), reads back the label volume, and derives per-biomarker
+volumes in mm³ from the DICOM voxel size.
 
-fluidseg label convention (RetInsight): 1=IRF (cyst), 2=SRF, 3=PED.
+fluidseg label convention: 1=IRF (cyst), 2=SRF, 3=PED.
 
-Two things to confirm on the first real build/run (vendor-version dependent,
-not verifiable without the wheels + weights):
-  * the exact ``--weights`` set + filenames (see RUNNER_FLUID_WEIGHTS);
-  * the output artifact name/shape (``fluidseg.npy`` vs ``fluidseg.npz``
-    with a ``segmentation`` key) — handled defensively below.
+NB: v2.5.0 (a Singularity .sif using run_inference.py) is newer than 1.3.0 but
+is GPU/x86-only; 1.3.0 is the newest CPU-runnable (pip-wheel) build, so it backs
+this runner. Confirm on first real build: that fluidseg finds its baked weights
+with no --weights (mirrors the vendor Dockerfile) and the output artifact name
+(fluidseg.npy vs fluidseg.npz['segmentation'] — handled defensively below).
 """
 
 from __future__ import annotations
 
 import os
-import shlex
 import subprocess
 from pathlib import Path
 
@@ -28,13 +29,9 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 MODEL_VERSION = os.environ.get("RUNNER_FLUID_MODEL_VERSION", "retinsight-fluid-1.3.0")
-# Space-separated weight paths inside the image/mount, in the order fluidseg's
-# --weights expects. Default is the 0.6.2 ensemble; override per release.
-WEIGHTS = os.environ.get(
-    "RUNNER_FLUID_WEIGHTS",
-    "/weights/weights_fluidbrunet.pt /weights/weights_fluidbrunet_3class.pt "
-    "/weights/weights_2d.pt /weights/weights_25d.pt",
-).split()
+# Run fluidseg from here so its default (baked) weights resolve, per the vendor
+# code_for_1_3 Dockerfile (ADD model-weights-1-3-0 /workdir; no --weights arg).
+WORKDIR = os.environ.get("RUNNER_FLUID_WORKDIR", "/workdir")
 USE_CPU = os.environ.get("RUNNER_FLUID_CPU", "1") == "1"
 
 LABELS = {"irf_mm3": 1, "srf_mm3": 2, "ped_mm3": 3}
@@ -79,11 +76,13 @@ def infer(req: InferRequest) -> dict:
     if not dcm.is_file():
         raise HTTPException(status_code=400, detail=f"bscan.dcm not found: {dcm}")
 
-    cmd = ["fluidseg", "--input", str(dcm), "--output", str(out), "--weights", *WEIGHTS]
+    cmd = ["fluidseg", "--input", str(dcm), "--output", str(out)]
     if USE_CPU:
         cmd.append("--cpu")
     try:
-        subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=3600)
+        subprocess.run(
+            cmd, check=True, capture_output=True, text=True, timeout=3600, cwd=WORKDIR
+        )
     except subprocess.CalledProcessError as e:  # surface the model's stderr
         raise HTTPException(
             status_code=500, detail=f"fluidseg failed: {e.stderr or e.stdout}"
@@ -96,8 +95,6 @@ def infer(req: InferRequest) -> dict:
         for name, label in LABELS.items()
     }
     total = round(sum(payload.values()), 6)
-
-    # Persist the label volume as the per-bscan artifact.
     np.save(out / "fluid_labels.npy", seg.astype(np.uint8))
 
     return {

@@ -137,9 +137,9 @@ services:
       RUNNER_FLUID_CPU: "1"
     volumes:
       # MUST mount at the same absolute path the sidecar uses — it passes
-      # absolute bscan_dcm_path / output_dir in the /infer request.
+      # absolute bscan_dcm_path / output_dir in the /infer request. (fluidseg
+      # 1.3.0 weights are baked into the image, so no weights mount here.)
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
-      - ${RETINAL_FLUID_WEIGHTS_DIR:-./docker/retinal-weights/fluid}:/weights:ro
     cpus: "4.0"
     mem_limit: 6g
 

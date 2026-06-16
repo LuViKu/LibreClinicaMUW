@@ -10,10 +10,12 @@ sese_pr (photoreceptor / BMEIS boundary) behind the runner `/infer` contract
 cp -r <sese_pr>/code/photoreceptors-segmentation/* \
       retinal-inference/runners/bmeis/code/
 ```
-**Weights** — mounted at `/weights` at runtime (compose):
+**Weights** — mounted at `/weights` at runtime (compose). sese_pr selects the
+model by manufacturer: **Heidelberg/Spectralis → `u2net-cross-entropy`**
+(our OCT exports), Cirrus/Topcon → `u2net-cirrus_v3`.
 ```
-<sese_pr>/weights/u2net-cirrus_v3/    (.ini + model.pkl)   # default
-<sese_pr>/weights/u2net-cross-entropy/                      # alternative
+<sese_pr>/weights/u2net-cross-entropy/   (.ini + model.pkl)   # default (Spectralis)
+<sese_pr>/weights/u2net-cirrus_v3/                             # Cirrus/Topcon only
 ```
 
 ## torch / weights caveat (PyTorch 1.0 full-pickle)
@@ -37,7 +39,7 @@ docker run --rm -p 8003:8000 \
 ## Env knobs
 | Var | Default | Notes |
 |---|---|---|
-| `RUNNER_BMEIS_WEIGHTS` | `/weights/u2net-cirrus_v3` | model dir (.ini + .pkl) |
+| `RUNNER_BMEIS_WEIGHTS` | `/weights/u2net-cross-entropy` | model dir (.ini + .pkl); Spectralis |
 | `RUNNER_BMEIS_SAMPLES` | `10` | Bayesian MC samples |
 | `RUNNER_BMEIS_CODE` | `/opt/sese_pr` | vendor code location in the image |
 | `RUNNER_BMEIS_MODEL_VERSION` | `sese-pr-1.3` | reported to `/health` |

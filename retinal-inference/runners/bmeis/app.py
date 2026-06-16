@@ -40,7 +40,9 @@ from pydantic import BaseModel
 
 MODEL_VERSION = os.environ.get("RUNNER_BMEIS_MODEL_VERSION", "sese-pr-1.3")
 PR_CODE = os.environ.get("RUNNER_BMEIS_CODE", "/opt/sese_pr")
-WEIGHTS = os.environ.get("RUNNER_BMEIS_WEIGHTS", "/weights/u2net-cirrus_v3")
+# Heidelberg/Spectralis uses the cross-entropy model (sese_pr MODEL_PATH_SPECTRALIS);
+# u2net-cirrus_v3 is for Cirrus/Topcon. Our OCT exports are Spectralis.
+WEIGHTS = os.environ.get("RUNNER_BMEIS_WEIGHTS", "/weights/u2net-cross-entropy")
 SAMPLES = os.environ.get("RUNNER_BMEIS_SAMPLES", "10")
 
 app = FastAPI(title="retinal-runner-bmeis")
@@ -90,6 +92,7 @@ def infer(req: InferRequest) -> dict:
         str(out),  # output_path
         WEIGHTS,  # model_path (.ini + .pkl)
         "--export_for_optimus", "True",
+        "--export_mhd", "False",
         "--samples", SAMPLES,
     ]
     try:

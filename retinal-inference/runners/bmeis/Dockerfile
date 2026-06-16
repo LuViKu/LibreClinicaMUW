@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir \
 # e.g. add:  RUN pip install --no-cache-dir torch==1.0.1
 
 COPY app.py ./
-ENV RUNNER_BMEIS_CODE=/opt/sese_pr RUNNER_BMEIS_WEIGHTS=/weights/u2net-cirrus_v3
+ENV RUNNER_BMEIS_CODE=/opt/sese_pr RUNNER_BMEIS_WEIGHTS=/weights/u2net-cross-entropy
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://localhost:8000/health || exit 1
