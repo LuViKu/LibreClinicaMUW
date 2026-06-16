@@ -83,8 +83,10 @@ services:
       # Per-task model-runner endpoints (used when RETINAL_INFERENCE_ADAPTER=optima).
       # Empty by default so prod stays on the placeholder until a runner image is
       # published + deployed (see retinal-inference/runners/). Set in
-      # /etc/libreclinica/env when the fluid runner service is rolled out.
+      # /etc/libreclinica/env when each runner service is rolled out.
       RETINAL_INFERENCE_RUNNER_FLUID_URL: ${RETINAL_INFERENCE_RUNNER_FLUID_URL:-}
+      RETINAL_INFERENCE_RUNNER_ONL_URL: ${RETINAL_INFERENCE_RUNNER_ONL_URL:-}
+      RETINAL_INFERENCE_RUNNER_BMEIS_URL: ${RETINAL_INFERENCE_RUNNER_BMEIS_URL:-}
     volumes:
       # Move the two retinal-inference bind mounts off the dev-tree
       # ./docker/ paths and onto /var/lib/libreclinica/ paths the setup

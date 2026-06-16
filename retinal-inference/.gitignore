@@ -11,3 +11,5 @@ venv/
 *.pkl
 *.ckpt
 *.sif
+runners/*/code/*
+!runners/*/code/.gitkeep

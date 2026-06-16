@@ -110,6 +110,8 @@ services:
       # Per-task model-runner endpoints (used when ADAPTER=optima). A task is
       # only enabled when its URL is set; harmless under the placeholder.
       RETINAL_INFERENCE_RUNNER_FLUID_URL: ${RETINAL_INFERENCE_RUNNER_FLUID_URL:-http://retinal-runner-fluid:8000}
+      RETINAL_INFERENCE_RUNNER_ONL_URL: ${RETINAL_INFERENCE_RUNNER_ONL_URL:-http://retinal-runner-onl:8000}
+      RETINAL_INFERENCE_RUNNER_BMEIS_URL: ${RETINAL_INFERENCE_RUNNER_BMEIS_URL:-http://retinal-runner-bmeis:8000}
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
       - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
@@ -134,6 +136,38 @@ services:
       # absolute bscan_dcm_path / output_dir in the /infer request.
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
       - ${RETINAL_FLUID_WEIGHTS_DIR:-./docker/retinal-weights/fluid}:/weights:ro
+    cpus: "4.0"
+    mem_limit: 6g
+
+  # ONL model-runner (sese_onl, outer nuclear layer thickness). Same `optima`
+  # profile gate — its image needs the vendor code (runners/onl/code/) + mounted
+  # weights, neither in git.
+  retinal-runner-onl:
+    build: ./retinal-inference/runners/onl
+    image: libreclinica-muw-retinal-runner-onl:latest
+    container_name: libreclinica-muw-retinal-runner-onl-1
+    profiles: ["optima"]
+    depends_on:
+      - db
+    volumes:
+      - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      - ${RETINAL_ONL_WEIGHTS_DIR:-./docker/retinal-weights/onl}:/weights:ro
+    cpus: "4.0"
+    mem_limit: 6g
+
+  # BMEIS model-runner (sese_pr, photoreceptor boundary). Same `optima` profile;
+  # needs the vendor code (runners/bmeis/code/) + weights. PyTorch-1.0 pickle —
+  # see runners/bmeis/README.md for the torch/weight caveat.
+  retinal-runner-bmeis:
+    build: ./retinal-inference/runners/bmeis
+    image: libreclinica-muw-retinal-runner-bmeis:latest
+    container_name: libreclinica-muw-retinal-runner-bmeis-1
+    profiles: ["optima"]
+    depends_on:
+      - db
+    volumes:
+      - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      - ${RETINAL_BMEIS_WEIGHTS_DIR:-./docker/retinal-weights/bmeis}:/weights:ro
     cpus: "4.0"
     mem_limit: 6g
 
