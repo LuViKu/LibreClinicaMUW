@@ -487,6 +487,44 @@ Option 3. The catalog is read-only at the database level; "create" is a UX affor
 
 ---
 
+## DR-022 — Remote stateless GPU sidecar for retinal inference
+
+**Date:** 2026-06-16
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+
+**Context.** Retinal inference (fluid / onl / bmeis / ga task families) is GPU-bound — ONL's 5-fold ensemble takes 25+ minutes per scan under linux/amd64 emulation on Apple Silicon. The institution has a Linux VM with NVIDIA TITAN + RTX 2080 GPUs that can host the sidecar + per-task runners. The main Tomcat continues to run on the institutional Tomcat host; sidecar / runners colocate on the GPU VM, both inside the same institutional network.
+
+**Decision.** Add a stateless `POST /run` endpoint to the sidecar (`retinal-inference/src/retinal_inference/api/run.py`) that accepts a Heidelberg `.e2e` inline, runs the existing OptimaAdapter against it inside a per-request `TemporaryDirectory`, returns a JSON envelope containing the runner-produced CSV/NPY/PNG outputs as base64-encoded `artifacts`, and deletes the tempdir before the response completes. The institutional Tomcat reaches it via a new `RemoteRetinalInferenceClient` (`core/src/main/java/.../service/retinal/`) using `RestTemplate` multipart POST with an `X-MUW-Inference-Token` header + an `Idempotency-Key` header. The local `/screen` + DB-poll worker stay as the fallback path; setting `core.retinalInference.remotePushUrl` opts in to the remote branch.
+
+**Trade-offs considered.**
+
+| Axis | Choice | Rejected alternative |
+|---|---|---|
+| Transport | Plain sync POST with 60-min timeout | Async + callback URL (rejected — would need an inbound port on the institutional host) |
+| Runner I/O | Sidecar + runners share `/var/lib/retinal-inference/tmp` host-bind so the runner sees the sidecar's `TemporaryDirectory` natively | Sidecar serves files to runners via HTTP (future-proofs horizontal scaling — deferred) |
+| Result encoding | JSON envelope with base64 artifact bytes | `multipart/mixed` response (rejected — Java client complexity for 33% wire savings) |
+| Streaming | None (single sync response) | `ndjson` heartbeats (rejected — same institutional network, no egress proxy buffering) |
+| Scope | CSV outputs for every task — sidecar mirrors what the DB-poll worker already emits | DICOM SEG creation in v1 (deferred to a follow-up DR; sidecar generates `StudyInstanceUID` + `SeriesInstanceUID` on the bscan now so the SEG work is cheap when it lands) |
+
+**Consequences.**
+
+- The GPU VM never persists scan data past the request lifetime. The tempdir is created with `TemporaryDirectory(dir=RETINAL_INFERENCE_SHARED_TMPDIR)` and deleted via `with`-block exit; PHI redaction (`inference/phi.py`) blanks `PatientName`/`PatientID`/`PatientBirthDate`/etc. on the synthesised bscan before anything else reads the file (DICOM SUP 142 attestation).
+- The institutional artifact store at `core.retinalInference.artifactStorePath` (default `/var/lib/libreclinica/retinal-artifacts`) keeps the CSV/NPY outputs the SPA's modality-results panel reads. Result rows are written exactly like the DB-poll path; only the **source** differs.
+- Opt-in via four `datainfo.properties` keys: `remotePushUrl`, `remotePushToken`, `remotePushTimeoutSecs`, `artifactStorePath`. Local dev compose with all four unset behaves identically to before.
+- Auth is a shared-secret header; production should source `remotePushToken` from `/etc/libreclinica/env` at Tomcat startup rather than committing it into the properties file.
+
+**Reversible** — disabling the remote branch is a single-line config change (blank `remotePushUrl`); the sidecar's `/run` endpoint is itself opt-in via `RETINAL_INFERENCE_RUN_ENDPOINT_ENABLED=true`. The DB-poll worker stays untouched, so reverting is a no-op.
+
+**Out of scope (for this DR).**
+
+- DICOM SEG creation — separate phase. Will add `dcm4che-core 5.x`, a `DicomSegService`, and `bscan_dcm_path`/`seg_dcm_path` columns when the downstream PACS viewer + ophthalmic workflow nail down their SEG SOP-class requirements.
+- HTTP file-serving between sidecar + runners (deferred until horizontal runner scaling is real).
+- ndjson heartbeats / streaming (revisit if MUW network policy ever places an egress proxy between the institutional Tomcat and the GPU host).
+- Java-side PHI assertion on returned bscan bytes (deferred until dcm4che lands).
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)

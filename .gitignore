@@ -84,3 +84,9 @@ web/src/main/webapp/app/
 docker/retinal-weights/
 docker/retinal-inference-input/
 docker/retinal-inference-storage/
+# DR-022: shared host-bind for the sidecar's stateless /run TemporaryDirectory
+# (sidecar nukes its tempdir on response → stays empty between requests) +
+# the institutional artifact store where the Java side persists per-job CSVs
+# returned by the remote /run envelope.
+docker/retinal-tmp/
+docker/retinal-artifacts/

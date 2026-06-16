@@ -128,8 +128,19 @@ services:
       # Set it (+ start the retinal-runner-ga service via the `ga` profile) only
       # on a GPU host with the IOWA binary + .sif available.
       RETINAL_INFERENCE_RUNNER_GA_URL: ${RETINAL_INFERENCE_RUNNER_GA_URL:-}
+      # DR-022: stateless POST /run. Disabled by default so single-host dev
+      # compose runs the legacy /screen + DB-poll surface only. Set
+      # RETINAL_INFERENCE_RUN_ENDPOINT_ENABLED=true + RETINAL_INFERENCE_AUTH_TOKEN
+      # on the GPU host to expose /run to the institutional Tomcat.
+      RETINAL_INFERENCE_RUN_ENDPOINT_ENABLED: ${RETINAL_INFERENCE_RUN_ENDPOINT_ENABLED:-false}
+      RETINAL_INFERENCE_AUTH_TOKEN: ${RETINAL_INFERENCE_AUTH_TOKEN:-}
+      RETINAL_INFERENCE_SHARED_TMPDIR: /var/lib/retinal-inference/tmp
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      # DR-022: shared tempdir bind so the sidecar's /run TemporaryDirectory is
+      # visible to every runner at the same absolute path. Stays empty between
+      # requests (sidecar nukes its tempdir on response).
+      - ./docker/retinal-tmp:/var/lib/retinal-inference/tmp
       - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
     cpus: "4.0"
     mem_limit: 4g
@@ -152,6 +163,10 @@ services:
       # absolute bscan_dcm_path / output_dir in the /infer request. (fluidseg
       # 1.3.0 weights are baked into the image, so no weights mount here.)
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      # DR-022: shared tempdir bind so the sidecar's /run TemporaryDirectory is
+      # visible to every runner at the same absolute path. Stays empty between
+      # requests (sidecar nukes its tempdir on response).
+      - ./docker/retinal-tmp:/var/lib/retinal-inference/tmp
     cpus: "4.0"
     mem_limit: 6g
 
@@ -167,6 +182,10 @@ services:
       - db
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      # DR-022: shared tempdir bind so the sidecar's /run TemporaryDirectory is
+      # visible to every runner at the same absolute path. Stays empty between
+      # requests (sidecar nukes its tempdir on response).
+      - ./docker/retinal-tmp:/var/lib/retinal-inference/tmp
       - ${RETINAL_ONL_WEIGHTS_DIR:-./docker/retinal-weights/onl}:/weights:ro
     cpus: "4.0"
     mem_limit: 6g
@@ -183,6 +202,10 @@ services:
       - db
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      # DR-022: shared tempdir bind so the sidecar's /run TemporaryDirectory is
+      # visible to every runner at the same absolute path. Stays empty between
+      # requests (sidecar nukes its tempdir on response).
+      - ./docker/retinal-tmp:/var/lib/retinal-inference/tmp
       - ${RETINAL_BMEIS_WEIGHTS_DIR:-./docker/retinal-weights/bmeis}:/weights:ro
     cpus: "4.0"
     mem_limit: 6g
@@ -202,6 +225,10 @@ services:
       - db
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      # DR-022: shared tempdir bind so the sidecar's /run TemporaryDirectory is
+      # visible to every runner at the same absolute path. Stays empty between
+      # requests (sidecar nukes its tempdir on response).
+      - ./docker/retinal-tmp:/var/lib/retinal-inference/tmp
       - ${RETINAL_GA_WEIGHTS_DIR:-./docker/retinal-weights/ga}:/weights:ro
       - ${RETINAL_GA_IOWA_BINARY:-./docker/iowa/OCTLayerSeg3.6}:/opt/iowa/OCTLayerSeg3.6:ro
       - ${RETINAL_GA_SIF:-./docker/sese_ga/pytorch_optima_dl.v4.sif}:/opt/sese_ga/pytorch_optima_dl.v4.sif:ro
