@@ -30,7 +30,14 @@ class ClaimedJob:
 
 
 def claim_next_job(conn: PgConnection) -> ClaimedJob | None:
-    """Atomically claim the oldest ``screened`` job and flip it to ``segmenting``.
+    """Atomically claim the oldest ready job and flip it to ``segmenting``.
+
+    Claims both ``screened`` (the Java sync ``/screen`` succeeded) and ``queued``
+    (async-only tasks, where ``/screen`` returns 422 and the Java side leaves the
+    job queued). The transient ``screening`` status the Java side sets while it
+    runs the sync screen is deliberately NOT claimed, so the sync path and the
+    worker never both process one job — ``FOR UPDATE SKIP LOCKED`` + the status
+    flip settle any race in the brief queued→screening window.
 
     Returns ``None`` when the queue is empty.
     """
@@ -41,7 +48,7 @@ def claim_next_job(conn: PgConnection) -> ClaimedJob | None:
                SET status = 'segmenting', segmenting_at = NOW()
              WHERE job_id = (
                  SELECT job_id FROM retinal_inference_job
-                  WHERE status = 'screened'
+                  WHERE status IN ('queued', 'screened')
                   ORDER BY enqueued_at
                     FOR UPDATE SKIP LOCKED
                   LIMIT 1

@@ -62,9 +62,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * INSERTs a row into {@code retinal_inference_job}, and calls the sidecar's
  * synchronous {@code POST /screen} via {@link RetinalInferenceClient}.
  *
- * <p>v1 enables {@code task='ga'} only. Anything else is rejected with 400;
- * the queue + sidecar schema already carry the task discriminator so adding
- * future tasks (fluid, layers, ...) is decoder-only with no API change.
+ * <p>Enabled tasks: {@code fluid}, {@code onl}, {@code bmeis} (OptimaAdapter
+ * model-runners), plus {@code ga} (gated at the sidecar until its runner exists).
+ * Anything else is rejected with 400; the queue + sidecar schema carry the task
+ * discriminator so adding future tasks is decoder-only with no API change.
  *
  * <p>Authorization mirrors {@link EventCrfsApiController}: session-bound
  * userBean + study, and a {@link SiteVisibilityFilter} check against the
@@ -91,8 +92,15 @@ public class RetinalInferenceApiController {
     /** Filesystem fallback when {@code core.retinalInference.e2eUploadsPath} is unset. */
     public static final String DEFAULT_UPLOADS_PATH = "/var/lib/libreclinica/e2e-uploads";
 
-    /** v1 task allow-list. Extend in lock-step with the sidecar's {@code SUPPORTED_TASKS}. */
-    private static final Set<String> SUPPORTED_TASKS = Set.of("ga");
+    /**
+     * Task allow-list — keep in lock-step with the sidecar's {@code SUPPORTED_TASKS}.
+     * fluid/onl/bmeis run via the OptimaAdapter model-runners (async; the sidecar's
+     * {@code /screen} returns 422 for them, so the controller's existing
+     * null-result path queues them for the worker). {@code ga} is registered but
+     * gated at the sidecar adapter (no runner) until the IOWA layer segmenter +
+     * a GPU host exist.
+     */
+    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "bmeis");
 
     /** Laterality must be one of the OD/OS pair (no OU for the placeholder GA path). */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");

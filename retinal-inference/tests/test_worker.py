@@ -66,6 +66,44 @@ def test_worker_processes_screened_job(db_conn, fake_e2e_path) -> None:
     assert float(pixel_scale) == pytest.approx(0.011, abs=1e-6)
 
 
+def test_worker_processes_queued_job(db_conn, fake_e2e_path) -> None:
+    """Async-only tasks stay 'queued' (sidecar /screen returns 422); the worker
+    must claim and process them, not just 'screened' jobs."""
+    from retinal_inference.config import reload_settings
+    from retinal_inference.inference.adapter import get_adapter, reset_adapter
+    from retinal_inference.worker import process_one_job
+
+    reload_settings()
+    reset_adapter()
+    adapter = get_adapter()
+
+    with db_conn.cursor() as cur:
+        cur.execute("INSERT INTO event_crf DEFAULT VALUES RETURNING event_crf_id")
+        (event_crf_id,) = cur.fetchone()
+        cur.execute(
+            """
+            INSERT INTO retinal_inference_job (
+                event_crf_id, task, e2e_path, eye_laterality, status
+            ) VALUES (%s, 'fluid', %s, 'OD', 'queued')
+            RETURNING job_id
+            """,
+            (event_crf_id, str(fake_e2e_path)),
+        )
+        (job_id,) = cur.fetchone()
+    db_conn.commit()
+
+    job = process_one_job(db_conn, adapter)
+    assert job is not None and job.job_id == job_id
+
+    with db_conn.cursor() as cur:
+        cur.execute(
+            "SELECT status FROM retinal_inference_job WHERE job_id = %s", (job_id,)
+        )
+        (status,) = cur.fetchone()
+    # Placeholder adapter (active in tests) handles 'fluid', so it completes.
+    assert status == "done"
+
+
 def test_worker_returns_none_on_empty_queue(db_conn) -> None:
     from retinal_inference.inference.adapter import get_adapter, reset_adapter
     from retinal_inference.worker import process_one_job
