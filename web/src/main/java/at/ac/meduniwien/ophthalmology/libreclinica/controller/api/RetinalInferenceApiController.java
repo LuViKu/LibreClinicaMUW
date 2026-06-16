@@ -37,7 +37,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRunResult;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalInferenceClient;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -106,17 +111,25 @@ public class RetinalInferenceApiController {
     /** Laterality must be one of the OD/OS pair (no OU for the placeholder GA path). */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");
 
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
     private final RetinalInferenceClient inferenceClient;
+    private final RemoteRetinalInferenceClient remoteClient;
+    private final RetinalArtifactStorageService artifactStore;
 
     @Autowired
     public RetinalInferenceApiController(@Qualifier("dataSource") DataSource dataSource,
                                          SiteVisibilityFilter siteVisibilityFilter,
-                                         RetinalInferenceClient inferenceClient) {
+                                         RetinalInferenceClient inferenceClient,
+                                         RemoteRetinalInferenceClient remoteClient,
+                                         RetinalArtifactStorageService artifactStore) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.inferenceClient = inferenceClient;
+        this.remoteClient = remoteClient;
+        this.artifactStore = artifactStore;
     }
 
     @PostMapping(path = "/{eventCrfId:[0-9]+}/oct-upload",
@@ -212,6 +225,20 @@ public class RetinalInferenceApiController {
                 /* oldValue   */ "",
                 /* newValue   */ "queued");
 
+        // ---- DR-022: remote GPU sidecar branch ---------------------------------
+        // When core.retinalInference.remotePushUrl is set the institutional
+        // Tomcat pushes the .e2e to the GPU host's /run endpoint, persists the
+        // returned artifacts locally, and marks the job 'done'. On any failure
+        // the job reverts to 'queued' and the existing local-screen / DB-poll
+        // path runs as the fallback (see below). Single-host dev compose with
+        // remotePushUrl blank keeps the current behaviour unchanged.
+        if (remoteClient.isConfigured()) {
+            ResponseEntity<?> remoteResp = handleRemote(
+                    jobId, taskClean, absolutePath, lat, eventCrfId);
+            if (remoteResp != null) return remoteResp;
+            // fall through to the existing local path on remote failure
+        }
+
         // ---- flip to 'screening' + call sidecar /screen ------------------------
         try (Connection c = dataSource.getConnection()) {
             updateStatus(c, jobId, "screening", /* setScreenedAt */ false, /* modelVersion */ null);
@@ -296,6 +323,125 @@ public class RetinalInferenceApiController {
     }
 
     /**
+     * DR-022 — drive the remote GPU sidecar end-to-end: flip the job to
+     * {@code 'segmenting'}, POST the E2E to the remote {@code /run}, persist
+     * the returned artifacts under the institutional artifact store, INSERT
+     * the {@code retinal_inference_result} row, mark the job {@code 'done'},
+     * and return a {@link RetinalInferenceClient.ScreenResult}-shaped body so
+     * the SPA's existing preview surface keeps working.
+     *
+     * <p>Returns {@code null} when the remote call fails — the caller falls
+     * back to the local {@code /screen} path which itself may fall back to the
+     * DB-poll worker, so a degraded GPU host never breaks the upload UX.
+     */
+    private ResponseEntity<?> handleRemote(long jobId,
+                                           String taskClean,
+                                           String absolutePath,
+                                           String lat,
+                                           int eventCrfId) {
+        try (Connection c = dataSource.getConnection()) {
+            updateStatus(c, jobId, "segmenting", false, null);
+        } catch (SQLException sqlEx) {
+            LOG.warn("Failed to flip job {} to 'segmenting' (continuing remote call): {}",
+                    jobId, sqlEx.getMessage());
+        }
+
+        RemoteRunResult remote;
+        try {
+            remote = remoteClient.runRemote(jobId, taskClean, absolutePath, lat);
+        } catch (Exception e) {
+            LOG.warn("Remote /run threw for job {}: {}", jobId, e.getMessage());
+            remote = null;
+        }
+
+        if (remote == null) {
+            // Revert + let the caller fall through to the local-screen path.
+            try (Connection c = dataSource.getConnection()) {
+                updateStatus(c, jobId, "queued", false, null);
+            } catch (SQLException ignored) { /* best-effort */ }
+            return null;
+        }
+
+        // Persist the returned artifacts to the institutional store so the
+        // result row's bscan_masks_dir points at a browsable directory.
+        Path artifactDir;
+        try {
+            artifactDir = artifactStore.persist(jobId, remote);
+        } catch (IOException ioEx) {
+            LOG.error("Remote /run succeeded but artifact persist failed for job {}: {}",
+                    jobId, ioEx.getMessage());
+            try (Connection c = dataSource.getConnection()) {
+                updateStatus(c, jobId, "queued", false, null);
+            } catch (SQLException ignored) { /* best-effort */ }
+            return null;
+        }
+
+        // INSERT retinal_inference_result then mark the job 'done'.
+        try (Connection c = dataSource.getConnection()) {
+            insertResult(c, jobId, taskClean, remote, artifactDir);
+            updateStatus(c, jobId, "done",
+                    /* setScreenedAt */ false,
+                    /* setCompletedAt */ true,
+                    remote.modelVersion());
+        } catch (SQLException sqlEx) {
+            LOG.error("Remote /run succeeded but result persist failed for job {}: {}",
+                    jobId, sqlEx.getMessage());
+            try (Connection c = dataSource.getConnection()) {
+                updateStatus(c, jobId, "queued", false, null);
+            } catch (SQLException ignored) { /* best-effort */ }
+            return null;
+        }
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("jobId", jobId);
+        body.put("status", "done");
+        body.put("task", taskClean);
+        body.put("laterality", lat);
+        body.put("primaryMetricValue", remote.primaryMetricValue());
+        body.put("primaryMetricUnit", remote.primaryMetricUnit());
+        body.put("confidence", remote.confidence());
+        body.put("modelVersion", remote.modelVersion());
+        body.put("artifactCount", remote.artifacts().size());
+
+        LOG.info("Retinal inference (remote): event_crf {} → job {} done (task={}, model={}, metric={}{})",
+                eventCrfId, jobId, taskClean,
+                remote.modelVersion(), remote.primaryMetricValue(), remote.primaryMetricUnit());
+        return ResponseEntity.ok(body);
+    }
+
+    /**
+     * INSERT into {@code retinal_inference_result}. The output_payload column
+     * is JSONB; we serialise the envelope's payload map to a string and let
+     * Postgres cast it via {@code ?::jsonb} — no postgres JDBC dep needed.
+     */
+    private void insertResult(Connection c, long jobId, String task,
+                              RemoteRunResult remote, Path artifactDir) throws SQLException {
+        String payloadJson;
+        try {
+            payloadJson = JSON.writeValueAsString(remote.outputPayload());
+        } catch (Exception jsonEx) {
+            throw new SQLException("Failed to serialise output_payload for job " + jobId, jsonEx);
+        }
+        String sql = "INSERT INTO retinal_inference_result ("
+                + "job_id, task, output_payload, primary_metric_value, "
+                + "primary_metric_unit, bscan_masks_dir, pixel_scale_mm, confidence"
+                + ") VALUES (?, ?, ?::jsonb, ?, ?, ?, ?, ?)";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, jobId);
+            ps.setString(2, task);
+            ps.setString(3, payloadJson);
+            ps.setDouble(4, remote.primaryMetricValue());
+            ps.setString(5, remote.primaryMetricUnit());
+            ps.setString(6, artifactDir.toString());
+            // pixel_scale_mm: the remote envelope doesn't carry it in v1 (the
+            // SPA's modality registry resolves scale by OID), so leave it null.
+            ps.setNull(7, java.sql.Types.NUMERIC);
+            ps.setDouble(8, remote.confidence());
+            ps.executeUpdate();
+        }
+    }
+
+    /**
      * Update the job's {@code status} (+ optional {@code screened_at} and
      * {@code model_version}). Used for both the optimistic flip to
      * {@code 'screening'} before the sidecar call and the terminal
@@ -303,15 +449,29 @@ public class RetinalInferenceApiController {
      */
     private void updateStatus(Connection c, long jobId, String newStatus,
                               boolean setScreenedAt, String modelVersion) throws SQLException {
+        updateStatus(c, jobId, newStatus, setScreenedAt, /* setCompletedAt */ false, modelVersion);
+    }
+
+    /**
+     * Like {@link #updateStatus(Connection, long, String, boolean, String)} but
+     * also stamps {@code completed_at} when {@code setCompletedAt=true}. The
+     * remote DR-022 branch needs this on the {@code 'done'} transition; the
+     * local path keeps the 4-arg call for back-compat.
+     */
+    private void updateStatus(Connection c, long jobId, String newStatus,
+                              boolean setScreenedAt, boolean setCompletedAt,
+                              String modelVersion) throws SQLException {
         StringBuilder sql = new StringBuilder(
                 "UPDATE retinal_inference_job SET status = ?");
-        if (setScreenedAt) sql.append(", screened_at = ?");
+        if (setScreenedAt)  sql.append(", screened_at = ?");
+        if (setCompletedAt) sql.append(", completed_at = ?");
         if (modelVersion != null) sql.append(", model_version = ?");
         sql.append(" WHERE job_id = ?");
         try (PreparedStatement ps = c.prepareStatement(sql.toString())) {
             int i = 1;
             ps.setString(i++, newStatus);
-            if (setScreenedAt) ps.setTimestamp(i++, Timestamp.from(Instant.now()));
+            if (setScreenedAt)  ps.setTimestamp(i++, Timestamp.from(Instant.now()));
+            if (setCompletedAt) ps.setTimestamp(i++, Timestamp.from(Instant.now()));
             if (modelVersion != null) ps.setString(i++, modelVersion);
             ps.setLong(i, jobId);
             ps.executeUpdate();
