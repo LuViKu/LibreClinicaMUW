@@ -9,3 +9,5 @@ pillow==11.0.0
 oct-converter==0.7.0
 pydicom==3.0.2
 numpy==2.4.6
+# FastAPI multipart parsing for POST /run (DR-022).
+python-multipart==0.0.20

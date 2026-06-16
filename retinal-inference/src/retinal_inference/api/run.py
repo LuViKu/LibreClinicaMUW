@@ -1,0 +1,210 @@
+"""POST /run — stateless full-volume inference (DR-022).
+
+Accepts a Heidelberg ``.e2e`` inline (multipart), runs the configured
+adapter against it in a fresh tempdir, base64-encodes the runner-produced
+artifacts into a JSON envelope, deletes the tempdir, and returns. Nothing
+about the scan volume persists past the response.
+
+Used when the Java side has ``core.retinalInference.remotePushUrl`` set — the
+sidecar runs on a remote GPU host and the institutional Tomcat reaches it
+over HTTP. The DB-poll worker + ``/screen`` path remain untouched for the
+single-host dev compose flow.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import tempfile
+import urllib.error
+from collections import OrderedDict
+from pathlib import Path
+from typing import Literal
+
+from fastapi import APIRouter, File, Form, Header, HTTPException, UploadFile, status
+
+from retinal_inference import config as _config
+from retinal_inference.inference.adapter import (
+    FastScreenUnavailable,
+    UnsupportedTaskError,
+    get_adapter,
+)
+from retinal_inference.inference.artifact_collector import (
+    collect_artifacts,
+    rewrite_payload_paths,
+)
+from retinal_inference.models.run import RunEnvelope
+from retinal_inference.tasks import SUPPORTED_TASKS, TaskName
+
+LOG = logging.getLogger(__name__)
+
+router = APIRouter()
+
+# Single-request-at-a-time per sidecar process — keeps the shared tempdir's
+# disk pressure bounded (see plan § Open items + risks). uvicorn workers are
+# the unit of parallelism if the operator wants concurrency.
+_run_lock = asyncio.Lock()
+
+# Idempotency LRU. Maps caller-supplied Idempotency-Key → envelope so a
+# retry (network blip on the Java side) returns the cached result without
+# re-running inference. Cap of 64 keys is plenty for a sidecar that processes
+# one job at a time.
+_idempotency_cache: "OrderedDict[str, RunEnvelope]" = OrderedDict()
+_IDEMPOTENCY_CACHE_MAX = 64
+
+_LATERALITIES: frozenset[str] = frozenset({"OD", "OS"})
+
+
+def _check_auth(token_header: str | None) -> None:
+    expected = _config.settings.auth_token
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Sidecar /run not configured (RETINAL_INFERENCE_AUTH_TOKEN unset)"
+            ),
+        )
+    if token_header != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing X-MUW-Inference-Token",
+        )
+
+
+def _check_endpoint_enabled() -> None:
+    if not _config.settings.run_endpoint_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Sidecar /run is disabled in this deployment",
+        )
+
+
+def _record_idempotent(key: str, envelope: RunEnvelope) -> None:
+    _idempotency_cache[key] = envelope
+    while len(_idempotency_cache) > _IDEMPOTENCY_CACHE_MAX:
+        _idempotency_cache.popitem(last=False)
+
+
+@router.post("/run", response_model=RunEnvelope, status_code=200)
+async def run(
+    file: UploadFile = File(..., description="Heidelberg .e2e binary"),
+    task: str = Form(..., description="One of fluid / onl / bmeis / ga"),
+    laterality: str = Form(..., description="OD or OS"),
+    x_muw_inference_token: str | None = Header(default=None),
+    idempotency_key: str | None = Header(default=None),
+) -> RunEnvelope:
+    _check_endpoint_enabled()
+    _check_auth(x_muw_inference_token)
+
+    if task not in SUPPORTED_TASKS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported task '{task}' — v1 enables: {sorted(SUPPORTED_TASKS)}",
+        )
+    if laterality not in _LATERALITIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"laterality must be OD or OS (got '{laterality}')",
+        )
+
+    if idempotency_key and idempotency_key in _idempotency_cache:
+        # Move to end (LRU touch).
+        cached = _idempotency_cache.pop(idempotency_key)
+        _idempotency_cache[idempotency_key] = cached
+        return cached
+
+    typed_task: TaskName = task  # type: ignore[assignment]
+    typed_laterality: Literal["OD", "OS"] = laterality  # type: ignore[assignment]
+
+    async with _run_lock:
+        return await _run_locked(
+            file=file,
+            task=typed_task,
+            laterality=typed_laterality,
+            idempotency_key=idempotency_key,
+        )
+
+
+async def _run_locked(
+    *,
+    file: UploadFile,
+    task: TaskName,
+    laterality: Literal["OD", "OS"],
+    idempotency_key: str | None,
+) -> RunEnvelope:
+    shared_tmpdir = _config.settings.shared_tmpdir
+    shared_tmpdir.mkdir(parents=True, exist_ok=True)
+
+    body = await file.read()
+    if not body:
+        raise HTTPException(status_code=400, detail="file part is empty")
+
+    # tempfile.TemporaryDirectory cleans up on context exit — including if the
+    # adapter raises. The `dir=shared_tmpdir` argument keeps the tempdir on the
+    # shared host-bind so the runner sees the same path inside its own
+    # container (DR-022 § GPU-host topology).
+    with tempfile.TemporaryDirectory(prefix="run_", dir=str(shared_tmpdir)) as td:
+        tempdir = Path(td)
+        e2e_path = tempdir / "input.e2e"
+        e2e_path.write_bytes(body)
+
+        adapter = get_adapter()
+        if not adapter.supports(task):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Task '{task}' is not supported by the current adapter",
+            )
+
+        try:
+            # The OptimaAdapter places the bscan.dcm at tempdir/bscan.dcm and
+            # passes that path to the runner; the runner writes its artifacts
+            # back into the same tempdir (host-bind shared).
+            result = adapter.full_volume(
+                task,
+                e2e_path,
+                laterality,
+                out_dir_override=tempdir,
+            )
+        except FastScreenUnavailable as e:
+            # full_volume shouldn't raise this, but be defensive.
+            raise HTTPException(status_code=500, detail=str(e)) from e
+        except UnsupportedTaskError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except FileNotFoundError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except urllib.error.HTTPError as e:
+            # OptimaAdapter._post_json re-raises with the runner's detail in
+            # the reason — surface it.
+            raise HTTPException(
+                status_code=502,
+                detail=f"runner returned {e.code}: {e.reason}",
+            ) from e
+
+        artifacts = collect_artifacts(tempdir)
+        rewritten_payload = rewrite_payload_paths(
+            dict(result.output_payload), tempdir
+        )
+
+        envelope = RunEnvelope(
+            model_version=result.model_version,
+            primary_metric_value=result.primary_metric_value,
+            primary_metric_unit=result.primary_metric_unit,
+            output_payload=rewritten_payload,
+            confidence=result.confidence,
+            artifacts=artifacts,
+            task=task,
+            laterality=laterality,
+        )
+
+        if idempotency_key:
+            _record_idempotent(idempotency_key, envelope)
+
+        LOG.info(
+            "POST /run task=%s laterality=%s artifacts=%d metric=%s%s",
+            task,
+            laterality,
+            len(artifacts),
+            envelope.primary_metric_value,
+            envelope.primary_metric_unit,
+        )
+        return envelope

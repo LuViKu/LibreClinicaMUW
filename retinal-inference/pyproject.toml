@@ -22,6 +22,10 @@ dependencies = [
     "oct-converter==0.7.0",
     "pydicom==3.0.2",
     "numpy==2.4.6",
+    # FastAPI multipart parsing for POST /run (DR-022). UploadFile+Form rely on
+    # python-multipart at request time even though it's not a direct fastapi
+    # dependency.
+    "python-multipart==0.0.20",
 ]
 
 [project.optional-dependencies]

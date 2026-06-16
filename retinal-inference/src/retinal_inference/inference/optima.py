@@ -110,6 +110,7 @@ class OptimaAdapter(RetinalInferenceAdapter):
         task: TaskName,
         e2e_path: Path,
         laterality: Literal["OD", "OS"],
+        out_dir_override: Path | None = None,
     ) -> FullVolumeResult:
         if not self.supports(task):
             raise UnsupportedTaskError(
@@ -118,9 +119,14 @@ class OptimaAdapter(RetinalInferenceAdapter):
         runner_url = self._runner_urls[task]
         assert runner_url is not None  # guaranteed by supports()
 
-        # Per-job output directory on the shared volume; e2e filenames are UUIDs
-        # on the Java side, so (stem, task) is unique.
-        out_dir = _config.settings.shared_storage_path / f"{Path(e2e_path).stem}-{task}"
+        # Per-job output directory. Default: persistent shared-volume layout the
+        # DB-poll worker has always used. Remote `/run` mode overrides with a
+        # caller-supplied tempdir that both sidecar + runners see via the shared
+        # host bind (DR-022), so nothing leaks past the request lifetime.
+        if out_dir_override is not None:
+            out_dir = out_dir_override
+        else:
+            out_dir = _config.settings.shared_storage_path / f"{Path(e2e_path).stem}-{task}"
 
         # Shared ingestion: .e2e → bscan.dcm the runner consumes.
         bscan_dir = prepare_bscan_dcm(Path(e2e_path), out_dir)

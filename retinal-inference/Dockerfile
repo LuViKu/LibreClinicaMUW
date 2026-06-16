@@ -13,6 +13,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
 COPY docker-entrypoint.sh ./
 RUN chmod +x ./docker-entrypoint.sh
+
+# DR-022: shared host-bind for /run tempdirs. Sidecar and runners mount the
+# same path so the runner sees the sidecar's TemporaryDirectory natively.
+RUN mkdir -p /var/lib/retinal-inference/tmp
+
 ENV PYTHONPATH=/app/src
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

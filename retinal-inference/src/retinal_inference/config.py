@@ -41,6 +41,21 @@ class Settings(BaseSettings):
     # Generous per-job ceiling — CPU full-volume inference is slow.
     runner_timeout_s: float = 900.0
 
+    # --- Remote /run endpoint (DR-022) ---------------------------------------
+    # When the sidecar is deployed on a separate GPU host, the institutional
+    # Tomcat reaches it via POST /run. The endpoint is opt-in so dev compose
+    # (single-host) and the DB-poll worker keep their existing surface.
+    #
+    # The auth token gates every /run request — sidecar refuses to start with
+    # the endpoint enabled if the token is unset.
+    #
+    # shared_tmpdir is the host-bind that the sidecar AND every runner mount at
+    # the same absolute path; the sidecar's TemporaryDirectory lives inside
+    # it so runners see the bscan.dcm path natively.
+    run_endpoint_enabled: bool = False
+    auth_token: str | None = None
+    shared_tmpdir: Path = Path("/var/lib/retinal-inference/tmp")
+
 
 settings = Settings()
 

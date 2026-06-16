@@ -151,6 +151,11 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     ds.file_meta = fm
     ds.SOPClassUID = sop_class
     ds.SOPInstanceUID = fm.MediaStorageSOPInstanceUID
+    # Generate Study + Series UIDs so a future DICOM SEG can reference this
+    # bscan by its triple (Study, Series, SOP Instance) the way Supplement 111
+    # expects. Cheap to add now; expensive to back-fill once a SEG is in flight.
+    ds.StudyInstanceUID = generate_uid()
+    ds.SeriesInstanceUID = generate_uid()
     ds.Modality = "OPT"  # Ophthalmic Tomography
     ds.Manufacturer = "Heidelberg Engineering"
     ds.ImageLaterality = "R" if bv.laterality == "OD" else "L"
@@ -170,6 +175,13 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     ds.PixelSpacing = [round(bv.axial_mm, 8), round(bv.lateral_mm, 8)]
     ds.SpacingBetweenSlices = round(bv.slice_mm, 8)
     ds.PixelData = bv.volume_u8.tobytes()
+
+    # PHI redaction (DR-022) — strip patient identifiers from the synthesised
+    # bscan before write. E2E headers may carry PatientID/Name/DOB; we don't
+    # propagate them into anything the sidecar ever returns.
+    from retinal_inference.inference.phi import redact_dicom
+
+    redact_dicom(ds)
 
     out_dir.mkdir(parents=True, exist_ok=True)
     dcm_path = out_dir / "bscan.dcm"
