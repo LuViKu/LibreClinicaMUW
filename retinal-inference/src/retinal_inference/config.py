@@ -19,7 +19,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    inference_adapter: Literal["placeholder", "mirage"] = "placeholder"
+    inference_adapter: Literal["placeholder", "mirage", "optima"] = "placeholder"
     db_url: str = "postgresql://clinica:clinica@db:5432/libreclinica"
     shared_storage_path: Path = Path("/var/lib/libreclinica/segmentation-output")
     e2e_uploads_path: Path = Path("/var/lib/libreclinica/e2e-uploads")
@@ -28,6 +28,18 @@ class Settings(BaseSettings):
     # Placeholder-only sleeps; tests override to 0 to keep pytest fast.
     fast_screen_sleep_s: float = 2.0
     full_volume_sleep_s: float = 30.0
+
+    # --- OptimaAdapter: per-task model-runner endpoints -----------------------
+    # Each task is dispatched to its own runner container over the internal
+    # network. A task is only ``supports()``-ed when its URL is set, so leaving
+    # one empty cleanly gates that task (e.g. ``ga`` until the IOWA segmenter +
+    # a GPU host exist). Set e.g. RETINAL_INFERENCE_RUNNER_FLUID_URL.
+    runner_fluid_url: str | None = None
+    runner_onl_url: str | None = None
+    runner_bmeis_url: str | None = None
+    runner_ga_url: str | None = None
+    # Generous per-job ceiling — CPU full-volume inference is slow.
+    runner_timeout_s: float = 900.0
 
 
 settings = Settings()

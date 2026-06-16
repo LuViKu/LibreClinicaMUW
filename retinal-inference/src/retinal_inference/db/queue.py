@@ -68,8 +68,13 @@ def persist_result(
     job: ClaimedJob,
     result: FullVolumeResult,
 ) -> None:
-    """Insert one ``retinal_inference_result`` row for ``job``."""
-    payload: dict[str, Any] = {
+    """Insert one ``retinal_inference_result`` row for ``job``.
+
+    Task-agnostic: the result's ``output_payload`` + ``primary_metric_*`` map
+    straight onto the generic result columns. For the GA area task / placeholder
+    the payload falls back to the legacy area fields if not set explicitly.
+    """
+    payload: dict[str, Any] = result.output_payload or {
         "total_area_mm2": result.total_area_mm2,
         "per_bscan_areas_mm2": result.per_bscan_areas_mm2,
     }
@@ -79,17 +84,18 @@ def persist_result(
             INSERT INTO retinal_inference_result (
                 job_id, task, output_payload,
                 primary_metric_value, primary_metric_unit,
-                en_face_mask_path, pixel_scale_mm, confidence
+                en_face_mask_path, bscan_masks_dir, pixel_scale_mm, confidence
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """,
             (
                 job.job_id,
                 result.task,
                 Json(payload),
-                result.total_area_mm2,
-                "mm²",
+                result.primary_metric_value,
+                result.primary_metric_unit,
                 result.en_face_mask_path,
+                result.bscan_masks_dir,
                 result.pixel_scale_mm,
                 result.confidence,
             ),

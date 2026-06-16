@@ -19,6 +19,15 @@ class UnsupportedTaskError(ValueError):
     """Raised when an adapter is asked to handle a task it does not implement."""
 
 
+class FastScreenUnavailable(RuntimeError):
+    """Raised by ``fast_screen`` for tasks that have no synchronous quick path.
+
+    The caller should enqueue the job and poll ``/jobs/{id}`` for the async
+    full-volume result instead. Real model-runner tasks (fluid/onl/bmeis/ga)
+    are async-only; the deterministic placeholder still offers a fast screen.
+    """
+
+
 class RetinalInferenceAdapter(ABC):
     @abstractmethod
     def supports(self, task: TaskName) -> bool: ...
@@ -62,6 +71,10 @@ def get_adapter() -> RetinalInferenceAdapter:
             from .mirage import MirageAdapter
 
             _singleton = MirageAdapter()
+        elif _config.settings.inference_adapter == "optima":
+            from .optima import OptimaAdapter
+
+            _singleton = OptimaAdapter()
         else:
             raise RuntimeError(f"Unknown adapter: {_config.settings.inference_adapter}")
     return _singleton

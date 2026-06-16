@@ -35,3 +35,23 @@ def parse_e2e_metadata(e2e_path: Path) -> E2EMetadata:
         bscan_height_px=496,
         pixel_scale_mm=0.011,
     )
+
+
+def prepare_bscan_dcm(e2e_path: Path, out_dir: Path) -> Path:
+    """Convert a Heidelberg ``.e2e`` into a ``bscan.dcm`` the model-runners read.
+
+    Every OPTIMA/RetInsight runner consumes a Spectralis DICOM volume
+    (``<dir>/bscan.dcm`` with ``Manufacturer='Heidelberg Engineering'``,
+    ``PixelSpacing``, ``NumberOfFrames``). This is the single shared ingestion
+    seam the ``OptimaAdapter`` calls before dispatch; returns the directory
+    containing the written ``bscan.dcm``.
+
+    NOTE: real implementation (oct-converter / eyepy E2E reader → SimpleITK
+    DICOM writer) lands in the E2E-ingestion slice. Until then this raises so a
+    misconfiguration fails loudly rather than dispatching a bogus path. Unit
+    tests monkeypatch this function.
+    """
+    raise NotImplementedError(
+        "E2E→bscan.dcm ingestion not implemented yet (see project plan, "
+        "Phase 0 ingestion slice). e2e_path=%s" % e2e_path
+    )
