@@ -29,10 +29,20 @@ COPY code/ /opt/sese_pr/
 # code touches. pydicom 3.x requires py3.9+ → constrain to <3.
 # fastapi >=0.104 and uvicorn >=0.22 both dropped py3.7 → constrain below the
 # cutoffs to land on the last py3.7-compatible releases.
+# matplotlib + scikit-learn + Pillow + imageio are imported unconditionally by
+# the inference path through sese_pr's util/* (file_access.py wires pyplot at
+# module load; util/metrics.py imports sklearn.metrics; data_loader and
+# image_preprocessing import PIL; data_preparation imports imageio). torchvision
+# and visdom appear only in train.py / train_interruptions_network.py / the
+# plot helpers used during training — skipped here.
 RUN pip install --no-cache-dir \
-    "numpy" "scipy" "scikit-image" "SimpleITK==1.2.0" "pydicom<3" \
+    "numpy" "scipy" "scikit-image" "scikit-learn" "SimpleITK==1.2.0" "pydicom<3" \
+    "matplotlib" "Pillow" "imageio" \
     "fastapi<0.104" "uvicorn[standard]<0.22"
-# e.g. add:  RUN pip install --no-cache-dir torch==1.0.1
+# Route (a) — install torch 1.0.1 so the vendor's full-pickle model.pkl loads
+# as-is (matches the sese_pr production stack). torch 1.0.1 ships
+# manylinux1 py3.7 amd64 wheels on PyPI, so no source build is needed.
+RUN pip install --no-cache-dir "torch==1.0.1"
 
 COPY app.py ./
 ENV RUNNER_BMEIS_CODE=/opt/sese_pr RUNNER_BMEIS_WEIGHTS=/weights/u2net-cross-entropy

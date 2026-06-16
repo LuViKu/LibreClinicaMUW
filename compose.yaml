@@ -110,6 +110,12 @@ services:
       - db
     environment:
       RETINAL_INFERENCE_INFERENCE_ADAPTER: ${RETINAL_INFERENCE_ADAPTER:-placeholder}
+      # Per-job runner timeout (urllib HTTP, seconds). Default 900s (15 min) is
+      # generous on production GPUs but tight under linux/amd64 emulation on
+      # Apple Silicon, where the 5-fold ONL ensemble (97 B-scans × 5 models)
+      # takes 15-25 min. Bumped to 1 hour for the dev compose so a smoke run
+      # doesn't false-timeout.
+      RETINAL_INFERENCE_RUNNER_TIMEOUT_S: ${RETINAL_INFERENCE_RUNNER_TIMEOUT_S:-3600}
       RETINAL_INFERENCE_DB_URL: postgresql://clinica:clinica@db:5432/libreclinica
       RETINAL_INFERENCE_SHARED_STORAGE_PATH: /var/lib/libreclinica/segmentation-output
       RETINAL_INFERENCE_E2E_UPLOADS_PATH: /var/lib/libreclinica/e2e-uploads

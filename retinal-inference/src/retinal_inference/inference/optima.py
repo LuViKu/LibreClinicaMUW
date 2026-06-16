@@ -51,8 +51,22 @@ def _post_json(url: str, payload: dict[str, Any], timeout: float) -> dict[str, A
         headers={"Content-Type": "application/json"},
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
-        return json.loads(resp.read().decode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            return json.loads(resp.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        # Surface the runner's error detail in the raised exception so the
+        # worker writes it to retinal_inference_job.status_message instead of
+        # the bare urllib status line ("HTTP Error 500: Internal Server
+        # Error"). FastAPI runners reply with {"detail": "..."} on 500.
+        body = e.read().decode("utf-8", errors="replace")
+        try:
+            detail = json.loads(body).get("detail", body)
+        except json.JSONDecodeError:
+            detail = body
+        raise urllib.error.HTTPError(
+            e.url, e.code, f"{e.reason} — {detail[:2000]}", e.headers, None
+        ) from e
 
 
 class OptimaAdapter(RetinalInferenceAdapter):

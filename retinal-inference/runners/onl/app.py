@@ -74,10 +74,15 @@ def infer(req: InferRequest) -> dict:
     if not dcm.is_file():
         raise HTTPException(status_code=400, detail=f"bscan.dcm not found: {dcm}")
 
+    # original_database_path is a single .dcm FILE despite the vendor
+    # CLI help calling it "the original database with the dcm files":
+    # the vendor's load_dcm_volume(image_filename) calls
+    # pydicom.dcmread(image_filename) directly. Passing dcm.parent (a
+    # dir) reaches that line as a directory and raises IsADirectoryError.
     cmd = [
         "python",
         str(Path(ONL_CODE) / "process_input_for_optimus.py"),
-        str(dcm.parent),  # original_database_path (dir containing bscan.dcm)
+        str(dcm),  # original_database_path (bscan.dcm file)
         str(out),  # output_path
         WEIGHTS,  # model_path
     ]

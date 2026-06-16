@@ -18,6 +18,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 # Vendor inference code (the script + its modules) → /opt/sese_onl.
 COPY code/ /opt/sese_onl/
 
+# Vendor patch: load_model uses `torch.load(model_path)` which deserializes
+# on whatever device the checkpoint was saved on (the 5-fold weights were
+# trained on CUDA, so they pin to cuda:0). On a CPU host that raises
+# `Attempting to deserialize object on a CUDA device but
+# torch.cuda.is_available() is False`. Pin the load to CPU here so the
+# subsequent `model.cuda() if available else cpu()` line still works on
+# both targets.
+RUN sed -i 's|torch.load(model_path)|torch.load(model_path, map_location=torch.device("cpu"))|g' \
+    /opt/sese_onl/process_input_for_optimus.py
+
 # Py3.8 availability notes (the base image): pydicom 3.x and SimpleITK 2.5.x
 # both require py3.10+ → unconstrained `SimpleITK` pulls 2.5.x sdist which
 # fails to build from source on this slim image (no CMake/ITK). Constrain

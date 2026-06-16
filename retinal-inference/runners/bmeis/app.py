@@ -85,10 +85,16 @@ def infer(req: InferRequest) -> dict:
     axial = float(img.GetSpacing()[1]) if img.GetDimension() == 3 else float(pydicom.dcmread(str(dcm), stop_before_pixels=True).PixelSpacing[0])
     sitk.WriteImage(img, str(mhd_dir / "bscan.mhd"))
 
+    # With --export_for_optimus True, sese_pr's
+    # predict_segmentation_on_patient_volume treats original_database_path as
+    # the MHD FILE itself (`input_filename = path.join(original_database_path)`
+    # → SimpleITK.ReadImage on whatever path is given). Passing the parent dir
+    # raises "Unable to determine ImageIO reader". Point at the bscan.mhd file.
+    mhd_file = mhd_dir / "bscan.mhd"
     cmd = [
         "python",
         str(Path(PR_CODE) / "process_input_for_optimus.py"),
-        str(mhd_dir),  # original_database_path (dir with bscan.mhd)
+        str(mhd_file),  # original_database_path (the bscan.mhd file)
         str(out),  # output_path
         WEIGHTS,  # model_path (.ini + .pkl)
         "--export_for_optimus", "True",
