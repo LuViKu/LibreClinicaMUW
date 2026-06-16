@@ -83,18 +83,33 @@ def infer(req: InferRequest) -> dict:
     mhd_dir.mkdir(parents=True, exist_ok=True)
     img = sitk.ReadImage(str(dcm))
     axial = float(img.GetSpacing()[1]) if img.GetDimension() == 3 else float(pydicom.dcmread(str(dcm), stop_before_pixels=True).PixelSpacing[0])
-    sitk.WriteImage(img, str(mhd_dir / "bscan.mhd"))
+    mhd_path = mhd_dir / "bscan.mhd"
+    sitk.WriteImage(img, str(mhd_path))
+
+    # sese_pr branches on mhd_dict['Manufacturer'] when the volume's lateral
+    # axis doesn't already match Cirrus (1024×512) or Heidelberg (496×512).
+    # SimpleITK's MHD writer doesn't emit a Manufacturer field, so the vendor
+    # raises KeyError before reaching the actual segmentation. We use the
+    # Spectralis weights (u2net-cross-entropy), so flag the volume as
+    # Heidelberg Engineering — the vendor then resizes the lateral 1024→512
+    # to match the model's training distribution.
+    header = mhd_path.read_text()
+    if "Manufacturer" not in header:
+        header = header.replace(
+            "ElementDataFile",
+            "Manufacturer = Heidelberg Engineering\nElementDataFile",
+        )
+        mhd_path.write_text(header)
 
     # With --export_for_optimus True, sese_pr's
     # predict_segmentation_on_patient_volume treats original_database_path as
     # the MHD FILE itself (`input_filename = path.join(original_database_path)`
     # → SimpleITK.ReadImage on whatever path is given). Passing the parent dir
     # raises "Unable to determine ImageIO reader". Point at the bscan.mhd file.
-    mhd_file = mhd_dir / "bscan.mhd"
     cmd = [
         "python",
         str(Path(PR_CODE) / "process_input_for_optimus.py"),
-        str(mhd_file),  # original_database_path (the bscan.mhd file)
+        str(mhd_path),  # original_database_path (the bscan.mhd file)
         str(out),  # output_path
         WEIGHTS,  # model_path (.ini + .pkl)
         "--export_for_optimus", "True",
@@ -106,7 +121,15 @@ def infer(req: InferRequest) -> dict:
             cmd, check=True, capture_output=True, text=True, timeout=3600, cwd=PR_CODE
         )
     except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=f"sese_pr failed: {e.stderr or e.stdout}") from e
+        # `stderr or stdout` hides the real exception when stderr is non-empty
+        # but only carries a benign warning. Surface both for diagnostics.
+        stderr_t = (e.stderr or "").strip()
+        stdout_t = (e.stdout or "").strip()
+        if stderr_t and stdout_t:
+            detail = f"sese_pr failed (exit {e.returncode}):\n[stderr]\n{stderr_t}\n[stdout]\n{stdout_t}"
+        else:
+            detail = f"sese_pr failed (exit {e.returncode}): {stderr_t or stdout_t}"
+        raise HTTPException(status_code=500, detail=detail) from e
 
     bmeis = sorted(glob.glob(str(out / "*BMEIS*.csv")))
     if not bmeis:

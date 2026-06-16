@@ -91,7 +91,17 @@ def infer(req: InferRequest) -> dict:
             cmd, check=True, capture_output=True, text=True, timeout=3600, cwd=ONL_CODE
         )
     except subprocess.CalledProcessError as e:
-        raise HTTPException(status_code=500, detail=f"sese_onl failed: {e.stderr or e.stdout}") from e
+        # `stderr or stdout` hides the real exception when stderr is non-empty
+        # but only carries a benign warning — sese_onl prints
+        # `[W616] NNPACK Unsupported hardware` under linux/amd64 emulation
+        # alongside a real failure that lands in stdout. Surface both.
+        stderr_t = (e.stderr or "").strip()
+        stdout_t = (e.stdout or "").strip()
+        if stderr_t and stdout_t:
+            detail = f"sese_onl failed (exit {e.returncode}):\n[stderr]\n{stderr_t}\n[stdout]\n{stdout_t}"
+        else:
+            detail = f"sese_onl failed (exit {e.returncode}): {stderr_t or stdout_t}"
+        raise HTTPException(status_code=500, detail=detail) from e
 
     upper = sorted(glob.glob(str(out / "*OPL-HFL*.csv")))
     lower = sorted(glob.glob(str(out / "*BMEIS*.csv")))
