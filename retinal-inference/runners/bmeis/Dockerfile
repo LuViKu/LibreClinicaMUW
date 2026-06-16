@@ -22,9 +22,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 COPY code/ /opt/sese_pr/
 
 # torch pin is intentionally left to the build host (see header). The rest:
+#
+# Py3.7 availability notes (the base image): SimpleITK 1.2.4 is not published
+# for py3.7 (PyPI jumps 1.2.0 → 2.1.0); 1.2.0 is the closest 1.x available and
+# the 1.2.0→1.2.4 diff is patches-only, no API break that the segmentation
+# code touches. pydicom 3.x requires py3.9+ → constrain to <3.
+# fastapi >=0.104 and uvicorn >=0.22 both dropped py3.7 → constrain below the
+# cutoffs to land on the last py3.7-compatible releases.
 RUN pip install --no-cache-dir \
-    "numpy" "scipy" "scikit-image" "SimpleITK==1.2.4" "pydicom==3.0.2" \
-    "fastapi==0.115.6" "uvicorn[standard]==0.32.1"
+    "numpy" "scipy" "scikit-image" "SimpleITK==1.2.0" "pydicom<3" \
+    "fastapi<0.104" "uvicorn[standard]<0.22"
 # e.g. add:  RUN pip install --no-cache-dir torch==1.0.1
 
 COPY app.py ./

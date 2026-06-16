@@ -31,8 +31,10 @@ RUN pip install --no-cache-dir /tmp/wheels/dlfwdata-*.whl \
  && pip install --no-cache-dir imutils sklearn gitpython \
  && rm -rf /tmp/wheels
 
-# Runner HTTP layer.
-RUN pip install --no-cache-dir "fastapi==0.115.6" "uvicorn[standard]==0.32.1" "pydicom==3.0.2"
+# Runner HTTP layer. pytorch/pytorch:1.9.0-* ships Python 3.7 — pydicom 3.x
+# requires py3.9+; fastapi >=0.104 and uvicorn >=0.22 both dropped py3.7;
+# constrained below each cutoff to land on the last py3.7-compatible release.
+RUN pip install --no-cache-dir "fastapi<0.104" "uvicorn[standard]<0.22" "pydicom<3"
 
 COPY app.py /workdir/app.py
 EXPOSE 8000

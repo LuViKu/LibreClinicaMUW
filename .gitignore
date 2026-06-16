@@ -76,3 +76,11 @@ web/src/main/webapp/app/
 # node:20-alpine container falls back to creating .pnpm-store at the
 # bind-mount root when the container can't write to its default cache).
 .pnpm-store/
+
+# Phase E.7 retinal-inference: vendor model weights and operator-supplied
+# input scans mount into the compose containers. Weights are large + licensed,
+# input scans contain PHI — neither belongs in git. Storage already excluded
+# via docker/retinal-inference-storage (per compose.yaml's runtime volume).
+docker/retinal-weights/
+docker/retinal-inference-input/
+docker/retinal-inference-storage/

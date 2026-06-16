@@ -18,8 +18,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 # Vendor inference code (the script + its modules) → /opt/sese_onl.
 COPY code/ /opt/sese_onl/
 
+# Py3.8 availability notes (the base image): pydicom 3.x and SimpleITK 2.5.x
+# both require py3.10+ → unconstrained `SimpleITK` pulls 2.5.x sdist which
+# fails to build from source on this slim image (no CMake/ITK). Constrain
+# both below their py3.10 cutoffs.
 RUN pip install --no-cache-dir \
-    "torch" "numpy" "scipy" "scikit-image" "SimpleITK" "pydicom==3.0.2" \
+    "torch" "numpy" "scipy" "scikit-image" "SimpleITK<2.5" "pydicom<3" \
     "fastapi==0.115.6" "uvicorn[standard]==0.32.1"
 
 COPY app.py ./
