@@ -106,10 +106,15 @@ services:
     # step can pre-load both images for `compose up --no-build`.
     image: libreclinica-muw-retinal-inference:latest
     container_name: libreclinica-muw-retinal-inference-1
-    depends_on:
-      - db
+    # DR-022 split topology: no hard dep on Postgres. The institutional
+    # dev compose still brings db up via the libreclinica service's
+    # depends_on; the GPU host omits libreclinica + db entirely and runs
+    # this service standalone with RETINAL_INFERENCE_WORKER_ENABLED=false.
     environment:
       RETINAL_INFERENCE_INFERENCE_ADAPTER: ${RETINAL_INFERENCE_ADAPTER:-placeholder}
+      # DR-022: institutional dev compose runs the DB-poll worker (default
+      # true); GPU host sets this to false to serve POST /run only.
+      RETINAL_INFERENCE_WORKER_ENABLED: ${RETINAL_INFERENCE_WORKER_ENABLED:-true}
       # Per-job runner timeout (urllib HTTP, seconds). Default 900s (15 min) is
       # generous on production GPUs but tight under linux/amd64 emulation on
       # Apple Silicon, where the 5-fold ONL ensemble (97 B-scans × 5 models)
@@ -154,8 +159,7 @@ services:
     image: libreclinica-muw-retinal-runner-fluid:latest
     container_name: libreclinica-muw-retinal-runner-fluid-1
     profiles: ["optima"]
-    depends_on:
-      - db
+    # No Postgres dep — runners only expose /infer over HTTP.
     environment:
       RUNNER_FLUID_CPU: "1"
     volumes:
@@ -178,8 +182,7 @@ services:
     image: libreclinica-muw-retinal-runner-onl:latest
     container_name: libreclinica-muw-retinal-runner-onl-1
     profiles: ["optima"]
-    depends_on:
-      - db
+    # No Postgres dep — runners only expose /infer over HTTP.
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
       # DR-022: shared tempdir bind so the sidecar's /run TemporaryDirectory is
@@ -198,8 +201,7 @@ services:
     image: libreclinica-muw-retinal-runner-bmeis:latest
     container_name: libreclinica-muw-retinal-runner-bmeis-1
     profiles: ["optima"]
-    depends_on:
-      - db
+    # No Postgres dep — runners only expose /infer over HTTP.
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
       # DR-022: shared tempdir bind so the sidecar's /run TemporaryDirectory is
@@ -221,8 +223,7 @@ services:
     container_name: libreclinica-muw-retinal-runner-ga-1
     profiles: ["ga"]
     # gpus: all          # uncomment on an NVIDIA host (compose GPU passthrough)
-    depends_on:
-      - db
+    # No Postgres dep — runners only expose /infer over HTTP.
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
       # DR-022: shared tempdir bind so the sidecar's /run TemporaryDirectory is

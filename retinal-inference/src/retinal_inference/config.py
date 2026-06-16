@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     shared_storage_path: Path = Path("/var/lib/libreclinica/segmentation-output")
     e2e_uploads_path: Path = Path("/var/lib/libreclinica/e2e-uploads")
     worker_poll_interval_s: float = 2.0
+    # DR-022 split topology: institutional dev compose runs the DB-poll worker
+    # (default true). Production GPU host runs the /run endpoint only — set
+    # RETINAL_INFERENCE_WORKER_ENABLED=false there so the worker process isn't
+    # spawned. (Read by docker-entrypoint.sh, not by Python code directly, but
+    # surfaced here so the env var is documented in one place.)
+    worker_enabled: bool = True
     fast_screen_timeout_s: float = 8.0
     # Placeholder-only sleeps; tests override to 0 to keep pytest fast.
     fast_screen_sleep_s: float = 2.0

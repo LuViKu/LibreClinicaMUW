@@ -54,7 +54,8 @@ config, the smoke test, and the operational gotchas.
 
 ### 2. Compose env
 
-Set these on the GPU host before `docker compose up`:
+Set these on the GPU host before `docker compose up`. Drop them into
+`/srv/retinal-inference/.env` and source it once:
 
 ```sh
 # Enable the /run endpoint (off by default so dev compose doesn't expose it)
@@ -69,15 +70,46 @@ export RETINAL_INFERENCE_ADAPTER=optima
 
 # Real GPU runs in seconds — drop the dev-default 60 min to fail fast
 export RETINAL_INFERENCE_RUNNER_TIMEOUT_S=300
+
+# DR-022 split: no Postgres on the GPU host. Disable the DB-poll worker so
+# the entrypoint runs uvicorn only.
+export RETINAL_INFERENCE_WORKER_ENABLED=false
 ```
 
-Start with:
+### 3. Start ONLY the inference services
+
+Per DR-022 the GPU VM runs the inference server + the per-task runners and
+NOTHING ELSE — no libreclinica, no Postgres, no SMTP. Name the services
+explicitly on the compose-up so the dependency graph doesn't pull anything
+else in:
 
 ```sh
-docker compose --profile optima up -d
+docker compose --profile optima up -d \
+    retinal-inference \
+    retinal-runner-fluid \
+    retinal-runner-onl \
+    retinal-runner-bmeis
 ```
 
-### 3. TLS termination
+For the GA runner (gated by its own profile + needs the IOWA binary +
+`.sif`):
+
+```sh
+docker compose --profile optima --profile ga up -d \
+    retinal-inference \
+    retinal-runner-fluid retinal-runner-onl retinal-runner-bmeis \
+    retinal-runner-ga
+```
+
+Verify nothing extra is running:
+
+```sh
+docker compose ps
+# Should list only the retinal-inference + retinal-runner-* services.
+# No libreclinica-muw-db-1, no libreclinica-muw-libreclinica-1.
+```
+
+### 4. TLS termination
 
 Put a reverse proxy in front of the sidecar's 8000 — `nginx` or `caddy` both
 work; the sidecar speaks plain HTTP internally. The reverse proxy should:
