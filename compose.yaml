@@ -107,11 +107,35 @@ services:
       RETINAL_INFERENCE_DB_URL: postgresql://clinica:clinica@db:5432/libreclinica
       RETINAL_INFERENCE_SHARED_STORAGE_PATH: /var/lib/libreclinica/segmentation-output
       RETINAL_INFERENCE_E2E_UPLOADS_PATH: /var/lib/libreclinica/e2e-uploads
+      # Per-task model-runner endpoints (used when ADAPTER=optima). A task is
+      # only enabled when its URL is set; harmless under the placeholder.
+      RETINAL_INFERENCE_RUNNER_FLUID_URL: ${RETINAL_INFERENCE_RUNNER_FLUID_URL:-http://retinal-runner-fluid:8000}
     volumes:
       - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
       - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
     cpus: "4.0"
     mem_limit: 4g
+
+  # Fluid model-runner (RetInsight fluidseg, IRF/SRF/PED). Behind the `optima`
+  # compose profile because its image needs vendor wheels (runners/fluid/wheels/)
+  # + mounted weights that aren't in git — so the default `docker compose up`
+  # does not try to build it. Start with: docker compose --profile optima up.
+  retinal-runner-fluid:
+    build: ./retinal-inference/runners/fluid
+    image: libreclinica-muw-retinal-runner-fluid:latest
+    container_name: libreclinica-muw-retinal-runner-fluid-1
+    profiles: ["optima"]
+    depends_on:
+      - db
+    environment:
+      RUNNER_FLUID_CPU: "1"
+    volumes:
+      # MUST mount at the same absolute path the sidecar uses — it passes
+      # absolute bscan_dcm_path / output_dir in the /infer request.
+      - ./docker/retinal-inference-storage:/var/lib/libreclinica/segmentation-output
+      - ${RETINAL_FLUID_WEIGHTS_DIR:-./docker/retinal-weights/fluid}:/weights:ro
+    cpus: "4.0"
+    mem_limit: 6g
 
 volumes:
   libreclinica-db-data:

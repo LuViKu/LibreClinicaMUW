@@ -17,6 +17,11 @@ dependencies = [
     "pydantic-settings==2.7.0",
     "psycopg2-binary==2.9.10",
     "pillow==11.0.0",
+    # E2E -> bscan.dcm ingestion (OptimaAdapter). Reads Heidelberg .e2e and
+    # writes the multi-frame DICOM the model-runners consume.
+    "oct-converter==0.7.0",
+    "pydicom==3.0.2",
+    "numpy==2.4.6",
 ]
 
 [project.optional-dependencies]

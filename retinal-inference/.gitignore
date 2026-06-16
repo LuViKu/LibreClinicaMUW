@@ -4,3 +4,10 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+# Vendor wheels + model weights are never committed (large, licensed).
+*.whl
+*.pt
+*.pth
+*.pkl
+*.ckpt
+*.sif
