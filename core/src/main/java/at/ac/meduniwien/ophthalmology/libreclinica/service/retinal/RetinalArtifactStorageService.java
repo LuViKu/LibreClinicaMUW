@@ -10,6 +10,7 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -95,5 +96,56 @@ public class RetinalArtifactStorageService {
             // CoreResources unavailable in some test contexts.
         }
         return DEFAULT_STORE_PATH;
+    }
+
+    /**
+     * Resolve the per-source-scan bscan store base from
+     * {@code core.retinalInference.bscanStorePath}, falling back to
+     * {@code <artifactStorePath>/bscans} so a single config key suffices when
+     * an operator hasn't split the two locations.
+     *
+     * <p>This must match {@code RETINAL_INFERENCE_BSCAN_STORE} on the
+     * preprocess sidecar — the sidecar writes the companion files
+     * ({@code bscan.dcm}, {@code fundus.png}, {@code geometry.json}) under
+     * {@code <bscanStorePath>/<e2eUuid>/}; the resolvers below read them back.
+     */
+    protected String bscanStorePath() {
+        try {
+            String raw = CoreResources.getField("core.retinalInference.bscanStorePath");
+            if (raw != null && !raw.isBlank()) return raw.trim();
+        } catch (Exception ignored) {
+            // CoreResources unavailable in some test contexts.
+        }
+        return Path.of(storePath(), "bscans").toString();
+    }
+
+    /** Companion file: PHI-redacted DICOM the preprocess sidecar wrote. */
+    public Path resolveBscanDcm(String e2eUuid) throws IOException {
+        return resolveCompanion(e2eUuid, "bscan.dcm");
+    }
+
+    /** Companion file: SLO en-face PNG the preprocess sidecar extracted. */
+    public Path resolveFundus(String e2eUuid) throws IOException {
+        return resolveCompanion(e2eUuid, "fundus.png");
+    }
+
+    /** Companion file: fundus + bscan registration JSON. */
+    public Path resolveGeometry(String e2eUuid) throws IOException {
+        return resolveCompanion(e2eUuid, "geometry.json");
+    }
+
+    private Path resolveCompanion(String e2eUuid, String name) throws IOException {
+        if (e2eUuid == null || e2eUuid.isBlank()) {
+            throw new IllegalArgumentException("e2eUuid required to resolve " + name);
+        }
+        // Defence-in-depth: the UUID must look like a UUID (no path traversal).
+        if (!e2eUuid.matches("[A-Za-z0-9_.-]+")) {
+            throw new IllegalArgumentException("e2eUuid contains disallowed chars: " + e2eUuid);
+        }
+        Path p = Path.of(bscanStorePath(), e2eUuid, name);
+        if (!Files.exists(p)) {
+            throw new NoSuchFileException(p.toString());
+        }
+        return p;
     }
 }

@@ -21,6 +21,11 @@ import java.util.Map;
  * <p>Field names are camelCase here even though the wire shape is
  * snake_case; the {@link RemoteRetinalInferenceClient} translates at
  * parse time.
+ *
+ * <p>{@code geometry} + {@code e2eUuid} come from the app-VM /preprocess
+ * sidecar's response headers (DR-022, Wave 1A). They are nullable when the
+ * preprocess step was skipped or the sidecar didn't stamp the headers (eg
+ * an older deploy); callers must null-check before reading.
  */
 public record RemoteRunResult(String modelVersion,
                               double primaryMetricValue,
@@ -29,7 +34,22 @@ public record RemoteRunResult(String modelVersion,
                               double confidence,
                               List<Artifact> artifacts,
                               String task,
-                              String laterality) {
+                              String laterality,
+                              PixelGeometry geometry,
+                              String e2eUuid) {
+
+    /** Back-compat ctor for existing callers that don't carry geometry yet. */
+    public RemoteRunResult(String modelVersion,
+                           double primaryMetricValue,
+                           String primaryMetricUnit,
+                           Map<String, Object> outputPayload,
+                           double confidence,
+                           List<Artifact> artifacts,
+                           String task,
+                           String laterality) {
+        this(modelVersion, primaryMetricValue, primaryMetricUnit, outputPayload,
+                confidence, artifacts, task, laterality, null, null);
+    }
 
     /**
      * A single runner-produced output (CSV / NPY / PNG) returned inline.
