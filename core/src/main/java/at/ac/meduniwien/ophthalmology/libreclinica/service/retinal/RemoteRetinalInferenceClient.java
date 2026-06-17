@@ -125,8 +125,9 @@ public class RemoteRetinalInferenceClient {
             fileName = "bscan.dcm";
         }
 
+        final String partFileName = fileName;
         ByteArrayResource filePart = new ByteArrayResource(bytes) {
-            @Override public String getFilename() { return fileName; }
+            @Override public String getFilename() { return partFileName; }
         };
 
         MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
