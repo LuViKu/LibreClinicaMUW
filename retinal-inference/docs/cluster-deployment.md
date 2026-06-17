@@ -67,24 +67,32 @@ If `--fakeroot` isn't enabled for your user (common on shared clusters), build
 the `.sif` on a box where you have sudo/root and copy it over, or use a remote
 builder — the `.def` itself is unchanged.
 
+> ⚠️ **`/scratch` is purged after 30 days.** Keep every persistent asset under
+> `/home/optima/$USER/` — the conda env (`ri-env`, `miniconda3`), the built
+> `pr.sif`, the readable GA code copy (`sese_ga_code`), the owned IOWA binary copy,
+> and the git clone. Only `SHARED_TMPDIR` (per-request scratch) stays on `/scratch`.
+> The paths below use `/home/optima/$USER`; adjust `$USER` to your account.
+
 ## 2. The server (bare Python, NOT in a container — it launches the .sif's)
 CentOS 7 caveats: the module system tops out at Python 3.9 (we need ≥3.11), so use
 a Miniconda env, and a pre-2024 installer (the latest needs glibc ≥2.28; cn7 has
-2.17):
+2.17). Install it under your **home** (persistent), not /scratch:
 ```sh
-cd /scratch/$USER
+H=/home/optima/$USER
+cd "$H"
 wget -q https://repo.anaconda.com/miniconda/Miniconda3-py311_23.11.0-2-Linux-x86_64.sh
-bash Miniconda3-py311_23.11.0-2-Linux-x86_64.sh -b -p /scratch/$USER/miniconda3
-/scratch/$USER/miniconda3/bin/conda create -y -p /scratch/$USER/ri-env python=3.11
-source /scratch/$USER/miniconda3/bin/activate /scratch/$USER/ri-env
+bash Miniconda3-py311_23.11.0-2-Linux-x86_64.sh -b -p "$H/miniconda3"
+"$H/miniconda3/bin/conda" create -y -p "$H/ri-env" python=3.11
+source "$H/miniconda3/bin/activate" "$H/ri-env"
 ```
-Install the **run-only** server (no `ingest` extra — the cluster never converts
-E2E; that's app-side). Pin `numpy<2.1` so pip uses a glibc-2.17 wheel instead of
-building numpy ≥2.1 from source (cn7's GCC 4.8.5 is too old):
+Clone the repo under home too (`git clone … $H/libreclinicamuw`). Install the
+**run-only** server (no `ingest` extra — the cluster never converts E2E; that's
+app-side). Pin `numpy<2.1` so pip uses a glibc-2.17 wheel instead of building
+numpy ≥2.1 from source (cn7's GCC 4.8.5 is too old):
 ```sh
-cd <repo>/retinal-inference
+cd "$H/libreclinicamuw/retinal-inference"
 pip install -e . "numpy<2.1"
-mkdir -p /scratch/$USER/retinal-inference/tmp
+mkdir -p /scratch/$USER/retinal-inference/tmp   # SHARED_TMPDIR — transient, stays on scratch
 ```
 (The app-VM preprocess sidecar — §5b — installs `pip install -e ".[ingest]"` to
 pull `oct-converter`; on a modern-glibc app VM no numpy pin is needed.)
@@ -103,7 +111,7 @@ RETINAL_INFERENCE_FLUID_SIF=/home/optima/octreader/Processor_Implementations/ses
 RETINAL_INFERENCE_ONL_SIF=/home/optima/octreader/Processor_Implementations/sese_onl/singularity/sese_onl.sif \
 RETINAL_INFERENCE_ONL_CODE=/home/optima/octreader/Processor_Implementations/sese_onl/code/outernuclearlayer-segmentation \
 RETINAL_INFERENCE_ONL_WEIGHTS=/home/optima/octreader/Processor_Implementations/sese_onl/weights/cross_val_ga \
-RETINAL_INFERENCE_PR_SIF=/scratch/$USER/ri/pr.sif \
+RETINAL_INFERENCE_PR_SIF=/home/optima/$USER/ri/pr.sif \
 RETINAL_INFERENCE_PR_CODE=/home/optima/octreader/Processor_Implementations/sese_pr/code/photoreceptors-segmentation \
 RETINAL_INFERENCE_PR_WEIGHTS=/home/optima/octreader/Processor_Implementations/sese_pr/weights/u2net-cross-entropy \
   nohup uvicorn retinal_inference.main:app --host 0.0.0.0 --port 8000 \
@@ -118,13 +126,16 @@ RETINAL_INFERENCE_PR_WEIGHTS=/home/optima/octreader/Processor_Implementations/se
   converter `dlopen`s `libcppxmlxercesadapter.so.1` which lives in
   `drlresults/releasegcc4` (NOT in `prod/lib`, which only has the unversioned `.so`).
   `GA_IOWA_LD_LIBRARY_PATH` must list all three dirs:
+  Also: `sese_ga/code/common/` + `prepare_data/` are octreader-locked, so `GA_CODE`
+  must point at a **readable copy** of `sese_ga/code` you make (the `.sif` only bakes
+  `optima`, not `common`/`prepare_data`); weights are readable at the original path.
   ```
   RETINAL_INFERENCE_GA_SIF=/home/optima/octreader/Processor_Implementations/sese_ga/pytorch_optima_dl.v4.sif
-  RETINAL_INFERENCE_GA_CODE=/home/optima/octreader/Processor_Implementations/sese_ga/code
+  RETINAL_INFERENCE_GA_CODE=/home/optima/$USER/ri/sese_ga_code   # readable copy (incl. common/ + prepare_data/)
   RETINAL_INFERENCE_GA_WEIGHTS=/home/optima/octreader/Processor_Implementations/sese_ga/weights/filly_checkpoints
-  RETINAL_INFERENCE_GA_IOWA_BINARY=/home/optima/octreader/OCTLayerSeg3.6_owned_<user>
+  RETINAL_INFERENCE_GA_IOWA_BINARY=/home/optima/$USER/ri/OCTLayerSeg3.6_owned   # owned, executable copy
   RETINAL_INFERENCE_GA_IOWA_CONVERTER=/home/optima/octreader/optima-framework/deployment/prod/local_IOWA_LayerSegV3_to_CSV
-  RETINAL_INFERENCE_GA_IOWA_LD_LIBRARY_PATH=/scratch/$USER/ri-env/lib:/home/optima/octreader/optima-framework/deployment/prod/lib:/home/optima/octreader/optima/drlresults/releasegcc4
+  RETINAL_INFERENCE_GA_IOWA_LD_LIBRARY_PATH=/home/optima/$USER/ri-env/lib:/home/optima/octreader/optima-framework/deployment/prod/lib:/home/optima/octreader/optima/drlresults/releasegcc4
   ```
 - These `$PI` paths must be visible from the GPU compute node (they are — same NFS
   as `/scratch`); the adapter bind-mounts the code/weights dirs into the `.sif`.
