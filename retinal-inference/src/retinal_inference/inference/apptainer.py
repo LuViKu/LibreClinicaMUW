@@ -144,6 +144,9 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             srun = ["srun", f"--time={s.apptainer_slurm_time}", f"--gres={s.apptainer_slurm_gres}"]
             if s.apptainer_slurm_partition:
                 srun.append(f"--partition={s.apptainer_slurm_partition}")
+            if s.apptainer_slurm_account:
+                # This cluster has no default association — srun fails without it.
+                srun.append(f"--account={s.apptainer_slurm_account}")
             cmd = srun + cmd
         return cmd
 

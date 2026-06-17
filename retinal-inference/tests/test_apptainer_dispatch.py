@@ -80,6 +80,7 @@ def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:
     _set_sifs(monkeypatch, fluid="/sif/fluid_segmentation.sif")
     monkeypatch.setattr(_config.settings, "apptainer_use_slurm", True, raising=False)
     monkeypatch.setattr(_config.settings, "apptainer_slurm_partition", "full_optima", raising=False)
+    monkeypatch.setattr(_config.settings, "apptainer_slurm_account", "optima", raising=False)
     monkeypatch.setattr(_config.settings, "apptainer_gpu_device", "0", raising=False)  # ignored under SLURM
     monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
 
@@ -106,6 +107,7 @@ def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:
     assert "--gres=gpu:1" in cmd
     assert "--time=01:00:00" in cmd
     assert "--partition=full_optima" in cmd
+    assert "--account=optima" in cmd
     assert "apptainer" in cmd  # the apptainer invocation follows srun
     # SLURM owns GPU assignment — the dispatcher must NOT force CUDA_VISIBLE_DEVICES.
     assert "CUDA_VISIBLE_DEVICES" not in (captured["env"] or {})

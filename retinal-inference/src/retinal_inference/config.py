@@ -80,6 +80,7 @@ class Settings(BaseSettings):
     # dispatcher stays CPU-only off-GPU and submits a short GPU job per scan.
     apptainer_use_slurm: bool = False
     apptainer_slurm_partition: str | None = None  # e.g. "full_optima"; None = SLURM default
+    apptainer_slurm_account: str | None = None  # SLURM --account (this cluster requires one)
     apptainer_slurm_time: str = "01:00:00"  # walltime per inference job (<< 2d cap)
     apptainer_slurm_gres: str = "gpu:1"  # or typed, e.g. "gpu:nvtitanxp:1"
 
