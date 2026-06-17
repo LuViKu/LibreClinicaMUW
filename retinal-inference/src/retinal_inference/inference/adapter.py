@@ -85,6 +85,10 @@ def get_adapter() -> RetinalInferenceAdapter:
             from .optima import OptimaAdapter
 
             _singleton = OptimaAdapter()
+        elif _config.settings.inference_adapter == "apptainer":
+            from .apptainer import ApptainerAdapter
+
+            _singleton = ApptainerAdapter()
         else:
             raise RuntimeError(f"Unknown adapter: {_config.settings.inference_adapter}")
     return _singleton

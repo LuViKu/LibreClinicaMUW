@@ -19,7 +19,7 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    inference_adapter: Literal["placeholder", "mirage", "optima"] = "placeholder"
+    inference_adapter: Literal["placeholder", "mirage", "optima", "apptainer"] = "placeholder"
     db_url: str = "postgresql://clinica:clinica@db:5432/libreclinica"
     shared_storage_path: Path = Path("/var/lib/libreclinica/segmentation-output")
     e2e_uploads_path: Path = Path("/var/lib/libreclinica/e2e-uploads")
@@ -61,6 +61,35 @@ class Settings(BaseSettings):
     run_endpoint_enabled: bool = False
     auth_token: str | None = None
     shared_tmpdir: Path = Path("/var/lib/retinal-inference/tmp")
+
+    # --- ApptainerAdapter (GPU cluster dispatch, DR-022) ----------------------
+    # On the Apptainer cluster there is no Docker/compose: the adapter runs each
+    # model's .sif via ``apptainer exec --nv`` as a subprocess (the OPTIMA
+    # pattern). A task is only ``supports()``-ed when its .sif is configured.
+    # code/weights dirs are bind-mounted into the .sif at their host paths.
+    # Input is a bscan.dcm (the Java side preprocesses the .e2e — DR-022).
+    apptainer_bin: str = "apptainer"
+    # CUDA_VISIBLE_DEVICES for most tasks (torch>=1.9 / CUDA 10.2 — any GPU).
+    apptainer_gpu_device: str | None = None
+    # BMEIS (sese_pr) is torch1.0 / CUDA 9 — no Turing (RTX 2080 Ti, sm_75)
+    # kernels; pin to a non-Turing GPU (TITAN Xp/V), or set "" to force CPU.
+    apptainer_bmeis_gpu_device: str | None = None
+    # When true, wrap each apptainer call in ``sbatch`` (SLURM job per scan)
+    # instead of running it directly. Left off until the hosting model is fixed.
+    apptainer_use_slurm: bool = False
+
+    fluid_sif: str | None = None  # fluid_segmentation.sif (v2.5.0)
+    onl_sif: str | None = None
+    onl_code: Path | None = None
+    onl_weights: Path | None = None
+    bmeis_sif: str | None = None
+    bmeis_code: Path | None = None
+    bmeis_weights: Path | None = None
+    ga_sif: str | None = None
+    ga_code: Path | None = None
+    ga_weights: Path | None = None
+    ga_iowa_binary: str | None = None
+    ga_threshold: str = "0.5"
 
 
 settings = Settings()
