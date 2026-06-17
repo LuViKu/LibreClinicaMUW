@@ -57,19 +57,19 @@ def client(monkeypatch):
     def fake_get_adapter():
         class _Fake:
             def supports(self, task: str) -> bool:
-                return task in ("fluid", "onl", "bmeis", "ga")
+                return task in ("fluid", "onl", "pr", "ga")
 
             def full_volume(self, task, e2e_path, laterality, out_dir_override=None):
                 # The endpoint passes the tempdir as out_dir_override; drop a
                 # fake CSV inside so the artifact collector picks it up.
                 assert out_dir_override is not None
                 (out_dir_override / "fake-output.csv").write_text("a,b\n1,2\n")
+                # Server returns raw artifacts only; the metric is None.
                 return FullVolumeResult(
                     task=task,
-                    primary_metric_value=6.84,
-                    primary_metric_unit="mm³",
+                    primary_metric_value=None,
+                    primary_metric_unit=None,
                     output_payload={
-                        "total": 6.84,
                         "csv_path": str(out_dir_override / "fake-output.csv"),
                     },
                     en_face_mask_path=None,
@@ -108,12 +108,11 @@ def test_run_happy_path(client) -> None:
     body = r.json()
     assert body["task"] == "fluid"
     assert body["laterality"] == "OD"
-    assert body["primary_metric_value"] == 6.84
-    assert body["primary_metric_unit"] == "mm³"
+    assert body["primary_metric_value"] is None
+    assert body["primary_metric_unit"] is None
     assert body["model_version"] == "test-fluid-1.0"
     # Payload paths must be rewritten to basenames.
     assert body["output_payload"]["csv_path"] == "fake-output.csv"
-    assert body["output_payload"]["total"] == 6.84
     # Single artifact carrying the fake CSV.
     assert len(body["artifacts"]) == 1
     assert body["artifacts"][0]["name"] == "fake-output.csv"

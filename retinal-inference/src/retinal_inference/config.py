@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # a GPU host exist). Set e.g. RETINAL_INFERENCE_RUNNER_FLUID_URL.
     runner_fluid_url: str | None = None
     runner_onl_url: str | None = None
-    runner_bmeis_url: str | None = None
+    runner_pr_url: str | None = None
     runner_ga_url: str | None = None
     # Generous per-job ceiling — CPU full-volume inference is slow.
     runner_timeout_s: float = 900.0
@@ -79,9 +79,9 @@ class Settings(BaseSettings):
     apptainer_bin: str = "apptainer"
     # CUDA_VISIBLE_DEVICES for most tasks (torch>=1.9 / CUDA 10.2 — any GPU).
     apptainer_gpu_device: str | None = None
-    # BMEIS (sese_pr) is torch1.0 / CUDA 9 — no Turing (RTX 2080 Ti, sm_75)
+    # The pr task (sese_pr) is torch1.0 / CUDA 9 — no Turing (RTX 2080 Ti, sm_75)
     # kernels; pin to a non-Turing GPU (TITAN Xp/V), or set "" to force CPU.
-    apptainer_bmeis_gpu_device: str | None = None
+    apptainer_pr_gpu_device: str | None = None
     # When true, wrap each apptainer call in ``srun`` (one blocking SLURM job per
     # scan) instead of running it directly. Required on the OPTIMA cluster: all
     # partitions cap at MaxTime=2d, so no persistent GPU service — the /run
@@ -96,14 +96,14 @@ class Settings(BaseSettings):
     onl_sif: str | None = None
     onl_code: Path | None = None
     onl_weights: Path | None = None
-    bmeis_sif: str | None = None
-    bmeis_code: Path | None = None
-    bmeis_weights: Path | None = None
-    # Optional extra site-packages dir bound into the bmeis .sif and prepended to
+    pr_sif: str | None = None
+    pr_code: Path | None = None
+    pr_weights: Path | None = None
+    # Optional extra site-packages dir bound into the pr .sif and prepended to
     # PYTHONPATH (e.g. a `pip install --target` of scikit-learn). Lets a pure-Python
     # / wheel dep be added without rebaking the heavy .sif; leave unset once the
     # dep is baked into the image.
-    bmeis_pyextra: Path | None = None
+    pr_pyextra: Path | None = None
     ga_sif: str | None = None
     ga_code: Path | None = None
     ga_weights: Path | None = None

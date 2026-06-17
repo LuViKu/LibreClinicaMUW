@@ -35,14 +35,14 @@ Singularity 3.8 supports every flag the adapter emits (`exec`/`run`/`--nv`/
 The assets already live on shared storage under
 `$PI = /home/optima/octreader/Processor_Implementations` (confirmed June 2026 by a
 full recursive listing). The `.sif`s are large (fluid 2.9 G, onl 6.0 G, ga 10.1 G);
-**bind them in place — no copy needed.** Only the BMEIS `.sif` must be built (none
+**bind them in place — no copy needed.** Only the PR `.sif` must be built (none
 ships for `sese_pr`). Resolved canonical paths:
 
 | Task | .sif | code dir | weights |
 |---|---|---|---|
 | fluid | `$PI/sese_retinsight_fluid/code/v2.5.0/fluid_segmentation.sif` | — (baked) | — (baked) |
 | onl | `$PI/sese_onl/singularity/sese_onl.sif` | `$PI/sese_onl/code/outernuclearlayer-segmentation` | `$PI/sese_onl/weights/cross_val_ga` (5-fold ensemble; single-model alt `…/weights/onl_seg_vanilla_unet.pth`) |
-| bmeis | **build** from `runners/bmeis/apptainer.def` → `/scratch/$USER/ri/bmeis.sif` | `$PI/sese_pr/code/photoreceptors-segmentation` | `$PI/sese_pr/weights/u2net-cross-entropy` |
+| pr | **build** from `runners/pr/apptainer.def` → `/scratch/$USER/ri/pr.sif` | `$PI/sese_pr/code/photoreceptors-segmentation` | `$PI/sese_pr/weights/u2net-cross-entropy` |
 | ga (gated) | `$PI/sese_ga/pytorch_optima_dl.v4.sif` | `$PI/sese_ga/code` (`common/`+`prepare_data/` are empty on disk — the real ones live inside the `.sif`) | `$PI/sese_ga/weights/filly_checkpoints` (5× `w.ckpt`) |
 
 > **GA's IOWA step (binary located).** GA needs an 11-layer IOWA segmentation as
@@ -56,12 +56,12 @@ ships for `sese_pr`). Resolved canonical paths:
 >    usage — **validate on the first GA run.**)
 > 3. `infer_sample_filly.py` in the GA `.sif` consumes those CSVs → RPEL.
 >
-> GA also rejects non-Spectralis scans and expects 49 or 97 B-scans. fluid/onl/bmeis
+> GA also rejects non-Spectralis scans and expects 49 or 97 B-scans. fluid/onl/pr
 > do not depend on any of this.
 
 ```sh
-singularity build --fakeroot /scratch/$USER/ri/bmeis.sif \
-  <repo>/retinal-inference/runners/bmeis/apptainer.def
+singularity build --fakeroot /scratch/$USER/ri/pr.sif \
+  <repo>/retinal-inference/runners/pr/apptainer.def
 ```
 If `--fakeroot` isn't enabled for your user (common on shared clusters), build
 the `.sif` on a box where you have sudo/root and copy it over, or use a remote
@@ -103,13 +103,13 @@ RETINAL_INFERENCE_FLUID_SIF=/home/optima/octreader/Processor_Implementations/ses
 RETINAL_INFERENCE_ONL_SIF=/home/optima/octreader/Processor_Implementations/sese_onl/singularity/sese_onl.sif \
 RETINAL_INFERENCE_ONL_CODE=/home/optima/octreader/Processor_Implementations/sese_onl/code/outernuclearlayer-segmentation \
 RETINAL_INFERENCE_ONL_WEIGHTS=/home/optima/octreader/Processor_Implementations/sese_onl/weights/cross_val_ga \
-RETINAL_INFERENCE_BMEIS_SIF=/scratch/$USER/ri/bmeis.sif \
-RETINAL_INFERENCE_BMEIS_CODE=/home/optima/octreader/Processor_Implementations/sese_pr/code/photoreceptors-segmentation \
-RETINAL_INFERENCE_BMEIS_WEIGHTS=/home/optima/octreader/Processor_Implementations/sese_pr/weights/u2net-cross-entropy \
+RETINAL_INFERENCE_PR_SIF=/scratch/$USER/ri/pr.sif \
+RETINAL_INFERENCE_PR_CODE=/home/optima/octreader/Processor_Implementations/sese_pr/code/photoreceptors-segmentation \
+RETINAL_INFERENCE_PR_WEIGHTS=/home/optima/octreader/Processor_Implementations/sese_pr/weights/u2net-cross-entropy \
   nohup uvicorn retinal_inference.main:app --host 0.0.0.0 --port 8000 \
   > /scratch/$USER/retinal-inference/server.log 2>&1 &
 ```
-- `GPU_DEVICE=0` — an idle card (GPU 3 was busy). For BMEIS the CUDA-10 `.sif`
+- `GPU_DEVICE=0` — an idle card (GPU 3 was busy). For the pr task the CUDA-10 `.sif`
   runs on any of the 6, so no Turing pin needed.
 - `ga` is omitted above (validate-on-first-run, not blocked). All paths are known;
   to enable it add:
@@ -122,15 +122,15 @@ RETINAL_INFERENCE_BMEIS_WEIGHTS=/home/optima/octreader/Processor_Implementations
   ```
 - These `$PI` paths must be visible from the GPU compute node (they are — same NFS
   as `/scratch`); the adapter bind-mounts the code/weights dirs into the `.sif`.
-- BMEIS extra dep: sese_pr imports `scikit-learn`, baked into `bmeis.sif` via the
+- PR extra dep: sese_pr imports `scikit-learn`, baked into `pr.sif` via the
   `.def`. To avoid rebaking the `.sif` you can instead bind a `pip --target` dir:
   ```sh
   mkdir -p /scratch/$USER/ri/pyextra
   singularity exec --bind /scratch/$USER/ri/pyextra:/scratch/$USER/ri/pyextra \
-    /scratch/$USER/ri/bmeis.sif pip install --no-cache-dir --no-deps \
+    /scratch/$USER/ri/pr.sif pip install --no-cache-dir --no-deps \
     --target=/scratch/$USER/ri/pyextra scikit-learn==0.24.2 joblib threadpoolctl
   ```
-  then set `RETINAL_INFERENCE_BMEIS_PYEXTRA=/scratch/$USER/ri/pyextra` (use
+  then set `RETINAL_INFERENCE_PR_PYEXTRA=/scratch/$USER/ri/pyextra` (use
   `--no-deps` so it holds only sklearn, not a numpy that would shadow the `.sif`'s).
 - Persistence: `nohup`/`tmux` to start; a `systemd --user` unit if your admin
   permits a long-lived service on the node.
@@ -181,8 +181,10 @@ DICOM or an `.e2e`, auto-detected, so a misconfig degrades rather than corrupts.
 
 ## 6. Per-model validation (first real run)
 For each task: POST a real `.e2e`, confirm the model **accepts the synthesized
-`bscan.dcm`**, the output artifact name/parse matches (`fluidseg.npz` labels;
-ONL/BMEIS surface CSVs; GA RPEL), and the metric is sane. See each
+`bscan.dcm`** and the expected output artifacts are produced (`fluidseg.npz`
+labels; ONL OPL-HFL + BMEIS surface CSVs; PR BMEIS + OB-OPR surface CSVs; GA
+RPEL CSV). The server returns these artifacts only — the Java backend computes
+the clinical metric — so there is no server-side metric to eyeball. See each
 `runners/<task>/README.md` "confirm on first run" list.
 
 ## Open decisions
@@ -191,7 +193,8 @@ ONL/BMEIS surface CSVs; GA RPEL), and the metric is sane. See each
   (§5b), the Java client forwards only the DICOM when `preprocessUrl` is set, and
   the cluster `/run` + `ApptainerAdapter` are DICOM-first (auto-detect; the adapter
   rejects raw `.e2e`). `prepare_bscan_dcm` now runs on the app-VM preprocess sidecar.
-- **ONL/BMEIS primary metric**: mean thickness / mean depth are placeholders —
-  confirm the clinical metric.
+- **ONL/PR clinical metric**: the server returns the raw surface CSVs only; the
+  Java backend computes the ONL thickness / PR depth (µm). Confirm the exact
+  clinical definition Java-side.
 - **Dispatcher host / persistence policy**: confirm a long-lived service is
   allowed on a node, else submit from the app VM over SSH.

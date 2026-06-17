@@ -23,7 +23,7 @@ class FastScreenUnavailable(RuntimeError):
     """Raised by ``fast_screen`` for tasks that have no synchronous quick path.
 
     The caller should enqueue the job and poll ``/jobs/{id}`` for the async
-    full-volume result instead. Real model-runner tasks (fluid/onl/bmeis/ga)
+    full-volume result instead. Real model-runner tasks (fluid/onl/pr/ga)
     are async-only; the deterministic placeholder still offers a fast screen.
     """
 

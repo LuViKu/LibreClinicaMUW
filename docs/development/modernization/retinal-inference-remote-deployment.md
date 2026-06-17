@@ -88,7 +88,7 @@ docker compose --profile optima up -d \
     retinal-inference \
     retinal-runner-fluid \
     retinal-runner-onl \
-    retinal-runner-bmeis
+    retinal-runner-pr
 ```
 
 For the GA runner (gated by its own profile + needs the IOWA binary +
@@ -97,7 +97,7 @@ For the GA runner (gated by its own profile + needs the IOWA binary +
 ```sh
 docker compose --profile optima --profile ga up -d \
     retinal-inference \
-    retinal-runner-fluid retinal-runner-onl retinal-runner-bmeis \
+    retinal-runner-fluid retinal-runner-onl retinal-runner-pr \
     retinal-runner-ga
 ```
 

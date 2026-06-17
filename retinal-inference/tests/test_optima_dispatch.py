@@ -14,7 +14,7 @@ from retinal_inference.inference.optima import OptimaAdapter
 
 
 def _set_runner_urls(monkeypatch, **urls) -> None:
-    for task in ("fluid", "onl", "bmeis", "ga"):
+    for task in ("fluid", "onl", "pr", "ga"):
         monkeypatch.setattr(
             _config.settings, f"runner_{task}_url", urls.get(task), raising=False
         )
@@ -56,10 +56,11 @@ def test_full_volume_dispatch(monkeypatch, fake_e2e_path, tmp_path) -> None:
         captured["url"] = url
         captured["payload"] = payload
         captured["timeout"] = timeout
+        # Server returns raw artifacts only; the metric is None (Java computes it).
         return {
-            "primary_metric_value": 1.234,
-            "primary_metric_unit": "mm³",
-            "output_payload": {"irf_mm3": 0.5, "srf_mm3": 0.4, "ped_mm3": 0.334},
+            "primary_metric_value": None,
+            "primary_metric_unit": None,
+            "output_payload": {"segmentation_file": "fluidseg.npz"},
             "en_face_mask_path": str(tmp_path / "mask.png"),
             "bscan_masks_dir": str(tmp_path / "masks"),
             "pixel_scale_mm": 0.011,
@@ -73,9 +74,9 @@ def test_full_volume_dispatch(monkeypatch, fake_e2e_path, tmp_path) -> None:
     res = adapter.full_volume("fluid", fake_e2e_path, "OD")
 
     assert res.task == "fluid"
-    assert res.primary_metric_value == 1.234
-    assert res.primary_metric_unit == "mm³"
-    assert res.output_payload["irf_mm3"] == 0.5
+    assert res.primary_metric_value is None
+    assert res.primary_metric_unit is None
+    assert res.output_payload["segmentation_file"] == "fluidseg.npz"
     assert res.model_version == "retinsight-fluid-1.3.0"
     assert res.confidence == 0.9
 

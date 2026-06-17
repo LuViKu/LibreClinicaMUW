@@ -128,7 +128,7 @@ services:
       # only enabled when its URL is set; harmless under the placeholder.
       RETINAL_INFERENCE_RUNNER_FLUID_URL: ${RETINAL_INFERENCE_RUNNER_FLUID_URL:-http://retinal-runner-fluid:8000}
       RETINAL_INFERENCE_RUNNER_ONL_URL: ${RETINAL_INFERENCE_RUNNER_ONL_URL:-http://retinal-runner-onl:8000}
-      RETINAL_INFERENCE_RUNNER_BMEIS_URL: ${RETINAL_INFERENCE_RUNNER_BMEIS_URL:-http://retinal-runner-bmeis:8000}
+      RETINAL_INFERENCE_RUNNER_PR_URL: ${RETINAL_INFERENCE_RUNNER_PR_URL:-http://retinal-runner-pr:8000}
       # GA is gated: empty by default so OptimaAdapter.supports('ga') is False.
       # Set it (+ start the retinal-runner-ga service via the `ga` profile) only
       # on a GPU host with the IOWA binary + .sif available.
@@ -193,13 +193,13 @@ services:
     cpus: "4.0"
     mem_limit: 6g
 
-  # BMEIS model-runner (sese_pr, photoreceptor boundary). Same `optima` profile;
-  # needs the vendor code (runners/bmeis/code/) + weights. PyTorch-1.0 pickle —
-  # see runners/bmeis/README.md for the torch/weight caveat.
-  retinal-runner-bmeis:
-    build: ./retinal-inference/runners/bmeis
-    image: libreclinica-muw-retinal-runner-bmeis:latest
-    container_name: libreclinica-muw-retinal-runner-bmeis-1
+  # PR model-runner (sese_pr, photoreceptor layer — BMEIS / OB-OPR boundaries).
+  # Same `optima` profile; needs the vendor code (runners/pr/code/) + weights.
+  # PyTorch-1.0 pickle — see runners/pr/README.md for the torch/weight caveat.
+  retinal-runner-pr:
+    build: ./retinal-inference/runners/pr
+    image: libreclinica-muw-retinal-runner-pr:latest
+    container_name: libreclinica-muw-retinal-runner-pr-1
     profiles: ["optima"]
     # No Postgres dep — runners only expose /infer over HTTP.
     volumes:
@@ -208,7 +208,7 @@ services:
       # visible to every runner at the same absolute path. Stays empty between
       # requests (sidecar nukes its tempdir on response).
       - ./docker/retinal-tmp:/var/lib/retinal-inference/tmp
-      - ${RETINAL_BMEIS_WEIGHTS_DIR:-./docker/retinal-weights/bmeis}:/weights:ro
+      - ${RETINAL_PR_WEIGHTS_DIR:-./docker/retinal-weights/pr}:/weights:ro
     cpus: "4.0"
     mem_limit: 6g
 

@@ -35,7 +35,7 @@ _MEDIA_TYPES: dict[str, str] = {
 
 # Skip the source bscan.dcm — it was synthesised by the sidecar and the bytes
 # would just round-trip uselessly. Also skip any nested mhd_in dir that the
-# bmeis runner uses for its DICOM→MHD pre-conversion.
+# pr runner uses for its DICOM→MHD pre-conversion.
 _SKIP_NAMES: frozenset[str] = frozenset({"bscan.dcm"})
 _SKIP_DIRS: frozenset[str] = frozenset({"mhd_in"})
 

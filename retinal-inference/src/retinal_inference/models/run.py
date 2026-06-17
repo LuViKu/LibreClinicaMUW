@@ -34,11 +34,15 @@ class RunEnvelope(BaseModel):
     the same DB columns it already writes for the local DB-poll path; the
     additional ``artifacts`` array carries the binary outputs that used to live
     on the shared segmentation-output volume.
+
+    The server emits raw artifacts only and the Java backend computes the
+    clinical metric, so ``primary_metric_value``/``primary_metric_unit`` are
+    optional (``None`` for the real-model tasks).
     """
 
     model_version: str
-    primary_metric_value: float
-    primary_metric_unit: str
+    primary_metric_value: float | None = None
+    primary_metric_unit: str | None = None
     output_payload: dict[str, Any] = Field(default_factory=dict)
     confidence: float = 0.85
     artifacts: list[Artifact] = Field(default_factory=list)

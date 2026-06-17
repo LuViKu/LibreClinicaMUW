@@ -4,9 +4,12 @@
 Each model ships a reference ``bscan.dcm`` (+ expected outputs) on the OPTIMA
 cluster under ``$PI = /home/optima/octreader/Processor_Implementations``. This
 script POSTs one to ``POST /run`` for a given task and prints the returned
-envelope — primary metric, payload, and the artifact filenames/sizes — so you can
-eyeball that the model accepted the synthesized DICOM and produced sane output on
-the **first real run** (the step the file listing alone can't verify).
+envelope — payload and the artifact filenames/sizes (plus the primary metric if
+the server still reports one; the server now returns raw artifacts only and the
+Java backend computes the clinical metric, so the metric is normally None) — so
+you can eyeball that the model accepted the synthesized DICOM and produced the
+expected output files on the **first real run** (the step the file listing alone
+can't verify).
 
 Stdlib only (no requests/httpx) so it runs in the bare cluster venv. Run it ON the
 cluster — or any host that can both read the reference DICOM and reach ``/run``.
@@ -17,8 +20,8 @@ Examples
     python scripts/validate_against_reference.py --task onl \
         --base-url http://localhost:8000 --token "$RETINAL_INFERENCE_AUTH_TOKEN"
 
-    # explicit DICOM (bmeis / ga, or any scan you want to push):
-    python scripts/validate_against_reference.py --task bmeis \
+    # explicit DICOM (pr / ga, or any scan you want to push):
+    python scripts/validate_against_reference.py --task pr \
         --dcm /path/to/bscan.dcm --laterality OD --token "$TOK"
 
     # assert the primary metric is within tolerance (CI / regression):
@@ -41,15 +44,15 @@ import urllib.request
 from pathlib import Path
 
 # Reference DICOMs that ship with each model on the OPTIMA cluster. Confirmed
-# present in the June 2026 recursive listing. bmeis/ga have no enumerated
+# present in the June 2026 recursive listing. pr/ga have no enumerated
 # per-test bscan.dcm here — pass --dcm explicitly (any Spectralis volume works;
 # the onl reference below is a fine generic Spectralis scan for a smoke test).
 PI = "/home/optima/octreader/Processor_Implementations"
 DEFAULT_REFERENCES = {
     "onl": f"{PI}/sese_onl/test/TestCase1/Inputs/BscanPath/bscan.dcm",
     "fluid": f"{PI}/sese_retinsight_fluid/test/TestCase1/Inputs/BscanPath/bscan.dcm",
-    # "bmeis": pass --dcm  (sese_pr test-case inner files were not enumerated)
-    # "ga":    pass --dcm  (needs a Spectralis 49/97-bscan volume + GA enabled)
+    # "pr": pass --dcm  (sese_pr test-case inner files were not enumerated)
+    # "ga": pass --dcm  (needs a Spectralis 49/97-bscan volume + GA enabled)
 }
 
 
@@ -101,7 +104,7 @@ def _post_run(
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--task", required=True, choices=["fluid", "onl", "bmeis", "ga"])
+    p.add_argument("--task", required=True, choices=["fluid", "onl", "pr", "ga"])
     p.add_argument("--base-url", default="http://localhost:8000", help="sidecar base URL")
     p.add_argument(
         "--token",
@@ -150,10 +153,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     metric = env.get("primary_metric_value")
-    unit = env.get("primary_metric_unit", "")
+    unit = env.get("primary_metric_unit") or ""
     print("\n--- result ---------------------------------------------------------")
     print(f"  model_version : {env.get('model_version')}")
-    print(f"  primary_metric: {metric} {unit}")
+    # The server returns raw artifacts only; the metric is normally None (Java
+    # computes it). Print it only when present so a placeholder run still shows it.
+    if metric is None:
+        print("  primary_metric: (none — server returns artifacts; Java computes the metric)")
+    else:
+        print(f"  primary_metric: {metric} {unit}")
     print(f"  confidence    : {env.get('confidence')}")
     print(f"  output_payload: {json.dumps(env.get('output_payload', {}), indent=2)}")
     artifacts = env.get("artifacts", [])

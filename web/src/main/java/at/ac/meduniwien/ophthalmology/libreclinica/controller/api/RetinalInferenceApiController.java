@@ -68,7 +68,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * INSERTs a row into {@code retinal_inference_job}, and calls the sidecar's
  * synchronous {@code POST /screen} via {@link RetinalInferenceClient}.
  *
- * <p>Enabled tasks: {@code fluid}, {@code onl}, {@code bmeis} (OptimaAdapter
+ * <p>Enabled tasks: {@code fluid}, {@code onl}, {@code pr} (OptimaAdapter
  * model-runners), plus {@code ga} (gated at the sidecar until its runner exists).
  * Anything else is rejected with 400; the queue + sidecar schema carry the task
  * discriminator so adding future tasks is decoder-only with no API change.
@@ -100,13 +100,13 @@ public class RetinalInferenceApiController {
 
     /**
      * Task allow-list — keep in lock-step with the sidecar's {@code SUPPORTED_TASKS}.
-     * fluid/onl/bmeis run via the OptimaAdapter model-runners (async; the sidecar's
+     * fluid/onl/pr run via the OptimaAdapter model-runners (async; the sidecar's
      * {@code /screen} returns 422 for them, so the controller's existing
      * null-result path queues them for the worker). {@code ga} is registered but
      * gated at the sidecar adapter (no runner) until the IOWA layer segmenter +
      * a GPU host exist.
      */
-    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "bmeis");
+    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr");
 
     /** Laterality must be one of the OD/OS pair (no OU for the placeholder GA path). */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");

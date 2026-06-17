@@ -27,12 +27,17 @@ class FullVolumeResult(BaseModel):
     Task-agnostic: ``primary_metric_value``/``primary_metric_unit`` and the
     free-form ``output_payload`` map straight onto the generic
     ``retinal_inference_result`` columns, so area (GA), volume (fluid), and
-    layer-thickness (ONL/BMEIS) tasks all fit without a schema change.
+    layer-segmentation (ONL/PR) tasks all fit without a schema change.
+
+    The inference server returns raw artifacts only — the Java backend computes
+    the clinical metrics — so ``primary_metric_value``/``primary_metric_unit``
+    are optional (``None`` for the real-model tasks); the deterministic
+    placeholder still populates them for end-to-end dev tests.
     """
 
     task: TaskName
-    primary_metric_value: float
-    primary_metric_unit: str
+    primary_metric_value: float | None = None
+    primary_metric_unit: str | None = None
     output_payload: dict[str, Any] = Field(
         default_factory=dict,
         description="Full per-task result, persisted verbatim to output_payload JSONB.",

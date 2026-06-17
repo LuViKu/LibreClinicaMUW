@@ -9,12 +9,17 @@ does no oct-converter ingestion.
 
 A task is only ``supports()``-ed when its ``.sif`` is configured (gates GA, and
 any task whose image isn't present). Per-task ``.sif``/code/weights come from
-config; outputs are parsed into the generic ``FullVolumeResult`` (fluid mm³,
-ONL/BMEIS µm, GA mm²).
+config.
+
+The server returns *raw segmentation artifacts only* — the Java backend computes
+every clinical metric. So each handler runs the model, confirms the expected
+output files exist, and returns those file basenames as the ``output_payload``
+with ``primary_metric_value``/``primary_metric_unit`` left ``None``. No fluid
+mm³ / ONL-PR µm / GA mm² is computed here.
 
 Cluster caveats encoded here:
-  * BMEIS (sese_pr, torch1.0/CUDA9) has no Turing kernels → pin to a non-Turing
-    GPU via ``apptainer_bmeis_gpu_device`` (or "" for CPU).
+  * the pr task (sese_pr, torch1.0/CUDA9) has no Turing kernels → pin to a
+    non-Turing GPU via ``apptainer_pr_gpu_device`` (or "" for CPU).
   * ``apptainer_use_slurm`` will wrap calls in ``sbatch`` once the hosting model
     is fixed; for now it runs apptainer directly.
 
@@ -24,7 +29,6 @@ flagged "confirm on the cluster" — not runnable without the .sif images + GPUs
 
 from __future__ import annotations
 
-import csv
 import os
 import subprocess
 import tempfile
@@ -78,18 +82,6 @@ def _spacing_mm(dcm_file: Path) -> tuple[float, float, float]:
     return axial, lateral, slice_mm
 
 
-def _read_surface_csv(path: str):
-    import numpy as np
-
-    rows: list[list[float]] = []
-    with open(path, newline="") as f:
-        reader = csv.reader(f)
-        next(reader, None)  # size header
-        for line in reader:
-            rows.append([float(x) if x not in ("", "nan", "NaN") else np.nan for x in line])
-    return np.asarray(rows, dtype=float)
-
-
 class ApptainerAdapter(RetinalInferenceAdapter):
     """Dispatch each task to its model ``.sif`` via apptainer on the GPU cluster."""
 
@@ -100,7 +92,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         self._sif: dict[TaskName, str | None] = {
             "fluid": s.fluid_sif,
             "onl": s.onl_sif,
-            "bmeis": s.bmeis_sif,
+            "pr": s.pr_sif,
             "ga": s.ga_sif,
         }
 
@@ -126,7 +118,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             # SLURM assigns the GPU (via --gres) and sets CUDA_VISIBLE_DEVICES in
             # the job env; don't override it from the dispatcher.
             return {}
-        dev = s.apptainer_bmeis_gpu_device if task == "bmeis" else s.apptainer_gpu_device
+        dev = s.apptainer_pr_gpu_device if task == "pr" else s.apptainer_gpu_device
         if dev is None:
             return {}
         # Apptainer forwards APPTAINERENV_* into the container.
@@ -153,8 +145,6 @@ class ApptainerAdapter(RetinalInferenceAdapter):
     # --- per-task handlers (return the generic result fields) ----------------
 
     def _fluid(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
-        import numpy as np
-
         out = work / "out"
         out.mkdir(parents=True, exist_ok=True)
         # v2.5.0 .sif: run_inference.py reads /workdir/input-data, writes fluidseg.npz.
@@ -166,21 +156,21 @@ class ApptainerAdapter(RetinalInferenceAdapter):
              "--optima_spacing", "--run_local"],
         )
         _exec(cmd, self._gpu_env("fluid"))
+        # Server returns the raw fluid mask only; Java computes the IRF/SRF/PED mm³.
         npz, npy = out / "fluidseg.npz", out / "fluidseg.npy"
-        seg = np.load(npz)["segmentation"] if npz.is_file() else np.load(npy)
-        axial, lateral, slice_mm = _spacing_mm(dcm_dir / "bscan.dcm")
-        vox = axial * lateral * slice_mm
-        payload = {n: round(float((seg == lbl).sum()) * vox, 6)
-                   for n, lbl in {"irf_mm3": 1, "srf_mm3": 2, "ped_mm3": 3}.items()}
-        total = round(sum(payload.values()), 6)
-        return {"primary_metric_value": total, "primary_metric_unit": "mm³",
-                "output_payload": {"total_fluid_volume_mm3": total, **payload},
+        if npz.is_file():
+            seg_file = npz.name
+        elif npy.is_file():
+            seg_file = npy.name
+        else:
+            raise RuntimeError(f"fluid model produced no fluidseg.npz/.npy in {out}")
+        axial = _spacing_mm(dcm_dir / "bscan.dcm")[0]
+        return {"primary_metric_value": None, "primary_metric_unit": None,
+                "output_payload": {"segmentation_file": seg_file},
                 "pixel_scale_mm": axial}
 
     def _onl(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
         import glob
-
-        import numpy as np
 
         s = _config.settings
         out = work / "out"
@@ -197,37 +187,36 @@ class ApptainerAdapter(RetinalInferenceAdapter):
              str(dcm_dir / "bscan.dcm"), str(out), str(weights)],
         )
         _exec(cmd, self._gpu_env("onl"))
+        # ONL is bounded by the OPL-HFL and BMEIS surfaces; the server returns
+        # both surface CSVs and Java computes the ONL thickness (µm) from them.
         upper = sorted(glob.glob(str(out / "*OPL-HFL*.csv")))
         lower = sorted(glob.glob(str(out / "*BMEIS*.csv")))
         if not upper or not lower:
             raise RuntimeError(f"sese_onl produced no boundary CSVs in {out}")
         axial = _spacing_mm(dcm_dir / "bscan.dcm")[0]
-        thick_um = float(np.nanmean(_read_surface_csv(lower[0]) - _read_surface_csv(upper[0]))) * axial * 1000.0
-        return {"primary_metric_value": round(thick_um, 3), "primary_metric_unit": "µm",
-                "output_payload": {"mean_onl_thickness_um": round(thick_um, 3)},
+        return {"primary_metric_value": None, "primary_metric_unit": None,
+                "output_payload": {"surface_csvs": [Path(upper[0]).name, Path(lower[0]).name]},
                 "pixel_scale_mm": axial}
 
-    def _bmeis(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
+    def _pr(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
         import glob
-
-        import numpy as np
 
         s = _config.settings
         out = work / "out"
         mhd = work / "mhd_in"
         out.mkdir(parents=True, exist_ok=True)
         mhd.mkdir(parents=True, exist_ok=True)
-        code = Path(s.bmeis_code or "/opt/sese_pr")
-        weights = Path(s.bmeis_weights or "/weights/u2net-cross-entropy")
+        code = Path(s.pr_code or "/opt/sese_pr")
+        weights = Path(s.pr_weights or "/weights/u2net-cross-entropy")
         dcm = dcm_dir / "bscan.dcm"
         mhd_file = mhd / "bscan.mhd"
         binds = [str(code), str(weights), str(dcm_dir), str(work)]
         # Optional extra site-packages (e.g. scikit-learn) bound + on PYTHONPATH,
         # so a wheel dep can be added without rebaking the .sif (see config).
         pythonpath = ""
-        if s.bmeis_pyextra:
-            binds.append(str(s.bmeis_pyextra))
-            pythonpath = f"PYTHONPATH='{s.bmeis_pyextra}' "
+        if s.pr_pyextra:
+            binds.append(str(s.pr_pyextra))
+            pythonpath = f"PYTHONPATH='{s.pr_pyextra}' "
         # process_input_for_optimus.py --export_for_optimus reads an .mhd and pulls
         # ElementSpacing from its header, so convert the DICOM -> MHD first. Do it
         # INSIDE the .sif (it ships SimpleITK; the host dispatcher stays thin), in
@@ -249,24 +238,25 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             f"--export_for_optimus True --export_mhd False --samples 10"
         )
         cmd = self._apptainer(
-            "exec", s.bmeis_sif or "",
+            "exec", s.pr_sif or "",
             binds,
             ["bash", "-c", f"{convert} && {run_model}"],
         )
-        _exec(cmd, self._gpu_env("bmeis"))
+        _exec(cmd, self._gpu_env("pr"))
+        # The PR (photoreceptor) layer is bounded by the BMEIS and OB-OPR
+        # surfaces; the server returns both surface CSVs and Java computes the
+        # PR depth (µm) from them.
         bmeis = sorted(glob.glob(str(out / "*BMEIS*.csv")))
-        if not bmeis:
-            raise RuntimeError(f"sese_pr produced no BMEIS CSV in {out}")
+        ob_opr = sorted(glob.glob(str(out / "*OB?OPR*.csv"))) or sorted(glob.glob(str(out / "*OPR*.csv")))
+        if not bmeis or not ob_opr:
+            raise RuntimeError(f"sese_pr produced no BMEIS / OB-OPR CSVs in {out}")
         axial = _spacing_mm(dcm_dir / "bscan.dcm")[0]
-        depth_um = float(np.nanmean(_read_surface_csv(bmeis[0]))) * axial * 1000.0
-        return {"primary_metric_value": round(depth_um, 3), "primary_metric_unit": "µm",
-                "output_payload": {"mean_bmeis_depth_um": round(depth_um, 3)},
+        return {"primary_metric_value": None, "primary_metric_unit": None,
+                "output_payload": {"surface_csvs": [Path(bmeis[0]).name, Path(ob_opr[0]).name]},
                 "pixel_scale_mm": axial}
 
     def _ga(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
         import glob
-
-        import numpy as np
 
         s = _config.settings
         out = work / "out"
@@ -302,14 +292,14 @@ class ApptainerAdapter(RetinalInferenceAdapter):
              "--OutputGA", str(out), "--threshold", s.ga_threshold],
         )
         _exec(cmd, self._gpu_env("ga"))
+        # Server returns the raw RPEL surface CSV only; Java computes the GA
+        # area (mm²) from it.
         rpel = sorted(glob.glob(str(out / "*RPEL*.csv")))
         if not rpel:
             raise RuntimeError(f"sese_ga produced no RPEL CSV in {out}")
-        arr = _read_surface_csv(rpel[0])
-        _, lateral, slice_mm = _spacing_mm(dcm)
-        area_mm2 = float(np.count_nonzero(arr > 0)) * lateral * slice_mm
-        return {"primary_metric_value": round(area_mm2, 4), "primary_metric_unit": "mm²",
-                "output_payload": {"total_area_mm2": round(area_mm2, 4)},
+        lateral = _spacing_mm(dcm)[1]
+        return {"primary_metric_value": None, "primary_metric_unit": None,
+                "output_payload": {"rpel_csv": Path(rpel[0]).name},
                 "pixel_scale_mm": lateral}
 
     def full_volume(
@@ -335,7 +325,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         dcm_dir, _dcm = _resolve_dcm(src)
 
         handler = {"fluid": self._fluid, "onl": self._onl,
-                   "bmeis": self._bmeis, "ga": self._ga}[task]
+                   "pr": self._pr, "ga": self._ga}[task]
 
         if out_dir_override is not None:
             work = Path(out_dir_override)
@@ -351,8 +341,8 @@ class ApptainerAdapter(RetinalInferenceAdapter):
 
         return FullVolumeResult(
             task=task,
-            primary_metric_value=res["primary_metric_value"],
-            primary_metric_unit=res["primary_metric_unit"],
+            primary_metric_value=res.get("primary_metric_value"),
+            primary_metric_unit=res.get("primary_metric_unit"),
             output_payload=res["output_payload"],
             en_face_mask_path=None,
             bscan_masks_dir=bscan_masks_dir,

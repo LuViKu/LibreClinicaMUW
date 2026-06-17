@@ -1,4 +1,4 @@
-# Apptainer image for the BMEIS (sese_pr) model on the GPU cluster.
+# Apptainer image for the PR (photoreceptor, sese_pr) model on the GPU cluster.
 #
 # sese_pr is PyTorch 1.0; production ran it under CUDA 10.1 (the wrapper's LMOD
 # modules), so we base on a torch-1.0.1 / CUDA-10 image — which DOES have Turing
@@ -6,14 +6,14 @@
 # (A CUDA-9 base is the thing that can't target Turing — avoid it.)
 #
 # This image carries only the *environment*; the vendor code + weights are
-# bind-mounted at runtime by the ApptainerAdapter (s.bmeis_code / s.bmeis_weights),
+# bind-mounted at runtime by the ApptainerAdapter (s.pr_code / s.pr_weights),
 # so nothing licensed is baked into the .sif.
 #
 # Build on the cluster:
-#   apptainer build --fakeroot bmeis.sif retinal-inference/runners/bmeis/apptainer.def
-# Then point RETINAL_INFERENCE_BMEIS_SIF at the result, and
-#   RETINAL_INFERENCE_BMEIS_CODE  -> a checkout of sese_pr/code/photoreceptors-segmentation
-#   RETINAL_INFERENCE_BMEIS_WEIGHTS -> .../weights/u2net-cross-entropy   (Spectralis model)
+#   apptainer build --fakeroot pr.sif retinal-inference/runners/pr/apptainer.def
+# Then point RETINAL_INFERENCE_PR_SIF at the result, and
+#   RETINAL_INFERENCE_PR_CODE  -> a checkout of sese_pr/code/photoreceptors-segmentation
+#   RETINAL_INFERENCE_PR_WEIGHTS -> .../weights/u2net-cross-entropy   (Spectralis model)
 #
 # Confirm on the cluster:
 #   * the full-pickle model.pkl loads under this torch build (1.0.x ABI);

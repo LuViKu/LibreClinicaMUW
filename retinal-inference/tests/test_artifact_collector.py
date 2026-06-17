@@ -25,9 +25,11 @@ def _seed_onl_outputs(tmpdir: Path) -> None:
     (tmpdir / "002-BMEIS.csv").write_text("size_header\n4,5,6\n")
 
 
-def _seed_bmeis_outputs(tmpdir: Path) -> None:
+def _seed_pr_outputs(tmpdir: Path) -> None:
+    # The PR runner emits the BMEIS + OB-OPR surface CSVs.
     (tmpdir / "bscan.dcm").write_bytes(b"DICM-FAKE")
     (tmpdir / "001-BMEIS.csv").write_text("size_header\n7,8,9\n")
+    (tmpdir / "002-OB-OPR.csv").write_text("size_header\n1,2,3\n")
     # mhd_in is internal; should be skipped.
     nested = tmpdir / "mhd_in"
     nested.mkdir()
@@ -56,10 +58,10 @@ def test_onl_artifacts(tmp_path: Path) -> None:
         assert a.media_type == "text/csv"
 
 
-def test_bmeis_artifacts_skip_mhd_in(tmp_path: Path) -> None:
-    _seed_bmeis_outputs(tmp_path)
+def test_pr_artifacts_skip_mhd_in(tmp_path: Path) -> None:
+    _seed_pr_outputs(tmp_path)
     artifacts = collect_artifacts(tmp_path)
-    assert filenames(artifacts) == ["001-BMEIS.csv"]
+    assert filenames(artifacts) == ["001-BMEIS.csv", "002-OB-OPR.csv"]
 
 
 def test_ga_artifacts(tmp_path: Path) -> None:

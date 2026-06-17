@@ -115,7 +115,7 @@ def _record_idempotent(key: str, envelope: RunEnvelope) -> None:
 @router.post("/run", response_model=RunEnvelope, status_code=200)
 async def run(
     file: UploadFile = File(..., description="bscan.dcm (DICOM) or Heidelberg .e2e"),
-    task: str = Form(..., description="One of fluid / onl / bmeis / ga"),
+    task: str = Form(..., description="One of fluid / onl / pr / ga"),
     laterality: str = Form(..., description="OD or OS"),
     x_muw_inference_token: str | None = Header(default=None),
     idempotency_key: str | None = Header(default=None),
@@ -227,11 +227,11 @@ async def _run_locked(
             _record_idempotent(idempotency_key, envelope)
 
         LOG.info(
-            "POST /run task=%s laterality=%s artifacts=%d metric=%s%s",
+            "POST /run task=%s laterality=%s artifacts=%d metric=%s %s",
             task,
             laterality,
             len(artifacts),
             envelope.primary_metric_value,
-            envelope.primary_metric_unit,
+            envelope.primary_metric_unit or "",
         )
         return envelope

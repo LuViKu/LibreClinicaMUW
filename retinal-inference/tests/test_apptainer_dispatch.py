@@ -14,7 +14,7 @@ from retinal_inference.inference.adapter import (
 
 
 def _set_sifs(monkeypatch, **sifs) -> None:
-    for task in ("fluid", "onl", "bmeis", "ga"):
+    for task in ("fluid", "onl", "pr", "ga"):
         monkeypatch.setattr(_config.settings, f"{task}_sif", sifs.get(task), raising=False)
 
 
@@ -75,9 +75,10 @@ def test_fluid_dispatch_v25(monkeypatch, tmp_path) -> None:
     )
 
     assert res.task == "fluid"
-    assert res.primary_metric_unit == "mm³"
-    assert res.primary_metric_value > 0
-    assert set(res.output_payload) >= {"total_fluid_volume_mm3", "irf_mm3", "srf_mm3", "ped_mm3"}
+    # Server returns the raw mask only; Java computes the mm³ volumes.
+    assert res.primary_metric_value is None
+    assert res.primary_metric_unit is None
+    assert res.output_payload["segmentation_file"] == "fluidseg.npz"
     # v2.5.0 invocation: apptainer run … run_inference.py, GPU env forwarded.
     assert "run" in captured["cmd"]
     assert any("fluid_segmentation.sif" in c for c in captured["cmd"])
@@ -112,7 +113,10 @@ def test_onl_passes_dcm_file_not_dir(monkeypatch, tmp_path) -> None:
     )
 
     assert res.task == "onl"
-    assert res.primary_metric_unit == "µm"
+    # Server returns the raw OPL-HFL + BMEIS surface CSVs; Java computes the µm.
+    assert res.primary_metric_value is None
+    assert res.primary_metric_unit is None
+    assert set(res.output_payload["surface_csvs"]) == {"001-OPL-HFL.csv", "002-BMEIS.csv"}
     cmd = captured["cmd"]
     script_idx = next(i for i, c in enumerate(cmd) if c.endswith("process_input_for_optimus.py"))
     # The first positional after the script must be the .dcm FILE, not the dir.
@@ -120,12 +124,12 @@ def test_onl_passes_dcm_file_not_dir(monkeypatch, tmp_path) -> None:
     assert cmd[script_idx + 1] != str(dcm_dir)
 
 
-def test_bmeis_converts_dicom_in_container(monkeypatch, tmp_path) -> None:
+def test_pr_converts_dicom_in_container(monkeypatch, tmp_path) -> None:
     # The DICOM->MHD conversion must run INSIDE the .sif (host dispatcher has no
     # SimpleITK); the model run follows in the same exec via bash -c.
-    _set_sifs(monkeypatch, bmeis="/sif/bmeis.sif")
-    monkeypatch.setattr(_config.settings, "bmeis_code", "/code/pr", raising=False)
-    monkeypatch.setattr(_config.settings, "bmeis_weights", "/weights/u2net-cross-entropy", raising=False)
+    _set_sifs(monkeypatch, pr="/sif/pr.sif")
+    monkeypatch.setattr(_config.settings, "pr_code", "/code/pr", raising=False)
+    monkeypatch.setattr(_config.settings, "pr_weights", "/weights/u2net-cross-entropy", raising=False)
     monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
 
     captured: dict = {}
@@ -134,7 +138,9 @@ def test_bmeis_converts_dicom_in_container(monkeypatch, tmp_path) -> None:
         captured["cmd"] = cmd
         out = tmp_path / "work" / "out"
         out.mkdir(parents=True, exist_ok=True)
+        # The PR layer is bounded by the BMEIS and OB-OPR surfaces.
         (out / "001-BMEIS.csv").write_text("size\n30\n40\n")
+        (out / "002-OB-OPR.csv").write_text("size\n50\n60\n")
         return ""
 
     monkeypatch.setattr(ap, "_exec", fake_exec)
@@ -142,11 +148,14 @@ def test_bmeis_converts_dicom_in_container(monkeypatch, tmp_path) -> None:
     dcm_dir = tmp_path / "in"
     dcm_dir.mkdir()
     res = ap.ApptainerAdapter().full_volume(
-        "bmeis", dcm_dir, "OD", out_dir_override=tmp_path / "work"
+        "pr", dcm_dir, "OD", out_dir_override=tmp_path / "work"
     )
 
-    assert res.task == "bmeis"
-    assert res.primary_metric_unit == "µm"
+    assert res.task == "pr"
+    # Server returns the raw BMEIS + OB-OPR surface CSVs; Java computes the µm.
+    assert res.primary_metric_value is None
+    assert res.primary_metric_unit is None
+    assert set(res.output_payload["surface_csvs"]) == {"001-BMEIS.csv", "002-OB-OPR.csv"}
     cmd = captured["cmd"]
     assert "bash" in cmd and "-c" in cmd
     payload = cmd[-1]  # the bash -c script
@@ -157,11 +166,11 @@ def test_bmeis_converts_dicom_in_container(monkeypatch, tmp_path) -> None:
     assert "Manufacturer = Heidelberg Engineering" in payload
 
 
-def test_bmeis_pyextra_binds_and_sets_pythonpath(monkeypatch, tmp_path) -> None:
-    _set_sifs(monkeypatch, bmeis="/sif/bmeis.sif")
-    monkeypatch.setattr(_config.settings, "bmeis_code", "/code/pr", raising=False)
-    monkeypatch.setattr(_config.settings, "bmeis_weights", "/weights/u2net", raising=False)
-    monkeypatch.setattr(_config.settings, "bmeis_pyextra", "/scratch/ri/pyextra", raising=False)
+def test_pr_pyextra_binds_and_sets_pythonpath(monkeypatch, tmp_path) -> None:
+    _set_sifs(monkeypatch, pr="/sif/pr.sif")
+    monkeypatch.setattr(_config.settings, "pr_code", "/code/pr", raising=False)
+    monkeypatch.setattr(_config.settings, "pr_weights", "/weights/u2net", raising=False)
+    monkeypatch.setattr(_config.settings, "pr_pyextra", "/scratch/ri/pyextra", raising=False)
     monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
 
     captured: dict = {}
@@ -171,6 +180,7 @@ def test_bmeis_pyextra_binds_and_sets_pythonpath(monkeypatch, tmp_path) -> None:
         out = tmp_path / "work" / "out"
         out.mkdir(parents=True, exist_ok=True)
         (out / "001-BMEIS.csv").write_text("size\n30\n40\n")
+        (out / "002-OB-OPR.csv").write_text("size\n50\n60\n")
         return ""
 
     monkeypatch.setattr(ap, "_exec", fake_exec)
@@ -178,7 +188,7 @@ def test_bmeis_pyextra_binds_and_sets_pythonpath(monkeypatch, tmp_path) -> None:
     dcm_dir = tmp_path / "in"
     dcm_dir.mkdir()
     ap.ApptainerAdapter().full_volume(
-        "bmeis", dcm_dir, "OD", out_dir_override=tmp_path / "work"
+        "pr", dcm_dir, "OD", out_dir_override=tmp_path / "work"
     )
 
     cmd = captured["cmd"]

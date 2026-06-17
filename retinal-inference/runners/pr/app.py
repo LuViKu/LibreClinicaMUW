@@ -1,17 +1,21 @@
-"""BMEIS model-runner (sese_pr) — photoreceptor boundary (BMEIS).
+"""PR (photoreceptor) model-runner (sese_pr) — BMEIS / OB-OPR boundaries.
 
 Thin FastAPI wrapper around the sese_pr inference script (vendor ``code/``
 copied into this image). sese_pr consumes MetaImage (``bscan.mhd``), so the
 runner first converts the shared ``bscan.dcm`` → ``bscan.mhd`` (SimpleITK),
-runs the script with ``--export_for_optimus``, and reads back the BMEIS
-boundary surface.
+runs the script with ``--export_for_optimus``, and reads back the boundary
+surfaces.
 
 sese_pr entry (process_input_for_optimus.py): positional CLI
 ``<original_database_path> <output_path> <model_path>``
 ``--export_for_optimus True --samples N`` →
-  001-...(BMEIS).csv     — upper photoreceptor interface (the deliverable)
+  001-...(BMEIS).csv     — upper photoreceptor interface
   002-...(OB_OPR).csv    — lower interface
-The primary metric here is the mean BMEIS depth (µm) = mean row × axial mm/px.
+The PR (photoreceptor) layer lies between BMEIS and OB-OPR.
+
+The server returns the raw surface CSVs only — the Java backend computes the
+clinical metric (PR depth/thickness in µm), so this runner does not compute it
+(``primary_metric_value``/``primary_metric_unit`` are ``None``).
 
 Confirm on first real build/run:
   * sese_pr is PyTorch 1.0 with full-pickle model.pkl — this image must carry a
@@ -19,33 +23,30 @@ Confirm on first real build/run:
     offline and load on modern torch (see README). The forced .cuda() in
     model_factory needs patching for CPU.
   * the model_path layout (.ini + .pkl dir; --ensemble for multi-model);
-  * the exact CSV filenames (globbed defensively);
-  * the clinical primary metric (mean BMEIS depth is a placeholder).
+  * the exact CSV filenames (globbed defensively).
 """
 
 from __future__ import annotations
 
-import csv
 import glob
 import os
 import subprocess
 from pathlib import Path
 
-import numpy as np
 import pydicom
 import SimpleITK as sitk
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-MODEL_VERSION = os.environ.get("RUNNER_BMEIS_MODEL_VERSION", "sese-pr-1.3")
-PR_CODE = os.environ.get("RUNNER_BMEIS_CODE", "/opt/sese_pr")
+MODEL_VERSION = os.environ.get("RUNNER_PR_MODEL_VERSION", "sese-pr-1.3")
+PR_CODE = os.environ.get("RUNNER_PR_CODE", "/opt/sese_pr")
 # Heidelberg/Spectralis uses the cross-entropy model (sese_pr MODEL_PATH_SPECTRALIS);
 # u2net-cirrus_v3 is for Cirrus/Topcon. Our OCT exports are Spectralis.
-WEIGHTS = os.environ.get("RUNNER_BMEIS_WEIGHTS", "/weights/u2net-cross-entropy")
-SAMPLES = os.environ.get("RUNNER_BMEIS_SAMPLES", "10")
+WEIGHTS = os.environ.get("RUNNER_PR_WEIGHTS", "/weights/u2net-cross-entropy")
+SAMPLES = os.environ.get("RUNNER_PR_SAMPLES", "10")
 
-app = FastAPI(title="retinal-runner-bmeis")
+app = FastAPI(title="retinal-runner-pr")
 
 
 class InferRequest(BaseModel):
@@ -57,17 +58,7 @@ class InferRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "task": "bmeis", "model_version": MODEL_VERSION}
-
-
-def _read_surface_csv(path: str) -> np.ndarray:
-    rows: list[list[float]] = []
-    with open(path, newline="") as f:
-        reader = csv.reader(f)
-        next(reader, None)  # size header
-        for line in reader:
-            rows.append([float(x) if x not in ("", "nan", "NaN") else np.nan for x in line])
-    return np.asarray(rows, dtype=float)
+    return {"status": "ok", "task": "pr", "model_version": MODEL_VERSION}
 
 
 @app.post("/infer")
@@ -131,16 +122,17 @@ def infer(req: InferRequest) -> dict:
             detail = f"sese_pr failed (exit {e.returncode}): {stderr_t or stdout_t}"
         raise HTTPException(status_code=500, detail=detail) from e
 
+    # The PR layer lies between the BMEIS and OB-OPR surfaces. The server returns
+    # both raw surface CSVs and the Java backend computes the clinical metric.
     bmeis = sorted(glob.glob(str(out / "*BMEIS*.csv")))
-    if not bmeis:
-        raise HTTPException(status_code=500, detail=f"sese_pr produced no BMEIS CSV in {out}")
-    surface = _read_surface_csv(bmeis[0])
-    depth_um = float(np.nanmean(surface)) * axial * 1000.0
+    ob_opr = sorted(glob.glob(str(out / "*OB?OPR*.csv"))) or sorted(glob.glob(str(out / "*OPR*.csv")))
+    if not bmeis or not ob_opr:
+        raise HTTPException(status_code=500, detail=f"sese_pr produced no BMEIS / OB-OPR CSVs in {out}")
 
     return {
-        "primary_metric_value": round(depth_um, 3),
-        "primary_metric_unit": "µm",
-        "output_payload": {"mean_bmeis_depth_um": round(depth_um, 3), "bmeis_csv": bmeis[0]},
+        "primary_metric_value": None,
+        "primary_metric_unit": None,
+        "output_payload": {"bmeis_csv": bmeis[0], "ob_opr_csv": ob_opr[0]},
         "en_face_mask_path": None,
         "bscan_masks_dir": str(out),
         "pixel_scale_mm": axial,

@@ -80,7 +80,7 @@ class OptimaAdapter(RetinalInferenceAdapter):
         self._runner_urls: dict[TaskName, str | None] = {
             "fluid": s.runner_fluid_url,
             "onl": s.runner_onl_url,
-            "bmeis": s.runner_bmeis_url,
+            "pr": s.runner_pr_url,
             "ga": s.runner_ga_url,
         }
 
@@ -142,10 +142,13 @@ class OptimaAdapter(RetinalInferenceAdapter):
             timeout=_config.settings.runner_timeout_s,
         )
 
+        # Server returns raw artifacts; the metric is optional (Java computes it).
+        metric_value = resp.get("primary_metric_value")
+        metric_unit = resp.get("primary_metric_unit")
         return FullVolumeResult(
             task=task,
-            primary_metric_value=float(resp["primary_metric_value"]),
-            primary_metric_unit=str(resp["primary_metric_unit"]),
+            primary_metric_value=None if metric_value is None else float(metric_value),
+            primary_metric_unit=None if metric_unit is None else str(metric_unit),
             output_payload=resp.get("output_payload", {}),
             en_face_mask_path=resp.get("en_face_mask_path"),
             bscan_masks_dir=resp.get("bscan_masks_dir", str(out_dir)),
