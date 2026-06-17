@@ -985,6 +985,31 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           </DenseTable>
         </section>
 
+        <!-- Phase E.7 Wave 4 — retinal scan results. The SubjectDetail
+             API doesn't expose the numeric study_subject_id, so we
+             can't call the subject-scoped retinal list endpoint
+             directly here; instead we surface a short banner pointing
+             operators at the per-event Retinal results panels that
+             EventDetailView renders. Wave 5 will add a
+             study-subject-OID-keyed read endpoint so we can list
+             retinal jobs aggregate to subject-detail too. -->
+        <section
+          v-if="subject.events.length > 0"
+          class="bg-white border border-slate-200 rounded-muw px-5 py-4 mb-5 text-xs text-slate-600"
+          data-testid="retinal-results-pointer"
+        >
+          <div class="flex items-center gap-2 mb-1">
+            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Retinal results
+            </span>
+          </div>
+          <p>
+            Retinal inference metrics are scoped per visit. Open any event above to see
+            the OCT inference jobs ({{ t('subjectDetail.openEvent') }} →) and click
+            "View metrics" on a job to launch the metrics viewer.
+          </p>
+        </section>
+
         <!-- Phase E.6 — per-eye modality baselines. One panel per
              in-scope eye (subject.studyEye includes the eye) and per
              transitioned-away eye that still has historic baselines
