@@ -111,14 +111,20 @@ RETINAL_INFERENCE_PR_WEIGHTS=/home/optima/octreader/Processor_Implementations/se
 ```
 - `GPU_DEVICE=0` — an idle card (GPU 3 was busy). For the pr task the CUDA-10 `.sif`
   runs on any of the 6, so no Turing pin needed.
-- `ga` is omitted above (validate-on-first-run, not blocked). All paths are known;
-  to enable it add:
+- `ga` is omitted above (host-native IOWA chain). To enable it add the block below.
+  The IOWA `OCTLayerSeg3.6` binary is `rwx------ octreader` (only that account can
+  run it) — run a copy you own. Both host binaries are CentOS-6-era builds: the IOWA
+  binary needs a modern `libstdc++` (GLIBCXX_3.4.20 — the conda env `lib`), and the
+  converter `dlopen`s `libcppxmlxercesadapter.so.1` which lives in
+  `drlresults/releasegcc4` (NOT in `prod/lib`, which only has the unversioned `.so`).
+  `GA_IOWA_LD_LIBRARY_PATH` must list all three dirs:
   ```
   RETINAL_INFERENCE_GA_SIF=/home/optima/octreader/Processor_Implementations/sese_ga/pytorch_optima_dl.v4.sif
   RETINAL_INFERENCE_GA_CODE=/home/optima/octreader/Processor_Implementations/sese_ga/code
   RETINAL_INFERENCE_GA_WEIGHTS=/home/optima/octreader/Processor_Implementations/sese_ga/weights/filly_checkpoints
-  RETINAL_INFERENCE_GA_IOWA_BINARY=/home/optima/octreader/OCTLayerSeg3.6
+  RETINAL_INFERENCE_GA_IOWA_BINARY=/home/optima/octreader/OCTLayerSeg3.6_owned_<user>
   RETINAL_INFERENCE_GA_IOWA_CONVERTER=/home/optima/octreader/optima-framework/deployment/prod/local_IOWA_LayerSegV3_to_CSV
+  RETINAL_INFERENCE_GA_IOWA_LD_LIBRARY_PATH=/scratch/$USER/ri-env/lib:/home/optima/octreader/optima-framework/deployment/prod/lib:/home/optima/octreader/optima/drlresults/releasegcc4
   ```
 - These `$PI` paths must be visible from the GPU compute node (they are — same NFS
   as `/scratch`); the adapter bind-mounts the code/weights dirs into the `.sif`.
