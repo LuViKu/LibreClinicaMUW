@@ -9,14 +9,30 @@ the remote ``/run``.
 Deployed as a small preprocess-only sidecar co-located with Tomcat on the app VM
 (``RETINAL_INFERENCE_PREPROCESS_ENDPOINT_ENABLED=true`` + an auth token; no GPU,
 no models, no adapter). Stateless: the tempdir is deleted before the response.
+
+In addition to streaming the DCM back inline, this endpoint:
+
+* Stamps 7 response headers carrying pixel geometry + the e2e UUID — the Java
+  adapter parses these into a ``PixelGeometry`` carried on ``RemoteRunResult``.
+* When ``RETINAL_INFERENCE_BSCAN_STORE`` is set + writable, persists three
+  companion files under ``<store>/<e2eUuid>/`` — ``bscan.dcm`` (atomic move),
+  ``fundus.png`` (PNG-encoded SLO), and ``geometry.json`` (registration
+  metadata). The bind mount lives under the artifact-store root so the GET
+  endpoint (Wave 3) can serve the files back to the SPA.
+* Dedups at the e2e-uuid level — a second call with the same .e2e finds the
+  bscan.dcm already there and skips the rewrite.
 """
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
+import os
 import tempfile
 from pathlib import Path
 
+import pydicom
 from fastapi import (
     APIRouter,
     File,
@@ -29,11 +45,17 @@ from fastapi import (
 )
 
 from retinal_inference import config as _config
-from retinal_inference.inference.e2e_parser import prepare_bscan_dcm
+from retinal_inference.inference.e2e_parser import prepare_bscan_dcm, read_e2e_volume
+from retinal_inference.inference.fundus_extract import build_geometry, extract_fundus_png
 
 LOG = logging.getLogger(__name__)
 
 router = APIRouter()
+
+_EXPOSED_HEADERS = (
+    "X-MUW-Pixel-Axial-Mm, X-MUW-Pixel-Lateral-Mm, X-MUW-Pixel-Slice-Mm, "
+    "X-MUW-Bscan-Dim-Z, X-MUW-Bscan-Dim-Y, X-MUW-Bscan-Dim-X, X-MUW-E2E-Uuid"
+)
 
 
 def _check_endpoint_enabled() -> None:
@@ -58,10 +80,81 @@ def _check_auth(token_header: str | None) -> None:
         )
 
 
+def _derive_uuid(body: bytes) -> str:
+    """Deterministic e2e UUID = first 36 chars of sha256(body) shaped as a UUID.
+
+    Same .e2e bytes -> same UUID across re-uploads, which is the whole point
+    of the dedup contract.
+    """
+    digest = hashlib.sha256(body).hexdigest()  # 64 hex chars
+    # Slot into 8-4-4-4-12 layout for downstream code that wants UUIDs.
+    return f"{digest[0:8]}-{digest[8:12]}-{digest[12:16]}-{digest[16:20]}-{digest[20:32]}"
+
+
+def _bscan_store_dir() -> Path | None:
+    """Resolve the per-e2e store root; return None when unconfigured / non-writable."""
+    raw = _config.settings.bscan_store
+    if raw is None:
+        return None
+    try:
+        store = Path(raw)
+        store.mkdir(parents=True, exist_ok=True)
+        # Probe writability with a sentinel; cleaner than catching mid-write.
+        if not os.access(store, os.W_OK):
+            LOG.warning("RETINAL_INFERENCE_BSCAN_STORE=%s is not writable; skipping persistence", store)
+            return None
+        return store
+    except OSError as e:  # noqa: BLE001
+        LOG.warning("RETINAL_INFERENCE_BSCAN_STORE=%s unusable (%s); skipping persistence", raw, e)
+        return None
+
+
+def _atomic_write(target: Path, payload: bytes) -> None:
+    """Write ``payload`` to ``target`` via a temp file + os.replace.
+
+    ``os.replace`` is atomic on POSIX when both paths are on the same FS,
+    which they are (both inside ``target.parent``).
+    """
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.parent / f"{target.name}.tmp.{os.getpid()}"
+    tmp.write_bytes(payload)
+    os.replace(tmp, target)
+
+
+def _persist_bscan_dcm(target: Path, dcm_bytes: bytes) -> bool:
+    """Write ``dcm_bytes`` to ``target`` unless an existing file matches the size.
+
+    Returns True when a write happened, False on a dedup-skip. Size match is a
+    cheap idempotency check — full hashing on every upload would cost more
+    than the rare race it'd catch (same e2e UUID + different bytes shouldn't
+    happen by construction).
+    """
+    if target.is_file() and target.stat().st_size == len(dcm_bytes):
+        LOG.info("dedup-skip bscan.dcm at %s (size match, %d bytes)", target, len(dcm_bytes))
+        return False
+    _atomic_write(target, dcm_bytes)
+    return True
+
+
+def _persist_fundus_png(target: Path, png_bytes: bytes) -> None:
+    if not png_bytes:
+        return
+    if target.is_file() and target.stat().st_size > 0:
+        LOG.info("dedup-skip fundus.png at %s (already non-empty)", target)
+        return
+    _atomic_write(target, png_bytes)
+
+
+def _persist_geometry(target: Path, geometry: dict) -> None:
+    payload = json.dumps(geometry, indent=2, sort_keys=True).encode("utf-8")
+    _atomic_write(target, payload)
+
+
 @router.post("/preprocess")
 async def preprocess(
     file: UploadFile = File(..., description="Heidelberg .e2e binary"),
     laterality: str | None = Form(default=None, description="OD or OS (informational; derived from the E2E)"),
+    e2e_uuid: str | None = Form(default=None, description="Optional e2e UUID; defaults to sha256(body)-derived"),
     x_muw_inference_token: str | None = Header(default=None),
 ) -> Response:
     _check_endpoint_enabled()
@@ -70,6 +163,8 @@ async def preprocess(
     body = await file.read()
     if not body:
         raise HTTPException(status_code=400, detail="file part is empty")
+
+    uuid = e2e_uuid.strip() if e2e_uuid and e2e_uuid.strip() else _derive_uuid(body)
 
     shared_tmpdir = _config.settings.shared_tmpdir
     shared_tmpdir.mkdir(parents=True, exist_ok=True)
@@ -88,9 +183,52 @@ async def preprocess(
             ) from e
         dcm_bytes = (Path(out_dir) / "bscan.dcm").read_bytes()
 
-    LOG.info("POST /preprocess -> bscan.dcm (%d bytes, laterality=%s)", len(dcm_bytes), laterality)
+        # Pixel geometry must come back to the Java client every call (the
+        # SPA doesn't care about the bind-mount but the runner does); we read
+        # it back out of the DCM the same conversion just wrote so it stays
+        # bit-identical to the headers.
+        ds = pydicom.dcmread(str(Path(out_dir) / "bscan.dcm"))
+        try:
+            bv = read_e2e_volume(e2e_path)
+        except Exception as e:  # noqa: BLE001 — already converted once, this is best-effort metadata
+            LOG.warning("Geometry read failed on %s: %s", e2e_path, e)
+            bv = None
+
+        # Companion file writes (best-effort; skipped when no store configured).
+        store = _bscan_store_dir()
+        if store is not None and bv is not None:
+            target_dir = store / uuid
+            try:
+                _persist_bscan_dcm(target_dir / "bscan.dcm", dcm_bytes)
+                fundus_png, fundus_dims = extract_fundus_png(e2e_path)
+                _persist_fundus_png(target_dir / "fundus.png", fundus_png)
+                geom = build_geometry(bv, ds, fundus_dims, e2e_path=e2e_path)
+                _persist_geometry(target_dir / "geometry.json", geom)
+            except Exception as e:  # noqa: BLE001 — never let companion-write failures break the request
+                LOG.warning("Companion persistence failed for %s: %s", uuid, e)
+        elif store is None:
+            LOG.info("bscan_store unset; skipping companion-file persistence for e2e %s", uuid)
+
+    LOG.info(
+        "POST /preprocess -> bscan.dcm (%d bytes, laterality=%s, e2e_uuid=%s)",
+        len(dcm_bytes),
+        laterality,
+        uuid,
+    )
+
+    headers = {"Content-Disposition": 'attachment; filename="bscan.dcm"'}
+    if bv is not None:
+        headers["X-MUW-Pixel-Axial-Mm"] = f"{bv.axial_mm:.8f}"
+        headers["X-MUW-Pixel-Lateral-Mm"] = f"{bv.lateral_mm:.8f}"
+        headers["X-MUW-Pixel-Slice-Mm"] = f"{bv.slice_mm:.8f}"
+        headers["X-MUW-Bscan-Dim-Z"] = str(int(bv.n_bscans))
+        headers["X-MUW-Bscan-Dim-Y"] = str(int(bv.rows))
+        headers["X-MUW-Bscan-Dim-X"] = str(int(bv.cols))
+    headers["X-MUW-E2E-Uuid"] = uuid
+    headers["Access-Control-Expose-Headers"] = _EXPOSED_HEADERS
+
     return Response(
         content=dcm_bytes,
         media_type="application/dicom",
-        headers={"Content-Disposition": 'attachment; filename="bscan.dcm"'},
+        headers=headers,
     )
