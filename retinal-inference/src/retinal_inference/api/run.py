@@ -1,9 +1,16 @@
 """POST /run — stateless full-volume inference (DR-022).
 
-Accepts a Heidelberg ``.e2e`` inline (multipart), runs the configured
-adapter against it in a fresh tempdir, base64-encodes the runner-produced
-artifacts into a JSON envelope, deletes the tempdir, and returns. Nothing
-about the scan volume persists past the response.
+Accepts a scan inline (multipart), runs the configured adapter against it in a
+fresh tempdir, base64-encodes the runner-produced artifacts into a JSON
+envelope, deletes the tempdir, and returns. Nothing about the scan volume
+persists past the response.
+
+The upload may be either a synthesized ``bscan.dcm`` (DICOM — the cluster
+``ApptainerAdapter`` is DICOM-only; the Java backend converts ``.e2e -> .dcm``
+app-side, DR-022) or a Heidelberg ``.e2e`` (the single-host dev ``OptimaAdapter``
+ingests the E2E itself). The input kind is auto-detected from the filename
+suffix and the DICOM Part-10 magic, and materialised under the right name so the
+adapter picks it up.
 
 Used when the Java side has ``core.retinalInference.remotePushUrl`` set — the
 sidecar runs on a remote GPU host and the institutional Tomcat reaches it
@@ -55,6 +62,26 @@ _IDEMPOTENCY_CACHE_MAX = 64
 _LATERALITIES: frozenset[str] = frozenset({"OD", "OS"})
 
 
+def _is_dicom(filename: str | None, body: bytes) -> bool:
+    """True if the upload is a DICOM (by suffix or Part-10 ``DICM`` magic)."""
+    if filename and filename.lower().endswith((".dcm", ".dicom")):
+        return True
+    # DICOM Part-10: 128-byte preamble followed by the "DICM" magic.
+    return len(body) >= 132 and body[128:132] == b"DICM"
+
+
+def _materialize_input(tempdir: Path, filename: str | None, body: bytes) -> Path:
+    """Write the upload under a name the adapter recognises and return its path.
+
+    DICOM -> ``bscan.dcm`` (ApptainerAdapter / cluster, DICOM-only);
+    otherwise ``input.e2e`` (OptimaAdapter / dev, ingests the E2E).
+    """
+    name = "bscan.dcm" if _is_dicom(filename, body) else "input.e2e"
+    path = tempdir / name
+    path.write_bytes(body)
+    return path
+
+
 def _check_auth(token_header: str | None) -> None:
     expected = _config.settings.auth_token
     if not expected:
@@ -87,7 +114,7 @@ def _record_idempotent(key: str, envelope: RunEnvelope) -> None:
 
 @router.post("/run", response_model=RunEnvelope, status_code=200)
 async def run(
-    file: UploadFile = File(..., description="Heidelberg .e2e binary"),
+    file: UploadFile = File(..., description="bscan.dcm (DICOM) or Heidelberg .e2e"),
     task: str = Form(..., description="One of fluid / onl / bmeis / ga"),
     laterality: str = Form(..., description="OD or OS"),
     x_muw_inference_token: str | None = Header(default=None),
@@ -145,8 +172,9 @@ async def _run_locked(
     # container (DR-022 § GPU-host topology).
     with tempfile.TemporaryDirectory(prefix="run_", dir=str(shared_tmpdir)) as td:
         tempdir = Path(td)
-        e2e_path = tempdir / "input.e2e"
-        e2e_path.write_bytes(body)
+        # DICOM -> bscan.dcm (cluster ApptainerAdapter); .e2e -> input.e2e (dev
+        # OptimaAdapter). The adapter resolves the path from its name.
+        input_path = _materialize_input(tempdir, file.filename, body)
 
         adapter = get_adapter()
         if not adapter.supports(task):
@@ -156,12 +184,11 @@ async def _run_locked(
             )
 
         try:
-            # The OptimaAdapter places the bscan.dcm at tempdir/bscan.dcm and
-            # passes that path to the runner; the runner writes its artifacts
-            # back into the same tempdir (host-bind shared).
+            # Both adapters write their artifacts back into the same tempdir
+            # (host-bind shared) via out_dir_override.
             result = adapter.full_volume(
                 task,
-                e2e_path,
+                input_path,
                 laterality,
                 out_dir_override=tempdir,
             )

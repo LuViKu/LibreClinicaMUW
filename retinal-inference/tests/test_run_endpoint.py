@@ -163,6 +163,34 @@ def test_run_empty_file_returns_400(client) -> None:
     assert r.status_code == 400
 
 
+def test_is_dicom_detection() -> None:
+    # by suffix
+    assert run_module._is_dicom("bscan.dcm", b"anything") is True
+    assert run_module._is_dicom("scan.DICOM", b"anything") is True
+    # by Part-10 magic (128-byte preamble + "DICM")
+    assert run_module._is_dicom("noext", b"\x00" * 128 + b"DICM" + b"rest") is True
+    # neither
+    assert run_module._is_dicom("input.e2e", b"E2E-FAKE") is False
+    assert run_module._is_dicom(None, b"short") is False
+
+
+def test_materialize_input_names_by_kind(tmp_path) -> None:
+    dcm = run_module._materialize_input(tmp_path, "x.dcm", b"\x00" * 132)
+    assert dcm.name == "bscan.dcm" and dcm.read_bytes() == b"\x00" * 132
+    e2e = run_module._materialize_input(tmp_path, "x.e2e", b"E2E")
+    assert e2e.name == "input.e2e" and e2e.read_bytes() == b"E2E"
+
+
+def test_run_accepts_dicom_upload(client) -> None:
+    # A DICOM upload (Part-10 magic) must be accepted and routed like a .e2e.
+    files = {"file": ("bscan.dcm", b"\x00" * 128 + b"DICM" + b"x", "application/dicom")}
+    data = {"task": "onl", "laterality": "OD"}
+    headers = {"X-MUW-Inference-Token": "secret-test-token"}
+    r = client.post("/run", files=files, data=data, headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["task"] == "onl"
+
+
 def test_run_tempdir_cleaned_up_after_response(client) -> None:
     files, data = _multipart()
     headers = {"X-MUW-Inference-Token": "secret-test-token"}
