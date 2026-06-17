@@ -100,8 +100,8 @@ public class OnlMetricTest {
                     new PixelGeometry(0.001, 0.01, 0.05, 3, 100, 5), "OD");
             fail("expected MetricComputationException");
         } catch (MetricComputationException ex) {
-            assertTrue("error must name the missing path: " + ex.getMessage(),
-                    ex.getMessage().contains("001-OPL-HFL.csv"));
+            assertTrue("error must reference the OPL-HFL surface: " + ex.getMessage(),
+                    ex.getMessage().contains("OPL-HFL"));
         }
     }
 }

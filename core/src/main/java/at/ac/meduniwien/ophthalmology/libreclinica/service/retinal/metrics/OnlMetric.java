@@ -35,14 +35,17 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.io.SurfaceGri
  */
 final class OnlMetric {
 
-    private static final String UPPER_CSV = "001-OPL-HFL.csv";
-    private static final String LOWER_CSV = "002-BMEIS.csv";
+    // The cluster emits long human-readable filenames like
+    // "001-OPL-Henle's fiber layer (OPL-HFL).csv" — we resolve by substring
+    // so both the canonical short form and the long form match.
+    private static final String UPPER_TOKEN = "OPL-HFL";
+    private static final String LOWER_TOKEN = "BMEIS";
 
     private OnlMetric() { }
 
     static ComputedMetrics compute(Path segDir, PixelGeometry geom, String laterality) {
         return ThicknessMetric.compute(segDir, geom, laterality,
-                UPPER_CSV, LOWER_CSV, "ONL");
+                UPPER_TOKEN, LOWER_TOKEN, "ONL");
     }
 
     /** Shared helper since ONL and PR differ only in surface filenames. */
@@ -51,15 +54,19 @@ final class OnlMetric {
         private ThicknessMetric() { }
 
         static ComputedMetrics compute(Path segDir, PixelGeometry geom, String laterality,
-                                       String upperCsv, String lowerCsv, String layerName) {
-            Path upper = segDir.resolve(upperCsv);
-            Path lower = segDir.resolve(lowerCsv);
-            if (!Files.isRegularFile(upper)) {
-                throw new MetricComputationException("missing artifact: " + upper);
+                                       String upperToken, String lowerToken, String layerName) {
+            Path upper = findSurface(segDir, upperToken);
+            Path lower = findSurface(segDir, lowerToken);
+            if (upper == null) {
+                throw new MetricComputationException(
+                        "no surface CSV matching '" + upperToken + "' in " + segDir);
             }
-            if (!Files.isRegularFile(lower)) {
-                throw new MetricComputationException("missing artifact: " + lower);
+            if (lower == null) {
+                throw new MetricComputationException(
+                        "no surface CSV matching '" + lowerToken + "' in " + segDir);
             }
+            String upperCsv = upper.getFileName().toString();
+            String lowerCsv = lower.getFileName().toString();
 
             SurfaceGrid up;
             SurfaceGrid lo;
@@ -131,6 +138,29 @@ final class OnlMetric {
 
             BigDecimal primary = BigDecimal.valueOf(thicknessValue).setScale(4, RoundingMode.HALF_UP);
             return new ComputedMetrics(primary, unit, payload);
+        }
+
+        /**
+         * Return the first {@code .csv} under {@code segDir} whose basename
+         * contains {@code token} (case-sensitive — runner filenames are
+         * fixed), or {@code null} when none match. Subdirectories are not
+         * walked: each task's outputs are flat.
+         */
+        static Path findSurface(Path segDir, String token) {
+            try (java.util.stream.Stream<Path> entries = Files.list(segDir)) {
+                return entries
+                        .filter(Files::isRegularFile)
+                        .filter(p -> {
+                            String n = p.getFileName().toString();
+                            return n.endsWith(".csv") && n.contains(token);
+                        })
+                        .sorted()
+                        .findFirst()
+                        .orElse(null);
+            } catch (IOException e) {
+                throw new MetricComputationException(
+                        "failed to list " + segDir + " while seeking '" + token + "'", e);
+            }
         }
     }
 }

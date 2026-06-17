@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.Set;
 
 import javax.sql.DataSource;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
@@ -40,8 +41,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.io.FileSystemResource;
-import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -338,7 +337,8 @@ public class RetinalResultsApiController {
     @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/artifacts/{name:.+}")
     public ResponseEntity<?> streamArtifact(@PathVariable("jobId") long jobId,
                                             @PathVariable("name") String name,
-                                            HttpSession session) {
+                                            HttpSession session,
+                                            HttpServletResponse response) {
         ResponseEntity<?> guard = guardSession(session);
         if (guard != null) return guard;
 
@@ -399,15 +399,35 @@ public class RetinalResultsApiController {
                     "message", "Failed to resolve artifact: " + ioEx.getMessage()));
         }
 
+        // Stream the bytes directly to the response — the application's
+        // configured HttpMessageConverter chain doesn't include
+        // ResourceHttpMessageConverter, so a ResponseEntity<Resource> would
+        // be picked up by Jackson and serialised as JSON (then fail on the
+        // ChannelInputStream property). Direct streaming sidesteps the
+        // converter selection entirely.
         MediaType mediaType = mediaTypeForName(name);
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(mediaType);
-        // Fundus + geometry don't change for a given e2eUuid — cache for an hour.
-        if ("fundus.png".equals(name) || "geometry.json".equals(name)) {
-            headers.setCacheControl(CacheControl.maxAge(Duration.ofHours(1)).cachePrivate());
+        response.setStatus(HttpServletResponse.SC_OK);
+        response.setContentType(mediaType.toString());
+        long size;
+        try {
+            size = Files.size(target);
+            response.setContentLengthLong(size);
+        } catch (IOException sizeEx) {
+            LOG.warn("Could not stat {} for Content-Length: {}", target, sizeEx.getMessage());
         }
-        Resource body = new FileSystemResource(target);
-        return ResponseEntity.ok().headers(headers).body(body);
+        if ("fundus.png".equals(name) || "geometry.json".equals(name)) {
+            response.setHeader(HttpHeaders.CACHE_CONTROL,
+                    CacheControl.maxAge(Duration.ofHours(1)).cachePrivate().getHeaderValue());
+        }
+        try {
+            Files.copy(target, response.getOutputStream());
+            response.getOutputStream().flush();
+        } catch (IOException copyEx) {
+            LOG.error("Failed to stream artifact '{}' for job {}: {}",
+                    name, jobId, copyEx.getMessage());
+            // Headers were already sent — best we can do is abort the body.
+        }
+        return null;
     }
 
     /* ====================================================================== */

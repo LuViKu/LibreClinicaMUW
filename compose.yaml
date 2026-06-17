@@ -52,6 +52,12 @@ services:
       # back through the same in-container path. The host bind makes
       # the two containers share the file via ./docker/e2e-uploads/.
       - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads
+      # DR-022: retinal artifact store — the preprocess sidecar writes the
+      # per-source-scan companion files under bscans/<e2eUuid>/ and the run
+      # branch persists segmentation outputs under segs/<jobUuid>/ here.
+      # The viewer's artifact-stream endpoint reads them back. Shared with
+      # the retinal-preprocess service at the same in-container path.
+      - ./docker/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts
     develop:
       watch:
         # restart on config file changes
@@ -173,13 +179,24 @@ services:
       RETINAL_INFERENCE_WORKER_ENABLED: "false"
       RETINAL_INFERENCE_RUN_ENDPOINT_ENABLED: "false"
       RETINAL_INFERENCE_PREPROCESS_ENDPOINT_ENABLED: "true"
-      RETINAL_INFERENCE_AUTH_TOKEN: ${RETINAL_INFERENCE_PREPROCESS_TOKEN:-}
+      # Must match core.retinalInference.preprocessToken in datainfo.properties.
+      # Override at deploy time via the env var if /etc/libreclinica/env is in
+      # use; the inlined value here is the dev default committed alongside the
+      # matching datainfo value (single-sysadmin posture per DR-022 runbook).
+      RETINAL_INFERENCE_AUTH_TOKEN: ${RETINAL_INFERENCE_PREPROCESS_TOKEN:-cb2e7d0edd4d54cd8af46bbef78755a7}
       RETINAL_INFERENCE_SHARED_TMPDIR: /var/lib/retinal-inference/tmp
+      # DR-022 Wave 1A: sidecar persists three companion files per source
+      # .e2e here — bscan.dcm + fundus.png + geometry.json. The libreclinica
+      # container reads them through the same bind via
+      # core.retinalInference.bscanStorePath.
+      RETINAL_INFERENCE_BSCAN_STORE: /var/lib/libreclinica/retinal-artifacts/bscans
     volumes:
       # Same RO bind as the main service so the preprocess sidecar can read
       # the .e2e the libreclinica controller persisted.
       - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
       - ./docker/retinal-tmp:/var/lib/retinal-inference/tmp
+      # Writable bind for the per-source-scan companion files.
+      - ./docker/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts
     cpus: "2.0"
     mem_limit: 2g
     healthcheck:

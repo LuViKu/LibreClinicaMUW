@@ -22,13 +22,16 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.PixelGeometry
  */
 final class PrMetric {
 
-    private static final String UPPER_CSV = "001-BMEIS.csv";
-    private static final String LOWER_CSV = "002-OB-OPR.csv";
+    // The cluster's PR runner emits filenames like
+    // "002-Outer boundary of OPR (OB_OPR).csv" — substring tokens cover both
+    // short and long forms.
+    private static final String UPPER_TOKEN = "BMEIS";
+    private static final String LOWER_TOKEN = "OPR";
 
     private PrMetric() { }
 
     static ComputedMetrics compute(Path segDir, PixelGeometry geom, String laterality) {
         return OnlMetric.ThicknessMetric.compute(segDir, geom, laterality,
-                UPPER_CSV, LOWER_CSV, "PR");
+                UPPER_TOKEN, LOWER_TOKEN, "PR");
     }
 }
