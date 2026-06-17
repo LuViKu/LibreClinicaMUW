@@ -115,6 +115,12 @@ class Settings(BaseSettings):
     # infer_sample_filly.py's --LayerSegPath expects. On the OPTIMA host:
     #   /home/optima/octreader/optima-framework/deployment/prod/local_IOWA_LayerSegV3_to_CSV
     ga_iowa_converter: str | None = None
+    # Colon-joined dirs prepended to LD_LIBRARY_PATH when running the IOWA binary
+    # + converter (host-native CentOS-6-era builds): a modern libstdc++
+    # (GLIBCXX_3.4.20 — e.g. the conda env lib) for the binary, and the framework
+    # lib dir (xerces etc.) for the converter. On the OPTIMA host e.g.:
+    #   /scratch/$USER/ri-env/lib:/home/optima/octreader/optima-framework/deployment/prod/lib
+    ga_iowa_ld_library_path: str | None = None
     ga_threshold: str = "0.5"
 
 

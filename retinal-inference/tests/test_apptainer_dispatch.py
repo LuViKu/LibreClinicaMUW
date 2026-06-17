@@ -196,6 +196,48 @@ def test_pr_pyextra_binds_and_sets_pythonpath(monkeypatch, tmp_path) -> None:
     assert "PYTHONPATH='/scratch/ri/pyextra'" in cmd[-1]  # on the run cmd
 
 
+def test_ga_iowa_chain_libs_and_rmdir(monkeypatch, tmp_path) -> None:
+    # GA host chain: IOWA binary + converter run with GA_IOWA_LD_LIBRARY_PATH on
+    # LD_LIBRARY_PATH; the converter gets --rmdir_out 1 and its out dir is NOT
+    # pre-created. Server returns the RPEL CSV (metric None).
+    _set_sifs(monkeypatch, ga="/sif/ga.sif")
+    monkeypatch.setattr(_config.settings, "ga_code", "/code/ga", raising=False)
+    monkeypatch.setattr(_config.settings, "ga_weights", "/weights/filly", raising=False)
+    monkeypatch.setattr(_config.settings, "ga_iowa_binary", "/scratch/ri/OCTLayerSeg3.6_owned", raising=False)
+    monkeypatch.setattr(_config.settings, "ga_iowa_converter", "/fw/local_IOWA_LayerSegV3_to_CSV", raising=False)
+    monkeypatch.setattr(_config.settings, "ga_iowa_ld_library_path", "/conda/lib:/fw/lib", raising=False)
+    monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
+
+    calls: list = []
+
+    def fake_exec(cmd, env=None):
+        calls.append((cmd, env))
+        if any("infer_sample_filly.py" in c for c in cmd):
+            out = tmp_path / "work" / "out"
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "001-RPEL.csv").write_text("size\n1\n2\n")
+        return ""
+
+    monkeypatch.setattr(ap, "_exec", fake_exec)
+
+    dcm_dir = tmp_path / "in"
+    dcm_dir.mkdir()
+    res = ap.ApptainerAdapter().full_volume(
+        "ga", dcm_dir, "OD", out_dir_override=tmp_path / "work"
+    )
+
+    assert res.task == "ga"
+    assert res.primary_metric_value is None
+    assert res.output_payload["rpel_csv"] == "001-RPEL.csv"
+    # IOWA binary call carries LD_LIBRARY_PATH with the configured dirs.
+    iowa = next((c, e) for c, e in calls if c[0].endswith("OCTLayerSeg3.6_owned"))
+    assert iowa[1] and "/conda/lib:/fw/lib" in iowa[1]["LD_LIBRARY_PATH"]
+    # Converter call uses --rmdir_out 1 and the same LD env.
+    conv = next((c, e) for c, e in calls if any("local_IOWA_LayerSegV3_to_CSV" in x for x in c))
+    assert "--rmdir_out" in conv[0] and conv[0][conv[0].index("--rmdir_out") + 1] == "1"
+    assert conv[1] and "LD_LIBRARY_PATH" in conv[1]
+
+
 def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:
     _set_sifs(monkeypatch, fluid="/sif/fluid_segmentation.sif")
     monkeypatch.setattr(_config.settings, "apptainer_use_slurm", True, raising=False)

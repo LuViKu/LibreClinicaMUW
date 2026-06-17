@@ -264,22 +264,35 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         out.mkdir(parents=True, exist_ok=True)
         layerseg.mkdir(parents=True, exist_ok=True)
         dcm = dcm_dir / "bscan.dcm"
+        # The IOWA binary + converter are host-native (CentOS-6-era) builds needing
+        # extra shared libs: the binary wants a modern libstdc++ (GLIBCXX_3.4.20,
+        # e.g. the conda env lib) and the converter wants the framework lib dir
+        # (xerces etc.). GA_IOWA_LD_LIBRARY_PATH supplies both (colon-joined); we
+        # prepend it to LD_LIBRARY_PATH for these two host execs.
+        iowa_env: dict[str, str] = {}
+        if s.ga_iowa_ld_library_path:
+            existing = os.environ.get("LD_LIBRARY_PATH", "")
+            iowa_env["LD_LIBRARY_PATH"] = (
+                f"{s.ga_iowa_ld_library_path}:{existing}"
+                if existing else s.ga_iowa_ld_library_path
+            )
         # Step 1: IOWA layer segmentation — native host binary OCTLayerSeg3.6
         # (licensed, not a .sif), emits lres.xml. Matches sese_iowa_layer_vrcbin.py.
         _exec([s.ga_iowa_binary or "OCTLayerSeg3.6", "-oM", str(dcm),
                str(layerseg / "lres.xml"), str(layerseg / "t1.xml"),
-               str(layerseg / "t2.tif"), str(layerseg / "t3.xml")])
+               str(layerseg / "t2.tif"), str(layerseg / "t3.xml")], iowa_env or None)
         # Step 1b: convert the IOWA XML -> a folder of 11 layer CSVs, which is what
         # infer_sample_filly.py's --LayerSegPath consumes (it reads them via
         # prepare_filly.resample_oct, and rpe = layers[:, 10]). The raw lres.xml is
         # NOT directly consumable. Converter = local_IOWA_LayerSegV3_to_CSV.
-        # Flags confirmed against the converter's --help on cn5 (iowaxml_ls -> csv
-        # folder; --aScanMode is unsupported for iowaxml_ls input, so omitted).
+        # Flags confirmed on cn5: iowaxml_ls -> csv folder; --aScanMode unsupported
+        # for iowaxml_ls; the converter REFUSES a pre-existing --out dir, so don't
+        # create it and pass --rmdir_out 1.
         layers_csv = work / "layers_csv"
-        layers_csv.mkdir(parents=True, exist_ok=True)
         _exec([s.ga_iowa_converter or "local_IOWA_LayerSegV3_to_CSV",
                "--in", str(layerseg / "lres.xml"), "--intype", "iowaxml_ls",
-               "--out", str(layers_csv), "--outtype", "csv"])
+               "--out", str(layers_csv), "--outtype", "csv", "--rmdir_out", "1"],
+              iowa_env or None)
         # Step 2: GA model in the .sif.
         code = Path(s.ga_code or "/opt/sese_ga/code")
         weights = Path(s.ga_weights or "/weights/filly_checkpoints")
