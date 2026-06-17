@@ -283,22 +283,31 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             raise UnsupportedTaskError(
                 f"Task '{task}' has no configured .sif in this deployment"
             )
-        # Input is already a bscan.dcm (Java preprocessed the .e2e).
-        dcm_dir, _dcm = _resolve_dcm(Path(e2e_path))
-
+        src = Path(e2e_path)
         handler = {"fluid": self._fluid, "onl": self._onl,
                    "bmeis": self._bmeis, "ga": self._ga}[task]
+
+        def _run_in(work: Path) -> dict[str, Any]:
+            # /run delivers a .e2e (multipart) → ingest to bscan.dcm here;
+            # if a .dcm/dir is passed instead, use it directly.
+            if src.suffix.lower() == ".e2e":
+                from .e2e_parser import prepare_bscan_dcm
+
+                dcm_dir = prepare_bscan_dcm(src, work / "ingest")
+            else:
+                dcm_dir, _ = _resolve_dcm(src)
+            return handler(dcm_dir, work)
 
         if out_dir_override is not None:
             work = Path(out_dir_override)
             work.mkdir(parents=True, exist_ok=True)
-            res = handler(dcm_dir, work)
+            res = _run_in(work)
             bscan_masks_dir = str(work)
         else:
             with tempfile.TemporaryDirectory(
                 dir=str(_config.settings.shared_tmpdir)
             ) as tmp:
-                res = handler(dcm_dir, Path(tmp))
+                res = _run_in(Path(tmp))
                 bscan_masks_dir = None  # stateless: outputs not persisted
 
         return FullVolumeResult(
