@@ -233,10 +233,16 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         # INSIDE the .sif (it ships SimpleITK; the host dispatcher stays thin), in
         # the same exec as the model run via bash -c. Paths are tmpdirs under
         # /scratch (no spaces), so the inline quoting is safe.
-        convert = (
-            f"python -c 'import SimpleITK as sitk; "
-            f'sitk.WriteImage(sitk.ReadImage("{dcm}"), "{mhd_file}")\''
+        # Also append a `Manufacturer = Heidelberg Engineering` line: the vendor
+        # code reads it from the .mhd header to pick the Spectralis resize path
+        # (496x512); SimpleITK doesn't carry the DICOM Manufacturer tag across, and
+        # its absence raises KeyError for any off-spec volume dimensions.
+        pycode = (
+            "import SimpleITK as sitk; "
+            f'sitk.WriteImage(sitk.ReadImage("{dcm}"), "{mhd_file}"); '
+            f'open("{mhd_file}", "a").write("Manufacturer = Heidelberg Engineering\\n")'
         )
+        convert = f"python -c '{pycode}'"
         run_model = (
             f"{pythonpath}python '{code / 'process_input_for_optimus.py'}' "
             f"'{mhd_file}' '{out}' '{weights}' "

@@ -153,6 +153,8 @@ def test_bmeis_converts_dicom_in_container(monkeypatch, tmp_path) -> None:
     assert "SimpleITK" in payload and "bscan.mhd" in payload
     assert "process_input_for_optimus.py" in payload
     assert "--export_for_optimus True" in payload
+    # Manufacturer must be injected into the .mhd (vendor reads it for the resize path)
+    assert "Manufacturer = Heidelberg Engineering" in payload
 
 
 def test_bmeis_pyextra_binds_and_sets_pythonpath(monkeypatch, tmp_path) -> None:
