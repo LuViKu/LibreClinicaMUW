@@ -281,6 +281,16 @@ const router = createRouter({
       component: () => import('@/views/ModalitiesView.vue'),
       meta: { title: 'Modalitäten', role: 'Administrator' as const },
     },
+    /* Phase E.7 Wave 4 — Retinal scan metrics viewer. */
+    {
+      path: '/retinal-jobs/:jobId(\\d+)',
+      name: 'retinal-job',
+      component: () => import('@/views/RetinalMetricsView.vue'),
+      meta: {
+        title: 'Retinal scan metrics',
+        role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
+      },
+    },
     /* Phase E.6 — Patient Overview (cross-study, keyed on the underlying
        patient rather than the active-study study-subject label). */
     {
