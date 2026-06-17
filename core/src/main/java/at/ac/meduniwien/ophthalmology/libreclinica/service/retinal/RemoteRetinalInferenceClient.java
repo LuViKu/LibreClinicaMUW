@@ -112,16 +112,21 @@ public class RemoteRetinalInferenceClient {
         // co-located with Tomcat does the (PHI-redacting) conversion and we forward
         // only the bscan.dcm. When unset, post the .e2e as-is (the single-host dev
         // OptimaAdapter ingests the E2E itself).
+        PreprocessResult prep = null;
         String prepUrl = preprocessUrl();
         if (prepUrl != null && !prepUrl.isBlank()) {
-            byte[] dcm = preprocessToDicom(rest, prepUrl, jobId, fileName, bytes, laterality);
-            if (dcm == null) {
+            // Derive the e2e UUID from the file basename (strip the .e2e suffix);
+            // the uploads service names files {uuid}.e2e so this stays stable
+            // across re-uploads of the same scan.
+            String derivedUuid = stripE2eSuffix(fileName);
+            prep = preprocessToDicom(rest, prepUrl, jobId, fileName, bytes, laterality, derivedUuid);
+            if (prep == null || prep.dcmBytes() == null) {
                 // Conversion failed — return null so the caller reverts the job and
                 // the local fallback path drains it, rather than POSTing a raw .e2e
                 // the DICOM-only cluster adapter would reject.
                 return null;
             }
-            bytes = dcm;
+            bytes = prep.dcmBytes();
             fileName = "bscan.dcm";
         }
 
@@ -153,12 +158,40 @@ public class RemoteRetinalInferenceClient {
             }
             @SuppressWarnings("unchecked")
             Map<String, Object> b = (Map<String, Object>) resp.getBody();
-            return parseEnvelope(b);
+            RemoteRunResult parsed = parseEnvelope(b);
+            if (prep != null) {
+                // Thread the preprocess-derived geometry + e2e UUID through; the
+                // /run envelope itself doesn't carry pixel geometry (the runners
+                // read it off the DCM tags directly).
+                parsed = new RemoteRunResult(
+                        parsed.modelVersion(),
+                        parsed.primaryMetricValue(),
+                        parsed.primaryMetricUnit(),
+                        parsed.outputPayload(),
+                        parsed.confidence(),
+                        parsed.artifacts(),
+                        parsed.task(),
+                        parsed.laterality(),
+                        prep.geometry(),
+                        prep.e2eUuid()
+                );
+            }
+            return parsed;
         } catch (Exception e) {
             LOG.warn("Remote /run failed for job {} (task={}) at {}: {}",
                     jobId, task, endpoint, e.getMessage());
             return null;
         }
+    }
+
+    private static String stripE2eSuffix(String fileName) {
+        if (fileName == null || fileName.isBlank()) return "";
+        String n = fileName;
+        int dot = n.lastIndexOf('.');
+        if (dot > 0 && n.substring(dot).equalsIgnoreCase(".e2e")) {
+            return n.substring(0, dot);
+        }
+        return n;
     }
 
     private static RestTemplate restTemplate(long timeoutMs) {
@@ -170,16 +203,17 @@ public class RemoteRetinalInferenceClient {
 
     /**
      * POST the {@code .e2e} to {@code ${preprocessUrl}/preprocess} and return the
-     * PHI-redacted {@code bscan.dcm} bytes, or {@code null} on any failure (so the
-     * caller reverts + falls back rather than shipping a raw E2E to the
-     * DICOM-only cluster adapter).
+     * PHI-redacted {@code bscan.dcm} bytes + parsed pixel geometry, or {@code null}
+     * on any failure (so the caller reverts + falls back rather than shipping a
+     * raw E2E to the DICOM-only cluster adapter).
      */
-    private byte[] preprocessToDicom(RestTemplate rest,
-                                     String prepUrl,
-                                     long jobId,
-                                     String e2eName,
-                                     byte[] e2eBytes,
-                                     String laterality) {
+    private PreprocessResult preprocessToDicom(RestTemplate rest,
+                                               String prepUrl,
+                                               long jobId,
+                                               String e2eName,
+                                               byte[] e2eBytes,
+                                               String laterality,
+                                               String e2eUuid) {
         String token = preprocessToken();
         if (token == null || token.isBlank()) {
             LOG.warn("Preprocess URL set but no token "
@@ -196,6 +230,9 @@ public class RemoteRetinalInferenceClient {
         if (laterality != null) {
             body.add("laterality", laterality);
         }
+        if (e2eUuid != null && !e2eUuid.isBlank()) {
+            body.add("e2e_uuid", e2eUuid);
+        }
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
@@ -209,13 +246,28 @@ public class RemoteRetinalInferenceClient {
                 LOG.warn("Preprocess returned empty body for job {} at {}", jobId, endpoint);
                 return null;
             }
-            return resp.getBody();
+            PixelGeometry geom = null;
+            try {
+                geom = PixelGeometry.from(resp.getHeaders());
+            } catch (IllegalStateException missingHeaders) {
+                // Soft-fail: an older preprocess deploy may not yet stamp the 7
+                // headers. The DCM round-trip still works; geometry-dependent
+                // features (metric computer, viewer overlays) skip those steps.
+                LOG.warn("Preprocess didn't stamp geometry headers for job {} ({}); "
+                        + "continuing without geometry", jobId, missingHeaders.getMessage());
+            }
+            String echoedUuid = resp.getHeaders().getFirst(PixelGeometry.HEADER_E2E_UUID);
+            String resolvedUuid = (echoedUuid == null || echoedUuid.isBlank()) ? e2eUuid : echoedUuid;
+            return new PreprocessResult(resp.getBody(), geom, resolvedUuid);
         } catch (Exception e) {
             LOG.warn("Preprocess /preprocess failed for job {} at {}: {}",
                     jobId, endpoint, e.getMessage());
             return null;
         }
     }
+
+    /** DR-022 carrier — bscan.dcm bytes + geometry parsed off the response headers. */
+    record PreprocessResult(byte[] dcmBytes, PixelGeometry geometry, String e2eUuid) { }
 
     @SuppressWarnings("unchecked")
     private static RemoteRunResult parseEnvelope(Map<String, Object> b) {

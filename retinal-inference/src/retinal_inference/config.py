@@ -62,6 +62,13 @@ class Settings(BaseSettings):
     auth_token: str | None = None
     shared_tmpdir: Path = Path("/var/lib/retinal-inference/tmp")
 
+    # Host-bind for the per-E2E artifact spine the app-VM /preprocess writes to.
+    # When set + writable, /preprocess persists <e2eUuid>/{bscan.dcm,fundus.png,
+    # geometry.json} so the Java backend's GET endpoint can serve them later.
+    # Leaving this unset is the standalone-sidecar mode (tests / local dev that
+    # only need the response body + headers; no bind mount required).
+    bscan_store: Path | None = None
+
     # --- /preprocess endpoint (DR-022, app-VM side) --------------------------
     # The cluster ApptainerAdapter is DICOM-only, and the PHI-bearing .e2e must
     # not leave the app VM. A preprocess-only sidecar runs on the app VM with

@@ -130,11 +130,19 @@ public class RemoteRetinalInferenceClientTest {
     /** Handler that replies with raw bytes under a given content type (the
      *  /preprocess sidecar returning application/dicom). */
     private void registerBinaryHandler(String path, int status, byte[] payload, String contentType) {
+        registerBinaryHandler(path, status, payload, contentType, Map.of());
+    }
+
+    /** Same as above but also stamps the supplied response headers — used to
+     *  simulate the DR-022 preprocess sidecar's 7 X-MUW headers. */
+    private void registerBinaryHandler(String path, int status, byte[] payload,
+                                       String contentType, Map<String, String> extraHeaders) {
         server.createContext(path, exchange -> {
             try (var in = exchange.getRequestBody()) {
                 in.readAllBytes();
             }
             exchange.getResponseHeaders().set("Content-Type", contentType);
+            extraHeaders.forEach((k, v) -> exchange.getResponseHeaders().set(k, v));
             exchange.sendResponseHeaders(status, payload.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(payload);
@@ -250,10 +258,18 @@ public class RemoteRetinalInferenceClientTest {
 
     @Test
     public void runRemote_preprocessesE2eToDicom_whenPreprocessUrlSet() throws IOException {
-        // /preprocess returns a DICOM blob (Part-10 magic); /run captures the body.
+        // /preprocess returns a DICOM blob (Part-10 magic) AND the 7 DR-022 headers.
         byte[] dicom = new byte[140];
         System.arraycopy("DICM".getBytes(StandardCharsets.UTF_8), 0, dicom, 128, 4);
-        registerBinaryHandler("/preprocess", 200, dicom, "application/dicom");
+        Map<String, String> geomHeaders = new HashMap<>();
+        geomHeaders.put(PixelGeometry.HEADER_AXIAL_MM, "0.00387");
+        geomHeaders.put(PixelGeometry.HEADER_LATERAL_MM, "0.01155");
+        geomHeaders.put(PixelGeometry.HEADER_SLICE_MM, "0.12100");
+        geomHeaders.put(PixelGeometry.HEADER_DIM_Z, "49");
+        geomHeaders.put(PixelGeometry.HEADER_DIM_Y, "496");
+        geomHeaders.put(PixelGeometry.HEADER_DIM_X, "512");
+        geomHeaders.put(PixelGeometry.HEADER_E2E_UUID, "deadbeef-cafe-1234");
+        registerBinaryHandler("/preprocess", 200, dicom, "application/dicom", geomHeaders);
         AtomicReference<byte[]> runBody = new AtomicReference<>();
         registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{9}), runBody);
 
@@ -268,6 +284,35 @@ public class RemoteRetinalInferenceClientTest {
         assertTrue("multipart carries the bscan.dcm filename", received.contains("filename=\"bscan.dcm\""));
         assertTrue("multipart carries the DICOM magic", received.contains("DICM"));
         assertFalse("raw E2E bytes must not be forwarded", received.contains("FAKE-E2E-BYTES"));
+        // DR-022 geometry plumbed through to RemoteRunResult.
+        assertNotNull("preprocess geometry should be parsed off response headers", result.geometry());
+        assertEquals(0.00387, result.geometry().axialMm(), 1e-9);
+        assertEquals(0.01155, result.geometry().lateralMm(), 1e-9);
+        assertEquals(0.12100, result.geometry().sliceMm(), 1e-9);
+        assertEquals(49, result.geometry().dimZ());
+        assertEquals(496, result.geometry().dimY());
+        assertEquals(512, result.geometry().dimX());
+        assertEquals("deadbeef-cafe-1234", result.e2eUuid());
+    }
+
+    @Test
+    public void runRemote_softFailsGeometry_whenPreprocessHasNoHeaders() throws IOException {
+        // Preprocess returns a DICOM but doesn't stamp the X-MUW headers (old deploy).
+        // Java should soft-fail: result.geometry() is null but the run still succeeds.
+        byte[] dicom = new byte[140];
+        System.arraycopy("DICM".getBytes(StandardCharsets.UTF_8), 0, dicom, 128, 4);
+        registerBinaryHandler("/preprocess", 200, dicom, "application/dicom");
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+        client.prepUrl = client.url;
+
+        RemoteRunResult result = client.runRemote(99L, "fluid", e2eFile.toString(), "OD");
+
+        assertNotNull("run should still succeed without geometry headers", result);
+        assertNull("geometry must be null when headers missing", result.geometry());
+        // The e2e UUID falls back to the derived basename when the header is absent.
+        assertNotNull(result.e2eUuid());
+        assertFalse(result.e2eUuid().isBlank());
     }
 
     @Test
