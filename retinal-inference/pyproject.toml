@@ -16,12 +16,11 @@ dependencies = [
     "pydantic==2.10.4",
     "pydantic-settings==2.7.0",
     "psycopg2-binary==2.9.10",
-    "pillow==11.0.0",
-    # E2E -> bscan.dcm ingestion (OptimaAdapter). Reads Heidelberg .e2e and
-    # writes the multi-frame DICOM the model-runners consume.
-    "oct-converter==0.7.0",
     "pydicom==3.0.2",
-    "numpy==2.4.6",
+    # numpy>=2.1 dropped glibc-2.17 (manylinux2014) wheels, which the CentOS 7
+    # GPU cluster needs. A floor keeps modern deploys current; pin numpy<2.1 at
+    # install time on the cluster (see docs/cluster-deployment.md §2).
+    "numpy>=1.26",
     # FastAPI multipart parsing for POST /run (DR-022). UploadFile+Form rely on
     # python-multipart at request time even though it's not a direct fastapi
     # dependency.
@@ -29,6 +28,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# E2E -> bscan.dcm ingestion (app-VM /preprocess + single-host dev OptimaAdapter).
+# The DICOM-only cluster run-only deploy does NOT need these — oct-converter is
+# imported lazily, so the package imports fine without them installed.
+ingest = [
+    "oct-converter==0.7.0",
+    "pillow==11.0.0",
+]
 dev = [
     "pytest>=8.3",
     "httpx>=0.27",

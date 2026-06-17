@@ -68,11 +68,26 @@ the `.sif` on a box where you have sudo/root and copy it over, or use a remote
 builder — the `.def` itself is unchanged.
 
 ## 2. The server (bare Python, NOT in a container — it launches the .sif's)
+CentOS 7 caveats: the module system tops out at Python 3.9 (we need ≥3.11), so use
+a Miniconda env, and a pre-2024 installer (the latest needs glibc ≥2.28; cn7 has
+2.17):
+```sh
+cd /scratch/$USER
+wget -q https://repo.anaconda.com/miniconda/Miniconda3-py311_23.11.0-2-Linux-x86_64.sh
+bash Miniconda3-py311_23.11.0-2-Linux-x86_64.sh -b -p /scratch/$USER/miniconda3
+/scratch/$USER/miniconda3/bin/conda create -y -p /scratch/$USER/ri-env python=3.11
+source /scratch/$USER/miniconda3/bin/activate /scratch/$USER/ri-env
+```
+Install the **run-only** server (no `ingest` extra — the cluster never converts
+E2E; that's app-side). Pin `numpy<2.1` so pip uses a glibc-2.17 wheel instead of
+building numpy ≥2.1 from source (cn7's GCC 4.8.5 is too old):
 ```sh
 cd <repo>/retinal-inference
-python3.11 -m venv .venv && . .venv/bin/activate && pip install -e .
+pip install -e . "numpy<2.1"
 mkdir -p /scratch/$USER/retinal-inference/tmp
 ```
+(The app-VM preprocess sidecar — §5b — installs `pip install -e ".[ingest]"` to
+pull `oct-converter`; on a modern-glibc app VM no numpy pin is needed.)
 
 ## 3. Run — direct mode (works now, no SLURM account needed)
 ```sh
@@ -132,7 +147,11 @@ curl -sS -m5 -o /dev/null -w "%{http_code}\n" http://149.148.108.173:8000/health
 ### 5b. App-VM preprocess sidecar (DICOM-only cluster)
 The cluster `ApptainerAdapter` rejects `.e2e` — the `.e2e → bscan.dcm` conversion
 (PHI redaction included) happens **app-side** so the PHI-bearing E2E never leaves
-the app VM. Run a tiny preprocess-only sidecar next to Tomcat (no GPU, no models):
+the app VM. Run a tiny preprocess-only sidecar next to Tomcat (no GPU, no models).
+Install **with** the `ingest` extra (this side does need `oct-converter`):
+```sh
+pip install -e ".[ingest]"
+```
 ```sh
 RETINAL_INFERENCE_PREPROCESS_ENDPOINT_ENABLED=true \
 RETINAL_INFERENCE_AUTH_TOKEN=<app-vm secret> \
