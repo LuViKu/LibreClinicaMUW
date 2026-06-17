@@ -246,19 +246,31 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         out.mkdir(parents=True, exist_ok=True)
         layerseg.mkdir(parents=True, exist_ok=True)
         dcm = dcm_dir / "bscan.dcm"
-        # Step 1: IOWA layer segmentation (native binary on the host).
+        # Step 1: IOWA layer segmentation — native host binary OCTLayerSeg3.6
+        # (licensed, not a .sif), emits lres.xml. Matches sese_iowa_layer_vrcbin.py.
         _exec([s.ga_iowa_binary or "OCTLayerSeg3.6", "-oM", str(dcm),
                str(layerseg / "lres.xml"), str(layerseg / "t1.xml"),
                str(layerseg / "t2.tif"), str(layerseg / "t3.xml")])
+        # Step 1b: convert the IOWA XML -> a folder of 11 layer CSVs, which is what
+        # infer_sample_filly.py's --LayerSegPath consumes (it reads them via
+        # prepare_filly.resample_oct, and rpe = layers[:, 10]). The raw lres.xml is
+        # NOT directly consumable. Converter = local_IOWA_LayerSegV3_to_CSV.
+        # NOTE: the XML->CSV direction/flags are reconstructed from the vendor's
+        # csv->vrcbin usage (sese_ga_vrcbin.py:166) — validate on the first GA run.
+        layers_csv = work / "layers_csv"
+        layers_csv.mkdir(parents=True, exist_ok=True)
+        _exec([s.ga_iowa_converter or "local_IOWA_LayerSegV3_to_CSV",
+               "--in", str(layerseg / "lres.xml"), "--intype", "iowaxml_ls",
+               "--out", str(layers_csv), "--outtype", "csv", "--aScanMode", "1"])
         # Step 2: GA model in the .sif.
         code = Path(s.ga_code or "/opt/sese_ga/code")
         weights = Path(s.ga_weights or "/weights/filly_checkpoints")
         wlist = [str(weights / str(i) / "w.ckpt") for i in range(5)]
         cmd = self._apptainer(
             "exec", s.ga_sif or "",
-            [str(code), str(weights), str(dcm_dir), str(out), str(layerseg)],
+            [str(code), str(weights), str(dcm_dir), str(out), str(layers_csv)],
             ["python", str(code / "infer_sample_filly.py"), "--PathToWeights", *wlist,
-             "--BscanPath", str(dcm), "--LayerSegPath", str(layerseg),
+             "--BscanPath", str(dcm), "--LayerSegPath", str(layers_csv),
              "--OutputGA", str(out), "--threshold", s.ga_threshold],
         )
         _exec(cmd, self._gpu_env("ga"))

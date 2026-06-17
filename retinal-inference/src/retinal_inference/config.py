@@ -94,7 +94,14 @@ class Settings(BaseSettings):
     ga_sif: str | None = None
     ga_code: Path | None = None
     ga_weights: Path | None = None
+    # IOWA OCTLayerSeg native binary (host, not a .sif) — produces the 11-layer
+    # segmentation GA needs as input. On the OPTIMA host:
+    #   /home/optima/octreader/OCTLayerSeg3.6
     ga_iowa_binary: str | None = None
+    # Converts the IOWA XML (lres.xml) -> a folder of 11 layer CSVs that
+    # infer_sample_filly.py's --LayerSegPath expects. On the OPTIMA host:
+    #   /home/optima/octreader/optima-framework/deployment/prod/local_IOWA_LayerSegV3_to_CSV
+    ga_iowa_converter: str | None = None
     ga_threshold: str = "0.5"
 
 
