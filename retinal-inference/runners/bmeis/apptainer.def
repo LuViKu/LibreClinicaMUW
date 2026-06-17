@@ -24,7 +24,10 @@ Bootstrap: docker
 From: pytorch/pytorch:1.0.1-cuda10.0-cudnn7-runtime
 
 %post
-    pip install --no-cache-dir "numpy" "scipy" "scikit-image" "SimpleITK==1.2.4" "imutils"
+    # sese_pr's runtime deps. NB: no imutils/opencv — the only cv2 reference in the
+    # vendor code is a commented-out import, and nothing imports imutils. Adding
+    # imutils would drag in cv2 (and libGL) and fail at import for nothing.
+    pip install --no-cache-dir "numpy" "scipy" "scikit-image" "SimpleITK==1.2.4"
 
 %runscript
     exec "$@"
