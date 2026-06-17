@@ -74,9 +74,14 @@ class Settings(BaseSettings):
     # BMEIS (sese_pr) is torch1.0 / CUDA 9 — no Turing (RTX 2080 Ti, sm_75)
     # kernels; pin to a non-Turing GPU (TITAN Xp/V), or set "" to force CPU.
     apptainer_bmeis_gpu_device: str | None = None
-    # When true, wrap each apptainer call in ``sbatch`` (SLURM job per scan)
-    # instead of running it directly. Left off until the hosting model is fixed.
+    # When true, wrap each apptainer call in ``srun`` (one blocking SLURM job per
+    # scan) instead of running it directly. Required on the OPTIMA cluster: all
+    # partitions cap at MaxTime=2d, so no persistent GPU service — the /run
+    # dispatcher stays CPU-only off-GPU and submits a short GPU job per scan.
     apptainer_use_slurm: bool = False
+    apptainer_slurm_partition: str | None = None  # e.g. "full_optima"; None = SLURM default
+    apptainer_slurm_time: str = "01:00:00"  # walltime per inference job (<< 2d cap)
+    apptainer_slurm_gres: str = "gpu:1"  # or typed, e.g. "gpu:nvtitanxp:1"
 
     fluid_sif: str | None = None  # fluid_segmentation.sif (v2.5.0)
     onl_sif: str | None = None

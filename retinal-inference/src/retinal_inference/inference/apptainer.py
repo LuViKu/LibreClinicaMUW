@@ -122,6 +122,10 @@ class ApptainerAdapter(RetinalInferenceAdapter):
 
     def _gpu_env(self, task: TaskName) -> dict[str, str]:
         s = _config.settings
+        if s.apptainer_use_slurm:
+            # SLURM assigns the GPU (via --gres) and sets CUDA_VISIBLE_DEVICES in
+            # the job env; don't override it from the dispatcher.
+            return {}
         dev = s.apptainer_bmeis_gpu_device if task == "bmeis" else s.apptainer_gpu_device
         if dev is None:
             return {}
@@ -129,13 +133,18 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         return {"CUDA_VISIBLE_DEVICES": dev, "APPTAINERENV_CUDA_VISIBLE_DEVICES": dev}
 
     def _apptainer(self, verb: str, sif: str, binds: list[str], args: list[str]) -> list[str]:
-        cmd = [_config.settings.apptainer_bin, verb, "-e", "--nv", "--no-home"]
+        s = _config.settings
+        cmd = [s.apptainer_bin, verb, "-e", "--nv", "--no-home"]
         if binds:
             cmd += ["--bind", ",".join(binds)]
         cmd += [sif, *args]
-        if _config.settings.apptainer_use_slurm:
-            # SLURM job-per-scan wrapper (hosting model TBD): block until done.
-            cmd = ["srun", "--gpus=1", *cmd]
+        if s.apptainer_use_slurm:
+            # One blocking SLURM job per scan (cluster caps walltime at 2d, so no
+            # persistent GPU service). srun allocates a GPU and runs to completion.
+            srun = ["srun", f"--time={s.apptainer_slurm_time}", f"--gres={s.apptainer_slurm_gres}"]
+            if s.apptainer_slurm_partition:
+                srun.append(f"--partition={s.apptainer_slurm_partition}")
+            cmd = srun + cmd
         return cmd
 
     # --- per-task handlers (return the generic result fields) ----------------
