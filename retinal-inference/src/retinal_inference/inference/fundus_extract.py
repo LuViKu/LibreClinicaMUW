@@ -13,18 +13,27 @@ overlay the B-scan scan pattern on the en-face; ``geometry.json`` carries the
 registration metadata the SPA needs to draw the overlay (one B-scan = one
 line segment ``(x1,y1)-(x2,y2)`` in the SLO frame).
 
-The B-scan endpoint coordinates come from oct-converter's ``bscan_metadata``
-struct (see ``oct_converter/readers/binary_structs/e2e_binary.py`` —
-``posX1/posY1/posX2/posY2`` are Float32 fields stored in the fundus image's
-pixel frame for Spectralis exports). The existing ``_derive_spacing_mm``
-helper in ``e2e_parser.py`` already treats them as fundus-frame pixel coords
-(``math.hypot`` to recover per-line lengths); we propagate that contract.
+The B-scan endpoint coordinates from oct-converter's ``bscan_metadata``
+struct (``posX1/posY1/posX2/posY2``) are **Float32 mm values in the
+patient/scanner reference frame, centered on the SLO image** — NOT pixel
+coordinates. ``e2e_parser._derive_spacing_mm`` reads them as such already
+(``math.hypot`` recovers the scan line length in mm; dividing by ``cols``
+yields ``lateral_mm`` mm/px).
+
+For overlay rendering the SPA expects **pixel coordinates in the fundus
+PNG frame** (so the SVG ``viewBox="0 0 width_px height_px"`` matches the
+image). We do the conversion here using the SLO's mm/px and an origin at
+the image centre:
+
+    pixel_x = mm_x / lateral_mm_per_px + fundus_width  / 2
+    pixel_y = mm_y / slice_mm_per_px   + fundus_height / 2
 
 The SLO scale (mm/pixel) is **not** directly exposed by oct-converter — the
 ``image_structure`` chunk that holds the fundus image only carries width +
 height. We fall back to the B-scan's lateral mm/px as a degraded
 approximation and label it ``scale_source: bscan_fallback`` so callers know
-the geometry is volume-derived rather than SLO-native.
+the geometry is volume-derived rather than SLO-native. The conversion
+preserves the schema (``_fundus_px`` keys); only the values change.
 """
 
 from __future__ import annotations
@@ -117,30 +126,41 @@ def build_geometry(
 
     bscan_data = _load_bscan_data(bv, e2e_path)
 
+    # SLO scale (mm/px). Not directly exposed by oct-converter; fall back to
+    # the B-scan lateral / slice spacing and label the source so callers can
+    # act on it. Used to project mm-frame positions into the fundus pixel frame.
+    fundus_lateral_mm_per_px = float(bv.lateral_mm)
+    fundus_slice_mm_per_px = float(bv.slice_mm)
+    scale_source = "bscan_fallback"
+
     positions: list[dict[str, float | int]] = []
     if bscan_data:
         for idx, b in enumerate(bscan_data):
             if not all(k in b for k in ("posX1", "posY1", "posX2", "posY2")):
                 continue
+            x1_px, y1_px = _mm_to_fundus_px(
+                float(b["posX1"]), float(b["posY1"]),
+                fundus_width, fundus_height,
+                fundus_lateral_mm_per_px, fundus_slice_mm_per_px,
+            )
+            x2_px, y2_px = _mm_to_fundus_px(
+                float(b["posX2"]), float(b["posY2"]),
+                fundus_width, fundus_height,
+                fundus_lateral_mm_per_px, fundus_slice_mm_per_px,
+            )
             positions.append(
                 {
                     "z": idx,
-                    "x1": float(b["posX1"]),
-                    "y1": float(b["posY1"]),
-                    "x2": float(b["posX2"]),
-                    "y2": float(b["posY2"]),
+                    "x1": x1_px,
+                    "y1": y1_px,
+                    "x2": x2_px,
+                    "y2": y2_px,
                 }
             )
 
     bbox = _aabb(positions)
 
     fovea = _fovea_volume_center(positions, bv)
-
-    # SLO scale (mm/px). Not directly exposed by oct-converter; fall back to
-    # the B-scan lateral spacing and label the source so callers can act on it.
-    fundus_lateral_mm_per_px = float(bv.lateral_mm)
-    fundus_slice_mm_per_px = float(bv.slice_mm)
-    scale_source = "bscan_fallback"
     LOG.info(
         "Geometry built: fundus=%dx%d, n_bscans=%d, scale_source=%s",
         fundus_width,
@@ -198,6 +218,29 @@ def _load_bscan_data(bv: Any, e2e_path: Path | None) -> list[dict] | None:
     except Exception as e:  # noqa: BLE001
         LOG.warning("Failed to re-read bscan_data from %s: %s", e2e_path, e)
         return None
+
+
+def _mm_to_fundus_px(
+    mm_x: float,
+    mm_y: float,
+    fundus_w: int,
+    fundus_h: int,
+    lateral_mm_per_px: float,
+    slice_mm_per_px: float,
+) -> tuple[float, float]:
+    """Map a centered-mm coordinate into the fundus pixel frame.
+
+    Origin shift: the SLO frame's (0,0) maps to the fundus image centre. With
+    degenerate scale (mm/px <= 0) or no fundus, returns the raw mm value so
+    downstream consumers still see a non-NaN coordinate. Callers should check
+    ``fundus.scale_source`` to decide whether the result is SLO-native or
+    derived from the B-scan spacing.
+    """
+    if fundus_w <= 0 or fundus_h <= 0 or lateral_mm_per_px <= 0 or slice_mm_per_px <= 0:
+        return mm_x, mm_y
+    px_x = mm_x / lateral_mm_per_px + fundus_w / 2.0
+    px_y = mm_y / slice_mm_per_px + fundus_h / 2.0
+    return px_x, px_y
 
 
 def _aabb(positions: list[dict[str, float | int]]) -> dict[str, float]:

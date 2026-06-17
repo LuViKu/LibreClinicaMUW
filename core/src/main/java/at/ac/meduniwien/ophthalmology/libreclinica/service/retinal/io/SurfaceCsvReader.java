@@ -22,9 +22,16 @@ import java.util.List;
  *
  * <p>The CSV layout is:
  * <pre>
- *   line 1: size header (e.g. ``1024,97,496``) — skipped.
+ *   line 1: size header — three integers (e.g. ``1024,97,496``) declaring
+ *           [nAscans, nBscans, depth]. The depth slot is informational.
  *   line 2..N: one B-scan per line; comma-separated per-A-scan Y values.
  * </pre>
+ *
+ * <p>GA's {@code 001-RPEL.csv} emits TWO concatenated blocks per row —
+ * the first ``nAscans`` cells carry the binary mask (0/1), the next
+ * ``nAscans`` carry a 0–100 percentage scale. We honour the header here
+ * and truncate to the first block; the percentage block is redundant
+ * for the area metric.
  *
  * <p>Tokens that are empty, {@code U}, {@code u}, or case-insensitive
  * {@code nan} decode to {@link Double#NaN}; everything else goes
@@ -36,12 +43,14 @@ public final class SurfaceCsvReader {
 
     public static SurfaceGrid read(Path csv) throws IOException {
         List<double[]> rows = new ArrayList<>();
-        int nAscans = -1;
+        int declaredAscans = -1;
+        int truncatedAscans = -1;
         try (BufferedReader r = Files.newBufferedReader(csv, StandardCharsets.UTF_8)) {
             String header = r.readLine();
             if (header == null) {
                 throw new IOException("empty CSV: " + csv);
             }
+            declaredAscans = parseHeaderAscans(header);
             String line;
             int rowIdx = 0;
             while ((line = r.readLine()) != null) {
@@ -49,15 +58,20 @@ public final class SurfaceCsvReader {
                     continue;
                 }
                 String[] toks = line.split(",", -1);
-                if (nAscans < 0) {
-                    nAscans = toks.length;
-                } else if (toks.length != nAscans) {
+                int rowAscans = (declaredAscans > 0 && toks.length > declaredAscans
+                        && toks.length % declaredAscans == 0)
+                        ? declaredAscans
+                        : toks.length;
+                if (truncatedAscans < 0) {
+                    truncatedAscans = rowAscans;
+                } else if (rowAscans != truncatedAscans) {
                     throw new IllegalArgumentException(
                             "row " + rowIdx + " has " + toks.length
-                                    + " columns, expected " + nAscans);
+                                    + " columns (effective " + rowAscans
+                                    + "), expected " + truncatedAscans);
                 }
-                double[] vals = new double[toks.length];
-                for (int i = 0; i < toks.length; i++) {
+                double[] vals = new double[rowAscans];
+                for (int i = 0; i < rowAscans; i++) {
                     vals[i] = parseToken(toks[i]);
                 }
                 rows.add(vals);
@@ -65,7 +79,20 @@ public final class SurfaceCsvReader {
             }
         }
         double[][] grid = rows.toArray(new double[0][]);
-        return new SurfaceGrid(grid.length, nAscans < 0 ? 0 : nAscans, grid);
+        return new SurfaceGrid(grid.length, truncatedAscans < 0 ? 0 : truncatedAscans, grid);
+    }
+
+    /** Parse the leading {@code nAscans,nBscans,depth} header; returns -1
+     *  when the header isn't three comma-separated positive integers. */
+    private static int parseHeaderAscans(String header) {
+        String[] parts = header.split(",");
+        if (parts.length < 1) return -1;
+        try {
+            int n = Integer.parseInt(parts[0].trim());
+            return n > 0 ? n : -1;
+        } catch (NumberFormatException e) {
+            return -1;
+        }
     }
 
     private static double parseToken(String raw) {
