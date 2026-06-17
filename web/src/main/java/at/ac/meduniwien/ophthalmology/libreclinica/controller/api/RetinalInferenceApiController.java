@@ -41,6 +41,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinal
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRunResult;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalInferenceClient;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.ComputedMetrics;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.RetinalMetricComputer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -118,18 +120,21 @@ public class RetinalInferenceApiController {
     private final RetinalInferenceClient inferenceClient;
     private final RemoteRetinalInferenceClient remoteClient;
     private final RetinalArtifactStorageService artifactStore;
+    private final RetinalMetricComputer metricComputer;
 
     @Autowired
     public RetinalInferenceApiController(@Qualifier("dataSource") DataSource dataSource,
                                          SiteVisibilityFilter siteVisibilityFilter,
                                          RetinalInferenceClient inferenceClient,
                                          RemoteRetinalInferenceClient remoteClient,
-                                         RetinalArtifactStorageService artifactStore) {
+                                         RetinalArtifactStorageService artifactStore,
+                                         RetinalMetricComputer metricComputer) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.inferenceClient = inferenceClient;
         this.remoteClient = remoteClient;
         this.artifactStore = artifactStore;
+        this.metricComputer = metricComputer;
     }
 
     @PostMapping(path = "/{eventCrfId:[0-9]+}/oct-upload",
@@ -376,9 +381,26 @@ public class RetinalInferenceApiController {
             return null;
         }
 
+        // Wave 3 — compute the task-specific metric off the persisted
+        // artifacts. The remote envelope's primary_metric_* fields are
+        // placeholder nulls for the cluster path; this is where the
+        // browseable mm³ / µm value comes from. Soft-fail: a metric
+        // compute crash leaves the row with the envelope's values so the
+        // operator can still browse the segmentation + re-run.
+        ComputedMetrics metrics = null;
+        try {
+            metrics = metricComputer.compute(taskClean, artifactDir, remote.geometry(), lat);
+        } catch (Exception metricEx) {
+            LOG.warn("Metric compute failed for job {} (task={}): {}",
+                    jobId, taskClean, metricEx.getMessage());
+            // The artifacts are persisted; the row will still INSERT with raw envelope values.
+            // Wave 3 chose not to fail the upload on metric-compute error so the operator can
+            // still browse the segmentation and re-run.
+        }
+
         // INSERT retinal_inference_result then mark the job 'done'.
         try (Connection c = dataSource.getConnection()) {
-            insertResult(c, jobId, taskClean, remote, artifactDir);
+            insertResult(c, jobId, taskClean, remote, artifactDir, metrics);
             updateStatus(c, jobId, "done",
                     /* setScreenedAt */ false,
                     /* setCompletedAt */ true,
@@ -392,33 +414,50 @@ public class RetinalInferenceApiController {
             return null;
         }
 
+        // Body + log: prefer the computed metric over the envelope's
+        // placeholder values; fall back to the envelope when compute
+        // soft-failed.
+        Object respValue = (metrics != null) ? metrics.primaryValue() : remote.primaryMetricValue();
+        String respUnit  = (metrics != null) ? metrics.primaryUnit()  : remote.primaryMetricUnit();
+
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("jobId", jobId);
         body.put("status", "done");
         body.put("task", taskClean);
         body.put("laterality", lat);
-        body.put("primaryMetricValue", remote.primaryMetricValue());
-        body.put("primaryMetricUnit", remote.primaryMetricUnit());
+        body.put("primaryMetricValue", respValue);
+        body.put("primaryMetricUnit", respUnit);
         body.put("confidence", remote.confidence());
         body.put("modelVersion", remote.modelVersion());
         body.put("artifactCount", remote.artifacts().size());
 
         LOG.info("Retinal inference (remote): event_crf {} → job {} done (task={}, model={}, metric={}{})",
                 eventCrfId, jobId, taskClean,
-                remote.modelVersion(), remote.primaryMetricValue(), remote.primaryMetricUnit());
+                remote.modelVersion(), respValue, respUnit);
         return ResponseEntity.ok(body);
     }
 
     /**
      * INSERT into {@code retinal_inference_result}. The output_payload column
-     * is JSONB; we serialise the envelope's payload map to a string and let
-     * Postgres cast it via {@code ?::jsonb} — no postgres JDBC dep needed.
+     * is JSONB; we serialise the payload map to a string and let Postgres
+     * cast it via {@code ?::jsonb} — no postgres JDBC dep needed.
+     *
+     * <p>When Wave 3's task-specific {@link ComputedMetrics} is non-null
+     * (the normal path) the row carries the computed BigDecimal primary
+     * value + structured payload. If the metric compute soft-failed (or
+     * the caller passed null for back-compat) the inserted row falls back
+     * to the remote envelope's placeholder fields — the operator can
+     * still browse the segmentation and re-run.
      */
     private void insertResult(Connection c, long jobId, String task,
-                              RemoteRunResult remote, Path artifactDir) throws SQLException {
+                              RemoteRunResult remote, Path artifactDir,
+                              ComputedMetrics metrics) throws SQLException {
+        Map<String, Object> payloadMap = (metrics != null)
+                ? metrics.payload()
+                : remote.outputPayload();
         String payloadJson;
         try {
-            payloadJson = JSON.writeValueAsString(remote.outputPayload());
+            payloadJson = JSON.writeValueAsString(payloadMap);
         } catch (Exception jsonEx) {
             throw new SQLException("Failed to serialise output_payload for job " + jobId, jsonEx);
         }
@@ -430,8 +469,15 @@ public class RetinalInferenceApiController {
             ps.setLong(1, jobId);
             ps.setString(2, task);
             ps.setString(3, payloadJson);
-            ps.setDouble(4, remote.primaryMetricValue());
-            ps.setString(5, remote.primaryMetricUnit());
+            if (metrics != null) {
+                // BigDecimal lands exactly into NUMERIC(12,4) with no
+                // lossy double→BigDecimal round-trip.
+                ps.setBigDecimal(4, metrics.primaryValue());
+                ps.setString(5, metrics.primaryUnit());
+            } else {
+                ps.setDouble(4, remote.primaryMetricValue());
+                ps.setString(5, remote.primaryMetricUnit());
+            }
             ps.setString(6, artifactDir.toString());
             // pixel_scale_mm: the remote envelope doesn't carry it in v1 (the
             // SPA's modality registry resolves scale by OID), so leave it null.
