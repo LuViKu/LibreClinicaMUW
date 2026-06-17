@@ -24,10 +24,12 @@ Bootstrap: docker
 From: pytorch/pytorch:1.0.1-cuda10.0-cudnn7-runtime
 
 %post
-    # sese_pr's runtime deps. NB: no imutils/opencv — the only cv2 reference in the
-    # vendor code is a commented-out import, and nothing imports imutils. Adding
-    # imutils would drag in cv2 (and libGL) and fail at import for nothing.
-    pip install --no-cache-dir "numpy" "scipy" "scikit-image" "SimpleITK==1.2.4"
+    # sese_pr's runtime deps (full import chain of process_input_for_optimus.py ->
+    # compute_scores -> util.metrics: numpy, scipy, scikit-image, SimpleITK,
+    # scikit-learn; matplotlib comes from the base image). scikit-learn 0.24.2 is
+    # the last release supporting the base image's Python 3.6. NB: no imutils/opencv
+    # — the only cv2 reference in the vendor code is a commented-out import.
+    pip install --no-cache-dir "numpy" "scipy" "scikit-image" "SimpleITK==1.2.4" "scikit-learn==0.24.2"
 
 %runscript
     exec "$@"
