@@ -211,22 +211,34 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         import glob
 
         import numpy as np
-        import SimpleITK as sitk
 
         s = _config.settings
         out = work / "out"
         mhd = work / "mhd_in"
         out.mkdir(parents=True, exist_ok=True)
         mhd.mkdir(parents=True, exist_ok=True)
-        sitk.WriteImage(sitk.ReadImage(str(dcm_dir / "bscan.dcm")), str(mhd / "bscan.mhd"))
         code = Path(s.bmeis_code or "/opt/sese_pr")
         weights = Path(s.bmeis_weights or "/weights/u2net-cross-entropy")
+        dcm = dcm_dir / "bscan.dcm"
+        mhd_file = mhd / "bscan.mhd"
+        # process_input_for_optimus.py --export_for_optimus reads an .mhd and pulls
+        # ElementSpacing from its header, so convert the DICOM -> MHD first. Do it
+        # INSIDE the .sif (it ships SimpleITK; the host dispatcher stays thin), in
+        # the same exec as the model run via bash -c. Paths are tmpdirs under
+        # /scratch (no spaces), so the inline quoting is safe.
+        convert = (
+            f"python -c 'import SimpleITK as sitk; "
+            f'sitk.WriteImage(sitk.ReadImage("{dcm}"), "{mhd_file}")\''
+        )
+        run_model = (
+            f"python '{code / 'process_input_for_optimus.py'}' "
+            f"'{mhd_file}' '{out}' '{weights}' "
+            f"--export_for_optimus True --export_mhd False --samples 10"
+        )
         cmd = self._apptainer(
             "exec", s.bmeis_sif or "",
-            [str(code), str(weights), str(mhd), str(out)],
-            ["python", str(code / "process_input_for_optimus.py"),
-             str(mhd / "bscan.mhd"), str(out), str(weights),
-             "--export_for_optimus", "True", "--export_mhd", "False", "--samples", "10"],
+            [str(code), str(weights), str(dcm_dir), str(work)],
+            ["bash", "-c", f"{convert} && {run_model}"],
         )
         _exec(cmd, self._gpu_env("bmeis"))
         bmeis = sorted(glob.glob(str(out / "*BMEIS*.csv")))

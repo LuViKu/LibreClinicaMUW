@@ -120,6 +120,41 @@ def test_onl_passes_dcm_file_not_dir(monkeypatch, tmp_path) -> None:
     assert cmd[script_idx + 1] != str(dcm_dir)
 
 
+def test_bmeis_converts_dicom_in_container(monkeypatch, tmp_path) -> None:
+    # The DICOM->MHD conversion must run INSIDE the .sif (host dispatcher has no
+    # SimpleITK); the model run follows in the same exec via bash -c.
+    _set_sifs(monkeypatch, bmeis="/sif/bmeis.sif")
+    monkeypatch.setattr(_config.settings, "bmeis_code", "/code/pr", raising=False)
+    monkeypatch.setattr(_config.settings, "bmeis_weights", "/weights/u2net-cross-entropy", raising=False)
+    monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
+
+    captured: dict = {}
+
+    def fake_exec(cmd, env=None):
+        captured["cmd"] = cmd
+        out = tmp_path / "work" / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "001-BMEIS.csv").write_text("size\n30\n40\n")
+        return ""
+
+    monkeypatch.setattr(ap, "_exec", fake_exec)
+
+    dcm_dir = tmp_path / "in"
+    dcm_dir.mkdir()
+    res = ap.ApptainerAdapter().full_volume(
+        "bmeis", dcm_dir, "OD", out_dir_override=tmp_path / "work"
+    )
+
+    assert res.task == "bmeis"
+    assert res.primary_metric_unit == "µm"
+    cmd = captured["cmd"]
+    assert "bash" in cmd and "-c" in cmd
+    payload = cmd[-1]  # the bash -c script
+    assert "SimpleITK" in payload and "bscan.mhd" in payload
+    assert "process_input_for_optimus.py" in payload
+    assert "--export_for_optimus True" in payload
+
+
 def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:
     _set_sifs(monkeypatch, fluid="/sif/fluid_segmentation.sif")
     monkeypatch.setattr(_config.settings, "apptainer_use_slurm", True, raising=False)
