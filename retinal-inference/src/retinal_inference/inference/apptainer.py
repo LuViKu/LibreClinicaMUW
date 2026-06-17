@@ -187,11 +187,14 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         out.mkdir(parents=True, exist_ok=True)
         code = Path(s.onl_code or "/opt/sese_onl")
         weights = Path(s.onl_weights or "/weights")
+        # process_input_for_optimus.py's first arg is the bscan.dcm FILE (it calls
+        # pydicom.dcmread on it directly), not the containing dir — passing the dir
+        # raises IsADirectoryError. Bind the dir so the file resolves inside.
         cmd = self._apptainer(
             "exec", s.onl_sif or "",
             [str(code), str(weights), str(dcm_dir), str(out)],
             ["python", str(code / "process_input_for_optimus.py"),
-             str(dcm_dir), str(out), str(weights)],
+             str(dcm_dir / "bscan.dcm"), str(out), str(weights)],
         )
         _exec(cmd, self._gpu_env("onl"))
         upper = sorted(glob.glob(str(out / "*OPL-HFL*.csv")))

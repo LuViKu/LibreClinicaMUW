@@ -85,6 +85,41 @@ def test_fluid_dispatch_v25(monkeypatch, tmp_path) -> None:
     assert captured["env"]["CUDA_VISIBLE_DEVICES"] == "0"
 
 
+def test_onl_passes_dcm_file_not_dir(monkeypatch, tmp_path) -> None:
+    # Regression: process_input_for_optimus.py dcmread()s its first arg, so it must
+    # be the bscan.dcm FILE; passing the dir raises IsADirectoryError in-container.
+    _set_sifs(monkeypatch, onl="/sif/sese_onl.sif")
+    monkeypatch.setattr(_config.settings, "onl_code", "/code/onl", raising=False)
+    monkeypatch.setattr(_config.settings, "onl_weights", "/weights/cross_val_ga", raising=False)
+    monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
+
+    captured: dict = {}
+
+    def fake_exec(cmd, env=None):
+        captured["cmd"] = cmd
+        out = tmp_path / "work" / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "001-OPL-HFL.csv").write_text("size\n10\n20\n")
+        (out / "002-BMEIS.csv").write_text("size\n15\n25\n")
+        return ""
+
+    monkeypatch.setattr(ap, "_exec", fake_exec)
+
+    dcm_dir = tmp_path / "in"
+    dcm_dir.mkdir()
+    res = ap.ApptainerAdapter().full_volume(
+        "onl", dcm_dir, "OD", out_dir_override=tmp_path / "work"
+    )
+
+    assert res.task == "onl"
+    assert res.primary_metric_unit == "µm"
+    cmd = captured["cmd"]
+    script_idx = next(i for i, c in enumerate(cmd) if c.endswith("process_input_for_optimus.py"))
+    # The first positional after the script must be the .dcm FILE, not the dir.
+    assert cmd[script_idx + 1].endswith("bscan.dcm")
+    assert cmd[script_idx + 1] != str(dcm_dir)
+
+
 def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:
     _set_sifs(monkeypatch, fluid="/sif/fluid_segmentation.sif")
     monkeypatch.setattr(_config.settings, "apptainer_use_slurm", True, raising=False)
