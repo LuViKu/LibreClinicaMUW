@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     auth_token: str | None = None
     shared_tmpdir: Path = Path("/var/lib/retinal-inference/tmp")
 
+    # --- /preprocess endpoint (DR-022, app-VM side) --------------------------
+    # The cluster ApptainerAdapter is DICOM-only, and the PHI-bearing .e2e must
+    # not leave the app VM. A preprocess-only sidecar runs on the app VM with
+    # this enabled; the Java backend POSTs the .e2e here, gets the PHI-redacted
+    # bscan.dcm back, and forwards only that to the remote /run. Gated by the
+    # same auth_token. No adapter/models needed for this mode.
+    preprocess_endpoint_enabled: bool = False
+
     # --- ApptainerAdapter (GPU cluster dispatch, DR-022) ----------------------
     # On the Apptainer cluster there is no Docker/compose: the adapter runs each
     # model's .sif via ``apptainer exec --nv`` as a subprocess (the OPTIMA

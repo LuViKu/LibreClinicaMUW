@@ -129,6 +129,27 @@ matching token on the Java side. Reachability test from the app VM:
 curl -sS -m5 -o /dev/null -w "%{http_code}\n" http://149.148.108.173:8000/health
 ```
 
+### 5b. App-VM preprocess sidecar (DICOM-only cluster)
+The cluster `ApptainerAdapter` rejects `.e2e` — the `.e2e → bscan.dcm` conversion
+(PHI redaction included) happens **app-side** so the PHI-bearing E2E never leaves
+the app VM. Run a tiny preprocess-only sidecar next to Tomcat (no GPU, no models):
+```sh
+RETINAL_INFERENCE_PREPROCESS_ENDPOINT_ENABLED=true \
+RETINAL_INFERENCE_AUTH_TOKEN=<app-vm secret> \
+RETINAL_INFERENCE_SHARED_TMPDIR=/var/lib/retinal-inference/tmp \
+  uvicorn retinal_inference.main:app --host 127.0.0.1 --port 8001
+```
+Then point the Java client at it:
+```
+core.retinalInference.preprocessUrl=http://127.0.0.1:8001
+core.retinalInference.preprocessToken=<app-vm secret>   # falls back to remotePushToken if unset
+```
+With `preprocessUrl` set, `RemoteRetinalInferenceClient` POSTs the `.e2e` to
+`/preprocess`, gets the redacted `bscan.dcm` back, and forwards only that to the
+cluster `/run`. Leave `preprocessUrl` **blank** for single-host dev — there the
+`OptimaAdapter` ingests the `.e2e` itself. (The cluster `/run` accepts either a
+DICOM or an `.e2e`, auto-detected, so a misconfig degrades rather than corrupts.)
+
 ## 6. Per-model validation (first real run)
 For each task: POST a real `.e2e`, confirm the model **accepts the synthesized
 `bscan.dcm`**, the output artifact name/parse matches (`fluidseg.npz` labels;
@@ -136,11 +157,11 @@ ONL/BMEIS surface CSVs; GA RPEL), and the metric is sane. See each
 `runners/<task>/README.md` "confirm on first run" list.
 
 ## Open decisions
-- **Payload (RESOLVED → DICOM):** the LibreClinica backend converts
-  `.e2e → bscan.dcm` (PHI-redacted) **app-side**, and the `ApptainerAdapter` is
-  DICOM-only (rejects `.e2e`). Companion change still needed: the `/run` endpoint
-  + the Java client currently send/accept `.e2e` — switch them to `bscan.dcm`,
-  and move `prepare_bscan_dcm` to the app-VM preprocessing step.
+- **Payload (RESOLVED → DICOM, implemented):** the backend converts
+  `.e2e → bscan.dcm` (PHI-redacted) **app-side** via the `/preprocess` sidecar
+  (§5b), the Java client forwards only the DICOM when `preprocessUrl` is set, and
+  the cluster `/run` + `ApptainerAdapter` are DICOM-first (auto-detect; the adapter
+  rejects raw `.e2e`). `prepare_bscan_dcm` now runs on the app-VM preprocess sidecar.
 - **ONL/BMEIS primary metric**: mean thickness / mean depth are placeholders —
   confirm the clinical metric.
 - **Dispatcher host / persistence policy**: confirm a long-lived service is

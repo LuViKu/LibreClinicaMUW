@@ -58,10 +58,16 @@ public class RemoteRetinalInferenceClientTest {
         String url;
         String token = "test-token";
         Duration timeout = Duration.ofSeconds(10);
+        String prepUrl = "";
+        String prepToken = "";
 
         @Override protected String remoteUrl() { return url == null ? "" : url; }
         @Override protected String remoteToken() { return token == null ? "" : token; }
         @Override protected Duration remoteTimeout() { return timeout; }
+        @Override protected String preprocessUrl() { return prepUrl == null ? "" : prepUrl; }
+        @Override protected String preprocessToken() {
+            return (prepToken == null || prepToken.isBlank()) ? remoteToken() : prepToken;
+        }
     }
 
     @Before
@@ -100,6 +106,38 @@ public class RemoteRetinalInferenceClientTest {
             exchange.sendResponseHeaders(status, response.length);
             try (OutputStream os = exchange.getResponseBody()) {
                 os.write(response);
+            }
+        });
+    }
+
+    /** Handler that captures the raw request body (for asserting what /run got)
+     *  and replies with a fixed JSON body. */
+    private void registerCapturingJsonHandler(String path, int status, String body,
+                                              AtomicReference<byte[]> capturedBody) {
+        server.createContext(path, exchange -> {
+            try (var in = exchange.getRequestBody()) {
+                capturedBody.set(in.readAllBytes());
+            }
+            byte[] response = body.getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(status, response.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(response);
+            }
+        });
+    }
+
+    /** Handler that replies with raw bytes under a given content type (the
+     *  /preprocess sidecar returning application/dicom). */
+    private void registerBinaryHandler(String path, int status, byte[] payload, String contentType) {
+        server.createContext(path, exchange -> {
+            try (var in = exchange.getRequestBody()) {
+                in.readAllBytes();
+            }
+            exchange.getResponseHeaders().set("Content-Type", contentType);
+            exchange.sendResponseHeaders(status, payload.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(payload);
             }
         });
     }
@@ -208,6 +246,42 @@ public class RemoteRetinalInferenceClientTest {
         registerJsonHandler("/run", 200, "{}", null);
         RemoteRunResult result = client.runRemote(42L, "fluid", "/nonexistent/path.e2e", "OD");
         assertNull(result);
+    }
+
+    @Test
+    public void runRemote_preprocessesE2eToDicom_whenPreprocessUrlSet() throws IOException {
+        // /preprocess returns a DICOM blob (Part-10 magic); /run captures the body.
+        byte[] dicom = new byte[140];
+        System.arraycopy("DICM".getBytes(StandardCharsets.UTF_8), 0, dicom, 128, 4);
+        registerBinaryHandler("/preprocess", 200, dicom, "application/dicom");
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{9}), runBody);
+
+        client.prepUrl = client.url; // same test server, different path
+
+        RemoteRunResult result = client.runRemote(7L, "fluid", e2eFile.toString(), "OD");
+
+        assertNotNull(result);
+        // The /run multipart must carry the converted DICOM (DICM magic) under the
+        // bscan.dcm filename — not the raw E2E bytes.
+        String received = new String(runBody.get(), StandardCharsets.ISO_8859_1);
+        assertTrue("multipart carries the bscan.dcm filename", received.contains("filename=\"bscan.dcm\""));
+        assertTrue("multipart carries the DICOM magic", received.contains("DICM"));
+        assertFalse("raw E2E bytes must not be forwarded", received.contains("FAKE-E2E-BYTES"));
+    }
+
+    @Test
+    public void runRemote_returnsNull_whenPreprocessFails() {
+        // /preprocess errors -> client must not POST a raw E2E to /run.
+        registerBinaryHandler("/preprocess", 500, new byte[]{1}, "application/json");
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, "{}", runBody);
+
+        client.prepUrl = client.url;
+
+        RemoteRunResult result = client.runRemote(8L, "fluid", e2eFile.toString(), "OD");
+        assertNull(result);
+        assertNull("/run must not be called when preprocess fails", runBody.get());
     }
 
     @Test

@@ -38,11 +38,16 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
  * {@code POST /run} endpoint.
  *
  * <p>When {@code core.retinalInference.remotePushUrl} is set the
- * institutional Tomcat reaches the sidecar over HTTP, POSTs the
- * persisted {@code .e2e} as multipart, and blocks until the sidecar
+ * institutional Tomcat reaches the sidecar over HTTP and blocks until it
  * returns the {@link RemoteRunResult} envelope. Same-network deployment
  * (the GPU host shares the institutional LAN), so a plain sync POST
  * with a long timeout is the right shape — no streaming, no callback.
+ *
+ * <p>If {@code core.retinalInference.preprocessUrl} is also set, the
+ * {@code .e2e} is first converted to a PHI-redacted {@code bscan.dcm} by an
+ * app-VM-side preprocess sidecar and only the DICOM is forwarded to the
+ * (DICOM-only) cluster {@code /run} — the raw E2E never leaves the app VM
+ * (DR-022). When it is blank, the {@code .e2e} is posted as-is.
  *
  * <p>The {@link RetinalInferenceClient#screenFast} client stays for the
  * SPA's fast-preview path and the single-host dev compose flow. This
@@ -99,10 +104,26 @@ public class RemoteRetinalInferenceClient {
 
         String fileName = Path.of(e2ePath).getFileName().toString();
 
-        SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
-        rf.setConnectTimeout((int) Math.min(timeoutMs, Integer.MAX_VALUE));
-        rf.setReadTimeout((int) Math.min(timeoutMs, Integer.MAX_VALUE));
-        RestTemplate rest = new RestTemplate(rf);
+        RestTemplate rest = restTemplate(timeoutMs);
+
+        // DR-022: convert .e2e -> bscan.dcm app-side when a preprocess service is
+        // configured. The cluster ApptainerAdapter is DICOM-only and the
+        // PHI-bearing .e2e must not leave the app VM, so a preprocess-only sidecar
+        // co-located with Tomcat does the (PHI-redacting) conversion and we forward
+        // only the bscan.dcm. When unset, post the .e2e as-is (the single-host dev
+        // OptimaAdapter ingests the E2E itself).
+        String prepUrl = preprocessUrl();
+        if (prepUrl != null && !prepUrl.isBlank()) {
+            byte[] dcm = preprocessToDicom(rest, prepUrl, jobId, fileName, bytes, laterality);
+            if (dcm == null) {
+                // Conversion failed — return null so the caller reverts the job and
+                // the local fallback path drains it, rather than POSTing a raw .e2e
+                // the DICOM-only cluster adapter would reject.
+                return null;
+            }
+            bytes = dcm;
+            fileName = "bscan.dcm";
+        }
 
         ByteArrayResource filePart = new ByteArrayResource(bytes) {
             @Override public String getFilename() { return fileName; }
@@ -135,6 +156,62 @@ public class RemoteRetinalInferenceClient {
         } catch (Exception e) {
             LOG.warn("Remote /run failed for job {} (task={}) at {}: {}",
                     jobId, task, endpoint, e.getMessage());
+            return null;
+        }
+    }
+
+    private static RestTemplate restTemplate(long timeoutMs) {
+        SimpleClientHttpRequestFactory rf = new SimpleClientHttpRequestFactory();
+        rf.setConnectTimeout((int) Math.min(timeoutMs, Integer.MAX_VALUE));
+        rf.setReadTimeout((int) Math.min(timeoutMs, Integer.MAX_VALUE));
+        return new RestTemplate(rf);
+    }
+
+    /**
+     * POST the {@code .e2e} to {@code ${preprocessUrl}/preprocess} and return the
+     * PHI-redacted {@code bscan.dcm} bytes, or {@code null} on any failure (so the
+     * caller reverts + falls back rather than shipping a raw E2E to the
+     * DICOM-only cluster adapter).
+     */
+    private byte[] preprocessToDicom(RestTemplate rest,
+                                     String prepUrl,
+                                     long jobId,
+                                     String e2eName,
+                                     byte[] e2eBytes,
+                                     String laterality) {
+        String token = preprocessToken();
+        if (token == null || token.isBlank()) {
+            LOG.warn("Preprocess URL set but no token "
+                    + "(core.retinalInference.preprocessToken / remotePushToken) for job {}", jobId);
+            return null;
+        }
+
+        ByteArrayResource filePart = new ByteArrayResource(e2eBytes) {
+            @Override public String getFilename() { return e2eName; }
+        };
+
+        MultiValueMap<String, Object> body = new LinkedMultiValueMap<>();
+        body.add("file", filePart);
+        if (laterality != null) {
+            body.add("laterality", laterality);
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.MULTIPART_FORM_DATA);
+        headers.set("X-MUW-Inference-Token", token);
+
+        String endpoint = prepUrl.replaceAll("/+$", "") + "/preprocess";
+        try {
+            HttpEntity<MultiValueMap<String, Object>> req = new HttpEntity<>(body, headers);
+            ResponseEntity<byte[]> resp = rest.postForEntity(endpoint, req, byte[].class);
+            if (resp == null || resp.getBody() == null || resp.getBody().length == 0) {
+                LOG.warn("Preprocess returned empty body for job {} at {}", jobId, endpoint);
+                return null;
+            }
+            return resp.getBody();
+        } catch (Exception e) {
+            LOG.warn("Preprocess /preprocess failed for job {} at {}: {}",
+                    jobId, endpoint, e.getMessage());
             return null;
         }
     }
@@ -194,6 +271,22 @@ public class RemoteRetinalInferenceClient {
     /** Shared secret for the {@code X-MUW-Inference-Token} header. */
     protected String remoteToken() {
         return readField("core.retinalInference.remotePushToken", "");
+    }
+
+    /** Base URL of the app-VM-side preprocess sidecar (DR-022). Blank disables
+     *  app-side conversion — the raw {@code .e2e} is posted to {@code /run}. */
+    protected String preprocessUrl() {
+        return readField("core.retinalInference.preprocessUrl", "");
+    }
+
+    /** Token for the preprocess sidecar; falls back to {@link #remoteToken()}
+     *  when {@code core.retinalInference.preprocessToken} is unset. */
+    protected String preprocessToken() {
+        String t = readField("core.retinalInference.preprocessToken", "");
+        if (t == null || t.isBlank()) {
+            return remoteToken();
+        }
+        return t;
     }
 
     /** Read + connect timeout for the remote POST. */
