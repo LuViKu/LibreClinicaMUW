@@ -90,3 +90,12 @@ docker/retinal-inference-storage/
 # returned by the remote /run envelope.
 docker/retinal-tmp/
 docker/retinal-artifacts/
+# The Java-side persisted E2E uploads (the dir compose binds into both the
+# libreclinica and retinal-inference containers as /var/lib/libreclinica/
+# e2e-uploads). The files inside are real patient OCT scans — PHI — and must
+# never enter git.
+docker/e2e-uploads/
+
+# Claude Code session state (transcripts, hook outputs, planning artefacts).
+# Per-developer scratch, not repo content.
+.claude/
