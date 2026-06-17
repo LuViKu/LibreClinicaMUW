@@ -7,14 +7,13 @@ internal MUW network.
 ## Topology
 
 ```
-LibreClinica (app VM, 149.148.170.183)
-   │  POST /run   (multipart .e2e + task + laterality, header X-MUW-Inference-Token)
+LibreClinica (app VM, 149.148.170.183) — converts .e2e → bscan.dcm (PHI-redacted) app-side
+   │  POST /run   (multipart bscan.dcm + task + laterality, header X-MUW-Inference-Token)
    ▼
-inference server  (bare conda/venv Python 3.11 on the cluster; ADAPTER=apptainer)
-   │  per scan: ingest .e2e→bscan.dcm (PHI-redacted) in a tempdir on /scratch,
-   │            then run the model's .sif
+inference server  (bare venv Python 3.11 on the cluster; ADAPTER=apptainer; DICOM-only)
+   │  per scan: write bscan.dcm into a tempdir on /scratch, run the model's .sif
    ▼
-   {apptainer|singularity} exec --nv <model>.sif …   (direct now; srun-per-scan once a SLURM account exists)
+   singularity exec --nv <model>.sif …   (direct now; srun-per-scan once a SLURM account exists)
    → parse output → JSON envelope → tempdir deleted (stateless)
 ```
 
@@ -109,10 +108,11 @@ ONL/BMEIS surface CSVs; GA RPEL), and the metric is sane. See each
 `runners/<task>/README.md` "confirm on first run" list.
 
 ## Open decisions
-- **Payload**: `/run` currently takes `.e2e` and ingests on the cluster (stateless
-  + PHI-redacted). If you prefer the earlier `.dcm`-from-Java approach, the
-  adapter already passes a `.dcm` through unchanged — only `/run` + the Java
-  client need to switch to sending DICOM.
+- **Payload (RESOLVED → DICOM):** the LibreClinica backend converts
+  `.e2e → bscan.dcm` (PHI-redacted) **app-side**, and the `ApptainerAdapter` is
+  DICOM-only (rejects `.e2e`). Companion change still needed: the `/run` endpoint
+  + the Java client currently send/accept `.e2e` — switch them to `bscan.dcm`,
+  and move `prepare_bscan_dcm` to the app-VM preprocessing step.
 - **ONL/BMEIS primary metric**: mean thickness / mean depth are placeholders —
   confirm the clinical metric.
 - **Dispatcher host / persistence policy**: confirm a long-lived service is

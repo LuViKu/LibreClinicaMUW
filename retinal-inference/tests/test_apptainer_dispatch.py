@@ -38,6 +38,15 @@ def test_full_volume_unsupported(monkeypatch, tmp_path) -> None:
         ap.ApptainerAdapter().full_volume("ga", tmp_path, "OD")
 
 
+def test_rejects_e2e_input(monkeypatch, tmp_path) -> None:
+    # DICOM-only: the backend converts .e2e -> .dcm; an .e2e must be rejected.
+    _set_sifs(monkeypatch, fluid="/sif/fluid.sif")
+    e2e = tmp_path / "scan.e2e"
+    e2e.write_bytes(b"x")
+    with pytest.raises(ValueError):
+        ap.ApptainerAdapter().full_volume("fluid", e2e, "OD")
+
+
 def test_fluid_dispatch_v25(monkeypatch, tmp_path) -> None:
     _set_sifs(monkeypatch, fluid="/sif/fluid_segmentation.sif")
     monkeypatch.setattr(_config.settings, "apptainer_gpu_device", "0", raising=False)

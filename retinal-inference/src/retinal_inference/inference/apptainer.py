@@ -283,31 +283,30 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             raise UnsupportedTaskError(
                 f"Task '{task}' has no configured .sif in this deployment"
             )
+        # DICOM-only: the LibreClinica backend converts .e2e -> bscan.dcm and
+        # posts the DICOM, so this adapter never ingests E2E (no oct-converter
+        # on the cluster). Reject an .e2e loudly rather than mis-handle it.
         src = Path(e2e_path)
+        if src.suffix.lower() == ".e2e":
+            raise ValueError(
+                "ApptainerAdapter accepts a bscan.dcm only; the LibreClinica "
+                "backend must convert .e2e -> .dcm before posting to /run"
+            )
+        dcm_dir, _dcm = _resolve_dcm(src)
+
         handler = {"fluid": self._fluid, "onl": self._onl,
                    "bmeis": self._bmeis, "ga": self._ga}[task]
-
-        def _run_in(work: Path) -> dict[str, Any]:
-            # /run delivers a .e2e (multipart) → ingest to bscan.dcm here;
-            # if a .dcm/dir is passed instead, use it directly.
-            if src.suffix.lower() == ".e2e":
-                from .e2e_parser import prepare_bscan_dcm
-
-                dcm_dir = prepare_bscan_dcm(src, work / "ingest")
-            else:
-                dcm_dir, _ = _resolve_dcm(src)
-            return handler(dcm_dir, work)
 
         if out_dir_override is not None:
             work = Path(out_dir_override)
             work.mkdir(parents=True, exist_ok=True)
-            res = _run_in(work)
+            res = handler(dcm_dir, work)
             bscan_masks_dir = str(work)
         else:
             with tempfile.TemporaryDirectory(
                 dir=str(_config.settings.shared_tmpdir)
             ) as tmp:
-                res = _run_in(Path(tmp))
+                res = handler(dcm_dir, Path(tmp))
                 bscan_masks_dir = None  # stateless: outputs not persisted
 
         return FullVolumeResult(
