@@ -99,3 +99,7 @@ docker/e2e-uploads/
 # Claude Code session state (transcripts, hook outputs, planning artefacts).
 # Per-developer scratch, not repo content.
 .claude/
+
+# Apptainer / Singularity image artifacts — multi-GB, GPU-only, never tracked.
+# Production builds them on the cluster; Mac devs build via docker as a smoke.
+retinal-inference/*.sif

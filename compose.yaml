@@ -150,6 +150,44 @@ services:
     cpus: "4.0"
     mem_limit: 4g
 
+  # DR-022 app-VM preprocess sidecar (DICOM-only cluster path).
+  #
+  # Cluster ApptainerAdapter is DICOM-only; the PHI-bearing .e2e must NEVER
+  # leave the app VM. This sidecar runs the same retinal-inference image but
+  # exposes ONLY POST /preprocess: it reads the .e2e from the same volume the
+  # libreclinica container writes to, runs `prepare_bscan_dcm` (PHI-redacted),
+  # and streams back the bscan.dcm bytes. No /run (the cluster owns inference),
+  # no worker (no DB poll), no model runners.
+  #
+  # The libreclinica controller's RemoteRetinalInferenceClient hits this at
+  # http://retinal-preprocess:8000 (compose-network DNS) when the Java
+  # config key core.retinalInference.preprocessUrl is set.
+  retinal-preprocess:
+    image: libreclinica-muw-retinal-inference:latest
+    container_name: libreclinica-muw-retinal-preprocess-1
+    # Same image, but only the preprocess endpoint is enabled.
+    environment:
+      # Placeholder adapter is fine — /preprocess never calls adapter.full_volume,
+      # it just exercises e2e_parser.prepare_bscan_dcm.
+      RETINAL_INFERENCE_INFERENCE_ADAPTER: placeholder
+      RETINAL_INFERENCE_WORKER_ENABLED: "false"
+      RETINAL_INFERENCE_RUN_ENDPOINT_ENABLED: "false"
+      RETINAL_INFERENCE_PREPROCESS_ENDPOINT_ENABLED: "true"
+      RETINAL_INFERENCE_AUTH_TOKEN: ${RETINAL_INFERENCE_PREPROCESS_TOKEN:-}
+      RETINAL_INFERENCE_SHARED_TMPDIR: /var/lib/retinal-inference/tmp
+    volumes:
+      # Same RO bind as the main service so the preprocess sidecar can read
+      # the .e2e the libreclinica controller persisted.
+      - ./docker/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
+      - ./docker/retinal-tmp:/var/lib/retinal-inference/tmp
+    cpus: "2.0"
+    mem_limit: 2g
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=2).status==200 else 1)\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   # Fluid model-runner (RetInsight fluidseg, IRF/SRF/PED). Behind the `optima`
   # compose profile because its image needs vendor wheels (runners/fluid/wheels/)
   # + mounted weights that aren't in git — so the default `docker compose up`
