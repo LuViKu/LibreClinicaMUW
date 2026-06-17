@@ -273,13 +273,13 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         # infer_sample_filly.py's --LayerSegPath consumes (it reads them via
         # prepare_filly.resample_oct, and rpe = layers[:, 10]). The raw lres.xml is
         # NOT directly consumable. Converter = local_IOWA_LayerSegV3_to_CSV.
-        # NOTE: the XML->CSV direction/flags are reconstructed from the vendor's
-        # csv->vrcbin usage (sese_ga_vrcbin.py:166) — validate on the first GA run.
+        # Flags confirmed against the converter's --help on cn5 (iowaxml_ls -> csv
+        # folder; --aScanMode is unsupported for iowaxml_ls input, so omitted).
         layers_csv = work / "layers_csv"
         layers_csv.mkdir(parents=True, exist_ok=True)
         _exec([s.ga_iowa_converter or "local_IOWA_LayerSegV3_to_CSV",
                "--in", str(layerseg / "lres.xml"), "--intype", "iowaxml_ls",
-               "--out", str(layers_csv), "--outtype", "csv", "--aScanMode", "1"])
+               "--out", str(layers_csv), "--outtype", "csv"])
         # Step 2: GA model in the .sif.
         code = Path(s.ga_code or "/opt/sese_ga/code")
         weights = Path(s.ga_weights or "/weights/filly_checkpoints")
