@@ -122,6 +122,16 @@ RETINAL_INFERENCE_BMEIS_WEIGHTS=/home/optima/octreader/Processor_Implementations
   ```
 - These `$PI` paths must be visible from the GPU compute node (they are — same NFS
   as `/scratch`); the adapter bind-mounts the code/weights dirs into the `.sif`.
+- BMEIS extra dep: sese_pr imports `scikit-learn`, baked into `bmeis.sif` via the
+  `.def`. To avoid rebaking the `.sif` you can instead bind a `pip --target` dir:
+  ```sh
+  mkdir -p /scratch/$USER/ri/pyextra
+  singularity exec --bind /scratch/$USER/ri/pyextra:/scratch/$USER/ri/pyextra \
+    /scratch/$USER/ri/bmeis.sif pip install --no-cache-dir --no-deps \
+    --target=/scratch/$USER/ri/pyextra scikit-learn==0.24.2 joblib threadpoolctl
+  ```
+  then set `RETINAL_INFERENCE_BMEIS_PYEXTRA=/scratch/$USER/ri/pyextra` (use
+  `--no-deps` so it holds only sklearn, not a numpy that would shadow the `.sif`'s).
 - Persistence: `nohup`/`tmux` to start; a `systemd --user` unit if your admin
   permits a long-lived service on the node.
 

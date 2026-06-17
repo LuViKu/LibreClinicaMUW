@@ -155,6 +155,35 @@ def test_bmeis_converts_dicom_in_container(monkeypatch, tmp_path) -> None:
     assert "--export_for_optimus True" in payload
 
 
+def test_bmeis_pyextra_binds_and_sets_pythonpath(monkeypatch, tmp_path) -> None:
+    _set_sifs(monkeypatch, bmeis="/sif/bmeis.sif")
+    monkeypatch.setattr(_config.settings, "bmeis_code", "/code/pr", raising=False)
+    monkeypatch.setattr(_config.settings, "bmeis_weights", "/weights/u2net", raising=False)
+    monkeypatch.setattr(_config.settings, "bmeis_pyextra", "/scratch/ri/pyextra", raising=False)
+    monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
+
+    captured: dict = {}
+
+    def fake_exec(cmd, env=None):
+        captured["cmd"] = cmd
+        out = tmp_path / "work" / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "001-BMEIS.csv").write_text("size\n30\n40\n")
+        return ""
+
+    monkeypatch.setattr(ap, "_exec", fake_exec)
+
+    dcm_dir = tmp_path / "in"
+    dcm_dir.mkdir()
+    ap.ApptainerAdapter().full_volume(
+        "bmeis", dcm_dir, "OD", out_dir_override=tmp_path / "work"
+    )
+
+    cmd = captured["cmd"]
+    assert any("/scratch/ri/pyextra" in c for c in cmd)  # bound
+    assert "PYTHONPATH='/scratch/ri/pyextra'" in cmd[-1]  # on the run cmd
+
+
 def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:
     _set_sifs(monkeypatch, fluid="/sif/fluid_segmentation.sif")
     monkeypatch.setattr(_config.settings, "apptainer_use_slurm", True, raising=False)

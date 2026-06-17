@@ -221,6 +221,13 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         weights = Path(s.bmeis_weights or "/weights/u2net-cross-entropy")
         dcm = dcm_dir / "bscan.dcm"
         mhd_file = mhd / "bscan.mhd"
+        binds = [str(code), str(weights), str(dcm_dir), str(work)]
+        # Optional extra site-packages (e.g. scikit-learn) bound + on PYTHONPATH,
+        # so a wheel dep can be added without rebaking the .sif (see config).
+        pythonpath = ""
+        if s.bmeis_pyextra:
+            binds.append(str(s.bmeis_pyextra))
+            pythonpath = f"PYTHONPATH='{s.bmeis_pyextra}' "
         # process_input_for_optimus.py --export_for_optimus reads an .mhd and pulls
         # ElementSpacing from its header, so convert the DICOM -> MHD first. Do it
         # INSIDE the .sif (it ships SimpleITK; the host dispatcher stays thin), in
@@ -231,13 +238,13 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             f'sitk.WriteImage(sitk.ReadImage("{dcm}"), "{mhd_file}")\''
         )
         run_model = (
-            f"python '{code / 'process_input_for_optimus.py'}' "
+            f"{pythonpath}python '{code / 'process_input_for_optimus.py'}' "
             f"'{mhd_file}' '{out}' '{weights}' "
             f"--export_for_optimus True --export_mhd False --samples 10"
         )
         cmd = self._apptainer(
             "exec", s.bmeis_sif or "",
-            [str(code), str(weights), str(dcm_dir), str(work)],
+            binds,
             ["bash", "-c", f"{convert} && {run_model}"],
         )
         _exec(cmd, self._gpu_env("bmeis"))

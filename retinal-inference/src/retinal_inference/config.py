@@ -99,6 +99,11 @@ class Settings(BaseSettings):
     bmeis_sif: str | None = None
     bmeis_code: Path | None = None
     bmeis_weights: Path | None = None
+    # Optional extra site-packages dir bound into the bmeis .sif and prepended to
+    # PYTHONPATH (e.g. a `pip install --target` of scikit-learn). Lets a pure-Python
+    # / wheel dep be added without rebaking the heavy .sif; leave unset once the
+    # dep is baked into the image.
+    bmeis_pyextra: Path | None = None
     ga_sif: str | None = None
     ga_code: Path | None = None
     ga_weights: Path | None = None
