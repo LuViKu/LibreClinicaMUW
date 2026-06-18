@@ -417,6 +417,127 @@ export const useOctPortalStore = defineStore('octPortal', () => {
     rows.value = []
   }
 
+  /**
+   * Wave 2B — operator picked a subject in the PatientSearchModal.
+   *
+   * Replaces the row's candidate with the picked subject so the
+   * subject context is no longer "missing" and re-runs the per-row
+   * /resolve call so the matching event(s) for the scan date come
+   * back. The row transitions out of {@code nopatient} into whatever
+   * the new resolve verdict is — typically {@code suggested} (event
+   * found) or {@code novisit} (no event for the scan date).
+   *
+   * <p>Lightweight shape — the modal hit only carries study + subject
+   * label + site context, not the matchingEvent the resolve endpoint
+   * returns. We synthesise a {@link ResolveCandidate} from the hit so
+   * the row's UI (StudyChip, subjectLabel) keeps working pre-resolve,
+   * then let the resolve response overwrite it.
+   */
+  async function assignFromSearch(
+    rowId: string,
+    subject: {
+      studySubjectId: number
+      label: string
+      studyId: number
+      studyName: string
+      siteName: string | null
+    },
+  ): Promise<void> {
+    const idx = rows.value.findIndex((r) => r.rowId === rowId)
+    if (idx === -1) return
+    const current = rows.value[idx]
+    if (!current.scan) return
+    // Seed the row with the picked subject so the UI updates
+    // immediately while the resolve call is in flight; flip to
+    // `parsing` to drive the spinner.
+    const seeded: ResolveCandidate = {
+      studyId: subject.studyId,
+      studyName: subject.studyName,
+      studyOid: '',
+      studySubjectId: subject.studySubjectId,
+      subjectLabel: subject.label,
+      siteName: subject.siteName,
+      matchingEvent: null,
+    }
+    rows.value[idx] = {
+      ...current,
+      state: 'parsing',
+      candidates: [seeded],
+      selectedCandidate: seeded,
+      selectedEvent: null,
+    }
+
+    // Re-run /resolve so the backend recomputes the matching event
+    // for the scan date against the picked subject.
+    let response
+    try {
+      response = await resolveScans([{
+        patientId: subject.label,
+        scanDate: isoLocalDate(current.scan.scanDate),
+        laterality: current.scan.laterality,
+      }])
+    } catch (e) {
+      const msg =
+        e instanceof Error && e.message
+          ? `Studie/Visite-Lookup fehlgeschlagen: ${e.message}`
+          : 'Studie/Visite-Lookup fehlgeschlagen'
+      flipRowToError(rowId, msg)
+      return
+    }
+    const result: ResolveScanResult | undefined = response.scans[0]
+    if (!result) {
+      flipRowToError(rowId, 'Keine Antwort vom Resolver')
+      return
+    }
+    applyResolveResult(rowId, result)
+  }
+
+  /**
+   * Wave 2B — operator picked a visit in the VisitPickerModal.
+   *
+   * Bypasses the auto-resolve path and binds the row to the chosen
+   * event_crf. Transitions the row to {@code suggested} so the
+   * operator's next confirm-all sweep includes it.
+   *
+   * <p>If the picker emitted {@code eventCrfId: -1} (no started CRF
+   * for the picked event), surface an error on the row so the
+   * operator sees why the bind didn't take.
+   */
+  function setManualVisit(
+    rowId: string,
+    eventCrfId: number,
+    definitionLabel: string,
+    dateStart: string,
+  ): void {
+    const idx = rows.value.findIndex((r) => r.rowId === rowId)
+    if (idx === -1) return
+    const current = rows.value[idx]
+    if (eventCrfId <= 0) {
+      rows.value[idx] = {
+        ...current,
+        error: 'Keine Eingabemaske für diese Visite — bitte zuerst Daten starten.',
+      }
+      return
+    }
+    if (!current.selectedCandidate) {
+      // Defensive — should never fire from the UI path (the visit
+      // picker is only mounted when a candidate exists), but surface
+      // a clean error rather than crashing if it does.
+      flipRowToError(rowId, 'Kein Studienteilnehmer ausgewählt')
+      return
+    }
+    rows.value[idx] = {
+      ...current,
+      state: 'suggested',
+      selectedEvent: {
+        eventCrfId,
+        definitionLabel,
+        dateStart,
+        matchPolicy: 'manual',
+      },
+    }
+  }
+
   return {
     rows,
     isParsing,
@@ -429,5 +550,7 @@ export const useOctPortalStore = defineStore('octPortal', () => {
     undo,
     dismiss,
     reset,
+    assignFromSearch,
+    setManualVisit,
   }
 })

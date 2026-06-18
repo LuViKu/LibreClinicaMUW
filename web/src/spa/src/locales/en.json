@@ -2374,6 +2374,26 @@
       "problemSingular": "[NEEDS_REVIEW] issue",
       "problemPlural": "[NEEDS_REVIEW] issues",
       "confirmAllSuffix": "[NEEDS_REVIEW] confirm"
+    },
+    "modals": {
+      "patientSearch": {
+        "title": "[NEEDS_REVIEW] Search patient",
+        "placeholder": "[NEEDS_REVIEW] Enter study ID or subject label…",
+        "tooShort": "[NEEDS_REVIEW] Enter at least 2 characters.",
+        "empty": "[NEEDS_REVIEW] No matching study subjects found.",
+        "searching": "[NEEDS_REVIEW] Searching…",
+        "cancel": "[NEEDS_REVIEW] Cancel",
+        "siteLabel": "[NEEDS_REVIEW] Site",
+        "studyLabel": "[NEEDS_REVIEW] Study",
+        "loadError": "[NEEDS_REVIEW] Search failed."
+      },
+      "visitPicker": {
+        "title": "[NEEDS_REVIEW] Pick visit",
+        "empty": "[NEEDS_REVIEW] No visits for this subject.",
+        "loading": "[NEEDS_REVIEW] Loading visits…",
+        "cancel": "[NEEDS_REVIEW] Cancel",
+        "loadError": "[NEEDS_REVIEW] Failed to load visits."
+      }
     }
   },
   "retinal": {
@@ -2488,6 +2508,21 @@
     },
     "live": {
       "indicator": "[NEEDS_REVIEW] Live"
+    },
+    "parked": {
+      "title": "[NEEDS_REVIEW] Parked scans",
+      "subtitle": "[NEEDS_REVIEW] Uploaded scans without an assigned visit — please bind to a visit.",
+      "empty": "[NEEDS_REVIEW] No parked scans.",
+      "loading": "[NEEDS_REVIEW] Loading…",
+      "loadError": "[NEEDS_REVIEW] Failed to load parked scans.",
+      "colTask": "[NEEDS_REVIEW] Task",
+      "colEye": "[NEEDS_REVIEW] Eye",
+      "colEnqueued": "[NEEDS_REVIEW] Received",
+      "colAction": "[NEEDS_REVIEW] Action",
+      "bindAction": "[NEEDS_REVIEW] Assign visit",
+      "bindSuccess": "[NEEDS_REVIEW] Scan assigned to a visit.",
+      "bindConflict": "[NEEDS_REVIEW] Scan was already assigned by another session.",
+      "bindError": "[NEEDS_REVIEW] Assignment failed."
     }
   },
   "bugReport": {
