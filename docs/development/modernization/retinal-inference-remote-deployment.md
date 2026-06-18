@@ -74,6 +74,14 @@ export RETINAL_INFERENCE_RUNNER_TIMEOUT_S=300
 # DR-022 split: no Postgres on the GPU host. Disable the DB-poll worker so
 # the entrypoint runs uvicorn only.
 export RETINAL_INFERENCE_WORKER_ENABLED=false
+
+# OPTIONAL — institutional per-modality SLO scale override. Sidecar
+# build_geometry can't read the SLO mm/px from oct-converter, so it falls
+# back to the OCT volume's lateral spacing (labelled `scale_source:
+# bscan_fallback`) which is degraded — the SLO is not sampled at the OCT's
+# pitch. Set this to the Spectralis spec value to get SLO-native geometry
+# (labelled `scale_source: env_override`). Spectralis 30deg SLO: 0.0058.
+# export RETINAL_INFERENCE_SLO_SPECTRALIS_MM_PER_PX=0.0058
 ```
 
 ### 3. Start ONLY the inference services
