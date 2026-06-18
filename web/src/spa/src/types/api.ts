@@ -2473,6 +2473,8 @@ export interface components {
             status?: string;
             groupAssignments?: components["schemas"]["GroupAssignmentSnapshot"][];
             eyeTransitions?: components["schemas"]["EyeTransitionSummary"][];
+            /** Format: int32 */
+            studySubjectId?: number;
         };
         Assignment: {
             /** Format: int32 */
