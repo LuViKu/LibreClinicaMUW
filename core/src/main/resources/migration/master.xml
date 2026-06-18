@@ -63,5 +63,6 @@
   <include  file="migration/lc-muw-2026-06-18-retinal-job-parked-status.xml"/>
   <include  file="migration/lc-muw-2026-06-19-retinal-job-remote-pending-status.xml"/>
   <include  file="migration/lc-muw-2026-06-19-audit-types-retinal-followups.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-seed-oct-portal-fixture.xml"/>
 </databaseChangeLog>
 
