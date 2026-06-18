@@ -19,6 +19,7 @@
  * the matching B-scan polyline highlights on the fundus image.
  */
 import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
@@ -40,6 +41,7 @@ import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from
  */
 const PerBscanTrace = defineAsyncComponent(() => import('@/components/PerBscanTrace.vue'))
 
+const { t } = useI18n()
 const route = useRoute()
 const store = useRetinalJobStore()
 
@@ -123,16 +125,16 @@ const kpiTiles = computed<KpiTile[]>(() => {
       total_mm3: 0,
     }
     return [
-      { label: 'IRF', value: formatNumber(b.irf_mm3), unit: 'mm³', tone: 'irf' },
-      { label: 'SRF', value: formatNumber(b.srf_mm3), unit: 'mm³', tone: 'srf' },
-      { label: 'PED', value: formatNumber(b.ped_mm3), unit: 'mm³', tone: 'ped' },
-      { label: 'Total', value: formatNumber(b.total_mm3), unit: 'mm³', tone: 'neutral' },
+      { label: t('retinal.kpi.irf'), value: formatNumber(b.irf_mm3), unit: 'mm³', tone: 'irf' },
+      { label: t('retinal.kpi.srf'), value: formatNumber(b.srf_mm3), unit: 'mm³', tone: 'srf' },
+      { label: t('retinal.kpi.ped'), value: formatNumber(b.ped_mm3), unit: 'mm³', tone: 'ped' },
+      { label: t('retinal.kpi.total'), value: formatNumber(b.total_mm3), unit: 'mm³', tone: 'neutral' },
     ]
   }
   if (gaPayload.value) {
     return [
       {
-        label: 'GA area',
+        label: t('retinal.kpi.gaArea'),
         value: formatNumber(gaPayload.value.ga_area_mm2),
         unit: 'mm²',
         tone: 'ga',
@@ -140,15 +142,15 @@ const kpiTiles = computed<KpiTile[]>(() => {
     ]
   }
   if (thicknessPayload.value) {
-    const t = thicknessPayload.value
+    const tp = thicknessPayload.value
     const validRatio =
-      t.total_ascans > 0
-        ? `${t.valid_ascans} / ${t.total_ascans} A-scans valid`
+      tp.total_ascans > 0
+        ? t('retinal.kpi.validAscans', { valid: tp.valid_ascans, total: tp.total_ascans })
         : undefined
     return [
       {
-        label: isOnl.value ? 'ONL thickness' : 'PR thickness',
-        value: formatNumber(t.thickness_mean_um),
+        label: isOnl.value ? t('retinal.kpi.onlThickness') : t('retinal.kpi.prThickness'),
+        value: formatNumber(tp.thickness_mean_um),
         unit: 'µm',
         subtitle: validRatio,
         tone: 'thickness',
@@ -166,8 +168,8 @@ interface EtdrsRow {
 }
 
 const etdrsHeaders = computed<string[]>(() => {
-  if (fluidPayload.value) return ['Ring', 'IRF mm³', 'SRF mm³', 'PED mm³', 'Total mm³']
-  if (gaPayload.value) return ['Ring', 'GA area mm²']
+  if (fluidPayload.value) return [t('retinal.etdrs.colRing'), t('retinal.etdrs.colIrf'), t('retinal.etdrs.colSrf'), t('retinal.etdrs.colPed'), t('retinal.etdrs.colTotal')]
+  if (gaPayload.value) return [t('retinal.etdrs.colRing'), t('retinal.etdrs.colGaArea')]
   return []
 })
 
@@ -176,9 +178,9 @@ const etdrsRows = computed<EtdrsRow[]>(() => {
     const m = fluidPayload.value.etdrs_mm3
     if (m == null) return []
     return [
-      ['1 mm', m.central_1mm],
-      ['3 mm', m.central_3mm],
-      ['6 mm', m.central_6mm],
+      [t('retinal.etdrs.ringLabel', { mm: 1 }), m.central_1mm],
+      [t('retinal.etdrs.ringLabel', { mm: 3 }), m.central_3mm],
+      [t('retinal.etdrs.ringLabel', { mm: 6 }), m.central_6mm],
     ].map(([label, ring]) => ({
       label: label as string,
       values: [
@@ -193,9 +195,9 @@ const etdrsRows = computed<EtdrsRow[]>(() => {
     const m = gaPayload.value.etdrs_mm2
     if (m == null) return []
     return [
-      { label: '1 mm', values: [formatNumber(m.central_1mm)] },
-      { label: '3 mm', values: [formatNumber(m.central_3mm)] },
-      { label: '6 mm', values: [formatNumber(m.central_6mm)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 1 }), values: [formatNumber(m.central_1mm)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 3 }), values: [formatNumber(m.central_3mm)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 6 }), values: [formatNumber(m.central_6mm)] },
     ]
   }
   return []
@@ -223,10 +225,10 @@ function formatIsoDate(iso: string | null): string {
 
 function emptyStateMessage(status: string | null | undefined): string | null {
   if (!status) return null
-  if (status === 'queued') return 'Awaiting sidecar…'
-  if (status === 'preprocessing') return 'Preprocessing the OCT volume…'
-  if (status === 'segmenting') return 'Running segmentation — metrics will appear when the sidecar completes.'
-  if (status === 'failed') return 'Inference failed — segmentation artifacts (if any) are still available below.'
+  if (status === 'queued') return t('retinal.empty.awaitingSidecar')
+  if (status === 'preprocessing') return t('retinal.empty.preprocessing')
+  if (status === 'segmenting') return t('retinal.empty.segmenting')
+  if (status === 'failed') return t('retinal.empty.failed')
   return null
 }
 
@@ -239,13 +241,13 @@ const showJson = ref(false)
   <div class="flex">
     <SideRail>
       <RouterLink to="/" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
-        Home
+        {{ t('retinal.nav.home') }}
       </RouterLink>
     </SideRail>
 
     <main class="flex-1 max-w-6xl px-8 py-6">
       <p v-if="isLoading && !job" class="text-slate-500 italic" data-testid="retinal-view-loading">
-        Loading retinal scan metrics…
+        {{ t('retinal.loading') }}
       </p>
 
       <div
@@ -253,17 +255,17 @@ const showJson = ref(false)
         class="rounded-muw border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800"
         data-testid="retinal-view-error"
       >
-        Failed to load retinal job: {{ loadError }}
+        {{ t('retinal.failedToLoad', { error: loadError }) }}
       </div>
 
       <template v-else-if="job">
         <!-- Header -->
         <div class="mb-5">
           <div class="text-xs text-slate-500 mb-1">
-            Event-CRF #{{ job.eventCrfId }} · Retinal inference job #{{ job.jobId }}
+            {{ t('retinal.header.eventCrfLabel', { id: job.eventCrfId, jobId: job.jobId }) }}
           </div>
           <h1 class="text-xl font-semibold tracking-tight flex items-center gap-3 flex-wrap" data-testid="retinal-view-heading">
-            Retinal scan metrics
+            {{ t('retinal.header.title') }}
             <StatusPill variant="info">{{ String(job.laterality) }}</StatusPill>
             <StatusPill v-if="job.task" variant="neutral">{{ String(job.task).toUpperCase() }}</StatusPill>
             <StatusPill
@@ -277,9 +279,9 @@ const showJson = ref(false)
             <StatusPill v-else variant="warning">{{ job.status }}</StatusPill>
           </h1>
           <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
-            <span>Model: <span class="font-mono">{{ job.modelVersion ?? '—' }}</span></span>
-            <span>Run: <span class="font-mono">{{ formatIsoDate(job.completedAt ?? job.enqueuedAt) }}</span></span>
-            <span>Confidence: <span class="font-mono">{{ job.confidence != null ? job.confidence.toFixed(2) : '—' }}</span></span>
+            <span>{{ t('retinal.header.modelLabel') }} <span class="font-mono">{{ job.modelVersion ?? '—' }}</span></span>
+            <span>{{ t('retinal.header.runLabel') }} <span class="font-mono">{{ formatIsoDate(job.completedAt ?? job.enqueuedAt) }}</span></span>
+            <span>{{ t('retinal.header.confidenceLabel') }} <span class="font-mono">{{ job.confidence != null ? job.confidence.toFixed(2) : '—' }}</span></span>
           </div>
         </div>
 
@@ -296,7 +298,7 @@ const showJson = ref(false)
           class="mb-5 rounded-muw border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"
           data-testid="retinal-view-no-metric"
         >
-          Metrics couldn't be computed — segmentation artifacts are still available below.
+          {{ t('retinal.empty.noMetric') }}
         </div>
 
         <!-- 3-column grid: KPIs / fundus / per-B-scan trace -->
@@ -316,7 +318,7 @@ const showJson = ref(false)
               v-if="kpiTiles.length === 0"
               class="bg-slate-50 border border-dashed border-slate-300 rounded-muw px-4 py-3 text-xs text-slate-500"
             >
-              No KPI yet.
+              {{ t('retinal.empty.noKpi') }}
             </div>
           </div>
 
@@ -326,7 +328,7 @@ const showJson = ref(false)
               v-if="!job.fundusUrl || !geometry"
               class="aspect-square w-full bg-slate-100 border border-dashed border-slate-300 rounded-muw flex items-center justify-center text-xs text-slate-500"
             >
-              Fundus image not yet available.
+              {{ t('retinal.empty.fundusNotAvailable') }}
             </div>
             <div v-else class="aspect-square w-full">
               <FundusOverlay
@@ -353,7 +355,7 @@ const showJson = ref(false)
               v-else
               class="bg-white border border-slate-200 rounded-muw p-3 h-64 flex items-center justify-center text-xs text-slate-500 italic"
             >
-              No per-B-scan trace for this task.
+              {{ t('retinal.empty.noPerBscan') }}
             </div>
           </div>
         </div>
@@ -366,7 +368,7 @@ const showJson = ref(false)
         >
           <div class="px-5 py-3 border-b border-slate-200">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              ETDRS sub-totals
+              {{ t('retinal.etdrs.header') }}
             </h2>
           </div>
           <DenseTable :bordered="false">
@@ -414,7 +416,7 @@ const showJson = ref(false)
             :aria-expanded="showJson"
             @click="showJson = !showJson"
           >
-            <span>Raw output payload</span>
+            <span>{{ t('retinal.jsonTree.rawPayloadHeader') }}</span>
             <span class="text-slate-400">{{ showJson ? '▾' : '▸' }}</span>
           </button>
           <div v-if="showJson" class="p-4 bg-slate-50 overflow-auto max-h-[40rem]">
@@ -427,7 +429,7 @@ const showJson = ref(false)
           to="/subjects"
           class="text-xs text-muw-blue underline"
         >
-          ← Back to subjects
+          {{ t('retinal.nav.backToSubjects') }}
         </RouterLink>
       </template>
     </main>

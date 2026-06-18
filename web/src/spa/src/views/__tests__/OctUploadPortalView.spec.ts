@@ -22,6 +22,18 @@ import { resolve } from 'node:path'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
+
+import deMessages from '@/locales/de.json'
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'de-AT',
+  fallbackLocale: 'de-AT',
+  missingWarn: false,
+  fallbackWarn: false,
+  messages: { 'de-AT': deMessages },
+})
 
 // Stub the OCT-portal API module at the import boundary. The view +
 // store both import from '@/api/octPortal'; this mock replaces the
@@ -88,7 +100,7 @@ function mountView() {
   const pinia = createPinia()
   setActivePinia(pinia)
   return mount(OctUploadPortalView, {
-    global: { plugins: [pinia] },
+    global: { plugins: [pinia, i18n] },
     attachTo: document.body,
   })
 }

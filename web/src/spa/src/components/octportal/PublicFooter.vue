@@ -9,6 +9,10 @@
  * `__BUILD_HASH__`, `__BUILD_DATE__`).
  */
 
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
+
 declare const __APP_VERSION__: string
 declare const __BUILD_HASH__: string
 declare const __BUILD_DATE__: string
@@ -34,7 +38,7 @@ const buildDate = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '0000
             <polyline points="14 2 14 8 20 8" />
           </svg>
         </span>
-        Heidelberg Spectralis OCT · <span class="font-mono">.e2e</span>
+        {{ t('octPortal.footer.formatNote') }} · <span class="font-mono">.e2e</span>
       </span>
     </div>
     <div class="flex items-center gap-2">
@@ -43,8 +47,8 @@ const buildDate = typeof __BUILD_DATE__ !== 'undefined' ? __BUILD_DATE__ : '0000
           <path d="M20 6 9 17l-5-5" />
         </svg>
       </span>
-      <span class="text-[11px] text-slate-500 font-medium">LibreClinica MUW · Version {{ version }}</span>
-      <span class="text-[10px] text-slate-400 font-mono ml-1">Build {{ buildDate }} · {{ buildHash }}</span>
+      <span class="text-[11px] text-slate-500 font-medium">{{ t('octPortal.footer.versionLine', { version }) }}</span>
+      <span class="text-[10px] text-slate-400 font-mono ml-1">{{ t('octPortal.footer.buildLine', { date: buildDate, hash: buildHash }) }}</span>
     </div>
   </footer>
 </template>

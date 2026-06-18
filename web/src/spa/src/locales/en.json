@@ -2279,6 +2279,182 @@
       "placeholder": "Confirmation surface lands with Phase 2."
     }
   },
+  "octPortal": {
+    "topbar": {
+      "brandSuffix": "[NEEDS_REVIEW] MUW",
+      "portalLabel": "[NEEDS_REVIEW] OCT upload portal",
+      "noLoginRequired": "[NEEDS_REVIEW] No login required"
+    },
+    "footer": {
+      "formatNote": "[NEEDS_REVIEW] Heidelberg Spectralis OCT",
+      "versionLine": "[NEEDS_REVIEW] LibreClinica MUW · Version {version}",
+      "buildLine": "[NEEDS_REVIEW] Build {date} · {hash}"
+    },
+    "head": {
+      "eyebrow": "[NEEDS_REVIEW] OCT imaging · upload portal",
+      "title": "[NEEDS_REVIEW] Upload OCT scans",
+      "leadIntro": "[NEEDS_REVIEW] Cross-study — the matching",
+      "leadAnd": "[NEEDS_REVIEW] and",
+      "leadDetermine": "[NEEDS_REVIEW] are automatically resolved from",
+      "leadFromHeader": "[NEEDS_REVIEW] from the file header.",
+      "studyWord": "[NEEDS_REVIEW] study",
+      "visitWord": "[NEEDS_REVIEW] visit",
+      "patientIdWord": "[NEEDS_REVIEW] PatientId",
+      "scanDateWord": "[NEEDS_REVIEW] scan date",
+      "parsingStatus": "[NEEDS_REVIEW] Reading headers…"
+    },
+    "hero": {
+      "noLoginPrefix": "[NEEDS_REVIEW] No login required. The browser reads the",
+      "noLoginHeader": "[NEEDS_REVIEW] header locally and extracts",
+      "noLoginEye": "[NEEDS_REVIEW] eye",
+      "noLoginSuffix": "[NEEDS_REVIEW] then suggests the matching study and visit for confirmation."
+    },
+    "dropzone": {
+      "slimDropMorePrefix": "[NEEDS_REVIEW] Drag more",
+      "slimDropMoreSuffix": "[NEEDS_REVIEW] files here",
+      "browse": "[NEEDS_REVIEW] Browse",
+      "heroTitle": "[NEEDS_REVIEW] Drag OCT scans here",
+      "heroBrowsePrefix": "[NEEDS_REVIEW] or",
+      "heroBrowse": "[NEEDS_REVIEW] browse files",
+      "heroNote": "[NEEDS_REVIEW] multiple files supported · processed locally in the browser"
+    },
+    "parseQueue": {
+      "headerLabel": "[NEEDS_REVIEW] Processing · {done} of {total} files read",
+      "headerHint": "[NEEDS_REVIEW] .e2e header → PatientId · date · eye → study/visit"
+    },
+    "parseRow": {
+      "studyVisitDetermining": "[NEEDS_REVIEW] Resolving study & visit…",
+      "headerReading": "[NEEDS_REVIEW] Reading header…"
+    },
+    "reviewQueue": {
+      "colFile": "[NEEDS_REVIEW] File",
+      "colPatientId": "[NEEDS_REVIEW] PatientId",
+      "colScanDate": "[NEEDS_REVIEW] Scan date",
+      "colEye": "[NEEDS_REVIEW] Eye",
+      "colStudyVisit": "[NEEDS_REVIEW] Study · visit"
+    },
+    "assignment": {
+      "patientFound": "[NEEDS_REVIEW] Patient found",
+      "patientNotFound": "[NEEDS_REVIEW] Patient not found",
+      "multipleStudies": "[NEEDS_REVIEW] Multiple studies",
+      "patientIdMissingPrefix": "[NEEDS_REVIEW] PatientId",
+      "patientIdMissingSuffix": "[NEEDS_REVIEW] does not exist in any study.",
+      "patientIdAmbiguous": "[NEEDS_REVIEW] PatientId exists in multiple studies — assignment required.",
+      "noEventForDate": "[NEEDS_REVIEW] No visit scheduled for {date}.",
+      "assigned": "[NEEDS_REVIEW] Assigned",
+      "parked": "[NEEDS_REVIEW] Parked",
+      "today": "[NEEDS_REVIEW] today",
+      "todayScheduled": "[NEEDS_REVIEW] scheduled today",
+      "processError": "[NEEDS_REVIEW] Processing error",
+      "uploading": "[NEEDS_REVIEW] Uploading…",
+      "change": "[NEEDS_REVIEW] change",
+      "dismissAria": "[NEEDS_REVIEW] Dismiss"
+    },
+    "actions": {
+      "confirm": "[NEEDS_REVIEW] Confirm",
+      "undo": "[NEEDS_REVIEW] Undo",
+      "pickVisit": "[NEEDS_REVIEW] Pick visit",
+      "parkLater": "[NEEDS_REVIEW] Assign later",
+      "searchPatient": "[NEEDS_REVIEW] Search patient",
+      "park": "[NEEDS_REVIEW] Park",
+      "pickStudy": "[NEEDS_REVIEW] Pick study"
+    },
+    "summary": {
+      "fileSingular": "[NEEDS_REVIEW] file",
+      "filePlural": "[NEEDS_REVIEW] files",
+      "recognised": "[NEEDS_REVIEW] recognised",
+      "studySingular": "[NEEDS_REVIEW] study",
+      "studyPlural": "[NEEDS_REVIEW] studies",
+      "suggestionSingular": "[NEEDS_REVIEW] suggestion",
+      "suggestionPlural": "[NEEDS_REVIEW] suggestions",
+      "confirmedSuffix": "[NEEDS_REVIEW] confirmed",
+      "noVisitSuffix": "[NEEDS_REVIEW] without visit",
+      "noPatientSuffix": "[NEEDS_REVIEW] without patient",
+      "ambiguousSuffix": "[NEEDS_REVIEW] ambiguous",
+      "problemSingular": "[NEEDS_REVIEW] issue",
+      "problemPlural": "[NEEDS_REVIEW] issues",
+      "confirmAllSuffix": "[NEEDS_REVIEW] confirm"
+    }
+  },
+  "retinal": {
+    "loading": "[NEEDS_REVIEW] Loading retinal scan metrics…",
+    "failedToLoad": "[NEEDS_REVIEW] Failed to load retinal job: {error}",
+    "header": {
+      "eventCrfLabel": "[NEEDS_REVIEW] Event-CRF #{id} · Retinal inference job #{jobId}",
+      "title": "[NEEDS_REVIEW] Retinal scan metrics",
+      "modelLabel": "[NEEDS_REVIEW] Model:",
+      "runLabel": "[NEEDS_REVIEW] Run:",
+      "confidenceLabel": "[NEEDS_REVIEW] Confidence:"
+    },
+    "empty": {
+      "awaitingSidecar": "[NEEDS_REVIEW] Awaiting sidecar…",
+      "preprocessing": "[NEEDS_REVIEW] Preprocessing the OCT volume…",
+      "segmenting": "[NEEDS_REVIEW] Running segmentation — metrics will appear when the sidecar completes.",
+      "failed": "[NEEDS_REVIEW] Inference failed — segmentation artifacts (if any) are still available below.",
+      "noMetric": "[NEEDS_REVIEW] Metrics couldn't be computed — segmentation artifacts are still available below.",
+      "noKpi": "[NEEDS_REVIEW] No KPI yet.",
+      "fundusNotAvailable": "[NEEDS_REVIEW] Fundus image not yet available.",
+      "noPerBscan": "[NEEDS_REVIEW] No per-B-scan trace for this task."
+    },
+    "kpi": {
+      "irf": "IRF",
+      "srf": "SRF",
+      "ped": "PED",
+      "total": "[NEEDS_REVIEW] Total",
+      "gaArea": "[NEEDS_REVIEW] GA area",
+      "onlThickness": "[NEEDS_REVIEW] ONL thickness",
+      "prThickness": "[NEEDS_REVIEW] PR thickness",
+      "validAscans": "[NEEDS_REVIEW] {valid} / {total} A-scans valid"
+    },
+    "etdrs": {
+      "header": "[NEEDS_REVIEW] ETDRS sub-totals",
+      "colRing": "[NEEDS_REVIEW] Ring",
+      "colIrf": "[NEEDS_REVIEW] IRF mm³",
+      "colSrf": "[NEEDS_REVIEW] SRF mm³",
+      "colPed": "[NEEDS_REVIEW] PED mm³",
+      "colTotal": "[NEEDS_REVIEW] Total mm³",
+      "colGaArea": "[NEEDS_REVIEW] GA area mm²",
+      "ringLabel": "[NEEDS_REVIEW] {mm} mm"
+    },
+    "downloads": {
+      "header": "[NEEDS_REVIEW] Downloads",
+      "empty": "[NEEDS_REVIEW] No artifacts available yet.",
+      "sectionPerScan": "[NEEDS_REVIEW] Per-scan",
+      "sectionSegmentation": "[NEEDS_REVIEW] Segmentation",
+      "action": "[NEEDS_REVIEW] Download"
+    },
+    "jsonTree": {
+      "rawPayloadHeader": "[NEEDS_REVIEW] Raw output payload"
+    },
+    "nav": {
+      "backToSubjects": "[NEEDS_REVIEW] ← Back to subjects",
+      "home": "[NEEDS_REVIEW] Home"
+    },
+    "perBscan": {
+      "header": "[NEEDS_REVIEW] Per-B-scan trace",
+      "empty": "[NEEDS_REVIEW] No per-B-scan data.",
+      "xAxisLabel": "[NEEDS_REVIEW] B-scan index",
+      "yAxisLabel": "[NEEDS_REVIEW] mm²",
+      "tooltipPrefix": "[NEEDS_REVIEW] B-scan {label}"
+    },
+    "results": {
+      "header": "[NEEDS_REVIEW] Retinal results",
+      "jobsLabel": "[NEEDS_REVIEW] {n} job(s)",
+      "loading": "[NEEDS_REVIEW] Loading…",
+      "empty": "[NEEDS_REVIEW] No retinal inference jobs yet.",
+      "colTask": "[NEEDS_REVIEW] Task",
+      "colEye": "[NEEDS_REVIEW] Eye",
+      "colStatus": "[NEEDS_REVIEW] Status",
+      "colPrimaryMetric": "[NEEDS_REVIEW] Primary metric",
+      "colModel": "[NEEDS_REVIEW] Model",
+      "colCompleted": "[NEEDS_REVIEW] Completed",
+      "viewMetricsLink": "[NEEDS_REVIEW] View metrics"
+    },
+    "fundusOverlay": {
+      "aria": "[NEEDS_REVIEW] Fundus image with retinal overlays, {laterality}",
+      "foveaTooltip": "[NEEDS_REVIEW] Fovea estimate ({source})"
+    }
+  },
   "bugReport": {
     "title": "Report a bug",
     "dialog": {

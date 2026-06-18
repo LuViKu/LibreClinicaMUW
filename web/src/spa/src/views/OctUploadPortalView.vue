@@ -22,6 +22,7 @@
  * v1" choice — the portal is unilaterally German for MUW operators.
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import PublicTopBar from '@/components/octportal/PublicTopBar.vue'
 import PublicFooter from '@/components/octportal/PublicFooter.vue'
@@ -32,6 +33,7 @@ import SummaryBar from '@/components/octportal/SummaryBar.vue'
 
 import { useOctPortalStore } from '@/stores/octPortal'
 
+const { t } = useI18n()
 const store = useOctPortalStore()
 
 /** Three-state visual machine derived from store.rows. */
@@ -92,10 +94,10 @@ function onSearchPatientUnsupported(_rowId: string): void {
         <!-- ============================ Page head ============================ -->
         <div class="flex items-end justify-between gap-4 mb-6">
           <div>
-            <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-muw-coral-700 mb-1.5">OCT-Bildgebung · Upload-Portal</div>
-            <h1 class="muw-display text-[27px] leading-tight font-semibold tracking-tight text-slate-900">OCT-Scans hochladen</h1>
+            <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-muw-coral-700 mb-1.5">{{ t('octPortal.head.eyebrow') }}</div>
+            <h1 class="muw-display text-[27px] leading-tight font-semibold tracking-tight text-slate-900">{{ t('octPortal.head.title') }}</h1>
             <p class="text-[13.5px] text-slate-500 mt-2 max-w-[660px] leading-relaxed">
-              Studienübergreifend — die passende <span class="font-medium text-slate-700">Studie</span> und <span class="font-medium text-slate-700">Visite</span> werden automatisch anhand von <span class="font-medium text-slate-700">PatientId</span> und <span class="font-medium text-slate-700">Scan-Datum</span> aus dem Datei-Header bestimmt.
+              {{ t('octPortal.head.leadIntro') }} <span class="font-medium text-slate-700">{{ t('octPortal.head.studyWord') }}</span> {{ t('octPortal.head.leadAnd') }} <span class="font-medium text-slate-700">{{ t('octPortal.head.visitWord') }}</span> {{ t('octPortal.head.leadDetermine') }} <span class="font-medium text-slate-700">{{ t('octPortal.head.patientIdWord') }}</span> {{ t('octPortal.head.leadAnd') }} <span class="font-medium text-slate-700">{{ t('octPortal.head.scanDateWord') }}</span> {{ t('octPortal.head.leadFromHeader') }}
             </p>
           </div>
           <div v-if="screen === 'parsing'" class="inline-flex items-center gap-2 text-[13px] text-slate-500 mb-1">
@@ -104,7 +106,7 @@ function onSearchPatientUnsupported(_rowId: string): void {
                 <path d="M21 12a9 9 0 1 1-6.2-8.5" opacity="0.9" />
               </svg>
             </span>
-            Header werden gelesen…
+            {{ t('octPortal.head.parsingStatus') }}
           </div>
         </div>
 
@@ -119,7 +121,7 @@ function onSearchPatientUnsupported(_rowId: string): void {
               </svg>
             </span>
             <p class="max-w-[720px] leading-relaxed">
-              Es ist kein Login nötig. Der Browser liest den <span class="font-medium text-slate-700">.e2e</span>-Header lokal aus, ermittelt <span class="font-medium text-slate-700">PatientId</span>, <span class="font-medium text-slate-700">Scan-Datum</span> und <span class="font-medium text-slate-700">Auge</span> und schlägt anschließend die passende Studie und Visite zur Bestätigung vor.
+              {{ t('octPortal.hero.noLoginPrefix') }} <span class="font-medium text-slate-700">.e2e</span>{{ t('octPortal.hero.noLoginHeader') }} <span class="font-medium text-slate-700">{{ t('octPortal.head.patientIdWord') }}</span>, <span class="font-medium text-slate-700">{{ t('octPortal.head.scanDateWord') }}</span> {{ t('octPortal.head.leadAnd') }} <span class="font-medium text-slate-700">{{ t('octPortal.hero.noLoginEye') }}</span> {{ t('octPortal.hero.noLoginSuffix') }}
             </p>
           </div>
         </template>

@@ -2278,6 +2278,182 @@
       "placeholder": "Bestätigungsoberfläche folgt mit Phase 2."
     }
   },
+  "octPortal": {
+    "topbar": {
+      "brandSuffix": "MUW",
+      "portalLabel": "OCT-Upload-Portal",
+      "noLoginRequired": "Kein Login erforderlich"
+    },
+    "footer": {
+      "formatNote": "Heidelberg Spectralis OCT",
+      "versionLine": "LibreClinica MUW · Version {version}",
+      "buildLine": "Build {date} · {hash}"
+    },
+    "head": {
+      "eyebrow": "OCT-Bildgebung · Upload-Portal",
+      "title": "OCT-Scans hochladen",
+      "leadIntro": "Studienübergreifend — die passende",
+      "leadAnd": "und",
+      "leadDetermine": "werden automatisch anhand von",
+      "leadFromHeader": "aus dem Datei-Header bestimmt.",
+      "studyWord": "Studie",
+      "visitWord": "Visite",
+      "patientIdWord": "PatientId",
+      "scanDateWord": "Scan-Datum",
+      "parsingStatus": "Header werden gelesen…"
+    },
+    "hero": {
+      "noLoginPrefix": "Es ist kein Login nötig. Der Browser liest den",
+      "noLoginHeader": "-Header lokal aus, ermittelt",
+      "noLoginEye": "Auge",
+      "noLoginSuffix": "und schlägt anschließend die passende Studie und Visite zur Bestätigung vor."
+    },
+    "dropzone": {
+      "slimDropMorePrefix": "Weitere",
+      "slimDropMoreSuffix": "-Dateien hierher ziehen",
+      "browse": "Durchsuchen",
+      "heroTitle": "OCT-Scans hierher ziehen",
+      "heroBrowsePrefix": "oder",
+      "heroBrowse": "Dateien durchsuchen",
+      "heroNote": "mehrere Dateien gleichzeitig möglich · Auslesen erfolgt lokal im Browser"
+    },
+    "parseQueue": {
+      "headerLabel": "Verarbeitung · {done} von {total} Dateien gelesen",
+      "headerHint": ".e2e-Header → PatientId · Datum · Auge → Studie/Visite"
+    },
+    "parseRow": {
+      "studyVisitDetermining": "Studie & Visite werden ermittelt…",
+      "headerReading": "Header wird gelesen…"
+    },
+    "reviewQueue": {
+      "colFile": "Datei",
+      "colPatientId": "PatientId",
+      "colScanDate": "Scan-Datum",
+      "colEye": "Auge",
+      "colStudyVisit": "Studie · Visite"
+    },
+    "assignment": {
+      "patientFound": "Patient gefunden",
+      "patientNotFound": "Patient nicht gefunden",
+      "multipleStudies": "Mehrere Studien",
+      "patientIdMissingPrefix": "PatientId",
+      "patientIdMissingSuffix": "existiert in keiner Studie.",
+      "patientIdAmbiguous": "PatientId existiert in mehreren Studien — Zuordnung erforderlich.",
+      "noEventForDate": "Kein Termin für den {date} geplant.",
+      "assigned": "Zugeordnet",
+      "parked": "Geparkt",
+      "today": "heute",
+      "todayScheduled": "heute geplant",
+      "processError": "Fehler beim Verarbeiten",
+      "uploading": "Wird hochgeladen…",
+      "change": "ändern",
+      "dismissAria": "Verwerfen"
+    },
+    "actions": {
+      "confirm": "Bestätigen",
+      "undo": "Rückgängig",
+      "pickVisit": "Visite wählen",
+      "parkLater": "Später zuordnen",
+      "searchPatient": "Patient suchen",
+      "park": "Parken",
+      "pickStudy": "Studie wählen"
+    },
+    "summary": {
+      "fileSingular": "Datei",
+      "filePlural": "Dateien",
+      "recognised": "erkannt",
+      "studySingular": "Studie",
+      "studyPlural": "Studien",
+      "suggestionSingular": "Vorschlag",
+      "suggestionPlural": "Vorschläge",
+      "confirmedSuffix": "bestätigt",
+      "noVisitSuffix": "ohne Termin",
+      "noPatientSuffix": "ohne Patient",
+      "ambiguousSuffix": "mehrdeutig",
+      "problemSingular": "Problem",
+      "problemPlural": "Probleme",
+      "confirmAllSuffix": "bestätigen"
+    }
+  },
+  "retinal": {
+    "loading": "Loading retinal scan metrics…",
+    "failedToLoad": "Failed to load retinal job: {error}",
+    "header": {
+      "eventCrfLabel": "Event-CRF #{id} · Retinal inference job #{jobId}",
+      "title": "Retinal scan metrics",
+      "modelLabel": "Model:",
+      "runLabel": "Run:",
+      "confidenceLabel": "Confidence:"
+    },
+    "empty": {
+      "awaitingSidecar": "Awaiting sidecar…",
+      "preprocessing": "Preprocessing the OCT volume…",
+      "segmenting": "Running segmentation — metrics will appear when the sidecar completes.",
+      "failed": "Inference failed — segmentation artifacts (if any) are still available below.",
+      "noMetric": "Metrics couldn't be computed — segmentation artifacts are still available below.",
+      "noKpi": "No KPI yet.",
+      "fundusNotAvailable": "Fundus image not yet available.",
+      "noPerBscan": "No per-B-scan trace for this task."
+    },
+    "kpi": {
+      "irf": "IRF",
+      "srf": "SRF",
+      "ped": "PED",
+      "total": "Total",
+      "gaArea": "GA area",
+      "onlThickness": "ONL thickness",
+      "prThickness": "PR thickness",
+      "validAscans": "{valid} / {total} A-scans valid"
+    },
+    "etdrs": {
+      "header": "ETDRS sub-totals",
+      "colRing": "Ring",
+      "colIrf": "IRF mm³",
+      "colSrf": "SRF mm³",
+      "colPed": "PED mm³",
+      "colTotal": "Total mm³",
+      "colGaArea": "GA area mm²",
+      "ringLabel": "{mm} mm"
+    },
+    "downloads": {
+      "header": "Downloads",
+      "empty": "No artifacts available yet.",
+      "sectionPerScan": "Per-scan",
+      "sectionSegmentation": "Segmentation",
+      "action": "Download"
+    },
+    "jsonTree": {
+      "rawPayloadHeader": "Raw output payload"
+    },
+    "nav": {
+      "backToSubjects": "← Back to subjects",
+      "home": "Home"
+    },
+    "perBscan": {
+      "header": "Per-B-scan trace",
+      "empty": "No per-B-scan data.",
+      "xAxisLabel": "B-scan index",
+      "yAxisLabel": "mm²",
+      "tooltipPrefix": "B-scan {label}"
+    },
+    "results": {
+      "header": "Retinal results",
+      "jobsLabel": "{n} job(s)",
+      "loading": "Loading…",
+      "empty": "No retinal inference jobs yet.",
+      "colTask": "Task",
+      "colEye": "Eye",
+      "colStatus": "Status",
+      "colPrimaryMetric": "Primary metric",
+      "colModel": "Model",
+      "colCompleted": "Completed",
+      "viewMetricsLink": "View metrics"
+    },
+    "fundusOverlay": {
+      "aria": "Fundus image with retinal overlays, {laterality}",
+      "foveaTooltip": "Fovea estimate ({source})"
+    }
+  },
   "bugReport": {
     "title": "Fehler melden",
     "dialog": {

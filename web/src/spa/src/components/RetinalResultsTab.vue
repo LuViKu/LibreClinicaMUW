@@ -13,6 +13,7 @@
  * the heavy lifting.
  */
 import { computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { RouterLink } from 'vue-router'
 
 import DenseTable from './DenseTable.vue'
@@ -26,6 +27,7 @@ interface Props {
   eventCrfId?: number | null
 }
 
+const { t } = useI18n()
 const props = defineProps<Props>()
 const store = useRetinalJobStore()
 
@@ -109,9 +111,9 @@ function formatPrimaryMetric(job: RetinalJobSummary): string {
   >
     <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
       <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-        Retinal results
+        {{ t('retinal.results.header') }}
       </h2>
-      <span class="text-xs text-slate-500">{{ jobs.length }} job(s)</span>
+      <span class="text-xs text-slate-500">{{ t('retinal.results.jobsLabel', { n: jobs.length }) }}</span>
     </div>
 
     <p
@@ -119,7 +121,7 @@ function formatPrimaryMetric(job: RetinalJobSummary): string {
       class="px-5 py-6 text-xs text-slate-500 italic"
       data-testid="retinal-results-loading"
     >
-      Loading…
+      {{ t('retinal.results.loading') }}
     </p>
 
     <p
@@ -127,18 +129,18 @@ function formatPrimaryMetric(job: RetinalJobSummary): string {
       class="px-5 py-6 text-xs text-slate-500 italic"
       data-testid="retinal-results-empty"
     >
-      No retinal inference jobs yet.
+      {{ t('retinal.results.empty') }}
     </p>
 
     <DenseTable v-else :bordered="false">
       <template #header>
         <tr class="border-b border-slate-200">
-          <th scope="col" class="px-5 py-2 font-medium w-24">Task</th>
-          <th scope="col" class="px-5 py-2 font-medium w-20">Eye</th>
-          <th scope="col" class="px-5 py-2 font-medium w-32">Status</th>
-          <th scope="col" class="px-5 py-2 font-medium">Primary metric</th>
-          <th scope="col" class="px-5 py-2 font-medium w-32">Model</th>
-          <th scope="col" class="px-5 py-2 font-medium w-28">Completed</th>
+          <th scope="col" class="px-5 py-2 font-medium w-24">{{ t('retinal.results.colTask') }}</th>
+          <th scope="col" class="px-5 py-2 font-medium w-20">{{ t('retinal.results.colEye') }}</th>
+          <th scope="col" class="px-5 py-2 font-medium w-32">{{ t('retinal.results.colStatus') }}</th>
+          <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.results.colPrimaryMetric') }}</th>
+          <th scope="col" class="px-5 py-2 font-medium w-32">{{ t('retinal.results.colModel') }}</th>
+          <th scope="col" class="px-5 py-2 font-medium w-28">{{ t('retinal.results.colCompleted') }}</th>
           <th scope="col" class="px-5 py-2 font-medium w-28 text-right"></th>
         </tr>
       </template>
@@ -157,7 +159,7 @@ function formatPrimaryMetric(job: RetinalJobSummary): string {
             class="text-muw-blue hover:underline"
             data-testid="retinal-results-view-link"
           >
-            View metrics
+            {{ t('retinal.results.viewMetricsLink') }}
           </RouterLink>
         </td>
       </tr>

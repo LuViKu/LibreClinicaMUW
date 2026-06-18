@@ -17,11 +17,22 @@
  */
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 
 import Assignment from '../Assignment.vue'
+import deMessages from '@/locales/de.json'
 import type { ReviewRow } from '@/stores/octPortal'
 import type { E2eScan } from '@/lib/e2eParser'
 import type { EventCandidate, ResolveCandidate } from '@/api/octPortal'
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'de-AT',
+  fallbackLocale: 'de-AT',
+  missingWarn: false,
+  fallbackWarn: false,
+  messages: { 'de-AT': deMessages },
+})
 
 function makeFile(name: string): File {
   return new File([new Uint8Array(8)], name, { type: 'application/octet-stream' })
@@ -67,7 +78,7 @@ function baseRow(state: ReviewRow['state'], overrides: Partial<ReviewRow> = {}):
 
 describe('Assignment (per-state action buttons)', () => {
   it('suggested → renders Bestätigen + ändern; confirm emits rowId', async () => {
-    const w = mount(Assignment, { props: { row: baseRow('suggested') } })
+    const w = mount(Assignment, { global: { plugins: [i18n] }, props: { row: baseRow('suggested') } })
     expect(w.text()).toContain('Bestätigen')
     expect(w.text()).toContain('ändern')
     expect(w.text()).toContain('Patient gefunden')
@@ -78,7 +89,7 @@ describe('Assignment (per-state action buttons)', () => {
   })
 
   it('confirmed → renders Rückgängig; undo emits rowId', async () => {
-    const w = mount(Assignment, { props: { row: baseRow('confirmed', { jobId: 99 }) } })
+    const w = mount(Assignment, { global: { plugins: [i18n] }, props: { row: baseRow('confirmed', { jobId: 99 }) } })
     expect(w.text()).toContain('Rückgängig')
     expect(w.text()).toContain('Zugeordnet')
     const btn = w.find('[data-testid="action-undo-row-1"]')
@@ -89,6 +100,7 @@ describe('Assignment (per-state action buttons)', () => {
 
   it('novisit → renders Visite wählen + Später zuordnen; park emits rowId', async () => {
     const w = mount(Assignment, {
+      global: { plugins: [i18n] },
       props: {
         row: baseRow('novisit', {
           selectedEvent: null,
@@ -107,6 +119,7 @@ describe('Assignment (per-state action buttons)', () => {
 
   it('nopatient → renders Patient suchen + Parken; park emits rowId', async () => {
     const w = mount(Assignment, {
+      global: { plugins: [i18n] },
       props: {
         row: baseRow('nopatient', {
           candidates: [],
@@ -127,6 +140,7 @@ describe('Assignment (per-state action buttons)', () => {
 
   it('error → renders dismiss button; dismiss emits rowId', async () => {
     const w = mount(Assignment, {
+      global: { plugins: [i18n] },
       props: {
         row: baseRow('error', {
           candidates: undefined,
