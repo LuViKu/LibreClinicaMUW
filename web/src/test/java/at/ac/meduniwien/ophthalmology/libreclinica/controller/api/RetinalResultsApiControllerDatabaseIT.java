@@ -8,7 +8,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -22,14 +25,20 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.Timestamp;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -185,8 +194,18 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
     }
 
     private MockMvc buildMockMvc() {
+        // Wave 1B (2026-06-18) — wire the full constructor so the new
+        // bind / search paths can be exercised end-to-end. The remote
+        // client is mocked to "not configured" so the bind path picks
+        // the local-queue branch (status=queued, not remote_pending).
+        RemoteRetinalInferenceClient remoteClient = Mockito.mock(RemoteRetinalInferenceClient.class);
+        Mockito.when(remoteClient.isConfigured()).thenReturn(false);
         return MockMvcBuilders.standaloneSetup(
-                new RetinalResultsApiController(DATA_SOURCE, visibilityFilter, artifactStore))
+                new RetinalResultsApiController(
+                        DATA_SOURCE, visibilityFilter, artifactStore,
+                        new StudySubjectFinder(DATA_SOURCE),
+                        remoteClient,
+                        new RetinalJobStatusBroadcaster()))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }
@@ -350,5 +369,174 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
                 .andExpect(content().contentType("image/png"))
                 .andExpect(header().string("Cache-Control",
                         org.hamcrest.Matchers.containsString("max-age=3600")));
+    }
+
+    /* ====================================================================== */
+    /* PATCH /retinal-jobs/{jobId}/bind  — Wave 1B                            */
+    /* ====================================================================== */
+
+    /** Happy path: bind a parked job to event_crf 1 → status flips to queued. */
+    @Test
+    void bind_happyPath_flipsToQueuedAndWritesAudit() throws Exception {
+        long jobId = seedParkedJob();
+        try {
+            buildMockMvc().perform(patch("/api/v1/retinal-jobs/" + jobId + "/bind")
+                    .session(authenticatedSession())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"eventCrfId\":1}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.jobId").value((int) jobId))
+                    .andExpect(jsonPath("$.status").value("queued"));
+
+            // Verify the row was actually updated.
+            try (Connection c = DATA_SOURCE.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "SELECT event_crf_id, status FROM retinal_inference_job WHERE job_id = ?")) {
+                ps.setLong(1, jobId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertEquals(1, rs.getInt("event_crf_id"));
+                    assertEquals("queued", rs.getString("status"));
+                }
+            }
+
+            // Audit row check
+            try (Connection c = DATA_SOURCE.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "SELECT new_value, old_value FROM audit_log_event "
+                                 + "WHERE audit_log_event_type_id = ? AND entity_id = ?")) {
+                ps.setInt(1, AuditTypeIds.RETINAL_PARK_BIND);
+                ps.setInt(2, (int) jobId);
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertTrue(rs.next(), "RETINAL_PARK_BIND audit row should exist");
+                    assertEquals("queued", rs.getString("new_value"));
+                    assertEquals("parked", rs.getString("old_value"));
+                }
+            }
+        } finally {
+            cleanupAuditAndJob(jobId, AuditTypeIds.RETINAL_PARK_BIND);
+        }
+    }
+
+    /** 409 when the job is in any non-parked status. */
+    @Test
+    void bind_returns409WhenJobNotParked() throws Exception {
+        // 9001 is seeded as 'done' by the @BeforeEach.
+        buildMockMvc().perform(patch("/api/v1/retinal-jobs/9001/bind")
+                .session(authenticatedSession())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"eventCrfId\":1}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("Job is not parked")));
+    }
+
+    /** 404 when the eventCrfId references a missing event_crf. */
+    @Test
+    void bind_returns404OnMissingEventCrf() throws Exception {
+        long jobId = seedParkedJob();
+        try {
+            buildMockMvc().perform(patch("/api/v1/retinal-jobs/" + jobId + "/bind")
+                    .session(authenticatedSession())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"eventCrfId\":987654321}"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.message").value(
+                            org.hamcrest.Matchers.containsString("event_crf")));
+        } finally {
+            cleanupJobOnly(jobId);
+        }
+    }
+
+    /* ====================================================================== */
+    /* GET /study-subjects/search                                              */
+    /* ====================================================================== */
+
+    @Test
+    void searchSubjects_returnsHits_forKnownPrefix() throws Exception {
+        buildMockMvc().perform(get("/api/v1/study-subjects/search")
+                .param("q", "M-00")
+                .param("limit", "10")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                // 7 seeded subjects M-001 .. M-007 all visible to root.
+                .andExpect(jsonPath("$.length()").value(7))
+                .andExpect(jsonPath("$[0].label").value("M-001"))
+                .andExpect(jsonPath("$[0].studyId").value(1));
+    }
+
+    @Test
+    void searchSubjects_returnsEmpty_forNonexistentPrefix() throws Exception {
+        buildMockMvc().perform(get("/api/v1/study-subjects/search")
+                .param("q", "ZZZ-NO-SUCH")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void searchSubjects_clampsLimitOutOfRange() throws Exception {
+        // limit=99 → clamped to 50 internally; with only 7 rows the assert
+        // is just "no error, returns the 7 matches".
+        buildMockMvc().perform(get("/api/v1/study-subjects/search")
+                .param("q", "M-")
+                .param("limit", "99")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(7));
+    }
+
+    @Test
+    void searchSubjects_returnsEmpty_forBlankQuery() throws Exception {
+        buildMockMvc().perform(get("/api/v1/study-subjects/search")
+                .param("q", "  ")
+                .session(authenticatedSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    /* ---- bind / search helpers --------------------------------------- */
+
+    private static long seedParkedJob() throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO retinal_inference_job ("
+                             + "event_crf_id, task, e2e_path, eye_laterality, "
+                             + "status, enqueued_at) VALUES (?, ?, ?, ?, ?, ?) "
+                             + "RETURNING job_id")) {
+            ps.setNull(1, java.sql.Types.INTEGER);
+            ps.setString(2, "fluid");
+            ps.setString(3, "/tmp/wave1b-parked.e2e");
+            ps.setString(4, "OD");
+            ps.setString(5, "parked");
+            ps.setTimestamp(6, new Timestamp(System.currentTimeMillis()));
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next());
+                return rs.getLong(1);
+            }
+        }
+    }
+
+    private static void cleanupJobOnly(long jobId) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "DELETE FROM retinal_inference_job WHERE job_id = ?")) {
+            ps.setLong(1, jobId);
+            ps.executeUpdate();
+        }
+    }
+
+    private static void cleanupAuditAndJob(long jobId, int auditTypeId) throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "DELETE FROM audit_log_event "
+                             + "WHERE audit_log_event_type_id = ? AND entity_id = ?")) {
+            ps.setInt(1, auditTypeId);
+            ps.setInt(2, (int) jobId);
+            ps.executeUpdate();
+        }
+        cleanupJobOnly(jobId);
     }
 }

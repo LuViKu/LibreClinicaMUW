@@ -1,0 +1,62 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Retinal follow-ups Wave 1B (2026-06-19): seed two new
+        audit_log_event_type rows so the unified audit-write paths can
+        record park-binding + ambiguous-match disambiguation events
+        emitted by the public OCT-upload portal + the staff park-bind
+        endpoint.
+
+        116 — retinal_park_bind         | retinal_inference_job
+        117 — oct_upload_public_ambiguous | study_subject
+
+        See AuditTypeIds.java (controller.api package) for the matching
+        constants + the convention for how the new_value column is
+        packed.
+
+        Plan: /Users/lukas/.claude/plans/robust-jumping-eich.md
+        (Wave 1B · Java backend new endpoints).
+    -->
+    <changeSet id="2026-06-19-audit-types-retinal-followups"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id IN (116, 117);
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the two retinal-followups audit types. Both rows
+            surface in per-study audit views (is_user_visible=true) so
+            the operator timeline shows the bind + the disambiguation
+            decisions alongside the regular upload events.
+        </comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="116"/>
+            <column name="name" value="retinal_park_bind"/>
+            <column name="display_name" value="Retinal job bound from park"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="117"/>
+            <column name="name" value="oct_upload_public_ambiguous"/>
+            <column name="display_name" value="OCT upload (public portal) — ambiguous-match disambiguated"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id IN (116, 117)</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
