@@ -17,6 +17,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFi
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalInferenceClient;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.RetinalMetricComputer;
 
 import org.junit.jupiter.api.Test;
@@ -48,7 +49,8 @@ class RetinalInferenceApiControllerTest extends AbstractApiControllerTest {
                 Mockito.mock(RetinalInferenceClient.class),
                 Mockito.mock(RemoteRetinalInferenceClient.class),
                 Mockito.mock(RetinalArtifactStorageService.class),
-                Mockito.mock(RetinalMetricComputer.class)));
+                Mockito.mock(RetinalMetricComputer.class),
+                Mockito.mock(RetinalJobStatusBroadcaster.class)));
     }
 
     private static MockMultipartFile sampleE2e() {

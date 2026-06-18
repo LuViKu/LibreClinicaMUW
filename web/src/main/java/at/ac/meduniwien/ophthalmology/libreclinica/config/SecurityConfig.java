@@ -29,9 +29,12 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.audit.LoginAuditServi
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.JitProvisioningStrategy;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.LookupOnlyProvisioningStrategy;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.UserProvisioningStrategy;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.SsoUserDetailsService;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.TrustedProxyRequestHeaderAuthenticationFilter;
+import org.springframework.security.web.access.channel.ChannelProcessingFilter;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Phase C.14 cliff (2026-05-30): Java replacement for the
@@ -61,6 +64,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.TrustedProxyReques
  */
 @Configuration
 @EnableWebSecurity
+@EnableScheduling
 public class SecurityConfig {
 
     /**
@@ -93,7 +97,12 @@ public class SecurityConfig {
             UserAccountDAO userAccountDao,
             // Phase D.5 (DR-014): shared audit-write hook for both
             // local-password and SSO pre-auth paths.
-            LoginAuditService loginAuditService) throws Exception {
+            LoginAuditService loginAuditService,
+            // Wave 1B (2026-06-18): hand-rolled token-bucket on the
+            // public OCT-upload portal. The filter no-ops for every
+            // path that doesn't match its guarded prefix; cost is one
+            // request URI startsWith for the rest of the chain.
+            PublicOctUploadRateLimitFilter publicOctUploadRateLimitFilter) throws Exception {
 
         // Phase E.6 (2026-06-03) — SPA-vs-legacy entry-point split.
         // The legacy form-login entry point at /pages/login/login emits
@@ -259,6 +268,7 @@ public class SecurityConfig {
                 )).permitAll()
                 .anyRequest().hasRole("USER")
             )
+            .addFilterBefore(publicOctUploadRateLimitFilter, ChannelProcessingFilter.class)
             .addFilterAt(myFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterAt(concurrencyFilter, ConcurrentSessionFilter.class)
             .logout(logout -> logout

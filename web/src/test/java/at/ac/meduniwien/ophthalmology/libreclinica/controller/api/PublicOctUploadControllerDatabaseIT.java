@@ -259,6 +259,57 @@ class PublicOctUploadControllerDatabaseIT extends AbstractApiControllerDatabaseI
                 .andExpect(status().isBadRequest());
     }
 
+    /**
+     * Wave 1B disambiguation flow — commit with disambiguated=true &
+     * candidateCount=3 writes a SECOND audit row of type
+     * OCT_UPLOAD_PUBLIC_AMBIGUOUS against the chosen study_subject.
+     */
+    @Test
+    void commit_disambiguated_writesAmbiguousAuditRow() throws Exception {
+        MockMultipartFile file = new MockMultipartFile(
+                "file", "scan.e2e", "application/octet-stream", new byte[256]);
+        MvcResult res = mockMvc().perform(multipart("/api/v1/public/oct-upload/commit")
+                .file(file)
+                .param("patientId", "M-001")
+                .param("scanDate", "2020-10-06")
+                .param("laterality", "OD")
+                .param("eventCrfId", "1")
+                .param("disambiguated", "true")
+                .param("candidateCount", "3"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        long jobId = extractJobId(res);
+
+        // The ambiguous-marker row sits on study_subject 1 (M-001 was bound
+        // to event_crf 1, which belongs to study_subject 1 per the seed).
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT audit_table, entity_id, new_value "
+                             + "FROM audit_log_event "
+                             + "WHERE audit_log_event_type_id = ? AND entity_id = ?")) {
+            ps.setInt(1, AuditTypeIds.OCT_UPLOAD_PUBLIC_AMBIGUOUS);
+            ps.setInt(2, 1);
+            try (ResultSet rs = ps.executeQuery()) {
+                assertTrue(rs.next(), "OCT_UPLOAD_PUBLIC_AMBIGUOUS row must exist");
+                assertEquals("study_subject", rs.getString("audit_table"));
+                assertEquals(1, rs.getInt("entity_id"));
+                String newValue = rs.getString("new_value");
+                assertTrue(newValue.contains("chose:1"), "new_value should pack chose:<id>");
+                assertTrue(newValue.contains("from:3"), "new_value should pack candidate count");
+            }
+        }
+
+        // Cleanup the disambiguation audit row + the regular flow's rows.
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "DELETE FROM audit_log_event "
+                             + "WHERE audit_log_event_type_id = ?")) {
+            ps.setInt(1, AuditTypeIds.OCT_UPLOAD_PUBLIC_AMBIGUOUS);
+            ps.executeUpdate();
+        }
+        cleanupJob(jobId);
+    }
+
     /* ====================================================================== */
     /* DELETE /{jobId} — undo                                                 */
     /* ====================================================================== */

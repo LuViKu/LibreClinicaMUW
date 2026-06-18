@@ -209,4 +209,34 @@ public final class AuditTypeIds {
     // ------------------------------------------------------------------
 
     public static final int OCT_UPLOAD_PUBLIC                = 115;
+
+    // ------------------------------------------------------------------
+    // Retinal followups Wave 1B (2026-06-18).
+    // ------------------------------------------------------------------
+
+    /**
+     * Park-bind: a clinician attached a previously parked
+     * retinal_inference_job (commit via public OCT-upload portal with no
+     * scheduled visit) to an event_crf via
+     * {@code PATCH /retinal-jobs/{jobId}/bind}. Writer is
+     * {@code RetinalResultsApiController.bindParkedJob}; auditTable
+     * stays {@code retinal_inference_job}, entityId = jobId. The flip
+     * from {@code parked} to {@code remote_pending}/{@code queued}
+     * itself surfaces via the {@code OCT_UPLOAD_PUBLIC}-style audit row
+     * convention — old_value carries the prior status string.
+     */
+    public static final int RETINAL_PARK_BIND                = 116;
+
+    /**
+     * Disambiguation marker for {@link #OCT_UPLOAD_PUBLIC}: the
+     * portal's {@code /commit} endpoint receives
+     * {@code disambiguated=true} when the staff picked ONE candidate
+     * from a multi-match resolve response. This second audit row is
+     * persisted alongside the main {@code OCT_UPLOAD_PUBLIC} row so
+     * the audit timeline shows BOTH the upload + the human pick.
+     * audit_table = {@code study_subject}; entity_id is the chosen
+     * study_subject_id; new_value packs
+     * {@code "chose:<studySubjectId>:from:<candidateCount> candidates"}.
+     */
+    public static final int OCT_UPLOAD_PUBLIC_AMBIGUOUS      = 117;
 }

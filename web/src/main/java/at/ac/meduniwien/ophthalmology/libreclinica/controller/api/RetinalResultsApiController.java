@@ -32,8 +32,17 @@ import jakarta.servlet.http.HttpSession;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -46,8 +55,11 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
@@ -113,14 +125,37 @@ public class RetinalResultsApiController {
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
     private final RetinalArtifactStorageService artifactStore;
+    private final StudySubjectFinder studySubjectFinder;
+    private final RemoteRetinalInferenceClient remoteClient;
+    private final RetinalJobStatusBroadcaster broadcaster;
 
     @Autowired
     public RetinalResultsApiController(@Qualifier("dataSource") DataSource dataSource,
                                        SiteVisibilityFilter siteVisibilityFilter,
-                                       RetinalArtifactStorageService artifactStore) {
+                                       RetinalArtifactStorageService artifactStore,
+                                       StudySubjectFinder studySubjectFinder,
+                                       RemoteRetinalInferenceClient remoteClient,
+                                       RetinalJobStatusBroadcaster broadcaster) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.artifactStore = artifactStore;
+        this.studySubjectFinder = studySubjectFinder;
+        this.remoteClient = remoteClient;
+        this.broadcaster = broadcaster;
+    }
+
+    /**
+     * Wave 1B (2026-06-18): IT-friendly back-compat constructor used by
+     * the Wave-3 happy-path IT and its sibling sliced tests. The bind +
+     * search + SSE-broadcast paths are exercised via the
+     * full-arg constructor; tests that exercise only the read-side
+     * endpoints can keep the existing 3-arg ctor and pass null for the
+     * new collaborators (the call paths guard for null).
+     */
+    public RetinalResultsApiController(DataSource dataSource,
+                                       SiteVisibilityFilter siteVisibilityFilter,
+                                       RetinalArtifactStorageService artifactStore) {
+        this(dataSource, siteVisibilityFilter, artifactStore, null, null, null);
     }
 
     /* ====================================================================== */
@@ -431,6 +466,192 @@ public class RetinalResultsApiController {
     }
 
     /* ====================================================================== */
+    /* PATCH /retinal-jobs/{jobId}/bind — Wave 1B park-bind                   */
+    /* ====================================================================== */
+
+    /**
+     * Request body for {@link #bindParkedJob(long, BindRequest, HttpSession)}.
+     */
+    public record BindRequest(int eventCrfId) { }
+
+    /**
+     * Wave 1B — bind a previously parked retinal_inference_job (commit
+     * via the public OCT-upload portal with no scheduled visit) to a
+     * concrete event_crf. The job's status flips from {@code parked} to
+     * {@code remote_pending} (when the remote GPU sidecar is
+     * configured) or {@code queued} so the worker / sidecar picks it up
+     * immediately.
+     *
+     * <p>409 Conflict when the job is not currently {@code parked}; 403
+     * when the requested event_crf is outside the session user's
+     * site-visibility scope; 404 when either the job or the event_crf
+     * is missing.
+     *
+     * <p>One audit_log_event row of type
+     * {@link AuditTypeIds#RETINAL_PARK_BIND} is emitted on success;
+     * old_value carries {@code "parked"} and new_value carries the new
+     * status so the timeline shows the bind + the transition in a
+     * single row.
+     */
+    @PatchMapping(path = "/retinal-jobs/{jobId:[0-9]+}/bind",
+                  produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> bindParkedJob(@PathVariable("jobId") long jobId,
+                                           @RequestBody BindRequest body,
+                                           HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        if (body == null || body.eventCrfId() <= 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "eventCrfId is required"));
+        }
+        int eventCrfId = body.eventCrfId();
+
+        // ---- load the parked job ------------------------------------
+        ParkedJob job;
+        try (Connection c = dataSource.getConnection()) {
+            job = fetchParkedJob(c, jobId);
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to fetch retinal job {} for bind: {}",
+                    jobId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to fetch retinal job: " + sqlEx.getMessage()));
+        }
+        if (job == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
+        if (!"parked".equals(job.status)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Job is not parked (status=" + job.status + ")"));
+        }
+
+        // ---- visibility on the target event_crf ---------------------
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        if (ss == null || ss.getStudyId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "event_crf " + eventCrfId + " has no resolvable study"));
+        }
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "event_crf " + eventCrfId + " belongs to a different study"));
+        }
+
+        // ---- flip the job + emit audit + broadcast ------------------
+        String newStatus = (remoteClient != null && remoteClient.isConfigured())
+                ? "remote_pending"
+                : "queued";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE retinal_inference_job "
+                             + "   SET event_crf_id = ?, status = ?, "
+                             + "       screened_at = NULL, segmenting_at = NULL "
+                             + " WHERE job_id = ?")) {
+            ps.setInt(1, eventCrfId);
+            ps.setString(2, newStatus);
+            ps.setLong(3, jobId);
+            int updated = ps.executeUpdate();
+            if (updated == 0) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "No retinal_inference_job with id " + jobId));
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to bind retinal job {} to event_crf {}: {}",
+                    jobId, eventCrfId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to bind retinal job: " + sqlEx.getMessage()));
+        }
+
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        EventCrfsApiController.writeAuditEvent(
+                auditDAO, AuditTypeIds.RETINAL_PARK_BIND,
+                currentUser, currentStudy, ss,
+                "Retinal job park-bind — eventCrfId=" + eventCrfId,
+                /* auditTable */ "retinal_inference_job",
+                /* entityId   */ (int) jobId,
+                /* columnName */ "status",
+                /* oldValue   */ "parked",
+                /* newValue   */ newStatus);
+
+        if (broadcaster != null) {
+            broadcaster.publish(jobId, newStatus);
+        }
+
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("jobId", jobId);
+        resp.put("status", newStatus);
+        LOG.info("Retinal park-bind: job {} -> event_crf {} (status={})",
+                jobId, eventCrfId, newStatus);
+        return ResponseEntity.ok(resp);
+    }
+
+    /* ====================================================================== */
+    /* GET /study-subjects/search — Wave 1B patient search                    */
+    /* ====================================================================== */
+
+    /**
+     * Wave 1B — staff-portal label prefix search. Backs the Wave 2B
+     * "Patient suchen" modal. Always filtered to the session user's
+     * site-visibility scope; never leaks subjects from studies the
+     * user can't see.
+     *
+     * @param q     label prefix (case-insensitive); blank → empty list
+     * @param limit hard ceiling on rows returned; clamped to [1, 50]
+     */
+    @GetMapping(path = "/study-subjects/search",
+                produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> searchSubjects(@RequestParam("q") String q,
+                                            @RequestParam(value = "limit", defaultValue = "10") int limit,
+                                            HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        if (studySubjectFinder == null) {
+            // Defensive: legacy 3-arg ctor (read-only IT path). The
+            // production wiring always populates the finder.
+            return ResponseEntity.ok(List.of());
+        }
+
+        int clamped = Math.max(1, Math.min(50, limit));
+        String prefix = (q == null) ? "" : q.trim();
+        if (prefix.isBlank()) {
+            return ResponseEntity.ok(List.of());
+        }
+
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+
+        List<StudySubjectMatch> matches = studySubjectFinder.findByLabelPrefix(prefix, clamped);
+        List<Map<String, Object>> out = new ArrayList<>(matches.size());
+        for (StudySubjectMatch m : matches) {
+            if (!visibleStudyIds.contains(m.studyId())) continue;
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("studySubjectId", m.studySubjectId());
+            row.put("label", m.subjectLabel());
+            row.put("studyId", m.studyId());
+            row.put("studyName", m.studyName());
+            row.put("siteName", m.siteName());
+            out.add(row);
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /* ====================================================================== */
     /* helpers                                                                */
     /* ====================================================================== */
 
@@ -453,6 +674,26 @@ public class RetinalResultsApiController {
         Double confidence;
         // visibility — derived via the event_crf → study_event → study_subject chain
         Integer studyId;
+    }
+
+    /** Slim row used by the bind endpoint — only the bits the flip needs. */
+    private static final class ParkedJob {
+        long jobId;
+        String status;
+    }
+
+    private ParkedJob fetchParkedJob(Connection c, long jobId) throws SQLException {
+        String sql = "SELECT job_id, status FROM retinal_inference_job WHERE job_id = ?";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, jobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                ParkedJob job = new ParkedJob();
+                job.jobId = rs.getLong("job_id");
+                job.status = rs.getString("status");
+                return job;
+            }
+        }
     }
 
     private JobRow fetchJobDetail(Connection c, long jobId) throws SQLException {

@@ -109,6 +109,65 @@ public class StudySubjectFinder {
     }
 
     /**
+     * Prefix search across all studies, used by the staff portal's
+     * "Patient suchen" modal (Wave 1B + 2B). Returns rows whose
+     * {@code label} starts with the supplied prefix (case-insensitive
+     * via {@code ILIKE}); the caller is responsible for filtering the
+     * result to studies the session user can see.
+     *
+     * <p>The query mirrors {@link #findByLabelAcrossStudies(String)}'s
+     * shape (same column set, same NOT IN (5,7) status filter), so the
+     * portal can render a uniform candidate row regardless of which
+     * lookup produced it.
+     *
+     * @param prefix label prefix; blank → empty list. No SQL wildcards
+     *               are added by the caller — they're appended here
+     *               so the prefix value is treated as a literal.
+     * @param limit  hard ceiling on result rows; caller should clamp
+     *               to a sensible range (1-50) before invoking.
+     */
+    public List<StudySubjectMatch> findByLabelPrefix(String prefix, int limit) {
+        if (prefix == null || prefix.isBlank() || limit <= 0) {
+            return List.of();
+        }
+        final String sql =
+                "SELECT ss.study_subject_id, ss.label, ss.status_id, "
+                        + "       s.study_id, s.name AS study_name, "
+                        + "       s.unique_identifier AS study_oid, "
+                        + "       site.name AS site_name "
+                        + "  FROM study_subject ss "
+                        + "  JOIN study s ON s.study_id = ss.study_id "
+                        + "  LEFT JOIN study site ON site.study_id = s.parent_study_id "
+                        + " WHERE ss.label ILIKE ? "
+                        + "   AND ss.status_id NOT IN (5, 7) "
+                        + " ORDER BY ss.label "
+                        + " LIMIT ?";
+        List<StudySubjectMatch> out = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, prefix + "%");
+            ps.setInt(2, limit);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new StudySubjectMatch(
+                            rs.getInt("study_id"),
+                            rs.getString("study_name"),
+                            rs.getString("study_oid"),
+                            rs.getInt("study_subject_id"),
+                            rs.getString("label"),
+                            rs.getString("site_name"),
+                            rs.getInt("status_id")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("findByLabelPrefix failed for prefix '{}': {}", prefix, e.getMessage());
+            return List.of();
+        }
+        return out;
+    }
+
+    /**
      * For one resolved study_subject, find the event_crf row whose
      * parent study_event.date_start falls on the supplied scan date.
      *
