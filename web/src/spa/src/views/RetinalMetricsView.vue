@@ -33,6 +33,7 @@ import type { FundusOverlayTask } from '@/components/FundusOverlay.vue'
 
 import { useRetinalJobStore } from '@/stores/retinalJob'
 import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
+import { useJobStatusStream } from '@/composables/useJobStatusStream'
 
 /**
  * Lazy-load the per-B-scan trace — Chart.js + vue-chartjs only ship
@@ -235,6 +236,50 @@ function emptyStateMessage(status: string | null | undefined): string | null {
 const inflightMessage = computed(() => emptyStateMessage(job.value?.status))
 
 const showJson = ref(false)
+
+/* ------------------------------------------------------------- */
+/* Wave 2A — Real-time job-status SSE subscriber.                */
+/*                                                               */
+/* While the job is in an in-flight state we subscribe to the    */
+/* SSE stream and re-fetch the DTO when the backend pushes a     */
+/* terminal `done`. Heartbeats keep the connection up without    */
+/* triggering a re-fetch — useJobStatusStream surfaces those     */
+/* via the connected flag, not the status ref.                   */
+/*                                                               */
+/* The composable closes the stream on any of:                   */
+/*   - jobId watch returning null;                               */
+/*   - the enabled flag flipping false (terminal state).         */
+/*   - component unmount.                                        */
+/* ------------------------------------------------------------- */
+const IN_FLIGHT_STATUSES = new Set([
+  'remote_pending',
+  'queued',
+  'screening',
+  'screened',
+  'preprocessing',
+  'segmenting',
+])
+
+const streamEnabled = computed<boolean>(() => {
+  const status = job.value?.status
+  return status != null && IN_FLIGHT_STATUSES.has(status)
+})
+
+const streamJobId = computed<number | null>(() =>
+  streamEnabled.value ? jobId.value : null,
+)
+
+const { connected: liveConnected } = useJobStatusStream(streamJobId, {
+  enabled: streamEnabled,
+  onStatus: (e) => {
+    // The store's DTO carries the authoritative payload (e.g.
+    // metrics, artifacts). The SSE event just tells us "something
+    // changed" — re-fetch when the status hits a terminal state.
+    if (e.status === 'done' || e.status === 'failed') {
+      void store.loadJob(jobId.value, true)
+    }
+  },
+})
 </script>
 
 <template>
@@ -277,6 +322,23 @@ const showJson = ref(false)
               variant="danger"
             >{{ job.status }}</StatusPill>
             <StatusPill v-else variant="warning">{{ job.status }}</StatusPill>
+            <!-- Wave 2A — Live indicator. Visible while the SSE
+                 stream is connected (i.e. the job is in flight + the
+                 EventSource has at least handshaked). The animated
+                 dot is purely cosmetic; the semantic for screen
+                 readers is the i18n key value. -->
+            <span
+              v-if="liveConnected"
+              class="inline-flex items-center gap-1.5 text-xs text-emerald-700"
+              data-testid="retinal-view-live-indicator"
+              :title="t('retinal.live.indicator')"
+            >
+              <span
+                aria-hidden="true"
+                class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"
+              />
+              {{ t('retinal.live.indicator') }}
+            </span>
           </h1>
           <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
             <span>{{ t('retinal.header.modelLabel') }} <span class="font-mono">{{ job.modelVersion ?? '—' }}</span></span>

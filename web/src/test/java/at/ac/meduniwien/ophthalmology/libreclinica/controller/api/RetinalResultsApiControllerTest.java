@@ -102,6 +102,40 @@ class RetinalResultsApiControllerTest extends AbstractApiControllerTest {
     }
 
     /* ---------------------------------------------------------------------- */
+    /* GET /api/v1/study-subjects/{ssId}/retinal-trends — Wave 2A             */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void trendsReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/study-subjects/1/retinal-trends")
+                .param("task", "fluid")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void trendsReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/study-subjects/1/retinal-trends")
+                .param("task", "fluid")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void trendsReturns400WhenTaskInvalid() throws Exception {
+        mockMvcWith().perform(get("/api/v1/study-subjects/1/retinal-trends")
+                .param("task", "not-a-task")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("task must be one of")));
+    }
+
+    /* ---------------------------------------------------------------------- */
     /* GET /api/v1/retinal-jobs/{jobId}/artifacts/{name}                      */
     /* ---------------------------------------------------------------------- */
 

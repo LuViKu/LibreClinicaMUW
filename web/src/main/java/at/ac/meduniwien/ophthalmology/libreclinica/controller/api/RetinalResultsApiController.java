@@ -192,6 +192,22 @@ public class RetinalResultsApiController {
             String completedAt,
             PrimaryMetric primaryMetric) { }
 
+    /**
+     * Wave 2A — longitudinal trends row. One point per completed job
+     * for a (subject, task) pair. {@code outputPayload} carries the raw
+     * {@code retinal_inference_result.output_payload} JSON so the SPA's
+     * BiomarkerTrendsChart can render per-biomarker datasets (e.g. IRF
+     * / SRF / PED / total for {@code fluid}) without an extra round-
+     * trip.
+     */
+    public record RetinalTrendsPointDto(
+            long jobId,
+            String completedAt,
+            String eyeLaterality,
+            java.math.BigDecimal primaryMetricValue,
+            String primaryMetricUnit,
+            Map<String, Object> outputPayload) { }
+
     /* ====================================================================== */
     /* GET /retinal-jobs/{jobId}                                              */
     /* ====================================================================== */
@@ -361,6 +377,100 @@ public class RetinalResultsApiController {
                     studySubjectId, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to list retinal jobs: " + sqlEx.getMessage()));
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /* ====================================================================== */
+    /* GET /study-subjects/{studySubjectId}/retinal-trends — Wave 2A          */
+    /* ====================================================================== */
+
+    /**
+     * Permitted values of the {@code task} query parameter on the
+     * trends endpoint. Mirrors the Wave 2 task discriminator —
+     * {@code fluid} / {@code onl} / {@code pr} / {@code ga}. Anything
+     * else returns 400.
+     */
+    private static final Set<String> TREND_TASKS = Set.of("fluid", "onl", "pr", "ga");
+
+    /**
+     * Wave 2A — longitudinal biomarker timeseries for a single subject,
+     * scoped to one inference task. Backs the SPA's
+     * BiomarkerTrendsChart embedded in SubjectRetinalTab.
+     *
+     * <p>Only {@code status='done'} jobs are returned (the SPA renders
+     * one trend point per completed job, ordered by completion time);
+     * incomplete / failed jobs are skipped to keep the chart axis
+     * clean.
+     *
+     * <p>Site visibility re-uses the same path as the per-subject job
+     * list — gate on the subject's owning study via
+     * {@link #fetchStudyIdForStudySubject(Connection, int)} +
+     * {@link #guardStudyVisibility(Integer, HttpSession, String)}.
+     */
+    @GetMapping(path = "/study-subjects/{studySubjectId:[0-9]+}/retinal-trends",
+                produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> trendsForSubject(@PathVariable("studySubjectId") int studySubjectId,
+                                              @RequestParam("task") String task,
+                                              HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        if (task == null || !TREND_TASKS.contains(task)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "task must be one of " + TREND_TASKS));
+        }
+
+        Integer studyId;
+        try (Connection c = dataSource.getConnection()) {
+            studyId = fetchStudyIdForStudySubject(c, studySubjectId);
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to resolve study for study_subject {}: {}",
+                    studySubjectId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to resolve study for study_subject: " + sqlEx.getMessage()));
+        }
+        if (studyId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No study_subject with id " + studySubjectId));
+        }
+        ResponseEntity<?> visGuard = guardStudyVisibility(studyId, session,
+                "study_subject " + studySubjectId + " belongs to a different study");
+        if (visGuard != null) return visGuard;
+
+        List<RetinalTrendsPointDto> out = new ArrayList<>();
+        String sql = "SELECT j.job_id, j.completed_at, j.eye_laterality, "
+                + "       r.primary_metric_value, r.primary_metric_unit, r.output_payload "
+                + "  FROM retinal_inference_job j "
+                + "  JOIN retinal_inference_result r ON r.job_id = j.job_id "
+                + "  JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + " WHERE se.study_subject_id = ? "
+                + "   AND j.task = ? "
+                + "   AND j.status = 'done' "
+                + " ORDER BY j.completed_at";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            ps.setString(2, task);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    long jobId = rs.getLong("job_id");
+                    Timestamp completedAt = rs.getTimestamp("completed_at");
+                    String laterality = rs.getString("eye_laterality");
+                    BigDecimal value = rs.getBigDecimal("primary_metric_value");
+                    String unit = rs.getString("primary_metric_unit");
+                    Map<String, Object> payload = parsePayload(rs.getString("output_payload"));
+                    out.add(new RetinalTrendsPointDto(
+                            jobId, toIso(completedAt), laterality,
+                            value, unit, payload));
+                }
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to list retinal trends for study_subject {} (task={}): {}",
+                    studySubjectId, task, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to list retinal trends: " + sqlEx.getMessage()));
         }
         return ResponseEntity.ok(out);
     }

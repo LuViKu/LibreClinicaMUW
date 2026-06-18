@@ -868,7 +868,8 @@ public class SubjectsApiController {
                 formatIsoDate(ssb.getScreeningDate()),
                 mapStudySubjectStatus(ssb.getStatus()),
                 initialAssignments,
-                /* eyeTransitions — fresh subject, none yet */ null
+                /* eyeTransitions — fresh subject, none yet */ null,
+                /* studySubjectId — Wave 2A */ ssb.getId()
         );
 
         LOG.info("Add Subject: created study_subject id={} oid={} label={} (study {}, user {})",
@@ -2516,7 +2517,8 @@ public class SubjectsApiController {
                 formatIsoDate(ss.getScreeningDate()),
                 mapStudySubjectStatus(ss.getStatus()),
                 groupAssignments,
-                eyeTransitions
+                eyeTransitions,
+                /* studySubjectId — Wave 2A */ ss.getId()
         );
     }
 

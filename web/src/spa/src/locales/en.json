@@ -2453,6 +2453,41 @@
     "fundusOverlay": {
       "aria": "[NEEDS_REVIEW] Fundus image with retinal overlays, {laterality}",
       "foveaTooltip": "[NEEDS_REVIEW] Fovea estimate ({source})"
+    },
+    "trends": {
+      "title": "[NEEDS_REVIEW] Biomarker trends",
+      "chartHeader": "[NEEDS_REVIEW] Trend",
+      "empty": "[NEEDS_REVIEW] No data yet",
+      "loading": "[NEEDS_REVIEW] Loading trends…",
+      "errorPrefix": "[NEEDS_REVIEW] Failed to load trends:",
+      "xAxisLabel": "[NEEDS_REVIEW] Date",
+      "yAxisLabel": "[NEEDS_REVIEW] Value ({unit})",
+      "yAxisLabelBlank": "[NEEDS_REVIEW] Value",
+      "taskLabel": "[NEEDS_REVIEW] Task",
+      "taskLabels": {
+        "fluid": "[NEEDS_REVIEW] Fluid (IRF / SRF / PED)",
+        "onl": "[NEEDS_REVIEW] ONL thickness",
+        "pr": "[NEEDS_REVIEW] PR thickness",
+        "ga": "[NEEDS_REVIEW] GA area"
+      },
+      "historyHeader": "[NEEDS_REVIEW] Past inferences",
+      "history": {
+        "colJob": "[NEEDS_REVIEW] Job",
+        "colCompleted": "[NEEDS_REVIEW] Completed",
+        "colTask": "[NEEDS_REVIEW] Task",
+        "colEye": "[NEEDS_REVIEW] Eye",
+        "colStatus": "[NEEDS_REVIEW] Status",
+        "colPrimaryMetric": "[NEEDS_REVIEW] Primary metric",
+        "viewLink": "[NEEDS_REVIEW] View",
+        "empty": "[NEEDS_REVIEW] No inferences yet."
+      }
+    },
+    "subject": {
+      "sectionTitle": "[NEEDS_REVIEW] Retinal trends",
+      "sectionSubtitle": "[NEEDS_REVIEW] Longitudinal OCT inference results for this subject."
+    },
+    "live": {
+      "indicator": "[NEEDS_REVIEW] Live"
     }
   },
   "bugReport": {
