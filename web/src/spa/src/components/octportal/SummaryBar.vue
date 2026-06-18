@@ -10,9 +10,12 @@
  * disabled button is more frustrating than seeing it disappear.
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import PortalStatusPill from './PortalStatusPill.vue'
 import type { ReviewRow } from '@/stores/octPortal'
+
+const { t } = useI18n()
 
 interface Props {
   rows: ReviewRow[]
@@ -57,19 +60,19 @@ const showConfirmAllButton = computed(() => counts.value.suggested > 0)
 <template>
   <div class="flex items-center gap-3 mb-4 flex-wrap" data-testid="summary-bar">
     <div class="text-[13px] text-slate-500">
-      {{ totalCount }} {{ totalCount === 1 ? 'Datei' : 'Dateien' }} ·
-      <span class="text-slate-700 font-medium">{{ recognisedCount }} erkannt</span>
+      {{ totalCount }} {{ totalCount === 1 ? t('octPortal.summary.fileSingular') : t('octPortal.summary.filePlural') }} ·
+      <span class="text-slate-700 font-medium">{{ recognisedCount }} {{ t('octPortal.summary.recognised') }}</span>
       <template v-if="distinctStudyCount > 0">
-        · {{ distinctStudyCount }} {{ distinctStudyCount === 1 ? 'Studie' : 'Studien' }}
+        · {{ distinctStudyCount }} {{ distinctStudyCount === 1 ? t('octPortal.summary.studySingular') : t('octPortal.summary.studyPlural') }}
       </template>
     </div>
     <div class="flex items-center gap-1.5">
-      <PortalStatusPill v-if="showSuggestPill" tone="suggest">{{ counts.suggested }} {{ counts.suggested === 1 ? 'Vorschlag' : 'Vorschläge' }}</PortalStatusPill>
-      <PortalStatusPill v-if="showConfirmedPill" tone="ok">{{ counts.confirmed }} bestätigt</PortalStatusPill>
-      <PortalStatusPill v-if="showNovisitPill" tone="sky">{{ counts.novisit }} ohne Termin</PortalStatusPill>
-      <PortalStatusPill v-if="showNopatientPill" tone="bad">{{ counts.nopatient }} ohne Patient</PortalStatusPill>
-      <PortalStatusPill v-if="showAmbiguousPill" tone="suggest">{{ counts.ambiguous }} mehrdeutig</PortalStatusPill>
-      <PortalStatusPill v-if="showErrorPill" tone="mute">{{ counts.error }} {{ counts.error === 1 ? 'Problem' : 'Probleme' }}</PortalStatusPill>
+      <PortalStatusPill v-if="showSuggestPill" tone="suggest">{{ counts.suggested }} {{ counts.suggested === 1 ? t('octPortal.summary.suggestionSingular') : t('octPortal.summary.suggestionPlural') }}</PortalStatusPill>
+      <PortalStatusPill v-if="showConfirmedPill" tone="ok">{{ counts.confirmed }} {{ t('octPortal.summary.confirmedSuffix') }}</PortalStatusPill>
+      <PortalStatusPill v-if="showNovisitPill" tone="sky">{{ counts.novisit }} {{ t('octPortal.summary.noVisitSuffix') }}</PortalStatusPill>
+      <PortalStatusPill v-if="showNopatientPill" tone="bad">{{ counts.nopatient }} {{ t('octPortal.summary.noPatientSuffix') }}</PortalStatusPill>
+      <PortalStatusPill v-if="showAmbiguousPill" tone="suggest">{{ counts.ambiguous }} {{ t('octPortal.summary.ambiguousSuffix') }}</PortalStatusPill>
+      <PortalStatusPill v-if="showErrorPill" tone="mute">{{ counts.error }} {{ counts.error === 1 ? t('octPortal.summary.problemSingular') : t('octPortal.summary.problemPlural') }}</PortalStatusPill>
     </div>
     <div class="ml-auto">
       <button
@@ -80,7 +83,7 @@ const showConfirmAllButton = computed(() => counts.value.suggested > 0)
         @click="emit('confirm-all')"
       >
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
-        {{ counts.suggested }} {{ counts.suggested === 1 ? 'Vorschlag' : 'Vorschläge' }} bestätigen
+        {{ counts.suggested }} {{ counts.suggested === 1 ? t('octPortal.summary.suggestionSingular') : t('octPortal.summary.suggestionPlural') }} {{ t('octPortal.summary.confirmAllSuffix') }}
       </button>
     </div>
   </div>

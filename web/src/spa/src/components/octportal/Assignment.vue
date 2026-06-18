@@ -27,11 +27,14 @@
  * de.json for v1" choice.
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import EyeBadge from './EyeBadge.vue'
 import PortalStatusPill from './PortalStatusPill.vue'
 import StudyChip from './StudyChip.vue'
 import type { ReviewRow } from '@/stores/octPortal'
+
+const { t } = useI18n()
 
 interface Props {
   row: ReviewRow
@@ -61,7 +64,7 @@ const eventWhen = computed(() => {
   const dateStart = ev.dateStart
   const today = new Date()
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  if (dateStart === todayIso) return 'heute geplant'
+  if (dateStart === todayIso) return t('octPortal.assignment.todayScheduled')
   return dateStart
 })
 
@@ -91,7 +94,7 @@ const scanDateLabel = computed(() => {
               </svg>
             </span>{{ subjectLabel }}
           </span>
-          <PortalStatusPill tone="ok">Patient gefunden</PortalStatusPill>
+          <PortalStatusPill tone="ok">{{ t('octPortal.assignment.patientFound') }}</PortalStatusPill>
         </div>
         <div class="inline-flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/70 pl-2.5 pr-2 py-1.5">
           <span class="text-amber-600">
@@ -107,7 +110,7 @@ const scanDateLabel = computed(() => {
             type="button"
             class="ml-1 text-[11px] text-slate-400 hover:text-slate-600 inline-flex items-center gap-0.5"
             @click="emit('pick-visit', props.row.rowId)"
-          >ändern
+          >{{ t('octPortal.assignment.change') }}
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
           </button>
         </div>
@@ -130,8 +133,8 @@ const scanDateLabel = computed(() => {
           <span class="w-4 h-4 rounded-full bg-muw-teal text-white inline-flex items-center justify-center">
             <svg viewBox="0 0 24 24" width="11" height="11" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
           </span>
-          Zugeordnet · <span class="font-semibold">{{ eventLabel || 'Geparkt' }}</span>
-          <span v-if="eventLabel"> · {{ eventWhen || 'heute' }}</span>
+          {{ t('octPortal.assignment.assigned') }} · <span class="font-semibold">{{ eventLabel || t('octPortal.assignment.parked') }}</span>
+          <span v-if="eventLabel"> · {{ eventWhen || t('octPortal.assignment.today') }}</span>
         </div>
       </template>
 
@@ -147,7 +150,7 @@ const scanDateLabel = computed(() => {
               </svg>
             </span>{{ subjectLabel }}
           </span>
-          <PortalStatusPill tone="ok">Patient gefunden</PortalStatusPill>
+          <PortalStatusPill tone="ok">{{ t('octPortal.assignment.patientFound') }}</PortalStatusPill>
         </div>
         <div class="inline-flex items-center gap-2 text-[12px] text-slate-500">
           <span class="text-slate-400">
@@ -156,24 +159,24 @@ const scanDateLabel = computed(() => {
               <path d="M16 2v4M8 2v4M3 10h18" />
             </svg>
           </span>
-          Kein Termin für den {{ scanDateLabel }} geplant.
+          {{ t('octPortal.assignment.noEventForDate', { date: scanDateLabel }) }}
         </div>
       </template>
 
       <!-- nopatient: PatientId not found -->
       <template v-else-if="props.row.state === 'nopatient'">
         <div class="flex items-center gap-2 mb-1.5">
-          <PortalStatusPill tone="bad">Patient nicht gefunden</PortalStatusPill>
+          <PortalStatusPill tone="bad">{{ t('octPortal.assignment.patientNotFound') }}</PortalStatusPill>
         </div>
         <div class="inline-flex items-center gap-2 text-[12px] text-slate-500">
-          PatientId <span class="font-mono text-slate-600">{{ props.row.scan?.patientId }}</span> existiert in keiner Studie.
+          {{ t('octPortal.assignment.patientIdMissingPrefix') }} <span class="font-mono text-slate-600">{{ props.row.scan?.patientId }}</span> {{ t('octPortal.assignment.patientIdMissingSuffix') }}
         </div>
       </template>
 
       <!-- ambiguous: multi-study match (rendered as a soft warning) -->
       <template v-else-if="props.row.state === 'ambiguous'">
         <div class="flex items-center gap-2 mb-1.5 flex-wrap">
-          <PortalStatusPill tone="suggest">Mehrere Studien</PortalStatusPill>
+          <PortalStatusPill tone="suggest">{{ t('octPortal.assignment.multipleStudies') }}</PortalStatusPill>
           <span class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-700">
             <span class="opacity-60">
               <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
@@ -184,7 +187,7 @@ const scanDateLabel = computed(() => {
           </span>
         </div>
         <div class="inline-flex items-center gap-2 text-[12px] text-slate-500">
-          PatientId existiert in mehreren Studien — Zuordnung erforderlich.
+          {{ t('octPortal.assignment.patientIdAmbiguous') }}
         </div>
       </template>
 
@@ -196,7 +199,7 @@ const scanDateLabel = computed(() => {
               <path d="M10.3 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.7 3.86a2 2 0 0 0-3.42 0Z" />
               <path d="M12 9v4M12 17h.01" />
             </svg>
-          </span>{{ props.row.error || 'Fehler beim Verarbeiten' }}
+          </span>{{ props.row.error || t('octPortal.assignment.processError') }}
         </div>
       </template>
 
@@ -208,7 +211,7 @@ const scanDateLabel = computed(() => {
               <path d="M21 12a9 9 0 1 1-6.2-8.5" opacity="0.9" />
             </svg>
           </span>
-          Wird hochgeladen…
+          {{ t('octPortal.assignment.uploading') }}
         </div>
       </template>
 
@@ -229,7 +232,7 @@ const scanDateLabel = computed(() => {
             type="button"
             class="text-[12px] font-medium inline-flex items-center gap-1 text-slate-500 hover:text-slate-700"
             @click="emit('pick-visit', props.row.rowId)"
-          >ändern</button>
+          >{{ t('octPortal.assignment.change') }}</button>
           <button
             type="button"
             class="px-3.5 py-2 text-[13px] font-semibold bg-muw-blue text-white rounded-lg hover:bg-muw-blue-700 inline-flex items-center gap-2 shadow-[0_1px_2px_rgba(17,29,78,0.18)] whitespace-nowrap"
@@ -237,7 +240,7 @@ const scanDateLabel = computed(() => {
             @click="emit('confirm', props.row.rowId)"
           >
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
-            Bestätigen
+            {{ t('octPortal.actions.confirm') }}
           </button>
         </div>
       </template>
@@ -255,7 +258,7 @@ const scanDateLabel = computed(() => {
               <path d="M3 13a9 9 0 1 0 3-7.7L3 8" />
             </svg>
           </span>
-          Rückgängig
+          {{ t('octPortal.actions.undo') }}
         </button>
       </template>
 
@@ -265,13 +268,13 @@ const scanDateLabel = computed(() => {
             type="button"
             class="text-[12px] font-medium inline-flex items-center gap-1 text-muw-blue hover:text-muw-blue-700"
             @click="emit('pick-visit', props.row.rowId)"
-          >Visite wählen</button>
+          >{{ t('octPortal.actions.pickVisit') }}</button>
           <button
             type="button"
             class="px-3 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 whitespace-nowrap"
             :data-testid="`action-park-${props.row.rowId}`"
             @click="emit('park', props.row.rowId)"
-          >Später zuordnen</button>
+          >{{ t('octPortal.actions.parkLater') }}</button>
         </div>
       </template>
 
@@ -286,14 +289,14 @@ const scanDateLabel = computed(() => {
               <circle cx="11" cy="11" r="8" />
               <path d="m21 21-4.3-4.3" />
             </svg>
-            Patient suchen
+            {{ t('octPortal.actions.searchPatient') }}
           </button>
           <button
             type="button"
             class="px-3 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 whitespace-nowrap"
             :data-testid="`action-park-${props.row.rowId}`"
             @click="emit('park', props.row.rowId)"
-          >Parken</button>
+          >{{ t('octPortal.actions.park') }}</button>
         </div>
       </template>
 
@@ -303,12 +306,12 @@ const scanDateLabel = computed(() => {
             type="button"
             class="text-[12px] font-medium inline-flex items-center gap-1 text-muw-blue hover:text-muw-blue-700"
             @click="emit('pick-visit', props.row.rowId)"
-          >Studie wählen</button>
+          >{{ t('octPortal.actions.pickStudy') }}</button>
           <button
             type="button"
             class="px-3 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 whitespace-nowrap"
             @click="emit('park', props.row.rowId)"
-          >Später zuordnen</button>
+          >{{ t('octPortal.actions.parkLater') }}</button>
         </div>
       </template>
 
@@ -318,7 +321,7 @@ const scanDateLabel = computed(() => {
           class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50"
           :data-testid="`action-dismiss-${props.row.rowId}`"
           @click="emit('dismiss', props.row.rowId)"
-          aria-label="Verwerfen"
+          :aria-label="t('octPortal.assignment.dismissAria')"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <line x1="18" x2="6" y1="6" y2="18" />

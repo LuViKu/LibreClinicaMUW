@@ -7,8 +7,11 @@
  * von Y Dateien gelesen" header + the file-type hint on the right.
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import ParseRow from './ParseRow.vue'
 import type { ReviewRow } from '@/stores/octPortal'
+
+const { t } = useI18n()
 
 interface Props {
   rows: ReviewRow[]
@@ -27,9 +30,9 @@ const totalCount = computed(() => props.rows.length)
   >
     <div class="flex items-center justify-between px-5 py-2.5 bg-slate-50 border-b border-slate-100">
       <div class="text-[12px] font-medium text-slate-500">
-        Verarbeitung · {{ doneCount }} von {{ totalCount }} Dateien gelesen
+        {{ t('octPortal.parseQueue.headerLabel', { done: doneCount, total: totalCount }) }}
       </div>
-      <div class="text-[11px] text-slate-400">.e2e-Header → PatientId · Datum · Auge → Studie/Visite</div>
+      <div class="text-[11px] text-slate-400">{{ t('octPortal.parseQueue.headerHint') }}</div>
     </div>
     <ParseRow v-for="row in props.rows" :key="row.rowId" :row="row" />
   </div>

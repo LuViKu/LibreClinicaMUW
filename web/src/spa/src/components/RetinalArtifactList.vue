@@ -14,7 +14,10 @@
  * without having to find the host or the docker volume.
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { artifactUrl } from '@/api/retinal'
+
+const { t } = useI18n()
 
 interface Props {
   jobId: number
@@ -65,19 +68,19 @@ const artifacts = computed<ArtifactRow[]>(() => toRows(props.artifactNames))
   >
     <div class="px-5 py-3 border-b border-slate-200">
       <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-        Downloads
+        {{ t('retinal.downloads.header') }}
       </h2>
     </div>
 
     <div v-if="companions.length === 0 && artifacts.length === 0" class="px-5 py-6 text-xs text-slate-500 italic">
-      No artifacts available yet.
+      {{ t('retinal.downloads.empty') }}
     </div>
 
     <table v-else class="w-full text-[13px]">
       <tbody class="divide-y divide-slate-100">
         <tr v-if="companions.length" class="bg-slate-50">
           <td colspan="3" class="px-5 py-2 text-[10px] uppercase tracking-wider font-semibold text-slate-500">
-            Per-scan
+            {{ t('retinal.downloads.sectionPerScan') }}
           </td>
         </tr>
         <tr v-for="row in companions" :key="`companion-${row.name}`" data-testid="artifact-row">
@@ -93,13 +96,13 @@ const artifacts = computed<ArtifactRow[]>(() => toRows(props.artifactNames))
               class="text-muw-blue hover:underline text-xs"
               download
               data-testid="artifact-download"
-            >Download</a>
+            >{{ t('retinal.downloads.action') }}</a>
           </td>
         </tr>
 
         <tr v-if="artifacts.length" class="bg-slate-50">
           <td colspan="3" class="px-5 py-2 text-[10px] uppercase tracking-wider font-semibold text-slate-500">
-            Segmentation
+            {{ t('retinal.downloads.sectionSegmentation') }}
           </td>
         </tr>
         <tr v-for="row in artifacts" :key="`artifact-${row.name}`" data-testid="artifact-row">
@@ -115,7 +118,7 @@ const artifacts = computed<ArtifactRow[]>(() => toRows(props.artifactNames))
               class="text-muw-blue hover:underline text-xs"
               download
               data-testid="artifact-download"
-            >Download</a>
+            >{{ t('retinal.downloads.action') }}</a>
           </td>
         </tr>
       </tbody>
