@@ -44,10 +44,31 @@
  */
 
 export interface E2eScan {
-  /** Patient ID extracted from chunk type 9. Latin-1, trimmed of NULs. */
+  /** Patient ID extracted from chunk type 9.
+   *
+   *  Heidelberg's canonical 25-byte {@code patient_id} field at payload
+   *  offset 102 is read first. When that's empty (typical of MUW's
+   *  de-identified exports where Heidelberg's "anonymize" UI zeros it
+   *  out), the parser falls back to the {@code surname} slot (offset
+   *  31, 51B) and then the {@code first_name} slot (offset 0, 31B) —
+   *  in that order. MUW operationally stores the patient id in
+   *  {@code surname} after anonymisation (confirmed 2026-06-18 against
+   *  EIAMD140 sample). Latin-1, NULs trimmed.
+   *
+   *  Empty string means none of the three slots carried a value, in
+   *  which case the upload portal short-circuits the /resolve POST
+   *  and asks the operator to enter the id manually. */
   patientId: string;
-  /** Acquisition timestamp from chunk type 10004 (Windows ticks → Date). */
-  scanDate: Date;
+  /** Acquisition timestamp from chunk type 10004 (Windows ticks → Date).
+   *
+   *  null when the file has no bscan-metadata chunk (fundus-only
+   *  exports — Spectralis stores acquisition time only inside OCT
+   *  volume metadata). The view renders "—" and the /resolve POST
+   *  sends `scanDate: null`, matching the backend's contract
+   *  (PublicOctUploadController:145 — null is searched-by-patientId
+   *  only). Without this, the parser would fabricate `1970-01-01` and
+   *  mis-resolve against any subject visit recorded on that date. */
+  scanDate: Date | null;
   /** OD = right eye, OS = left eye. Defaults to OD when no laterality chunk parses. */
   laterality: 'OD' | 'OS';
   /** 0-based ordinal of this volume within the file. */
@@ -92,10 +113,22 @@ const CHUNK_TYPE_OFFSET = 52;
 /** Chunk-type integer constants (see {@link e2eParser} module doc). */
 const CHUNK_TYPE_PRE_DATA = 3;
 const CHUNK_TYPE_PATIENT_DATA = 9;
+/** Acquisition info: 8-byte LE IEEE 754 double at payload offset 6,
+ *  encoding an OLE Automation date (days since 1899-12-30 with the
+ *  fractional part = time of day in 24 h units). Heidelberg's libE2E
+ *  spec labels this as `ColorStruct`, but on modern Spectralis exports
+ *  the chunk also carries the operator login (~payload offset 17) and
+ *  the acquisition timestamp. Used as the FAF / SLO fallback when no
+ *  `bscan_metadata` (type 10004) chunk is present in the file. */
+const CHUNK_TYPE_ACQUISITION_INFO = 10;
 const CHUNK_TYPE_LATERALITY = 11;
 const CHUNK_TYPE_BSCAN_METADATA = 10004;
 
 /** Field offsets WITHIN each chunk's payload (after the 60-byte header). */
+const PATIENT_DATA_FIRST_NAME_OFFSET = 0;
+const PATIENT_DATA_FIRST_NAME_LEN = 31;
+const PATIENT_DATA_SURNAME_OFFSET = 31;
+const PATIENT_DATA_SURNAME_LEN = 51;
 const PATIENT_DATA_ID_OFFSET = 31 + 51 + 15 + 4 + 1; // 102 — first_name(31) + surname(51) + title(15) + birthdate(4) + sex(1)
 const PATIENT_DATA_ID_LEN = 25;
 
@@ -105,6 +138,12 @@ const LAT_STRUCT_LATERALITY_OFFSET = 14; // 14 × u8 unknown then 1-byte lateral
 
 const BSCAN_NUM_IMAGES_OFFSET = 64;
 const BSCAN_ACQUISITION_TIME_OFFSET = 88;
+
+/** OLE-Automation epoch (1899-12-30 UTC) → Unix-epoch shift, in days. */
+const OLE_EPOCH_TO_UNIX_DAYS = 25569;
+/** Offset of the 8-byte LE f64 OLE-Automation date inside the type-10
+ *  chunk payload (operator-login string lives a few bytes after it). */
+const ACQUISITION_INFO_OLE_DATE_OFFSET = 6;
 
 /** Windows-tick → Unix epoch conversion: ticks of 100 ns from 1601-01-01 UTC. */
 const WINDOWS_TICKS_PER_SECOND = 10_000_000n;
@@ -135,6 +174,16 @@ function windowsTicksToDate(ticks: bigint): Date {
   // (ticks / 10_000_000) - 11_644_473_600 yields unix seconds.
   const unixSeconds = ticks / WINDOWS_TICKS_PER_SECOND - WINDOWS_EPOCH_TO_UNIX_SECONDS;
   return new Date(Number(unixSeconds) * 1000);
+}
+
+/** OLE Automation date (f64, days since 1899-12-30 UTC, fractional =
+ *  time of day) → JS Date. Returns null when the value is outside a
+ *  sane Spectralis range (1980-2117) so junk bytes don't yield a
+ *  plausible-looking pre-PC date. */
+function oleDateToDate(days: number): Date | null {
+  if (!Number.isFinite(days) || days < 30000 || days > 80000) return null;
+  const unixMs = Math.round((days - OLE_EPOCH_TO_UNIX_DAYS) * 86400 * 1000);
+  return new Date(unixMs);
 }
 
 /** Convert "R"/"L" → OD/OS. Anything else returns null. */
@@ -233,6 +282,10 @@ export async function parseE2e(file: File): Promise<E2eScan[]> {
   const volumes = new Map<string, VolumeAccumulator>();
   /** patient_db_id → patientId (we expect one per file but key it just in case). */
   const patientIds = new Map<number, string>();
+  /** File-wide acquisition date from the type-10 acquisition_info chunk.
+   *  Used as the per-volume scanDate fallback when bscan_metadata isn't
+   *  present (FAF / SLO / pure-fundus exports). One per file. */
+  let fileAcquisitionDate: Date | null = null;
   let ordinalCounter = 0;
 
   for (const { start } of chunkPositions) {
@@ -249,14 +302,53 @@ export async function parseE2e(file: File): Promise<E2eScan[]> {
     switch (type) {
       case CHUNK_TYPE_PATIENT_DATA: {
         if (payloadOffset + PATIENT_DATA_ID_OFFSET + PATIENT_DATA_ID_LEN > buf.length) break;
-        const idBytes = buf.subarray(
-          payloadOffset + PATIENT_DATA_ID_OFFSET,
-          payloadOffset + PATIENT_DATA_ID_OFFSET + PATIENT_DATA_ID_LEN,
-        );
-        const patientId = decodeLatin1(idBytes).trim();
+        // Read the canonical patient_id field first.
+        const canonical = decodeLatin1(
+          buf.subarray(
+            payloadOffset + PATIENT_DATA_ID_OFFSET,
+            payloadOffset + PATIENT_DATA_ID_OFFSET + PATIENT_DATA_ID_LEN,
+          ),
+        ).trim();
+        // MUW de-identification convention (confirmed 2026-06-18):
+        // Heidelberg zeros out the canonical patient_id slot; the
+        // operationally-relevant patient id lives in the surname slot.
+        // first_name is also probed as a last resort — some sites stash
+        // an internal MRN/db-id there.
+        let patientId = canonical;
+        if (patientId.length === 0) {
+          patientId = decodeLatin1(
+            buf.subarray(
+              payloadOffset + PATIENT_DATA_SURNAME_OFFSET,
+              payloadOffset + PATIENT_DATA_SURNAME_OFFSET + PATIENT_DATA_SURNAME_LEN,
+            ),
+          ).trim();
+        }
+        if (patientId.length === 0) {
+          patientId = decodeLatin1(
+            buf.subarray(
+              payloadOffset + PATIENT_DATA_FIRST_NAME_OFFSET,
+              payloadOffset + PATIENT_DATA_FIRST_NAME_OFFSET + PATIENT_DATA_FIRST_NAME_LEN,
+            ),
+          ).trim();
+        }
         if (patientId.length > 0) {
           patientIds.set(patientDbId, patientId);
         }
+        break;
+      }
+
+      case CHUNK_TYPE_ACQUISITION_INFO: {
+        // 8-byte LE IEEE 754 double at payload offset 6 = OLE Automation
+        // date. Reading the chunk only once is fine — Spectralis writes a
+        // single type-10 chunk per file holding the session start.
+        if (fileAcquisitionDate !== null) break;
+        if (payloadOffset + ACQUISITION_INFO_OLE_DATE_OFFSET + 8 > buf.length) break;
+        const days = view.getFloat64(
+          payloadOffset + ACQUISITION_INFO_OLE_DATE_OFFSET,
+          true,
+        );
+        const d = oleDateToDate(days);
+        if (d !== null) fileAcquisitionDate = d;
         break;
       }
 
@@ -320,8 +412,16 @@ export async function parseE2e(file: File): Promise<E2eScan[]> {
       const patientId = patientIds.get(v.patientDbId) ?? '';
       const nBscans =
         v.numImages > 0 ? v.numImages : v.maxSliceCount > 0 ? v.maxSliceCount : 0;
+      // Prefer per-volume bscan_metadata acquisition time (OCT-volume
+      // exports). Fall back to the file-wide type-10 acquisition_info
+      // OLE date (typical for FAF / SLO / pure-fundus exports). null
+      // only when neither source carried a usable value — the view
+      // renders "—" and the /resolve payload sends scanDate: null,
+      // matching the backend's "search by patientId only" contract.
       const scanDate =
-        v.acquisitionTicks !== null ? windowsTicksToDate(v.acquisitionTicks) : new Date(0);
+        v.acquisitionTicks !== null
+          ? windowsTicksToDate(v.acquisitionTicks)
+          : fileAcquisitionDate;
       return {
         patientId,
         scanDate,

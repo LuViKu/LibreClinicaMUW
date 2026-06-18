@@ -27,8 +27,11 @@
  *  {@code ResolveRequestScan} record. */
 export interface ResolveScanRequest {
   patientId: string
-  /** ISO yyyy-MM-dd — what the controller's {@code LocalDate} parser expects. */
-  scanDate: string
+  /** ISO yyyy-MM-dd — what the controller's {@code LocalDate} parser expects.
+   *  null when the .e2e file has no bscan-metadata chunk (typical of
+   *  fundus-only exports). PublicOctUploadController:145 treats a null
+   *  scanDate as "search by patientId only". */
+  scanDate: string | null
   laterality: 'OD' | 'OS'
 }
 
@@ -81,8 +84,10 @@ export interface CommitResponse {
 export interface CommitScanRequest {
   file: File
   patientId: string
-  /** ISO yyyy-MM-dd. */
-  scanDate: string
+  /** ISO yyyy-MM-dd. null for fundus-only files without an
+   *  acquisition-time chunk — backend treats null as "use server-side
+   *  default" (typically the upload timestamp). */
+  scanDate: string | null
   laterality: 'OD' | 'OS'
   scanIndex: number
   /** Bound when the operator picked a visit; null when park=true. */
@@ -174,7 +179,9 @@ export async function commitScan(req: CommitScanRequest): Promise<CommitResponse
   const form = new FormData()
   form.append('file', req.file, req.file.name)
   form.append('patientId', req.patientId)
-  form.append('scanDate', req.scanDate)
+  if (req.scanDate !== null) {
+    form.append('scanDate', req.scanDate)
+  }
   form.append('laterality', req.laterality)
   form.append('scanIndex', String(req.scanIndex))
   if (req.eventCrfId !== null) {
