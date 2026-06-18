@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        OCT-upload-portal — relax retinal_inference_job.event_crf_id to
+        nullable so the public upload endpoint can persist 'parked' jobs
+        when no scheduled visit matches the scan date (or the patient
+        label is missing entirely). Also seeds the OCT_UPLOAD_PUBLIC
+        (id 115) audit_log_event_type.
+
+        The DB-level status column is VARCHAR(20); no enum or CHECK
+        constraint exists, so adding the new 'parked' status string is a
+        pure Java-side change (RetinalInferenceJobStatus.PARKED).
+
+        OCT_UPLOAD_PUBLIC audit rows carry a NULL user_id because the
+        endpoint is unauthenticated (trust-the-reverse-proxy model). The
+        study_subject_id on the audit row is also NULL when the resolved
+        candidate is missing (park-no-patient flow).
+
+        See /Users/lukas/.claude/plans/robust-jumping-eich.md for the
+        portal architecture and the resolve/commit endpoint contract.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-18-retinal-job-parked-status">
+        <dropNotNullConstraint tableName="retinal_inference_job"
+                               columnName="event_crf_id"
+                               columnDataType="INT"/>
+        <rollback>
+            <addNotNullConstraint tableName="retinal_inference_job"
+                                  columnName="event_crf_id"
+                                  columnDataType="INT"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-06-18-audit-event-type-oct-upload-public" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 115;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed the OCT_UPLOAD_PUBLIC row PublicOctUploadController.commit
+            emits via direct INSERT into audit_log_event when an
+            unauthenticated portal upload succeeds. is_user_visible=true:
+            even though user_id is NULL on the row, the upload is a
+            material clinical-data event (a scan now references an
+            event_crf), so it surfaces in per-study audit views.
+        </comment>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="115"/>
+            <column name="name" value="oct_upload_public"/>
+            <column name="display_name" value="OCT upload (public portal)"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 115</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
