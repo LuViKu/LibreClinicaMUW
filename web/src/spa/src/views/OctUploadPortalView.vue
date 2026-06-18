@@ -21,7 +21,7 @@
  * German UI text is hard-coded inline per the plan's "no de.json for
  * v1" choice — the portal is unilaterally German for MUW operators.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import PublicTopBar from '@/components/octportal/PublicTopBar.vue'
@@ -30,11 +30,41 @@ import E2eDropzone from '@/components/octportal/E2eDropzone.vue'
 import ParseQueue from '@/components/octportal/ParseQueue.vue'
 import ReviewQueue from '@/components/octportal/ReviewQueue.vue'
 import SummaryBar from '@/components/octportal/SummaryBar.vue'
+import PatientSearchModal from '@/components/octportal/PatientSearchModal.vue'
+import VisitPickerModal from '@/components/octportal/VisitPickerModal.vue'
 
 import { useOctPortalStore } from '@/stores/octPortal'
+import type { StudySubjectSearchHit } from '@/api/retinal'
 
 const { t } = useI18n()
 const store = useOctPortalStore()
+
+/** Row currently driving a modal — {@code null} when no modal is open. */
+const searchTargetRowId = ref<string | null>(null)
+const visitTargetRowId = ref<string | null>(null)
+
+/** Initial query for the search modal — seeded from the row's parsed
+ *  PatientId so the operator doesn't have to retype the scan's id. */
+const searchInitialQuery = computed<string>(() => {
+  const id = searchTargetRowId.value
+  if (id == null) return ''
+  const row = store.rows.find((r) => r.rowId === id)
+  return row?.scan?.patientId ?? ''
+})
+
+/** Subject + label for the visit-picker — the modal needs the LABEL
+ *  to call /api/v1/events?subjectId=<label>, and the numeric id to
+ *  let the store match the row on pick. */
+const visitTargetSubject = computed<{ id: number; label: string } | null>(() => {
+  const rid = visitTargetRowId.value
+  if (rid == null) return null
+  const row = store.rows.find((r) => r.rowId === rid)
+  if (!row?.selectedCandidate) return null
+  return {
+    id: row.selectedCandidate.studySubjectId,
+    label: row.selectedCandidate.subjectLabel,
+  }
+})
 
 /** Three-state visual machine derived from store.rows. */
 const screen = computed<'ready' | 'parsing' | 'review'>(() => {
@@ -70,19 +100,43 @@ function onDismiss(rowId: string): void {
 }
 
 /**
- * "Visite wählen" / "Patient suchen" are not implemented in v1 — the
- * mockup surfaces them but the plan's "Out of scope" list defers
- * them. We swallow the event so the row stays interactive and the
- * operator falls back to "Parken" / "Später zuordnen".
- *
- * TODO(phase-e-retinal-v2): replace with a real picker modal once
- * the backend exposes /candidates and /events search endpoints.
+ * Wave 2B — "Visite wählen" / "Patient suchen" land their respective
+ * modals. The wiring keeps the row interactive throughout:
+ *  - Patient suchen → PatientSearchModal → store.assignFromSearch on
+ *    pick → row re-resolves against the chosen subject.
+ *  - Visite wählen → VisitPickerModal → store.setManualVisit on pick
+ *    → row flips to {@code suggested} with the picked event.
  */
-function onPickVisitUnsupported(_rowId: string): void {
-  // intentionally no-op for v1
+function onPickVisit(rowId: string): void {
+  visitTargetRowId.value = rowId
 }
-function onSearchPatientUnsupported(_rowId: string): void {
-  // intentionally no-op for v1
+function onSearchPatient(rowId: string): void {
+  searchTargetRowId.value = rowId
+}
+
+function onSubjectPicked(subject: StudySubjectSearchHit): void {
+  const rid = searchTargetRowId.value
+  searchTargetRowId.value = null
+  if (rid == null) return
+  void store.assignFromSearch(rid, subject)
+}
+
+function onEventPicked(payload: {
+  eventCrfId: number
+  definitionLabel: string
+  dateStart: string
+}): void {
+  const rid = visitTargetRowId.value
+  visitTargetRowId.value = null
+  if (rid == null) return
+  store.setManualVisit(rid, payload.eventCrfId, payload.definitionLabel, payload.dateStart)
+}
+
+function onPatientSearchClose(): void {
+  searchTargetRowId.value = null
+}
+function onVisitPickerClose(): void {
+  visitTargetRowId.value = null
 }
 </script>
 
@@ -140,14 +194,30 @@ function onSearchPatientUnsupported(_rowId: string): void {
             :rows="store.rows"
             @confirm="onConfirm"
             @undo="onUndo"
-            @pick-visit="onPickVisitUnsupported"
+            @pick-visit="onPickVisit"
             @park="onPark"
-            @search-patient="onSearchPatientUnsupported"
+            @search-patient="onSearchPatient"
             @dismiss="onDismiss"
           />
         </template>
       </div>
     </div>
     <PublicFooter />
+
+    <!-- ============================ Wave 2B modals ============================ -->
+    <PatientSearchModal
+      :open="searchTargetRowId !== null"
+      :initial-query="searchInitialQuery"
+      @subject-picked="onSubjectPicked"
+      @close="onPatientSearchClose"
+    />
+    <VisitPickerModal
+      v-if="visitTargetSubject"
+      :open="visitTargetRowId !== null"
+      :study-subject-id="visitTargetSubject.id"
+      :subject-label="visitTargetSubject.label"
+      @event-picked="onEventPicked"
+      @close="onVisitPickerClose"
+    />
   </div>
 </template>
