@@ -32,6 +32,16 @@ import java.util.Optional;
  *                the job to an event_crf via the (Phase E follow-up)
  *                "Parkende Scans" view, which UPDATEs the row to
  *                event_crf_id + status='queued'.
+ *
+ *   REMOTE_PENDING — DR-022 worker-race kill. When
+ *                core.retinalInference.remotePushUrl is configured,
+ *                RetinalInferenceApiController.handleRemote inserts at
+ *                this status instead of 'queued' so the Python DB-poll
+ *                worker's WHERE clause (`status IN ('queued','screened')`)
+ *                naturally skips remote-tracked rows. On remote success
+ *                the chain becomes REMOTE_PENDING → SEGMENTING → DONE;
+ *                on remote failure it flips back to QUEUED so the
+ *                worker drains the fallback.
  * </pre>
  */
 public enum RetinalInferenceJobStatus {
@@ -42,7 +52,9 @@ public enum RetinalInferenceJobStatus {
     SEGMENTING("segmenting"),
     DONE("done"),
     /** Public-portal upload with no event_crf binding yet. */
-    PARKED("parked");
+    PARKED("parked"),
+    /** DR-022 — controller-tracked remote sidecar in flight; worker MUST skip. */
+    REMOTE_PENDING("remote_pending");
 
     private final String dbValue;
 

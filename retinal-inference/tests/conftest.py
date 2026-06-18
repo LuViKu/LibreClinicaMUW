@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS retinal_inference_job (
     e2e_path VARCHAR(500) NOT NULL,
     eye_laterality VARCHAR(2) NOT NULL,
     status VARCHAR(20) NOT NULL,
+    scan_index INT NOT NULL DEFAULT 0,
     status_message TEXT,
     enqueued_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     screened_at TIMESTAMP,

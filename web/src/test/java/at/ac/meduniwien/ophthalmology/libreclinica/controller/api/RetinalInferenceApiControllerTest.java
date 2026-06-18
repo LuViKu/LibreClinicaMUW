@@ -102,4 +102,16 @@ class RetinalInferenceApiControllerTest extends AbstractApiControllerTest {
                 .andExpect(jsonPath("$.message").value(containsString("laterality")));
     }
 
+    @Test
+    void octUploadReturns400OnNegativeScanIndex() throws Exception {
+        mockMvcWith().perform(multipart("/api/v1/event-crfs/1/oct-upload")
+                .file(sampleE2e())
+                .param("task", "fluid")
+                .param("laterality", "OD")
+                .param("scanIndex", "-1")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(containsString("scanIndex")));
+    }
 }

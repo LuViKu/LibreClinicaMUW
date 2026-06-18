@@ -31,6 +31,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
@@ -144,6 +145,8 @@ public class RetinalInferenceApiController {
                                        @RequestPart("file") MultipartFile file,
                                        @RequestParam("task") String task,
                                        @RequestParam("laterality") String laterality,
+                                       @RequestParam(value = "scanIndex",
+                                                     defaultValue = "0") int scanIndex,
                                        HttpSession session) {
 
         // ---- auth + study guards ------------------------------------------------
@@ -171,6 +174,10 @@ public class RetinalInferenceApiController {
         if (!SUPPORTED_LATERALITIES.contains(lat)) {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "laterality must be one of " + SUPPORTED_LATERALITIES + " (got '" + laterality + "')"));
+        }
+        if (scanIndex < 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "scanIndex must be >= 0 (got " + scanIndex + ")"));
         }
 
         // ---- resolve event_crf + site-visibility guard --------------------------
@@ -207,10 +214,21 @@ public class RetinalInferenceApiController {
         }
         String absolutePath = savedPath.toString();
 
-        // ---- INSERT retinal_inference_job (status='queued') --------------------
+        // ---- INSERT retinal_inference_job --------------------------------------
+        // DR-022 worker-race kill: when the remote sidecar is configured we
+        // land at 'remote_pending' so the Python DB-poll worker's
+        // `status IN ('queued','screened')` filter skips the row by
+        // construction. On remote failure handleRemote() flips it back to
+        // 'queued' so the worker drains the fallback. When remote is unset,
+        // the legacy 'queued' insert + local /screen path is unchanged.
+        boolean remoteConfigured = remoteClient.isConfigured();
+        String initialStatus = remoteConfigured
+                ? RetinalInferenceJobStatus.REMOTE_PENDING.dbValue()
+                : RetinalInferenceJobStatus.QUEUED.dbValue();
         long jobId;
         try (Connection c = dataSource.getConnection()) {
-            jobId = insertJob(c, eventCrfId, taskClean, absolutePath, lat);
+            jobId = insertJob(c, eventCrfId, taskClean, absolutePath, lat,
+                    initialStatus, scanIndex);
         } catch (SQLException sqlEx) {
             LOG.error("Failed to enqueue retinal_inference_job for event_crf {}: {}",
                     eventCrfId, sqlEx.getMessage());
@@ -228,18 +246,19 @@ public class RetinalInferenceApiController {
                 /* entityId   */ eventCrfId,
                 /* columnName */ "status",
                 /* oldValue   */ "",
-                /* newValue   */ "queued");
+                /* newValue   */ initialStatus);
 
         // ---- DR-022: remote GPU sidecar branch ---------------------------------
         // When core.retinalInference.remotePushUrl is set the institutional
         // Tomcat pushes the .e2e to the GPU host's /run endpoint, persists the
         // returned artifacts locally, and marks the job 'done'. On any failure
-        // the job reverts to 'queued' and the existing local-screen / DB-poll
-        // path runs as the fallback (see below). Single-host dev compose with
-        // remotePushUrl blank keeps the current behaviour unchanged.
-        if (remoteClient.isConfigured()) {
+        // the job reverts to 'queued' (worker-drainable) and the existing
+        // local-screen / DB-poll path runs as the fallback. Single-host dev
+        // compose with remotePushUrl blank keeps the current behaviour
+        // unchanged (initialStatus == 'queued').
+        if (remoteConfigured) {
             ResponseEntity<?> remoteResp = handleRemote(
-                    jobId, taskClean, absolutePath, lat, eventCrfId);
+                    jobId, taskClean, absolutePath, lat, scanIndex, eventCrfId);
             if (remoteResp != null) return remoteResp;
             // fall through to the existing local path on remote failure
         }
@@ -305,20 +324,22 @@ public class RetinalInferenceApiController {
     /* ====================================================================== */
 
     private long insertJob(Connection c, int eventCrfId, String task, String e2ePath,
-                           String eyeLaterality) throws SQLException {
+                           String eyeLaterality, String status, int scanIndex)
+            throws SQLException {
         // enqueued_at carries a DB-default of CURRENT_TIMESTAMP per the changeset
         // but we set it explicitly here so the test-fixture path (which may use
         // an older driver) does not surface a NOT NULL violation.
         String sql = "INSERT INTO retinal_inference_job ("
-                + "event_crf_id, task, e2e_path, eye_laterality, status, enqueued_at"
-                + ") VALUES (?, ?, ?, ?, ?, ?)";
+                + "event_crf_id, task, e2e_path, eye_laterality, status, scan_index, enqueued_at"
+                + ") VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             ps.setInt(1, eventCrfId);
             ps.setString(2, task);
             ps.setString(3, e2ePath);
             ps.setString(4, eyeLaterality);
-            ps.setString(5, "queued");
-            ps.setTimestamp(6, Timestamp.from(Instant.now()));
+            ps.setString(5, status);
+            ps.setInt(6, scanIndex);
+            ps.setTimestamp(7, Timestamp.from(Instant.now()));
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) return keys.getLong(1);
@@ -343,6 +364,7 @@ public class RetinalInferenceApiController {
                                            String taskClean,
                                            String absolutePath,
                                            String lat,
+                                           int scanIndex,
                                            int eventCrfId) {
         try (Connection c = dataSource.getConnection()) {
             updateStatus(c, jobId, "segmenting", false, null);
@@ -353,7 +375,7 @@ public class RetinalInferenceApiController {
 
         RemoteRunResult remote;
         try {
-            remote = remoteClient.runRemote(jobId, taskClean, absolutePath, lat);
+            remote = remoteClient.runRemote(jobId, taskClean, absolutePath, lat, scanIndex);
         } catch (Exception e) {
             LOG.warn("Remote /run threw for job {}: {}", jobId, e.getMessage());
             remote = null;
