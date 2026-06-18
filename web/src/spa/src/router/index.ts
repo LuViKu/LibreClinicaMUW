@@ -299,6 +299,17 @@ const router = createRouter({
       component: () => import('@/views/PatientsOverviewView.vue'),
       meta: { title: 'Patientenübersicht', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
     },
+    /* Phase E retinal-inference (Wave C) — public OCT-upload portal.
+       Unauthenticated drag-and-drop ingest at /app/oct-upload; the
+       backend whitelists /pages/api/v1/public/oct-upload/** under
+       permitAll() (DR-022 sibling) and the institutional reverse
+       proxy is the only access gate. */
+    {
+      path: '/oct-upload',
+      name: 'oct-upload-portal',
+      component: () => import('@/views/OctUploadPortalView.vue'),
+      meta: { public: true, title: 'OCT-Upload-Portal' },
+    },
     /**
      * Phase E hardening — A5 (2026-06-10): catch-all "Seite nicht
      * gefunden" route. Must remain the LAST entry — vue-router
