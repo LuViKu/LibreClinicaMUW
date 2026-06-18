@@ -196,4 +196,17 @@ public final class AuditTypeIds {
     // ------------------------------------------------------------------
 
     public static final int STUDY_CREATED                    = 114;
+
+    // ------------------------------------------------------------------
+    // Public OCT upload portal (PublicOctUploadController.commit).
+    // The endpoint is unauthenticated — the institutional reverse proxy
+    // is the only access gate — so the emitted audit_log_event row
+    // carries user_id IS NULL. entity_id is the retinal_inference_job
+    // PK; audit_table='retinal_inference_job'. When the upload was
+    // parked with no patient match the row's entity_id still refers to
+    // the job, but its embedded event_crf_id / study_subject_id
+    // pointers will be NULL on the job itself.
+    // ------------------------------------------------------------------
+
+    public static final int OCT_UPLOAD_PUBLIC                = 115;
 }

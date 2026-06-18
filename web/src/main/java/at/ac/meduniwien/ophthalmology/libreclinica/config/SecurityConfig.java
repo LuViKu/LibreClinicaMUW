@@ -138,6 +138,13 @@ public class SecurityConfig {
                         "/pages/healthcheck/**",
                         "/pages/api/v1/anonymousform/**",
                         "/pages/api/v2/anonymousform/**",
+                        // Public OCT upload portal — see oct-upload-portal plan.
+                        // Trust-the-reverse-proxy exposure: must NOT be exposed
+                        // to public internet. CSRF is already disabled globally
+                        // for this filter chain (.csrf(csrf -> csrf.disable())
+                        // above), so no separate ignoringRequestMatchers entry
+                        // is needed.
+                        "/pages/api/v1/public/oct-upload/**",
                         "/pages/api/v1/editform/**",
                         "/pages/auth/api/v1/discrepancynote/**",
                         "/pages/auth/api/v1/forms/migrate/**",
