@@ -522,6 +522,45 @@ export const useOctPortalStore = defineStore('octPortal', () => {
   }
 
   /**
+   * Wave 2C follow-up (2026-06-19) — operator picked a study in the
+   * StudyPickerModal (the ambiguous-row disambiguation flow).
+   *
+   * <p>Two outcomes depending on the picked candidate:
+   *  - candidate carries a {@code matchingEvent} → flip to {@code
+   *    suggested} with the matching event pre-selected, so the
+   *    operator's next "Bestätigen" sweep commits it.
+   *  - candidate carries no event → flip to {@code novisit} with the
+   *    candidate selected; the operator can next open the
+   *    VisitPickerModal to pick from that cohort's events, or click
+   *    "Später zuordnen" to park the bind.
+   *
+   * <p>This is a client-side state transition only — no /resolve
+   * round-trip required, because {@code row.candidates} already
+   * carries every option from the original /resolve response.
+   * Defensive guards: only acts on {@code state === 'ambiguous'} rows
+   * whose candidate set actually contains the picked study_subject_id.
+   */
+  function pickStudyCandidate(rowId: string, candidate: ResolveCandidate): void {
+    const idx = rows.value.findIndex((r) => r.rowId === rowId)
+    if (idx === -1) return
+    const current = rows.value[idx]
+    if (current.state !== 'ambiguous') return
+    if (!current.candidates) return
+    const match = current.candidates.find(
+      (c) => c.studySubjectId === candidate.studySubjectId,
+    )
+    if (!match) return
+    const nextState: RowState = match.matchingEvent ? 'suggested' : 'novisit'
+    rows.value[idx] = {
+      ...current,
+      state: nextState,
+      candidates: [match],
+      selectedCandidate: match,
+      selectedEvent: match.matchingEvent ?? null,
+    }
+  }
+
+  /**
    * Wave 2B — operator picked a visit in the VisitPickerModal.
    *
    * Bypasses the auto-resolve path and binds the row to the chosen
@@ -581,5 +620,6 @@ export const useOctPortalStore = defineStore('octPortal', () => {
     reset,
     assignFromSearch,
     setManualVisit,
+    pickStudyCandidate,
   }
 })

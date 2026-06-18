@@ -2392,6 +2392,15 @@
         "loading": "Visiten werden geladen…",
         "cancel": "Abbrechen",
         "loadError": "Visiten konnten nicht geladen werden."
+      },
+      "studyPicker": {
+        "title": "Studie wählen",
+        "subtitle": "PatientId existiert in mehreren Studien — bitte die Zuordnung wählen für",
+        "subjectLabelPrefix": "Teilnehmer-ID:",
+        "siteLabelPrefix": "Standort:",
+        "visitFound": "Visite gefunden",
+        "noVisit": "Keine Visite am Scan-Datum",
+        "cancel": "Abbrechen"
       }
     }
   },

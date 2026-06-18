@@ -2393,6 +2393,15 @@
         "loading": "[NEEDS_REVIEW] Loading visits…",
         "cancel": "[NEEDS_REVIEW] Cancel",
         "loadError": "[NEEDS_REVIEW] Failed to load visits."
+      },
+      "studyPicker": {
+        "title": "[NEEDS_REVIEW] Pick study",
+        "subtitle": "[NEEDS_REVIEW] PatientId exists in multiple studies — please pick the cohort for",
+        "subjectLabelPrefix": "[NEEDS_REVIEW] Subject:",
+        "siteLabelPrefix": "[NEEDS_REVIEW] Site:",
+        "visitFound": "[NEEDS_REVIEW] Visit found",
+        "noVisit": "[NEEDS_REVIEW] No visit on scan date",
+        "cancel": "[NEEDS_REVIEW] Cancel"
       }
     }
   },

@@ -24,6 +24,7 @@ const emit = defineEmits<{
   confirm: [rowId: string]
   undo: [rowId: string]
   'pick-visit': [rowId: string]
+  'pick-study': [rowId: string]
   park: [rowId: string]
   'search-patient': [rowId: string]
   dismiss: [rowId: string]
@@ -106,6 +107,7 @@ const scanDateTimeLabel = computed(() => {
       @confirm="(id) => emit('confirm', id)"
       @undo="(id) => emit('undo', id)"
       @pick-visit="(id) => emit('pick-visit', id)"
+      @pick-study="(id) => emit('pick-study', id)"
       @park="(id) => emit('park', id)"
       @search-patient="(id) => emit('search-patient', id)"
       @dismiss="(id) => emit('dismiss', id)"

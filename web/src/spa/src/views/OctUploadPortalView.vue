@@ -32,8 +32,10 @@ import ReviewQueue from '@/components/octportal/ReviewQueue.vue'
 import SummaryBar from '@/components/octportal/SummaryBar.vue'
 import PatientSearchModal from '@/components/octportal/PatientSearchModal.vue'
 import VisitPickerModal from '@/components/octportal/VisitPickerModal.vue'
+import StudyPickerModal from '@/components/octportal/StudyPickerModal.vue'
 
 import { useOctPortalStore } from '@/stores/octPortal'
+import type { ResolveCandidate } from '@/api/octPortal'
 import type { StudySubjectSearchHit } from '@/api/retinal'
 
 const { t } = useI18n()
@@ -42,6 +44,7 @@ const store = useOctPortalStore()
 /** Row currently driving a modal — {@code null} when no modal is open. */
 const searchTargetRowId = ref<string | null>(null)
 const visitTargetRowId = ref<string | null>(null)
+const studyPickTargetRowId = ref<string | null>(null)
 
 /** Initial query for the search modal — seeded from the row's parsed
  *  PatientId so the operator doesn't have to retype the scan's id. */
@@ -63,6 +66,23 @@ const visitTargetSubject = computed<{ id: number; label: string } | null>(() => 
   return {
     id: row.selectedCandidate.studySubjectId,
     label: row.selectedCandidate.subjectLabel,
+  }
+})
+
+/** Candidates + parsed PatientId for the study-picker — driven by an
+ *  ambiguous row whose /resolve call returned more than one cohort.
+ *  Null when no row is driving the modal. */
+const studyPickContext = computed<{
+  candidates: ResolveCandidate[]
+  patientId: string
+} | null>(() => {
+  const rid = studyPickTargetRowId.value
+  if (rid == null) return null
+  const row = store.rows.find((r) => r.rowId === rid)
+  if (!row?.candidates || row.candidates.length === 0) return null
+  return {
+    candidates: row.candidates,
+    patientId: row.scan?.patientId ?? '',
   }
 })
 
@@ -112,6 +132,24 @@ function onPickVisit(rowId: string): void {
 }
 function onSearchPatient(rowId: string): void {
   searchTargetRowId.value = rowId
+}
+
+/**
+ * Wave 2C follow-up (2026-06-19) — operator clicked "Studie wählen"
+ * on an ambiguous row. Open StudyPickerModal against the row's
+ * {@code candidates} so the operator can pick the cohort.
+ */
+function onPickStudy(rowId: string): void {
+  studyPickTargetRowId.value = rowId
+}
+function onStudyPicked(candidate: ResolveCandidate): void {
+  const rid = studyPickTargetRowId.value
+  studyPickTargetRowId.value = null
+  if (rid == null) return
+  store.pickStudyCandidate(rid, candidate)
+}
+function onStudyPickerClose(): void {
+  studyPickTargetRowId.value = null
 }
 
 function onSubjectPicked(subject: StudySubjectSearchHit): void {
@@ -195,6 +233,7 @@ function onVisitPickerClose(): void {
             @confirm="onConfirm"
             @undo="onUndo"
             @pick-visit="onPickVisit"
+            @pick-study="onPickStudy"
             @park="onPark"
             @search-patient="onSearchPatient"
             @dismiss="onDismiss"
@@ -218,6 +257,14 @@ function onVisitPickerClose(): void {
       :subject-label="visitTargetSubject.label"
       @event-picked="onEventPicked"
       @close="onVisitPickerClose"
+    />
+    <StudyPickerModal
+      v-if="studyPickContext"
+      :open="studyPickTargetRowId !== null"
+      :candidates="studyPickContext.candidates"
+      :patient-id="studyPickContext.patientId"
+      @study-picked="onStudyPicked"
+      @close="onStudyPickerClose"
     />
   </div>
 </template>
