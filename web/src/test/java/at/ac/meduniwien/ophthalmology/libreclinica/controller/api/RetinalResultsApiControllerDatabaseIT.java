@@ -156,9 +156,14 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
             ps.setString(4, e2ePath);
             ps.setString(5, laterality);
             ps.setString(6, status);
-            // Stagger enqueued_at so jobId 9001 (newer) > 8999 (older).
-            ps.setTimestamp(7, new Timestamp(System.currentTimeMillis() - (10_000L - jobId)));
-            ps.setTimestamp(8, new Timestamp(System.currentTimeMillis()));
+            // Stagger enqueued_at deterministically by jobId — the previous
+            // System.currentTimeMillis() basis raced when two seedJobAndResult
+            // calls happened in the same ms, flipping the ordering in CI.
+            // Anchor to a fixed past epoch + jobId so higher jobId always
+            // means more-recent enqueued_at and the DESC order is stable.
+            long anchorMs = 1_750_000_000_000L; // arbitrary fixed past instant
+            ps.setTimestamp(7, new Timestamp(anchorMs + jobId));
+            ps.setTimestamp(8, new Timestamp(anchorMs + jobId + 100L));
             ps.setString(9, modelVersion);
             ps.executeUpdate();
         }
@@ -231,16 +236,18 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
 
     @Test
     void getRetinalJob_403WhenSiteVisibilityDenies() throws Exception {
-        // Insert a job tied to event_crf id 99999 whose join chain doesn't
-        // resolve to any study_subject — the controller treats a null study
-        // as out-of-visibility and returns 403.
+        // Insert a job with NULL event_crf_id — exercises the controller's
+        // "no study chain" branch which treats an unresolvable study as
+        // out-of-visibility (403). The column was relaxed from NOT NULL by
+        // the 2026-06-18 changeset specifically for this and for the
+        // upcoming OCT-upload-portal "parked" status.
         try (Connection c = DATA_SOURCE.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO retinal_inference_job ("
                              + "job_id, event_crf_id, task, e2e_path, eye_laterality, "
                              + "status, enqueued_at) VALUES (?, ?, ?, ?, ?, ?, ?)")) {
             ps.setLong(1, 9100L);
-            ps.setInt(2, 99999);
+            ps.setNull(2, java.sql.Types.INTEGER);
             ps.setString(3, "fluid");
             ps.setString(4, "/tmp/dangling.e2e");
             ps.setString(5, "OD");
