@@ -25,7 +25,22 @@
         portal architecture and the resolve/commit endpoint contract.
     -->
 
-    <changeSet author="muw-ophthalmology" id="2026-06-18-retinal-job-parked-status">
+    <changeSet author="muw-ophthalmology" id="2026-06-18-retinal-job-parked-status" dbms="postgresql">
+        <!--
+            Idempotent: an in-flight retinal-inference-models branch ships a
+            sibling 2026-06-18 changeset that relaxes the same constraint to
+            unblock an IT visibility test. When that branch merges first the
+            column is already nullable and this changeSet would fail; the
+            precondition MARK_RANs it instead so the portal scope remains
+            self-contained.
+        -->
+        <preConditions onFail="MARK_RAN" onFailMessage="event_crf_id already nullable; skipping">
+            <sqlCheck expectedResult="NO">
+                SELECT is_nullable FROM information_schema.columns
+                WHERE table_name = 'retinal_inference_job'
+                  AND column_name = 'event_crf_id'
+            </sqlCheck>
+        </preConditions>
         <dropNotNullConstraint tableName="retinal_inference_job"
                                columnName="event_crf_id"
                                columnDataType="INT"/>
