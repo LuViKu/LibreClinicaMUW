@@ -2452,6 +2452,41 @@
     "fundusOverlay": {
       "aria": "Fundus image with retinal overlays, {laterality}",
       "foveaTooltip": "Fovea estimate ({source})"
+    },
+    "trends": {
+      "title": "Biomarker-Verlauf",
+      "chartHeader": "Verlauf",
+      "empty": "Noch keine Daten",
+      "loading": "Werte werden geladen…",
+      "errorPrefix": "Werte konnten nicht geladen werden:",
+      "xAxisLabel": "Datum",
+      "yAxisLabel": "Wert ({unit})",
+      "yAxisLabelBlank": "Wert",
+      "taskLabel": "Aufgabe",
+      "taskLabels": {
+        "fluid": "Flüssigkeit (IRF / SRF / PED)",
+        "onl": "ONL-Dicke",
+        "pr": "PR-Dicke",
+        "ga": "GA-Fläche"
+      },
+      "historyHeader": "Bisherige Auswertungen",
+      "history": {
+        "colJob": "Job",
+        "colCompleted": "Abgeschlossen",
+        "colTask": "Aufgabe",
+        "colEye": "Auge",
+        "colStatus": "Status",
+        "colPrimaryMetric": "Primärwert",
+        "viewLink": "Anzeigen",
+        "empty": "Noch keine Auswertungen vorhanden."
+      }
+    },
+    "subject": {
+      "sectionTitle": "Retinal-Verlauf",
+      "sectionSubtitle": "Längsschnitt-Auswertungen der OCT-Inferenz für diese/n Teilnehmer/in."
+    },
+    "live": {
+      "indicator": "Live"
     }
   },
   "bugReport": {

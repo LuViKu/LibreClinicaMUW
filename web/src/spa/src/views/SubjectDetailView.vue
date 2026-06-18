@@ -14,6 +14,8 @@ import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
 import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
 import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
+import SubjectRetinalTab from '@/views/SubjectRetinalTab.vue'
+import { listSubjectJobs } from '@/api/retinal'
 
 import { useSubjectsStore } from '@/stores/subjects'
 import { useEventsStore } from '@/stores/events'
@@ -472,8 +474,52 @@ onMounted(() => {
 watch(subjectId, (next, prev) => {
   if (next !== prev) {
     subjects.fetchOne(next)
+    retinalJobCount.value = null
   }
 })
+
+/* ------------------------------------------------------------- */
+/* Wave 2A — Retinal trends section mounting.                    */
+/*                                                               */
+/* Only render the SubjectRetinalTab section once we've          */
+/* confirmed the subject has at least one retinal_inference_job. */
+/* The probe is cheap (single LEFT JOIN-list call, paged by      */
+/* enqueued_at desc) so we can run it on every subject load      */
+/* without gating behind a separate "has retinal data" flag.     */
+/*                                                               */
+/* Wave 2A landed the numeric studySubjectId on SubjectDetailDto */
+/* so the trends + per-subject jobs endpoints (keyed by the      */
+/* numeric id, not the OID) work without an extra resolve trip.  */
+/* ------------------------------------------------------------- */
+const retinalJobCount = ref<number | null>(null)
+const retinalNumericId = computed<number | null>(() => {
+  const id = (subject.value as { studySubjectId?: number | null } | null)
+    ?.studySubjectId
+  return typeof id === 'number' && id > 0 ? id : null
+})
+const shouldShowRetinalTab = computed(() =>
+  retinalNumericId.value != null
+    && retinalJobCount.value != null
+    && retinalJobCount.value > 0,
+)
+
+watch(
+  () => retinalNumericId.value,
+  async (id) => {
+    retinalJobCount.value = null
+    if (id == null) return
+    try {
+      const jobs = await listSubjectJobs(id)
+      retinalJobCount.value = jobs.length
+    } catch {
+      // Silent: a failed probe means we just don't render the
+      // section — operators still have the per-event Retinal
+      // results panels on EventDetailView.
+      retinalJobCount.value = 0
+    }
+  },
+  { immediate: true },
+)
 
 const subject = computed(() => subjects.selected)
 const isLoading = computed(() => subjects.isLoadingSelected)
@@ -985,30 +1031,18 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           </DenseTable>
         </section>
 
-        <!-- Phase E.7 Wave 4 — retinal scan results. The SubjectDetail
-             API doesn't expose the numeric study_subject_id, so we
-             can't call the subject-scoped retinal list endpoint
-             directly here; instead we surface a short banner pointing
-             operators at the per-event Retinal results panels that
-             EventDetailView renders. Wave 5 will add a
-             study-subject-OID-keyed read endpoint so we can list
-             retinal jobs aggregate to subject-detail too. -->
-        <section
-          v-if="subject.events.length > 0"
-          class="bg-white border border-slate-200 rounded-muw px-5 py-4 mb-5 text-xs text-slate-600"
-          data-testid="retinal-results-pointer"
-        >
-          <div class="flex items-center gap-2 mb-1">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Retinal results
-            </span>
-          </div>
-          <p>
-            Retinal inference metrics are scoped per visit. Open any event above to see
-            the OCT inference jobs ({{ t('subjectDetail.openEvent') }} →) and click
-            "View metrics" on a job to launch the metrics viewer.
-          </p>
-        </section>
+        <!-- Wave 2A — retinal-trends section. Only mounts when the
+             subject has at least one retinal_inference_job (probed
+             on subject load via listSubjectJobs). The numeric
+             studySubjectId comes from the SubjectDetailDto field
+             Wave 2A added so the trends + per-subject jobs
+             endpoints (keyed by the numeric id, not the OID) work
+             directly. -->
+        <SubjectRetinalTab
+          v-if="shouldShowRetinalTab && retinalNumericId != null"
+          data-testid="subject-retinal-tab-mount"
+          :subject-id="retinalNumericId"
+        />
 
         <!-- Phase E.6 — per-eye modality baselines. One panel per
              in-scope eye (subject.studyEye includes the eye) and per
