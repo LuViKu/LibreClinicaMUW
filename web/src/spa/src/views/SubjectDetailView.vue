@@ -478,6 +478,10 @@ watch(subjectId, (next, prev) => {
   }
 })
 
+const subject = computed(() => subjects.selected)
+const isLoading = computed(() => subjects.isLoadingSelected)
+const loadError = computed(() => subjects.selectedError)
+
 /* ------------------------------------------------------------- */
 /* Wave 2A — Retinal trends section mounting.                    */
 /*                                                               */
@@ -493,8 +497,12 @@ watch(subjectId, (next, prev) => {
 /* ------------------------------------------------------------- */
 const retinalJobCount = ref<number | null>(null)
 const retinalNumericId = computed<number | null>(() => {
-  const id = (subject.value as { studySubjectId?: number | null } | null)
-    ?.studySubjectId
+  // SubjectDetail extends Required<SubjectDetailDto>, so this is
+  // typed via the openapi-derived schema; cast defensively so the
+  // field stays readable on subjects pre-dating the openapi regen
+  // (the runtime payload may surface as undefined either way).
+  const s = subject.value as (typeof subject.value & { studySubjectId?: number | null }) | null
+  const id = s?.studySubjectId
   return typeof id === 'number' && id > 0 ? id : null
 })
 const shouldShowRetinalTab = computed(() =>
@@ -520,10 +528,6 @@ watch(
   },
   { immediate: true },
 )
-
-const subject = computed(() => subjects.selected)
-const isLoading = computed(() => subjects.isLoadingSelected)
-const loadError = computed(() => subjects.selectedError)
 
 function statusVariant(status: EventStatus): 'success' | 'info' | 'warning' | 'neutral' {
   switch (status) {

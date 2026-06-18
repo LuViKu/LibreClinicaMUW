@@ -285,8 +285,10 @@ const chartOptions = computed(() => ({
 }))
 
 /* Test hook: lets BiomarkerTrendsChart.spec.ts read the constructed
- * chart data without mounting the lazy Line component. Not exported
- * from the build because <script setup> auto-strips unused locals. */
+ * chart data without mounting the lazy Line component. <script setup>
+ * exposes refs as auto-unwrapped values via the component instance
+ * proxy, so {@code w.vm.chartData} on the test side already yields
+ * the inner ChartData (or null) — no {@code .value} hop needed. */
 defineExpose({ points, chartData })
 </script>
 

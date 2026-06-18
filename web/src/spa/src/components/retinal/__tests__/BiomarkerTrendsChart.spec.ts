@@ -42,9 +42,14 @@ function mountChart(task: 'fluid' | 'onl' | 'pr' | 'ga', subjectId = 42) {
   })
 }
 
+/**
+ * <script setup> + defineExpose auto-unwraps refs at the
+ * component-instance proxy boundary, so we read the inner value
+ * directly through {@code w.vm.chartData} / {@code w.vm.points}.
+ */
 interface ExposedChart {
-  points: { value: unknown[] }
-  chartData: { value: { datasets: Array<{ label: string; data: Array<number | null> }> } | null }
+  points: unknown[]
+  chartData: { datasets: Array<{ label: string; data: Array<number | null> }> } | null
 }
 
 const fluidFixture = [
@@ -137,7 +142,7 @@ describe('BiomarkerTrendsChart', () => {
     vi.stubGlobal('fetch', fetchMock)
     const w = mountChart('fluid', 42)
     await flushPromises()
-    const cd = (w.vm as unknown as ExposedChart).chartData.value
+    const cd = (w.vm as unknown as ExposedChart).chartData
     expect(cd).not.toBeNull()
     expect(cd!.datasets).toHaveLength(4)
     expect(cd!.datasets.map((d) => d.data)).toEqual([
@@ -153,7 +158,7 @@ describe('BiomarkerTrendsChart', () => {
     vi.stubGlobal('fetch', fetchMock)
     const w = mountChart('onl', 99)
     await flushPromises()
-    const cd = (w.vm as unknown as ExposedChart).chartData.value
+    const cd = (w.vm as unknown as ExposedChart).chartData
     expect(cd).not.toBeNull()
     expect(cd!.datasets).toHaveLength(1)
     expect(cd!.datasets[0].data).toEqual([95.3, 92.1])
@@ -164,7 +169,7 @@ describe('BiomarkerTrendsChart', () => {
     vi.stubGlobal('fetch', fetchMock)
     const w = mountChart('ga', 5)
     await flushPromises()
-    const cd = (w.vm as unknown as ExposedChart).chartData.value
+    const cd = (w.vm as unknown as ExposedChart).chartData
     expect(cd).not.toBeNull()
     expect(cd!.datasets).toHaveLength(1)
     expect(cd!.datasets[0].data).toEqual([2.5])
