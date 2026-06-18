@@ -1,124 +1,179 @@
-# Wave 1B — Java backend new endpoints
+# Wave 2B — SPA portal completion
 
 ## Result: PASS
 
-### Default-profile test run (`mvn test`)
-`Tests run: 634, Failures: 0, Errors: 0, Skipped: 0` — BUILD SUCCESS.
+### Vitest default run
+`Test Files  96 passed (96)` / `Tests  948 passed | 1 skipped (949)` —
+0 failures, 0 errors.
 
-### Integration-tests profile (`*DatabaseIT` subset, manual run)
-Ran with `TESTCONTAINERS_RYUK_DISABLED=true` + `--network host`:
-- `RetinalJobStatusSseControllerDatabaseIT` — 3/3 pass
-- `RetinalResultsApiControllerDatabaseIT` — 17/17 pass (10 baseline + 7 new bind/search)
-- `PublicOctUploadControllerDatabaseIT` — 9/9 pass (8 baseline + 1 new disambiguation)
-- `StudySubjectFinderDatabaseIT` — 6/6 pass
+The pre-existing `1 skipped` survives from Wave 1C — no behaviour
+change.
 
-**Total**: 35 ITs pass across the 4 classes.
-
-Note: bare `mvn -P integration-tests test` against the full IT suite hits
-Testcontainers Ryuk connectivity errors on Docker-Desktop's nested
-networking (same failure mode for unrelated ITs like
-`PatientsApiControllerDatabaseIT`). With Ryuk disabled and host networking
-my four IT classes run green. CI uses the GitHub-Actions Docker runner
-which doesn't have this nested-bridge issue, so the suite should pass
-unattended there.
+### vue-tsc --noEmit
+`EXIT=0` — clean.
 
 ## What ships
 
-### 1. SSE controller + broadcaster
-- **`core/.../service/retinal/RetinalJobStatusBroadcaster.java`** (new @Component)
-  - `ConcurrentHashMap<Long, CopyOnWriteArrayList<SseEmitter>>`.
-  - `subscribe(jobId, emitter)` registers + hooks completion/timeout/error → eviction.
-  - `publish(jobId, status)` fans out; send failure → evict that emitter.
-  - `@Scheduled(fixedRate=15_000)` heartbeat keeps idle connections alive across proxies.
-- **`web/.../controller/api/RetinalJobStatusSseController.java`** (new)
-  - `GET /pages/api/v1/retinal-jobs/{jobId}/status/stream` returns SseEmitter (5-min idle timeout).
-  - guardSession + SiteVisibilityFilter; 401 / 400 / 403 / 404 mirror the read-side controller.
-- **`web/.../controller/api/RetinalInferenceApiController.java`** — `updateStatus` now calls `broadcaster.publish` after every successful DB flip (null-guarded for legacy test ctors).
+### 1. SPA api plumbing
+- **`web/src/spa/src/api/client.ts`** — adds the public `apiPatch<T>()`
+  wrapper. The underlying `request<T>` already supported PATCH; this
+  is the first SPA consumer.
+- **`web/src/spa/src/api/retinal.ts`** — typed wrappers for Wave 1B's
+  two new endpoints:
+    * `bindParkedJob(jobId, { eventCrfId })` → `PATCH /pages/api/v1/retinal-jobs/{jobId}/bind`
+    * `searchStudySubjects(q, limit)` → `GET /pages/api/v1/study-subjects/search?q=&limit=`
 
-### 2. Park-bind endpoint
-- **`web/.../controller/api/RetinalResultsApiController.java`**
-  - `PATCH /pages/api/v1/retinal-jobs/{jobId}/bind` body `{ eventCrfId }`.
-  - 200 success: updates `event_crf_id` + flips `status` → `remote_pending` (when `remoteClient.isConfigured()`) or `queued`; clears `screened_at` + `segmenting_at`.
-  - 409 when current status != `parked`.
-  - 403 when target event_crf outside site visibility.
-  - 404 when job or event_crf missing.
-  - Emits `RETINAL_PARK_BIND` (id 116) audit row.
-  - Calls `broadcaster.publish` so subscribers see the flip.
+### 2. i18n
+- **`web/src/spa/src/locales/de.json`** — DE verbatim:
+    * `octPortal.modals.patientSearch.{title,placeholder,empty,tooShort,searching,cancel,siteLabel,studyLabel,loadError}`
+    * `octPortal.modals.visitPicker.{title,empty,loading,cancel,loadError}`
+    * `retinal.parked.{title,subtitle,empty,loading,loadError,colTask,colEye,colEnqueued,colAction,bindAction,bindSuccess,bindConflict,bindError}`
+- **`web/src/spa/src/locales/en.json`** — EN mirrored, every new value
+  prefixed with `[NEEDS_REVIEW] ` per the Wave 1C pattern.
 
-### 3. Patient search endpoint
-- `GET /pages/api/v1/study-subjects/search?q=<prefix>&limit=<n>` on RetinalResultsApiController.
-- Limit clamped to `[1, 50]`; default 10.
-- Delegates to **new** `StudySubjectFinder.findByLabelPrefix(prefix, limit)` (case-insensitive ILIKE).
-- Result filtered by `SiteVisibilityFilter.visibleStudyIds`.
+### 3. PatientSearchModal
+- **`web/src/spa/src/components/octportal/PatientSearchModal.vue`**
+  — debounced (300 ms) search against the Wave 1B endpoint. Results
+  rendered with study + site context for disambiguation. Empty / "too
+  short" (< 2 chars) / loading / error states wired. Emits
+  `subject-picked` with the full `StudySubjectSearchHit`. Seeds the
+  search field from the operator's parsed PatientId so they don't
+  re-type the unresolved id.
 
-### 4. Rate limit filter
-- **`web/.../web/PublicOctUploadRateLimitFilter.java`** (new @Component)
-  - Hand-rolled token bucket; no Maven dep.
-  - 30 req/h/IP against `/pages/api/v1/public/oct-upload/**`.
-  - 1 token / 120s refill; CAS-based to be safe against concurrent requests.
-  - 429 + `Retry-After` header + JSON body on exhaustion.
-  - X-Forwarded-For preferred over `remoteAddr`.
-  - `@Scheduled(fixedRate=300_000)` evicts buckets idle > 1h.
-  - `nowMs()` seam for tests (no sleeps).
-- Wired into `SecurityConfig.securityFilterChain` via `.addFilterBefore(filter, ChannelProcessingFilter.class)`.
-- `ServletInfraConfig` opt-out for Boot's auto-registration (matches the pattern for myFilter/concurrencyFilter/apiSecurityFilter).
-- `SecurityConfig` gained `@EnableScheduling` so the filter's `@Scheduled` + the broadcaster's heartbeat both fire in the root context.
+### 4. VisitPickerModal
+- **`web/src/spa/src/components/octportal/VisitPickerModal.vue`**
+  — two-hop fetch:
+    1. `GET /pages/api/v1/events?subjectId=<label>` for the visit list
+       (Wave 1B brief is wrong about parameter shape — the existing
+       `EventsApiController` identifies subjects by LABEL, not
+       numeric id, so the component takes both `studySubjectId` AND
+       `subjectLabel`).
+    2. On click, `GET /pages/api/v1/events/{eventId}` to extract the
+       first non-removed `event_crf_id` — the bind endpoint requires
+       it. If no started CRF exists for the visit, the picker emits
+       `eventCrfId: -1` so the parent surfaces an error rather than
+       silently sending an invalid bind.
+  - Emits `event-picked` with `{ eventCrfId, definitionLabel, dateStart }`.
+  - Empty / loading / error states wired.
 
-### 5. Ambiguous-match audit
-- `PublicOctUploadController.commit` accepts two new optional fields: `disambiguated=true|false` (default false) + `candidateCount=<n>` (default 0).
-- When `disambiguated=true` AND a `study_subject_id` was resolved for the audit row, writes a SECOND `audit_log_event` row of type `OCT_UPLOAD_PUBLIC_AMBIGUOUS` (id 117) with `audit_table='study_subject'`, `entity_id=<chosen ssId>`, `new_value="chose:<id>:from:<count> candidates"`.
-- Best-effort: failure to write the marker does not block the upload or roll back the main audit row.
+### 5. Store extension — `octPortal.ts`
+- `assignFromSearch(rowId, subject)` — replaces the row's candidate
+  with the picked subject and re-runs `/resolve` so the matching
+  event (or lack thereof) for the scan date is recomputed.
+- `setManualVisit(rowId, eventCrfId, label, date)` — bypasses the
+  auto-resolve, flips the row to `suggested` with the operator's
+  pick wired into `selectedEvent`. Defensively surfaces an error
+  inline when `eventCrfId <= 0`.
 
-### Liquibase
-- New `core/src/main/resources/migration/lc-muw-2026-06-19-audit-types-retinal-followups.xml` seeds:
-  - id 116 `retinal_park_bind` / "Retinal job bound from park" / `is_user_visible=true`
-  - id 117 `oct_upload_public_ambiguous` / "OCT upload (public portal) — ambiguous-match disambiguated" / `is_user_visible=true`
-- Added to `master.xml` tail.
-- `AuditTypeIds.java` updated with the matching constants.
+### 6. OctUploadPortalView wiring
+- Drops the `onPickVisitUnsupported` / `onSearchPatientUnsupported`
+  no-ops. The `pick-visit` and `search-patient` row emits now open
+  their respective modals; on pick the view routes the result through
+  the new store actions.
+- Both modals mount conditionally — `PatientSearchModal` listens
+  on `open=false` until a row picks it; `VisitPickerModal` is gated
+  by `v-if="visitTargetSubject"` so it isn't even constructed
+  outside the picker flow.
+
+### 7. ParkedScansList
+- **`web/src/spa/src/components/retinal/ParkedScansList.vue`** —
+  embedded inside Wave 2A's `SubjectRetinalTab.vue` via a named slot:
+
+  ```vue
+  <SubjectRetinalTab :subject-id="subjectId">
+    <template #parked>
+      <ParkedScansList :study-subject-id="subjectId" />
+    </template>
+  </SubjectRetinalTab>
+  ```
+
+- Filters subject jobs client-side to `status === 'parked'` — the
+  backend endpoint `GET /pages/api/v1/study-subjects/{id}/retinal-jobs`
+  does not accept a `?status=` filter.
+- "Visite zuweisen" → opens VisitPickerModal → PATCH bind.
+  - 200 happy path: optimistic remove + success toast.
+  - 409 conflict (bound by another session in the meantime): refresh
+    + conflict toast, **not** an error banner — clinically benign.
+  - 4xx/5xx/network: restore the optimistic removal + error banner.
+
+## Note on Wave 2A dependency
+
+Wave 2A's `SubjectRetinalTab.vue` **was not present** in this
+worktree at start. ParkedScansList ships standalone with a
+`subjectLabel?: string` fallback (defaults to the numeric id as a
+string so the visit picker still has something to call
+`/api/v1/events?subjectId=…` with).
+
+**Harmonize action**: once Wave 2A's tab lands the main session
+should:
+1. Add the `#parked` slot to `SubjectRetinalTab.vue` (already
+   specified by the Wave 2A brief).
+2. Mount `ParkedScansList` from the parent (e.g. `SubjectDetailView`)
+   inside the slot, passing both `studySubjectId` and the subject
+   label.
 
 ## New tests
-- **`RetinalJobStatusBroadcasterTest`** (5 unit cases): subscribe / publish / failing-emitter eviction / no-op-when-empty / heartbeat-safe-on-empty.
-- **`RetinalJobStatusSseControllerDatabaseIT`** (3 IT cases): subscribe registers + broadcast routes, parked-no-event_crf → 403, missing job → 404.
-- **`RetinalResultsApiControllerDatabaseIT`** extended with 7 new IT cases (bind happy / 409 / 404; search happy / blank / clamp / no-match).
-- **`StudySubjectFinderDatabaseIT`** (6 IT cases): all-matches / limit honored / case-insensitive / blank prefix / non-existent prefix / zero limit.
-- **`PublicOctUploadRateLimitFilterTest`** (7 unit cases): under-limit / 31st 429 / refill / unguarded bypass / distinct-IP buckets / X-Forwarded-For preference / idle eviction.
-- **`PublicOctUploadControllerDatabaseIT`** extended with 1 new IT case (commit_disambiguated_writesAmbiguousAuditRow).
-
-## Surprises + notes
-- **SseEmitter + MockMvc**: `MvcResult.getAsyncResult()` hangs for the full SseEmitter timeout because nothing calls `.complete()` on a streaming emitter. The IT skips the async-wait and inspects the broadcaster registry directly after `perform()` — by then the controller has registered the emitter, which is what the SPA cares about.
-- **Spring `@EnableScheduling`**: was not previously enabled anywhere in the app. Added to `SecurityConfig` because that's the @Configuration class that already imports filter + scheduling-adjacent infra; it powers both the broadcaster heartbeat and the rate-limit idle eviction.
-- **Auto-register opt-out**: a `@Component` Filter gets auto-mounted at `/*` by Boot's `ServletContextInitializerBeans` unless explicitly disabled via a `FilterRegistrationBean.setEnabled(false)`. Without the opt-out the rate-limit filter would decrement tokens TWICE per request (once via Spring Security's chain, once via the Boot-auto-registered chain). Pattern is identical to the existing myFilter / concurrencyFilter / apiSecurityFilter opt-outs.
-- **Back-compat constructor**: `RetinalResultsApiController` grew a 6-arg ctor for the new collaborators (StudySubjectFinder + RemoteRetinalInferenceClient + broadcaster) plus a 3-arg back-compat ctor that null-defaults the trio. The session-guard slice test (`RetinalResultsApiControllerTest`) keeps the old wiring; the search endpoint defensively returns `[]` when the finder is null so the legacy test path still 200s on `/study-subjects/search`.
-- **SSE controller 403 vs 404**: had to distinguish "no job row" (404) from "job exists, study chain doesn't resolve" (403, via a wrapper `JobLookup` carrying a nullable Integer). Matches the read-side controller's behaviour for parked jobs with NULL `event_crf_id`.
-- **Testcontainers Ryuk**: the standard `mvn -P integration-tests` invocation fails with `Could not connect to Ryuk at 172.17.0.1:<port>` on Docker-Desktop nested networking. With `TESTCONTAINERS_RYUK_DISABLED=true` + `--network host` the suite runs clean. This affects the entire `*DatabaseIT` suite, not just my new tests — flagging here so CI is the canonical runner.
+- **`PatientSearchModal.spec.ts`** — 6 cases: too-short empty state,
+  debounce + fetch contract, results render with study + site
+  context, `subject-picked` emit with full hit, cancel emit, backend
+  error → error banner.
+- **`VisitPickerModal.spec.ts`** — 6 cases: fetch by subject label
+  on open, row content (label + date + status pill), two-hop
+  `event-picked` emit with the first non-removed eventCrfId, empty
+  state, cancel emit, backend error → error banner.
+- **`ParkedScansList.spec.ts`** — 4 cases: parked-status filter,
+  empty state, bind happy path (modal flow → PATCH → optimistic
+  remove + success toast), 409 conflict (refresh + conflict toast,
+  no error banner).
 
 ## Files touched
+
 **New**:
-- `core/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/service/retinal/RetinalJobStatusBroadcaster.java`
-- `core/src/main/resources/migration/lc-muw-2026-06-19-audit-types-retinal-followups.xml`
-- `core/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/service/retinal/RetinalJobStatusBroadcasterTest.java`
-- `web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api/RetinalJobStatusSseController.java`
-- `web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/web/PublicOctUploadRateLimitFilter.java`
-- `web/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api/RetinalJobStatusSseControllerDatabaseIT.java`
-- `web/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/service/retinal/StudySubjectFinderDatabaseIT.java`
-- `web/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/web/PublicOctUploadRateLimitFilterTest.java`
+- `web/src/spa/src/components/octportal/PatientSearchModal.vue`
+- `web/src/spa/src/components/octportal/VisitPickerModal.vue`
+- `web/src/spa/src/components/octportal/__tests__/PatientSearchModal.spec.ts`
+- `web/src/spa/src/components/octportal/__tests__/VisitPickerModal.spec.ts`
+- `web/src/spa/src/components/retinal/ParkedScansList.vue`
+- `web/src/spa/src/components/retinal/__tests__/ParkedScansList.spec.ts`
 
 **Modified**:
-- `core/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/service/retinal/StudySubjectFinder.java`
-- `core/src/main/resources/migration/master.xml`
-- `web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/config/SecurityConfig.java`
-- `web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/config/ServletInfraConfig.java`
-- `web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api/AuditTypeIds.java`
-- `web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api/PublicOctUploadController.java`
-- `web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api/RetinalInferenceApiController.java`
-- `web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api/RetinalResultsApiController.java`
-- `web/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api/PublicOctUploadControllerDatabaseIT.java`
-- `web/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api/RetinalInferenceApiControllerTest.java`
-- `web/src/test/java/at/ac/meduniwien/ophthalmology/libreclinica/controller/api/RetinalResultsApiControllerDatabaseIT.java`
+- `web/src/spa/src/api/client.ts`
+- `web/src/spa/src/api/retinal.ts`
+- `web/src/spa/src/locales/de.json`
+- `web/src/spa/src/locales/en.json`
+- `web/src/spa/src/stores/octPortal.ts`
+- `web/src/spa/src/views/OctUploadPortalView.vue`
 
-## Commits
-- `3b36a2b60` feat(retinal-followups-1b): SSE broadcaster + status push to subscribers
-- `846d80d82` feat(retinal-followups-1b): park-bind + patient-search endpoints
-- `6f80ae5a4` feat(retinal-followups-1b): rate limit + ambiguous-match audit
+## Commits (this worktree)
+- `bb1e269ec` feat(retinal-followups-2b): SPA api + i18n scaffolding
+- `95a4aaefa` feat(retinal-followups-2b): OCT-portal modals replace v1 no-op stubs
+- `15fbe4467` feat(retinal-followups-2b): ParkedScansList for Wave 2A integration
 
-Not pushed; ready for the main session to harmonize with Waves 1A + 1C.
+Not pushed.
+
+## Surprises + notes
+
+- **Spec vs reality on `/api/v1/events?subjectId=…`**: the brief
+  implied the parameter takes a numeric `studySubjectId` but the
+  existing `EventsApiController` (referenced as the bind target)
+  takes the subject LABEL string. Modelled both on the
+  `VisitPickerModal` so the prop signature documents the constraint
+  rather than papering over it.
+
+- **`event_crf_id` vs `study_event_id`**: the brief's emit signature
+  for `event-picked` uses `eventCrfId` but `GET /api/v1/events`
+  returns `study_event_id`. Added a second-hop to
+  `GET /api/v1/events/{eventId}` to pull the first non-removed CRF;
+  if no started CRF exists for the event we emit `-1` and the parent
+  surfaces an error rather than firing an invalid PATCH.
+
+- **`PrickedEvent` named export**: a `type { PickedEvent }` named
+  export from a `<script setup>` block doesn't get re-exported the
+  way module-style components do. Reverted the export to an internal
+  interface and inlined the shape at the call site in the view.
+
+- **OctUploadPortalView spec compatibility**: the existing view
+  spec mocks `@/api/octPortal` but not `@/api/retinal`. Since the
+  new modals only fire fetches when `open=true` and neither opens
+  in the existing test scenarios, the mock surface stays unchanged
+  — `948/948 + 1 skipped` confirms no regression.
