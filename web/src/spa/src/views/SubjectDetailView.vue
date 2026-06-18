@@ -15,6 +15,7 @@ import SubjectExportButton from '@/components/SubjectExportButton.vue'
 import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
 import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
 import SubjectRetinalTab from '@/views/SubjectRetinalTab.vue'
+import ParkedScansList from '@/components/retinal/ParkedScansList.vue'
 import { listSubjectJobs } from '@/api/retinal'
 
 import { useSubjectsStore } from '@/stores/subjects'
@@ -1046,7 +1047,11 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           v-if="shouldShowRetinalTab && retinalNumericId != null"
           data-testid="subject-retinal-tab-mount"
           :subject-id="retinalNumericId"
-        />
+        >
+          <template #parked>
+            <ParkedScansList :study-subject-id="retinalNumericId" />
+          </template>
+        </SubjectRetinalTab>
 
         <!-- Phase E.6 — per-eye modality baselines. One panel per
              in-scope eye (subject.studyEye includes the eye) and per
