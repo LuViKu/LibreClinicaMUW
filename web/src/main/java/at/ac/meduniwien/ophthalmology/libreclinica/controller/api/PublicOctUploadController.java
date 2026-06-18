@@ -260,7 +260,7 @@ public class PublicOctUploadController {
                 : RetinalInferenceJobStatus.QUEUED.dbValue();
         long jobId;
         try (Connection c = dataSource.getConnection()) {
-            jobId = insertJob(c, eventCrfId, DEFAULT_TASK, absolutePath, lat, status);
+            jobId = insertJob(c, eventCrfId, DEFAULT_TASK, absolutePath, lat, status, scanIndex);
         } catch (SQLException sqlEx) {
             LOG.error("Failed to enqueue retinal_inference_job from portal (patientId={}): {}",
                     pid, sqlEx.getMessage());
@@ -380,10 +380,10 @@ public class PublicOctUploadController {
     }
 
     private long insertJob(Connection c, Integer eventCrfId, String task, String e2ePath,
-                           String lat, String status) throws SQLException {
+                           String lat, String status, int scanIndex) throws SQLException {
         String sql = "INSERT INTO retinal_inference_job ("
-                + "event_crf_id, task, e2e_path, eye_laterality, status, enqueued_at"
-                + ") VALUES (?, ?, ?, ?, ?, ?)";
+                + "event_crf_id, task, e2e_path, eye_laterality, status, scan_index, enqueued_at"
+                + ") VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             if (eventCrfId == null) {
                 ps.setNull(1, java.sql.Types.INTEGER);
@@ -394,7 +394,8 @@ public class PublicOctUploadController {
             ps.setString(3, e2ePath);
             ps.setString(4, lat);
             ps.setString(5, status);
-            ps.setTimestamp(6, Timestamp.from(Instant.now()));
+            ps.setInt(6, scanIndex);
+            ps.setTimestamp(7, Timestamp.from(Instant.now()));
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) return keys.getLong(1);

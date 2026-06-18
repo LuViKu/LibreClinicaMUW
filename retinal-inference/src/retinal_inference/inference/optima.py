@@ -111,7 +111,16 @@ class OptimaAdapter(RetinalInferenceAdapter):
         e2e_path: Path,
         laterality: Literal["OD", "OS"],
         out_dir_override: Path | None = None,
+        scan_index: int = 0,
     ) -> FullVolumeResult:
+        """Dispatch ``task`` to its configured model-runner.
+
+        ``scan_index`` picks which volume to ingest from a multi-acquisition
+        .e2e (some Heidelberg exports carry several volumes). The shared
+        ingestion seam (``prepare_bscan_dcm``) forwards it to
+        ``read_e2e_volume`` which raises ``IndexError`` on out-of-range; the
+        ``/run`` endpoint maps that to HTTP 400.
+        """
         if not self.supports(task):
             raise UnsupportedTaskError(
                 f"Task '{task}' has no configured runner in this deployment"
@@ -129,7 +138,7 @@ class OptimaAdapter(RetinalInferenceAdapter):
             out_dir = _config.settings.shared_storage_path / f"{Path(e2e_path).stem}-{task}"
 
         # Shared ingestion: .e2e → bscan.dcm the runner consumes.
-        bscan_dir = prepare_bscan_dcm(Path(e2e_path), out_dir)
+        bscan_dir = prepare_bscan_dcm(Path(e2e_path), out_dir, scan_index=scan_index)
 
         resp = _post_json(
             runner_url.rstrip("/") + "/infer",

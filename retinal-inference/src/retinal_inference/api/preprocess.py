@@ -155,6 +155,10 @@ async def preprocess(
     file: UploadFile = File(..., description="Heidelberg .e2e binary"),
     laterality: str | None = Form(default=None, description="OD or OS (informational; derived from the E2E)"),
     e2e_uuid: str | None = Form(default=None, description="Optional e2e UUID; defaults to sha256(body)-derived"),
+    scan_index: int = Form(
+        default=0,
+        description="Volume index in a multi-acquisition .e2e (default 0)",
+    ),
     x_muw_inference_token: str | None = Header(default=None),
 ) -> Response:
     _check_endpoint_enabled()
@@ -163,6 +167,11 @@ async def preprocess(
     body = await file.read()
     if not body:
         raise HTTPException(status_code=400, detail="file part is empty")
+    if scan_index < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"scan_index must be >= 0 (got {scan_index})",
+        )
 
     uuid = e2e_uuid.strip() if e2e_uuid and e2e_uuid.strip() else _derive_uuid(body)
 
@@ -174,8 +183,12 @@ async def preprocess(
         e2e_path = tempdir / "input.e2e"
         e2e_path.write_bytes(body)
         try:
-            out_dir = prepare_bscan_dcm(e2e_path, tempdir)
+            out_dir = prepare_bscan_dcm(e2e_path, tempdir, scan_index=scan_index)
         except FileNotFoundError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except IndexError as e:
+            # scan_index out of range — surface as 400 so the SPA can show
+            # the operator a clean "this file has N volumes" message.
             raise HTTPException(status_code=400, detail=str(e)) from e
         except Exception as e:  # oct-converter / pydicom failure on a bad E2E
             raise HTTPException(
@@ -189,20 +202,27 @@ async def preprocess(
         # bit-identical to the headers.
         ds = pydicom.dcmread(str(Path(out_dir) / "bscan.dcm"))
         try:
-            bv = read_e2e_volume(e2e_path)
+            bv = read_e2e_volume(e2e_path, scan_index=scan_index)
         except Exception as e:  # noqa: BLE001 — already converted once, this is best-effort metadata
             LOG.warning("Geometry read failed on %s: %s", e2e_path, e)
             bv = None
 
         # Companion file writes (best-effort; skipped when no store configured).
+        # For scan_index > 0 we use a per-volume subdir so different volumes
+        # from the same .e2e don't overwrite each other's bscan.dcm / fundus.
         store = _bscan_store_dir()
         if store is not None and bv is not None:
-            target_dir = store / uuid
+            if scan_index > 0:
+                target_dir = store / uuid / f"scan-{scan_index}"
+            else:
+                target_dir = store / uuid
             try:
                 _persist_bscan_dcm(target_dir / "bscan.dcm", dcm_bytes)
-                fundus_png, fundus_dims = extract_fundus_png(e2e_path)
+                fundus_png, fundus_dims = extract_fundus_png(e2e_path, scan_index=scan_index)
                 _persist_fundus_png(target_dir / "fundus.png", fundus_png)
-                geom = build_geometry(bv, ds, fundus_dims, e2e_path=e2e_path)
+                geom = build_geometry(
+                    bv, ds, fundus_dims, e2e_path=e2e_path, scan_index=scan_index
+                )
                 _persist_geometry(target_dir / "geometry.json", geom)
             except Exception as e:  # noqa: BLE001 — never let companion-write failures break the request
                 LOG.warning("Companion persistence failed for %s: %s", uuid, e)
