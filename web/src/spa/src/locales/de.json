@@ -2373,6 +2373,26 @@
       "problemSingular": "Problem",
       "problemPlural": "Probleme",
       "confirmAllSuffix": "bestätigen"
+    },
+    "modals": {
+      "patientSearch": {
+        "title": "Patient suchen",
+        "placeholder": "Studien-ID oder Subject-Label eingeben…",
+        "tooShort": "Mindestens 2 Zeichen eingeben.",
+        "empty": "Keine passenden Studienteilnehmer gefunden.",
+        "searching": "Wird gesucht…",
+        "cancel": "Abbrechen",
+        "siteLabel": "Standort",
+        "studyLabel": "Studie",
+        "loadError": "Suche fehlgeschlagen."
+      },
+      "visitPicker": {
+        "title": "Visite wählen",
+        "empty": "Keine Visiten für diesen Teilnehmer.",
+        "loading": "Visiten werden geladen…",
+        "cancel": "Abbrechen",
+        "loadError": "Visiten konnten nicht geladen werden."
+      }
     }
   },
   "retinal": {
@@ -2452,6 +2472,21 @@
     "fundusOverlay": {
       "aria": "Fundus image with retinal overlays, {laterality}",
       "foveaTooltip": "Fovea estimate ({source})"
+    },
+    "parked": {
+      "title": "Parkende Scans",
+      "subtitle": "Hochgeladene Scans ohne zugewiesene Visite — bitte einer Visite zuordnen.",
+      "empty": "Keine parkenden Scans.",
+      "loading": "Wird geladen…",
+      "loadError": "Parkende Scans konnten nicht geladen werden.",
+      "colTask": "Aufgabe",
+      "colEye": "Auge",
+      "colEnqueued": "Eingegangen",
+      "colAction": "Aktion",
+      "bindAction": "Visite zuweisen",
+      "bindSuccess": "Scan einer Visite zugewiesen.",
+      "bindConflict": "Scan wurde bereits durch eine andere Sitzung zugewiesen.",
+      "bindError": "Zuweisung fehlgeschlagen."
     }
   },
   "bugReport": {

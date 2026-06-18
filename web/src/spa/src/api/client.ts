@@ -257,3 +257,13 @@ export function apiPut<T>(path: string, body: unknown, opts?: RequestOptions): P
 export function apiDelete<T>(path: string, opts?: RequestOptions): Promise<T> {
   return request<T>('DELETE', path, undefined, opts)
 }
+
+/**
+ * Wave 2B (retinal followups) — PATCH wrapper. The retinal park-bind
+ * endpoint ({@code PATCH /pages/api/v1/retinal-jobs/{id}/bind}) is the
+ * first SPA consumer; the underlying {@link request} helper already
+ * supports the verb, this is just the public alias.
+ */
+export function apiPatch<T>(path: string, body: unknown, opts?: RequestOptions): Promise<T> {
+  return request<T>('PATCH', path, body, opts)
+}
