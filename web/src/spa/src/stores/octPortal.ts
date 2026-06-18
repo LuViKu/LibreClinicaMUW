@@ -97,8 +97,12 @@ function generateRowId(): string {
 
 /** Format a Date as ISO yyyy-MM-dd in the LOCAL timezone — matches
  *  what the operator sees on the row (Vienna clock) rather than UTC.
- *  Keeps /resolve, /commit and the visible "Scan-Datum" cell in sync. */
-function isoLocalDate(d: Date): string {
+ *  Keeps /resolve, /commit and the visible "Scan-Datum" cell in sync.
+ *  Returns null when scanDate is null (fundus-only files have no
+ *  acquisition-time chunk; the backend handles null as
+ *  "search by patientId only"). */
+function isoLocalDate(d: Date | null): string | null {
+  if (d === null) return null
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
@@ -223,9 +227,34 @@ export const useOctPortalStore = defineStore('octPortal', () => {
     })
   }
 
-  /** Run /resolve against every parsing-but-already-has-scan row. */
+  /** Run /resolve against every parsing-but-already-has-scan row.
+   *
+   *  Rows whose parsed {@code patientId} is empty get short-circuited
+   *  into the `nopatient` state directly — the backend's /resolve
+   *  endpoint returns `nopatient` for blank ids anyway (see
+   *  PublicOctUploadController:147), and skipping the round-trip
+   *  prevents downstream "patientId is required" errors when an
+   *  operator later clicks "Bestätigen" on a header-less scan.
+   *  Operators clear the gap via the row's "Patient suchen" button. */
   async function resolveSurvivors(): Promise<void> {
-    const targets = rows.value.filter((r) => r.state === 'parsing' && r.scan)
+    const allTargets = rows.value.filter((r) => r.state === 'parsing' && r.scan)
+    if (allTargets.length === 0) return
+
+    // Split: empty patientId → directly nopatient; rest → /resolve.
+    const headerLess = allTargets.filter((r) => !r.scan!.patientId.trim())
+    const targets = allTargets.filter((r) => r.scan!.patientId.trim().length > 0)
+
+    for (const r of headerLess) {
+      const idx = rows.value.findIndex((x) => x.rowId === r.rowId)
+      if (idx !== -1) {
+        rows.value[idx] = {
+          ...rows.value[idx],
+          state: 'nopatient',
+          candidates: [],
+        }
+      }
+    }
+
     if (targets.length === 0) return
     const payload: ResolveScanRequest[] = targets.map((r) => ({
       patientId: r.scan!.patientId,

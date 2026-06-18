@@ -30,7 +30,7 @@ const done = computed(() => props.row.scan !== undefined)
 
 const sizeLabel = computed(() => formatBytes(props.row.file.size))
 const dateLabel = computed(() => {
-  if (!props.row.scan) return ''
+  if (!props.row.scan?.scanDate) return ''
   return formatScanDateTime(props.row.scan.scanDate)
 })
 

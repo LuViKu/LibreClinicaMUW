@@ -122,7 +122,17 @@ const userRoles = computed<UserRole[]>(() => {
   return []
 })
 
-const showTopBar = computed(() => route.name !== 'login' && route.name !== 'first-login')
+// Hide the global TopBar / unauthenticated-fallback header on public
+// routes that provide their own chrome (login, first-login, the OCT
+// upload portal). Without this, anonymous public routes would stack a
+// second "LibreClinica MUW · Anmelden" bar above the view's own
+// header — see the 2026-06-18 OCT-portal bug report.
+const showTopBar = computed(
+  () =>
+    route.name !== 'login' &&
+    route.name !== 'first-login' &&
+    route.name !== 'oct-upload-portal',
+)
 
 /**
  * Bug-report dialog open state. The dialog itself is always mounted
