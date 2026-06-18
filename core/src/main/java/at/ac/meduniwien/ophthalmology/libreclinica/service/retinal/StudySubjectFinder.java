@@ -1,0 +1,168 @@
+/*
+ * LibreClinica is distributed under the
+ * GNU Lesser General Public License (GNU LGPL).
+ *
+ * For details see: https://libreclinica.org/license
+ * copyright (C) 2026 Department of Ophthalmology and Optometry,
+ *                     Medical University of Vienna
+ */
+package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
+
+import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+import javax.sql.DataSource;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Component;
+
+/**
+ * Cross-study study_subject lookup that the existing
+ * {@link at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO}
+ * does not provide. Used by the public OCT-upload portal's
+ * {@code /resolve} endpoint to translate a Heidelberg-Spectralis
+ * PatientId (the {@code label} on the per-study study_subject row) plus
+ * an acquisition date into a (study_subject, event_crf) candidate that
+ * the staff can confirm before {@code /commit} persists the .e2e file.
+ *
+ * <p>Pure JDBC; no Hibernate. The two queries are read-only and
+ * fall outside the {@code SQLFactory} digester catalog because they
+ * cross study boundaries (the digester catalog is per-study aware).
+ *
+ * <p>Status filtering mirrors the existing convention in
+ * {@code itemdata_dao.xml} et al.: exclude
+ * {@code status_id IN (5, 7)} — removed + auto-removed.
+ */
+@Component
+public class StudySubjectFinder {
+
+    private static final Logger LOG = LoggerFactory.getLogger(StudySubjectFinder.class);
+
+    private final DataSource dataSource;
+
+    @Autowired
+    public StudySubjectFinder(@Qualifier("dataSource") DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    /**
+     * Find every study_subject row across all studies whose
+     * {@code label} exactly matches the supplied PatientId. Removed
+     * (status 5) and auto-removed (status 7) rows are filtered out.
+     *
+     * <p>Site siblings: when the matched study has a non-null
+     * {@code parent_study_id} the parent study's {@code name} is
+     * surfaced as {@code siteName} so the SPA can render a site chip
+     * ("MUW Vienna · Site-1") next to the study chip; top-level studies
+     * leave it null.
+     */
+    public List<StudySubjectMatch> findByLabelAcrossStudies(String label) {
+        if (label == null || label.isBlank()) {
+            return List.of();
+        }
+        // The join with `study site ON site.study_id = ss.parent_study_id`
+        // is intentionally LEFT — top-level studies have no parent so
+        // site_name remains NULL on the row.
+        final String sql =
+                "SELECT ss.study_subject_id, ss.label, ss.status_id, "
+                        + "       s.study_id, s.name AS study_name, "
+                        + "       s.unique_identifier AS study_oid, "
+                        + "       site.name AS site_name "
+                        + "  FROM study_subject ss "
+                        + "  JOIN study s ON s.study_id = ss.study_id "
+                        + "  LEFT JOIN study site ON site.study_id = s.parent_study_id "
+                        + " WHERE ss.label = ? "
+                        + "   AND ss.status_id NOT IN (5, 7) "
+                        + " ORDER BY s.study_id";
+        List<StudySubjectMatch> out = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, label);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    out.add(new StudySubjectMatch(
+                            rs.getInt("study_id"),
+                            rs.getString("study_name"),
+                            rs.getString("study_oid"),
+                            rs.getInt("study_subject_id"),
+                            rs.getString("label"),
+                            rs.getString("site_name"),
+                            rs.getInt("status_id")
+                    ));
+                }
+            }
+        } catch (SQLException e) {
+            LOG.error("findByLabelAcrossStudies failed for label '{}': {}", label, e.getMessage());
+            return List.of();
+        }
+        return out;
+    }
+
+    /**
+     * For one resolved study_subject, find the event_crf row whose
+     * parent study_event.date_start falls on the supplied scan date.
+     *
+     * <p>The result deliberately surfaces an {@code event_crf_id} (not
+     * a study_event_id): the OCT-upload commit binds a
+     * {@code retinal_inference_job} row to an event_crf, and we want
+     * the SPA to confirm exactly that PK without a second round-trip.
+     *
+     * <p>When more than one event_crf matches on the same day the lowest
+     * event_crf_id wins (deterministic, defensible — they're typically
+     * created in chronological order, so the earliest binding maps to
+     * the operator's earliest CRF on the day).
+     */
+    public Optional<EventCandidate> findEventOnDate(int studySubjectId, LocalDate scanDate) {
+        if (scanDate == null) {
+            return Optional.empty();
+        }
+        final String sql =
+                "SELECT ec.event_crf_id, "
+                        + "       sed.name AS definition_name, "
+                        + "       se.sample_ordinal, "
+                        + "       date(se.date_start) AS event_date "
+                        + "  FROM event_crf ec "
+                        + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                        + "  JOIN study_event_definition sed "
+                        + "    ON sed.study_event_definition_id = se.study_event_definition_id "
+                        + " WHERE ec.study_subject_id = ? "
+                        + "   AND date(se.date_start) = ? "
+                        + "   AND ec.status_id NOT IN (5, 7) "
+                        + " ORDER BY ec.event_crf_id ASC "
+                        + " LIMIT 1";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            ps.setDate(2, Date.valueOf(scanDate));
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return Optional.empty();
+                }
+                String defName = rs.getString("definition_name");
+                int ordinal = rs.getInt("sample_ordinal");
+                String label = (ordinal > 1) ? defName + " (#" + ordinal + ")" : defName;
+                Date dStart = rs.getDate("event_date");
+                return Optional.of(new EventCandidate(
+                        rs.getInt("event_crf_id"),
+                        label,
+                        dStart == null ? null : dStart.toLocalDate(),
+                        "same-day"
+                ));
+            }
+        } catch (SQLException e) {
+            LOG.error("findEventOnDate failed for studySubjectId={} date={}: {}",
+                    studySubjectId, scanDate, e.getMessage());
+            return Optional.empty();
+        }
+    }
+}
