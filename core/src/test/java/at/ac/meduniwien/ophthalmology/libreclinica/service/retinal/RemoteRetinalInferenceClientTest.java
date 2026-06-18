@@ -345,4 +345,61 @@ public class RemoteRetinalInferenceClientTest {
         assertNotNull(result);
         assertEquals(0, result.artifacts().size());
     }
+
+    @Test
+    public void runRemote_sendsScanIndexInRunBody() throws IOException {
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+
+        client.runRemote(55L, "fluid", e2eFile.toString(), "OD", 2);
+
+        String received = new String(runBody.get(), StandardCharsets.ISO_8859_1);
+        // The multipart body must carry scan_index=2 as a form field.
+        assertTrue("/run multipart carries scan_index field: " + received,
+                received.contains("name=\"scan_index\""));
+        assertTrue("/run multipart carries scan_index value 2",
+                received.contains("\r\n\r\n2\r\n"));
+    }
+
+    @Test
+    public void runRemote_sendsScanIndexInPreprocessBody() throws IOException {
+        byte[] dicom = new byte[140];
+        System.arraycopy("DICM".getBytes(StandardCharsets.UTF_8), 0, dicom, 128, 4);
+        AtomicReference<byte[]> preprocessBody = new AtomicReference<>();
+        server.createContext("/preprocess", exchange -> {
+            try (var in = exchange.getRequestBody()) {
+                preprocessBody.set(in.readAllBytes());
+            }
+            exchange.getResponseHeaders().set("Content-Type", "application/dicom");
+            exchange.sendResponseHeaders(200, dicom.length);
+            try (OutputStream os = exchange.getResponseBody()) {
+                os.write(dicom);
+            }
+        });
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+
+        client.prepUrl = client.url;
+
+        client.runRemote(77L, "fluid", e2eFile.toString(), "OD", 1);
+
+        String received = new String(preprocessBody.get(), StandardCharsets.ISO_8859_1);
+        assertTrue("/preprocess multipart carries scan_index field: " + received,
+                received.contains("name=\"scan_index\""));
+        assertTrue("/preprocess multipart carries scan_index value 1",
+                received.contains("\r\n\r\n1\r\n"));
+    }
+
+    @Test
+    public void runRemote_backCompatOverloadDefaultsScanIndexToZero() throws IOException {
+        AtomicReference<byte[]> runBody = new AtomicReference<>();
+        registerCapturingJsonHandler("/run", 200, envelopeJson(new byte[]{1}), runBody);
+
+        // 4-arg call must default scan_index to 0 (pre-multi-scan callers).
+        client.runRemote(99L, "fluid", e2eFile.toString(), "OD");
+
+        String received = new String(runBody.get(), StandardCharsets.ISO_8859_1);
+        assertTrue("default scan_index reaches /run as 0",
+                received.contains("name=\"scan_index\"") && received.contains("\r\n\r\n0\r\n"));
+    }
 }

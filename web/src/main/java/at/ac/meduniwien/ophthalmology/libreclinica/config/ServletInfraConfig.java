@@ -170,4 +170,22 @@ public class ServletInfraConfig {
         reg.setEnabled(false);
         return reg;
     }
+
+    /**
+     * Wave 1B (2026-06-18): the public OCT-upload rate-limit filter is
+     * mounted inside the {@code SecurityFilterChain} via
+     * {@link SecurityConfig#securityFilterChain(...)}'s
+     * {@code .addFilterBefore(...)}. Boot would otherwise auto-register
+     * it as a standalone servlet filter at {@code /*} and the token
+     * decrement would happen twice per request.
+     */
+    @Bean
+    public FilterRegistrationBean<at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter>
+            publicOctUploadRateLimitFilterAutoRegOptOut(
+                    at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter filter) {
+        FilterRegistrationBean<at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter>
+                reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        return reg;
+    }
 }

@@ -30,8 +30,11 @@
  * hundreds — well below the SVG redraw budget.
  */
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { GeometryJson } from '@/api/retinal'
 import { BIOMARKER_COLORS } from './retinalPalette'
+
+const { t } = useI18n()
 
 export type FundusOverlayTask = 'fluid' | 'onl' | 'pr' | 'ga'
 
@@ -254,12 +257,12 @@ function isHovered(z: number): boolean {
  */
 const foveaTooltip = computed(() => {
   const source = fovea.value.source ?? 'unknown'
-  return `Fovea estimate (${source})`
+  return t('retinal.fundusOverlay.foveaTooltip', { source })
 })
 
 /** Ring labels for the three ETDRS circles ("1 mm" / "3 mm" / "6 mm"). */
 function ringLabel(diameterMm: number): string {
-  return `${diameterMm} mm`
+  return t('retinal.etdrs.ringLabel', { mm: diameterMm })
 }
 </script>
 
@@ -273,7 +276,7 @@ function ringLabel(diameterMm: number): string {
       :viewBox="viewBox"
       preserveAspectRatio="xMidYMid meet"
       role="img"
-      :aria-label="`Fundus image with retinal overlays, ${laterality}`"
+      :aria-label="t('retinal.fundusOverlay.aria', { laterality })"
     >
       <!-- 1. Fundus image -->
       <image

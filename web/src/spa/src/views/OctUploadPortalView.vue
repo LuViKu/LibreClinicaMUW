@@ -21,7 +21,8 @@
  * German UI text is hard-coded inline per the plan's "no de.json for
  * v1" choice — the portal is unilaterally German for MUW operators.
  */
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import PublicTopBar from '@/components/octportal/PublicTopBar.vue'
 import PublicFooter from '@/components/octportal/PublicFooter.vue'
@@ -29,10 +30,41 @@ import E2eDropzone from '@/components/octportal/E2eDropzone.vue'
 import ParseQueue from '@/components/octportal/ParseQueue.vue'
 import ReviewQueue from '@/components/octportal/ReviewQueue.vue'
 import SummaryBar from '@/components/octportal/SummaryBar.vue'
+import PatientSearchModal from '@/components/octportal/PatientSearchModal.vue'
+import VisitPickerModal from '@/components/octportal/VisitPickerModal.vue'
 
 import { useOctPortalStore } from '@/stores/octPortal'
+import type { StudySubjectSearchHit } from '@/api/retinal'
 
+const { t } = useI18n()
 const store = useOctPortalStore()
+
+/** Row currently driving a modal — {@code null} when no modal is open. */
+const searchTargetRowId = ref<string | null>(null)
+const visitTargetRowId = ref<string | null>(null)
+
+/** Initial query for the search modal — seeded from the row's parsed
+ *  PatientId so the operator doesn't have to retype the scan's id. */
+const searchInitialQuery = computed<string>(() => {
+  const id = searchTargetRowId.value
+  if (id == null) return ''
+  const row = store.rows.find((r) => r.rowId === id)
+  return row?.scan?.patientId ?? ''
+})
+
+/** Subject + label for the visit-picker — the modal needs the LABEL
+ *  to call /api/v1/events?subjectId=<label>, and the numeric id to
+ *  let the store match the row on pick. */
+const visitTargetSubject = computed<{ id: number; label: string } | null>(() => {
+  const rid = visitTargetRowId.value
+  if (rid == null) return null
+  const row = store.rows.find((r) => r.rowId === rid)
+  if (!row?.selectedCandidate) return null
+  return {
+    id: row.selectedCandidate.studySubjectId,
+    label: row.selectedCandidate.subjectLabel,
+  }
+})
 
 /** Three-state visual machine derived from store.rows. */
 const screen = computed<'ready' | 'parsing' | 'review'>(() => {
@@ -68,19 +100,43 @@ function onDismiss(rowId: string): void {
 }
 
 /**
- * "Visite wählen" / "Patient suchen" are not implemented in v1 — the
- * mockup surfaces them but the plan's "Out of scope" list defers
- * them. We swallow the event so the row stays interactive and the
- * operator falls back to "Parken" / "Später zuordnen".
- *
- * TODO(phase-e-retinal-v2): replace with a real picker modal once
- * the backend exposes /candidates and /events search endpoints.
+ * Wave 2B — "Visite wählen" / "Patient suchen" land their respective
+ * modals. The wiring keeps the row interactive throughout:
+ *  - Patient suchen → PatientSearchModal → store.assignFromSearch on
+ *    pick → row re-resolves against the chosen subject.
+ *  - Visite wählen → VisitPickerModal → store.setManualVisit on pick
+ *    → row flips to {@code suggested} with the picked event.
  */
-function onPickVisitUnsupported(_rowId: string): void {
-  // intentionally no-op for v1
+function onPickVisit(rowId: string): void {
+  visitTargetRowId.value = rowId
 }
-function onSearchPatientUnsupported(_rowId: string): void {
-  // intentionally no-op for v1
+function onSearchPatient(rowId: string): void {
+  searchTargetRowId.value = rowId
+}
+
+function onSubjectPicked(subject: StudySubjectSearchHit): void {
+  const rid = searchTargetRowId.value
+  searchTargetRowId.value = null
+  if (rid == null) return
+  void store.assignFromSearch(rid, subject)
+}
+
+function onEventPicked(payload: {
+  eventCrfId: number
+  definitionLabel: string
+  dateStart: string
+}): void {
+  const rid = visitTargetRowId.value
+  visitTargetRowId.value = null
+  if (rid == null) return
+  store.setManualVisit(rid, payload.eventCrfId, payload.definitionLabel, payload.dateStart)
+}
+
+function onPatientSearchClose(): void {
+  searchTargetRowId.value = null
+}
+function onVisitPickerClose(): void {
+  visitTargetRowId.value = null
 }
 </script>
 
@@ -92,10 +148,10 @@ function onSearchPatientUnsupported(_rowId: string): void {
         <!-- ============================ Page head ============================ -->
         <div class="flex items-end justify-between gap-4 mb-6">
           <div>
-            <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-muw-coral-700 mb-1.5">OCT-Bildgebung · Upload-Portal</div>
-            <h1 class="muw-display text-[27px] leading-tight font-semibold tracking-tight text-slate-900">OCT-Scans hochladen</h1>
+            <div class="text-[11px] font-semibold uppercase tracking-[0.14em] text-muw-coral-700 mb-1.5">{{ t('octPortal.head.eyebrow') }}</div>
+            <h1 class="muw-display text-[27px] leading-tight font-semibold tracking-tight text-slate-900">{{ t('octPortal.head.title') }}</h1>
             <p class="text-[13.5px] text-slate-500 mt-2 max-w-[660px] leading-relaxed">
-              Studienübergreifend — die passende <span class="font-medium text-slate-700">Studie</span> und <span class="font-medium text-slate-700">Visite</span> werden automatisch anhand von <span class="font-medium text-slate-700">PatientId</span> und <span class="font-medium text-slate-700">Scan-Datum</span> aus dem Datei-Header bestimmt.
+              {{ t('octPortal.head.leadIntro') }} <span class="font-medium text-slate-700">{{ t('octPortal.head.studyWord') }}</span> {{ t('octPortal.head.leadAnd') }} <span class="font-medium text-slate-700">{{ t('octPortal.head.visitWord') }}</span> {{ t('octPortal.head.leadDetermine') }} <span class="font-medium text-slate-700">{{ t('octPortal.head.patientIdWord') }}</span> {{ t('octPortal.head.leadAnd') }} <span class="font-medium text-slate-700">{{ t('octPortal.head.scanDateWord') }}</span> {{ t('octPortal.head.leadFromHeader') }}
             </p>
           </div>
           <div v-if="screen === 'parsing'" class="inline-flex items-center gap-2 text-[13px] text-slate-500 mb-1">
@@ -104,7 +160,7 @@ function onSearchPatientUnsupported(_rowId: string): void {
                 <path d="M21 12a9 9 0 1 1-6.2-8.5" opacity="0.9" />
               </svg>
             </span>
-            Header werden gelesen…
+            {{ t('octPortal.head.parsingStatus') }}
           </div>
         </div>
 
@@ -119,7 +175,7 @@ function onSearchPatientUnsupported(_rowId: string): void {
               </svg>
             </span>
             <p class="max-w-[720px] leading-relaxed">
-              Es ist kein Login nötig. Der Browser liest den <span class="font-medium text-slate-700">.e2e</span>-Header lokal aus, ermittelt <span class="font-medium text-slate-700">PatientId</span>, <span class="font-medium text-slate-700">Scan-Datum</span> und <span class="font-medium text-slate-700">Auge</span> und schlägt anschließend die passende Studie und Visite zur Bestätigung vor.
+              {{ t('octPortal.hero.noLoginPrefix') }} <span class="font-medium text-slate-700">.e2e</span>{{ t('octPortal.hero.noLoginHeader') }} <span class="font-medium text-slate-700">{{ t('octPortal.head.patientIdWord') }}</span>, <span class="font-medium text-slate-700">{{ t('octPortal.head.scanDateWord') }}</span> {{ t('octPortal.head.leadAnd') }} <span class="font-medium text-slate-700">{{ t('octPortal.hero.noLoginEye') }}</span> {{ t('octPortal.hero.noLoginSuffix') }}
             </p>
           </div>
         </template>
@@ -138,14 +194,30 @@ function onSearchPatientUnsupported(_rowId: string): void {
             :rows="store.rows"
             @confirm="onConfirm"
             @undo="onUndo"
-            @pick-visit="onPickVisitUnsupported"
+            @pick-visit="onPickVisit"
             @park="onPark"
-            @search-patient="onSearchPatientUnsupported"
+            @search-patient="onSearchPatient"
             @dismiss="onDismiss"
           />
         </template>
       </div>
     </div>
     <PublicFooter />
+
+    <!-- ============================ Wave 2B modals ============================ -->
+    <PatientSearchModal
+      :open="searchTargetRowId !== null"
+      :initial-query="searchInitialQuery"
+      @subject-picked="onSubjectPicked"
+      @close="onPatientSearchClose"
+    />
+    <VisitPickerModal
+      v-if="visitTargetSubject"
+      :open="visitTargetRowId !== null"
+      :study-subject-id="visitTargetSubject.id"
+      :subject-label="visitTargetSubject.label"
+      @event-picked="onEventPicked"
+      @close="onVisitPickerClose"
+    />
   </div>
 </template>

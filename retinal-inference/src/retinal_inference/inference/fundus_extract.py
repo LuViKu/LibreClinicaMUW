@@ -40,14 +40,27 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
 LOG = logging.getLogger(__name__)
 
+# Optional per-modality SLO scale override. When set, replaces the
+# bscan_fallback value for the SLO mm/px (both lateral + slice axes); the
+# geometry block reports ``scale_source: env_override`` so the SPA can
+# annotate the source. Single global value because v1 only ships
+# Spectralis-shaped exports; per-modality dispatch can come later.
+_SLO_SCALE_ENV = "RETINAL_INFERENCE_SLO_SPECTRALIS_MM_PER_PX"
 
-def extract_fundus_png(e2e_path: Path) -> tuple[bytes, tuple[int, int] | None]:
+
+def extract_fundus_png(
+    e2e_path: Path, scan_index: int = 0
+) -> tuple[bytes, tuple[int, int] | None]:
     """Read the SLO en-face image from ``e2e_path`` and PNG-encode it.
+
+    ``scan_index`` picks which fundus to extract from a multi-acquisition .e2e
+    (each volume usually has its own SLO); defaults to 0.
 
     Returns
     -------
@@ -72,13 +85,21 @@ def extract_fundus_png(e2e_path: Path) -> tuple[bytes, tuple[int, int] | None]:
         LOG.warning("No fundus image in %s", e2e_path)
         return b"", None
 
-    # When multiple fundi exist, pick the largest by area (most likely the
-    # SLO en-face of the volume scan; OCT-only re-acquisitions tend to be
-    # smaller line/AF scans).
-    fundus = max(
-        fundi,
-        key=lambda f: int(getattr(f.image, "size", 0) or 0),
-    )
+    # Multi-acquisition .e2e files carry one SLO per volume; pick the one
+    # matching scan_index. Out-of-range falls back to the largest fundus —
+    # the alternative is failing the whole preprocess for a missing SLO,
+    # which silently breaks dedup writes that callers downstream expect.
+    if 0 <= scan_index < len(fundi):
+        fundus = fundi[scan_index]
+    else:
+        LOG.warning(
+            "Fundus scan_index %d out of range (have %d); falling back to largest",
+            scan_index, len(fundi),
+        )
+        fundus = max(
+            fundi,
+            key=lambda f: int(getattr(f.image, "size", 0) or 0),
+        )
     arr = fundus.image
     if arr is None or getattr(arr, "size", 0) == 0:
         LOG.warning("Fundus chunk in %s decoded to an empty array", e2e_path)
@@ -97,6 +118,7 @@ def build_geometry(
     ds: Any,  # pydicom.Dataset
     fundus_dims: tuple[int, int] | None,
     e2e_path: Path | None = None,
+    scan_index: int = 0,
 ) -> dict:
     """Assemble the registration JSON the SPA will use to align B-scans on the SLO.
 
@@ -116,6 +138,10 @@ def build_geometry(
         .e2e to recover the per-B-scan endpoint coords; when None, falls back
         to ``getattr(bv, 'bscan_data', None)`` (set by the caller if it kept
         the raw list around).
+    scan_index:
+        Which volume from a multi-acquisition .e2e was ingested. Stored at
+        the root of the output dict so downstream consumers can disambiguate
+        companion files written to ``<e2eUuid>/scan-<scan_index>/...``.
 
     The output shape matches the spec at
     `docs/development/modernization/retinal-preprocess-geometry.md` — see the
@@ -124,14 +150,32 @@ def build_geometry(
     fundus_width = int(fundus_dims[0]) if fundus_dims else 0
     fundus_height = int(fundus_dims[1]) if fundus_dims else 0
 
-    bscan_data = _load_bscan_data(bv, e2e_path)
+    bscan_data = _load_bscan_data(bv, e2e_path, scan_index=scan_index)
 
-    # SLO scale (mm/px). Not directly exposed by oct-converter; fall back to
-    # the B-scan lateral / slice spacing and label the source so callers can
-    # act on it. Used to project mm-frame positions into the fundus pixel frame.
-    fundus_lateral_mm_per_px = float(bv.lateral_mm)
-    fundus_slice_mm_per_px = float(bv.slice_mm)
-    scale_source = "bscan_fallback"
+    # SLO scale (mm/px). Not directly exposed by oct-converter; institutional
+    # operators can supply a vendor-spec'd value via
+    # RETINAL_INFERENCE_SLO_SPECTRALIS_MM_PER_PX (Spectralis spec sheet:
+    # 0.0058 mm/px), else fall back to the B-scan lateral / slice spacing and
+    # label the source so callers can act on it.
+    slo_override_env = os.environ.get(_SLO_SCALE_ENV)
+    if slo_override_env:
+        try:
+            slo_mm_per_px = float(slo_override_env)
+            fundus_lateral_mm_per_px = slo_mm_per_px
+            fundus_slice_mm_per_px = slo_mm_per_px
+            scale_source = "env_override"
+        except ValueError:
+            LOG.warning(
+                "Invalid %s=%r; falling back to bscan-derived spacing",
+                _SLO_SCALE_ENV, slo_override_env,
+            )
+            fundus_lateral_mm_per_px = float(bv.lateral_mm)
+            fundus_slice_mm_per_px = float(bv.slice_mm)
+            scale_source = "bscan_fallback"
+    else:
+        fundus_lateral_mm_per_px = float(bv.lateral_mm)
+        fundus_slice_mm_per_px = float(bv.slice_mm)
+        scale_source = "bscan_fallback"
 
     positions: list[dict[str, float | int]] = []
     if bscan_data:
@@ -170,6 +214,7 @@ def build_geometry(
     )
 
     return {
+        "scan_index": int(scan_index),
         "fundus": {
             "width_px": fundus_width,
             "height_px": fundus_height,
@@ -191,12 +236,15 @@ def build_geometry(
     }
 
 
-def _load_bscan_data(bv: Any, e2e_path: Path | None) -> list[dict] | None:
+def _load_bscan_data(
+    bv: Any, e2e_path: Path | None, scan_index: int = 0
+) -> list[dict] | None:
     """Best-effort recovery of the per-B-scan metadata list from the .e2e.
 
     The preprocess endpoint re-reads the .e2e here when ``bv`` doesn't already
     carry it — keeps ``read_e2e_volume`` backwards-compatible (callers that
-    only want the spacing don't pay the second-pass cost).
+    only want the spacing don't pay the second-pass cost). ``scan_index``
+    picks which volume's metadata to return from a multi-acquisition .e2e.
     """
     raw = getattr(bv, "bscan_data", None)
     if raw:
@@ -212,7 +260,10 @@ def _load_bscan_data(bv: Any, e2e_path: Path | None) -> list[dict] | None:
         volumes = reader.read_oct_volume()
         if not volumes:
             return None
-        vol_meta = max(volumes, key=lambda v: int(getattr(v, "num_slices", 0) or 0))
+        if 0 <= scan_index < len(volumes):
+            vol_meta = volumes[scan_index]
+        else:
+            vol_meta = max(volumes, key=lambda v: int(getattr(v, "num_slices", 0) or 0))
         md = getattr(vol_meta, "metadata", None) or {}
         return list(md.get("bscan_data", []) or [])
     except Exception as e:  # noqa: BLE001

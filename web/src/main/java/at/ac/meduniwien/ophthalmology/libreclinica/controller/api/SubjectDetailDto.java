@@ -111,7 +111,19 @@ public record SubjectDetailDto(
          * list for the no-banner branch. Created subjects + the legacy
          * unit-test fixtures pass {@code null} explicitly.
          */
-        java.util.List<EyeTransitionSummary> eyeTransitions
+        java.util.List<EyeTransitionSummary> eyeTransitions,
+        /**
+         * Wave 2A (2026-06-18) — numeric {@code study_subject.id}.
+         *
+         * <p>Surfaced so the SPA's SubjectDetailView can drive the new
+         * retinal-trends section without an extra OID→id resolve trip
+         * (the trends + per-subject jobs endpoints are keyed by the
+         * numeric id; the rest of the DTO uses the human-readable
+         * label / OID). {@code 0} on freshly-created subjects when the
+         * caller assembles the DTO before the DAO insert has assigned
+         * an id, OR on legacy fixture rows that pre-date this field.
+         */
+        int studySubjectId
 ) {
 
     /**

@@ -68,3 +68,4 @@ All env vars use the `RETINAL_INFERENCE_` prefix.
 | `RETINAL_INFERENCE_FAST_SCREEN_TIMEOUT_S` | `8.0` | Soft sync-screen budget. |
 | `RETINAL_INFERENCE_FAST_SCREEN_SLEEP_S` | `2.0` | Placeholder fast-screen sleep (set to `0` in tests). |
 | `RETINAL_INFERENCE_FULL_VOLUME_SLEEP_S` | `30.0` | Placeholder full-volume sleep (set to `0` in tests). |
+| `RETINAL_INFERENCE_SLO_SPECTRALIS_MM_PER_PX` | (unset) | Institutional per-modality override for the SLO en-face mm/px. When unset, `build_geometry` falls back to the B-scan lateral/slice spacing and emits `scale_source: bscan_fallback` (degraded — the SLO is not actually sampled at the OCT volume's pitch). Setting this to the Spectralis spec value (typically `0.0058`) makes the geometry SLO-native and emits `scale_source: env_override`. |

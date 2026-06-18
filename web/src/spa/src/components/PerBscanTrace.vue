@@ -19,7 +19,10 @@
  * the matching polyline.
  */
 import { computed, defineAsyncComponent } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { BIOMARKER_COLORS } from './retinalPalette'
+
+const { t } = useI18n()
 
 interface Props {
   payload: Record<string, unknown>
@@ -100,7 +103,7 @@ const chartData = computed<ChartData | null>(() => {
       labels,
       datasets: [
         {
-          label: 'IRF',
+          label: t('retinal.kpi.irf'),
           data: irf,
           borderColor: BIOMARKER_COLORS.irf,
           backgroundColor: BIOMARKER_COLORS.irf,
@@ -109,7 +112,7 @@ const chartData = computed<ChartData | null>(() => {
           pointHoverRadius: 4,
         },
         {
-          label: 'SRF',
+          label: t('retinal.kpi.srf'),
           data: srf,
           borderColor: BIOMARKER_COLORS.srf,
           backgroundColor: BIOMARKER_COLORS.srf,
@@ -118,7 +121,7 @@ const chartData = computed<ChartData | null>(() => {
           pointHoverRadius: 4,
         },
         {
-          label: 'PED',
+          label: t('retinal.kpi.ped'),
           data: ped,
           borderColor: BIOMARKER_COLORS.ped,
           backgroundColor: BIOMARKER_COLORS.ped,
@@ -136,7 +139,7 @@ const chartData = computed<ChartData | null>(() => {
     labels: per.map((_, i) => String(i)),
     datasets: [
       {
-        label: 'GA area',
+        label: t('retinal.kpi.gaArea'),
         data: per,
         borderColor: '#ec4899',
         backgroundColor: '#ec4899',
@@ -165,17 +168,17 @@ const chartOptions = computed(() => ({
     tooltip: {
       callbacks: {
         title: (items: Array<{ label: string }>) =>
-          items.length ? `B-scan ${items[0].label}` : '',
+          items.length ? t('retinal.perBscan.tooltipPrefix', { label: items[0].label }) : '',
       },
     },
   },
   scales: {
     x: {
-      title: { display: true, text: 'B-scan index', font: { size: 10 } },
+      title: { display: true, text: t('retinal.perBscan.xAxisLabel'), font: { size: 10 } },
       ticks: { font: { size: 9 }, maxTicksLimit: 10 },
     },
     y: {
-      title: { display: true, text: 'mm²', font: { size: 10 } },
+      title: { display: true, text: t('retinal.perBscan.yAxisLabel'), font: { size: 10 } },
       ticks: { font: { size: 9 } },
       beginAtZero: true,
     },
@@ -196,10 +199,10 @@ const chartOptions = computed(() => ({
 <template>
   <div data-testid="per-bscan-trace" class="bg-white border border-slate-200 rounded-muw p-3 h-64">
     <div class="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
-      Per-B-scan trace
+      {{ t('retinal.perBscan.header') }}
     </div>
     <div v-if="!chartData" class="text-xs text-slate-500 italic h-full flex items-center justify-center">
-      No per-B-scan data.
+      {{ t('retinal.perBscan.empty') }}
     </div>
     <div v-else class="h-[calc(100%-1.5rem)]">
       <Line :data="chartData" :options="chartOptions" />

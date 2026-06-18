@@ -73,16 +73,33 @@ public class RemoteRetinalInferenceClient {
     }
 
     /**
-     * POST the persisted E2E to {@code ${remotePushUrl}/run} and return the
-     * decoded envelope. Returns {@code null} on any failure (connect refused,
-     * timeout, non-2xx, malformed body); the caller is expected to revert the
-     * job to {@code status='queued'} so the existing DB-poll fallback drains
-     * it (or surface the failure to the operator).
+     * Back-compat overload — defaults {@code scanIndex} to 0. Callers should
+     * prefer {@link #runRemote(long, String, String, String, int)} so the
+     * portal's multi-acquisition .e2e routing reaches the sidecar.
      */
     public RemoteRunResult runRemote(long jobId,
                                      String task,
                                      String e2ePath,
                                      String laterality) {
+        return runRemote(jobId, task, e2ePath, laterality, 0);
+    }
+
+    /**
+     * POST the persisted E2E to {@code ${remotePushUrl}/run} and return the
+     * decoded envelope. Returns {@code null} on any failure (connect refused,
+     * timeout, non-2xx, malformed body); the caller is expected to revert the
+     * job to {@code status='queued'} so the existing DB-poll fallback drains
+     * it (or surface the failure to the operator).
+     *
+     * <p>{@code scanIndex} selects which volume from a multi-acquisition .e2e
+     * the sidecar should ingest (default 0). Forwarded to both /preprocess and
+     * /run as a {@code scan_index} multipart form field.
+     */
+    public RemoteRunResult runRemote(long jobId,
+                                     String task,
+                                     String e2ePath,
+                                     String laterality,
+                                     int scanIndex) {
         String url = remoteUrl();
         if (url == null || url.isBlank()) {
             return null;
@@ -119,7 +136,8 @@ public class RemoteRetinalInferenceClient {
             // the uploads service names files {uuid}.e2e so this stays stable
             // across re-uploads of the same scan.
             String derivedUuid = stripE2eSuffix(fileName);
-            prep = preprocessToDicom(rest, prepUrl, jobId, fileName, bytes, laterality, derivedUuid);
+            prep = preprocessToDicom(rest, prepUrl, jobId, fileName, bytes, laterality,
+                    derivedUuid, scanIndex);
             if (prep == null || prep.dcmBytes() == null) {
                 // Conversion failed — return null so the caller reverts the job and
                 // the local fallback path drains it, rather than POSTing a raw .e2e
@@ -139,6 +157,7 @@ public class RemoteRetinalInferenceClient {
         body.add("file", filePart);
         body.add("task", task);
         body.add("laterality", laterality);
+        body.add("scan_index", Integer.toString(scanIndex));
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);
@@ -206,6 +225,9 @@ public class RemoteRetinalInferenceClient {
      * PHI-redacted {@code bscan.dcm} bytes + parsed pixel geometry, or {@code null}
      * on any failure (so the caller reverts + falls back rather than shipping a
      * raw E2E to the DICOM-only cluster adapter).
+     *
+     * <p>{@code scanIndex} picks which volume from a multi-acquisition .e2e to
+     * convert; forwarded to /preprocess as a {@code scan_index} form field.
      */
     private PreprocessResult preprocessToDicom(RestTemplate rest,
                                                String prepUrl,
@@ -213,7 +235,8 @@ public class RemoteRetinalInferenceClient {
                                                String e2eName,
                                                byte[] e2eBytes,
                                                String laterality,
-                                               String e2eUuid) {
+                                               String e2eUuid,
+                                               int scanIndex) {
         String token = preprocessToken();
         if (token == null || token.isBlank()) {
             LOG.warn("Preprocess URL set but no token "
@@ -233,6 +256,7 @@ public class RemoteRetinalInferenceClient {
         if (e2eUuid != null && !e2eUuid.isBlank()) {
             body.add("e2e_uuid", e2eUuid);
         }
+        body.add("scan_index", Integer.toString(scanIndex));
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.MULTIPART_FORM_DATA);

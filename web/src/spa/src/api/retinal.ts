@@ -20,7 +20,7 @@
  * and the global error toast picks up the rest.
  */
 
-import { apiGet } from './client'
+import { apiGet, apiPatch } from './client'
 
 /* ====================================================================== */
 /* Public types                                                           */
@@ -276,6 +276,84 @@ export function listSubjectJobs(studySubjectId: number): Promise<RetinalJobSumma
  */
 export function artifactUrl(jobId: number, name: string): string {
   return `/LibreClinica${BASE}/${jobId}/artifacts/${encodeURIComponent(name)}`
+}
+
+/* ====================================================================== */
+/* Wave 2B (retinal followups) — park-bind + study-subject search          */
+/* ====================================================================== */
+
+/**
+ * Wave 2B — body of {@code PATCH /pages/api/v1/retinal-jobs/{jobId}/bind}.
+ * The backend requires {@code eventCrfId > 0}; the modal flow gates
+ * the call on a picked event so the call site never sends a zero.
+ */
+export interface RetinalJobBindRequest {
+  eventCrfId: number
+}
+
+/**
+ * Wave 2B — response of {@code PATCH /pages/api/v1/retinal-jobs/{jobId}/bind}.
+ * The backend echoes the new status ({@code remote_pending} when the
+ * GPU sidecar is configured, otherwise {@code queued}) so the SPA can
+ * surface it without an extra GET.
+ */
+export interface RetinalJobBindResponse {
+  jobId: number
+  status: string
+}
+
+/**
+ * Wave 2B — bind a parked retinal_inference_job to a concrete event_crf.
+ *
+ * The caller is expected to have picked the event from
+ * {@code VisitPickerModal}; the modal walks {@code /pages/api/v1/events?subjectId=...}
+ * so the resulting {@code eventCrfId} is always within the operator's
+ * site-visibility scope. The backend re-validates regardless.
+ *
+ * <p>Surfaces 409 ({@code job is not parked}) as a regular {@link ApiError}
+ * so the {@code ParkedScansList} caller can refresh the row and surface
+ * a non-error toast — the row was bound by a concurrent operator, not
+ * a true failure.
+ */
+export function bindParkedJob(
+  jobId: number,
+  body: RetinalJobBindRequest,
+): Promise<RetinalJobBindResponse> {
+  return apiPatch<RetinalJobBindResponse>(`${BASE}/${jobId}/bind`, body)
+}
+
+/**
+ * Wave 2B — one hit row from {@code GET /pages/api/v1/study-subjects/search?q=...}.
+ * The backend filters by the operator's site-visibility scope before
+ * returning so the SPA never sees a subject the operator can't open.
+ */
+export interface StudySubjectSearchHit {
+  studySubjectId: number
+  label: string
+  studyId: number
+  studyName: string
+  siteName: string | null
+}
+
+/**
+ * Wave 2B — staff-portal label prefix search. Backs the
+ * {@code PatientSearchModal} called from the no-patient row state.
+ *
+ * <p>The backend clamps {@code limit} to {@code [1, 50]} and trims
+ * {@code q}; an empty / whitespace-only query returns an empty list
+ * so the modal can short-circuit the "Mindestens 2 Zeichen" empty
+ * state without round-tripping.
+ */
+export function searchStudySubjects(
+  q: string,
+  limit = 10,
+): Promise<StudySubjectSearchHit[]> {
+  const params = new URLSearchParams()
+  params.set('q', q)
+  params.set('limit', String(limit))
+  return apiGet<StudySubjectSearchHit[]>(
+    `/pages/api/v1/study-subjects/search?${params.toString()}`,
+  )
 }
 
 /**

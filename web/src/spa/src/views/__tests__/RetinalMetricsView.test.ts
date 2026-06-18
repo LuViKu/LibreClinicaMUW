@@ -13,7 +13,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
+import { createI18n } from 'vue-i18n'
 import { createRouter, createMemoryHistory, type Router } from 'vue-router'
+
+// eslint-disable-next-line import/first
+import deMessages from '@/locales/de.json'
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'de-AT',
+  fallbackLocale: 'de-AT',
+  missingWarn: false,
+  fallbackWarn: false,
+  messages: { 'de-AT': deMessages },
+})
 
 vi.mock('@/api/retinal', () => {
   return {
@@ -164,7 +177,7 @@ async function mountView(jobPayload: Record<string, unknown>) {
 
   const wrapper = mount(RetinalMetricsView, {
     global: {
-      plugins: [router],
+      plugins: [router, i18n],
       stubs: {
         // PerBscanTrace is async + pulls in Chart.js — stub at the
         // tree level so the test doesn't try to load the chart bundle.

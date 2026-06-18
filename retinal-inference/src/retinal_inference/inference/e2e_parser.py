@@ -87,11 +87,13 @@ def _derive_spacing_mm(bscan_data: list[dict], n_bscans: int) -> tuple[float, fl
     return axial, lateral, slice_mm
 
 
-def read_e2e_volume(e2e_path: Path) -> BscanVolume:
+def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
     """Decode the OCT volume + geometry from a Heidelberg ``.e2e``.
 
     Requires ``oct-converter`` + ``numpy`` (sidecar runtime deps). Picks the
-    OCT series with the most B-scans (the volume scan, not a line/AF scan).
+    OCT series at ``scan_index`` (multi-acquisition .e2e files carry several
+    volumes; the SPA portal lets the user pick which one to ingest).
+    Raises ``IndexError`` when out of range so callers can map to HTTP 400.
     """
     import numpy as np
     from oct_converter.readers import E2E
@@ -99,7 +101,11 @@ def read_e2e_volume(e2e_path: Path) -> BscanVolume:
     volumes = E2E(str(e2e_path)).read_oct_volume()
     if not volumes:
         raise ValueError(f"No OCT volume found in {e2e_path}")
-    vol_meta = max(volumes, key=lambda v: int(getattr(v, "num_slices", 0) or 0))
+    if scan_index < 0 or scan_index >= len(volumes):
+        raise IndexError(
+            f"scan_index {scan_index} out of range; file has {len(volumes)} volumes"
+        )
+    vol_meta = volumes[scan_index]
 
     arr = np.asarray(vol_meta.volume, dtype=np.float64)  # (n, rows, cols), 0..1
     # oct-converter normalises to [0, 1]; map to 8-bit. The models min/max- and
@@ -189,13 +195,15 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     return out_dir
 
 
-def prepare_bscan_dcm(e2e_path: Path, out_dir: Path) -> Path:
+def prepare_bscan_dcm(e2e_path: Path, out_dir: Path, scan_index: int = 0) -> Path:
     """Convert a Heidelberg ``.e2e`` → ``out_dir/bscan.dcm`` and return ``out_dir``.
 
     The single shared ingestion seam the ``OptimaAdapter`` calls before
-    dispatching to a model-runner. Unit tests monkeypatch this function.
+    dispatching to a model-runner. ``scan_index`` selects which volume from
+    a multi-acquisition .e2e to ingest; defaults to 0 (first volume).
+    Unit tests monkeypatch this function.
     """
     if not Path(e2e_path).is_file():
         raise FileNotFoundError(f"E2E file not found: {e2e_path}")
-    bv = read_e2e_volume(Path(e2e_path))
+    bv = read_e2e_volume(Path(e2e_path), scan_index=scan_index)
     return write_bscan_dcm(bv, Path(out_dir))

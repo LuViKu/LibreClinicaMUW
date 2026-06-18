@@ -12,6 +12,9 @@
  * Newsreader serif loads even when the rest of the app is paused;
  * `serif` font is reserved for branding moments per style.css.
  */
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 </script>
 
 <template>
@@ -36,10 +39,10 @@
         class="muw-display font-semibold text-muw-blue tracking-tight text-[17px]"
       >LibreClinica<em
         class="not-italic font-medium text-muw-coral-700 text-[0.66em] uppercase tracking-[0.08em] ml-1.5 align-middle"
-      >MUW</em></span>
+      >{{ t('octPortal.topbar.brandSuffix') }}</em></span>
       <span
         class="ml-2 pl-3 border-l border-slate-200 text-[13px] font-medium text-slate-500"
-      >OCT-Upload-Portal</span>
+      >{{ t('octPortal.topbar.portalLabel') }}</span>
     </div>
     <div class="ml-auto flex items-center gap-4">
       <span
@@ -49,7 +52,7 @@
           <rect width="14" height="9" x="5" y="11" rx="2" />
           <path d="M8 11V7a4 4 0 0 1 7.5-2" />
         </svg>
-        Kein Login erforderlich
+        {{ t('octPortal.topbar.noLoginRequired') }}
       </span>
     </div>
   </header>

@@ -117,6 +117,10 @@ async def run(
     file: UploadFile = File(..., description="bscan.dcm (DICOM) or Heidelberg .e2e"),
     task: str = Form(..., description="One of fluid / onl / pr / ga"),
     laterality: str = Form(..., description="OD or OS"),
+    scan_index: int = Form(
+        default=0,
+        description="Volume index in a multi-acquisition .e2e (default 0); ignored for DICOM",
+    ),
     x_muw_inference_token: str | None = Header(default=None),
     idempotency_key: str | None = Header(default=None),
 ) -> RunEnvelope:
@@ -133,6 +137,11 @@ async def run(
             status_code=400,
             detail=f"laterality must be OD or OS (got '{laterality}')",
         )
+    if scan_index < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"scan_index must be >= 0 (got {scan_index})",
+        )
 
     if idempotency_key and idempotency_key in _idempotency_cache:
         # Move to end (LRU touch).
@@ -148,6 +157,7 @@ async def run(
             file=file,
             task=typed_task,
             laterality=typed_laterality,
+            scan_index=scan_index,
             idempotency_key=idempotency_key,
         )
 
@@ -157,6 +167,7 @@ async def _run_locked(
     file: UploadFile,
     task: TaskName,
     laterality: Literal["OD", "OS"],
+    scan_index: int,
     idempotency_key: str | None,
 ) -> RunEnvelope:
     shared_tmpdir = _config.settings.shared_tmpdir
@@ -191,6 +202,7 @@ async def _run_locked(
                 input_path,
                 laterality,
                 out_dir_override=tempdir,
+                scan_index=scan_index,
             )
         except FastScreenUnavailable as e:
             # full_volume shouldn't raise this, but be defensive.
@@ -198,6 +210,10 @@ async def _run_locked(
         except UnsupportedTaskError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
         except FileNotFoundError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+        except IndexError as e:
+            # scan_index out of range — bubble as 400 so the SPA can show the
+            # operator a clean "this file has N volumes" message.
             raise HTTPException(status_code=400, detail=str(e)) from e
         except urllib.error.HTTPError as e:
             # OptimaAdapter._post_json re-raises with the runner's detail in

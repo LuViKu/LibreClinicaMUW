@@ -61,5 +61,7 @@
   <include  file="migration/lc-muw-2026-06-12-modality-oid-aliases.xml"/>
   <include  file="migration/lc-muw-2026-06-18-retinal-job-event-crf-nullable.xml"/>
   <include  file="migration/lc-muw-2026-06-18-retinal-job-parked-status.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-retinal-job-remote-pending-status.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-audit-types-retinal-followups.xml"/>
 </databaseChangeLog>
 

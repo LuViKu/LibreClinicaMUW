@@ -21,6 +21,9 @@
  * skipped instead of a silent no-op.
  */
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+const { t } = useI18n()
 
 interface Props {
   /** Visual variant. `hero` is the 280px first-paint dropzone;
@@ -87,12 +90,12 @@ function onDragLeave(): void {
         <line x1="12" x2="12" y1="3" y2="15" />
       </svg>
     </span>
-    <div class="text-[13px] text-slate-600">Weitere <span class="font-mono">.e2e</span>-Dateien hierher ziehen</div>
+    <div class="text-[13px] text-slate-600">{{ t('octPortal.dropzone.slimDropMorePrefix') }} <span class="font-mono">.e2e</span>{{ t('octPortal.dropzone.slimDropMoreSuffix') }}</div>
     <button
       type="button"
       class="ml-auto px-3 py-1.5 text-[12px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700"
       @click="onClickBrowse"
-    >Durchsuchen</button>
+    >{{ t('octPortal.dropzone.browse') }}</button>
     <input
       ref="fileInput"
       type="file"
@@ -120,18 +123,18 @@ function onDragLeave(): void {
         <path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25" />
       </svg>
     </div>
-    <div class="text-[17px] font-semibold text-slate-800">OCT-Scans hierher ziehen</div>
+    <div class="text-[17px] font-semibold text-slate-800">{{ t('octPortal.dropzone.heroTitle') }}</div>
     <div class="text-[13px] text-slate-500 mt-1.5">
-      oder
+      {{ t('octPortal.dropzone.heroBrowsePrefix') }}
       <button
         type="button"
         class="text-muw-blue font-medium underline underline-offset-2 hover:text-muw-blue-700"
         @click="onClickBrowse"
-      >Dateien durchsuchen</button>
+      >{{ t('octPortal.dropzone.heroBrowse') }}</button>
     </div>
     <div class="flex items-center gap-2 mt-5 text-[12px] text-slate-400">
       <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white ring-1 ring-slate-200 font-mono">.e2e</span>
-      <span>mehrere Dateien gleichzeitig möglich · Auslesen erfolgt lokal im Browser</span>
+      <span>{{ t('octPortal.dropzone.heroNote') }}</span>
     </div>
     <input
       ref="fileInput"

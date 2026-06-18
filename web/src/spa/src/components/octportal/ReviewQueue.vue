@@ -7,8 +7,11 @@
  * ReviewRow}s. Emits are pass-throughs so the parent view holds the
  * single source of truth for store wiring.
  */
+import { useI18n } from 'vue-i18n'
 import ReviewRow from './ReviewRow.vue'
 import type { ReviewRow as ReviewRowData } from '@/stores/octPortal'
+
+const { t } = useI18n()
 
 interface Props {
   rows: ReviewRowData[]
@@ -32,11 +35,11 @@ const emit = defineEmits<{
   >
     <!-- column header strip -->
     <div class="flex items-center gap-4 px-5 py-2.5 bg-slate-50 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
-      <div class="w-[224px] shrink-0">Datei</div>
-      <div class="w-[96px] shrink-0">PatientId</div>
-      <div class="w-[150px] shrink-0">Scan-Datum</div>
-      <div class="w-[68px] shrink-0">Auge</div>
-      <div class="flex-1">Studie · Visite</div>
+      <div class="w-[224px] shrink-0">{{ t('octPortal.reviewQueue.colFile') }}</div>
+      <div class="w-[96px] shrink-0">{{ t('octPortal.reviewQueue.colPatientId') }}</div>
+      <div class="w-[150px] shrink-0">{{ t('octPortal.reviewQueue.colScanDate') }}</div>
+      <div class="w-[68px] shrink-0">{{ t('octPortal.reviewQueue.colEye') }}</div>
+      <div class="flex-1">{{ t('octPortal.reviewQueue.colStudyVisit') }}</div>
     </div>
 
     <ReviewRow

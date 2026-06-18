@@ -189,7 +189,14 @@ public class PublicOctUploadController {
                                     @RequestParam("laterality") String laterality,
                                     @RequestParam(value = "scanIndex", defaultValue = "0") int scanIndex,
                                     @RequestParam(value = "eventCrfId", required = false) Integer eventCrfId,
-                                    @RequestParam(value = "park", defaultValue = "false") boolean park) {
+                                    @RequestParam(value = "park", defaultValue = "false") boolean park,
+                                    // Wave 1B (2026-06-18): when the resolve response carried
+                                    // state='ambiguous' AND the staff picked, the SPA sets
+                                    // disambiguated=true and supplies candidateCount so the
+                                    // audit timeline records WHICH candidate was chosen out of
+                                    // how many. Both fields are optional + default to no-op.
+                                    @RequestParam(value = "disambiguated", defaultValue = "false") boolean disambiguated,
+                                    @RequestParam(value = "candidateCount", defaultValue = "0") int candidateCount) {
 
         if (file == null || file.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "file part is required"));
@@ -260,7 +267,7 @@ public class PublicOctUploadController {
                 : RetinalInferenceJobStatus.QUEUED.dbValue();
         long jobId;
         try (Connection c = dataSource.getConnection()) {
-            jobId = insertJob(c, eventCrfId, DEFAULT_TASK, absolutePath, lat, status);
+            jobId = insertJob(c, eventCrfId, DEFAULT_TASK, absolutePath, lat, status, scanIndex);
         } catch (SQLException sqlEx) {
             LOG.error("Failed to enqueue retinal_inference_job from portal (patientId={}): {}",
                     pid, sqlEx.getMessage());
@@ -273,8 +280,18 @@ public class PublicOctUploadController {
         // ---- audit row on enqueue -----------------------------------------
         writePublicOctUploadAuditRow(jobId, auditStudySubjectId, pid, lat, status);
 
-        LOG.info("Public OCT upload — job {} {} (patientId={}, lat={}, scanIndex={}, eventCrfId={})",
-                jobId, status, pid, lat, scanIndex, eventCrfId);
+        // ---- disambiguation marker (Wave 1B) ------------------------------
+        // Emit a SECOND audit row when the SPA flagged the upload as a
+        // disambiguated pick (resolve returned state='ambiguous' AND staff
+        // selected one of N candidates). The marker rides on the same
+        // unauthenticated transaction; failure to write it is best-effort
+        // and does NOT roll back the main audit row.
+        if (disambiguated && auditStudySubjectId != null) {
+            writeAmbiguousDisambiguationAuditRow(auditStudySubjectId, candidateCount);
+        }
+
+        LOG.info("Public OCT upload — job {} {} (patientId={}, lat={}, scanIndex={}, eventCrfId={}, disambiguated={})",
+                jobId, status, pid, lat, scanIndex, eventCrfId, disambiguated);
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("jobId", jobId);
@@ -380,10 +397,10 @@ public class PublicOctUploadController {
     }
 
     private long insertJob(Connection c, Integer eventCrfId, String task, String e2ePath,
-                           String lat, String status) throws SQLException {
+                           String lat, String status, int scanIndex) throws SQLException {
         String sql = "INSERT INTO retinal_inference_job ("
-                + "event_crf_id, task, e2e_path, eye_laterality, status, enqueued_at"
-                + ") VALUES (?, ?, ?, ?, ?, ?)";
+                + "event_crf_id, task, e2e_path, eye_laterality, status, scan_index, enqueued_at"
+                + ") VALUES (?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             if (eventCrfId == null) {
                 ps.setNull(1, java.sql.Types.INTEGER);
@@ -394,7 +411,8 @@ public class PublicOctUploadController {
             ps.setString(3, e2ePath);
             ps.setString(4, lat);
             ps.setString(5, status);
-            ps.setTimestamp(6, Timestamp.from(Instant.now()));
+            ps.setInt(6, scanIndex);
+            ps.setTimestamp(7, Timestamp.from(Instant.now()));
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) return keys.getLong(1);
@@ -434,6 +452,33 @@ public class PublicOctUploadController {
             ps.executeUpdate();
         } catch (SQLException e) {
             LOG.warn("OCT_UPLOAD_PUBLIC audit-write failed for job {}: {}", jobId, e.getMessage());
+        }
+    }
+
+    /**
+     * Wave 1B (2026-06-18) — second audit row written when the SPA flagged
+     * the upload as a disambiguated pick. {@code audit_table='study_subject'}
+     * (the row records the human decision against the chosen subject, not
+     * against the job row); {@code new_value} packs the pick + candidate
+     * count so the audit timeline can render a "chose X of N" line without
+     * a second look-up.
+     */
+    private void writeAmbiguousDisambiguationAuditRow(int studySubjectId, int candidateCount) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (?, now(), NULL, ?, ?, ?, ?, ?)")) {
+            ps.setInt(1, AuditTypeIds.OCT_UPLOAD_PUBLIC_AMBIGUOUS);
+            ps.setString(2, "study_subject");
+            ps.setInt(3, studySubjectId);
+            ps.setString(4, "study_subject_id");
+            ps.setString(5, "");
+            ps.setString(6, "chose:" + studySubjectId + ":from:" + candidateCount + " candidates");
+            ps.executeUpdate();
+        } catch (SQLException e) {
+            LOG.warn("OCT_UPLOAD_PUBLIC_AMBIGUOUS audit-write failed for study_subject {}: {}",
+                    studySubjectId, e.getMessage());
         }
     }
 

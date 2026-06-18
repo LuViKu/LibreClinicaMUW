@@ -47,6 +47,7 @@ class RetinalInferenceAdapter(ABC):
         e2e_path: Path,
         laterality: Literal["OD", "OS"],
         out_dir_override: Path | None = None,
+        scan_index: int = 0,
     ) -> FullVolumeResult:
         """Run full-volume inference and return the structured result.
 
@@ -56,6 +57,11 @@ class RetinalInferenceAdapter(ABC):
         passes a per-request ``TemporaryDirectory`` so nothing persists past
         the response. Adapters that don't touch the filesystem (placeholder,
         future mirage) should silently ignore the argument.
+
+        ``scan_index`` selects which volume to ingest from a multi-acquisition
+        .e2e (defaults to 0). Adapters that consume DICOM already (the cluster
+        ``ApptainerAdapter``) ignore the argument — the volume selection
+        happens app-side during the .e2e → bscan.dcm preprocess step.
         """
 
     @property

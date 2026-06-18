@@ -11,10 +11,21 @@
  */
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
 
 import FundusOverlay from '../FundusOverlay.vue'
 import { BIOMARKER_COLORS } from '../retinalPalette'
+import deMessages from '@/locales/de.json'
 import type { GeometryJson } from '@/api/retinal'
+
+const i18n = createI18n({
+  legacy: false,
+  locale: 'de-AT',
+  fallbackLocale: 'de-AT',
+  missingWarn: false,
+  fallbackWarn: false,
+  messages: { 'de-AT': deMessages },
+})
 
 function makeGeometry(overrides: Partial<GeometryJson> = {}): GeometryJson {
   return {
@@ -64,6 +75,7 @@ describe('FundusOverlay — registration', () => {
   it('renders the scan-bbox rect from geometry.scan_bbox_fundus_px', () => {
     const geometry = makeGeometry()
     const wrapper = mount(FundusOverlay, {
+      global: { plugins: [i18n] },
       props: {
         fundusUrl: '/fake/fundus.png',
         geometry,
@@ -83,6 +95,7 @@ describe('FundusOverlay — registration', () => {
   it('renders three ETDRS rings centred on the fovea estimate with correct radii (mm → px)', () => {
     const geometry = makeGeometry()
     const wrapper = mount(FundusOverlay, {
+      global: { plugins: [i18n] },
       props: {
         fundusUrl: '/fake/fundus.png',
         geometry,
@@ -110,6 +123,7 @@ describe('FundusOverlay — registration', () => {
 
   it('renders one polyline per B-scan, dominant biomarker → stroke colour (fluid task)', () => {
     const wrapper = mount(FundusOverlay, {
+      global: { plugins: [i18n] },
       props: {
         fundusUrl: '/fake/fundus.png',
         geometry: makeGeometry(),
@@ -130,6 +144,7 @@ describe('FundusOverlay — registration', () => {
 
   it('renders neutral lines for onl / pr tasks (no per-B-scan biomarker)', () => {
     const wrapper = mount(FundusOverlay, {
+      global: { plugins: [i18n] },
       props: {
         fundusUrl: '/fake/fundus.png',
         geometry: makeGeometry(),
@@ -148,6 +163,7 @@ describe('FundusOverlay — registration', () => {
 
   it('emits hoverBscan with the z index on line mouseenter', async () => {
     const wrapper = mount(FundusOverlay, {
+      global: { plugins: [i18n] },
       props: {
         fundusUrl: '/fake/fundus.png',
         geometry: makeGeometry(),
@@ -168,6 +184,7 @@ describe('FundusOverlay — registration', () => {
 
   it('emits null on mouseleave', async () => {
     const wrapper = mount(FundusOverlay, {
+      global: { plugins: [i18n] },
       props: {
         fundusUrl: '/fake/fundus.png',
         geometry: makeGeometry(),
@@ -188,6 +205,7 @@ describe('FundusOverlay — registration', () => {
 
   it('renders the fovea crosshair with a <title> tooltip carrying the source', () => {
     const wrapper = mount(FundusOverlay, {
+      global: { plugins: [i18n] },
       props: {
         fundusUrl: '/fake/fundus.png',
         geometry: makeGeometry(),

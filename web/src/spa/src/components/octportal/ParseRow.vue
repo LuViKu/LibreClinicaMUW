@@ -15,8 +15,11 @@
  * parent ParseQueue groups them with shared dividers.
  */
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import EyeBadge from './EyeBadge.vue'
 import type { ReviewRow } from '@/stores/octPortal'
+
+const { t } = useI18n()
 
 interface Props {
   row: ReviewRow
@@ -85,7 +88,7 @@ function formatScanDateTime(d: Date): string {
             <path d="M21 12a9 9 0 1 1-6.2-8.5" opacity="0.9" />
           </svg>
         </span>
-        Studie &amp; Visite werden ermittelt…
+        {{ t('octPortal.parseRow.studyVisitDetermining') }}
       </div>
     </template>
 
@@ -99,7 +102,7 @@ function formatScanDateTime(d: Date): string {
             <path d="M21 12a9 9 0 1 1-6.2-8.5" opacity="0.9" />
           </svg>
         </span>
-        Header wird gelesen…
+        {{ t('octPortal.parseRow.headerReading') }}
       </div>
     </template>
 
