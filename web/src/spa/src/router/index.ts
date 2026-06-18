@@ -291,6 +291,19 @@ const router = createRouter({
         role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
+    /* 2026-06-19 — Administrator-only cross-study parked-scans admin.
+       Parked rows have no study-subject linkage so the per-subject
+       ParkedScansList can never surface them; this view is the only
+       reachable bind UX. Doc: retinal-jobs-admin-followup.md. */
+    {
+      path: '/retinal/parked',
+      name: 'retinal-parked-admin',
+      component: () => import('@/views/RetinalParkedAdminView.vue'),
+      meta: {
+        title: 'Geparkte Scans',
+        role: 'Administrator' as const,
+      },
+    },
     /* Phase E.6 — Patient Overview (cross-study, keyed on the underlying
        patient rather than the active-study study-subject label). */
     {

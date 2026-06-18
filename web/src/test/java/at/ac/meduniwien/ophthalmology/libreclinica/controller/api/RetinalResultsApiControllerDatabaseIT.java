@@ -449,6 +449,67 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
     }
 
     /* ====================================================================== */
+    /* GET /retinal-jobs?status=PARKED — cross-study admin browser            */
+    /* ====================================================================== */
+
+    /**
+     * Happy path: the endpoint returns one row per parked job with
+     * patientId + candidateStudySubjectId parsed from the OCT-UPLOAD
+     * audit row's {@code old_value}.
+     */
+    @Test
+    void listParkedJobs_happyPath_returnsRowsWithParsedMetadata() throws Exception {
+        long jobIdWithCandidate = seedParkedJob();
+        long jobIdNopatient = seedParkedJob();
+        try {
+            // Seed two OCT_UPLOAD_PUBLIC audit rows — one with studySubjectId
+            // (novisit/ambiguous park), one without (nopatient park).
+            writeOctUploadAuditRow(jobIdWithCandidate,
+                    "patientId=EIAMD139;laterality=OD;studySubjectId=9", "parked");
+            writeOctUploadAuditRow(jobIdNopatient,
+                    "patientId=UNKNOWN_42;laterality=OS", "parked");
+
+            buildMockMvc().perform(get("/api/v1/retinal-jobs")
+                    .param("status", "PARKED")
+                    .session(authenticatedSession()))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$").isArray())
+                    // both seeded jobs surface — order is enqueued_at desc
+                    // so the later-seeded nopatient row appears first.
+                    .andExpect(jsonPath(
+                            "$[?(@.jobId == " + jobIdWithCandidate + ")].patientId")
+                            .value("EIAMD139"))
+                    .andExpect(jsonPath(
+                            "$[?(@.jobId == " + jobIdWithCandidate + ")].candidateStudySubjectId")
+                            .value(9))
+                    .andExpect(jsonPath(
+                            "$[?(@.jobId == " + jobIdNopatient + ")].patientId")
+                            .value("UNKNOWN_42"))
+                    // nopatient parks have no candidate FK
+                    .andExpect(jsonPath(
+                            "$[?(@.jobId == " + jobIdNopatient + ")].candidateStudySubjectId")
+                            .value(org.hamcrest.Matchers.empty()));
+        } finally {
+            cleanupAuditAndJob(jobIdWithCandidate, AuditTypeIds.OCT_UPLOAD_PUBLIC);
+            cleanupAuditAndJob(jobIdNopatient, AuditTypeIds.OCT_UPLOAD_PUBLIC);
+        }
+    }
+
+    /**
+     * The endpoint MUST reject status filters it doesn't recognize — the
+     * v1 endpoint is parked-only by design, no surprises.
+     */
+    @Test
+    void listParkedJobs_returns400OnUnknownStatusFilter() throws Exception {
+        buildMockMvc().perform(get("/api/v1/retinal-jobs")
+                .param("status", "DONE")
+                .session(authenticatedSession()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(org.hamcrest.Matchers.containsString("PARKED")));
+    }
+
+    /* ====================================================================== */
     /* GET /study-subjects/search                                              */
     /* ====================================================================== */
 
@@ -524,6 +585,29 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
              PreparedStatement ps = c.prepareStatement(
                      "DELETE FROM retinal_inference_job WHERE job_id = ?")) {
             ps.setLong(1, jobId);
+            ps.executeUpdate();
+        }
+    }
+
+    /**
+     * Insert one OCT_UPLOAD_PUBLIC audit row for a parked job. The
+     * production code path emits this from {@code PublicOctUploadController.writePublicOctUploadAuditRow}
+     * at park-commit time; the IT writes it directly to keep the
+     * seeding self-contained.
+     */
+    private static void writeOctUploadAuditRow(long jobId, String oldValue, String newValue)
+            throws Exception {
+        try (Connection c = DATA_SOURCE.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event ("
+                             + "audit_date, audit_table, entity_id, "
+                             + "audit_log_event_type_id, old_value, new_value) "
+                             + "VALUES (?, 'retinal_inference_job', ?, ?, ?, ?)")) {
+            ps.setTimestamp(1, new Timestamp(System.currentTimeMillis()));
+            ps.setInt(2, (int) jobId);
+            ps.setInt(3, AuditTypeIds.OCT_UPLOAD_PUBLIC);
+            ps.setString(4, oldValue);
+            ps.setString(5, newValue);
             ps.executeUpdate();
         }
     }

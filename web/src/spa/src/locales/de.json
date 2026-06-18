@@ -37,7 +37,8 @@
       "dismiss": "Fehlermeldung schließen",
       "reqIdLabel": "Fehler-ID"
     },
-    "systemAuditLog": "System-Audit"
+    "systemAuditLog": "System-Audit",
+    "retinalParked": "Geparkte Scans"
   },
   "network": {
     "offline": {
@@ -1511,6 +1512,28 @@
       "saveError": "Speichern der Rollen fehlgeschlagen. Bitte erneut versuchen.",
       "savedToast": "Rollen aktualisiert.",
       "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert."
+    }
+  },
+  "retinalParked": {
+    "title": "Geparkte Scans",
+    "subtitle": "Cross-Studie Übersicht: Retinale Inferenz-Jobs, die ohne Visite hochgeladen wurden und auf eine Zuordnung warten. Sysadmin-only.",
+    "empty": "Keine geparkten Scans.",
+    "unknownPatient": "Unbekannte PatientId",
+    "columns": {
+      "jobId": "Job",
+      "patientId": "PatientId",
+      "eye": "Auge",
+      "task": "Task",
+      "uploadedAt": "Hochgeladen",
+      "actions": "Aktion"
+    },
+    "action": {
+      "assign": "Zuordnen",
+      "refresh": "Neu laden"
+    },
+    "toast": {
+      "bindOk": "Scan erfolgreich zugeordnet.",
+      "bindRaced": "Wurde inzwischen von jemand anderem zugeordnet — Liste aktualisiert."
     }
   },
   "modalities": {

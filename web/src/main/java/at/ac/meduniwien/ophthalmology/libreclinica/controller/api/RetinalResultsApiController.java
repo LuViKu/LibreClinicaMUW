@@ -762,6 +762,132 @@ public class RetinalResultsApiController {
     }
 
     /* ====================================================================== */
+    /* GET /retinal-jobs?status=PARKED — cross-study admin browser            */
+    /* ====================================================================== */
+
+    /**
+     * Cross-study list of parked retinal-inference jobs awaiting a bind.
+     *
+     * <p>Parked jobs have {@code event_crf_id IS NULL} (see migration
+     * {@code lc-muw-2026-06-18-retinal-job-event-crf-nullable.xml}) and
+     * therefore no transitive path to a study_subject; the per-subject
+     * {@link #listByStudySubject(int, HttpSession) /study-subjects/{id}/retinal-jobs}
+     * endpoint cannot surface them. This endpoint backs the
+     * Administrator-only "Geparkte Scans" admin view that operators use
+     * to triage public-portal uploads that never resolved.
+     *
+     * <p>Patient metadata is recovered from the
+     * {@code audit_log_event_type_id = OCT_UPLOAD_PUBLIC (115)} row
+     * emitted at park-commit time — {@code old_value} carries
+     * {@code patientId=…[;laterality=…][;studySubjectId=…]}.
+     *
+     * <p>Role gate: sysadmin only. Mirrors the
+     * {@code /system/audit-log} convention used elsewhere in the
+     * MUW build — the single sysadmin role is responsible for cross-
+     * study cleanup. Widen to Data Manager if institutional policy
+     * later splits the responsibility.
+     *
+     * @param status MUST equal {@code "PARKED"} (case-insensitive) —
+     *               the endpoint is scoped to that one filter today.
+     *               Any other value returns 400.
+     */
+    @GetMapping(path = "/retinal-jobs",
+                produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listParkedJobs(@RequestParam(value = "status",
+                                                          defaultValue = "PARKED") String status,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        if (!currentUser.isSysAdmin()) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Parked-jobs admin view is sysadmin-only"));
+        }
+        if (status == null || !"PARKED".equalsIgnoreCase(status.trim())) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "status must be PARKED (only filter supported)"));
+        }
+
+        List<ParkedJobAdminDto> out = new ArrayList<>();
+        String sql = "SELECT j.job_id, j.task, j.eye_laterality, j.enqueued_at, "
+                + "       ( SELECT a.old_value "
+                + "           FROM audit_log_event a "
+                + "          WHERE a.audit_table = 'retinal_inference_job' "
+                + "            AND a.entity_id = j.job_id::integer "
+                + "            AND a.audit_log_event_type_id = ? "
+                + "          ORDER BY a.audit_date DESC "
+                + "          LIMIT 1 ) AS audit_meta "
+                + "  FROM retinal_inference_job j "
+                + " WHERE j.status = 'parked' "
+                + " ORDER BY j.enqueued_at DESC";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, AuditTypeIds.OCT_UPLOAD_PUBLIC);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, String> meta = parseAuditMeta(rs.getString("audit_meta"));
+                    Integer candidate = null;
+                    String csid = meta.get("studySubjectId");
+                    if (csid != null) {
+                        try { candidate = Integer.valueOf(csid); }
+                        catch (NumberFormatException ignored) { /* leave null */ }
+                    }
+                    out.add(new ParkedJobAdminDto(
+                            rs.getLong("job_id"),
+                            rs.getString("task"),
+                            meta.get("patientId"),
+                            rs.getString("eye_laterality"),
+                            toIso(rs.getTimestamp("enqueued_at")),
+                            candidate));
+                }
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to list parked retinal jobs: {}", sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to list parked retinal jobs: " + sqlEx.getMessage()));
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * One row in the {@link #listParkedJobs} response.
+     *
+     * @param jobId                 the {@code retinal_inference_job.job_id}; required
+     * @param task                  the inference task tag (e.g. {@code fluid}, {@code onl}); may be empty for legacy rows
+     * @param patientId             parsed PatientId from the OCT-UPLOAD audit row's
+     *                              {@code old_value}; may be null when the audit row is missing
+     * @param laterality            {@code OD} / {@code OS}; mirrors the job-row column
+     * @param enqueuedAt            ISO-8601 timestamp when the job was committed as parked
+     * @param candidateStudySubjectId study_subject_id the resolve picked at upload time, when known —
+     *                                only present for parks that came from {@code novisit}
+     *                                or {@code ambiguous} states; null for true {@code nopatient} parks
+     */
+    public record ParkedJobAdminDto(long jobId,
+                                    String task,
+                                    String patientId,
+                                    String laterality,
+                                    String enqueuedAt,
+                                    Integer candidateStudySubjectId) { }
+
+    /**
+     * Parse the {@code old_value} string from an OCT-UPLOAD audit row into
+     * its key=value pairs. Defensive against missing rows and malformed
+     * values — anything that doesn't match {@code key=value} is skipped,
+     * an empty input returns an empty map.
+     */
+    private static Map<String, String> parseAuditMeta(String oldValue) {
+        Map<String, String> meta = new LinkedHashMap<>();
+        if (oldValue == null || oldValue.isBlank()) return meta;
+        for (String token : oldValue.split(";")) {
+            int eq = token.indexOf('=');
+            if (eq <= 0 || eq == token.length() - 1) continue;
+            meta.put(token.substring(0, eq).trim(), token.substring(eq + 1).trim());
+        }
+        return meta;
+    }
+
+    /* ====================================================================== */
     /* helpers                                                                */
     /* ====================================================================== */
 
