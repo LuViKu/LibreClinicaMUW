@@ -41,6 +41,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinal
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRunResult;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalInferenceClient;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.ComputedMetrics;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.RetinalMetricComputer;
 
@@ -121,6 +122,7 @@ public class RetinalInferenceApiController {
     private final RemoteRetinalInferenceClient remoteClient;
     private final RetinalArtifactStorageService artifactStore;
     private final RetinalMetricComputer metricComputer;
+    private final RetinalJobStatusBroadcaster broadcaster;
 
     @Autowired
     public RetinalInferenceApiController(@Qualifier("dataSource") DataSource dataSource,
@@ -128,13 +130,15 @@ public class RetinalInferenceApiController {
                                          RetinalInferenceClient inferenceClient,
                                          RemoteRetinalInferenceClient remoteClient,
                                          RetinalArtifactStorageService artifactStore,
-                                         RetinalMetricComputer metricComputer) {
+                                         RetinalMetricComputer metricComputer,
+                                         RetinalJobStatusBroadcaster broadcaster) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.inferenceClient = inferenceClient;
         this.remoteClient = remoteClient;
         this.artifactStore = artifactStore;
         this.metricComputer = metricComputer;
+        this.broadcaster = broadcaster;
     }
 
     @PostMapping(path = "/{eventCrfId:[0-9]+}/oct-upload",
@@ -503,6 +507,12 @@ public class RetinalInferenceApiController {
      * also stamps {@code completed_at} when {@code setCompletedAt=true}. The
      * remote DR-022 branch needs this on the {@code 'done'} transition; the
      * local path keeps the 4-arg call for back-compat.
+     *
+     * <p>Wave 1B: every successful flip is broadcast to the SSE fan-out so
+     * subscribers see live status transitions without polling. The publish
+     * happens after the SQL commit (try-with-resources auto-close on the
+     * Statement; the Connection is short-lived autocommit) so a SQL failure
+     * never leaves an in-flight subscriber with a stale terminal status.
      */
     private void updateStatus(Connection c, long jobId, String newStatus,
                               boolean setScreenedAt, boolean setCompletedAt,
@@ -521,6 +531,13 @@ public class RetinalInferenceApiController {
             if (modelVersion != null) ps.setString(i++, modelVersion);
             ps.setLong(i, jobId);
             ps.executeUpdate();
+        }
+        // Broadcast AFTER the SQL succeeds — keeps the SSE stream
+        // truth-tracking the DB. broadcaster is nullable for legacy
+        // test ctors that haven't been re-wired; null-guard keeps those
+        // tests compiling without touching SSE-irrelevant code paths.
+        if (broadcaster != null) {
+            broadcaster.publish(jobId, newStatus);
         }
     }
 
