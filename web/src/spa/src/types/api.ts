@@ -1732,6 +1732,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/study-subjects/{studySubjectId}/retinal-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listByStudySubject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{studyOid}/export-jobs": {
         parameters: {
             query?: never;
@@ -1876,6 +1892,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retinal-jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retinal-jobs/{jobId}/artifacts/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["streamArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients": {
         parameters: {
             query?: never;
@@ -1995,7 +2043,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["getJob"];
+        get: operations["getJob_1"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2108,6 +2156,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["getDdeConflicts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/event-crfs/{eventCrfId}/retinal-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listByEventCrf"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6547,7 +6611,10 @@ export interface operations {
     };
     octUpload: {
         parameters: {
-            query?: never;
+            query: {
+                task: string;
+                laterality: string;
+            };
             header?: never;
             path: {
                 eventCrfId: number;
@@ -6559,8 +6626,6 @@ export interface operations {
                 "multipart/form-data": {
                     /** Format: binary */
                     file: string;
-                    task: string;
-                    laterality: string;
                 };
             };
         };
@@ -7256,6 +7321,28 @@ export interface operations {
             };
         };
     };
+    listByStudySubject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studySubjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     listJobsByStudy: {
         parameters: {
             query?: never;
@@ -7476,6 +7563,51 @@ export interface operations {
             };
         };
     };
+    getJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    streamArtifact: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     list_15: {
         parameters: {
             query?: {
@@ -7637,7 +7769,7 @@ export interface operations {
             };
         };
     };
-    getJob: {
+    getJob_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -7807,6 +7939,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    listByEventCrf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eventCrfId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };

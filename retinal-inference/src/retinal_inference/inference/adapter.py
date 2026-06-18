@@ -19,6 +19,15 @@ class UnsupportedTaskError(ValueError):
     """Raised when an adapter is asked to handle a task it does not implement."""
 
 
+class FastScreenUnavailable(RuntimeError):
+    """Raised by ``fast_screen`` for tasks that have no synchronous quick path.
+
+    The caller should enqueue the job and poll ``/jobs/{id}`` for the async
+    full-volume result instead. Real model-runner tasks (fluid/onl/pr/ga)
+    are async-only; the deterministic placeholder still offers a fast screen.
+    """
+
+
 class RetinalInferenceAdapter(ABC):
     @abstractmethod
     def supports(self, task: TaskName) -> bool: ...
@@ -37,7 +46,17 @@ class RetinalInferenceAdapter(ABC):
         task: TaskName,
         e2e_path: Path,
         laterality: Literal["OD", "OS"],
-    ) -> FullVolumeResult: ...
+        out_dir_override: Path | None = None,
+    ) -> FullVolumeResult:
+        """Run full-volume inference and return the structured result.
+
+        ``out_dir_override`` (DR-022) — when set, the adapter writes runner
+        outputs into this directory instead of its default
+        ``shared_storage_path`` layout. The stateless ``POST /run`` endpoint
+        passes a per-request ``TemporaryDirectory`` so nothing persists past
+        the response. Adapters that don't touch the filesystem (placeholder,
+        future mirage) should silently ignore the argument.
+        """
 
     @property
     @abstractmethod
@@ -62,6 +81,14 @@ def get_adapter() -> RetinalInferenceAdapter:
             from .mirage import MirageAdapter
 
             _singleton = MirageAdapter()
+        elif _config.settings.inference_adapter == "optima":
+            from .optima import OptimaAdapter
+
+            _singleton = OptimaAdapter()
+        elif _config.settings.inference_adapter == "apptainer":
+            from .apptainer import ApptainerAdapter
+
+            _singleton = ApptainerAdapter()
         else:
             raise RuntimeError(f"Unknown adapter: {_config.settings.inference_adapter}")
     return _singleton

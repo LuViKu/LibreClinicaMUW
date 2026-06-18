@@ -58,7 +58,11 @@ class PlaceholderAdapter(RetinalInferenceAdapter):
         task: TaskName,
         e2e_path: Path,
         laterality: Literal["OD", "OS"],
+        out_dir_override: Path | None = None,
     ) -> FullVolumeResult:
+        # out_dir_override is ignored — the placeholder doesn't touch the
+        # filesystem (results are derived deterministically from the E2E
+        # bytes' SHA), so DR-022's stateless tempdir flow degrades cleanly.
         if not self.supports(task):
             raise UnsupportedTaskError(
                 f"Task '{task}' not enabled in placeholder adapter"
@@ -73,12 +77,18 @@ class PlaceholderAdapter(RetinalInferenceAdapter):
         en_face_mask_path = str(mask_dir / f"placeholder-{task}.png")
         return FullVolumeResult(
             task=task,
-            total_area_mm2=total,
-            per_bscan_areas_mm2=per_bscan,
+            primary_metric_value=total,
+            primary_metric_unit="mm²",
+            output_payload={
+                "total_area_mm2": total,
+                "per_bscan_areas_mm2": per_bscan,
+            },
             en_face_mask_path=en_face_mask_path,
             pixel_scale_mm=0.011,
             confidence=0.85,
             model_version=self.model_version,
+            total_area_mm2=total,
+            per_bscan_areas_mm2=per_bscan,
         )
 
     @staticmethod

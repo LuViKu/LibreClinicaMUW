@@ -96,6 +96,7 @@ git-flow: `master` (production), `lc-develop` (integration), short-lived `featur
 - **Hard fork from upstream** — for context on why and how cherry-picks work, see [decision record DR-003](docs/development/modernization/decision-record.md#dr-003--hard-fork-from-upstream-reliateclibreclinica).
 - **Clinical-data system** — don't ship unverified changes. Bump dependency versions one batch at a time, verify with `mvn compile` (or `mvn test` post Phase 0).
 - **`docs/manuals/`** is for end-user documentation; **`docs/development/`** is for developers; **`MIGRATION.md`** is the modernization spine.
+- **Retinal-inference can run remotely on a GPU host** — see [DR-022](docs/development/modernization/decision-record.md#dr-022--remote-stateless-gpu-sidecar-for-retinal-inference) + the [runbook](docs/development/modernization/retinal-inference-remote-deployment.md). Single-host dev compose keeps working when `core.retinalInference.remotePushUrl` is blank.
 
 ## When making suggestions
 

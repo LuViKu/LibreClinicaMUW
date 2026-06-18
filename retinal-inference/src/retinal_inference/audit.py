@@ -38,7 +38,8 @@ def audit_inference_done(
     """
     action_message = (
         f"Retinal inference completed — task={job.task} "
-        f"model={result.model_version} total={result.total_area_mm2} mm²"
+        f"model={result.model_version} "
+        f"{result.primary_metric_value} {result.primary_metric_unit}"
     )
 
     # 1) Try the canonical Java-side audit_log_event shape.

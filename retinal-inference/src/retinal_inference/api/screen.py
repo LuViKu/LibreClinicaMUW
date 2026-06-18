@@ -12,6 +12,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 from retinal_inference.inference.adapter import (
+    FastScreenUnavailable,
     UnsupportedTaskError,
     get_adapter,
 )
@@ -31,6 +32,9 @@ def screen(req: ScreenRequest) -> ScreenResponse:
         )
     try:
         result = adapter.fast_screen(req.task, Path(req.e2e_path), req.laterality)
+    except FastScreenUnavailable as e:
+        # Async-only task: tell the caller to enqueue + poll rather than fail.
+        raise HTTPException(status_code=422, detail=str(e)) from e
     except UnsupportedTaskError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     except FileNotFoundError as e:

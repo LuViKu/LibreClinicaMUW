@@ -6,9 +6,10 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
+import RetinalResultsTab from '@/components/RetinalResultsTab.vue'
 
 import { useEventDetailStore } from '@/stores/eventDetail'
-import type { EventCrfRowStatus, StudyEventStatus } from '@/types/event'
+import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
 
 /**
  * Phase E.6 — standalone Event Detail view (replaces the legacy
@@ -95,6 +96,24 @@ async function restoreCrfRow(eventCrfId: number | null): Promise<void> {
     restoringEventCrfId.value = null
   }
 }
+
+/**
+ * Phase E.7 Wave 4 — flatten the event's CRF list down to the numeric
+ * event_crf_id values that have a row in {@code retinal_inference_job}.
+ *
+ * <p>The viewer renders one {@code RetinalResultsTab} per CRF row that
+ * actually exists ({@code eventCrfId != null}); pre-creation slots can't
+ * have jobs yet so we skip them. We surface a panel for every existing
+ * row rather than gating on task type — the read-API quietly returns an
+ * empty list for non-retinal CRFs, and the panel renders its own "no
+ * jobs yet" empty state.
+ */
+const retinalCrfIds = computed<number[]>(() => {
+  const crfs: EventCrfRowDto[] = event.value?.crfs ?? []
+  return crfs
+    .map((c) => c.eventCrfId)
+    .filter((id): id is number => id != null)
+})
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
 function formatDate(iso: string | null | undefined): string {
@@ -281,6 +300,16 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
             </tr>
           </DenseTable>
         </section>
+
+        <!-- Phase E.7 Wave 4 — retinal inference jobs per event-CRF.
+             One panel per existing CRF row; the read-API quietly returns
+             an empty list for non-retinal CRFs, and the panel renders its
+             own "no jobs yet" empty state. -->
+        <RetinalResultsTab
+          v-for="crfId in retinalCrfIds"
+          :key="`retinal-${crfId}`"
+          :event-crf-id="crfId"
+        />
 
         <RouterLink :to="`/subjects/${event.subjectLabel}`" class="text-xs text-muw-blue underline" data-test="event-detail-back">
           {{ t('eventDetail.back') }}

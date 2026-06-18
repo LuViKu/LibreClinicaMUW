@@ -37,7 +37,14 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRunResult;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalInferenceClient;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.ComputedMetrics;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.RetinalMetricComputer;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,6 +55,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -62,9 +70,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * INSERTs a row into {@code retinal_inference_job}, and calls the sidecar's
  * synchronous {@code POST /screen} via {@link RetinalInferenceClient}.
  *
- * <p>v1 enables {@code task='ga'} only. Anything else is rejected with 400;
- * the queue + sidecar schema already carry the task discriminator so adding
- * future tasks (fluid, layers, ...) is decoder-only with no API change.
+ * <p>Enabled tasks: {@code fluid}, {@code onl}, {@code pr} (OptimaAdapter
+ * model-runners), plus {@code ga} (gated at the sidecar until its runner exists).
+ * Anything else is rejected with 400; the queue + sidecar schema carry the task
+ * discriminator so adding future tasks is decoder-only with no API change.
  *
  * <p>Authorization mirrors {@link EventCrfsApiController}: session-bound
  * userBean + study, and a {@link SiteVisibilityFilter} check against the
@@ -91,23 +100,41 @@ public class RetinalInferenceApiController {
     /** Filesystem fallback when {@code core.retinalInference.e2eUploadsPath} is unset. */
     public static final String DEFAULT_UPLOADS_PATH = "/var/lib/libreclinica/e2e-uploads";
 
-    /** v1 task allow-list. Extend in lock-step with the sidecar's {@code SUPPORTED_TASKS}. */
-    private static final Set<String> SUPPORTED_TASKS = Set.of("ga");
+    /**
+     * Task allow-list — keep in lock-step with the sidecar's {@code SUPPORTED_TASKS}.
+     * fluid/onl/pr run via the OptimaAdapter model-runners (async; the sidecar's
+     * {@code /screen} returns 422 for them, so the controller's existing
+     * null-result path queues them for the worker). {@code ga} is registered but
+     * gated at the sidecar adapter (no runner) until the IOWA layer segmenter +
+     * a GPU host exist.
+     */
+    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr");
 
     /** Laterality must be one of the OD/OS pair (no OU for the placeholder GA path). */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");
 
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
     private final RetinalInferenceClient inferenceClient;
+    private final RemoteRetinalInferenceClient remoteClient;
+    private final RetinalArtifactStorageService artifactStore;
+    private final RetinalMetricComputer metricComputer;
 
     @Autowired
     public RetinalInferenceApiController(@Qualifier("dataSource") DataSource dataSource,
                                          SiteVisibilityFilter siteVisibilityFilter,
-                                         RetinalInferenceClient inferenceClient) {
+                                         RetinalInferenceClient inferenceClient,
+                                         RemoteRetinalInferenceClient remoteClient,
+                                         RetinalArtifactStorageService artifactStore,
+                                         RetinalMetricComputer metricComputer) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.inferenceClient = inferenceClient;
+        this.remoteClient = remoteClient;
+        this.artifactStore = artifactStore;
+        this.metricComputer = metricComputer;
     }
 
     @PostMapping(path = "/{eventCrfId:[0-9]+}/oct-upload",
@@ -115,8 +142,8 @@ public class RetinalInferenceApiController {
                  produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<?> octUpload(@PathVariable("eventCrfId") int eventCrfId,
                                        @RequestPart("file") MultipartFile file,
-                                       @RequestPart("task") String task,
-                                       @RequestPart("laterality") String laterality,
+                                       @RequestParam("task") String task,
+                                       @RequestParam("laterality") String laterality,
                                        HttpSession session) {
 
         // ---- auth + study guards ------------------------------------------------
@@ -203,6 +230,20 @@ public class RetinalInferenceApiController {
                 /* oldValue   */ "",
                 /* newValue   */ "queued");
 
+        // ---- DR-022: remote GPU sidecar branch ---------------------------------
+        // When core.retinalInference.remotePushUrl is set the institutional
+        // Tomcat pushes the .e2e to the GPU host's /run endpoint, persists the
+        // returned artifacts locally, and marks the job 'done'. On any failure
+        // the job reverts to 'queued' and the existing local-screen / DB-poll
+        // path runs as the fallback (see below). Single-host dev compose with
+        // remotePushUrl blank keeps the current behaviour unchanged.
+        if (remoteClient.isConfigured()) {
+            ResponseEntity<?> remoteResp = handleRemote(
+                    jobId, taskClean, absolutePath, lat, eventCrfId);
+            if (remoteResp != null) return remoteResp;
+            // fall through to the existing local path on remote failure
+        }
+
         // ---- flip to 'screening' + call sidecar /screen ------------------------
         try (Connection c = dataSource.getConnection()) {
             updateStatus(c, jobId, "screening", /* setScreenedAt */ false, /* modelVersion */ null);
@@ -287,6 +328,166 @@ public class RetinalInferenceApiController {
     }
 
     /**
+     * DR-022 — drive the remote GPU sidecar end-to-end: flip the job to
+     * {@code 'segmenting'}, POST the E2E to the remote {@code /run}, persist
+     * the returned artifacts under the institutional artifact store, INSERT
+     * the {@code retinal_inference_result} row, mark the job {@code 'done'},
+     * and return a {@link RetinalInferenceClient.ScreenResult}-shaped body so
+     * the SPA's existing preview surface keeps working.
+     *
+     * <p>Returns {@code null} when the remote call fails — the caller falls
+     * back to the local {@code /screen} path which itself may fall back to the
+     * DB-poll worker, so a degraded GPU host never breaks the upload UX.
+     */
+    private ResponseEntity<?> handleRemote(long jobId,
+                                           String taskClean,
+                                           String absolutePath,
+                                           String lat,
+                                           int eventCrfId) {
+        try (Connection c = dataSource.getConnection()) {
+            updateStatus(c, jobId, "segmenting", false, null);
+        } catch (SQLException sqlEx) {
+            LOG.warn("Failed to flip job {} to 'segmenting' (continuing remote call): {}",
+                    jobId, sqlEx.getMessage());
+        }
+
+        RemoteRunResult remote;
+        try {
+            remote = remoteClient.runRemote(jobId, taskClean, absolutePath, lat);
+        } catch (Exception e) {
+            LOG.warn("Remote /run threw for job {}: {}", jobId, e.getMessage());
+            remote = null;
+        }
+
+        if (remote == null) {
+            // Revert + let the caller fall through to the local-screen path.
+            try (Connection c = dataSource.getConnection()) {
+                updateStatus(c, jobId, "queued", false, null);
+            } catch (SQLException ignored) { /* best-effort */ }
+            return null;
+        }
+
+        // Persist the returned artifacts to the institutional store so the
+        // result row's bscan_masks_dir points at a browsable directory.
+        Path artifactDir;
+        try {
+            artifactDir = artifactStore.persist(jobId, remote);
+        } catch (IOException ioEx) {
+            LOG.error("Remote /run succeeded but artifact persist failed for job {}: {}",
+                    jobId, ioEx.getMessage());
+            try (Connection c = dataSource.getConnection()) {
+                updateStatus(c, jobId, "queued", false, null);
+            } catch (SQLException ignored) { /* best-effort */ }
+            return null;
+        }
+
+        // Wave 3 — compute the task-specific metric off the persisted
+        // artifacts. The remote envelope's primary_metric_* fields are
+        // placeholder nulls for the cluster path; this is where the
+        // browseable mm³ / µm value comes from. Soft-fail: a metric
+        // compute crash leaves the row with the envelope's values so the
+        // operator can still browse the segmentation + re-run.
+        ComputedMetrics metrics = null;
+        try {
+            metrics = metricComputer.compute(taskClean, artifactDir, remote.geometry(), lat);
+        } catch (Exception metricEx) {
+            LOG.warn("Metric compute failed for job {} (task={}): {}",
+                    jobId, taskClean, metricEx.getMessage());
+            // The artifacts are persisted; the row will still INSERT with raw envelope values.
+            // Wave 3 chose not to fail the upload on metric-compute error so the operator can
+            // still browse the segmentation and re-run.
+        }
+
+        // INSERT retinal_inference_result then mark the job 'done'.
+        try (Connection c = dataSource.getConnection()) {
+            insertResult(c, jobId, taskClean, remote, artifactDir, metrics);
+            updateStatus(c, jobId, "done",
+                    /* setScreenedAt */ false,
+                    /* setCompletedAt */ true,
+                    remote.modelVersion());
+        } catch (SQLException sqlEx) {
+            LOG.error("Remote /run succeeded but result persist failed for job {}: {}",
+                    jobId, sqlEx.getMessage());
+            try (Connection c = dataSource.getConnection()) {
+                updateStatus(c, jobId, "queued", false, null);
+            } catch (SQLException ignored) { /* best-effort */ }
+            return null;
+        }
+
+        // Body + log: prefer the computed metric over the envelope's
+        // placeholder values; fall back to the envelope when compute
+        // soft-failed.
+        Object respValue = (metrics != null) ? metrics.primaryValue() : remote.primaryMetricValue();
+        String respUnit  = (metrics != null) ? metrics.primaryUnit()  : remote.primaryMetricUnit();
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("jobId", jobId);
+        body.put("status", "done");
+        body.put("task", taskClean);
+        body.put("laterality", lat);
+        body.put("primaryMetricValue", respValue);
+        body.put("primaryMetricUnit", respUnit);
+        body.put("confidence", remote.confidence());
+        body.put("modelVersion", remote.modelVersion());
+        body.put("artifactCount", remote.artifacts().size());
+
+        LOG.info("Retinal inference (remote): event_crf {} → job {} done (task={}, model={}, metric={}{})",
+                eventCrfId, jobId, taskClean,
+                remote.modelVersion(), respValue, respUnit);
+        return ResponseEntity.ok(body);
+    }
+
+    /**
+     * INSERT into {@code retinal_inference_result}. The output_payload column
+     * is JSONB; we serialise the payload map to a string and let Postgres
+     * cast it via {@code ?::jsonb} — no postgres JDBC dep needed.
+     *
+     * <p>When Wave 3's task-specific {@link ComputedMetrics} is non-null
+     * (the normal path) the row carries the computed BigDecimal primary
+     * value + structured payload. If the metric compute soft-failed (or
+     * the caller passed null for back-compat) the inserted row falls back
+     * to the remote envelope's placeholder fields — the operator can
+     * still browse the segmentation and re-run.
+     */
+    private void insertResult(Connection c, long jobId, String task,
+                              RemoteRunResult remote, Path artifactDir,
+                              ComputedMetrics metrics) throws SQLException {
+        Map<String, Object> payloadMap = (metrics != null)
+                ? metrics.payload()
+                : remote.outputPayload();
+        String payloadJson;
+        try {
+            payloadJson = JSON.writeValueAsString(payloadMap);
+        } catch (Exception jsonEx) {
+            throw new SQLException("Failed to serialise output_payload for job " + jobId, jsonEx);
+        }
+        String sql = "INSERT INTO retinal_inference_result ("
+                + "job_id, task, output_payload, primary_metric_value, "
+                + "primary_metric_unit, bscan_masks_dir, pixel_scale_mm, confidence"
+                + ") VALUES (?, ?, ?::jsonb, ?, ?, ?, ?, ?)";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, jobId);
+            ps.setString(2, task);
+            ps.setString(3, payloadJson);
+            if (metrics != null) {
+                // BigDecimal lands exactly into NUMERIC(12,4) with no
+                // lossy double→BigDecimal round-trip.
+                ps.setBigDecimal(4, metrics.primaryValue());
+                ps.setString(5, metrics.primaryUnit());
+            } else {
+                ps.setDouble(4, remote.primaryMetricValue());
+                ps.setString(5, remote.primaryMetricUnit());
+            }
+            ps.setString(6, artifactDir.toString());
+            // pixel_scale_mm: the remote envelope doesn't carry it in v1 (the
+            // SPA's modality registry resolves scale by OID), so leave it null.
+            ps.setNull(7, java.sql.Types.NUMERIC);
+            ps.setDouble(8, remote.confidence());
+            ps.executeUpdate();
+        }
+    }
+
+    /**
      * Update the job's {@code status} (+ optional {@code screened_at} and
      * {@code model_version}). Used for both the optimistic flip to
      * {@code 'screening'} before the sidecar call and the terminal
@@ -294,15 +495,29 @@ public class RetinalInferenceApiController {
      */
     private void updateStatus(Connection c, long jobId, String newStatus,
                               boolean setScreenedAt, String modelVersion) throws SQLException {
+        updateStatus(c, jobId, newStatus, setScreenedAt, /* setCompletedAt */ false, modelVersion);
+    }
+
+    /**
+     * Like {@link #updateStatus(Connection, long, String, boolean, String)} but
+     * also stamps {@code completed_at} when {@code setCompletedAt=true}. The
+     * remote DR-022 branch needs this on the {@code 'done'} transition; the
+     * local path keeps the 4-arg call for back-compat.
+     */
+    private void updateStatus(Connection c, long jobId, String newStatus,
+                              boolean setScreenedAt, boolean setCompletedAt,
+                              String modelVersion) throws SQLException {
         StringBuilder sql = new StringBuilder(
                 "UPDATE retinal_inference_job SET status = ?");
-        if (setScreenedAt) sql.append(", screened_at = ?");
+        if (setScreenedAt)  sql.append(", screened_at = ?");
+        if (setCompletedAt) sql.append(", completed_at = ?");
         if (modelVersion != null) sql.append(", model_version = ?");
         sql.append(" WHERE job_id = ?");
         try (PreparedStatement ps = c.prepareStatement(sql.toString())) {
             int i = 1;
             ps.setString(i++, newStatus);
-            if (setScreenedAt) ps.setTimestamp(i++, Timestamp.from(Instant.now()));
+            if (setScreenedAt)  ps.setTimestamp(i++, Timestamp.from(Instant.now()));
+            if (setCompletedAt) ps.setTimestamp(i++, Timestamp.from(Instant.now()));
             if (modelVersion != null) ps.setString(i++, modelVersion);
             ps.setLong(i, jobId);
             ps.executeUpdate();
