@@ -1076,6 +1076,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/oct-upload/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["resolve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/oct-upload/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["commit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/modalities": {
         parameters: {
             query?: never;
@@ -2292,6 +2324,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/oct-upload/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["undo"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/eventCrfs/{id}/groups/{groupOid}/rows/{ordinal}": {
         parameters: {
             query?: never;
@@ -3131,6 +3179,14 @@ export interface components {
             /** Format: int64 */
             usageCount?: number;
             inActiveStudy?: boolean;
+        };
+        ResolveRequest: {
+            scans?: components["schemas"]["ResolveRequestScan"][];
+        };
+        ResolveRequestScan: {
+            patientId?: string;
+            scanDate?: string;
+            laterality?: string;
         };
         PasswordChangeRequest: {
             currentPassword?: string;
@@ -6094,6 +6150,64 @@ export interface operations {
             };
         };
     };
+    resolve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    commit: {
+        parameters: {
+            query: {
+                patientId: string;
+                scanDate: string;
+                laterality: string;
+                scanIndex?: number;
+                eventCrfId?: number;
+                park?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     list_8: {
         parameters: {
             query?: never;
@@ -8122,6 +8236,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    undo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
