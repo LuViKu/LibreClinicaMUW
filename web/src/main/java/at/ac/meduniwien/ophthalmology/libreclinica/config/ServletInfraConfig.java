@@ -172,6 +172,28 @@ public class ServletInfraConfig {
     }
 
     /**
+     * Explicit bean factory for the public OCT-upload rate-limit
+     * filter.
+     *
+     * <p>{@link at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter}
+     * carries {@code @Component} but lives in the {@code .web}
+     * package, which is NOT covered by the root
+     * {@link LibreClinicaApplication @SpringBootApplication}'s
+     * {@code scanBasePackages = ".config"} scope. Without this
+     * factory, Spring fails to start with an
+     * {@code UnsatisfiedDependencyException} when
+     * {@link #publicOctUploadRateLimitFilterAutoRegOptOut(at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter)}
+     * and {@link SecurityConfig#securityFilterChain(...)} try to
+     * autowire it. Hotfix for the PR #211 merge regression
+     * (2026-06-18 boot failure observed against the merged tip).
+     */
+    @Bean
+    public at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter
+            publicOctUploadRateLimitFilter() {
+        return new at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter();
+    }
+
+    /**
      * Wave 1B (2026-06-18): the public OCT-upload rate-limit filter is
      * mounted inside the {@code SecurityFilterChain} via
      * {@link SecurityConfig#securityFilterChain(...)}'s
