@@ -59,10 +59,11 @@ class PlaceholderAdapter(RetinalInferenceAdapter):
         e2e_path: Path,
         laterality: Literal["OD", "OS"],
         out_dir_override: Path | None = None,
+        scan_index: int = 0,
     ) -> FullVolumeResult:
-        # out_dir_override is ignored — the placeholder doesn't touch the
-        # filesystem (results are derived deterministically from the E2E
-        # bytes' SHA), so DR-022's stateless tempdir flow degrades cleanly.
+        # out_dir_override + scan_index are ignored — the placeholder doesn't
+        # touch the filesystem or parse the .e2e (results are derived from the
+        # E2E bytes' SHA), so DR-022's stateless tempdir flow degrades cleanly.
         if not self.supports(task):
             raise UnsupportedTaskError(
                 f"Task '{task}' not enabled in placeholder adapter"

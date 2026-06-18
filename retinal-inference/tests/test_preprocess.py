@@ -90,16 +90,21 @@ def fake_dcm_payload():
 
 @pytest.fixture
 def client(monkeypatch, fake_dcm_payload):
-    def fake_prepare(e2e_path: Path, out_dir: Path) -> Path:
+    captured: dict = {"prepare": [], "read_volume": [], "extract_fundus": []}
+
+    def fake_prepare(e2e_path: Path, out_dir: Path, scan_index: int = 0) -> Path:
+        captured["prepare"].append(scan_index)
         out_dir = Path(out_dir)
         out_dir.mkdir(parents=True, exist_ok=True)
         (out_dir / "bscan.dcm").write_bytes(fake_dcm_payload)
         return out_dir
 
-    def fake_read_volume(e2e_path: Path):  # noqa: ARG001
+    def fake_read_volume(e2e_path: Path, scan_index: int = 0):  # noqa: ARG001
+        captured["read_volume"].append(scan_index)
         return _FakeBscanVolume()
 
-    def fake_extract_fundus(e2e_path: Path):  # noqa: ARG001
+    def fake_extract_fundus(e2e_path: Path, scan_index: int = 0):  # noqa: ARG001
+        captured["extract_fundus"].append(scan_index)
         # Synthesise a 1-byte PNG-ish placeholder + size; the endpoint only cares
         # about non-empty bytes + dims for the geometry block.
         return b"\x89PNG\r\n\x1a\nFAKE", (768, 768)
@@ -110,6 +115,7 @@ def client(monkeypatch, fake_dcm_payload):
     from retinal_inference.main import app
 
     with TestClient(app) as c:
+        c.captured = captured  # type: ignore[attr-defined]
         yield c
 
 
@@ -256,3 +262,70 @@ def test_preprocess_skips_store_when_unset(client, tmp_path) -> None:
     # Headers still present.
     assert r.headers["X-MUW-E2E-Uuid"]
     assert r.headers["X-MUW-Pixel-Axial-Mm"]
+
+
+def test_preprocess_scan_index_defaults_to_zero(client) -> None:
+    files, data = _multipart()
+    headers = {"X-MUW-Inference-Token": "secret-test-token"}
+    r = client.post("/preprocess", files=files, data=data, headers=headers)
+    assert r.status_code == 200, r.text
+    # All three downstream helpers receive scan_index=0 by default.
+    assert client.captured["prepare"][-1] == 0  # type: ignore[attr-defined]
+    assert client.captured["read_volume"][-1] == 0  # type: ignore[attr-defined]
+
+
+def test_preprocess_scan_index_threaded(client, monkeypatch, tmp_path) -> None:
+    # Need a store so extract_fundus_png gets called too.
+    store = tmp_path / "bscan-store"
+    monkeypatch.setattr(_config.settings, "bscan_store", store, raising=False)
+
+    files, data = _multipart()
+    data["scan_index"] = 2
+    headers = {"X-MUW-Inference-Token": "secret-test-token"}
+    r = client.post("/preprocess", files=files, data=data, headers=headers)
+    assert r.status_code == 200, r.text
+    # All three downstream helpers receive scan_index=2.
+    assert client.captured["prepare"][-1] == 2  # type: ignore[attr-defined]
+    assert client.captured["read_volume"][-1] == 2  # type: ignore[attr-defined]
+    assert client.captured["extract_fundus"][-1] == 2  # type: ignore[attr-defined]
+
+
+def test_preprocess_scan_index_uses_subdir_for_nonzero(client, monkeypatch, tmp_path) -> None:
+    """scan_index > 0 writes to <e2eUuid>/scan-<n>/ so volumes don't overwrite."""
+    store = tmp_path / "bscan-store"
+    monkeypatch.setattr(_config.settings, "bscan_store", store, raising=False)
+
+    files, data = _multipart()
+    data["scan_index"] = 1
+    headers = {"X-MUW-Inference-Token": "secret-test-token"}
+    r = client.post("/preprocess", files=files, data=data, headers=headers)
+    assert r.status_code == 200, r.text
+
+    uuid = r.headers["X-MUW-E2E-Uuid"]
+    # The per-scan subdir holds the companion files; the root <uuid>/bscan.dcm
+    # is NOT written so a later scan-0 upload still dedups cleanly.
+    assert (store / uuid / "scan-1" / "bscan.dcm").is_file()
+    assert (store / uuid / "scan-1" / "fundus.png").is_file()
+    assert not (store / uuid / "bscan.dcm").exists()
+
+
+def test_preprocess_negative_scan_index_returns_400(client) -> None:
+    files, data = _multipart()
+    data["scan_index"] = -1
+    headers = {"X-MUW-Inference-Token": "secret-test-token"}
+    r = client.post("/preprocess", files=files, data=data, headers=headers)
+    assert r.status_code == 400
+
+
+def test_preprocess_out_of_range_scan_index_returns_400(client, monkeypatch) -> None:
+    def raising_prepare(e2e_path, out_dir, scan_index=0):
+        raise IndexError(f"scan_index {scan_index} out of range; file has 2 volumes")
+
+    monkeypatch.setattr(preprocess_module, "prepare_bscan_dcm", raising_prepare)
+
+    files, data = _multipart()
+    data["scan_index"] = 5
+    headers = {"X-MUW-Inference-Token": "secret-test-token"}
+    r = client.post("/preprocess", files=files, data=data, headers=headers)
+    assert r.status_code == 400
+    assert "out of range" in r.json()["detail"]

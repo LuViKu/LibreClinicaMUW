@@ -321,7 +321,10 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         e2e_path: Path,
         laterality: Literal["OD", "OS"],
         out_dir_override: Path | None = None,
+        scan_index: int = 0,
     ) -> FullVolumeResult:
+        # scan_index is ignored: the cluster adapter is DICOM-only and the
+        # volume-selection already happened app-side during preprocess.
         if not self.supports(task):
             raise UnsupportedTaskError(
                 f"Task '{task}' has no configured .sif in this deployment"

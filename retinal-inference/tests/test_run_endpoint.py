@@ -54,12 +54,19 @@ def client(monkeypatch):
     # artifact into the tempdir so the collector exercises a non-empty path.
     from retinal_inference.api import run as run_mod
 
+    captured: dict = {}
+
     def fake_get_adapter():
         class _Fake:
             def supports(self, task: str) -> bool:
                 return task in ("fluid", "onl", "pr", "ga")
 
-            def full_volume(self, task, e2e_path, laterality, out_dir_override=None):
+            def full_volume(
+                self, task, e2e_path, laterality,
+                out_dir_override=None, scan_index=0,
+            ):
+                # Capture scan_index so the test can assert plumbing.
+                captured["scan_index"] = scan_index
                 # The endpoint passes the tempdir as out_dir_override; drop a
                 # fake CSV inside so the artifact collector picks it up.
                 assert out_dir_override is not None
@@ -85,6 +92,7 @@ def client(monkeypatch):
     from retinal_inference.main import app
 
     with TestClient(app) as c:
+        c.captured = captured  # type: ignore[attr-defined]
         yield c
 
 
@@ -263,3 +271,55 @@ def test_run_without_idempotency_key_runs_twice(client, monkeypatch) -> None:
     files2, data2 = _multipart()
     client.post("/run", files=files2, data=data2, headers=headers)
     assert len(calls) == 2
+
+
+def test_run_scan_index_defaults_to_zero(client) -> None:
+    files, data = _multipart()
+    headers = {"X-MUW-Inference-Token": "secret-test-token"}
+    r = client.post("/run", files=files, data=data, headers=headers)
+    assert r.status_code == 200, r.text
+    assert client.captured["scan_index"] == 0  # type: ignore[attr-defined]
+
+
+def test_run_scan_index_threaded_to_adapter(client) -> None:
+    files, data = _multipart()
+    data["scan_index"] = 3
+    headers = {"X-MUW-Inference-Token": "secret-test-token"}
+    r = client.post("/run", files=files, data=data, headers=headers)
+    assert r.status_code == 200, r.text
+    assert client.captured["scan_index"] == 3  # type: ignore[attr-defined]
+
+
+def test_run_negative_scan_index_returns_400(client) -> None:
+    files, data = _multipart()
+    data["scan_index"] = -1
+    headers = {"X-MUW-Inference-Token": "secret-test-token"}
+    r = client.post("/run", files=files, data=data, headers=headers)
+    assert r.status_code == 400
+
+
+def test_run_out_of_range_scan_index_returns_400(client, monkeypatch) -> None:
+    # Make the adapter raise IndexError to simulate an out-of-range scan.
+    from retinal_inference.api import run as run_mod
+
+    def fake_get_adapter():
+        class _Fake:
+            def supports(self, task):
+                return True
+
+            def full_volume(self, task, e2e_path, laterality,
+                            out_dir_override=None, scan_index=0):
+                raise IndexError(
+                    f"scan_index {scan_index} out of range; file has 2 volumes"
+                )
+
+        return _Fake()
+
+    monkeypatch.setattr(run_mod, "get_adapter", fake_get_adapter)
+
+    files, data = _multipart()
+    data["scan_index"] = 5
+    headers = {"X-MUW-Inference-Token": "secret-test-token"}
+    r = client.post("/run", files=files, data=data, headers=headers)
+    assert r.status_code == 400
+    assert "out of range" in r.json()["detail"]

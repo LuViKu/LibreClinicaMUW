@@ -48,7 +48,13 @@ def test_full_volume_dispatch(monkeypatch, fake_e2e_path, tmp_path) -> None:
 
     bscan_dir = tmp_path / "bscan"
     bscan_dir.mkdir()
-    monkeypatch.setattr(optima_mod, "prepare_bscan_dcm", lambda e2e, out: bscan_dir)
+    captured_prep: dict = {}
+
+    def fake_prep(e2e, out, scan_index=0):
+        captured_prep["scan_index"] = scan_index
+        return bscan_dir
+
+    monkeypatch.setattr(optima_mod, "prepare_bscan_dcm", fake_prep)
 
     captured: dict = {}
 
@@ -86,3 +92,39 @@ def test_full_volume_dispatch(monkeypatch, fake_e2e_path, tmp_path) -> None:
     assert captured["payload"]["laterality"] == "OD"
     assert captured["payload"]["bscan_dcm_path"].endswith("bscan.dcm")
     assert captured["timeout"] == _config.settings.runner_timeout_s
+    # Default scan_index plumbed to the preprocess step.
+    assert captured_prep["scan_index"] == 0
+
+
+def test_full_volume_threads_scan_index_to_prepare(monkeypatch, fake_e2e_path, tmp_path) -> None:
+    """OptimaAdapter forwards scan_index to prepare_bscan_dcm so the right
+    volume from a multi-acquisition .e2e gets ingested."""
+    _set_runner_urls(monkeypatch, fluid="http://runner-fluid:8000/")
+    monkeypatch.setattr(_config.settings, "shared_storage_path", tmp_path, raising=False)
+
+    bscan_dir = tmp_path / "bscan"
+    bscan_dir.mkdir()
+    captured_prep: dict = {}
+
+    def fake_prep(e2e, out, scan_index=0):
+        captured_prep["scan_index"] = scan_index
+        return bscan_dir
+
+    monkeypatch.setattr(optima_mod, "prepare_bscan_dcm", fake_prep)
+    monkeypatch.setattr(
+        optima_mod, "_post_json",
+        lambda url, payload, timeout: {
+            "primary_metric_value": None,
+            "primary_metric_unit": None,
+            "output_payload": {},
+            "en_face_mask_path": None,
+            "bscan_masks_dir": str(tmp_path),
+            "pixel_scale_mm": 0.011,
+            "confidence": 0.9,
+            "model_version": "v1",
+        },
+    )
+
+    adapter = OptimaAdapter()
+    adapter.full_volume("fluid", fake_e2e_path, "OD", scan_index=2)
+    assert captured_prep["scan_index"] == 2
