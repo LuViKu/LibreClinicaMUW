@@ -164,3 +164,33 @@ html, body {
   box-shadow: 0 0 0 3px rgba(17, 29, 78, 0.18);
   border-color: var(--color-muw-blue) !important;
 }
+
+/* ========================================================================== */
+/* OCT-Upload-Portal — skeleton shimmer + spinner                              */
+/* ========================================================================== */
+/* The ParseRow primitives in components/octportal use these utilities while  */
+/* the header read is in progress. Mirrors the mockup's `.skel` + `.spin`     */
+/* classes from oct-portal.jsx so the visual fidelity stays 1:1.              */
+@keyframes muw-skel-shimmer {
+  0%   { background-position: -240px 0; }
+  100% { background-position: 240px 0; }
+}
+.muw-skel {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.55) 0%,
+    rgba(241, 245, 249, 0.85) 50%,
+    rgba(226, 232, 240, 0.55) 100%
+  );
+  background-size: 480px 100%;
+  animation: muw-skel-shimmer 1.4s linear infinite;
+  border-radius: 0.25rem;
+}
+
+@keyframes muw-portal-spin {
+  to { transform: rotate(360deg); }
+}
+.muw-portal-spin {
+  animation: muw-portal-spin 0.9s linear infinite;
+  transform-origin: center;
+}
