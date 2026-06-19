@@ -253,4 +253,14 @@ public final class AuditTypeIds {
      * carries {@code "remote_pending"}.
      */
     public static final int RETINAL_JOB_RETRY               = 118;
+
+    // ------------------------------------------------------------------
+    // App-feedback Wave 1B (2026-06-19) — cross-study patient identity
+    // soft-link. Writer is {@code SubjectsApiController.linkPatient};
+    // audit_table = {@code study_subject}; entity_id = source
+    // study_subject id; new_value packs
+    // {@code "linked-to:<targetSubjectId>:patientUuid:<uuid>"}.
+    // ------------------------------------------------------------------
+
+    public static final int STUDY_SUBJECT_PATIENT_LINKED    = 119;
 }
