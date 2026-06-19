@@ -113,6 +113,13 @@ def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
     finite_max = float(np.nanmax(arr)) if arr.size else 1.0
     scale = 255.0 / finite_max if finite_max > 0 else 255.0
     vol_u8 = np.clip(np.nan_to_num(arr) * scale, 0, 255).astype(np.uint8)
+    # 2026-06-19 — release the float64 source array as soon as the
+    # uint8 copy exists. For a 97×496×512 volume that's ~192 MB of
+    # peak heap freed before the downstream DICOM/geometry stages
+    # allocate again. Without the explicit `del` CPython holds the
+    # reference until `arr` goes out of scope at function return,
+    # stacking the two arrays at peak.
+    del arr
 
     n, rows, cols = vol_u8.shape
     bscan_data = (vol_meta.metadata or {}).get("bscan_data", []) if hasattr(vol_meta, "metadata") else []
