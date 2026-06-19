@@ -32,6 +32,7 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { GeometryJson } from '@/api/retinal'
+import { artifactUrl } from '@/api/retinal'
 import { BIOMARKER_COLORS } from './retinalPalette'
 
 const { t } = useI18n()
@@ -51,10 +52,25 @@ interface Props {
   laterality: 'OD' | 'OS'
   /** External hover index — when the per-B-scan trace highlights a slice. */
   hoveredBscanZ?: number | null
+  /**
+   * Job id — used to build the artifact URL for the en-face biomarker
+   * projection PNG (Wave 5, 2026-06-19). Optional so existing callsites
+   * (tests, storybook) keep compiling.
+   */
+  jobId?: number | null
+  /**
+   * List of per-job artifact filenames returned in
+   * {@code RetinalJobDetail.artifactNames}. The component scans this for
+   * a {@code projection_<task>.png} entry and renders it as an SVG
+   * {@code <image>} stretched over {@code scan_bbox_fundus_px}.
+   */
+  artifactNames?: string[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
   hoveredBscanZ: null,
+  jobId: null,
+  artifactNames: () => [],
 })
 
 const emit = defineEmits<{
@@ -102,6 +118,29 @@ const etdrsRadiiPx = computed<Array<{ mm: number; px: number }>>(() =>
 const fovea = computed(() => props.geometry.fovea_estimate_fundus_px)
 
 const scanBbox = computed(() => props.geometry.scan_bbox_fundus_px)
+
+/* ------- En-face biomarker projection (Wave 5, 2026-06-19) ----------- */
+
+/**
+ * Per-task expected artifact filename. Runners write the projection
+ * PNG into the same dir the rest of the segmentation outputs land in;
+ * the Java backend lists every file in {@code bscan_masks_dir} into
+ * {@code RetinalJobDetail.artifactNames}, so we just check membership.
+ */
+const PROJECTION_FILENAMES: Record<string, string> = {
+  fluid: 'projection_fluid.png',
+  ga: 'projection_ga.png',
+  onl: 'projection_onl.png',
+  pr: 'projection_pr.png',
+}
+
+const projectionUrl = computed<string | null>(() => {
+  const expected = PROJECTION_FILENAMES[String(props.task)]
+  if (!expected) return null
+  if (!props.jobId || !props.artifactNames?.includes(expected)) return null
+  return artifactUrl(props.jobId, expected)
+})
+
 
 /* ------- Per-B-scan indicator computation ---------------------------- */
 
@@ -324,6 +363,25 @@ function ringLabel(diameterMm: number): string {
         preserveAspectRatio="none"
       />
 
+      <!-- 1b. En-face biomarker projection (Wave 5) — stretched to bbox.
+           NB: default image-rendering (auto) lets the browser interpolate
+           smoothly between B-scan rows so the per-A-scan PED region reads
+           as a continuous blob across the slice direction. The data IS
+           per-A-scan, but B-scans are sparsely placed on the fundus
+           (~10 px apart) so without interpolation the visual gap between
+           slices dominates and the projection looks like stripes. -->
+      <image
+        v-if="projectionUrl"
+        data-testid="enface-projection"
+        :href="projectionUrl"
+        :x="scanBbox.x"
+        :y="scanBbox.y"
+        :width="scanBbox.width"
+        :height="scanBbox.height"
+        preserveAspectRatio="none"
+        opacity="0.85"
+      />
+
       <!-- 2. Scan-area outline -->
       <rect
         data-testid="scan-bbox"
@@ -361,8 +419,11 @@ function ringLabel(diameterMm: number): string {
         </template>
       </g>
 
-      <!-- 4. Per-B-scan indicators -->
-      <g data-testid="bscan-lines">
+      <!-- 4. Per-B-scan indicators — hidden when the en-face projection
+           is rendered. The projection encodes the same biomarker info at
+           per-A-scan spatial fidelity, so the per-B-scan stripe layer
+           becomes redundant noise once a projection PNG is available. -->
+      <g v-if="!projectionUrl" data-testid="bscan-lines">
         <g
           v-for="line in bscanLines"
           :key="`bscan-${line.z}`"

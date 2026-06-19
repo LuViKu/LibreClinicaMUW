@@ -37,6 +37,7 @@ RUN pip install --no-cache-dir /tmp/wheels/dlfwdata-*.whl \
 RUN pip install --no-cache-dir "fastapi<0.104" "uvicorn[standard]<0.22" "pydicom<3"
 
 COPY app.py /workdir/app.py
+COPY projection.py /workdir/projection.py
 # fluidseg → dlfwconfig.version imports gitpython at module load. The
 # pytorch:1.9.0 base ships no git binary, so gitpython aborts the import
 # with "Bad git executable" before fluidseg ever starts inference. The

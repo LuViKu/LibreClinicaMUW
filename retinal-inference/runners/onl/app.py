@@ -113,6 +113,21 @@ def infer(req: InferRequest) -> dict:
     axial = _axial_mm(str(dcm))
     thickness_um = float(np.nanmean(lo - up)) * axial * 1000.0
 
+    # 2026-06-19 — en-face ONL thickness projection.
+    en_face_mask_path = None
+    per_bscan_um: list[float] = []
+    try:
+        from projection import render_thickness_projection  # vendored alongside app.py
+        proj_name, per_bscan_um = render_thickness_projection(
+            Path(upper[0]), Path(lower[0]), out, "onl", axial
+        )
+        en_face_mask_path = str(out / proj_name)
+    except Exception as proj_exc:  # noqa: BLE001 — projection is best-effort
+        import logging
+        logging.getLogger(__name__).warning(
+            "onl en-face projection failed: %s", proj_exc
+        )
+
     return {
         "primary_metric_value": round(thickness_um, 3),
         "primary_metric_unit": "µm",
@@ -120,8 +135,9 @@ def infer(req: InferRequest) -> dict:
             "mean_onl_thickness_um": round(thickness_um, 3),
             "opl_hfl_csv": upper[0],
             "bmeis_csv": lower[0],
+            "per_bscan_thickness_um": per_bscan_um,
         },
-        "en_face_mask_path": None,
+        "en_face_mask_path": en_face_mask_path,
         "bscan_masks_dir": str(out),
         "pixel_scale_mm": axial,
         "model_version": MODEL_VERSION,
