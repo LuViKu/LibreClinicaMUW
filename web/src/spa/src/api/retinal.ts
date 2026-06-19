@@ -20,7 +20,7 @@
  * and the global error toast picks up the rest.
  */
 
-import { apiGet, apiPatch } from './client'
+import { apiGet, apiPatch, apiPost } from './client'
 
 /* ====================================================================== */
 /* Public types                                                           */
@@ -347,6 +347,29 @@ export function bindParkedJob(
   body: RetinalJobBindRequest,
 ): Promise<RetinalJobBindResponse> {
   return apiPatch<RetinalJobBindResponse>(`${BASE}/${jobId}/bind`, body)
+}
+
+/**
+ * 2026-06-19 retry — response body of {@code POST /retinal-jobs/{jobId}/retry}.
+ * Always {@code status: 'remote_pending'} on success; the SSE channel
+ * surfaces the post-dispatch transition asynchronously.
+ */
+export interface RetinalJobRetryResponse {
+  jobId: number
+  status: string
+}
+
+/**
+ * 2026-06-19 retry — re-dispatch a {@code failed} retinal_inference_job to
+ * the remote GPU sidecar without re-uploading the .e2e. The backend resets
+ * the row to {@code remote_pending} synchronously, fires
+ * {@code handleRemote} on a background thread, and returns 202 Accepted.
+ *
+ * <p>409 if the job is not currently {@code failed}; 403 outside the
+ * caller's site-visibility scope.
+ */
+export function retryRetinalJob(jobId: number): Promise<RetinalJobRetryResponse> {
+  return apiPost<RetinalJobRetryResponse>(`${BASE}/${jobId}/retry`, {})
 }
 
 /**

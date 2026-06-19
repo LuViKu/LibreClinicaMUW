@@ -2481,6 +2481,11 @@
     "jsonTree": {
       "rawPayloadHeader": "Raw output payload"
     },
+    "retry": {
+      "cta": "Erneut versuchen",
+      "inflight": "Wird neu gestartet…",
+      "error": "Neustart fehlgeschlagen — bitte später erneut versuchen."
+    },
     "nav": {
       "backToSubjects": "← Back to subjects",
       "home": "Home"
