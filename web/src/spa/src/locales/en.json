@@ -2514,6 +2514,9 @@
       "aria": "[NEEDS_REVIEW] Fundus image with retinal overlays, {laterality}",
       "foveaTooltip": "[NEEDS_REVIEW] Fovea estimate ({source})"
     },
+    "biomarkerToggle": {
+      "tooltip": "Toggle {name} layer"
+    },
     "trends": {
       "title": "[NEEDS_REVIEW] Biomarker trends",
       "chartHeader": "[NEEDS_REVIEW] Trend",
