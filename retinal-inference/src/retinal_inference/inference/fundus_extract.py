@@ -190,18 +190,25 @@ def build_geometry(
         fundus_slice_mm_per_px = float(bv.lateral_mm)
         scale_source = "bscan_fallback"
 
+    # 2026-06-19 — Heidelberg posX/posY are in DEGREES of FOV, not mm.
+    # Convert to mm via the shared helper before feeding the fundus-pixel
+    # conversion. See `e2e_parser.heidelberg_pos_to_mm`.
+    from .e2e_parser import heidelberg_pos_to_mm
+
     positions: list[dict[str, float | int]] = []
     if bscan_data:
         for idx, b in enumerate(bscan_data):
             if not all(k in b for k in ("posX1", "posY1", "posX2", "posY2")):
                 continue
             x1_px, y1_px = _mm_to_fundus_px(
-                float(b["posX1"]), float(b["posY1"]),
+                heidelberg_pos_to_mm(b["posX1"]),
+                heidelberg_pos_to_mm(b["posY1"]),
                 fundus_width, fundus_height,
                 fundus_lateral_mm_per_px, fundus_slice_mm_per_px,
             )
             x2_px, y2_px = _mm_to_fundus_px(
-                float(b["posX2"]), float(b["posY2"]),
+                heidelberg_pos_to_mm(b["posX2"]),
+                heidelberg_pos_to_mm(b["posY2"]),
                 fundus_width, fundus_height,
                 fundus_lateral_mm_per_px, fundus_slice_mm_per_px,
             )
@@ -217,7 +224,7 @@ def build_geometry(
 
     bbox = _aabb(positions)
 
-    fovea = _fovea_volume_center(positions, bv)
+    fovea = _fovea_volume_center(positions, bv, bbox=bbox)
     LOG.info(
         "Geometry built: fundus=%dx%d, n_bscans=%d, scale_source=%s",
         fundus_width,
@@ -318,21 +325,34 @@ def _aabb(positions: list[dict[str, float | int]]) -> dict[str, float]:
 
 
 def _fovea_volume_center(
-    positions: list[dict[str, float | int]], bv: Any
+    positions: list[dict[str, float | int]],
+    bv: Any,
+    bbox: dict[str, float] | None = None,
 ) -> dict[str, float | int | str]:
-    """MVP fovea estimate: centre A-scan of the centre B-scan.
+    """MVP fovea estimate: geometric centre of the scan AABB on the fundus.
 
     Real fovea detection is a model-shaped problem; for now we fall back to
-    the geometric centre of the volume and label the source so a downstream
-    consumer can replace it later without breaking the schema.
+    the centroid of `scan_bbox_fundus_px` and label the source so a
+    downstream consumer can replace it later without breaking the schema.
+
+    2026-06-19 — switched from "centre A-scan of centre B-scan" to "bbox
+    centroid". The two coincide for evenly-distributed B-scans, but real
+    Heidelberg exports often have a non-uniform slice distribution
+    (calibration sweeps, skip patterns) that pushed the centre-B-scan
+    midpoint well off the visible bbox centre; clinical users expect the
+    "fovea cross" to sit at the middle of the scan rectangle.
     """
     n_bscans = int(bv.n_bscans)
     n_ascans = int(bv.cols)
     bscan_z = n_bscans // 2
     ascan_x = n_ascans // 2
 
-    if positions and 0 <= bscan_z < len(positions):
-        # Linear interpolation along the centre B-scan's endpoint segment.
+    if bbox is not None and bbox.get("width", 0) > 0 and bbox.get("height", 0) > 0:
+        x = float(bbox["x"]) + float(bbox["width"]) / 2.0
+        y = float(bbox["y"]) + float(bbox["height"]) / 2.0
+    elif positions and 0 <= bscan_z < len(positions):
+        # Fallback: linear interpolation along the centre B-scan's endpoint
+        # segment (the pre-2026-06-19 behaviour).
         p = positions[bscan_z]
         denom = max(1, n_ascans - 1)
         t = ascan_x / denom
