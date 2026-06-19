@@ -267,5 +267,3 @@ function toggleAll(value: boolean) {
     </template>
   </Modal>
 </template>
-</content>
-</invoke>
