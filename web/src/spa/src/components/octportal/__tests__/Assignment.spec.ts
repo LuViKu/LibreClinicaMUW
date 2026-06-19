@@ -138,6 +138,33 @@ describe('Assignment (per-state action buttons)', () => {
     expect(w.emitted('park')?.[0]).toEqual(['row-1'])
   })
 
+  it('ambiguous → renders Studie wählen; click emits pick-study (not pick-visit)', async () => {
+    const SECOND: ResolveCandidate = {
+      ...CANDIDATE,
+      studyId: 8,
+      studyName: 'AMD-Studie',
+      studyOid: 'S_AMD',
+      studySubjectId: 43,
+    }
+    const w = mount(Assignment, {
+      global: { plugins: [i18n] },
+      props: {
+        row: baseRow('ambiguous', {
+          candidates: [CANDIDATE, SECOND],
+          selectedCandidate: undefined,
+          selectedEvent: null,
+        }),
+      },
+    })
+    expect(w.text()).toContain('Mehrere Studien')
+    expect(w.text()).toContain('Studie wählen')
+    const btn = w.find('[data-testid="action-pick-study-row-1"]')
+    expect(btn.exists()).toBe(true)
+    await btn.trigger('click')
+    expect(w.emitted('pick-study')?.[0]).toEqual(['row-1'])
+    expect(w.emitted('pick-visit')).toBeUndefined()
+  })
+
   it('error → renders dismiss button; dismiss emits rowId', async () => {
     const w = mount(Assignment, {
       global: { plugins: [i18n] },

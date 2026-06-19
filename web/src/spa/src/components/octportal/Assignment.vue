@@ -45,6 +45,7 @@ const emit = defineEmits<{
   confirm: [rowId: string]
   undo: [rowId: string]
   'pick-visit': [rowId: string]
+  'pick-study': [rowId: string]
   park: [rowId: string]
   'search-patient': [rowId: string]
   dismiss: [rowId: string]
@@ -305,7 +306,8 @@ const scanDateLabel = computed(() => {
           <button
             type="button"
             class="text-[12px] font-medium inline-flex items-center gap-1 text-muw-blue hover:text-muw-blue-700"
-            @click="emit('pick-visit', props.row.rowId)"
+            :data-testid="`action-pick-study-${props.row.rowId}`"
+            @click="emit('pick-study', props.row.rowId)"
           >{{ t('octPortal.actions.pickStudy') }}</button>
           <button
             type="button"

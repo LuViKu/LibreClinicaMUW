@@ -53,6 +53,16 @@ async function onInactivityTimeout(): Promise<void> {
  * When the operator is authenticated the watcher arms; when they
  * sign out (manually OR via the watcher) it disarms so the
  * /login mount doesn't churn the watcher needlessly.
+ *
+ * <p>{@code flush: 'post'} defers the callback until AFTER the DOM
+ * patch that pushed {@code auth.isAuthenticated} → true settles.
+ * Without it, the synchronous callback mutates the inactivity store
+ * refs during the same render pass that's already mounting HomeView
+ * (which reads those refs to render the inactivity ribbon), and Vue's
+ * scheduler trips "Maximum recursive updates exceeded in component
+ * &lt;HomeView&gt;". Symptom before this fix: an admin login lands on /
+ * and a popover error fires immediately. The watcher still arms /
+ * disarms on every auth flip, just one microtask later.
  */
 watch(
   () => auth.isAuthenticated,
@@ -64,7 +74,7 @@ watch(
       inactivity.stop()
     }
   },
-  { immediate: false },
+  { immediate: false, flush: 'post' },
 )
 
 onMounted(() => {
