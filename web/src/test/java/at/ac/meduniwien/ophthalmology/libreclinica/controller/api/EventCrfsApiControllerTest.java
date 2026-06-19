@@ -624,16 +624,15 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
     }
 
     @Test
-    void previousValuesReturns404WhenEventCrfNotFound() throws Exception {
-        // The mock DataSource doesn't surface any real rows; EventCRFDAO
-        // returns an empty bean (id=0) on findByPK miss → controller
-        // returns 404. Pins the request reached the DAO layer (i.e.
-        // past auth + active-study guards) and the 404 path fires.
+    void previousValuesPastGuardsBubblesNpeFromMockDao() throws Exception {
+        // The mock DataSource throws on getConnection() (see
+        // saveItemsReturns500OnInvalidJson pattern above) so this 500
+        // documents that the endpoint passes auth + active-study guards
+        // and reaches the DAO. The happy-path 404 / 200 semantics are
+        // exercised by EventCrfsApiControllerPreviousValuesIT.
         mockMvcWith().perform(get("/api/v1/eventCrfs/9999/previous-values")
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.message")
-                        .value(containsString("No event_crf")));
+                .andExpect(status().isInternalServerError());
     }
 }
