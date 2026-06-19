@@ -86,37 +86,6 @@ def _write_rgba_png(rgba: Any, out_path: Path) -> None:
     out_path.write_bytes(signature + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b""))
 
 
-def _dilate_z_axis(mask: Any, kernel: int) -> Any:
-    """Max-dilate a 2D ``(z, x)`` boolean mask along the z-axis only.
-
-    Rationale: the underlying segmentation only fires on B-scan slices
-    (every N µm), so the (z, x) projection has dense per-A-scan data
-    on rows where the model fired and FULLY EMPTY rows in between. A
-    naive image stretch then renders the empty rows as transparent
-    gaps and the model rows as thin stripes — even with browser
-    interpolation. Dilating the mask in z fills the inter-slice gaps
-    by carrying each painted row's signal up + down by half the
-    kernel; the PED blob then reads as a continuous 2D field. The
-    underlying per-B-scan totals are computed from the un-dilated
-    mask, so the dilation is purely a visualisation choice (it does
-    NOT inflate the reported biomarker area).
-    """
-    import numpy as np
-
-    if kernel <= 1 or mask.size == 0:
-        return mask
-    half = kernel // 2
-    out = mask.copy()
-    for shift in range(1, half + 1):
-        # Shift up + down, OR into the accumulator.
-        up = np.zeros_like(mask)
-        up[:-shift] = mask[shift:]
-        down = np.zeros_like(mask)
-        down[shift:] = mask[:-shift]
-        out |= up | down
-    return out
-
-
 def render_fluid_projection(seg: Any, out_dir: Path) -> tuple[str, dict[str, list[float]]]:
     """Project the 3D fluidseg label volume onto the fundus plane.
 
@@ -132,13 +101,6 @@ def render_fluid_projection(seg: Any, out_dir: Path) -> tuple[str, dict[str, lis
     * B channel — PED presence
     * alpha     — union of any biomarker, scaled by per-pixel hit count
 
-    For visualisation, the per-biomarker (z, x) masks are dilated in
-    the z-axis before encoding to PNG — this fills the inter-B-scan
-    gaps so the projection reads as a continuous 2D field on the
-    fundus rather than as sharp stripes; the per-B-scan numeric
-    aggregates (returned alongside) are computed from the
-    un-dilated mask so the reported biomarker area stays exact.
-
     Returns ``(filename, per_bscan_mm2)`` — the second element is a
     dict shaped like the SPA's existing
     ``payload['per_bscan_mm2'] = {irf: [...], srf: [...], ped: [...]}``
@@ -147,35 +109,30 @@ def render_fluid_projection(seg: Any, out_dir: Path) -> tuple[str, dict[str, lis
     import numpy as np
 
     n_bscans, rows, cols = seg.shape
-    irf = np.any(seg == 1, axis=1)  # (z, x), undilated
+    irf = np.any(seg == 1, axis=1)  # (z, x)
     srf = np.any(seg == 2, axis=1)
     ped = np.any(seg == 3, axis=1)
-
-    # Dilate in z so adjacent B-scans with the same biomarker visually
-    # merge across the slice direction. Kernel=5 covers ±2 slices,
-    # which closes typical Spectralis sampling gaps (~50 µm/slice) on
-    # blobs that span multiple mm in the z direction.
-    irf_d = _dilate_z_axis(irf, kernel=5)
-    srf_d = _dilate_z_axis(srf, kernel=5)
-    ped_d = _dilate_z_axis(ped, kernel=5)
 
     rgba = np.zeros((n_bscans, cols, 4), dtype=np.uint8)
     # Each biomarker paints its own RGB color where present; alpha is
     # the union (mixed colours where multiple overlap, single colour
     # where only one is present).
-    for mask, color in ((irf_d, _COLOR_IRF), (srf_d, _COLOR_SRF), (ped_d, _COLOR_PED)):
+    for mask, color in ((irf, _COLOR_IRF), (srf, _COLOR_SRF), (ped, _COLOR_PED)):
         any_z = mask
         rgba[any_z, 0] = np.maximum(rgba[any_z, 0], color[0])
         rgba[any_z, 1] = np.maximum(rgba[any_z, 1], color[1])
         rgba[any_z, 2] = np.maximum(rgba[any_z, 2], color[2])
-    union = irf_d | srf_d | ped_d
+    union = irf | srf | ped
     rgba[union, 3] = 180  # ~70% opacity where a biomarker is present
 
     filename = "projection_fluid.png"
     _write_rgba_png(rgba, out_dir / filename)
 
-    # Per-B-scan totals computed from the UN-DILATED masks so the
-    # reported biomarker area matches the model's actual output.
+    # Per-B-scan totals for the stripe renderer. Each value is the
+    # biomarker area on that B-scan in mm² — but we don't have the
+    # voxel volume here (the runner computes it from the DICOM); the
+    # caller fills in the conversion. Return raw A-scan-pixel counts;
+    # the runner converts.
     per_bscan = {
         "irf": [int(c) for c in irf.sum(axis=1)],
         "srf": [int(c) for c in srf.sum(axis=1)],
