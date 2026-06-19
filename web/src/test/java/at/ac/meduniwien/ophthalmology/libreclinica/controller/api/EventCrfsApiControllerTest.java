@@ -601,4 +601,39 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 "say \"hi\"", EventCrfsApiController.extractJsonField(json, "literal"));
     }
+
+    /* ---------------------------------------------------------------------- */
+    /* App-feedback Wave 1D (2026-06-19) — GET previous-values guard contract */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void previousValuesReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/previous-values")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void previousValuesReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/previous-values")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void previousValuesReturns404WhenEventCrfNotFound() throws Exception {
+        // The mock DataSource doesn't surface any real rows; EventCRFDAO
+        // returns an empty bean (id=0) on findByPK miss → controller
+        // returns 404. Pins the request reached the DAO layer (i.e.
+        // past auth + active-study guards) and the 404 path fires.
+        mockMvcWith().perform(get("/api/v1/eventCrfs/9999/previous-values")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No event_crf")));
+    }
 }
