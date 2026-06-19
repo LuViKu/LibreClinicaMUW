@@ -117,8 +117,32 @@ interface BscanLine {
   dominantValue: number
 }
 
+/**
+ * 2026-06-19 — flatten the raw bscan positions into clean horizontal
+ * lines that span the scan bbox exactly. The .e2e file carries the
+ * actual (slightly tilted) B-scan endpoints, but operators report a
+ * cleaner UI when each indicator runs perfectly horizontally + matches
+ * the visible scan rectangle width. We keep each B-scan's actual y
+ * midpoint so the vertical position still reflects where that slice
+ * was acquired; only the small lateral tilt + endpoint drift is
+ * removed.
+ */
+function flattenToBboxRect(
+  polylines: GeometryJson['bscan_positions_fundus_px'],
+  bbox: { x: number; y: number; width: number; height: number },
+): GeometryJson['bscan_positions_fundus_px'] {
+  if (!bbox || bbox.width <= 0) return polylines
+  const xLeft = bbox.x
+  const xRight = bbox.x + bbox.width
+  return polylines.map((p) => {
+    const yMid = (p.y1 + p.y2) / 2
+    return { z: p.z, x1: xLeft, y1: yMid, x2: xRight, y2: yMid }
+  })
+}
+
 const bscanLines = computed<BscanLine[]>(() => {
-  const polylines = props.geometry.bscan_positions_fundus_px ?? []
+  const raw = props.geometry.bscan_positions_fundus_px ?? []
+  const polylines = flattenToBboxRect(raw, scanBbox.value)
   if (props.task === 'fluid') {
     return computeFluidBscanLines(polylines, props.payload)
   }
