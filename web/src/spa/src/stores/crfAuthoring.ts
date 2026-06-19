@@ -415,11 +415,27 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   const responseSetCatalog = ref<ResponseSetCatalogEntry[]>([])
   const isLoadingCatalog = ref(false)
 
+  /**
+   * App-feedback Wave 2 (2026-06-19) — canvas selection model.
+   *
+   * <p>The canvas editor highlights a single item at a time; clicking
+   * an item fills the right rail's properties panel. The selection is
+   * keyed on the {@link AuthoringItem.uid} so it survives reorder.
+   * Clearing the selection ({@code null}) makes the properties rail
+   * show its empty state.
+   */
+  const selectedItemUid = ref<string | null>(null)
+
+  function selectItem(uid: string | null): void {
+    selectedItemUid.value = uid
+  }
+
   function reset(): void {
     draft.value = emptyDraft()
     error.value = null
     isSubmitting.value = false
     isPreviewing.value = false
+    selectedItemUid.value = null
   }
 
   function setMetadata(patch: Partial<Pick<AuthoringDraft, 'versionName' | 'versionDescription' | 'revisionNotes'>>): void {
@@ -673,6 +689,53 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     const section = draft.value.sections[sectionIndex]
     if (!section) return
     section.items = reordered
+  }
+
+  /**
+   * App-feedback Wave 2 (2026-06-19) — apply a canvas preset to a target
+   * section.
+   *
+   * <p>Resolves the {@code presetId} against the lazily-imported registry
+   * ({@link './components/crfAuthoring/presetCatalog'}), invokes the
+   * generator with the supplied translator, and pushes the materialised
+   * items into the section identified by {@code targetSectionUid}. When
+   * the preset declares {@code bilateralSection}, the section's
+   * bilateral flag is set so the canvas renders the OD-left / OS-right
+   * grid layout for the new items.
+   *
+   * <p>Returns the count of items appended, or {@code 0} when the preset
+   * id is unknown or the target section can't be found (defensive).
+   *
+   * <p>The signature accepts the preset registry + translator as
+   * parameters so the store stays decoupled from the i18n + the catalog
+   * import graph (avoids a circular import: store → presetCatalog → store).
+   */
+  function applyPreset(
+    presetId: string,
+    targetSectionUid: string,
+    opts: {
+      registry: ReadonlyArray<{
+        id: string
+        bilateralSection?: boolean
+        generate: (translate: (k: string) => string) => Array<Omit<AuthoringItem, 'uid'>>
+      }>
+      translate: (key: string) => string
+    },
+  ): number {
+    const preset = opts.registry.find((p) => p.id === presetId)
+    if (!preset) return 0
+    const section = draft.value.sections.find((s) => s.uid === targetSectionUid)
+    if (!section) return 0
+    const items = preset.generate(opts.translate)
+    const seeded: AuthoringItem[] = items.map((item) => ({
+      ...item,
+      uid: nextUid('item'),
+    }))
+    section.items.push(...seeded)
+    if (preset.bilateralSection) {
+      section.bilateral = true
+    }
+    return seeded.length
   }
 
   /**
@@ -991,6 +1054,8 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     error,
     responseSetCatalog,
     isLoadingCatalog,
+    selectedItemUid,
+    selectItem,
     reset,
     setMetadata,
     setVersionName,
@@ -1003,6 +1068,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     addBilateralPair,
     addCatalogItem,
     addOphthPresetSection,
+    applyPreset,
     setItemField,
     removeItem,
     reorderItems,
