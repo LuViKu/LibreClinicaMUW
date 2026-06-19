@@ -8,6 +8,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -993,7 +997,15 @@ public class EventsApiController {
      * {@link Status#DELETED}; nested {@code event_crf} → {@code item_data}
      * rows cascade to {@link Status#AUTO_DELETED}.
      *
-     * <p>Guards: 401 / 400 (no study) / 403 (DM/Admin only) / 404
+     * <p>Wave 1A (app-feedback, 2026-06-19) — the cancel request now
+     * carries a JSON body capturing why the visit was cancelled. The
+     * reason code is validated against {@code study_event_cancel_reason}
+     * and persisted on {@code study_event.cancel_reason_code} /
+     * {@code .cancel_reason_text} BEFORE the soft-delete cascade so a
+     * mid-flight failure leaves no orphan reason metadata.
+     *
+     * <p>Guards: 401 / 400 (no study OR missing body OR unknown reason
+     * code OR is_other=TRUE with blank text) / 403 (DM/Admin only) / 404
      * (visibility) / 409 (event already DELETED, or SubjectEventStatus
      * is SIGNED/LOCKED — terminal).
      *
@@ -1002,6 +1014,7 @@ public class EventsApiController {
      */
     @DeleteMapping("/{id:[0-9]+}")
     public ResponseEntity<?> cancel(@PathVariable("id") int eventId,
+                                    @RequestBody(required = false) CancelEventRequest body,
                                     HttpSession session) {
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
         if (ub == null || ub.getId() == 0) {
@@ -1051,6 +1064,36 @@ public class EventsApiController {
                             + " — un-sign / unlock before cancelling"));
         }
 
+        // Wave 1A — institutional cancel-reason validation. The DELETE
+        // body shape is `{ "reasonCode": "...", "reasonText": "..." }`.
+        // A missing body, a missing/unknown reasonCode, or an is_other
+        // reason without text all surface as 400 so the SPA can render
+        // a useful inline error. The lookup hits study_event_cancel_reason
+        // (6 rows seeded) — single query, no caching needed.
+        if (body == null || body.reasonCode == null || body.reasonCode.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "reasonCode is required — POST { \"reasonCode\": \"...\", \"reasonText\": \"...\" }"));
+        }
+        final String reasonCode = body.reasonCode.trim();
+        final String reasonText = body.reasonText == null ? "" : body.reasonText.trim();
+        final boolean isOther;
+        try {
+            Boolean lookup = loadCancelReasonIsOther(reasonCode);
+            if (lookup == null) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Unknown cancel reasonCode: " + reasonCode));
+            }
+            isOther = lookup;
+        } catch (SQLException sql) {
+            LOG.error("study_event cancel: reason lookup failed code={}", reasonCode, sql);
+            return ResponseEntity.internalServerError().body(Map.of("message",
+                    "Failed to validate cancel reason — see server log."));
+        }
+        if (isOther && reasonText.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "reasonText is required when reasonCode marks an 'Other' entry"));
+        }
+
         // Phase B2 (2026-06-10) — failure-audit wrap on the cascading
         // soft-delete. study_event flips to DELETED then the
         // event_crf + item_data children cascade to AUTO_DELETED;
@@ -1062,6 +1105,8 @@ public class EventsApiController {
         final UserAccountBean ubRef = ub;
         final int roleIdRef = roleId;
         final String reqId = MDC.get("reqId");
+        final String reasonCodeRef = reasonCode;
+        final String reasonTextRef = reasonText.isEmpty() ? null : reasonText;
         try {
             return FailureAuditTemplate.runOrAudit(
                     new AuditEventDAO(dataSource),
@@ -1071,6 +1116,20 @@ public class EventsApiController {
                     "DELETE_EVENT",
                     reqId,
                     () -> {
+                        // Wave 1A — persist the institutional reason BEFORE
+                        // the soft-delete. The StudyEventBean has no fields
+                        // for these columns (legacy DAO predates them), so
+                        // a small targeted JDBC update is the cheapest path
+                        // and stays inside the failure-audit envelope.
+                        try {
+                            persistCancelReason(evRef.getId(), reasonCodeRef, reasonTextRef);
+                        } catch (SQLException sqle) {
+                            // Wrap in RuntimeException so the FailureAuditTemplate
+                            // envelope still records the operation as failed and
+                            // the outer catch translates to a 500.
+                            throw new RuntimeException("Failed to persist cancel reason", sqle);
+                        }
+
                         // Parent: study_event → DELETED. Children: event_crf +
                         // item_data → AUTO_DELETED. Mirrors RemoveStudyEventServlet.
                         evRef.setStatus(Status.DELETED);
@@ -1098,8 +1157,9 @@ public class EventsApiController {
                             }
                         }
 
-                        LOG.info("Study event cancel: id={} subject={} by user={} role={}",
-                                evRef.getId(), ssRef.getLabel(), ubRef.getName(), roleIdRef);
+                        LOG.info("Study event cancel: id={} subject={} by user={} role={} reason={}",
+                                evRef.getId(), ssRef.getLabel(), ubRef.getName(),
+                                roleIdRef, reasonCodeRef);
                         return ResponseEntity.noContent().build();
                     });
         } catch (Exception e) {
@@ -1109,6 +1169,64 @@ public class EventsApiController {
                     "message", "Failed to cancel study event — see server log."));
         }
     }
+
+    /**
+     * Wave 1A — wire shape for the {@link #cancel} JSON body.
+     *
+     * <p>{@code reasonCode} is the {@code study_event_cancel_reason.code}
+     * value the operator picked; {@code reasonText} is the free-text
+     * field that the SPA only shows when {@code is_other} is true. Both
+     * fields are validated server-side.
+     */
+    public static class CancelEventRequest {
+        public String reasonCode;
+        public String reasonText;
+    }
+
+    /**
+     * Wave 1A — load the {@code is_other} flag for a reason code, or
+     * {@code null} if the code is not in {@code study_event_cancel_reason}.
+     * The table holds 6 rows so a per-request query is cheap.
+     */
+    private Boolean loadCancelReasonIsOther(String code) throws SQLException {
+        final String sql = "SELECT is_other FROM study_event_cancel_reason WHERE code = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, code);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return rs.getBoolean(1);
+            }
+        }
+    }
+
+    /**
+     * Wave 1A — persist the cancel-reason columns on study_event. The
+     * {@link StudyEventBean} predates these columns; rather than thread
+     * the fields through the legacy DAO update SQL we issue a small
+     * targeted UPDATE here. Runs INSIDE the FailureAuditTemplate
+     * envelope; a failure throws SQLException → wrapped as
+     * RuntimeException → caught by the outer 500 handler with an
+     * OPERATION_FAILED audit row.
+     */
+    private void persistCancelReason(int eventId, String reasonCode, String reasonText)
+            throws SQLException {
+        final String sql = "UPDATE study_event "
+                + "SET cancel_reason_code = ?, cancel_reason_text = ? "
+                + "WHERE study_event_id = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, reasonCode);
+            if (reasonText == null) {
+                ps.setNull(2, java.sql.Types.VARCHAR);
+            } else {
+                ps.setString(2, reasonText);
+            }
+            ps.setInt(3, eventId);
+            ps.executeUpdate();
+        }
+    }
+
 
     /**
      * Phase E.6 restore-quickwins — inverse of {@link #cancel}. Restores

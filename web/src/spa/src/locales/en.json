@@ -2014,6 +2014,23 @@
     },
     "locked": "Locked"
   },
+  "events": {
+    "cancel": {
+      "title": "[NEEDS_REVIEW] Cancel visit",
+      "subtitle": "[NEEDS_REVIEW] Visit «{label}»",
+      "reasonLabel": "[NEEDS_REVIEW] Reason",
+      "reasonPlaceholder": "[NEEDS_REVIEW] Select a reason…",
+      "reasonRequired": "[NEEDS_REVIEW] Please pick a reason.",
+      "otherTextLabel": "[NEEDS_REVIEW] Free-text rationale",
+      "otherTextRequired": "[NEEDS_REVIEW] Please supply a rationale.",
+      "otherPlaceholder": "[NEEDS_REVIEW] Capture the rationale…",
+      "confirm": "[NEEDS_REVIEW] Cancel visit",
+      "cancel": "[NEEDS_REVIEW] Dismiss",
+      "errorLoadReasons": "[NEEDS_REVIEW] Could not load cancel reasons — please try again later.",
+      "errorSubmit": "[NEEDS_REVIEW] Cancellation failed — please try again later.",
+      "successToast": "[NEEDS_REVIEW] Visit cancelled."
+    }
+  },
   "eventDetail": {
     "title": "CRFs for this event",
     "subTitle": "forms",
