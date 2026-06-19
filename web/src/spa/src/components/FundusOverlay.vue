@@ -141,15 +141,6 @@ const projectionUrl = computed<string | null>(() => {
   return artifactUrl(props.jobId, expected)
 })
 
-/**
- * When the en-face projection is present we dim the per-B-scan stripe
- * indicators — they encode the same biomarker information at lower
- * spatial fidelity, so leaving them at full opacity competes with the
- * projection layer rather than complementing it.
- */
-const bscanStripeOpacityScale = computed<number>(() =>
-  projectionUrl.value ? 0.45 : 1.0,
-)
 
 /* ------- Per-B-scan indicator computation ---------------------------- */
 
@@ -428,8 +419,11 @@ function ringLabel(diameterMm: number): string {
         </template>
       </g>
 
-      <!-- 4. Per-B-scan indicators -->
-      <g data-testid="bscan-lines">
+      <!-- 4. Per-B-scan indicators — hidden when the en-face projection
+           is rendered. The projection encodes the same biomarker info at
+           per-A-scan spatial fidelity, so the per-B-scan stripe layer
+           becomes redundant noise once a projection PNG is available. -->
+      <g v-if="!projectionUrl" data-testid="bscan-lines">
         <g
           v-for="line in bscanLines"
           :key="`bscan-${line.z}`"
@@ -455,7 +449,7 @@ function ringLabel(diameterMm: number): string {
             :y2="line.y2"
             :stroke="line.stroke"
             :stroke-width="isHovered(line.z) ? 3 : 1.5"
-            :style="{ strokeOpacity: isHovered(line.z) ? 1 : line.opacity * bscanStripeOpacityScale }"
+            :style="{ strokeOpacity: isHovered(line.z) ? 1 : line.opacity }"
             stroke-linecap="round"
             vector-effect="non-scaling-stroke"
             :data-testid="`bscan-line-${line.z}`"
