@@ -25,6 +25,7 @@ In addition to streaming the DCM back inline, this endpoint:
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import logging
@@ -87,7 +88,11 @@ def _derive_uuid(body: bytes) -> str:
     of the dedup contract.
     """
     digest = hashlib.sha256(body).hexdigest()  # 64 hex chars
-    # Slot into 8-4-4-4-12 layout for downstream code that wants UUIDs.
+    return _format_uuid_from_digest(digest)
+
+
+def _format_uuid_from_digest(digest: str) -> str:
+    """Shape a hex sha256 digest into the 8-4-4-4-12 UUID layout."""
     return f"{digest[0:8]}-{digest[8:12]}-{digest[12:16]}-{digest[16:20]}-{digest[20:32]}"
 
 
@@ -164,24 +169,45 @@ async def preprocess(
     _check_endpoint_enabled()
     _check_auth(x_muw_inference_token)
 
-    body = await file.read()
-    if not body:
-        raise HTTPException(status_code=400, detail="file part is empty")
     if scan_index < 0:
         raise HTTPException(
             status_code=400,
             detail=f"scan_index must be >= 0 (got {scan_index})",
         )
 
-    uuid = e2e_uuid.strip() if e2e_uuid and e2e_uuid.strip() else _derive_uuid(body)
-
     shared_tmpdir = _config.settings.shared_tmpdir
     shared_tmpdir.mkdir(parents=True, exist_ok=True)
+
+    # 2026-06-19 — stream the upload to a tempfile in 64 KiB chunks
+    # while computing sha256 incrementally. Previously `body =
+    # await file.read()` materialised the full 200 MB upload twice
+    # (once in uvicorn's multipart parser, once in the handler) and
+    # then again as `e2e_path.write_bytes(body)`. Streaming drops
+    # ~200 MB of peak RSS on a 197 MB .e2e — enough to keep the
+    # sidecar inside the 1.5 GiB compose mem_limit on a 3.8 GiB
+    # Docker VM.
 
     with tempfile.TemporaryDirectory(prefix="prep_", dir=str(shared_tmpdir)) as td:
         tempdir = Path(td)
         e2e_path = tempdir / "input.e2e"
-        e2e_path.write_bytes(body)
+        total = 0
+        hasher = hashlib.sha256()
+        with e2e_path.open("wb") as out:
+            while True:
+                chunk = await file.read(65536)
+                if not chunk:
+                    break
+                out.write(chunk)
+                hasher.update(chunk)
+                total += len(chunk)
+        if total == 0:
+            raise HTTPException(status_code=400, detail="file part is empty")
+
+        uuid = (
+            e2e_uuid.strip()
+            if e2e_uuid and e2e_uuid.strip()
+            else _format_uuid_from_digest(hasher.hexdigest())
+        )
         try:
             out_dir = prepare_bscan_dcm(e2e_path, tempdir, scan_index=scan_index)
         except FileNotFoundError as e:
@@ -229,6 +255,28 @@ async def preprocess(
         elif store is None:
             LOG.info("bscan_store unset; skipping companion-file persistence for e2e %s", uuid)
 
+        # 2026-06-19 — release the large per-request allocations before
+        # we exit the TemporaryDirectory context. `ds` (a pydicom
+        # Dataset) carries the full PixelData buffer (~192 MB for a
+        # 97×496×512 volume); `bv.volume_u8` carries the quantised
+        # volume (~48 MB). Neither is needed past this point — the
+        # response only needs the response body (`dcm_bytes`, already
+        # read from disk) and a handful of geometry scalars, which we
+        # copy out of `bv` into `geom_headers` before dropping it.
+        geom_headers: dict[str, str] = {}
+        if bv is not None:
+            geom_headers = {
+                "X-MUW-Pixel-Axial-Mm": f"{bv.axial_mm:.8f}",
+                "X-MUW-Pixel-Lateral-Mm": f"{bv.lateral_mm:.8f}",
+                "X-MUW-Pixel-Slice-Mm": f"{bv.slice_mm:.8f}",
+                "X-MUW-Bscan-Dim-Z": str(int(bv.n_bscans)),
+                "X-MUW-Bscan-Dim-Y": str(int(bv.rows)),
+                "X-MUW-Bscan-Dim-X": str(int(bv.cols)),
+            }
+        del ds
+        del bv
+        gc.collect()
+
     LOG.info(
         "POST /preprocess -> bscan.dcm (%d bytes, laterality=%s, e2e_uuid=%s)",
         len(dcm_bytes),
@@ -237,13 +285,7 @@ async def preprocess(
     )
 
     headers = {"Content-Disposition": 'attachment; filename="bscan.dcm"'}
-    if bv is not None:
-        headers["X-MUW-Pixel-Axial-Mm"] = f"{bv.axial_mm:.8f}"
-        headers["X-MUW-Pixel-Lateral-Mm"] = f"{bv.lateral_mm:.8f}"
-        headers["X-MUW-Pixel-Slice-Mm"] = f"{bv.slice_mm:.8f}"
-        headers["X-MUW-Bscan-Dim-Z"] = str(int(bv.n_bscans))
-        headers["X-MUW-Bscan-Dim-Y"] = str(int(bv.rows))
-        headers["X-MUW-Bscan-Dim-X"] = str(int(bv.cols))
+    headers.update(geom_headers)
     headers["X-MUW-E2E-Uuid"] = uuid
     headers["Access-Control-Expose-Headers"] = _EXPOSED_HEADERS
 
