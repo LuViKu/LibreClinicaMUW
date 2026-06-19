@@ -62,7 +62,22 @@ async function onAssignBind(payload: { jobId: number; eventCrfId: number }): Pro
     // store.error surfaces inline; close the dialog so the operator
     // can see the page-level error.
     activeRow.value = null
+  } finally {
+    // Always re-fetch — defensive against an optimistic-removal /
+    // backend-state divergence the 2026-06-18 smoke uncovered.
+    await store.load()
   }
+}
+
+/**
+ * The visit picker emitted no started event_crf for the picked event.
+ * Surface a warn toast so the operator knows the bind didn't take and
+ * what to do about it — silent close was the 2026-06-18 bug.
+ */
+function onNoEventCrf(): void {
+  activeRow.value = null
+  toastMessage.value = t('retinalParked.toast.noEventCrf')
+  toastTone.value = 'warn'
 }
 
 function shortIsoDate(iso: string | null | undefined): string {
@@ -182,6 +197,7 @@ function shortIsoDate(iso: string | null | undefined): string {
       :job-id="activeRow.jobId"
       :initial-patient-id="activeRow.patientId ?? ''"
       @bind="onAssignBind"
+      @no-event-crf="onNoEventCrf"
       @close="onAssignClose"
     />
   </div>

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd">
+
+    <!--
+      2026-06-19 — Widen the upload-dedup gate to (e2e_sha256, scan_index).
+
+      The previous {@code ux_retinal_inference_job_e2e_sha256} index
+      (introduced earlier today) treated SHA-256 alone as the unique
+      key. That blocks a legitimate operator flow: a multi-volume .e2e
+      file (e.g. one acquisition file holding both an OD and an OS
+      scan) produces two ReviewRows client-side with the SAME bytes
+      hash but DIFFERENT {@code scan_index}. The single-column gate
+      rejects the second eye as "duplicate" even though it's the
+      first time that {@code scan_index} from that file has been
+      committed — surfaced during the 2026-06-18 smoke.
+
+      Composite (e2e_sha256, scan_index) preserves the original
+      intent (block byte-identical re-uploads of the same volume
+      slot) while allowing each volume in a multi-acquisition file
+      to land as its own job row. The portal controller's pre-check
+      query is updated in lockstep.
+    -->
+    <changeSet id="2026-06-19-retinal-job-sha256-scan-index-unique" author="muw">
+        <dropIndex tableName="retinal_inference_job"
+                   indexName="ux_retinal_inference_job_e2e_sha256"/>
+        <createIndex tableName="retinal_inference_job"
+                     indexName="ux_retinal_inference_job_e2e_sha256_scan_idx"
+                     unique="true">
+            <column name="e2e_sha256"/>
+            <column name="scan_index"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

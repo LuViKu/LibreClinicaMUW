@@ -15,9 +15,10 @@
  *   nopatient → Patient suchen + Parken
  *   error     → red ✕ dismiss
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, beforeEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { createPinia, setActivePinia } from 'pinia'
 
 import Assignment from '../Assignment.vue'
 import deMessages from '@/locales/de.json'
@@ -77,6 +78,13 @@ function baseRow(state: ReviewRow['state'], overrides: Partial<ReviewRow> = {}):
 }
 
 describe('Assignment (per-state action buttons)', () => {
+  // 2026-06-19 — Assignment.vue reads useOctPortalStore() for the
+  // committing-state upload-percent label. Pinia must be active or
+  // the store-instantiation throws.
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
   it('suggested → renders Bestätigen + ändern; confirm emits rowId', async () => {
     const w = mount(Assignment, { global: { plugins: [i18n] }, props: { row: baseRow('suggested') } })
     expect(w.text()).toContain('Bestätigen')

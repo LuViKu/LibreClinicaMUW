@@ -31,20 +31,36 @@ import Modal from '@/components/Modal.vue'
 import { ApiError, ApiNetworkError, apiGet } from '@/api/client'
 import type { StudyEvent } from '@/types/event'
 import type { EventDetailDto } from '@/types/event'
+import {
+  listPatientEventsPublic,
+  OctPortalError,
+} from '@/api/octPortal'
 
 interface Props {
   open: boolean
   /** Numeric id of the picked study_subject — carried through to the
    *  bind so the parent can match the row state. */
   studySubjectId: number
-  /** Subject LABEL — what {@code /api/v1/events?subjectId=...} expects.
-   *  Required because the backend identifies subjects by label, not
-   *  numeric id. Carried separately so the prop signature documents
-   *  the constraint. */
-  subjectLabel: string
+  /** Subject LABEL — what {@code /api/v1/events?subjectId=...} expects
+   *  on the AUTH'd branch. The {@code publicContext} branch uses the
+   *  numeric {@code studySubjectId} instead. Required for the
+   *  AssignParkedDialog admin flow; defaults to empty string for the
+   *  public OCT-portal mount. */
+  subjectLabel?: string
+  /**
+   * 2026-06-19 — when true, load events via the anonymous
+   * {@code /api/v1/public/oct-upload/patients/{id}/events} endpoint
+   * (single-hop; firstEventCrfId pre-resolved). The portal at
+   * {@code /app/oct-upload} sets this to true; AssignParkedDialog in
+   * the admin view leaves it false (auth'd two-hop path).
+   */
+  publicContext?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  subjectLabel: '',
+  publicContext: false,
+})
 
 /**
  * Picked-event emit payload. {@code eventCrfId} is the bind target;
@@ -70,14 +86,50 @@ const errorMessage = ref<string | null>(null)
 /** Per-event-id flag — true while the second-hop GET /events/{id} is
  *  in flight to keep the operator from double-clicking a row. */
 const resolvingId = ref<string | null>(null)
+/**
+ * 2026-06-19 — populated on the {@code publicContext} branch only,
+ * mapping event_id (string) → first non-removed event_crf_id. The
+ * public endpoint pre-resolves this in one query, saving the second
+ * hop that the auth'd branch does via {@code GET /events/{id}}.
+ * Auth'd branch leaves this empty + uses the original second-hop.
+ */
+const publicEventCrfIdByEventId = ref<Map<string, number | null>>(new Map())
 
 const hasResults = computed(() => events.value.length > 0)
 
 async function load(): Promise<void> {
   errorMessage.value = null
   events.value = []
+  publicEventCrfIdByEventId.value = new Map()
   isLoading.value = true
   try {
+    if (props.publicContext) {
+      // 2026-06-19 — anonymous OCT-portal path. The auth'd /events
+      // endpoint requires a session and the portal at /app/oct-upload
+      // is unauthenticated by design. Use the public mirror that
+      // also pre-resolves firstEventCrfId in one query.
+      const list = await listPatientEventsPublic(props.studySubjectId)
+      events.value = list.map<StudyEvent>((p) => ({
+        id: p.id,
+        subjectId: '',
+        eventDefinitionOid: p.eventDefinitionOid,
+        eventLabel: p.eventLabel,
+        ordinal: p.ordinal,
+        dateStarted: p.dateStarted,
+        dateEnded: p.dateEnded,
+        location: p.location,
+        // Coerce the backend's lowercase-hyphenated status to the
+        // StudyEvent union; unknown values render as plain text via
+        // the {@link pillClass} default branch.
+        status: p.status as StudyEvent['status'],
+        repeating: p.repeating,
+      }))
+      const m = new Map<string, number | null>()
+      for (const p of list) m.set(p.id, p.firstEventCrfId)
+      publicEventCrfIdByEventId.value = m
+      return
+    }
+    // Auth'd path (AssignParkedDialog → admin view).
     const params = new URLSearchParams()
     params.set('subjectId', props.subjectLabel)
     const list = await apiGet<StudyEvent[]>(
@@ -94,8 +146,8 @@ async function load(): Promise<void> {
 /** Centralises the "fall back to inner message else generic i18n"
  *  ladder so {@link load} and {@link pick} stay short. */
 function describeLoadError(e: unknown): string {
-  if (e instanceof ApiError) {
-    const body = e.body as { message?: string } | null
+  if (e instanceof ApiError || e instanceof OctPortalError) {
+    const body = (e as ApiError | OctPortalError).body as { message?: string } | null
     if (body?.message) return body.message
     if (e.message) return e.message
     return t('octPortal.modals.visitPicker.loadError')
@@ -112,8 +164,23 @@ async function pick(evt: StudyEvent): Promise<void> {
   resolvingId.value = evt.id
   errorMessage.value = null
   try {
+    if (props.publicContext) {
+      // Public path: firstEventCrfId was pre-resolved server-side at
+      // load time. No second hop needed. Use -1 as the sentinel when
+      // the event has no started CRF (same contract the auth'd branch
+      // uses below) — the parent surfaces a "Keine Eingabemaske" toast.
+      const preResolved = publicEventCrfIdByEventId.value.get(evt.id)
+      const targetEventCrfId = preResolved == null ? -1 : preResolved
+      emit('event-picked', {
+        eventCrfId: targetEventCrfId,
+        definitionLabel: evt.eventLabel,
+        dateStart: evt.dateStarted,
+      })
+      return
+    }
+    // Auth'd path: second-hop to /events/{id} to resolve the first
+    // non-removed event_crf.
     const detail = await apiGet<EventDetailDto>(`/pages/api/v1/events/${evt.id}`)
-    // First non-removed CRF row carries the event_crf the bind needs.
     const firstCrf = detail.crfs.find(
       (c) => c.eventCrfId != null && c.status !== 'removed',
     )

@@ -119,7 +119,8 @@
       "sitesDesc": "Standortidentität + Aktivierung + Nutzerrollen je Standort.",
       "auditLogDesc": "Plattform-Audit-Trail mit Diff-Karten bei jeder Änderung.",
       "dataExportTitle": "Datenexport",
-      "dataExportDesc": "Gespeicherte Datensätze der aktiven Studie — Exporte starten und generierte Dateien herunterladen."
+      "dataExportDesc": "Gespeicherte Datensätze der aktiven Studie — Exporte starten und generierte Dateien herunterladen.",
+      "modalitiesDesc": "Untersuchungsmodalitäten + zugehörige eye-spezifische Item-OIDs verwalten."
     },
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
@@ -1533,7 +1534,8 @@
     },
     "toast": {
       "bindOk": "Scan erfolgreich zugeordnet.",
-      "bindRaced": "Wurde inzwischen von jemand anderem zugeordnet — Liste aktualisiert."
+      "bindRaced": "Wurde inzwischen von jemand anderem zugeordnet — Liste aktualisiert.",
+      "noEventCrf": "Keine Eingabemaske für diese Visite — bitte den Studienteilnehmer zuerst über die Visite öffnen, damit die CRF angelegt wird. Anschließend erneut zuordnen."
     }
   },
   "modalities": {
@@ -2358,6 +2360,8 @@
     "assignment": {
       "patientFound": "Patient gefunden",
       "patientNotFound": "Patient nicht gefunden",
+      "alreadyUploaded": "Bereits hochgeladen",
+      "alreadyUploadedDetail": "Identische .e2e-Datei existiert bereits als Job",
       "multipleStudies": "Mehrere Studien",
       "patientIdMissingPrefix": "PatientId",
       "patientIdMissingSuffix": "existiert in keiner Studie.",

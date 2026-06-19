@@ -239,9 +239,36 @@ const BASE = '/pages/api/v1/retinal-jobs'
 /**
  * `GET /pages/api/v1/retinal-jobs/{jobId}` — fat DTO for the metrics
  * viewer. Single source of truth for the per-job render.
+ *
+ * <p>2026-06-19 — the controller returns artifact URLs WITHOUT the
+ * Tomcat context-path prefix (e.g. {@code /pages/api/v1/.../fundus.png}
+ * not {@code /LibreClinica/pages/...}). In production the SPA + backend
+ * share an origin so the missing prefix doesn't hurt, but in dev the
+ * Vite proxy only forwards paths under {@code /LibreClinica/*}; a bare
+ * {@code /pages/*} request is served by Vite as a static asset and 404s.
+ * The FundusOverlay's {@code <svg image>} silently fails on the 404
+ * and the operator sees the {@code bg-slate-900} placeholder behind the
+ * overlay primitives. Prepend {@code /LibreClinica} to each {@code *Url}
+ * here so the {@code href}/{@code src} attributes resolve in both dev
+ * and prod.
  */
-export function getJob(jobId: number): Promise<RetinalJobDetail> {
-  return apiGet<RetinalJobDetail>(`${BASE}/${jobId}`)
+export async function getJob(jobId: number): Promise<RetinalJobDetail> {
+  const dto = await apiGet<RetinalJobDetail>(`${BASE}/${jobId}`)
+  return {
+    ...dto,
+    fundusUrl: prefixCtx(dto.fundusUrl),
+    geometryUrl: prefixCtx(dto.geometryUrl),
+    bscanDcmUrl: prefixCtx(dto.bscanDcmUrl),
+  }
+}
+
+/** Prepend the Tomcat context path (matches {@code api/client.ts}'s
+ *  internal CONTEXT_PATH) to a server-supplied URL, idempotently. */
+function prefixCtx(url: string | null): string | null {
+  if (url == null) return null
+  if (url.startsWith('/LibreClinica/')) return url
+  if (url.startsWith('/')) return `/LibreClinica${url}`
+  return url
 }
 
 /**

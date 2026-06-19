@@ -198,7 +198,19 @@ services:
       # Writable bind for the per-source-scan companion files.
       - ./docker/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts
     cpus: "2.0"
-    mem_limit: 2g
+    # 2026-06-18 — bumped from 2g to 10g after the preprocess sidecar
+    # OOM-killed (SIGKILL, exit 137) THREE separate times during the
+    # 2026-06-18 smoke (initial run, after the first bump to 6 g, and
+    # after the bind→remote dispatch landed). The sidecar holds the
+    # full bscan volume + intermediate DICOM buffer in RAM during the
+    # /preprocess call; multi-volume 200 MB .e2e files apparently need
+    # more headroom than 6 GiB, and the Python heap doesn't shrink
+    # between requests. 10 GiB is the new ceiling — if this trips
+    # again the next fix is to add `restart: on-failure` so the
+    # sidecar self-recovers without manual intervention, plus a Python
+    # follow-up to stream-decode instead of buffering the whole volume.
+    mem_limit: 10g
+    restart: on-failure
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request,sys;sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health',timeout=2).status==200 else 1)\""]
       interval: 30s

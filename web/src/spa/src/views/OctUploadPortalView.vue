@@ -255,6 +255,7 @@ function onVisitPickerClose(): void {
       :open="visitTargetRowId !== null"
       :study-subject-id="visitTargetSubject.id"
       :subject-label="visitTargetSubject.label"
+      :public-context="true"
       @event-picked="onEventPicked"
       @close="onVisitPickerClose"
     />

@@ -194,3 +194,73 @@ html, body {
   animation: muw-portal-spin 0.9s linear infinite;
   transform-origin: center;
 }
+
+/* ========================================================================== */
+/* OCT-portal row visuals (2026-06-19) — shim sweep + green-fill progress.    */
+/* Mirrors the Claude Design reference oct-upload-portal.html .shim/.fill-lr  */
+/* /.fill-edge primitives. Two phases on the parse-then-commit row:           */
+/*                                                                            */
+/*   1. Header read (parser running, no scan yet): muw-portal-shim overlays   */
+/*      a translucent teal sweep across the row to signal "doing work".       */
+/*   2. Commit (upload + INSERT + async preprocess): muw-portal-fill grows    */
+/*      a teal-tinted L→R band with a 2 px progress edge.                     */
+/*                                                                            */
+/* Tinted with muw-teal at rgba(47,142,145,...). Respects prefers-reduced-    */
+/* motion (the sweep stays painted but stops moving).                         */
+/* ========================================================================== */
+@keyframes muw-portal-shim-sweep {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(320%); }
+}
+.muw-portal-shim {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  z-index: 0;
+  pointer-events: none;
+}
+.muw-portal-shim > span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 34%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(47, 142, 145, 0.22),
+    transparent
+  );
+  animation: muw-portal-shim-sweep 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .muw-portal-shim > span { animation: none; }
+}
+
+/* L→R fill that grows behind the row content. The `--muw-portal-fill-pct`
+ * custom property drives the width; the consumer animates that value or
+ * binds it directly to a JS-driven progress percentage. */
+.muw-portal-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--muw-portal-fill-pct, 0%);
+  transform-origin: left;
+  background: rgba(47, 142, 145, 0.11);
+  z-index: 0;
+  transition: width 200ms linear;
+  pointer-events: none;
+}
+.muw-portal-fill-edge {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: var(--muw-portal-fill-pct, 0%);
+  width: 2px;
+  margin-left: -2px;
+  background: #2f8e91;
+  opacity: 0.55;
+  z-index: 0;
+  transition: left 200ms linear;
+  pointer-events: none;
+}

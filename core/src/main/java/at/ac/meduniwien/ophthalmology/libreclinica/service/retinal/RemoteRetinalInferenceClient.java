@@ -136,8 +136,26 @@ public class RemoteRetinalInferenceClient {
             // the uploads service names files {uuid}.e2e so this stays stable
             // across re-uploads of the same scan.
             String derivedUuid = stripE2eSuffix(fileName);
-            prep = preprocessToDicom(rest, prepUrl, jobId, fileName, bytes, laterality,
-                    derivedUuid, scanIndex);
+            // 2026-06-19 — preprocess-dedup. The public OCT-portal commit
+            // path now eagerly calls /preprocess in its async pipeline
+            // (PublicOctUploadController.runPostCommitPipeline), so by
+            // the time {@link RetinalInferenceApiController#handleRemote}
+            // invokes runRemote the {@code bscan.dcm} (and companion
+            // {@code geometry.json}) are already on disk under
+            // {@code bscanStorePath/<e2eUuid>/scan-{1..N}/}. A second
+            // {@code /preprocess} HTTP call against the same sidecar
+            // wastes 30+ s of CPU, doubles RAM pressure on the
+            // 10 GiB-limited container, and the 2026-06-19 smoke
+            // observed those repeat calls reliably dying with
+            // "Unexpected end of file from server" (sidecar closes the
+            // connection mid-response under sustained load). Try the
+            // disk artifacts first — if present + intact, skip the
+            // HTTP call entirely.
+            prep = tryReuseDiskDicom(derivedUuid, jobId, scanIndex);
+            if (prep == null) {
+                prep = preprocessToDicom(rest, prepUrl, jobId, fileName, bytes, laterality,
+                        derivedUuid, scanIndex);
+            }
             if (prep == null || prep.dcmBytes() == null) {
                 // Conversion failed — return null so the caller reverts the job and
                 // the local fallback path drains it, rather than POSTing a raw .e2e
@@ -221,6 +239,34 @@ public class RemoteRetinalInferenceClient {
     }
 
     /**
+     * 2026-06-18 — public-facing wrapper around {@link #preprocessToDicom}.
+     * Lets the public OCT-upload portal kick off the preprocess sidecar
+     * directly after persisting an {@code .e2e}, so the {@code bscan.dcm}
+     * /{@code fundus.png}/{@code geometry.json} companion files land on
+     * disk REGARDLESS of whether the inference pipeline runs (or runs
+     * successfully). Without this entry, parked uploads + queued uploads
+     * leave the operator unable to browse the just-uploaded scan at all.
+     *
+     * <p>{@code null} on any failure (no preprocess URL configured, no
+     * token, sidecar HTTP error) so the caller can log + continue
+     * without breaking the upload UX.
+     */
+    public PreprocessResult preprocessUpload(long jobId,
+                                              String e2eName,
+                                              byte[] e2eBytes,
+                                              String laterality,
+                                              String e2eUuid,
+                                              int scanIndex) {
+        String prepUrl = preprocessUrl();
+        if (prepUrl == null || prepUrl.isBlank()) {
+            return null;
+        }
+        RestTemplate rest = restTemplate(remoteTimeout().toMillis());
+        return preprocessToDicom(rest, prepUrl, jobId, e2eName, e2eBytes, laterality,
+                e2eUuid, scanIndex);
+    }
+
+    /**
      * POST the {@code .e2e} to {@code ${preprocessUrl}/preprocess} and return the
      * PHI-redacted {@code bscan.dcm} bytes + parsed pixel geometry, or {@code null}
      * on any failure (so the caller reverts + falls back rather than shipping a
@@ -229,6 +275,55 @@ public class RemoteRetinalInferenceClient {
      * <p>{@code scanIndex} picks which volume from a multi-acquisition .e2e to
      * convert; forwarded to /preprocess as a {@code scan_index} form field.
      */
+    /**
+     * 2026-06-19 — disk-side dedup probe. The async commit pipeline
+     * has typically already populated
+     * {@code bscanStorePath/<e2eUuid>/scan-{N}/bscan.dcm} (+
+     * {@code geometry.json}) before {@link #runRemote} fires. When
+     * present, read those bytes + reconstruct the
+     * {@link PreprocessResult} envelope instead of re-POSTing to the
+     * sidecar. Returns {@code null} when the artifacts aren't on
+     * disk, or when reading them fails — falls back to the normal
+     * HTTP path.
+     *
+     * <p>Tries {@code scan-{scanIndex+1}/} first, then {@code scan-1/}
+     * (the sidecar's observed default when scan_index is ignored),
+     * then root. Mirrors the resolver-side fallback ladder in
+     * {@link RetinalArtifactStorageService}.
+     */
+    private PreprocessResult tryReuseDiskDicom(String e2eUuid, long jobId, int scanIndex) {
+        String base = readField("core.retinalInference.bscanStorePath", "");
+        if (base == null || base.isBlank()) return null;
+        // Candidate paths in priority order — matches the resolver's
+        // fallback ladder. Empty subdir = root layout.
+        String[] subdirs = (scanIndex > 0)
+                ? new String[] { "scan-" + (scanIndex + 1), "scan-1", "" }
+                : new String[] { "scan-1", "" };
+        for (String sub : subdirs) {
+            java.nio.file.Path dcmPath = sub.isEmpty()
+                    ? java.nio.file.Path.of(base, e2eUuid, "bscan.dcm")
+                    : java.nio.file.Path.of(base, e2eUuid, sub, "bscan.dcm");
+            if (!java.nio.file.Files.exists(dcmPath)) continue;
+            byte[] dcmBytes;
+            try {
+                dcmBytes = java.nio.file.Files.readAllBytes(dcmPath);
+            } catch (java.io.IOException ioEx) {
+                LOG.warn("Found {} but read failed for job {}: {}", dcmPath, jobId, ioEx.getMessage());
+                continue;
+            }
+            // Geometry stays null — PixelGeometry.from(...) only knows
+            // how to parse from HTTP headers (the sidecar's response
+            // shape). The runners read the actual pixel scale from
+            // the DICOM tags directly, so a null PreprocessResult.geometry()
+            // doesn't block the segmentation pipeline; the metric
+            // computer also degrades gracefully when geometry is null.
+            LOG.info("Reusing on-disk preprocess DICOM for job {} from {} ({} bytes)",
+                    jobId, dcmPath, dcmBytes.length);
+            return new PreprocessResult(dcmBytes, null, e2eUuid);
+        }
+        return null;
+    }
+
     private PreprocessResult preprocessToDicom(RestTemplate rest,
                                                String prepUrl,
                                                long jobId,
@@ -291,7 +386,7 @@ public class RemoteRetinalInferenceClient {
     }
 
     /** DR-022 carrier — bscan.dcm bytes + geometry parsed off the response headers. */
-    record PreprocessResult(byte[] dcmBytes, PixelGeometry geometry, String e2eUuid) { }
+    public record PreprocessResult(byte[] dcmBytes, PixelGeometry geometry, String e2eUuid) { }
 
     @SuppressWarnings("unchecked")
     private static RemoteRunResult parseEnvelope(Map<String, Object> b) {

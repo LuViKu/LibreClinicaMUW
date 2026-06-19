@@ -58,10 +58,23 @@ function formatScanDateTime(d: Date): string {
 
 <template>
   <div
-    class="flex items-center gap-4 px-5 py-3.5 border-t border-slate-100"
+    class="relative overflow-hidden flex items-center gap-4 px-5 py-3.5 border-t border-slate-100"
     :data-testid="`parse-row-${props.row.rowId}`"
   >
-    <div class="w-[224px] flex items-center gap-3 shrink-0">
+    <!--
+      2026-06-19 — header-read shimmer overlay. Mirrors the
+      .shim/.muw-portal-shim primitive from the Claude Design
+      oct-upload-portal reference: a translucent teal band sweeps L→R
+      across the row while the .e2e header is being parsed locally
+      (no scan yet → done === false). Sits at z-0 behind the row
+      content (which carries z-10 via the relative-positioned
+      siblings below).
+    -->
+    <div v-if="!done" class="muw-portal-shim" aria-hidden="true">
+      <span></span>
+    </div>
+
+    <div class="w-[224px] flex items-center gap-3 shrink-0 relative z-10">
       <span class="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-muw-blue-50 text-muw-blue">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -75,14 +88,14 @@ function formatScanDateTime(d: Date): string {
     </div>
 
     <template v-if="done">
-      <div class="w-[96px] shrink-0">
+      <div class="w-[96px] shrink-0 relative z-10">
         <span class="font-mono text-[12px] font-medium text-slate-700">{{ props.row.scan?.patientId }}</span>
       </div>
-      <div class="w-[150px] shrink-0 text-[12px] text-slate-500">{{ dateLabel }}</div>
-      <div class="w-[68px] shrink-0">
+      <div class="w-[150px] shrink-0 text-[12px] text-slate-500 relative z-10">{{ dateLabel }}</div>
+      <div class="w-[68px] shrink-0 relative z-10">
         <EyeBadge :laterality="props.row.scan?.laterality ?? null" />
       </div>
-      <div class="flex-1 inline-flex items-center gap-2 text-[12px] text-slate-500">
+      <div class="flex-1 inline-flex items-center gap-2 text-[12px] text-slate-500 relative z-10">
         <span class="text-muw-sky-600 inline-block">
           <svg class="muw-portal-spin" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
             <path d="M21 12a9 9 0 1 1-6.2-8.5" opacity="0.9" />
@@ -93,19 +106,17 @@ function formatScanDateTime(d: Date): string {
     </template>
 
     <template v-else>
-      <div class="w-[96px] shrink-0"><div class="muw-skel h-3.5 w-14"></div></div>
-      <div class="w-[150px] shrink-0"><div class="muw-skel h-3.5 w-24"></div></div>
-      <div class="w-[68px] shrink-0"><div class="muw-skel h-3.5 w-10"></div></div>
-      <div class="flex-1 inline-flex items-center gap-2 text-[12px] text-slate-500">
-        <span class="text-muw-blue inline-block">
-          <svg class="muw-portal-spin" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
-            <path d="M21 12a9 9 0 1 1-6.2-8.5" opacity="0.9" />
-          </svg>
+      <div class="w-[96px] shrink-0 relative z-10"><div class="muw-skel h-3.5 w-14"></div></div>
+      <div class="w-[150px] shrink-0 relative z-10"><div class="muw-skel h-3.5 w-24"></div></div>
+      <div class="w-[68px] shrink-0 relative z-10"><div class="muw-skel h-3.5 w-10"></div></div>
+      <div class="flex-1 inline-flex items-center gap-2 text-[12px] text-slate-500 relative z-10">
+        <span class="inline-flex items-center gap-1.5 text-muw-teal-700 text-[12px] font-medium">
+          <span class="w-1.5 h-1.5 rounded-full bg-muw-teal animate-pulse"></span>
+          {{ t('octPortal.parseRow.headerReading') }}
         </span>
-        {{ t('octPortal.parseRow.headerReading') }}
       </div>
     </template>
 
-    <div class="shrink-0 text-[11px] text-slate-400">{{ done ? '100 %' : '…' }}</div>
+    <div class="shrink-0 text-[11px] text-slate-400 relative z-10">{{ done ? '100 %' : '…' }}</div>
   </div>
 </template>

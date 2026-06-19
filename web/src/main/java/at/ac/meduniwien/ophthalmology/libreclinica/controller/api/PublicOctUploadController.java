@@ -36,6 +36,7 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.retinal.RetinalInferenceJobStatus;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.core.CoreResources;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
 
@@ -46,6 +47,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -111,12 +113,49 @@ public class PublicOctUploadController {
 
     private final DataSource dataSource;
     private final StudySubjectFinder studySubjectFinder;
+    /**
+     * 2026-06-18 — best-effort preprocess sidecar invocation at upload
+     * commit time. Without this, the {@code fundus.png}/{@code bscan.dcm}/
+     * {@code geometry.json} companion files only exist when (and IF) the
+     * inference pipeline runs to completion; queued + parked uploads
+     * leave the operator unable to browse the just-uploaded scan. The
+     * dispatch is fire-and-continue: a sidecar failure logs a warning
+     * and the upload still completes. Nullable so the IT-friendly
+     * back-compat ctor stays valid.
+     */
+    private final RemoteRetinalInferenceClient remoteClient;
+    /**
+     * 2026-06-19 — used by the async post-commit pipeline to fire the
+     * full remote-GPU inference run after the {@code commit} response
+     * has already gone back to the operator. Without this hand-off
+     * public-portal commits drop into the local Python worker which
+     * runs {@code placeholder-v1} and never produces real segmentation
+     * artifacts. Cross-controller wiring mirrors the bind endpoint
+     * (also calls {@link RetinalInferenceApiController#handleRemote}).
+     * Nullable so the IT-friendly back-compat ctor stays valid.
+     */
+    private final RetinalInferenceApiController inferenceController;
 
     @Autowired
     public PublicOctUploadController(@Qualifier("dataSource") DataSource dataSource,
-                                     StudySubjectFinder studySubjectFinder) {
+                                     StudySubjectFinder studySubjectFinder,
+                                     RemoteRetinalInferenceClient remoteClient,
+                                     RetinalInferenceApiController inferenceController) {
         this.dataSource = dataSource;
         this.studySubjectFinder = studySubjectFinder;
+        this.remoteClient = remoteClient;
+        this.inferenceController = inferenceController;
+    }
+
+    /**
+     * Wave 1B (2026-06-18): IT-friendly back-compat ctor. The new
+     * collaborators (remoteClient, inferenceController) are null-safe:
+     * when null, the commit path skips the async preprocess+remote
+     * dispatch and behaves as the pre-Wave-2B portal did.
+     */
+    public PublicOctUploadController(DataSource dataSource,
+                                     StudySubjectFinder studySubjectFinder) {
+        this(dataSource, studySubjectFinder, null, null);
     }
 
     /* ====================================================================== */
@@ -245,15 +284,46 @@ public class PublicOctUploadController {
             }
         }
 
-        // ---- persist the upload to disk -----------------------------------
+        // ---- stream the upload to disk + compute SHA-256 in one pass -----
+        // 2026-06-19 — was: file.getBytes() + Files.write (200 MB held in
+        // JVM heap per upload + the whole request thread blocked through
+        // the preprocess sidecar). Now: stream the multipart payload
+        // straight to disk through a DigestInputStream so memory stays
+        // flat regardless of file size and we get the dedup hash for
+        // free during the copy. The preprocess + remote-inference
+        // dispatch moves to an async block below, so the commit
+        // response returns in low single-digit seconds.
         Path savedPath;
+        String e2eSha256;
+        final String originalFilename = file.getOriginalFilename();
         try {
             Path dir = Paths.get(uploadsDir());
             Files.createDirectories(dir);
             String filename = UUID.randomUUID() + ".e2e";
             savedPath = dir.resolve(filename);
+            java.security.MessageDigest md;
+            try {
+                md = java.security.MessageDigest.getInstance("SHA-256");
+            } catch (java.security.NoSuchAlgorithmException nsa) {
+                LOG.warn("SHA-256 unavailable on this JRE — dedup hash disabled: {}", nsa.getMessage());
+                md = null;
+            }
             try (var in = file.getInputStream()) {
-                Files.copy(in, savedPath);
+                if (md != null) {
+                    try (var dis = new java.security.DigestInputStream(in, md)) {
+                        Files.copy(dis, savedPath);
+                    }
+                } else {
+                    Files.copy(in, savedPath);
+                }
+            }
+            if (md != null) {
+                byte[] digest = md.digest();
+                StringBuilder hex = new StringBuilder(digest.length * 2);
+                for (byte b : digest) hex.append(String.format("%02x", b));
+                e2eSha256 = hex.toString();
+            } else {
+                e2eSha256 = null;
             }
         } catch (IOException ioEx) {
             LOG.error("Failed to persist E2E upload for portal patientId={}: {}", pid, ioEx.getMessage());
@@ -262,13 +332,70 @@ public class PublicOctUploadController {
         }
         String absolutePath = savedPath.toString();
 
-        String status = park
-                ? RetinalInferenceJobStatus.PARKED.dbValue()
-                : RetinalInferenceJobStatus.QUEUED.dbValue();
+        // Dedup pre-check after the stream finishes (we needed the bytes
+        // to hash). The unique index on retinal_inference_job.e2e_sha256
+        // is the race-safe gate; this pre-check just lets us short-
+        // circuit before the INSERT + skip the orphan-file cleanup
+        // path. Soft 409 with a pointer to the existing job.
+        Long existingDuplicateJobId = findJobBySha256(e2eSha256, scanIndex);
+        if (existingDuplicateJobId != null) {
+            try { Files.deleteIfExists(savedPath); } catch (IOException ignored) { /* swallow */ }
+            LOG.info("Public OCT upload — duplicate (sha256={}, scanIndex={}) matches existing job {} (patientId={})",
+                    e2eSha256, scanIndex, existingDuplicateJobId, pid);
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Diese .e2e-Datei wurde bereits hochgeladen.",
+                    "existingJobId", existingDuplicateJobId,
+                    "duplicate", true));
+        }
+
+        // 2026-06-19 — initial-status discriminator mirrors the legacy
+        // RetinalInferenceApiController upload flow: when the remote
+        // GPU sidecar is configured, land at {@code remote_pending} so
+        // the local DB-poll worker's {@code status IN ('queued','screened')}
+        // filter skips the row by construction. The async block below
+        // then drives the row through {@code segmenting → done} via
+        // {@link RetinalInferenceApiController#handleRemote}. Without
+        // this discriminator, the local worker grabs the row first and
+        // produces {@code placeholder-v1} synthetic metrics (no real
+        // segmentation, no fundus overlay) — the 2026-06-18 smoke bug.
+        boolean remoteClientNonNull = remoteClient != null;
+        boolean remoteConfigured = remoteClientNonNull && remoteClient.isConfigured();
+        boolean inferenceCtrlNonNull = inferenceController != null;
+        boolean dispatchToRemote = !park && remoteConfigured && inferenceCtrlNonNull;
+        // 2026-06-19 — diagnostic log. Without it, when dispatchToRemote
+        // evaluates to false we have no easy way to tell WHICH of the
+        // three components is missing (Spring DI silently degrades on
+        // some misconfigurations + the LogFilter chain hides INFO logs
+        // from this controller package in the docker compose dev stack).
+        LOG.warn("Public OCT commit — dispatchDecision: park={} remoteClient={} remoteConfigured={} inferenceController={} → dispatchToRemote={}",
+                park, remoteClientNonNull, remoteConfigured, inferenceCtrlNonNull, dispatchToRemote);
+        String status;
+        if (park) {
+            status = RetinalInferenceJobStatus.PARKED.dbValue();
+        } else if (dispatchToRemote) {
+            status = "remote_pending";
+        } else {
+            status = RetinalInferenceJobStatus.QUEUED.dbValue();
+        }
         long jobId;
         try (Connection c = dataSource.getConnection()) {
-            jobId = insertJob(c, eventCrfId, DEFAULT_TASK, absolutePath, lat, status, scanIndex);
+            jobId = insertJob(c, eventCrfId, DEFAULT_TASK, absolutePath, lat, status, scanIndex, e2eSha256);
         } catch (SQLException sqlEx) {
+            // 2026-06-19 — race-safe dedup catch. If a concurrent upload
+            // beat us to the unique index between the pre-check above
+            // and this INSERT, the constraint fires here. Surface as
+            // 409 with the existing job_id, same shape as the pre-check
+            // path. Postgres unique-violation SQLState = 23505.
+            if ("23505".equals(sqlEx.getSQLState())) {
+                Long racedJobId = findJobBySha256(e2eSha256, scanIndex);
+                try { Files.deleteIfExists(savedPath); } catch (IOException ignored) { /* swallow */ }
+                LOG.info("Public OCT upload — (sha256, scanIndex) race detected for patientId={}, existing job={}",
+                        pid, racedJobId);
+                return ResponseEntity.status(409).body(Map.of(
+                        "message", "Diese .e2e-Datei wurde bereits hochgeladen.",
+                        "existingJobId", racedJobId == null ? -1L : racedJobId,
+                        "duplicate", true));
+            }
             LOG.error("Failed to enqueue retinal_inference_job from portal (patientId={}): {}",
                     pid, sqlEx.getMessage());
             // Best-effort cleanup: don't leave an orphan file when the INSERT failed.
@@ -293,10 +420,257 @@ public class PublicOctUploadController {
         LOG.info("Public OCT upload — job {} {} (patientId={}, lat={}, scanIndex={}, eventCrfId={}, disambiguated={})",
                 jobId, status, pid, lat, scanIndex, eventCrfId, disambiguated);
 
+        // 2026-06-19 — fire the preprocess + remote-inference dispatch
+        // asynchronously so the commit response returns immediately and
+        // the operator's portal page stays responsive (was: 60+ s
+        // synchronous wall-clock during the 2026-06-18 smoke). The
+        // pipeline writes back to the same job row via DB, so the
+        // SPA's job-status SSE stream picks up the {@code segmenting}
+        // → {@code done} transitions without further coordination.
+        // Soft-fail: any exception in the async block logs + leaves
+        // the row in {@code remote_pending} or {@code queued}, which
+        // the local worker still drains as the fallback path.
+        final long finalJobId = jobId;
+        final Path finalSavedPath = savedPath;
+        final String finalLat = lat;
+        final int finalScanIndex = scanIndex;
+        final Integer finalEventCrfId = eventCrfId;
+        final boolean finalDispatchToRemote = dispatchToRemote;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                runPostCommitPipeline(finalJobId, finalSavedPath, originalFilename,
+                        finalLat, finalScanIndex, finalEventCrfId, finalDispatchToRemote);
+            } catch (Exception ex) {
+                LOG.warn("Post-commit async pipeline for job {} threw: {}",
+                        finalJobId, ex.getMessage());
+            }
+        });
+
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("jobId", jobId);
         body.put("status", status);
         return ResponseEntity.status(201).body(body);
+    }
+
+    /**
+     * 2026-06-19 — runs the slow part of the upload commit (preprocess
+     * sidecar + remote GPU inference dispatch) on a background thread
+     * so the request thread can return immediately. Both steps are
+     * fire-and-continue: a sidecar failure or a remote outage logs +
+     * leaves the row in the appropriate fallback state ({@code queued}
+     * for local-worker drain, or {@code remote_pending} for a later
+     * retry), so the operator's upload is never lost.
+     *
+     * <p>Re-reads the .e2e bytes from disk rather than holding them in
+     * memory across the async boundary — the request thread no longer
+     * needs to keep 200 MB resident per concurrent upload.
+     */
+    private void runPostCommitPipeline(long jobId, Path savedPath,
+                                       String originalFilename, String laterality,
+                                       int scanIndex, Integer eventCrfId,
+                                       boolean dispatchToRemote) {
+        String fileNameForLog = savedPath.getFileName().toString();
+        String e2eUuid = fileNameForLog.toLowerCase(Locale.ROOT).endsWith(".e2e")
+                ? fileNameForLog.substring(0, fileNameForLog.length() - 4)
+                : fileNameForLog;
+
+        // ---- preprocess sidecar (best-effort) ------------------------
+        if (remoteClient != null) {
+            byte[] e2eBytes = null;
+            try {
+                e2eBytes = Files.readAllBytes(savedPath);
+            } catch (IOException ioEx) {
+                LOG.warn("Async pipeline: failed to re-read .e2e for preprocess (job {}): {}",
+                        jobId, ioEx.getMessage());
+            }
+            if (e2eBytes != null) {
+                try {
+                    RemoteRetinalInferenceClient.PreprocessResult prep =
+                            remoteClient.preprocessUpload(jobId,
+                                    originalFilename != null ? originalFilename : fileNameForLog,
+                                    e2eBytes, laterality, e2eUuid, scanIndex);
+                    if (prep == null) {
+                        LOG.warn("Preprocess sidecar returned null for upload e2eUuid={} (job {}); "
+                                + "fundus/bscan artifacts unavailable until manual re-run",
+                                e2eUuid, jobId);
+                    } else {
+                        LOG.info("Preprocess sidecar ok for upload e2eUuid={} (job {}, dcmBytes={})",
+                                e2eUuid, jobId, prep.dcmBytes() != null ? prep.dcmBytes().length : 0);
+                    }
+                } catch (Exception prepEx) {
+                    LOG.warn("Preprocess sidecar threw for upload (job {}): {}", jobId, prepEx.getMessage());
+                }
+            }
+        }
+
+        // ---- remote inference dispatch (only when configured) --------
+        if (dispatchToRemote && inferenceController != null && eventCrfId != null) {
+            try {
+                inferenceController.handleRemote(jobId, DEFAULT_TASK,
+                        savedPath.toString(), laterality, scanIndex, eventCrfId);
+            } catch (Exception remoteEx) {
+                LOG.warn("Remote dispatch threw for portal commit job {}: {}",
+                        jobId, remoteEx.getMessage());
+            }
+        }
+    }
+
+    /* ====================================================================== */
+    /* GET /preflight?sha256=…&scanIndex=… — pre-upload dedup check           */
+    /* ====================================================================== */
+
+    /**
+     * 2026-06-19 — pre-upload dedup gate. The SPA hashes the .e2e
+     * bytes client-side (crypto.subtle.digest) BEFORE uploading and
+     * calls this endpoint to ask "has this exact (sha256, scanIndex)
+     * been uploaded before?" If so the SPA surfaces a "Bereits
+     * hochgeladen" state without sending the 200 MB upload over the
+     * wire — saving bandwidth, time, and the operator's confusion
+     * about why their Bestätigen returned 409.
+     *
+     * <p>Anonymous + idempotent: GET, no side effects. Returns
+     * {@code { exists, jobId }}. Distinct from the legacy commit-time
+     * 409 catch — the unique-index race-guard there still fires when
+     * two operators upload the same file in parallel between the
+     * preflight check and the commit, so the dedup gate stays
+     * race-safe regardless of whether the SPA called preflight first.
+     *
+     * @param sha256 hex SHA-256 (64 chars) of the .e2e bytes
+     * @param scanIndex which volume in a multi-acquisition .e2e
+     *                  the operator is about to commit; matches the
+     *                  composite unique-index column shape
+     */
+    @GetMapping(path = "/preflight",
+                produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> preflight(
+            @RequestParam("sha256") String sha256,
+            @RequestParam(value = "scanIndex", defaultValue = "0") int scanIndex) {
+        if (sha256 == null || !sha256.matches("[0-9a-f]{64}")) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "sha256 must be 64 hex characters"));
+        }
+        Long existingJobId = findJobBySha256(sha256, scanIndex);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("exists", existingJobId != null);
+        body.put("jobId", existingJobId);
+        return ResponseEntity.ok(body);
+    }
+
+    /* ====================================================================== */
+    /* GET /patients/{studySubjectId}/events                                  */
+    /* ====================================================================== */
+
+    /**
+     * 2026-06-19 — public (anonymous) event listing for the OCT-upload
+     * portal's "Visite wählen" / "Studie wählen" flows.
+     *
+     * <p>The authenticated {@code /api/v1/events?subjectId=…} endpoint
+     * requires a session, but the portal at {@code /app/oct-upload} is
+     * unauthenticated by design (DR-022 — institutional reverse proxy
+     * is the perimeter). Without this endpoint, every {@code novisit}
+     * row strands the operator because VisitPickerModal can't list
+     * candidate events. Identified during the 2026-06-18 smoke when an
+     * EIAMD139 upload resolved as {@code novisit} and "Visite wählen"
+     * returned 401.
+     *
+     * <p>Scope tightening for the public path:
+     * <ul>
+     *   <li>Single-subject lookup by numeric {@code studySubjectId} —
+     *       the resolve response always returns this; no label-to-id
+     *       round-trip needed.</li>
+     *   <li>Active-study filter ({@code study.status_id = 1} =
+     *       {@code Status.AVAILABLE}). An archived study's events
+     *       never surface from the portal.</li>
+     *   <li>First non-removed {@code event_crf_id} is pre-resolved in
+     *       the same query — saves the SPA's second-hop call to
+     *       {@code /events/{id}/detail}. Returned as
+     *       {@code firstEventCrfId} on each row; null when no started
+     *       CRF exists yet.</li>
+     * </ul>
+     */
+    @GetMapping(path = "/patients/{studySubjectId:[0-9]+}/events",
+                produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listPatientEventsPublic(
+            @PathVariable("studySubjectId") int studySubjectId) {
+        List<Map<String, Object>> out = new ArrayList<>();
+        String sql = "SELECT se.study_event_id, "
+                + "       sed.oc_oid AS event_def_oid, "
+                + "       sed.name AS event_label, "
+                + "       sed.ordinal AS def_ordinal, "
+                + "       se.date_start, "
+                + "       se.date_end, "
+                + "       se.location, "
+                + "       se.subject_event_status_id, "
+                + "       sed.repeating, "
+                + "       ( SELECT ec.event_crf_id FROM event_crf ec "
+                + "           WHERE ec.study_event_id = se.study_event_id "
+                + "             AND ec.status_id NOT IN (5, 7) "
+                + "           ORDER BY ec.event_crf_id ASC "
+                + "           LIMIT 1 ) AS first_event_crf_id "
+                + "  FROM study_event se "
+                + "  JOIN study_event_definition sed "
+                + "    ON sed.study_event_definition_id = se.study_event_definition_id "
+                + "  JOIN study_subject ss "
+                + "    ON ss.study_subject_id = se.study_subject_id "
+                + "  JOIN study s "
+                + "    ON s.study_id = ss.study_id "
+                + " WHERE se.study_subject_id = ? "
+                + "   AND s.status_id = 1 "
+                + " ORDER BY se.date_start ASC, se.study_event_id ASC";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    Map<String, Object> row = new LinkedHashMap<>();
+                    row.put("id", String.valueOf(rs.getInt("study_event_id")));
+                    row.put("eventDefinitionOid", rs.getString("event_def_oid"));
+                    row.put("eventLabel", rs.getString("event_label"));
+                    row.put("ordinal", rs.getInt("def_ordinal"));
+                    Timestamp ds = rs.getTimestamp("date_start");
+                    row.put("dateStarted", ds == null ? null : ds.toInstant().toString().substring(0, 10));
+                    Timestamp de = rs.getTimestamp("date_end");
+                    row.put("dateEnded", de == null ? null : de.toInstant().toString().substring(0, 10));
+                    row.put("location", rs.getString("location"));
+                    row.put("status", statusForSubjectEventStatusId(rs.getInt("subject_event_status_id")));
+                    row.put("repeating", rs.getBoolean("repeating"));
+                    int firstEcid = rs.getInt("first_event_crf_id");
+                    row.put("firstEventCrfId", rs.wasNull() ? null : firstEcid);
+                    out.add(row);
+                }
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Public listPatientEventsPublic failed for studySubjectId={}: {}",
+                    studySubjectId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to list events: " + sqlEx.getMessage()));
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Map {@code study_event.subject_event_status_id} to the same
+     * lowercase-hyphenated status string the authenticated
+     * {@code EventsApiController.list} emits, so the SPA's
+     * VisitPickerModal renders identically on the public + auth'd
+     * branches. The full code map lives in
+     * {@code SubjectEventStatus}; the cases below cover the values
+     * the portal can encounter (scheduled / data-entry-started /
+     * completed / signed / locked / stopped / skipped / removed).
+     */
+    private static String statusForSubjectEventStatusId(int id) {
+        return switch (id) {
+            case 1 -> "scheduled";
+            case 2 -> "data-entry-started";
+            case 4 -> "completed";
+            case 5 -> "stopped";
+            case 6 -> "skipped";
+            case 7 -> "locked";
+            case 8 -> "signed";
+            case 9 -> "scheduled"; // not_scheduled — treat as scheduled for portal
+            case 10 -> "removed";
+            default -> "scheduled";
+        };
     }
 
     /* ====================================================================== */
@@ -397,10 +771,10 @@ public class PublicOctUploadController {
     }
 
     private long insertJob(Connection c, Integer eventCrfId, String task, String e2ePath,
-                           String lat, String status, int scanIndex) throws SQLException {
+                           String lat, String status, int scanIndex, String e2eSha256) throws SQLException {
         String sql = "INSERT INTO retinal_inference_job ("
-                + "event_crf_id, task, e2e_path, eye_laterality, status, scan_index, enqueued_at"
-                + ") VALUES (?, ?, ?, ?, ?, ?, ?)";
+                + "event_crf_id, task, e2e_path, eye_laterality, status, scan_index, enqueued_at, e2e_sha256"
+                + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             if (eventCrfId == null) {
                 ps.setNull(1, java.sql.Types.INTEGER);
@@ -413,12 +787,69 @@ public class PublicOctUploadController {
             ps.setString(5, status);
             ps.setInt(6, scanIndex);
             ps.setTimestamp(7, Timestamp.from(Instant.now()));
+            if (e2eSha256 == null || e2eSha256.isBlank()) {
+                ps.setNull(8, java.sql.Types.VARCHAR);
+            } else {
+                ps.setString(8, e2eSha256);
+            }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (keys.next()) return keys.getLong(1);
                 throw new SQLException("retinal_inference_job INSERT returned no PK");
             }
         }
+    }
+
+    /**
+     * 2026-06-19 — hex SHA-256 of the uploaded .e2e bytes. Backs the
+     * upload-dedup gate: a unique index on {@code e2e_sha256} rejects
+     * re-uploads of byte-identical files at INSERT time, and the
+     * {@link #commit} handler catches the constraint violation to
+     * surface a soft 409 with a pointer to the existing job.
+     */
+    private static String sha256Hex(byte[] bytes) {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(bytes);
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                hex.append(String.format("%02x", b));
+            }
+            return hex.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            // SHA-256 is required by every JRE — this is unreachable in
+            // practice. Log + return null so the upload still proceeds
+            // (without dedup) rather than failing the whole flow.
+            LOG.warn("SHA-256 unavailable on this JRE — dedup hash will be null: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Locate the {@code job_id} of an existing row that carries the
+     * supplied {@code (e2eSha256, scanIndex)} pair. Used by the
+     * soft-409 dedup path to point the operator at the prior upload
+     * instead of just rejecting with a bare error.
+     *
+     * <p>2026-06-19 widened from sha256-only to (sha256, scanIndex)
+     * so a multi-volume .e2e file (e.g. OD + OS in one acquisition)
+     * doesn't have its second volume blocked by the unique constraint.
+     * The composite unique index on the DB matches this lookup.
+     */
+    private Long findJobBySha256(String e2eSha256, int scanIndex) {
+        if (e2eSha256 == null || e2eSha256.isBlank()) return null;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT job_id FROM retinal_inference_job "
+                             + "WHERE e2e_sha256 = ? AND scan_index = ? "
+                             + "ORDER BY enqueued_at DESC LIMIT 1")) {
+            ps.setString(1, e2eSha256);
+            ps.setInt(2, scanIndex);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getLong(1);
+            }
+        } catch (SQLException ignored) { /* best-effort */ }
+        return null;
     }
 
     /**
