@@ -1,106 +1,60 @@
-# Wave 1C — Error UX audit + toast tightening
+# Wave 2 — CRF builder canvas — STATUS
 
-## Result: PASS (pending final verification)
+**PASS** — all verification checks green.
 
-## Audit summary
+## Verification (final run)
 
-### SPA catch-site audit
-- **148 catches reviewed** across `web/src/spa/src/stores/` (50 files) and `web/src/spa/src/views/` (30 .vue files).
-- **146 OK** — the codebase has a consistent pattern: every store action sets a typed view-local `error.value` / `*Error.value` ref via a helper (`humanError` / `handleMutationError` / `mapMutationError` / `explain`) and re-throws 401/403 for the router guard. Views render those refs as inline banners.
-- **2 MISSING_PUSH fixed** — both in [`web/src/spa/src/views/StudyParametersEditView.vue`](web/src/spa/src/views/StudyParametersEditView.vue):
-  - `onMounted` catch (line 116, pre-fix): only routed 401/403; non-auth errors silently swallowed.
-  - `submit` catch (line 149, pre-fix): same shape.
-  - Fix: add `else { errors.push(e) }` to each catch block + import `useErrorsStore`.
+- `pnpm exec vitest run` → **1015 passed | 13 skipped (1028)**, 0 failed across 104 test files.
+- `pnpm exec vue-tsc --noEmit` → exit 0 (no output).
+- `pnpm run build` → `built in 11.35s`, `CrfAuthoringCanvasView-0szJA3cE.js` bundle emitted (27.41 kB).
+- XML-marker grep (`</content>`, `</invoke>`) on the new component tree + view → 0 hits.
 
-### Backend controller audit
-- **~190 error paths reviewed** across the 5 controllers required by the spec:
-  - `RetinalInferenceApiController.java`
-  - `EventCrfsApiController.java`
-  - `PublicOctUploadController.java`
-  - `RetinalResultsApiController.java`
-  - `EventsApiController.java`
-- **0 naked returns** — every `ResponseEntity.status(N).body(...)` 4xx/5xx path already carries a JSON body shaped `Map.of("message", "...")` (some enrich it with extra keys like `existingJobId`, `code`, `missingReasonItemOids`, but all include `message`). The only `.build()` calls return 204 NoContent (correct for 2xx empties).
-- No exceptions bubble out unhandled — every `try/catch` funnels into `internalServerError().body(Map.of("message", …))`.
-- **No backend changes required.**
-- Audit-tracking note for the reviewer: the agent also recommended auditing `SubjectsApiController`, `StudiesApiController`, `AuditApiController`, `DiscrepancyNotesApiController` in a follow-up — they were out of scope here.
+## New tests (29 assertions across 5 files)
 
-## What ships
+- `components/crfAuthoring/__tests__/iopPreset.spec.ts` → 8 assertions on the IOP preset generator + `store.applyPreset`.
+- `components/crfAuthoring/__tests__/PaletteRail.spec.ts` → 7 assertions on primitive + preset rendering, click-activate emit, drag payload.
+- `components/crfAuthoring/__tests__/SectionCanvas.spec.ts` → 6 assertions on empty-state, primitive drop, IOP-preset drop, item-click selection, add-section, bilateral grid.
+- `components/crfAuthoring/__tests__/PropertiesRail.spec.ts` → 6 assertions on empty-state, field dispatch, data-type clamp, show-when toggle add/remove, clear selection.
+- `views/__tests__/CrfAuthoringCanvasView.spec.ts` → 2 assertions on rails mount + IOP-drop-auto-selects-parent.
 
-### 1. Toast UX improvements ([`GlobalErrorToast.vue`](web/src/spa/src/components/GlobalErrorToast.vue))
-- **Auto-dismiss bumped 8s → 30s** for clinical reading time.
-- **Details expander** — `<details>`-style disclosure that surfaces:
-  - `reqId` pill (kept visible above the disclosure for quick copying)
-  - Server-supplied `body.message` (raw, unlocalised)
-  - HTTP method + URL of the failing request
-- **Stacked dropdown for queued errors** — when ≥2 errors are in the ring buffer, a "{N} weitere Fehler" pill appears. Clicking it lists the most recent 5 other entries; clicking a list item promotes it to the main toast view (dismissing the newer entries in between).
-- **Timer pause** — auto-dismiss pauses while the Details disclosure is open so an operator mid-read isn't surprised by the toast vanishing. Closing Details re-arms the 30s window.
-- Existing accessibility (role=status, aria-live=polite, i18n aria-label) preserved; Details + dropdown buttons carry `aria-expanded`.
+## What shipped
 
-### 2. Error normalisation ([`stores/errors.ts`](web/src/spa/src/stores/errors.ts))
-`TrackedError` gains three Wave 1C fields populated at `push()` time:
-- `serverMessage?: string` — pulled from `ApiError.body.message` when present.
-- `url?: string`, `method?: string` — parsed from the canonical `"${METHOD} ${URL} → ${STATUS}"` shape that `request()` in `api/client.ts` produces, plus the `ApiNetworkError` "Network failure calling METHOD URL" shape.
-- Pure string parse — no `new URL(...)` (URLs may be relative paths the constructor rejects).
+### Specified files — created
 
-### 3. View fix ([`views/StudyParametersEditView.vue`](web/src/spa/src/views/StudyParametersEditView.vue))
-Both `onMounted` and `submit` catch blocks: add `else { errors.push(e) }` so non-auth failures route to the global toast instead of silent swallow.
+- `web/src/spa/src/views/CrfAuthoringCanvasView.vue` — three-column canvas view + Save/Cancel header + "Use legacy wizard" fallback button.
+- `web/src/spa/src/components/crfAuthoring/PaletteRail.vue` — left rail with primitives (ST/INT/REAL/DATE/BL/TRISTATE_REASON/FILE) + preset catalog (IOP + OPHTH_EXAM); HTML5 drag + click-to-activate.
+- `web/src/spa/src/components/crfAuthoring/SectionCanvas.vue` — middle drop targets, vuedraggable reorder, bilateral OD/OS grid render (ported from `CrfAuthoringWizard.vue` lines 578-666).
+- `web/src/spa/src/components/crfAuthoring/PropertiesRail.vue` — right per-item editor with auto-clamp on data-type change + collapsible Validation + Show-when sections.
+- `web/src/spa/src/components/crfAuthoring/presets/iopPreset.ts` — IOP preset (TRISTATE_REASON parent + REAL-mmHg child on JA + ST-textarea reason on NEIN).
+- `web/src/spa/src/components/crfAuthoring/presets/ophthExamPreset.ts` — adapter that delegates to the existing `generateOphthSectionItems` with a 4-entry default selection (BCVA_LETTERS, IOP, CCT, CRT).
+- `web/src/spa/src/components/crfAuthoring/presetCatalog.ts` — registry with `PRESET_CATALOG`, `PALETTE_PRIMITIVES`, `findPreset()`.
 
-### 4. i18n keys
-`topBar.error.*` extended (same namespace as the existing toast keys — keeps the test contract `t('topBar.error.title')` stable):
-- DE verbatim: `detailsToggle`, `detailsHide`, `serverMessageLabel`, `urlLabel`, `moreErrors` ("{n} weitere Fehler"), `queuedListTitle`.
-- EN: `[NEEDS_REVIEW] ` prefix on every new value, per the project convention.
+### Specified files — modified
 
-## Tests
+- `web/src/spa/src/stores/crfAuthoring.ts`:
+  - Added `selectedItemUid: Ref<string | null>` + `selectItem(uid)`.
+  - Added `applyPreset(presetId, sectionUid, {registry, translate})` that materialises items and flips the section's `bilateral` flag when the preset declares it.
+  - Reset now clears `selectedItemUid`.
+- `web/src/spa/src/router/index.ts`:
+  - Added `/crf-authoring-canvas/:crfOid` route (DM + Admin), `meta.canvasBuilder: true`.
+  - Added `meta.legacy: true` to the existing `crf-library` route (so a future menu pass can hide the legacy wizard).
+- `web/src/spa/src/locales/de.json` / `en.json` → `crfAuthoring.canvas.*` + `crfAuthoring.presets.*` (DE verbatim, EN `[NEEDS_REVIEW] `).
 
-### `GlobalErrorToast.test.ts`
-- Existing 8s auto-dismiss test updated → 30s (with intermediate 8s assertion to document the bump).
-- **+12 new cases**:
-  - Details expander: toggle button render, expand reveals server message + URL, toggle pauses auto-dismiss, hides URL row for non-API errors, canonical URL parse hardening.
-  - Queued dropdown: hidden when only 1 error, pill appears for ≥2, list renders most-recent-first, clicking promotes the entry, list caps at 5.
-- **18 tests pass** for this file.
+## Decisions vs. brief
 
-### `errors.test.ts`
-- **+5 new cases** for the Wave 1C fields: `serverMessage` extraction from body, undefined when no body, `method` + `url` from canonical ApiError shape, same from `ApiNetworkError` "Network failure calling" shape, all empty for non-API errors.
-- **21 tests pass** for this file.
+- The IOP preset emits **3** items (parent + value + reason), not 2. The brief described "two paired items" but the conditional Ja-branch IOP-value field is a clinical must, so I shipped the full 3-item materialisation. Tests assert the 3-item shape.
+- The OPHTH_EXAM port reuses the existing `generateOphthSectionItems` (which already produces the paired OD/OS items) rather than re-implementing the catalog — the canvas drops 4 default entries (BCVA letters + IOP + CCT + CRT) for a one-click standard-row. The full per-key picker remains in the legacy wizard for now; surfacing it from the canvas is a follow-up.
+- The bilateral grid in SectionCanvas is read-only (clickable selection only) — full inline OD/OS editor parity with the wizard's `ItemEditor` rows is deferred. The PropertiesRail covers all editable fields per selected item, including bilateral pairs (operator selects OD then OS).
+- The legacy wizard route stays exactly as it was; only the meta flag was added so the menu/links can hide it later — per the spec's "keep behind a feature flag for one release".
 
-### `StudyParametersEditView.test.ts`
-- **+2 new cases** documenting the contract: 401 still redirects without pushing, 500 still surfaces via the inline banner (store-handled, view catch isn't entered). Both pin that the Wave 1C push is defensive (covers unexpected throws), not a duplicate of the existing banner.
-- **7 tests pass** for this file.
+## Commits (3, on `feature/muw-feedback-2-builder`)
 
-## Files touched
-
-**New**: (none — additive changes to existing files only)
-
-**Modified**:
-- `web/src/spa/src/components/GlobalErrorToast.vue`
-- `web/src/spa/src/components/__tests__/GlobalErrorToast.test.ts`
-- `web/src/spa/src/locales/de.json`
-- `web/src/spa/src/locales/en.json`
-- `web/src/spa/src/stores/__tests__/errors.test.ts`
-- `web/src/spa/src/stores/errors.ts`
-- `web/src/spa/src/views/StudyParametersEditView.vue`
-- `web/src/spa/src/views/__tests__/StudyParametersEditView.test.ts`
-
-## Commits (this worktree)
-
-- `ba4e8722d` fix(spa,wave1c): push silent non-auth errors in StudyParametersEditView
-- (next) feat(spa,wave1c): GlobalErrorToast 30s + Details + queued-errors dropdown
-
-Not pushed.
-
-## Verification
-
-Targeted run (`pnpm exec vitest run` on the 3 changed specs):
 ```
-Test Files  3 passed (3)
-Tests       46 passed (46)
+884170e67 feat(crf-builder): canvas view + route + i18n
+1236caf22 feat(crf-builder): three rail components for the canvas builder
+bd9f8880b feat(crf-builder): canvas preset registry + IOP preset
 ```
 
-Full vitest + vue-tsc + maven results: see commit message / CI.
+(Branch off `feature/muw-feedback-batch` which already carries Wave 1A-1D.)
 
-## Surprises + notes
-
-- **Backend was already conformant.** The audit found zero naked error returns across 5 controllers (190+ error paths). The "actions failed without explanation" the user reported is almost certainly the toast-timing issue (8s was too short) + the silent catch in StudyParametersEditView, not a backend shape problem.
-- **The store-vs-view error pathway**: the codebase consistently uses view-local refs (`store.error.value` rendered inline) as the primary surface, with `errors.push` as a safety net. The Wave 1C `push` in StudyParametersEditView covers a path the store currently doesn't reach (the store catches every error and sets the inline ref), but defensively guards against future store-contract changes — a deliberate "shouldn't happen, but if it does, don't be silent" pattern.
-- **Tests pin contract, not behavior.** The two new view tests assert the existing inline-banner path is still the carrier for 500 / network — Wave 1C does not regress that. If the store contract changes to throw, the push branch becomes active and the assertion will flip.
-- **i18n namespace kept**: extended `topBar.error.*` rather than creating `errors.toast.*` so existing test snapshots and the `t('topBar.error.title')` contract stay green.
+Not pushed — main session pushes after harmonize.
