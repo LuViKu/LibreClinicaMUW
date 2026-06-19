@@ -16,9 +16,38 @@ B-scan centre spread for the slice axis) rather than from oct-converter's
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+
+# 2026-06-19 — Heidelberg posX/posY/centrePosY in the E2E bscan_data
+# are **degrees of field-of-view**, NOT millimetres. The previous code
+# treated them as mm directly, so a 20° × 20° macula scan was reported
+# as 20 × 20 mm (3.4× the real ~6 × 6 mm physical extent) — bbox bbox
+# was self-consistent (both source and conversion used the same wrong
+# unit), but the ETDRS rings rendered at one-third of clinical size.
+# Spectralis' canonical factor is 0.288 mm per degree (24.46 mm
+# emmetropic eye axial length); operators with biometry data can
+# override via the env var.
+_HEIDELBERG_MM_PER_DEGREE_ENV = "RETINAL_INFERENCE_HEIDELBERG_MM_PER_DEGREE"
+_HEIDELBERG_MM_PER_DEGREE_DEFAULT = 0.288
+
+
+def _mm_per_degree() -> float:
+    raw = os.environ.get(_HEIDELBERG_MM_PER_DEGREE_ENV)
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            pass
+    return _HEIDELBERG_MM_PER_DEGREE_DEFAULT
+
+
+def heidelberg_pos_to_mm(pos_deg: float) -> float:
+    """Convert a Heidelberg E2E posX/posY/centrePosY (degrees of FOV) to mm."""
+    return float(pos_deg) * _mm_per_degree()
 
 
 @dataclass(frozen=True)
@@ -62,24 +91,34 @@ class BscanVolume:
 
 
 def _derive_spacing_mm(bscan_data: list[dict], n_bscans: int) -> tuple[float, float, float]:
-    """Authoritative spacing (axial, lateral, slice) in mm from E2E geometry."""
+    """Authoritative spacing (axial, lateral, slice) in mm from E2E geometry.
+
+    ``scaley`` is already in mm/px. ``posX/posY/centrePosY`` are in
+    DEGREES of field-of-view — converted to mm via
+    :func:`heidelberg_pos_to_mm` before any distance math.
+    """
     import numpy as np
 
     axial = float(bscan_data[0]["scaley"])  # depth mm/px (Spectralis ~0.00387)
+    mm_per_deg = _mm_per_degree()
 
     lengths = []
-    centres_y = []
+    centres_y_mm = []
     for b in bscan_data:
         cols = float(b.get("imgSizeX") or b.get("imgSizeWidth") or 0)
         if cols >= 2 and all(k in b for k in ("posX1", "posY1", "posX2", "posY2")):
-            length = math.hypot(b["posX2"] - b["posX1"], b["posY2"] - b["posY1"])
-            lengths.append(length / cols)
+            # posX/posY are in degrees — convert before computing the
+            # Euclidean distance so `lateral` lands in mm/A-scan-pixel.
+            dx_mm = (float(b["posX2"]) - float(b["posX1"])) * mm_per_deg
+            dy_mm = (float(b["posY2"]) - float(b["posY1"])) * mm_per_deg
+            length_mm = math.hypot(dx_mm, dy_mm)
+            lengths.append(length_mm / cols)
         if "centrePosY" in b:
-            centres_y.append(float(b["centrePosY"]))
+            centres_y_mm.append(float(b["centrePosY"]) * mm_per_deg)
 
     lateral = float(np.median(lengths)) if lengths else axial
-    if len(centres_y) >= 2 and n_bscans > 1:
-        slice_mm = (max(centres_y) - min(centres_y)) / (n_bscans - 1)
+    if len(centres_y_mm) >= 2 and n_bscans > 1:
+        slice_mm = (max(centres_y_mm) - min(centres_y_mm)) / (n_bscans - 1)
     else:
         slice_mm = lateral
     # Guard against degenerate single-B-scan / parsing gaps.

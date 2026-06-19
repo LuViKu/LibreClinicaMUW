@@ -190,18 +190,25 @@ def build_geometry(
         fundus_slice_mm_per_px = float(bv.lateral_mm)
         scale_source = "bscan_fallback"
 
+    # 2026-06-19 — Heidelberg posX/posY are in DEGREES of FOV, not mm.
+    # Convert to mm via the shared helper before feeding the fundus-pixel
+    # conversion. See `e2e_parser.heidelberg_pos_to_mm`.
+    from .e2e_parser import heidelberg_pos_to_mm
+
     positions: list[dict[str, float | int]] = []
     if bscan_data:
         for idx, b in enumerate(bscan_data):
             if not all(k in b for k in ("posX1", "posY1", "posX2", "posY2")):
                 continue
             x1_px, y1_px = _mm_to_fundus_px(
-                float(b["posX1"]), float(b["posY1"]),
+                heidelberg_pos_to_mm(b["posX1"]),
+                heidelberg_pos_to_mm(b["posY1"]),
                 fundus_width, fundus_height,
                 fundus_lateral_mm_per_px, fundus_slice_mm_per_px,
             )
             x2_px, y2_px = _mm_to_fundus_px(
-                float(b["posX2"]), float(b["posY2"]),
+                heidelberg_pos_to_mm(b["posX2"]),
+                heidelberg_pos_to_mm(b["posY2"]),
                 fundus_width, fundus_height,
                 fundus_lateral_mm_per_px, fundus_slice_mm_per_px,
             )
