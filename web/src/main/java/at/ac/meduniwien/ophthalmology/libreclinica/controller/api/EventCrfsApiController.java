@@ -953,6 +953,169 @@ public class EventCrfsApiController {
         return ResponseEntity.ok(out);
     }
 
+    /**
+     * App-feedback Wave 1D (2026-06-19) — "Vom letzten Besuch
+     * übernehmen". Resolves the most recent COMPLETED event_crf for
+     * the same study_subject + same crf_version (i.e. same CRF
+     * definition) and returns its persisted item values so the SPA's
+     * prefill modal can offer them to the operator for the current
+     * entry.
+     *
+     * <p>Match rules:
+     * <ol>
+     *   <li>Same {@code study_subject_id} (resolved via the current
+     *       event_crf's {@code study_event});</li>
+     *   <li>Same {@code crf_version_id} (so the schema matches —
+     *       upgrades to a newer CRF version legitimately reset the
+     *       prefill chain);</li>
+     *   <li>{@code date_completed IS NOT NULL} (only completed CRFs
+     *       are trusted as prefill sources — in-progress drafts can
+     *       contain partial / placeholder data);</li>
+     *   <li>{@code event_crf_id != current} (defensive — operators
+     *       shouldn't be able to pre-fill from themselves).</li>
+     * </ol>
+     *
+     * <p>Pick the row with the latest {@code date_completed} (then by
+     * descending {@code event_crf_id} as a stable tiebreaker), then
+     * fetch its {@code item_data} rows and join against
+     * {@code item_form_metadata} for the display label.
+     *
+     * <p>Guards (order matters):
+     * <ol>
+     *   <li>{@code 401} — no authenticated user.</li>
+     *   <li>{@code 400} — no active study bound.</li>
+     *   <li>{@code 404} — no event_crf with that id.</li>
+     *   <li>{@code 403} — event_crf belongs to a study the caller's
+     *       site-visibility set excludes.</li>
+     *   <li>{@code 404} — no prior completed CRF of the same
+     *       definition exists (SPA renders the "Keine vorherige
+     *       Visite gefunden" empty state).</li>
+     * </ol>
+     */
+    @GetMapping("/{id:[0-9]+}/previous-values")
+    public ResponseEntity<?> previousValues(@PathVariable("id") int currentEventCrfId,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."
+            ));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean currentEcb = eventCrfDAO.findByPK(currentEventCrfId);
+        if (currentEcb == null || currentEcb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + currentEventCrfId));
+        }
+
+        // Visibility guard — verify the current event_crf belongs to a
+        // study the caller is allowed to see.
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(currentEcb.getStudySubjectId());
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (ss == null || !visibleStudyIds.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + currentEventCrfId + " belongs to a different study"));
+        }
+
+        // Look up the prior completed CRF of the same definition for
+        // the same subject. The query walks back through study_event so
+        // we land the right study_subject + scope to the matching
+        // crf_version_id.
+        Integer sourceEventCrfId = null;
+        Date sourceCompletedAt = null;
+        final String sql =
+                "SELECT ec.event_crf_id, ec.date_completed " +
+                "  FROM event_crf ec " +
+                "  JOIN study_event se ON se.study_event_id = ec.study_event_id " +
+                " WHERE se.study_subject_id = (SELECT se2.study_subject_id " +
+                "                                FROM event_crf ec2 " +
+                "                                JOIN study_event se2 ON se2.study_event_id = ec2.study_event_id " +
+                "                               WHERE ec2.event_crf_id = ?) " +
+                "   AND ec.crf_version_id = (SELECT crf_version_id FROM event_crf WHERE event_crf_id = ?) " +
+                "   AND ec.date_completed IS NOT NULL " +
+                "   AND ec.event_crf_id <> ? " +
+                " ORDER BY ec.date_completed DESC, ec.event_crf_id DESC " +
+                " LIMIT 1";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, currentEventCrfId);
+            ps.setInt(2, currentEventCrfId);
+            ps.setInt(3, currentEventCrfId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    sourceEventCrfId = rs.getInt(1);
+                    java.sql.Timestamp ts = rs.getTimestamp(2);
+                    sourceCompletedAt = ts == null ? null : new Date(ts.getTime());
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.error("previousValues: lookup failed for event_crf {} ({})",
+                    currentEventCrfId, ex.getMessage(), ex);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Previous-values lookup failed."));
+        }
+
+        if (sourceEventCrfId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No prior completed CRF of the same definition for this subject."));
+        }
+
+        // Load the source CRF's item_data + materialise the wire DTO.
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ItemFormMetadataDAO ifmDAO = new ItemFormMetadataDAO(dataSource);
+        ArrayList<ItemDataBean> rows = idDAO.findAllByEventCRFId(sourceEventCrfId);
+        // Map item_id → ItemFormMetadataBean for label lookup.
+        Map<Integer, ItemFormMetadataBean> ifmByItemId = new HashMap<>();
+        try {
+            List<ItemFormMetadataBean> allIfms = ifmDAO.findAllByCRFVersionId(currentEcb.getCRFVersionId());
+            for (ItemFormMetadataBean ifm : allIfms) {
+                ifmByItemId.put(ifm.getItemId(), ifm);
+            }
+        } catch (Exception ignored) {
+            // Best-effort label lookup — falls back to the item OID.
+        }
+
+        List<Map<String, Object>> values = new ArrayList<>(rows.size());
+        for (ItemDataBean idb : rows) {
+            if (idb == null || idb.getValue() == null) continue;
+            // Skip rows belonging to soft-deleted item_data — operators
+            // shouldn't be carrying-forward administratively-removed
+            // measurements.
+            if (idb.isDeleted()) continue;
+            ItemBean item = (ItemBean) itemDAO.findByPK(idb.getItemId());
+            if (item == null || item.getOid() == null) continue;
+            ItemFormMetadataBean ifm = ifmByItemId.get(item.getId());
+            String label = (ifm != null) ? firstNonBlank(
+                    ifm.getLeftItemText(), ifm.getRightItemText(), item.getName()) : item.getName();
+            if (label == null || label.isBlank()) label = item.getOid();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("itemOid", item.getOid());
+            row.put("value", idb.getValue());
+            row.put("itemLabel", label);
+            values.add(row);
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("sourceEventCrfId", sourceEventCrfId);
+        out.put("sourceCompletedAt", formatIsoInstant(sourceCompletedAt));
+        out.put("values", values);
+
+        LOG.info("previousValues: served {} item(s) from event_crf {} as prefill source for {} (user {} / study {})",
+                values.size(), sourceEventCrfId, currentEventCrfId,
+                currentUser.getName(), currentStudy.getOid());
+
+        return ResponseEntity.ok(out);
+    }
+
     /* ====================================================================== */
     /* Phase E.6 crf-entry-advanced — TOC badges + concurrent-edit probe +    */
     /* per-item notes roll-up. Four read endpoints + one heartbeat write.     */

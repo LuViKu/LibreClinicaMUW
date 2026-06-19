@@ -628,6 +628,29 @@
       "placeholder": "Grund angeben…",
       "requiredTag": "Grund erforderlich",
       "inactiveHint": "Aktiv, sobald „{value}\" gewählt ist"
+    },
+    "prefill": {
+      "button": "Vom letzten Besuch übernehmen",
+      "modalTitle": "Werte vom letzten Besuch übernehmen",
+      "sourceLabel": "Quelle: Visite vom {date}",
+      "colItem": "Item",
+      "colValue": "Wert",
+      "colApply": "Übernehmen",
+      "confirm": "Übernehmen",
+      "cancel": "Abbrechen",
+      "empty": "Keine vorherige Visite gefunden",
+      "errorFetch": "Vorherige Werte konnten nicht geladen werden.",
+      "checkAll": "Alle auswählen",
+      "uncheckAll": "Keine auswählen"
+    }
+  },
+  "crfItem": {
+    "tristate": {
+      "tristateYes": "Ja",
+      "tristateNo": "Nein",
+      "tristateUnknown": "Unbekannt",
+      "reasonLabel": "Grund",
+      "reasonPlaceholder": "Grund angeben…"
     }
   },
   "dde": {

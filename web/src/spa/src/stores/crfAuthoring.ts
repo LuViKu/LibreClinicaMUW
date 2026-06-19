@@ -46,8 +46,20 @@ import type { CrfVersion } from '@/types/crfLibrary'
  * response-set picker for BL and the runtime renders it as a checkbox.
  * The backend adapter accepts BL via the same code path used by the
  * XLS uploader.
+ *
+ * <p>App-feedback Wave 1D (2026-06-19) — {@code TRISTATE_REASON} is the
+ * MUW-clinical-feedback shorthand for "Ja / Nein / Unbekannt" with a
+ * conditional reason textarea that appears only when the operator
+ * picks "Nein". It is NOT a new wire-level data type — at persistence
+ * time it materialises as TWO {@code item_data} rows: a parent (BL-like
+ * select-one with three options) plus a child string item driven by
+ * the existing show-when machinery (parent == "Nein"). The CRF builder
+ * (Wave 2) explodes the single drop into the pair; this Wave 1D ships
+ * only the RENDER side so an authored CRF that already contains the
+ * pair can opt the parent into the three-pill widget by setting its
+ * authoring dataType to TRISTATE_REASON.
  */
-export type AuthoringDataType = 'ST' | 'INT' | 'REAL' | 'DATE' | 'PDATE' | 'FILE' | 'BL'
+export type AuthoringDataType = 'ST' | 'INT' | 'REAL' | 'DATE' | 'PDATE' | 'FILE' | 'BL' | 'TRISTATE_REASON'
 
 /**
  * Authoring response type — canonical names per the backend
@@ -325,6 +337,15 @@ export function allowedResponseTypesForDataType(
     case 'BL':
       // BL is hardwired to a fixed Yes/No single-select; the wizard
       // disables the dropdown but the allowed set is still {single-select}.
+      return ['single-select']
+    case 'TRISTATE_REASON':
+      // App-feedback Wave 1D — Ja/Nein/Unbekannt + conditional reason.
+      // The parent item is rendered as a custom three-pill segmented
+      // control; the synthesised wire payload at materialisation time
+      // (Wave 2 builder) uses a single-select response set with the
+      // three canonical options. Locked to single-select here so the
+      // wizard dropdown stays consistent if the operator drops the
+      // primitive directly.
       return ['single-select']
   }
 }

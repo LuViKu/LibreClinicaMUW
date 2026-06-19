@@ -208,6 +208,198 @@ describe('CrfItemWidget — DATE / PDATE rendering', () => {
   })
 })
 
+describe('CrfItemWidget — TRISTATE_REASON (Ja / Nein / Unbekannt)', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('renders three radio chips when the OID carries the *_TRISTATE suffix', () => {
+    // Heuristic-only path — no catalog entry needed. Item carries a
+    // select-one wire shape with three options (the materialised pair
+    // emitted by the Wave 2 builder).
+    const item = mkItem('OD_IOP_MEASURED_TRISTATE', 'IOP gemessen?', 'select-one', {
+      options: [
+        { code: 'ja', label: 'Ja' },
+        { code: 'nein', label: 'Nein' },
+        { code: 'unbekannt', label: 'Unbekannt' },
+      ],
+    })
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: { item, modelValue: '', suppressLabel: true },
+    })
+    expect(wrapper.find('[data-testid="tristate-radiogroup"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="tristate-radio-Ja"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="tristate-radio-Nein"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="tristate-radio-Unbekannt"]').exists()).toBe(true)
+  })
+
+  it('emits the operator-authored option code on chip click', async () => {
+    const item = mkItem('OD_IOP_MEASURED_TRISTATE', 'IOP gemessen?', 'select-one', {
+      options: [
+        { code: 'ja', label: 'Ja' },
+        { code: 'nein', label: 'Nein' },
+        { code: 'unbekannt', label: 'Unbekannt' },
+      ],
+    })
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: { item, modelValue: '', suppressLabel: true },
+    })
+    await wrapper.find('[data-testid="tristate-radio-Nein"]').trigger('click')
+    const emits = wrapper.emitted('update:modelValue')
+    expect(emits).toBeTruthy()
+    expect(emits?.[0][0]).toBe('nein')
+  })
+
+  it('does NOT reveal the reason textarea while parent is "Ja"', () => {
+    const item = mkItem('OD_IOP_MEASURED_TRISTATE', 'IOP gemessen?', 'select-one', {
+      options: [
+        { code: 'ja', label: 'Ja' },
+        { code: 'nein', label: 'Nein' },
+        { code: 'unbekannt', label: 'Unbekannt' },
+      ],
+    })
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: { item, modelValue: 'ja', suppressLabel: true },
+    })
+    expect(wrapper.find('[data-testid="tristate-reason-textarea"]').exists()).toBe(false)
+  })
+
+  it('reveals the reason textarea (autofocus, NOT readonly/disabled) when parent flips to "Nein"', async () => {
+    const item = mkItem('OD_IOP_MEASURED_TRISTATE', 'IOP gemessen?', 'select-one', {
+      options: [
+        { code: 'ja', label: 'Ja' },
+        { code: 'nein', label: 'Nein' },
+        { code: 'unbekannt', label: 'Unbekannt' },
+      ],
+    })
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: { item, modelValue: 'nein', suppressLabel: true },
+    })
+    const ta = wrapper.find<HTMLTextAreaElement>('[data-testid="tristate-reason-textarea"]')
+    expect(ta.exists()).toBe(true)
+    // The textarea must be editable on first reveal — this guards the
+    // regression bug surfaced in the deployed app (clicked Nein, field
+    // appeared but was disabled / not editable).
+    expect(ta.element.readOnly).toBe(false)
+    expect(ta.element.disabled).toBe(false)
+    // The autofocus attribute is present so the cursor lands in the
+    // field on first reveal.
+    expect(ta.attributes('autofocus')).not.toBeUndefined()
+  })
+
+  it('emits update:tristate-reason when the operator types in the textarea', async () => {
+    const item = mkItem('OD_IOP_MEASURED_TRISTATE', 'IOP gemessen?', 'select-one', {
+      options: [
+        { code: 'ja', label: 'Ja' },
+        { code: 'nein', label: 'Nein' },
+        { code: 'unbekannt', label: 'Unbekannt' },
+      ],
+    })
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: { item, modelValue: 'nein', suppressLabel: true },
+    })
+    const ta = wrapper.find<HTMLTextAreaElement>('[data-testid="tristate-reason-textarea"]')
+    await ta.setValue('Patient war krank')
+    const emits = wrapper.emitted('update:tristate-reason')
+    expect(emits).toBeTruthy()
+    expect(emits?.[0][0]).toBe('Patient war krank')
+  })
+
+  it('detects a tri-state item via 3-option heuristic even without the OID suffix', () => {
+    // The heuristic also kicks in on a generic select-one carrying
+    // exactly three options where one is "unbekannt" — so legacy XLS
+    // uploads that don't follow the OID convention still render as
+    // tri-state pills.
+    const item = mkItem('I_FOOBAR', 'Frage', 'select-one', {
+      options: [
+        { code: 'ja', label: 'Ja' },
+        { code: 'nein', label: 'Nein' },
+        { code: 'unbekannt', label: 'Unbekannt' },
+      ],
+    })
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: { item, modelValue: '', suppressLabel: true },
+    })
+    expect(wrapper.find('[data-testid="tristate-radiogroup"]').exists()).toBe(true)
+  })
+})
+
+describe('CrfItemWidget — conditional-reason interactivity regression', () => {
+  /*
+   * App-feedback Wave 1D (2026-06-19) — pins the bug surfaced in the
+   * deployed MUW LibreClinica app: an operator clicked "Nein" on a
+   * yes/no parent item, the conditional reason textarea appeared, but
+   * looked disabled (greyed out) AND could not be edited.
+   *
+   * Root cause: CrfItemWidget routed the *_DONE_REASON heuristic item
+   * into the conditional-reason widget branch, but the {@code
+   * conditionalReasonState} computed property required a non-null
+   * {@code catalogEntry.conditionalShowWhenValue} to leave the
+   * "inactive" state. Heuristic-only items have no catalog entry → the
+   * input stayed permanently disabled.
+   *
+   * Fix: a fallback computed reads the parent value from the
+   * caller-supplied {@code parentValue} prop (resolved via the
+   * item's show-when rule in CrfEntryView) when no catalog entry is
+   * present. Any non-blank parent value unlocks editing.
+   */
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('regression — conditional reason input is editable on first reveal when parent flips to "Nein"', async () => {
+    // Heuristic-only item: OID ends with _DONE_REASON, no catalog entry.
+    // The show-when rule is resolved on the parent view side, so the
+    // widget receives the parent's value via the parentValue prop.
+    const item = mkItem('OD_SPECTRALIS_DONE_REASON', 'Grund (falls nein)', 'string')
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: {
+        item,
+        modelValue: '',
+        suppressLabel: true,
+        // Parent value flipped to "0" (Nein) — the widget MUST unlock
+        // its input even though no catalog entry is bound.
+        parentValue: '0',
+      },
+    })
+    const input = wrapper.find<HTMLInputElement>('[data-testid="conditional-reason-input"]')
+    expect(input.exists()).toBe(true)
+    // The fix: previously the input stayed disabled because the catalog
+    // resolver returned 'inactive'. The fallback unlocks editing.
+    expect(input.element.disabled).toBe(false)
+    expect(input.element.readOnly).toBe(false)
+    // And the operator can type into it.
+    await input.setValue('OP nicht möglich')
+    const emits = wrapper.emitted('update:modelValue')
+    expect(emits).toBeTruthy()
+    expect(emits?.[emits!.length - 1][0]).toBe('OP nicht möglich')
+  })
+
+  it('stays inactive when parent is null / undefined (heuristic-only path)', () => {
+    const item = mkItem('OD_SPECTRALIS_DONE_REASON', 'Grund (falls nein)', 'string')
+    const wrapper = mount(CrfItemWidget, {
+      global: { plugins: [mkI18n('de')] },
+      props: {
+        item,
+        modelValue: '',
+        suppressLabel: true,
+        // Parent unanswered — input should be disabled.
+        parentValue: undefined,
+      },
+    })
+    const input = wrapper.find<HTMLInputElement>('[data-testid="conditional-reason-input"]')
+    expect(input.exists()).toBe(true)
+    expect(input.element.disabled).toBe(true)
+  })
+})
+
 describe('crfPreview store — BL show-when filter for the reason follow-up', () => {
   // Schema mirrors the Spectralis-OCT ophth-preset shape: a parent BL
   // item + a reason text follow-up whose show-when fires only when the

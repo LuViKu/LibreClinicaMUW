@@ -628,6 +628,29 @@
       "placeholder": "Give a reason…",
       "requiredTag": "Reason required",
       "inactiveHint": "Active once \"{value}\" is selected"
+    },
+    "prefill": {
+      "button": "[NEEDS_REVIEW] Vom letzten Besuch übernehmen",
+      "modalTitle": "[NEEDS_REVIEW] Werte vom letzten Besuch übernehmen",
+      "sourceLabel": "[NEEDS_REVIEW] Quelle: Visite vom {date}",
+      "colItem": "[NEEDS_REVIEW] Item",
+      "colValue": "[NEEDS_REVIEW] Wert",
+      "colApply": "[NEEDS_REVIEW] Übernehmen",
+      "confirm": "[NEEDS_REVIEW] Übernehmen",
+      "cancel": "[NEEDS_REVIEW] Abbrechen",
+      "empty": "[NEEDS_REVIEW] Keine vorherige Visite gefunden",
+      "errorFetch": "[NEEDS_REVIEW] Vorherige Werte konnten nicht geladen werden.",
+      "checkAll": "[NEEDS_REVIEW] Alle auswählen",
+      "uncheckAll": "[NEEDS_REVIEW] Keine auswählen"
+    }
+  },
+  "crfItem": {
+    "tristate": {
+      "tristateYes": "[NEEDS_REVIEW] Ja",
+      "tristateNo": "[NEEDS_REVIEW] Nein",
+      "tristateUnknown": "[NEEDS_REVIEW] Unbekannt",
+      "reasonLabel": "[NEEDS_REVIEW] Grund",
+      "reasonPlaceholder": "[NEEDS_REVIEW] Grund angeben…"
     }
   },
   "dde": {
