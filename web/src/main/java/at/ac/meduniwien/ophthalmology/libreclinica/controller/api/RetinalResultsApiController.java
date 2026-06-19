@@ -750,6 +750,192 @@ public class RetinalResultsApiController {
         return ResponseEntity.ok(resp);
     }
 
+    /* ====================================================================== */
+    /* POST /retinal-jobs/{jobId}/retry — operator re-dispatch of failed job  */
+    /* ====================================================================== */
+
+    /**
+     * Re-dispatch a {@code failed} retinal_inference_job to the remote GPU
+     * sidecar without re-uploading the .e2e. Resets the row to
+     * {@code remote_pending} (clears status_message, completed_at,
+     * screened_at, segmenting_at) and fires
+     * {@link RetinalInferenceApiController#handleRemote} on a background
+     * thread so the SPA returns immediately; the SSE channel surfaces the
+     * post-dispatch status.
+     *
+     * <p>409 Conflict when the job is not currently {@code failed}; 403
+     * when its event_crf is outside the session user's site-visibility
+     * scope; 404 when the job has no event_crf (parked jobs use the
+     * separate {@code /bind} endpoint) or the row is missing.
+     *
+     * <p>One audit_log_event row of type
+     * {@link AuditTypeIds#RETINAL_JOB_RETRY} is emitted on success;
+     * old_value carries the prior status_message (truncated to 500
+     * chars), new_value carries {@code "remote_pending"}.
+     */
+    @org.springframework.web.bind.annotation.PostMapping(
+            path = "/retinal-jobs/{jobId:[0-9]+}/retry",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> retryJob(@PathVariable("jobId") long jobId,
+                                      HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        // ---- load the failed job + its run handle in one shot --------
+        FailedJob job;
+        try (Connection c = dataSource.getConnection()) {
+            job = fetchFailedJob(c, jobId);
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to fetch retinal job {} for retry: {}",
+                    jobId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to fetch retinal job: " + sqlEx.getMessage()));
+        }
+        if (job == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
+        if (!"failed".equals(job.status)) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Job is not failed (status=" + job.status + ")"));
+        }
+        if (job.eventCrfId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Job " + jobId + " has no event_crf — use /bind instead"));
+        }
+
+        // ---- visibility check via the job's event_crf ---------------
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(job.eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No event_crf with id " + job.eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        if (ss == null || ss.getStudyId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "event_crf " + job.eventCrfId + " has no resolvable study"));
+        }
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Job " + jobId + " belongs to a different study"));
+        }
+        if (remoteClient == null || !remoteClient.isConfigured()) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Remote GPU sidecar not configured — retry unavailable"));
+        }
+        if (inferenceController == null) {
+            return ResponseEntity.status(503).body(Map.of(
+                    "message", "Retry temporarily unavailable"));
+        }
+
+        // ---- reset the row + emit audit + broadcast ------------------
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE retinal_inference_job "
+                             + "   SET status = 'remote_pending', "
+                             + "       status_message = NULL, "
+                             + "       completed_at = NULL, "
+                             + "       screened_at = NULL, "
+                             + "       segmenting_at = NULL "
+                             + " WHERE job_id = ?")) {
+            ps.setLong(1, jobId);
+            int updated = ps.executeUpdate();
+            if (updated == 0) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "No retinal_inference_job with id " + jobId));
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to reset retinal job {} for retry: {}",
+                    jobId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to reset retinal job: " + sqlEx.getMessage()));
+        }
+
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        String priorMessage = job.statusMessage != null && job.statusMessage.length() > 500
+                ? job.statusMessage.substring(0, 500)
+                : (job.statusMessage != null ? job.statusMessage : "");
+        EventCrfsApiController.writeAuditEvent(
+                auditDAO, AuditTypeIds.RETINAL_JOB_RETRY,
+                currentUser, currentStudy, ss,
+                "Retinal job retry — manual re-dispatch from `failed`",
+                /* auditTable */ "retinal_inference_job",
+                /* entityId   */ (int) jobId,
+                /* columnName */ "status",
+                /* oldValue   */ priorMessage,
+                /* newValue   */ "remote_pending");
+
+        if (broadcaster != null) {
+            broadcaster.publish(jobId, "remote_pending");
+        }
+
+        // ---- fire handleRemote async; SSE surfaces the final state --
+        final FailedJob handle = job;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                inferenceController.handleRemote(
+                        jobId, handle.task, handle.e2ePath, handle.eyeLaterality,
+                        handle.scanIndex, handle.eventCrfId);
+            } catch (Exception remoteEx) {
+                LOG.warn("Remote dispatch threw for retry of job {}: {}",
+                        jobId, remoteEx.getMessage());
+            }
+        });
+
+        LOG.info("Retinal retry: job {} reset to remote_pending (was failed: {})",
+                jobId, priorMessage.isEmpty() ? "(no prior message)" : priorMessage);
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("jobId", jobId);
+        resp.put("status", "remote_pending");
+        return ResponseEntity.accepted().body(resp);
+    }
+
+    /** Slim row carrier for the failed-job retry handoff. */
+    private static final class FailedJob {
+        String status;
+        String statusMessage;
+        Integer eventCrfId;
+        String task;
+        String e2ePath;
+        String eyeLaterality;
+        int scanIndex;
+    }
+
+    /**
+     * Read the columns {@code retryJob} needs in one SELECT: current
+     * status + status_message (for the audit row), plus the immutable
+     * upload metadata {@code handleRemote} dispatches on. Returns
+     * {@code null} if the row is missing.
+     */
+    private FailedJob fetchFailedJob(Connection c, long jobId) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT status, status_message, event_crf_id, "
+                        + "       task, e2e_path, eye_laterality, scan_index "
+                        + "  FROM retinal_inference_job WHERE job_id = ?")) {
+            ps.setLong(1, jobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                FailedJob f = new FailedJob();
+                f.status = rs.getString("status");
+                f.statusMessage = rs.getString("status_message");
+                int ecId = rs.getInt("event_crf_id");
+                f.eventCrfId = rs.wasNull() ? null : ecId;
+                f.task = rs.getString("task");
+                f.e2ePath = rs.getString("e2e_path");
+                f.eyeLaterality = rs.getString("eye_laterality");
+                f.scanIndex = rs.getInt("scan_index");
+                return f;
+            }
+        }
+    }
+
     /** Slim row carrier for the bind→remote handoff. */
     private static final class JobRunHandle {
         String task;

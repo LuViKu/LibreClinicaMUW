@@ -235,6 +235,26 @@ function emptyStateMessage(status: string | null | undefined): string | null {
 
 const inflightMessage = computed(() => emptyStateMessage(job.value?.status))
 
+/* ------------------------------------------------------------- */
+/* 2026-06-19 retry — operator re-dispatch of a failed job.      */
+/*                                                               */
+/* Posts to /retinal-jobs/{id}/retry; the store optimistically   */
+/* patches status → 'remote_pending' so the SSE stream reopens   */
+/* and the live indicator pops back on. Any failure stays in the */
+/* loadError ref so the regular error banner surfaces it; we     */
+/* don't toast here because the view's own state already         */
+/* communicates the new status.                                  */
+/* ------------------------------------------------------------- */
+const retrying = computed<boolean>(() => !!store.retryInflight[jobId.value])
+async function onRetry(): Promise<void> {
+  try {
+    await store.retryJob(jobId.value)
+  } catch (e) {
+    const message = e instanceof Error ? e.message : t('retinal.retry.error')
+    store.errors[jobId.value] = message
+  }
+}
+
 const showJson = ref(false)
 
 /* ------------------------------------------------------------- */
@@ -350,10 +370,23 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
         <!-- Empty / in-flight banner -->
         <div
           v-if="inflightMessage"
-          class="mb-5 rounded-muw border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+          class="mb-5 rounded-muw border px-4 py-3 text-xs flex items-center justify-between gap-3"
+          :class="job.status === 'failed'
+            ? 'border-rose-200 bg-rose-50 text-rose-900'
+            : 'border-amber-200 bg-amber-50 text-amber-900'"
           data-testid="retinal-view-inflight"
         >
-          {{ inflightMessage }}
+          <span>{{ inflightMessage }}</span>
+          <button
+            v-if="job.status === 'failed'"
+            type="button"
+            class="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white text-xs font-medium whitespace-nowrap"
+            :disabled="retrying"
+            data-testid="retinal-view-retry"
+            @click="onRetry"
+          >
+            {{ retrying ? t('retinal.retry.inflight') : t('retinal.retry.cta') }}
+          </button>
         </div>
         <div
           v-else-if="!job.primaryMetric"

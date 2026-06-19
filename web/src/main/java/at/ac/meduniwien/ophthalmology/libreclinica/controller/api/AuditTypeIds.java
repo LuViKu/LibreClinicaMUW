@@ -239,4 +239,18 @@ public final class AuditTypeIds {
      * {@code "chose:<studySubjectId>:from:<candidateCount> candidates"}.
      */
     public static final int OCT_UPLOAD_PUBLIC_AMBIGUOUS      = 117;
+
+    /**
+     * Operator re-dispatch of a {@code failed} retinal_inference_job via
+     * {@code POST /retinal-jobs/{jobId}/retry}. The endpoint resets the
+     * row to {@code remote_pending} and re-invokes
+     * {@code RetinalInferenceApiController.handleRemote} on a background
+     * thread so the SPA can return immediately and pick the new status
+     * up via the existing SSE channel. Writer is
+     * {@code RetinalResultsApiController.retryJob}; audit_table stays
+     * {@code retinal_inference_job}, entityId = jobId; old_value carries
+     * the prior status_message (truncated to 500 chars), new_value
+     * carries {@code "remote_pending"}.
+     */
+    public static final int RETINAL_JOB_RETRY               = 118;
 }

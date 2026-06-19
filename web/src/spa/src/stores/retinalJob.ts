@@ -30,6 +30,7 @@ import {
   getJob,
   listEventCrfJobs,
   listSubjectJobs,
+  retryRetinalJob,
   type GeometryJson,
   type RetinalJobDetail,
   type RetinalJobSummary,
@@ -120,6 +121,32 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
     }
   }
 
+  /**
+   * 2026-06-19 — re-dispatch a {@code failed} job. Optimistically
+   * patches the cached snapshot to {@code remote_pending} so the view
+   * flips its banner + reopens the SSE stream before the next round-
+   * trip; the authoritative DTO arrives via the SSE-triggered
+   * {@code loadJob(force=true)} once the sidecar transitions.
+   */
+  const retryInflight = ref<Record<number, boolean>>({})
+  async function retryJob(jobId: number): Promise<void> {
+    retryInflight.value = { ...retryInflight.value, [jobId]: true }
+    try {
+      await retryRetinalJob(jobId)
+      const cached = jobs.value[jobId]
+      if (cached != null) {
+        jobs.value = {
+          ...jobs.value,
+          [jobId]: { ...cached, status: 'remote_pending', completedAt: null },
+        }
+      }
+    } finally {
+      const next = { ...retryInflight.value }
+      delete next[jobId]
+      retryInflight.value = next
+    }
+  }
+
   /** Fetch + cache the summary list for one study-subject. */
   async function loadSubjectJobs(
     studySubjectId: number,
@@ -149,9 +176,11 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
     subjectJobs,
     eventCrfLoading,
     subjectLoading,
+    retryInflight,
     loadJob,
     loadGeometry,
     loadEventCrfJobs,
     loadSubjectJobs,
+    retryJob,
   }
 })

@@ -34,18 +34,20 @@ vi.mock('@/api/retinal', () => {
     listEventCrfJobs: vi.fn(),
     listSubjectJobs: vi.fn(),
     fetchGeometry: vi.fn(),
+    retryRetinalJob: vi.fn(),
     artifactUrl: (jobId: number, name: string) =>
       `/LibreClinica/pages/api/v1/retinal-jobs/${jobId}/artifacts/${name}`,
   }
 })
 
 // eslint-disable-next-line import/first
-import { getJob, fetchGeometry } from '@/api/retinal'
+import { getJob, fetchGeometry, retryRetinalJob } from '@/api/retinal'
 // eslint-disable-next-line import/first
 import RetinalMetricsView from '../RetinalMetricsView.vue'
 
 const getJobMock = getJob as unknown as ReturnType<typeof vi.fn>
 const fetchGeometryMock = fetchGeometry as unknown as ReturnType<typeof vi.fn>
+const retryRetinalJobMock = retryRetinalJob as unknown as ReturnType<typeof vi.fn>
 
 function makeGeometry() {
   return {
@@ -263,5 +265,32 @@ describe('RetinalMetricsView — task surfaces', () => {
     )
     const banner = w.find('[data-testid="retinal-view-no-metric"]')
     expect(banner.exists()).toBe(true)
+  })
+
+  it('shows a retry button on failed jobs that calls retryRetinalJob and flips the cached status', async () => {
+    retryRetinalJobMock.mockReset()
+    retryRetinalJobMock.mockResolvedValue({ jobId: 7, status: 'remote_pending' })
+    const w = await mountView(
+      makeFluidJob({ status: 'failed', primaryMetric: null }),
+    )
+    const button = w.find('[data-testid="retinal-view-retry"]')
+    expect(button.exists()).toBe(true)
+    expect(button.text()).toContain('Erneut versuchen')
+
+    await button.trigger('click')
+    await flushPromises()
+
+    expect(retryRetinalJobMock).toHaveBeenCalledWith(7)
+    // Banner should disappear (status now remote_pending — handled by
+    // the `queued`/`remote_pending` inflight branch which surfaces a
+    // different copy) OR text changes; either way the failed copy is gone.
+    expect(w.html()).not.toContain('Inference failed')
+  })
+
+  it('hides the retry button on non-failed jobs', async () => {
+    const w = await mountView(
+      makeFluidJob({ status: 'queued', primaryMetric: null }),
+    )
+    expect(w.find('[data-testid="retinal-view-retry"]').exists()).toBe(false)
   })
 })

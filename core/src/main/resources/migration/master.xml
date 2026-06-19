@@ -66,5 +66,6 @@
   <include  file="migration/lc-muw-2026-06-19-seed-oct-portal-fixture.xml"/>
   <include  file="migration/lc-muw-2026-06-19-retinal-job-e2e-sha256.xml"/>
   <include  file="migration/lc-muw-2026-06-19-retinal-job-sha256-scan-index-unique.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-audit-type-retinal-retry.xml"/>
 </databaseChangeLog>
 
