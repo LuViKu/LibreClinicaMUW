@@ -141,6 +141,86 @@ const projectionUrl = computed<string | null>(() => {
   return artifactUrl(props.jobId, expected)
 })
 
+/* ------- Per-biomarker fluid toggles (Wave 5.1, 2026-06-19) --------- */
+
+/**
+ * For the fluid task the runner now also writes one PNG per
+ * biomarker (IRF / SRF / PED) alongside the composite projection PNG.
+ * The SPA lets the operator toggle each layer independently — the
+ * composite stays as a fallback when an older runner image is still
+ * deployed and the per-biomarker artifacts aren't present.
+ */
+const FLUID_BIOMARKERS = ['irf', 'srf', 'ped'] as const
+type FluidBiomarker = (typeof FLUID_BIOMARKERS)[number]
+
+const FLUID_BIOMARKER_FILENAMES: Record<FluidBiomarker, string> = {
+  irf: 'projection_fluid_irf.png',
+  srf: 'projection_fluid_srf.png',
+  ped: 'projection_fluid_ped.png',
+}
+
+/** RGB swatch for the toggle UI, kept in sync with projection.py. */
+const FLUID_BIOMARKER_SWATCH: Record<FluidBiomarker, string> = {
+  irf: '#38bdf8',  // sky-400
+  srf: '#fb923c',  // orange-400
+  ped: '#d946ef',  // fuchsia-500
+}
+
+const perBiomarkerUrls = computed<Record<FluidBiomarker, string | null>>(() => {
+  const empty = { irf: null, srf: null, ped: null }
+  if (props.task !== 'fluid' || !props.jobId) return empty
+  const out: Record<FluidBiomarker, string | null> = { ...empty }
+  for (const bm of FLUID_BIOMARKERS) {
+    const fn = FLUID_BIOMARKER_FILENAMES[bm]
+    if (props.artifactNames?.includes(fn)) {
+      out[bm] = artifactUrl(props.jobId, fn)
+    }
+  }
+  return out
+})
+
+/** True when at least one per-biomarker PNG is available — toggle UI shows. */
+const hasPerBiomarkerProjections = computed<boolean>(
+  () => Object.values(perBiomarkerUrls.value).some((v) => v != null),
+)
+
+/**
+ * Per-biomarker visibility state. Defaults to all-on so existing
+ * RetinalMetricsView renders pick up the new toggles without a config
+ * change. Persisted to {@code sessionStorage} so navigating between
+ * jobs in the same session keeps the operator's preferred layer mix.
+ */
+const STORAGE_KEY = 'fundus-overlay-biomarker-toggles'
+function loadTogglesFromStorage(): Record<FluidBiomarker, boolean> {
+  if (typeof window === 'undefined') return { irf: true, srf: true, ped: true }
+  try {
+    const raw = window.sessionStorage.getItem(STORAGE_KEY)
+    if (!raw) return { irf: true, srf: true, ped: true }
+    const parsed = JSON.parse(raw) as Partial<Record<FluidBiomarker, boolean>>
+    return {
+      irf: parsed.irf ?? true,
+      srf: parsed.srf ?? true,
+      ped: parsed.ped ?? true,
+    }
+  } catch {
+    return { irf: true, srf: true, ped: true }
+  }
+}
+const biomarkerVisible = ref<Record<FluidBiomarker, boolean>>(loadTogglesFromStorage())
+watch(
+  biomarkerVisible,
+  (val) => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(val))
+      } catch {
+        /* sessionStorage may be unavailable (private mode); silently ignore */
+      }
+    }
+  },
+  { deep: true },
+)
+
 
 /* ------- Per-B-scan indicator computation ---------------------------- */
 
@@ -334,6 +414,35 @@ function ringLabel(diameterMm: number): string {
     class="relative w-full h-full bg-slate-900 rounded-muw overflow-clip"
     data-testid="fundus-overlay"
   >
+    <!-- Per-biomarker visibility chips — only when the runner emitted
+         the per-biomarker PNGs. Positioned over the top-right of the
+         fundus so the operator can show / hide each layer without
+         leaving the viewer. -->
+    <div
+      v-if="hasPerBiomarkerProjections"
+      data-testid="biomarker-toggles"
+      class="absolute top-2 right-2 z-10 flex gap-1.5 bg-slate-900/70 backdrop-blur-sm rounded-muw px-2 py-1.5 shadow-md"
+    >
+      <button
+        v-for="bm in FLUID_BIOMARKERS"
+        :key="`toggle-${bm}`"
+        type="button"
+        :data-testid="`biomarker-toggle-${bm}`"
+        :aria-pressed="biomarkerVisible[bm]"
+        :title="t('retinal.biomarkerToggle.tooltip', { name: bm.toUpperCase() })"
+        class="flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-opacity"
+        :class="biomarkerVisible[bm] ? 'opacity-100 bg-slate-700/60 text-white' : 'opacity-50 bg-slate-800/40 text-slate-300 line-through'"
+        @click="biomarkerVisible[bm] = !biomarkerVisible[bm]"
+      >
+        <span
+          class="inline-block w-2.5 h-2.5 rounded-sm"
+          :style="{ backgroundColor: FLUID_BIOMARKER_SWATCH[bm] }"
+          aria-hidden="true"
+        />
+        {{ bm.toUpperCase() }}
+      </button>
+    </div>
+
     <svg
       class="block w-full h-full"
       :viewBox="viewBox"
@@ -369,9 +478,29 @@ function ringLabel(diameterMm: number): string {
            as a continuous blob across the slice direction. The data IS
            per-A-scan, but B-scans are sparsely placed on the fundus
            (~10 px apart) so without interpolation the visual gap between
-           slices dominates and the projection looks like stripes. -->
+           slices dominates and the projection looks like stripes.
+
+           Wave 5.1 (2026-06-19): when the runner has emitted per-biomarker
+           PNGs (one per IRF / SRF / PED), render each as a toggleable
+           layer. Fall back to the single composite PNG when only the
+           older artifact is present. -->
+      <template v-if="hasPerBiomarkerProjections">
+        <image
+          v-for="bm in FLUID_BIOMARKERS"
+          v-show="biomarkerVisible[bm] && perBiomarkerUrls[bm]"
+          :key="`projection-${bm}`"
+          :data-testid="`enface-projection-${bm}`"
+          :href="perBiomarkerUrls[bm] ?? ''"
+          :x="scanBbox.x"
+          :y="scanBbox.y"
+          :width="scanBbox.width"
+          :height="scanBbox.height"
+          preserveAspectRatio="none"
+          opacity="0.85"
+        />
+      </template>
       <image
-        v-if="projectionUrl"
+        v-else-if="projectionUrl"
         data-testid="enface-projection"
         :href="projectionUrl"
         :x="scanBbox.x"

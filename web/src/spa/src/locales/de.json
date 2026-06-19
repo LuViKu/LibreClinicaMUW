@@ -2514,6 +2514,9 @@
       "aria": "Fundus image with retinal overlays, {laterality}",
       "foveaTooltip": "Fovea estimate ({source})"
     },
+    "biomarkerToggle": {
+      "tooltip": "{name}-Schicht ein-/ausblenden"
+    },
     "trends": {
       "title": "Biomarker-Verlauf",
       "chartHeader": "Verlauf",

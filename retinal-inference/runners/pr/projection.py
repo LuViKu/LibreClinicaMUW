@@ -86,25 +86,52 @@ def _write_rgba_png(rgba: Any, out_path: Path) -> None:
     out_path.write_bytes(signature + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b""))
 
 
+def _render_single_biomarker_png(
+    mask: Any, color: tuple[int, int, int], out_path: Path
+) -> None:
+    """Encode a single (z, x) boolean mask as an RGBA PNG.
+
+    Pure-numpy helper used by ``render_fluid_projection`` to emit one
+    PNG per biomarker so the SPA can toggle IRF / SRF / PED visibility
+    independently. Pixel colour = the biomarker's RGB; alpha = 180 (~70%)
+    where present, 0 elsewhere.
+    """
+    import numpy as np
+
+    h, w = mask.shape
+    rgba = np.zeros((h, w, 4), dtype=np.uint8)
+    rgba[mask, 0] = color[0]
+    rgba[mask, 1] = color[1]
+    rgba[mask, 2] = color[2]
+    rgba[mask, 3] = 180
+    _write_rgba_png(rgba, out_path)
+
+
 def render_fluid_projection(seg: Any, out_dir: Path) -> tuple[str, dict[str, list[float]]]:
     """Project the 3D fluidseg label volume onto the fundus plane.
 
     ``seg`` shape is ``(n_bscans, rows, cols)``; labels per the fluid
     runner are 1=IRF, 2=SRF, 3=PED. We collapse along the depth (rows)
     axis with ``np.any``, producing a per-(z, x) presence mask per
-    biomarker. The three masks compose into one RGBA PNG so the SPA
-    only fetches a single artifact per job:
+    biomarker.
 
-    * R channel — SRF presence (orange biomarker, but encoded so that
-      additive blending matches the per-channel-strip palette)
-    * G channel — IRF presence
-    * B channel — PED presence
-    * alpha     — union of any biomarker, scaled by per-pixel hit count
+    Writes four PNG artifacts into ``out_dir``:
 
-    Returns ``(filename, per_bscan_mm2)`` — the second element is a
-    dict shaped like the SPA's existing
+    * ``projection_fluid.png`` — combined composite (all three
+      biomarkers blended), back-compat for older SPA bundles.
+    * ``projection_fluid_irf.png`` — IRF-only, sky-400 palette.
+    * ``projection_fluid_srf.png`` — SRF-only, orange-400 palette.
+    * ``projection_fluid_ped.png`` — PED-only, fuchsia-500 palette.
+
+    The SPA loads the three single-biomarker PNGs when present and
+    layers them with independent toggle visibility; the composite is
+    the fallback when an older runner image hasn't been rebuilt yet.
+
+    Returns ``(filename, per_bscan_mm2)`` — the second element is the
     ``payload['per_bscan_mm2'] = {irf: [...], srf: [...], ped: [...]}``
     contract so the per-B-scan stripe renderer also picks up real data.
+    The returned ``filename`` stays the composite for back-compat with
+    callers that hard-coded one filename.
     """
     import numpy as np
 
@@ -113,32 +140,30 @@ def render_fluid_projection(seg: Any, out_dir: Path) -> tuple[str, dict[str, lis
     srf = np.any(seg == 2, axis=1)
     ped = np.any(seg == 3, axis=1)
 
+    # Composite PNG — all three biomarkers blended into one image, kept
+    # for back-compat with the initial PR #223 SPA bundle.
     rgba = np.zeros((n_bscans, cols, 4), dtype=np.uint8)
-    # Each biomarker paints its own RGB color where present; alpha is
-    # the union (mixed colours where multiple overlap, single colour
-    # where only one is present).
     for mask, color in ((irf, _COLOR_IRF), (srf, _COLOR_SRF), (ped, _COLOR_PED)):
-        any_z = mask
-        rgba[any_z, 0] = np.maximum(rgba[any_z, 0], color[0])
-        rgba[any_z, 1] = np.maximum(rgba[any_z, 1], color[1])
-        rgba[any_z, 2] = np.maximum(rgba[any_z, 2], color[2])
+        rgba[mask, 0] = np.maximum(rgba[mask, 0], color[0])
+        rgba[mask, 1] = np.maximum(rgba[mask, 1], color[1])
+        rgba[mask, 2] = np.maximum(rgba[mask, 2], color[2])
     union = irf | srf | ped
-    rgba[union, 3] = 180  # ~70% opacity where a biomarker is present
+    rgba[union, 3] = 180
+    composite_filename = "projection_fluid.png"
+    _write_rgba_png(rgba, out_dir / composite_filename)
 
-    filename = "projection_fluid.png"
-    _write_rgba_png(rgba, out_dir / filename)
+    # Per-biomarker PNGs — drive the SPA's IRF / SRF / PED toggle layer.
+    _render_single_biomarker_png(irf, _COLOR_IRF, out_dir / "projection_fluid_irf.png")
+    _render_single_biomarker_png(srf, _COLOR_SRF, out_dir / "projection_fluid_srf.png")
+    _render_single_biomarker_png(ped, _COLOR_PED, out_dir / "projection_fluid_ped.png")
 
-    # Per-B-scan totals for the stripe renderer. Each value is the
-    # biomarker area on that B-scan in mm² — but we don't have the
-    # voxel volume here (the runner computes it from the DICOM); the
-    # caller fills in the conversion. Return raw A-scan-pixel counts;
-    # the runner converts.
+    # Per-B-scan totals for the stripe renderer.
     per_bscan = {
         "irf": [int(c) for c in irf.sum(axis=1)],
         "srf": [int(c) for c in srf.sum(axis=1)],
         "ped": [int(c) for c in ped.sum(axis=1)],
     }
-    return filename, per_bscan
+    return composite_filename, per_bscan
 
 
 def render_ga_projection(rpel_csv_path: Path, out_dir: Path) -> tuple[str, list[int]]:
