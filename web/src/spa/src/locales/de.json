@@ -35,7 +35,13 @@
     "error": {
       "title": "Ein Fehler ist aufgetreten",
       "dismiss": "Fehlermeldung schließen",
-      "reqIdLabel": "Fehler-ID"
+      "reqIdLabel": "Fehler-ID",
+      "detailsToggle": "Details anzeigen",
+      "detailsHide": "Details ausblenden",
+      "serverMessageLabel": "Server-Meldung",
+      "urlLabel": "URL",
+      "moreErrors": "{n} weitere Fehler",
+      "queuedListTitle": "Weitere Fehler"
     },
     "systemAuditLog": "System-Audit",
     "retinalParked": "Geparkte Scans"

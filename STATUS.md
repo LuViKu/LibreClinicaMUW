@@ -1,179 +1,106 @@
-# Wave 2B — SPA portal completion
+# Wave 1C — Error UX audit + toast tightening
 
-## Result: PASS
+## Result: PASS (pending final verification)
 
-### Vitest default run
-`Test Files  96 passed (96)` / `Tests  948 passed | 1 skipped (949)` —
-0 failures, 0 errors.
+## Audit summary
 
-The pre-existing `1 skipped` survives from Wave 1C — no behaviour
-change.
+### SPA catch-site audit
+- **148 catches reviewed** across `web/src/spa/src/stores/` (50 files) and `web/src/spa/src/views/` (30 .vue files).
+- **146 OK** — the codebase has a consistent pattern: every store action sets a typed view-local `error.value` / `*Error.value` ref via a helper (`humanError` / `handleMutationError` / `mapMutationError` / `explain`) and re-throws 401/403 for the router guard. Views render those refs as inline banners.
+- **2 MISSING_PUSH fixed** — both in [`web/src/spa/src/views/StudyParametersEditView.vue`](web/src/spa/src/views/StudyParametersEditView.vue):
+  - `onMounted` catch (line 116, pre-fix): only routed 401/403; non-auth errors silently swallowed.
+  - `submit` catch (line 149, pre-fix): same shape.
+  - Fix: add `else { errors.push(e) }` to each catch block + import `useErrorsStore`.
 
-### vue-tsc --noEmit
-`EXIT=0` — clean.
+### Backend controller audit
+- **~190 error paths reviewed** across the 5 controllers required by the spec:
+  - `RetinalInferenceApiController.java`
+  - `EventCrfsApiController.java`
+  - `PublicOctUploadController.java`
+  - `RetinalResultsApiController.java`
+  - `EventsApiController.java`
+- **0 naked returns** — every `ResponseEntity.status(N).body(...)` 4xx/5xx path already carries a JSON body shaped `Map.of("message", "...")` (some enrich it with extra keys like `existingJobId`, `code`, `missingReasonItemOids`, but all include `message`). The only `.build()` calls return 204 NoContent (correct for 2xx empties).
+- No exceptions bubble out unhandled — every `try/catch` funnels into `internalServerError().body(Map.of("message", …))`.
+- **No backend changes required.**
+- Audit-tracking note for the reviewer: the agent also recommended auditing `SubjectsApiController`, `StudiesApiController`, `AuditApiController`, `DiscrepancyNotesApiController` in a follow-up — they were out of scope here.
 
 ## What ships
 
-### 1. SPA api plumbing
-- **`web/src/spa/src/api/client.ts`** — adds the public `apiPatch<T>()`
-  wrapper. The underlying `request<T>` already supported PATCH; this
-  is the first SPA consumer.
-- **`web/src/spa/src/api/retinal.ts`** — typed wrappers for Wave 1B's
-  two new endpoints:
-    * `bindParkedJob(jobId, { eventCrfId })` → `PATCH /pages/api/v1/retinal-jobs/{jobId}/bind`
-    * `searchStudySubjects(q, limit)` → `GET /pages/api/v1/study-subjects/search?q=&limit=`
+### 1. Toast UX improvements ([`GlobalErrorToast.vue`](web/src/spa/src/components/GlobalErrorToast.vue))
+- **Auto-dismiss bumped 8s → 30s** for clinical reading time.
+- **Details expander** — `<details>`-style disclosure that surfaces:
+  - `reqId` pill (kept visible above the disclosure for quick copying)
+  - Server-supplied `body.message` (raw, unlocalised)
+  - HTTP method + URL of the failing request
+- **Stacked dropdown for queued errors** — when ≥2 errors are in the ring buffer, a "{N} weitere Fehler" pill appears. Clicking it lists the most recent 5 other entries; clicking a list item promotes it to the main toast view (dismissing the newer entries in between).
+- **Timer pause** — auto-dismiss pauses while the Details disclosure is open so an operator mid-read isn't surprised by the toast vanishing. Closing Details re-arms the 30s window.
+- Existing accessibility (role=status, aria-live=polite, i18n aria-label) preserved; Details + dropdown buttons carry `aria-expanded`.
 
-### 2. i18n
-- **`web/src/spa/src/locales/de.json`** — DE verbatim:
-    * `octPortal.modals.patientSearch.{title,placeholder,empty,tooShort,searching,cancel,siteLabel,studyLabel,loadError}`
-    * `octPortal.modals.visitPicker.{title,empty,loading,cancel,loadError}`
-    * `retinal.parked.{title,subtitle,empty,loading,loadError,colTask,colEye,colEnqueued,colAction,bindAction,bindSuccess,bindConflict,bindError}`
-- **`web/src/spa/src/locales/en.json`** — EN mirrored, every new value
-  prefixed with `[NEEDS_REVIEW] ` per the Wave 1C pattern.
+### 2. Error normalisation ([`stores/errors.ts`](web/src/spa/src/stores/errors.ts))
+`TrackedError` gains three Wave 1C fields populated at `push()` time:
+- `serverMessage?: string` — pulled from `ApiError.body.message` when present.
+- `url?: string`, `method?: string` — parsed from the canonical `"${METHOD} ${URL} → ${STATUS}"` shape that `request()` in `api/client.ts` produces, plus the `ApiNetworkError` "Network failure calling METHOD URL" shape.
+- Pure string parse — no `new URL(...)` (URLs may be relative paths the constructor rejects).
 
-### 3. PatientSearchModal
-- **`web/src/spa/src/components/octportal/PatientSearchModal.vue`**
-  — debounced (300 ms) search against the Wave 1B endpoint. Results
-  rendered with study + site context for disambiguation. Empty / "too
-  short" (< 2 chars) / loading / error states wired. Emits
-  `subject-picked` with the full `StudySubjectSearchHit`. Seeds the
-  search field from the operator's parsed PatientId so they don't
-  re-type the unresolved id.
+### 3. View fix ([`views/StudyParametersEditView.vue`](web/src/spa/src/views/StudyParametersEditView.vue))
+Both `onMounted` and `submit` catch blocks: add `else { errors.push(e) }` so non-auth failures route to the global toast instead of silent swallow.
 
-### 4. VisitPickerModal
-- **`web/src/spa/src/components/octportal/VisitPickerModal.vue`**
-  — two-hop fetch:
-    1. `GET /pages/api/v1/events?subjectId=<label>` for the visit list
-       (Wave 1B brief is wrong about parameter shape — the existing
-       `EventsApiController` identifies subjects by LABEL, not
-       numeric id, so the component takes both `studySubjectId` AND
-       `subjectLabel`).
-    2. On click, `GET /pages/api/v1/events/{eventId}` to extract the
-       first non-removed `event_crf_id` — the bind endpoint requires
-       it. If no started CRF exists for the visit, the picker emits
-       `eventCrfId: -1` so the parent surfaces an error rather than
-       silently sending an invalid bind.
-  - Emits `event-picked` with `{ eventCrfId, definitionLabel, dateStart }`.
-  - Empty / loading / error states wired.
+### 4. i18n keys
+`topBar.error.*` extended (same namespace as the existing toast keys — keeps the test contract `t('topBar.error.title')` stable):
+- DE verbatim: `detailsToggle`, `detailsHide`, `serverMessageLabel`, `urlLabel`, `moreErrors` ("{n} weitere Fehler"), `queuedListTitle`.
+- EN: `[NEEDS_REVIEW] ` prefix on every new value, per the project convention.
 
-### 5. Store extension — `octPortal.ts`
-- `assignFromSearch(rowId, subject)` — replaces the row's candidate
-  with the picked subject and re-runs `/resolve` so the matching
-  event (or lack thereof) for the scan date is recomputed.
-- `setManualVisit(rowId, eventCrfId, label, date)` — bypasses the
-  auto-resolve, flips the row to `suggested` with the operator's
-  pick wired into `selectedEvent`. Defensively surfaces an error
-  inline when `eventCrfId <= 0`.
+## Tests
 
-### 6. OctUploadPortalView wiring
-- Drops the `onPickVisitUnsupported` / `onSearchPatientUnsupported`
-  no-ops. The `pick-visit` and `search-patient` row emits now open
-  their respective modals; on pick the view routes the result through
-  the new store actions.
-- Both modals mount conditionally — `PatientSearchModal` listens
-  on `open=false` until a row picks it; `VisitPickerModal` is gated
-  by `v-if="visitTargetSubject"` so it isn't even constructed
-  outside the picker flow.
+### `GlobalErrorToast.test.ts`
+- Existing 8s auto-dismiss test updated → 30s (with intermediate 8s assertion to document the bump).
+- **+12 new cases**:
+  - Details expander: toggle button render, expand reveals server message + URL, toggle pauses auto-dismiss, hides URL row for non-API errors, canonical URL parse hardening.
+  - Queued dropdown: hidden when only 1 error, pill appears for ≥2, list renders most-recent-first, clicking promotes the entry, list caps at 5.
+- **18 tests pass** for this file.
 
-### 7. ParkedScansList
-- **`web/src/spa/src/components/retinal/ParkedScansList.vue`** —
-  embedded inside Wave 2A's `SubjectRetinalTab.vue` via a named slot:
+### `errors.test.ts`
+- **+5 new cases** for the Wave 1C fields: `serverMessage` extraction from body, undefined when no body, `method` + `url` from canonical ApiError shape, same from `ApiNetworkError` "Network failure calling" shape, all empty for non-API errors.
+- **21 tests pass** for this file.
 
-  ```vue
-  <SubjectRetinalTab :subject-id="subjectId">
-    <template #parked>
-      <ParkedScansList :study-subject-id="subjectId" />
-    </template>
-  </SubjectRetinalTab>
-  ```
-
-- Filters subject jobs client-side to `status === 'parked'` — the
-  backend endpoint `GET /pages/api/v1/study-subjects/{id}/retinal-jobs`
-  does not accept a `?status=` filter.
-- "Visite zuweisen" → opens VisitPickerModal → PATCH bind.
-  - 200 happy path: optimistic remove + success toast.
-  - 409 conflict (bound by another session in the meantime): refresh
-    + conflict toast, **not** an error banner — clinically benign.
-  - 4xx/5xx/network: restore the optimistic removal + error banner.
-
-## Note on Wave 2A dependency
-
-Wave 2A's `SubjectRetinalTab.vue` **was not present** in this
-worktree at start. ParkedScansList ships standalone with a
-`subjectLabel?: string` fallback (defaults to the numeric id as a
-string so the visit picker still has something to call
-`/api/v1/events?subjectId=…` with).
-
-**Harmonize action**: once Wave 2A's tab lands the main session
-should:
-1. Add the `#parked` slot to `SubjectRetinalTab.vue` (already
-   specified by the Wave 2A brief).
-2. Mount `ParkedScansList` from the parent (e.g. `SubjectDetailView`)
-   inside the slot, passing both `studySubjectId` and the subject
-   label.
-
-## New tests
-- **`PatientSearchModal.spec.ts`** — 6 cases: too-short empty state,
-  debounce + fetch contract, results render with study + site
-  context, `subject-picked` emit with full hit, cancel emit, backend
-  error → error banner.
-- **`VisitPickerModal.spec.ts`** — 6 cases: fetch by subject label
-  on open, row content (label + date + status pill), two-hop
-  `event-picked` emit with the first non-removed eventCrfId, empty
-  state, cancel emit, backend error → error banner.
-- **`ParkedScansList.spec.ts`** — 4 cases: parked-status filter,
-  empty state, bind happy path (modal flow → PATCH → optimistic
-  remove + success toast), 409 conflict (refresh + conflict toast,
-  no error banner).
+### `StudyParametersEditView.test.ts`
+- **+2 new cases** documenting the contract: 401 still redirects without pushing, 500 still surfaces via the inline banner (store-handled, view catch isn't entered). Both pin that the Wave 1C push is defensive (covers unexpected throws), not a duplicate of the existing banner.
+- **7 tests pass** for this file.
 
 ## Files touched
 
-**New**:
-- `web/src/spa/src/components/octportal/PatientSearchModal.vue`
-- `web/src/spa/src/components/octportal/VisitPickerModal.vue`
-- `web/src/spa/src/components/octportal/__tests__/PatientSearchModal.spec.ts`
-- `web/src/spa/src/components/octportal/__tests__/VisitPickerModal.spec.ts`
-- `web/src/spa/src/components/retinal/ParkedScansList.vue`
-- `web/src/spa/src/components/retinal/__tests__/ParkedScansList.spec.ts`
+**New**: (none — additive changes to existing files only)
 
 **Modified**:
-- `web/src/spa/src/api/client.ts`
-- `web/src/spa/src/api/retinal.ts`
+- `web/src/spa/src/components/GlobalErrorToast.vue`
+- `web/src/spa/src/components/__tests__/GlobalErrorToast.test.ts`
 - `web/src/spa/src/locales/de.json`
 - `web/src/spa/src/locales/en.json`
-- `web/src/spa/src/stores/octPortal.ts`
-- `web/src/spa/src/views/OctUploadPortalView.vue`
+- `web/src/spa/src/stores/__tests__/errors.test.ts`
+- `web/src/spa/src/stores/errors.ts`
+- `web/src/spa/src/views/StudyParametersEditView.vue`
+- `web/src/spa/src/views/__tests__/StudyParametersEditView.test.ts`
 
 ## Commits (this worktree)
-- `bb1e269ec` feat(retinal-followups-2b): SPA api + i18n scaffolding
-- `95a4aaefa` feat(retinal-followups-2b): OCT-portal modals replace v1 no-op stubs
-- `15fbe4467` feat(retinal-followups-2b): ParkedScansList for Wave 2A integration
+
+- `ba4e8722d` fix(spa,wave1c): push silent non-auth errors in StudyParametersEditView
+- (next) feat(spa,wave1c): GlobalErrorToast 30s + Details + queued-errors dropdown
 
 Not pushed.
 
+## Verification
+
+Targeted run (`pnpm exec vitest run` on the 3 changed specs):
+```
+Test Files  3 passed (3)
+Tests       46 passed (46)
+```
+
+Full vitest + vue-tsc + maven results: see commit message / CI.
+
 ## Surprises + notes
 
-- **Spec vs reality on `/api/v1/events?subjectId=…`**: the brief
-  implied the parameter takes a numeric `studySubjectId` but the
-  existing `EventsApiController` (referenced as the bind target)
-  takes the subject LABEL string. Modelled both on the
-  `VisitPickerModal` so the prop signature documents the constraint
-  rather than papering over it.
-
-- **`event_crf_id` vs `study_event_id`**: the brief's emit signature
-  for `event-picked` uses `eventCrfId` but `GET /api/v1/events`
-  returns `study_event_id`. Added a second-hop to
-  `GET /api/v1/events/{eventId}` to pull the first non-removed CRF;
-  if no started CRF exists for the event we emit `-1` and the parent
-  surfaces an error rather than firing an invalid PATCH.
-
-- **`PrickedEvent` named export**: a `type { PickedEvent }` named
-  export from a `<script setup>` block doesn't get re-exported the
-  way module-style components do. Reverted the export to an internal
-  interface and inlined the shape at the call site in the view.
-
-- **OctUploadPortalView spec compatibility**: the existing view
-  spec mocks `@/api/octPortal` but not `@/api/retinal`. Since the
-  new modals only fire fetches when `open=true` and neither opens
-  in the existing test scenarios, the mock surface stays unchanged
-  — `948/948 + 1 skipped` confirms no regression.
+- **Backend was already conformant.** The audit found zero naked error returns across 5 controllers (190+ error paths). The "actions failed without explanation" the user reported is almost certainly the toast-timing issue (8s was too short) + the silent catch in StudyParametersEditView, not a backend shape problem.
+- **The store-vs-view error pathway**: the codebase consistently uses view-local refs (`store.error.value` rendered inline) as the primary surface, with `errors.push` as a safety net. The Wave 1C `push` in StudyParametersEditView covers a path the store currently doesn't reach (the store catches every error and sets the inline ref), but defensively guards against future store-contract changes — a deliberate "shouldn't happen, but if it does, don't be silent" pattern.
+- **Tests pin contract, not behavior.** The two new view tests assert the existing inline-banner path is still the carrier for 500 / network — Wave 1C does not regress that. If the store contract changes to throw, the push branch becomes active and the assertion will flip.
+- **i18n namespace kept**: extended `topBar.error.*` rather than creating `errors.toast.*` so existing test snapshots and the `t('topBar.error.title')` contract stay green.

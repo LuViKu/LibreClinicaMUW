@@ -152,4 +152,56 @@ describe('useErrorsStore', () => {
     expect(b.id).toBeGreaterThan(a.id)
     expect(c.id).toBeGreaterThan(b.id)
   })
+
+  // ---------------------------------------------------------------------------
+  // Wave 1C (2026-06-19): expose serverMessage / method / url so the toast
+  // Details disclosure can render them.
+  // ---------------------------------------------------------------------------
+
+  it('extracts serverMessage from ApiError.body.message (Wave 1C)', () => {
+    const store = useErrorsStore()
+    const err = new ApiError(400, 'POST /pages/api/v1/foo → 400', {
+      message: 'IOP_OD must be a number',
+    })
+    const entry = store.push(err)
+    expect(entry.serverMessage).toBe('IOP_OD must be a number')
+  })
+
+  it('leaves serverMessage undefined when ApiError has no JSON body (Wave 1C)', () => {
+    const store = useErrorsStore()
+    const err = new ApiError(500, 'POST /pages/api/v1/foo → 500', null)
+    const entry = store.push(err)
+    expect(entry.serverMessage).toBeUndefined()
+  })
+
+  it('extracts method + url from a canonical ApiError message (Wave 1C)', () => {
+    const store = useErrorsStore()
+    const err = new ApiError(
+      404,
+      'GET /LibreClinica/pages/api/v1/subjects/SS_M001 → 404',
+      null,
+    )
+    const entry = store.push(err)
+    expect(entry.method).toBe('GET')
+    expect(entry.url).toBe('/LibreClinica/pages/api/v1/subjects/SS_M001')
+  })
+
+  it('extracts method + url from an ApiNetworkError "Network failure calling …" message (Wave 1C)', () => {
+    const store = useErrorsStore()
+    const err = new ApiNetworkError(
+      'Network failure calling GET /LibreClinica/pages/api/v1/me',
+      new Error('ECONNREFUSED'),
+    )
+    const entry = store.push(err)
+    expect(entry.method).toBe('GET')
+    expect(entry.url).toBe('/LibreClinica/pages/api/v1/me')
+  })
+
+  it('leaves method/url empty for non-API errors (Wave 1C)', () => {
+    const store = useErrorsStore()
+    const entry = store.push(new Error('Vue render explosion'))
+    expect(entry.method).toBe('')
+    expect(entry.url).toBe('')
+    expect(entry.serverMessage).toBeUndefined()
+  })
 })

@@ -36,12 +36,31 @@ export interface TrackedError {
   message: string
   /** Request-correlation id from A4. May be empty until A4 lands. */
   reqId: string
-  /** Capture time — drives the "8s auto-dismiss" countdown in the toast. */
+  /** Capture time — drives the auto-dismiss countdown in the toast. */
   when: Date
   /** Optional Vue/router context string (e.g. `'router.onError'`, render hook). */
   info?: string
   /** Tag for downstream classification (toast styling, future telemetry). */
   kind: 'api' | 'network' | 'render' | 'router' | 'unknown'
+  /**
+   * Wave 1C — raw server-supplied message extracted from `ApiError.body.message`
+   * when present. This is the unlocalised server text (e.g. "Validation failed:
+   * itemOid IOP_OD must be a number"); the operator can quote it verbatim
+   * in a bug report. May equal {@link message} when the wrapper extracted the
+   * same string; the toast's Details expander still shows it for clarity.
+   */
+  serverMessage?: string
+  /**
+   * Wave 1C — the URL the failing request targeted (extracted from
+   * `ApiError.message` which the wrapper formats as "METHOD URL → STATUS").
+   * Empty for render / router / non-API errors.
+   */
+  url?: string
+  /**
+   * Wave 1C — the HTTP method (GET / POST / etc.). Extracted alongside
+   * {@link url}. Empty for non-API errors.
+   */
+  method?: string
 }
 
 /** Read the `reqId` field defensively — A4 adds it; until then it's undefined. */
@@ -66,6 +85,45 @@ function extractMessage(err: unknown): string {
   return 'Unbekannter Fehler'
 }
 
+/**
+ * Wave 1C — pull the server-supplied `body.message` if the error is an
+ * {@link ApiError} carrying a structured JSON body. Returns `undefined`
+ * when the body isn't a JSON object or the `message` key is absent — the
+ * toast then skips the "Server-Meldung" row.
+ */
+function extractServerMessage(err: unknown): string | undefined {
+  if (!(err instanceof ApiError)) return undefined
+  const body = err.body
+  if (body && typeof body === 'object' && 'message' in body) {
+    const m = (body as { message: unknown }).message
+    if (typeof m === 'string' && m.trim() !== '') return m
+  }
+  return undefined
+}
+
+/**
+ * Wave 1C — `request()` in `api/client.ts` formats the ApiError message
+ * as `"${method} ${url} → ${status}"` when no JSON body message is
+ * present. Pull the leading `METHOD URL` pair if it matches that shape;
+ * otherwise return empty strings so the toast hides those rows. Pure
+ * string parse — no URL constructor (URLs may be relative paths like
+ * `/LibreClinica/pages/...` which don't satisfy `new URL(...)`).
+ */
+function extractRequestSignature(err: unknown): { method: string; url: string } {
+  if (!(err instanceof ApiError) && !(err instanceof ApiNetworkError)) {
+    return { method: '', url: '' }
+  }
+  const msg = err.message
+  // Matches the canonical wrapper format. Method = HTTP verb (uppercase
+  // letters), URL = anything up to ` →` (arrow) or end of string.
+  const m = /^(GET|POST|PUT|DELETE|PATCH)\s+(\S+?)(?:\s*(?:→|$))/.exec(msg)
+  if (m) return { method: m[1], url: m[2] }
+  // ApiNetworkError uses "Network failure calling METHOD URL" shape.
+  const n = /Network failure calling (GET|POST|PUT|DELETE|PATCH)\s+(\S+)/.exec(msg)
+  if (n) return { method: n[1], url: n[2] }
+  return { method: '', url: '' }
+}
+
 export const useErrorsStore = defineStore('errors', () => {
   const recent = ref<TrackedError[]>([])
 
@@ -84,6 +142,7 @@ export const useErrorsStore = defineStore('errors', () => {
    * for the console debug line but not surfaced in the toast.
    */
   function push(err: unknown, info?: string): TrackedError {
+    const { method, url } = extractRequestSignature(err)
     const entry: TrackedError = {
       id: nextId++,
       message: extractMessage(err),
@@ -91,6 +150,9 @@ export const useErrorsStore = defineStore('errors', () => {
       when: new Date(),
       info,
       kind: classify(err),
+      serverMessage: extractServerMessage(err),
+      url,
+      method,
     }
     recent.value = [...recent.value, entry]
     if (recent.value.length > RING_BUFFER_CAP) {

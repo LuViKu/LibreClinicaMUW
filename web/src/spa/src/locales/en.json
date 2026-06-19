@@ -35,7 +35,13 @@
     "error": {
       "title": "An error occurred",
       "dismiss": "Dismiss error message",
-      "reqIdLabel": "Error ID"
+      "reqIdLabel": "Error ID",
+      "detailsToggle": "[NEEDS_REVIEW] Show details",
+      "detailsHide": "[NEEDS_REVIEW] Hide details",
+      "serverMessageLabel": "[NEEDS_REVIEW] Server message",
+      "urlLabel": "[NEEDS_REVIEW] URL",
+      "moreErrors": "[NEEDS_REVIEW] {n} more error(s)",
+      "queuedListTitle": "[NEEDS_REVIEW] More errors"
     },
     "systemAuditLog": "System audit",
     "retinalParked": "[NEEDS_REVIEW] Parked scans"
