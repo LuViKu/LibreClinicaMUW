@@ -1684,6 +1684,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retinal-jobs/{jobId}/bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["bindParkedJob"];
+        trace?: never;
+    };
     "/api/v1/subjects/{studySubjectOid}/preflightForSign": {
         parameters: {
             query?: never;
@@ -1764,6 +1780,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/study-subjects/{studySubjectId}/retinal-trends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["trendsForSubject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/study-subjects/{studySubjectId}/retinal-jobs": {
         parameters: {
             query?: never;
@@ -1772,6 +1804,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listByStudySubject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/study-subjects/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["searchSubjects"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1924,6 +1972,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retinal-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listParkedJobs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retinal-jobs/{jobId}": {
         parameters: {
             query?: never;
@@ -1940,6 +2004,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retinal-jobs/{jobId}/status/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["stream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retinal-jobs/{jobId}/artifacts/{name}": {
         parameters: {
             query?: never;
@@ -1948,6 +2028,38 @@ export interface paths {
             cookie?: never;
         };
         get: operations["streamArtifact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/oct-upload/preflight": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["preflight"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/oct-upload/patients/{studySubjectId}/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listPatientEventsPublic"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3586,6 +3698,10 @@ export interface components {
         BugReportResponse: {
             delivered?: boolean;
             ticketId?: string;
+        };
+        BindRequest: {
+            /** Format: int32 */
+            eventCrfId?: number;
         };
         EventCellDto: {
             eventDefinitionOid?: string;
@@ -6185,6 +6301,8 @@ export interface operations {
                 scanIndex?: number;
                 eventCrfId?: number;
                 park?: boolean;
+                disambiguated?: boolean;
+                candidateCount?: number;
             };
             header?: never;
             path?: never;
@@ -6730,6 +6848,7 @@ export interface operations {
             query: {
                 task: string;
                 laterality: string;
+                scanIndex?: number;
             };
             header?: never;
             path: {
@@ -7322,6 +7441,32 @@ export interface operations {
             };
         };
     };
+    bindParkedJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BindRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     preflightForSign: {
         parameters: {
             query?: never;
@@ -7437,6 +7582,30 @@ export interface operations {
             };
         };
     };
+    trendsForSubject: {
+        parameters: {
+            query: {
+                task: string;
+            };
+            header?: never;
+            path: {
+                studySubjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     listByStudySubject: {
         parameters: {
             query?: never;
@@ -7444,6 +7613,29 @@ export interface operations {
             path: {
                 studySubjectId: number;
             };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    searchSubjects: {
+        parameters: {
+            query: {
+                q: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -7679,6 +7871,28 @@ export interface operations {
             };
         };
     };
+    listParkedJobs: {
+        parameters: {
+            query?: {
+                status?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     getJob: {
         parameters: {
             query?: never;
@@ -7697,6 +7911,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    stream: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
                 };
             };
         };
@@ -7720,6 +7956,51 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    preflight: {
+        parameters: {
+            query: {
+                sha256: string;
+                scanIndex?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listPatientEventsPublic: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studySubjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
