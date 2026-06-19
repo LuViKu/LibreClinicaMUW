@@ -45,6 +45,7 @@ RUN pip install --no-cache-dir \
 RUN pip install --no-cache-dir "torch==1.0.1"
 
 COPY app.py ./
+COPY projection.py ./
 ENV RUNNER_PR_CODE=/opt/sese_pr RUNNER_PR_WEIGHTS=/weights/u2net-cross-entropy
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \

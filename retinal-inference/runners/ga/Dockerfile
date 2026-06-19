@@ -26,6 +26,7 @@ RUN pip install --no-cache-dir \
     "numpy" "pydicom==3.0.2" "fastapi==0.115.6" "uvicorn[standard]==0.32.1"
 
 COPY app.py ./
+COPY projection.py ./
 ENV RUNNER_GA_CODE=/opt/sese_ga/code/infer_sample_filly.py \
     RUNNER_GA_WEIGHTS=/weights/filly_checkpoints
 EXPOSE 8000

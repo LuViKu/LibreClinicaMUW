@@ -97,11 +97,40 @@ def infer(req: InferRequest) -> dict:
     total = round(sum(payload.values()), 6)
     np.save(out / "fluid_labels.npy", seg.astype(np.uint8))
 
+    # 2026-06-19 — en-face biomarker projection. Pre-renders a single
+    # RGBA PNG of (n_bscans × n_ascans) projected onto the fundus plane
+    # + per-B-scan A-scan counts so the SPA's existing stripe renderer
+    # also picks up real data instead of falling back to neutral guides.
+    en_face_mask_path = None
+    per_bscan_mm2 = {"irf": [], "srf": [], "ped": []}
+    try:
+        from projection import render_fluid_projection  # vendored alongside app.py
+        proj_name, raw_counts = render_fluid_projection(seg, out)
+        en_face_mask_path = str(out / proj_name)
+        # Convert per-B-scan A-scan counts to mm² per biomarker. The
+        # area of one (axial-projected) A-scan cell is lateral × slice
+        # (the DICOM voxel_mm3 = axial × lateral × slice, so this is
+        # voxel_mm3 / axial).
+        bscan_area_mm2 = voxel_mm3 / axial if axial > 0 else voxel_mm3
+        per_bscan_mm2 = {
+            k: [round(c * bscan_area_mm2, 6) for c in v]
+            for k, v in raw_counts.items()
+        }
+    except Exception as proj_exc:  # noqa: BLE001 — projection is best-effort
+        import logging
+        logging.getLogger(__name__).warning(
+            "fluid en-face projection failed: %s", proj_exc
+        )
+
     return {
         "primary_metric_value": total,
         "primary_metric_unit": "mm³",
-        "output_payload": {"total_fluid_volume_mm3": total, **payload},
-        "en_face_mask_path": None,
+        "output_payload": {
+            "total_fluid_volume_mm3": total,
+            "per_bscan_mm2": per_bscan_mm2,
+            **payload,
+        },
+        "en_face_mask_path": en_face_mask_path,
         "bscan_masks_dir": str(out),
         "pixel_scale_mm": axial,
         "model_version": MODEL_VERSION,

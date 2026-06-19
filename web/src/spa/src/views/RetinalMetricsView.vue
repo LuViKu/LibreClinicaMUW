@@ -433,6 +433,8 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                 :task="overlayTask"
                 :laterality="job.laterality"
                 :hovered-bscan-z="hoveredBscanZ"
+                :job-id="job.jobId"
+                :artifact-names="job.artifactNames"
                 @hover-bscan="onHoverBscan"
               />
             </div>

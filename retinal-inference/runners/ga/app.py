@@ -130,11 +130,31 @@ def infer(req: InferRequest) -> dict:
     lateral, slice_mm = _spacing_mm(str(dcm))
     area_mm2 = float(np.count_nonzero(arr > 0)) * lateral * slice_mm
 
+    # 2026-06-19 — en-face GA projection. Same artifact layout as the
+    # fluid runner: ``projection_ga.png`` lands next to the RPEL CSV,
+    # ``per_bscan_mm2`` is the GA area on each B-scan.
+    en_face_mask_path = None
+    per_bscan_mm2: list[float] = []
+    try:
+        from projection import render_ga_projection  # vendored alongside app.py
+        proj_name, raw_counts = render_ga_projection(Path(rpel[0]), out)
+        en_face_mask_path = str(out / proj_name)
+        per_bscan_mm2 = [round(c * lateral * slice_mm, 6) for c in raw_counts]
+    except Exception as proj_exc:  # noqa: BLE001 — projection is best-effort
+        import logging
+        logging.getLogger(__name__).warning(
+            "ga en-face projection failed: %s", proj_exc
+        )
+
     return {
         "primary_metric_value": round(area_mm2, 4),
         "primary_metric_unit": "mm²",
-        "output_payload": {"total_area_mm2": round(area_mm2, 4), "rpel_csv": rpel[0]},
-        "en_face_mask_path": None,
+        "output_payload": {
+            "total_area_mm2": round(area_mm2, 4),
+            "rpel_csv": rpel[0],
+            "per_bscan_mm2": per_bscan_mm2,
+        },
+        "en_face_mask_path": en_face_mask_path,
         "bscan_masks_dir": str(out),
         "pixel_scale_mm": lateral,
         "model_version": MODEL_VERSION,

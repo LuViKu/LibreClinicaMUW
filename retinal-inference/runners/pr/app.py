@@ -129,11 +129,30 @@ def infer(req: InferRequest) -> dict:
     if not bmeis or not ob_opr:
         raise HTTPException(status_code=500, detail=f"sese_pr produced no BMEIS / OB-OPR CSVs in {out}")
 
+    # 2026-06-19 — en-face PR thickness projection.
+    en_face_mask_path = None
+    per_bscan_um: list[float] = []
+    try:
+        from projection import render_thickness_projection  # vendored alongside app.py
+        proj_name, per_bscan_um = render_thickness_projection(
+            Path(bmeis[0]), Path(ob_opr[0]), out, "pr", axial
+        )
+        en_face_mask_path = str(out / proj_name)
+    except Exception as proj_exc:  # noqa: BLE001 — projection is best-effort
+        import logging
+        logging.getLogger(__name__).warning(
+            "pr en-face projection failed: %s", proj_exc
+        )
+
     return {
         "primary_metric_value": None,
         "primary_metric_unit": None,
-        "output_payload": {"bmeis_csv": bmeis[0], "ob_opr_csv": ob_opr[0]},
-        "en_face_mask_path": None,
+        "output_payload": {
+            "bmeis_csv": bmeis[0],
+            "ob_opr_csv": ob_opr[0],
+            "per_bscan_thickness_um": per_bscan_um,
+        },
+        "en_face_mask_path": en_face_mask_path,
         "bscan_masks_dir": str(out),
         "pixel_scale_mm": axial,
         "model_version": MODEL_VERSION,
