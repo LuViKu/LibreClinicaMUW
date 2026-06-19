@@ -82,12 +82,29 @@ public class ServletInfraConfig {
      * any downstream filter logs. See {@link RequestIdFilter} JavaDoc for
      * the rationale on filter ordering + MDC hygiene.
      */
+    /*
+     * 2026-06-19 — every FilterRegistrationBean below explicitly sets
+     * {@code setAsyncSupported(true)}. Without this, Tomcat marks the
+     * resolved filter chain as not-async-supported as soon as any one
+     * filter's registration leaves the value at its default; the
+     * SseEmitter-backed {@code GET /pages/api/v1/retinal-jobs/{id}/status/stream}
+     * endpoint then throws {@code IllegalStateException: Async support
+     * must be enabled on a servlet and for all filters involved in
+     * async request processing.}, the SPA's EventSource auto-retries
+     * at ~1 Hz, and the libreclinica log fills with stack traces (the
+     * SSE flood observed during the 2026-06-18 OCT-portal smoke).
+     * Boot 3 used to default this to {@code true} on
+     * {@link FilterRegistrationBean} — being explicit makes the
+     * behaviour future-proof against further Boot defaults churn.
+     */
+
     @Bean
     public FilterRegistrationBean<RequestIdFilter> requestIdFilter() {
         FilterRegistrationBean<RequestIdFilter> reg =
                 new FilterRegistrationBean<>(new RequestIdFilter());
         reg.addUrlPatterns("/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -101,6 +118,7 @@ public class ServletInfraConfig {
         // A4 (2026-06-10): bumped from HIGHEST_PRECEDENCE to +5 so
         // requestIdFilter sits strictly ahead of every other filter.
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 5);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -109,6 +127,7 @@ public class ServletInfraConfig {
         FilterRegistrationBean<LocaleFilter> reg = new FilterRegistrationBean<>(new LocaleFilter());
         reg.addUrlPatterns("/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -118,6 +137,7 @@ public class ServletInfraConfig {
                 new FilterRegistrationBean<>(new OpenEntityManagerInViewFilter());
         reg.addUrlPatterns("/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 20);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -127,6 +147,7 @@ public class ServletInfraConfig {
                 new FilterRegistrationBean<>(new OCServletFilter());
         reg.addUrlPatterns("/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 30);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -137,6 +158,7 @@ public class ServletInfraConfig {
         reg.addUrlPatterns("/pages/auth/api/*");
         reg.setName("apiSecurityFilterProxy");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 40);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -150,6 +172,12 @@ public class ServletInfraConfig {
         FilterRegistrationBean<OpenClinicaUsernamePasswordAuthenticationFilter> reg =
                 new FilterRegistrationBean<>(myFilter);
         reg.setEnabled(false);
+        // 2026-06-19 — even disabled, the registration metadata is
+        // surfaced to Tomcat's filter-chain bookkeeping. Marking it
+        // async-supported avoids poisoning request.isAsyncSupported()
+        // on any chain that happens to include the bean. See class
+        // Javadoc's SSE fix note for full context.
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -159,6 +187,12 @@ public class ServletInfraConfig {
         FilterRegistrationBean<ConcurrentSessionFilter> reg =
                 new FilterRegistrationBean<>(concurrencyFilter);
         reg.setEnabled(false);
+        // 2026-06-19 — even disabled, the registration metadata is
+        // surfaced to Tomcat's filter-chain bookkeeping. Marking it
+        // async-supported avoids poisoning request.isAsyncSupported()
+        // on any chain that happens to include the bean. See class
+        // Javadoc's SSE fix note for full context.
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -168,6 +202,12 @@ public class ServletInfraConfig {
         FilterRegistrationBean<ApiSecurityFilter> reg =
                 new FilterRegistrationBean<>(apiSecurityFilter);
         reg.setEnabled(false);
+        // 2026-06-19 — even disabled, the registration metadata is
+        // surfaced to Tomcat's filter-chain bookkeeping. Marking it
+        // async-supported avoids poisoning request.isAsyncSupported()
+        // on any chain that happens to include the bean. See class
+        // Javadoc's SSE fix note for full context.
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -208,6 +248,12 @@ public class ServletInfraConfig {
         FilterRegistrationBean<at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter>
                 reg = new FilterRegistrationBean<>(filter);
         reg.setEnabled(false);
+        // 2026-06-19 — even disabled, the registration metadata is
+        // surfaced to Tomcat's filter-chain bookkeeping. Marking it
+        // async-supported avoids poisoning request.isAsyncSupported()
+        // on any chain that happens to include the bean. See class
+        // Javadoc's SSE fix note for full context.
+        reg.setAsyncSupported(true);
         return reg;
     }
 }

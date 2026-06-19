@@ -363,13 +363,21 @@ public class RetinalInferenceApiController {
      * <p>Returns {@code null} when the remote call fails — the caller falls
      * back to the local {@code /screen} path which itself may fall back to the
      * DB-poll worker, so a degraded GPU host never breaks the upload UX.
+     *
+     * <p>Package-private so {@link RetinalResultsApiController#bindParkedJob}
+     * can call it after the {@code parked → remote_pending} flip. Without
+     * this hand-off, parked-and-then-bound jobs would sit in
+     * {@code remote_pending} forever — the local DB-poll worker explicitly
+     * filters that status by design (worker-race kill at upload time), and
+     * the bind endpoint had no path to invoke the remote run. Identified
+     * during the 2026-06-18 smoke of the cross-study parked-admin view.
      */
-    private ResponseEntity<?> handleRemote(long jobId,
-                                           String taskClean,
-                                           String absolutePath,
-                                           String lat,
-                                           int scanIndex,
-                                           int eventCrfId) {
+    ResponseEntity<?> handleRemote(long jobId,
+                                   String taskClean,
+                                   String absolutePath,
+                                   String lat,
+                                   int scanIndex,
+                                   int eventCrfId) {
         try (Connection c = dataSource.getConnection()) {
             updateStatus(c, jobId, "segmenting", false, null);
         } catch (SQLException sqlEx) {
@@ -377,19 +385,38 @@ public class RetinalInferenceApiController {
                     jobId, sqlEx.getMessage());
         }
 
+        String remoteFailureReason = null;
         RemoteRunResult remote;
         try {
             remote = remoteClient.runRemote(jobId, taskClean, absolutePath, lat, scanIndex);
+            if (remote == null) {
+                remoteFailureReason = "Remote /run returned null — see RemoteRetinalInferenceClient WARN logs";
+            }
         } catch (Exception e) {
             LOG.warn("Remote /run threw for job {}: {}", jobId, e.getMessage());
             remote = null;
+            remoteFailureReason = "Remote /run threw: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
         }
 
         if (remote == null) {
-            // Revert + let the caller fall through to the local-screen path.
-            try (Connection c = dataSource.getConnection()) {
-                updateStatus(c, jobId, "queued", false, null);
-            } catch (SQLException ignored) { /* best-effort */ }
+            // 2026-06-19 — when we own the dispatch (remote was
+            // configured + we attempted /run), failures must surface as
+            // 'failed' to the operator instead of silently reverting to
+            // 'queued'. The previous fall-through let the local
+            // {@code placeholder-v1} adapter drain the row and stamp a
+            // result that LOOKS identical to a real segmentation in the
+            // metrics viewer — observed during the 2026-06-18 smoke
+            // (jobs 47/48/49/50 + 51 all completed with synthetic
+            // values when the GPU sidecar was unreachable). DR-022's
+            // intent was local-fallback for dev compose with
+            // {@code remotePushUrl} BLANK (in which case
+            // {@link RetinalInferenceJobStatus#REMOTE_PENDING} never
+            // applies + this method isn't called). With remote
+            // configured, no fallback: status='failed' + the captured
+            // error in {@code status_message} so the operator knows
+            // why it stopped and can re-bind / re-upload after fixing
+            // the GPU sidecar.
+            markRemoteFailed(jobId, remoteFailureReason);
             return null;
         }
 
@@ -401,9 +428,9 @@ public class RetinalInferenceApiController {
         } catch (IOException ioEx) {
             LOG.error("Remote /run succeeded but artifact persist failed for job {}: {}",
                     jobId, ioEx.getMessage());
-            try (Connection c = dataSource.getConnection()) {
-                updateStatus(c, jobId, "queued", false, null);
-            } catch (SQLException ignored) { /* best-effort */ }
+            // Same reasoning: we OWN this dispatch — surface the
+            // failure rather than handing it to the placeholder.
+            markRemoteFailed(jobId, "Artifact persist failed: " + ioEx.getMessage());
             return null;
         }
 
@@ -487,10 +514,27 @@ public class RetinalInferenceApiController {
         } catch (Exception jsonEx) {
             throw new SQLException("Failed to serialise output_payload for job " + jobId, jsonEx);
         }
+        // 2026-06-19 — UPSERT semantics. A previous attempt (e.g. the
+        // local Python placeholder worker that races the bind→remote
+        // dispatch when an operator re-binds a stale parked row) may
+        // have already inserted a result row for this job_id. Without
+        // the ON CONFLICT clause the second insert hit a unique-key
+        // violation on (job_id), aborted the transaction, and left
+        // the job stuck at 'segmenting' with no model_version + no
+        // completed_at. The DO UPDATE clause overwrites the stale
+        // row with the fresh GPU-side metrics so re-binds are robust.
         String sql = "INSERT INTO retinal_inference_result ("
                 + "job_id, task, output_payload, primary_metric_value, "
                 + "primary_metric_unit, bscan_masks_dir, pixel_scale_mm, confidence"
-                + ") VALUES (?, ?, ?::jsonb, ?, ?, ?, ?, ?)";
+                + ") VALUES (?, ?, ?::jsonb, ?, ?, ?, ?, ?) "
+                + "ON CONFLICT (job_id) DO UPDATE SET "
+                + "  task = EXCLUDED.task, "
+                + "  output_payload = EXCLUDED.output_payload, "
+                + "  primary_metric_value = EXCLUDED.primary_metric_value, "
+                + "  primary_metric_unit = EXCLUDED.primary_metric_unit, "
+                + "  bscan_masks_dir = EXCLUDED.bscan_masks_dir, "
+                + "  pixel_scale_mm = EXCLUDED.pixel_scale_mm, "
+                + "  confidence = EXCLUDED.confidence";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setLong(1, jobId);
             ps.setString(2, task);
@@ -570,6 +614,43 @@ public class RetinalInferenceApiController {
      * unreachable (the latter happens in some unit-test contexts where
      * {@code CoreResources} hasn't been initialised).
      */
+    /**
+     * 2026-06-19 — terminal-failure helper used when the remote GPU
+     * dispatch fails (network / sidecar 5xx / empty response /
+     * artifact persist failure). Flips the job to status='failed' +
+     * stamps a descriptive {@code status_message}, so the SPA's
+     * metrics viewer shows the failure reason instead of the
+     * placeholder-v1 mock that the local worker would otherwise drain
+     * a 'queued' row with.
+     *
+     * <p>Broadcast through the existing {@link RetinalJobStatusBroadcaster}
+     * SSE channel so the operator sees the flip live without a refresh.
+     * SQL failures are swallowed: best-effort cleanup.
+     */
+    private void markRemoteFailed(long jobId, String reason) {
+        String msg = reason != null && !reason.isBlank()
+                ? reason
+                : "Remote GPU dispatch failed";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE retinal_inference_job "
+                             + "   SET status = 'failed', status_message = ?, "
+                             + "       completed_at = ? "
+                             + " WHERE job_id = ?")) {
+            ps.setString(1, msg);
+            ps.setTimestamp(2, Timestamp.from(Instant.now()));
+            ps.setLong(3, jobId);
+            ps.executeUpdate();
+        } catch (SQLException sqlEx) {
+            LOG.warn("markRemoteFailed: SQL update failed for job {}: {}",
+                    jobId, sqlEx.getMessage());
+        }
+        if (broadcaster != null) {
+            broadcaster.publish(jobId, "failed");
+        }
+        LOG.warn("Remote GPU dispatch failed for job {}: {}", jobId, msg);
+    }
+
     private static String uploadsDir() {
         try {
             String raw = CoreResources.getField("core.retinalInference.e2eUploadsPath");

@@ -205,7 +205,12 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
                         DATA_SOURCE, visibilityFilter, artifactStore,
                         new StudySubjectFinder(DATA_SOURCE),
                         remoteClient,
-                        new RetinalJobStatusBroadcaster()))
+                        new RetinalJobStatusBroadcaster(),
+                        // 2026-06-18: inferenceController is the bind→remote
+                        // dispatch path; the local-queue branch in this IT
+                        // (remoteClient.isConfigured()=false) never reaches
+                        // the dispatch, so null is safe.
+                        null))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
     }

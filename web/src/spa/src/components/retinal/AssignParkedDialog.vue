@@ -47,6 +47,13 @@ const emit = defineEmits<{
   (e: 'bind', payload: { jobId: number; eventCrfId: number }): void
   /** Operator cancelled at either step. */
   (e: 'close'): void
+  /**
+   * Picked event has no started event_crf — surfaced to the parent so
+   * the operator sees an actionable toast instead of a silently-closing
+   * dialog. The 2026-06-18 smoke uncovered this gap: parked rows seemed
+   * to "stick" because the bind PATCH never fired.
+   */
+  (e: 'no-event-crf'): void
 }>()
 
 /** Two discrete steps:
@@ -82,8 +89,9 @@ function onEventPicked(payload: {
 }): void {
   if (payload.eventCrfId <= 0) {
     // The visit picker emits -1 when no started CRF exists for the
-    // picked event. The parent surfaces a toast; we just close.
-    emit('close')
+    // picked event. Surface the failure so the operator knows why the
+    // bind didn't take — silent close was the 2026-06-18 smoke bug.
+    emit('no-event-crf')
     return
   }
   emit('bind', { jobId: props.jobId, eventCrfId: payload.eventCrfId })

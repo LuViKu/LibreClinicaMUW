@@ -32,7 +32,9 @@ import { useI18n } from 'vue-i18n'
 import EyeBadge from './EyeBadge.vue'
 import PortalStatusPill from './PortalStatusPill.vue'
 import StudyChip from './StudyChip.vue'
-import type { ReviewRow } from '@/stores/octPortal'
+import { useOctPortalStore, type ReviewRow } from '@/stores/octPortal'
+
+const store = useOctPortalStore()
 
 const { t } = useI18n()
 
@@ -76,6 +78,20 @@ const scanDateLabel = computed(() => {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
   return `${dd}-${months[d.getMonth()]}-${d.getFullYear()}`
+})
+
+/**
+ * 2026-06-19 — real upload-progress percent read from the store's
+ * per-row {@code uploadPct} Map. Surfaced as the right-aligned
+ * "{pct}%" label during the {@code committing} state, mirroring the
+ * Claude Design oct-upload-portal reference's per-row percent.
+ * Rounds to a whole number; below 100 % during the upload, snaps to
+ * 100 % at {@code upload.onloadend}, then the row transitions out of
+ * {@code committing} so this branch unmounts.
+ */
+const uploadPercentLabel = computed(() => {
+  const pct = store.uploadPct.get(props.row.rowId) ?? 0
+  return `${Math.round(pct)} %`
 })
 </script>
 
@@ -192,6 +208,17 @@ const scanDateLabel = computed(() => {
         </div>
       </template>
 
+      <!-- duplicate: pre-flight matched a previously-uploaded scan -->
+      <template v-else-if="props.row.state === 'duplicate'">
+        <div class="flex items-center gap-2 mb-1.5">
+          <PortalStatusPill tone="ok">{{ t('octPortal.assignment.alreadyUploaded') }}</PortalStatusPill>
+        </div>
+        <div class="inline-flex items-center gap-2 text-[12px] text-slate-500">
+          {{ t('octPortal.assignment.alreadyUploadedDetail') }}
+          <span class="font-mono text-slate-700">#{{ props.row.existingJobId }}</span>
+        </div>
+      </template>
+
       <!-- error: red alert -->
       <template v-else-if="props.row.state === 'error'">
         <div class="inline-flex items-center gap-2 text-[12px] text-rose-700">
@@ -204,15 +231,25 @@ const scanDateLabel = computed(() => {
         </div>
       </template>
 
-      <!-- committing: in-flight spinner overlay -->
+      <!-- committing: real upload-progress (XHR onprogress) + percent text -->
       <template v-else-if="props.row.state === 'committing'">
-        <div class="inline-flex items-center gap-2 text-[12px] text-slate-500">
-          <span class="text-muw-blue inline-block">
-            <svg class="muw-portal-spin" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
-              <path d="M21 12a9 9 0 1 1-6.2-8.5" opacity="0.9" />
-            </svg>
-          </span>
-          {{ t('octPortal.assignment.uploading') }}
+        <div class="flex items-center justify-between gap-3">
+          <div class="inline-flex items-center gap-2 text-[12px] text-slate-600 font-medium">
+            <span class="w-1.5 h-1.5 rounded-full bg-muw-teal animate-pulse"></span>
+            {{ t('octPortal.assignment.uploading') }}
+          </div>
+          <!--
+            Right-aligned percent label per the Claude Design
+            oct-upload-portal reference. Snaps to "100 %" at
+            upload.onloadend (server is still persisting / running
+            preprocess + remote dispatch, but the bytes are over the
+            wire — that's the signal the operator wants). The row
+            transitions out of committing shortly after.
+          -->
+          <span
+            class="font-mono text-[12px] font-semibold text-muw-teal-700 shrink-0 tabular-nums"
+            :data-testid="`upload-pct-${props.row.rowId}`"
+          >{{ uploadPercentLabel }}</span>
         </div>
       </template>
 
@@ -317,7 +354,7 @@ const scanDateLabel = computed(() => {
         </div>
       </template>
 
-      <template v-else-if="props.row.state === 'error'">
+      <template v-else-if="props.row.state === 'error' || props.row.state === 'duplicate'">
         <button
           type="button"
           class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50"

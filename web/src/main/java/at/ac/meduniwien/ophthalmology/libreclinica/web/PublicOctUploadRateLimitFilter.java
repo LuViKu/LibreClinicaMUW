@@ -84,6 +84,34 @@ public class PublicOctUploadRateLimitFilter extends OncePerRequestFilter {
         }
     }
 
+    /**
+     * 2026-06-18 — async-dispatch support. Spring Security's
+     * FilterChainProxy runs this filter on every request (even those
+     * routed to auth'd controllers — only the URI check below
+     * short-circuits the rate-limit logic). When the controller calls
+     * an async-style endpoint (notably the SSE
+     * {@code /retinal-jobs/{id}/status/stream} channel the SPA opens
+     * for live status updates), Tomcat requires every participating
+     * filter to declare async support OR opt out of the async
+     * dispatch. We opt out: this filter has no business participating
+     * in async dispatches — the token-bucket check fires once on the
+     * initial request and the bucket state needs no re-evaluation
+     * during dispatch. Without this, the SSE stream throws
+     * {@code IllegalStateException: Async support must be enabled on
+     * a servlet and for all filters involved in async request
+     * processing.} every 2 s (the SPA's retry interval) and the
+     * server log fills with stack traces.
+     */
+    @Override
+    protected boolean shouldNotFilterAsyncDispatch() {
+        return true;
+    }
+
+    @Override
+    protected boolean shouldNotFilterErrorDispatch() {
+        return true;
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,

@@ -170,11 +170,24 @@ def build_geometry(
                 _SLO_SCALE_ENV, slo_override_env,
             )
             fundus_lateral_mm_per_px = float(bv.lateral_mm)
-            fundus_slice_mm_per_px = float(bv.slice_mm)
+            # 2026-06-19 — fundus_slice_mm_per_px must be a FUNDUS
+            # pixel scale (mm per fundus pixel along the slice axis),
+            # not the bscan's inter-slice spacing (mm per bscan slice).
+            # Spectralis SLO is square + the bscan's lateral mm/px is
+            # a passable approximation of the fundus pixel scale in
+            # both axes, so we use bv.lateral_mm for BOTH. Using
+            # bv.slice_mm (bscan's z-axis spacing, e.g. 0.21 mm/slice)
+            # caused the bscan_positions y-stride to underestimate
+            # the actual fundus-pixel span by ~10× — the bscan
+            # rectangle rendered ~96 px tall in a 1536 px fundus
+            # (job 51, 2026-06-19 smoke).
+            fundus_slice_mm_per_px = float(bv.lateral_mm)
             scale_source = "bscan_fallback"
     else:
         fundus_lateral_mm_per_px = float(bv.lateral_mm)
-        fundus_slice_mm_per_px = float(bv.slice_mm)
+        # Same correction as above — bscan_fallback uses lateral_mm
+        # for both axes, not slice_mm.
+        fundus_slice_mm_per_px = float(bv.lateral_mm)
         scale_source = "bscan_fallback"
 
     positions: list[dict[str, float | int]] = []

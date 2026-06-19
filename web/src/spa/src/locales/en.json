@@ -1534,7 +1534,8 @@
     },
     "toast": {
       "bindOk": "[NEEDS_REVIEW] Scan assigned.",
-      "bindRaced": "[NEEDS_REVIEW] Already assigned by someone else — list refreshed."
+      "bindRaced": "[NEEDS_REVIEW] Already assigned by someone else — list refreshed.",
+      "noEventCrf": "[NEEDS_REVIEW] No CRF for this visit yet — open the subject's visit first so the CRF is initialised, then re-assign."
     }
   },
   "modalities": {
@@ -2359,6 +2360,8 @@
     "assignment": {
       "patientFound": "[NEEDS_REVIEW] Patient found",
       "patientNotFound": "[NEEDS_REVIEW] Patient not found",
+      "alreadyUploaded": "[NEEDS_REVIEW] Already uploaded",
+      "alreadyUploadedDetail": "[NEEDS_REVIEW] Identical .e2e already exists as job",
       "multipleStudies": "[NEEDS_REVIEW] Multiple studies",
       "patientIdMissingPrefix": "[NEEDS_REVIEW] PatientId",
       "patientIdMissingSuffix": "[NEEDS_REVIEW] does not exist in any study.",

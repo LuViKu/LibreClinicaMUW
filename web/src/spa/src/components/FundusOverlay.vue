@@ -279,13 +279,24 @@ function ringLabel(diameterMm: number): string {
       :aria-label="t('retinal.fundusOverlay.aria', { laterality })"
     >
       <!-- 1. Fundus image -->
+      <!--
+        2026-06-19 — removed crossorigin="anonymous". The artifact
+        endpoint at /pages/api/v1/retinal-jobs/{id}/artifacts/fundus.png
+        is auth-gated by guardSession; an anonymous CORS request omits
+        the JSESSIONID cookie and the backend returns 401 → the browser
+        silently fails the image load. The SVG renders empty (just the
+        bg-slate-900 wrapper) and the operator sees a black square with
+        the overlay primitives painted on top. Since the SPA is served
+        from the same origin as the API (Vite proxy in dev, single
+        domain in prod), the credential-bearing same-origin request is
+        what we want — no CORS needed.
+      -->
       <image
         :href="fundusUrl"
         :width="geometry.fundus.width_px"
         :height="geometry.fundus.height_px"
         x="0"
         y="0"
-        crossorigin="anonymous"
         preserveAspectRatio="none"
       />
 

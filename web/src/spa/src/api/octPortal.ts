@@ -132,6 +132,120 @@ function messageFrom(body: unknown, fallback: string): string {
 }
 
 /**
+ * 2026-06-19 — one row in the response of
+ * {@code GET /api/v1/public/oct-upload/patients/{studySubjectId}/events}.
+ *
+ * <p>Shape mirrors {@code StudyEventDto} so VisitPickerModal can
+ * render the public + auth'd paths identically, with one addition:
+ * {@code firstEventCrfId} pre-resolves the value the picker would
+ * otherwise second-hop through {@code GET /events/{id}/detail} to
+ * fetch. Saves one round trip + works without an authenticated
+ * session (the auth'd detail endpoint requires login).
+ */
+export interface PublicStudyEvent {
+  id: string
+  eventDefinitionOid: string
+  eventLabel: string
+  ordinal: number
+  dateStarted: string
+  dateEnded: string | null
+  location: string | null
+  status: string
+  repeating: boolean
+  /** First non-removed event_crf row's id; null when the visit has
+   *  no started CRF yet. The bind endpoint rejects null targets, so
+   *  the picker surfaces "Keine Eingabemaske" when this is null. */
+  firstEventCrfId: number | null
+}
+
+/**
+ * 2026-06-19 — list events for a study_subject via the anonymous
+ * public OCT-portal path. Backs the "Visite wählen" / "Studie wählen"
+ * flows mounted at {@code /app/oct-upload}; without it those flows
+ * 401 because the equivalent auth'd endpoint at
+ * {@code /api/v1/events?subjectId=…} requires a session.
+ */
+export async function listPatientEventsPublic(
+  studySubjectId: number,
+): Promise<PublicStudyEvent[]> {
+  const res = await fetch(`${BASE}/patients/${studySubjectId}/events`, {
+    method: 'GET',
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  })
+  const body = await parseJsonOrNull(res)
+  if (!res.ok) {
+    throw new OctPortalError(
+      res.status,
+      messageFrom(body, `GET /patients/${studySubjectId}/events → ${res.status}`),
+      body,
+    )
+  }
+  return (body ?? []) as PublicStudyEvent[]
+}
+
+/**
+ * 2026-06-19 — hex SHA-256 of the .e2e bytes, computed via the
+ * Web Crypto API (crypto.subtle.digest). Used by the pre-upload
+ * dedup gate at {@link preflightSha256} so the operator never
+ * uploads 200 MB of bytes that already exist on the server.
+ *
+ * <p>Reads the full file into an ArrayBuffer. For very large .e2e
+ * files (>500 MB on a low-memory device) this could be slow / OOM
+ * the browser; the SPA gates the call on a reasonable file-size
+ * ceiling at the call site. Returns a lower-case hex string to
+ * match the backend's {@code [0-9a-f]{{64}}} validator.
+ */
+export async function sha256OfFile(file: File): Promise<string> {
+  const buf = await file.arrayBuffer()
+  const digest = await crypto.subtle.digest('SHA-256', buf)
+  const bytes = new Uint8Array(digest)
+  let hex = ''
+  for (let i = 0; i < bytes.length; i++) {
+    hex += bytes[i].toString(16).padStart(2, '0')
+  }
+  return hex
+}
+
+/** Response of {@code GET /api/v1/public/oct-upload/preflight}. */
+export interface PreflightResponse {
+  exists: boolean
+  jobId: number | null
+}
+
+/**
+ * 2026-06-19 — pre-upload dedup gate. The SPA calls this right after
+ * client-side parsing (and computing the SHA-256) of the .e2e file
+ * and BEFORE attempting an upload, so a re-upload of an already-
+ * known scan short-circuits to the "Bereits hochgeladen" UX without
+ * the 200 MB roundtrip + 409 dance.
+ *
+ * <p>The backend's commit-time uniqueness constraint still race-
+ * guards against concurrent uploads, so this preflight is a UX
+ * optimisation, not a security gate.
+ */
+export async function preflightSha256(
+  sha256: string,
+  scanIndex: number,
+): Promise<PreflightResponse> {
+  const url = `${BASE}/preflight?sha256=${encodeURIComponent(sha256)}&scanIndex=${scanIndex}`
+  const res = await fetch(url, {
+    method: 'GET',
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  })
+  const body = await parseJsonOrNull(res)
+  if (!res.ok) {
+    throw new OctPortalError(
+      res.status,
+      messageFrom(body, `GET /preflight → ${res.status}`),
+      body,
+    )
+  }
+  return (body ?? { exists: false, jobId: null }) as PreflightResponse
+}
+
+/**
  * POST {@code /resolve}. Takes the operator's per-scan (PatientId,
  * scanDate, laterality) triples parsed client-side from .e2e headers
  * and returns per-scan match candidates.
@@ -167,7 +281,10 @@ export async function resolveScans(
  * "Parken" — the controller will accept a null eventCrfId in that
  * case and stamp the job with status='PARKED'.
  */
-export async function commitScan(req: CommitScanRequest): Promise<CommitResponse> {
+export async function commitScan(
+  req: CommitScanRequest,
+  onProgress?: (pct: number) => void,
+): Promise<CommitResponse> {
   if (req.park === (req.eventCrfId !== null)) {
     // Mirror the controller's mutual-exclusion guard at the SPA edge
     // so the store / UI never has to deal with a 400 round-trip.
@@ -189,21 +306,57 @@ export async function commitScan(req: CommitScanRequest): Promise<CommitResponse
   }
   form.append('park', String(req.park))
 
-  const res = await fetch(`${BASE}/commit`, {
-    method: 'POST',
-    credentials: 'omit',
-    headers: { Accept: 'application/json' }, // browser sets Content-Type w/ boundary
-    body: form,
+  // 2026-06-19 — switched from fetch() to XMLHttpRequest so the SPA
+  // can drive a REAL upload-progress UI (fetch's Request body doesn't
+  // expose progress events). The deterministic JS timer we used
+  // before painted a fake fill that diverged from reality — it kept
+  // growing on errors (e.g. 409 duplicate), then snapped to 100 %
+  // long before the upload actually finished on slow disks.
+  return new Promise<CommitResponse>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('POST', `${BASE}/commit`)
+    xhr.responseType = 'text'
+    xhr.setRequestHeader('Accept', 'application/json')
+    // XHR's upload object is the source of real progress events. The
+    // browser fires `progress` until the request body is fully sent
+    // to the server; the response body doesn't factor in. That's
+    // exactly the UX signal we want — "the bytes are over the wire".
+    xhr.upload.onprogress = (evt) => {
+      if (!onProgress) return
+      if (evt.lengthComputable && evt.total > 0) {
+        const pct = Math.min(100, Math.max(0, (evt.loaded / evt.total) * 100))
+        onProgress(pct)
+      }
+    }
+    xhr.upload.onloadend = () => {
+      // Upload bytes fully transferred — the server is now persisting
+      // + INSERTing. Hold at 100 % until the response lands; the
+      // store flips the row to a terminal state at that point.
+      if (onProgress) onProgress(100)
+    }
+    xhr.onload = () => {
+      const status = xhr.status
+      let body: unknown = null
+      try { body = xhr.responseText ? JSON.parse(xhr.responseText) : null }
+      catch { body = null }
+      if (status >= 200 && status < 300) {
+        resolve((body ?? { jobId: 0, status: 'UNKNOWN' }) as CommitResponse)
+      } else {
+        reject(new OctPortalError(
+          status,
+          messageFrom(body, `POST /commit → ${status}`),
+          body,
+        ))
+      }
+    }
+    xhr.onerror = () => reject(new OctPortalError(
+      0, 'Network error during /commit', null,
+    ))
+    xhr.onabort = () => reject(new OctPortalError(
+      0, 'Upload aborted', null,
+    ))
+    xhr.send(form)
   })
-  const body = await parseJsonOrNull(res)
-  if (!res.ok) {
-    throw new OctPortalError(
-      res.status,
-      messageFrom(body, `POST /commit → ${res.status}`),
-      body,
-    )
-  }
-  return (body ?? { jobId: 0, status: 'UNKNOWN' }) as CommitResponse
 }
 
 /**

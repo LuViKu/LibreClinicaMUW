@@ -128,6 +128,18 @@ public class RetinalResultsApiController {
     private final StudySubjectFinder studySubjectFinder;
     private final RemoteRetinalInferenceClient remoteClient;
     private final RetinalJobStatusBroadcaster broadcaster;
+    /**
+     * Dispatcher for the post-bind remote run. The bind endpoint only
+     * flips {@code parked → remote_pending}; the actual GPU sidecar
+     * call lives on {@link RetinalInferenceApiController#handleRemote
+     * RetinalInferenceApiController.handleRemote}, which was previously
+     * private to the upload path. Cross-controller wiring is the
+     * minimal-diff fix for the 2026-06-18 smoke gap where bound parked
+     * jobs sat in {@code remote_pending} forever (the local DB-poll
+     * worker filters that status out by design). Nullable so the
+     * IT-friendly back-compat ctor stays valid.
+     */
+    private final RetinalInferenceApiController inferenceController;
 
     @Autowired
     public RetinalResultsApiController(@Qualifier("dataSource") DataSource dataSource,
@@ -135,13 +147,15 @@ public class RetinalResultsApiController {
                                        RetinalArtifactStorageService artifactStore,
                                        StudySubjectFinder studySubjectFinder,
                                        RemoteRetinalInferenceClient remoteClient,
-                                       RetinalJobStatusBroadcaster broadcaster) {
+                                       RetinalJobStatusBroadcaster broadcaster,
+                                       RetinalInferenceApiController inferenceController) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.artifactStore = artifactStore;
         this.studySubjectFinder = studySubjectFinder;
         this.remoteClient = remoteClient;
         this.broadcaster = broadcaster;
+        this.inferenceController = inferenceController;
     }
 
     /**
@@ -155,7 +169,7 @@ public class RetinalResultsApiController {
     public RetinalResultsApiController(DataSource dataSource,
                                        SiteVisibilityFilter siteVisibilityFilter,
                                        RetinalArtifactStorageService artifactStore) {
-        this(dataSource, siteVisibilityFilter, artifactStore, null, null, null);
+        this(dataSource, siteVisibilityFilter, artifactStore, null, null, null, null);
     }
 
     /* ====================================================================== */
@@ -236,7 +250,9 @@ public class RetinalResultsApiController {
 
         String e2eUuid = e2eUuidFromPath(row.e2ePath);
         List<String> artifactNames = listArtifactNames(row.bscanMasksDir);
-        List<String> companions = listCompanionNames(e2eUuid);
+        // 2026-06-19 — thread scan_index so multi-volume uploads
+        // discover their companions under scan-N/.
+        List<String> companions = listCompanionNames(e2eUuid, row.scanIndex);
 
         String fundusUrl   = companions.contains("fundus.png")
                 ? "/pages/api/v1/retinal-jobs/" + jobId + "/artifacts/fundus.png" : null;
@@ -512,10 +528,13 @@ public class RetinalResultsApiController {
         try {
             if (isCompanion) {
                 String e2eUuid = e2eUuidFromPath(row.e2ePath);
+                // 2026-06-19 — pass the job's scan_index so the
+                // resolver looks under scan-N/ for multi-volume uploads
+                // (preprocess sidecar layout change observed 2026-06-18).
                 target = switch (name) {
-                    case "bscan.dcm"     -> artifactStore.resolveBscanDcm(e2eUuid);
-                    case "fundus.png"    -> artifactStore.resolveFundus(e2eUuid);
-                    case "geometry.json" -> artifactStore.resolveGeometry(e2eUuid);
+                    case "bscan.dcm"     -> artifactStore.resolveBscanDcm(e2eUuid, row.scanIndex);
+                    case "fundus.png"    -> artifactStore.resolveFundus(e2eUuid, row.scanIndex);
+                    case "geometry.json" -> artifactStore.resolveGeometry(e2eUuid, row.scanIndex);
                     default -> throw new NoSuchFileException(name);
                 };
             } else {
@@ -699,12 +718,91 @@ public class RetinalResultsApiController {
             broadcaster.publish(jobId, newStatus);
         }
 
+        // 2026-06-18: when the remote sidecar is configured, hand the
+        // job off to RetinalInferenceApiController.handleRemote so it
+        // runs end-to-end (segment → persist → result → done) instead
+        // of sitting in `remote_pending` forever. The local DB-poll
+        // worker filters `remote_pending` out by design (DR-022 worker-
+        // race kill), so this is the only path that drains the queue.
+        // Soft-fail: if the dispatch throws, the row already carries
+        // `remote_pending` and the operator can re-bind / re-run from
+        // the SPA's existing affordances.
+        String finalStatus = newStatus;
+        if ("remote_pending".equals(newStatus) && inferenceController != null) {
+            JobRunHandle handle = fetchJobRunHandle(jobId);
+            if (handle != null) {
+                try {
+                    inferenceController.handleRemote(
+                            jobId, handle.task, handle.e2ePath, handle.eyeLaterality,
+                            handle.scanIndex, eventCrfId);
+                } catch (Exception remoteEx) {
+                    LOG.warn("Remote dispatch threw for bound job {}: {}", jobId, remoteEx.getMessage());
+                }
+                finalStatus = readJobStatus(jobId, newStatus);
+            }
+        }
+
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("jobId", jobId);
-        resp.put("status", newStatus);
+        resp.put("status", finalStatus);
         LOG.info("Retinal park-bind: job {} -> event_crf {} (status={})",
-                jobId, eventCrfId, newStatus);
+                jobId, eventCrfId, finalStatus);
         return ResponseEntity.ok(resp);
+    }
+
+    /** Slim row carrier for the bind→remote handoff. */
+    private static final class JobRunHandle {
+        String task;
+        String e2ePath;
+        String eyeLaterality;
+        int scanIndex;
+    }
+
+    /**
+     * Read the columns {@code handleRemote} needs to dispatch the job
+     * to the GPU sidecar. The bind UPDATE has already flipped the row
+     * to {@code remote_pending}; this lookup just pulls the immutable
+     * upload metadata. Returns {@code null} if the row vanished
+     * mid-flight — defensive but unreachable from the normal path.
+     */
+    private JobRunHandle fetchJobRunHandle(long jobId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT task, e2e_path, eye_laterality, scan_index "
+                             + "FROM retinal_inference_job WHERE job_id = ?")) {
+            ps.setLong(1, jobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                JobRunHandle h = new JobRunHandle();
+                h.task = rs.getString("task");
+                h.e2ePath = rs.getString("e2e_path");
+                h.eyeLaterality = rs.getString("eye_laterality");
+                h.scanIndex = rs.getInt("scan_index");
+                return h;
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("Failed to fetch run-handle for bound job {}: {}", jobId, sqlEx.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Re-read {@code retinal_inference_job.status} after the dispatch
+     * so the bind response reflects the post-{@code handleRemote}
+     * terminal state ({@code done} on success, {@code queued} on remote
+     * failure, or unchanged {@code remote_pending} if the dispatch
+     * couldn't fire). Falls back to the supplied default on read error.
+     */
+    private String readJobStatus(long jobId, String fallback) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT status FROM retinal_inference_job WHERE job_id = ?")) {
+            ps.setLong(1, jobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getString("status");
+            }
+        } catch (SQLException ignored) { /* best-effort */ }
+        return fallback;
     }
 
     /* ====================================================================== */
@@ -910,6 +1008,10 @@ public class RetinalResultsApiController {
         Double confidence;
         // visibility — derived via the event_crf → study_event → study_subject chain
         Integer studyId;
+        // 2026-06-19 — scan_index from retinal_inference_job. Needed by
+        // the artifact resolver to pick the right scan-N/ subdirectory
+        // for multi-volume .e2e uploads.
+        int scanIndex;
     }
 
     /** Slim row used by the bind endpoint — only the bits the flip needs. */
@@ -935,6 +1037,7 @@ public class RetinalResultsApiController {
     private JobRow fetchJobDetail(Connection c, long jobId) throws SQLException {
         String sql = "SELECT j.job_id, j.event_crf_id, j.task, j.e2e_path, "
                 + "       j.eye_laterality, j.status, j.enqueued_at, j.completed_at, j.model_version, "
+                + "       j.scan_index, "
                 + "       r.output_payload, r.primary_metric_value, r.primary_metric_unit, "
                 + "       r.bscan_masks_dir, r.confidence, ss.study_id "
                 + "  FROM retinal_inference_job j "
@@ -965,6 +1068,7 @@ public class RetinalResultsApiController {
                 row.confidence = rs.wasNull() ? null : cf;
                 int sid = rs.getInt("study_id");
                 row.studyId = rs.wasNull() ? null : sid;
+                row.scanIndex = rs.getInt("scan_index");
                 return row;
             }
         }
@@ -1076,14 +1180,18 @@ public class RetinalResultsApiController {
     }
 
     private List<String> listCompanionNames(String e2eUuid) {
+        return listCompanionNames(e2eUuid, -1);
+    }
+
+    private List<String> listCompanionNames(String e2eUuid, int scanIndex) {
         if (e2eUuid == null || e2eUuid.isBlank()) return List.of();
         List<String> out = new ArrayList<>();
         for (String name : COMPANION_NAMES) {
             try {
                 switch (name) {
-                    case "bscan.dcm"     -> artifactStore.resolveBscanDcm(e2eUuid);
-                    case "fundus.png"    -> artifactStore.resolveFundus(e2eUuid);
-                    case "geometry.json" -> artifactStore.resolveGeometry(e2eUuid);
+                    case "bscan.dcm"     -> artifactStore.resolveBscanDcm(e2eUuid, scanIndex);
+                    case "fundus.png"    -> artifactStore.resolveFundus(e2eUuid, scanIndex);
+                    case "geometry.json" -> artifactStore.resolveGeometry(e2eUuid, scanIndex);
                     default -> { }
                 }
                 out.add(name);

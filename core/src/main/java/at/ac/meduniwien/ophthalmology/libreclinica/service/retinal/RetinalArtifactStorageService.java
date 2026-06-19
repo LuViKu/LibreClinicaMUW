@@ -121,20 +121,40 @@ public class RetinalArtifactStorageService {
 
     /** Companion file: PHI-redacted DICOM the preprocess sidecar wrote. */
     public Path resolveBscanDcm(String e2eUuid) throws IOException {
-        return resolveCompanion(e2eUuid, "bscan.dcm");
+        return resolveCompanion(e2eUuid, "bscan.dcm", -1);
     }
 
     /** Companion file: SLO en-face PNG the preprocess sidecar extracted. */
     public Path resolveFundus(String e2eUuid) throws IOException {
-        return resolveCompanion(e2eUuid, "fundus.png");
+        return resolveCompanion(e2eUuid, "fundus.png", -1);
     }
 
     /** Companion file: fundus + bscan registration JSON. */
     public Path resolveGeometry(String e2eUuid) throws IOException {
-        return resolveCompanion(e2eUuid, "geometry.json");
+        return resolveCompanion(e2eUuid, "geometry.json", -1);
     }
 
-    private Path resolveCompanion(String e2eUuid, String name) throws IOException {
+    /**
+     * 2026-06-19 — multi-volume-aware overloads. The preprocess
+     * sidecar writes companion files for multi-volume {@code .e2e}
+     * uploads under per-scan subdirectories named {@code scan-{N+1}/}
+     * (1-indexed, sidecar convention) instead of the legacy root
+     * layout {@code <e2eUuid>/<name>}. The resolvers below look in
+     * {@code scan-{scanIndex+1}/} first and fall back to the root,
+     * so legacy single-volume uploads + tests against the older
+     * sidecar continue to work.
+     */
+    public Path resolveBscanDcm(String e2eUuid, int scanIndex) throws IOException {
+        return resolveCompanion(e2eUuid, "bscan.dcm", scanIndex);
+    }
+    public Path resolveFundus(String e2eUuid, int scanIndex) throws IOException {
+        return resolveCompanion(e2eUuid, "fundus.png", scanIndex);
+    }
+    public Path resolveGeometry(String e2eUuid, int scanIndex) throws IOException {
+        return resolveCompanion(e2eUuid, "geometry.json", scanIndex);
+    }
+
+    private Path resolveCompanion(String e2eUuid, String name, int scanIndex) throws IOException {
         if (e2eUuid == null || e2eUuid.isBlank()) {
             throw new IllegalArgumentException("e2eUuid required to resolve " + name);
         }
@@ -142,10 +162,30 @@ public class RetinalArtifactStorageService {
         if (!e2eUuid.matches("[A-Za-z0-9_.-]+")) {
             throw new IllegalArgumentException("e2eUuid contains disallowed chars: " + e2eUuid);
         }
-        Path p = Path.of(bscanStorePath(), e2eUuid, name);
-        if (!Files.exists(p)) {
-            throw new NoSuchFileException(p.toString());
+        // 2026-06-19 — multi-volume layout fallback ladder. The
+        // preprocess sidecar's exact subdir naming convention isn't
+        // fully consistent: for some uploads it honours the
+        // {@code scan_index} form-field and writes to
+        // {@code scan-{scanIndex+1}/}; for others (notably the
+        // 2026-06-19 smoke run on jobs 49–51) it writes to
+        // {@code scan-1/} regardless of the requested index. Try the
+        // matching subdir first, then the conservative {@code scan-1/}
+        // single-scan fallback, then the legacy root layout. {@code -1}
+        // skips the subdir probes entirely (IT tests, parked-list).
+        Path base = Path.of(bscanStorePath(), e2eUuid);
+        if (scanIndex >= 0) {
+            Path withSubdir = base.resolve("scan-" + (scanIndex + 1)).resolve(name);
+            if (Files.exists(withSubdir)) return withSubdir;
+            // Sidecar quirk: writes scan-1/ even when scan_index > 0.
+            if (scanIndex != 0) {
+                Path scan1 = base.resolve("scan-1").resolve(name);
+                if (Files.exists(scan1)) return scan1;
+            }
         }
-        return p;
+        Path direct = base.resolve(name);
+        if (!Files.exists(direct)) {
+            throw new NoSuchFileException(direct.toString());
+        }
+        return direct;
     }
 }

@@ -33,7 +33,9 @@ import { computed, ref } from 'vue'
 import { parseE2e, type E2eScan } from '@/lib/e2eParser'
 import {
   commitScan,
+  preflightSha256,
   resolveScans,
+  sha256OfFile,
   undoCommit,
   type EventCandidate,
   type ResolveCandidate,
@@ -54,6 +56,15 @@ export type RowState =
   | 'error'
   | 'committing'
   | 'committed'
+  /**
+   * 2026-06-19 — pre-upload dedup gate. After client-side SHA-256
+   * hashing + preflight call, the backend reported that an existing
+   * job carries this exact (sha256, scanIndex). The row carries the
+   * pointer in {@link ReviewRow.existingJobId} so the SPA can render
+   * "Bereits hochgeladen — Job #X" instead of letting the operator
+   * spend bandwidth on a no-op upload.
+   */
+  | 'duplicate'
 
 /** Aggregated per-file row. Shape designed for the table cells:
  *  RowMeta (file/pid/date/eye), Assignment (study/visit), Action. */
@@ -79,6 +90,14 @@ export interface ReviewRow {
   /** Set after /commit returns; needed for the 60-s undo window. */
   jobId?: number
   committedAt?: Date
+  /**
+   * 2026-06-19 — pointer to a prior upload that already carries the
+   * same (e2e_sha256, scan_index). Populated when the preflight call
+   * returns {@code exists=true}; rendered as "Job #N" in the
+   * duplicate state's UX so the operator knows where the scan
+   * landed previously. Undefined for non-duplicate rows.
+   */
+  existingJobId?: number
 }
 
 /** UUID generator that works in jsdom (where crypto.randomUUID is
@@ -114,6 +133,21 @@ export const useOctPortalStore = defineStore('octPortal', () => {
    *  + committed + errored — dismissed rows are pruned). */
   const rows = ref<ReviewRow[]>([])
 
+  /**
+   * 2026-06-19 — per-row upload progress percent (0..100). Populated
+   * by {@link commitScan}'s XHR {@code onProgress} callback; the
+   * ReviewRow component binds this to the {@code --muw-portal-fill-pct}
+   * CSS custom property so the L→R green fill reflects REAL upload
+   * progress instead of a deterministic JS timer (which diverged from
+   * reality on slow disks + over-painted on 409 duplicates).
+   *
+   * <p>Cleared back to absent on terminal row states (committed,
+   * error) so a re-paint doesn't show a stale percent. The keyed Map
+   * shape lets the SPA distinguish "no progress yet" (key absent)
+   * from "0 %" (start of upload).
+   */
+  const uploadPct = ref<Map<string, number>>(new Map())
+
   /** True while at least one row is in the `parsing` state — drives
    *  the view's `parsing` artboard vs `review`. */
   const isParsing = computed(() => rows.value.some((r) => r.state === 'parsing'))
@@ -134,6 +168,7 @@ export const useOctPortalStore = defineStore('octPortal', () => {
       error: 0,
       committing: 0,
       committed: 0,
+      duplicate: 0,
     }
     for (const r of rows.value) {
       byState[r.state] = (byState[r.state] ?? 0) + 1
@@ -240,9 +275,55 @@ export const useOctPortalStore = defineStore('octPortal', () => {
     const allTargets = rows.value.filter((r) => r.state === 'parsing' && r.scan)
     if (allTargets.length === 0) return
 
+    // 2026-06-19 — pre-upload dedup gate. Hash each file's bytes
+    // client-side and ask the backend whether the (sha256, scanIndex)
+    // pair already exists. Rows that match short-circuit to the
+    // 'duplicate' state, sparing the operator a 200 MB upload that
+    // would land on the same row anyway. The hash is computed once
+    // per FILE (not per scan_index) and reused across all of that
+    // file's review rows below.
+    //
+    // Best-effort: a network failure on /preflight leaves the row in
+    // the original flow (commit-time uniqueness still gates the
+    // race). Hash compute is awaited sequentially per file so the
+    // browser doesn't OOM on a parade of large .e2e's.
+    const seenFileHash = new Map<File, string>()
+    for (const r of allTargets) {
+      let hash = seenFileHash.get(r.file)
+      if (hash == null) {
+        try {
+          hash = await sha256OfFile(r.file)
+          seenFileHash.set(r.file, hash)
+        } catch {
+          // Hash compute failed — skip preflight for this file; commit
+          // path will still catch the duplicate at unique-index time.
+          continue
+        }
+      }
+      try {
+        const pf = await preflightSha256(hash, r.scan!.scanIndex)
+        if (pf.exists && pf.jobId != null) {
+          const idx = rows.value.findIndex((x) => x.rowId === r.rowId)
+          if (idx !== -1) {
+            rows.value[idx] = {
+              ...rows.value[idx],
+              state: 'duplicate',
+              existingJobId: pf.jobId,
+            }
+          }
+        }
+      } catch {
+        // /preflight 5xx / network — leave row in parsing so the
+        // regular resolve flow takes over.
+      }
+    }
+
+    // Now build the targets list for /resolve, EXCLUDING rows that
+    // the preflight gate already flipped to 'duplicate'.
+    const survivors = rows.value.filter((r) => r.state === 'parsing' && r.scan)
     // Split: empty patientId → directly nopatient; rest → /resolve.
-    const headerLess = allTargets.filter((r) => !r.scan!.patientId.trim())
-    const targets = allTargets.filter((r) => r.scan!.patientId.trim().length > 0)
+    const headerLess = survivors.filter((r) => !r.scan!.patientId.trim())
+    const targets = survivors.filter((r) => r.scan!.patientId.trim().length > 0)
 
     for (const r of headerLess) {
       const idx = rows.value.findIndex((x) => x.rowId === r.rowId)
@@ -354,16 +435,31 @@ export const useOctPortalStore = defineStore('octPortal', () => {
   ): Promise<void> {
     if (!row.scan) return
     flipRowState(row.rowId, 'committing')
+    // Reset progress to 0; the XHR.upload events drive it from there.
+    uploadPct.value.set(row.rowId, 0)
     try {
-      const res = await commitScan({
-        file: row.file,
-        patientId: row.scan.patientId,
-        scanDate: isoLocalDate(row.scan.scanDate),
-        laterality: row.scan.laterality,
-        scanIndex: row.scan.scanIndex,
-        eventCrfId,
-        park: parkFlag,
-      })
+      const res = await commitScan(
+        {
+          file: row.file,
+          patientId: row.scan.patientId,
+          scanDate: isoLocalDate(row.scan.scanDate),
+          laterality: row.scan.laterality,
+          scanIndex: row.scan.scanIndex,
+          eventCrfId,
+          park: parkFlag,
+        },
+        (pct) => {
+          // 2026-06-19 — real upload-progress callback from XHR. Map
+          // shape (rather than direct mutation on the row) keeps the
+          // hot path off the rows array so a 1 KB/sec stream of pct
+          // updates doesn't churn the rows-array reactivity.
+          uploadPct.value.set(row.rowId, pct)
+          // Trigger Map reactivity in Vue 3 (Maps need replacement
+          // for shallow tracking — replace the Map reference so the
+          // computed bindings in ReviewRow refresh).
+          uploadPct.value = new Map(uploadPct.value)
+        },
+      )
       const idx = rows.value.findIndex((r) => r.rowId === row.rowId)
       if (idx === -1) return
       rows.value[idx] = {
@@ -372,12 +468,18 @@ export const useOctPortalStore = defineStore('octPortal', () => {
         jobId: res.jobId,
         committedAt: new Date(),
       }
+      // Clear progress so the next render doesn't carry a stale 100 %.
+      uploadPct.value.delete(row.rowId)
+      uploadPct.value = new Map(uploadPct.value)
     } catch (e) {
       const msg =
         e instanceof Error && e.message
           ? `Upload fehlgeschlagen: ${e.message}`
           : 'Upload fehlgeschlagen'
       flipRowToError(row.rowId, msg)
+      // Drop the progress so the fill doesn't linger on the error row.
+      uploadPct.value.delete(row.rowId)
+      uploadPct.value = new Map(uploadPct.value)
     }
   }
 
@@ -608,6 +710,7 @@ export const useOctPortalStore = defineStore('octPortal', () => {
 
   return {
     rows,
+    uploadPct,
     isParsing,
     reviewReady,
     counts,

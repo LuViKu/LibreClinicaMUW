@@ -28,6 +28,22 @@
   </appender>
 
   <!--
+    2026-06-19 — raw CONSOLE appender that bypasses every LogFilterFacility*
+    chain attached to the main CONSOLE above. Used by the dedicated <logger>
+    entries for the retinal-inference packages so their WARN / ERROR logs
+    (remote /run failures, preprocess sidecar errors, etc.) actually reach
+    `docker logs`. Without this, the FacilityLog filters route these events
+    to per-facility files only — making it impossible to diagnose why the
+    remote GPU sidecar returns null on /run from the running container's
+    stdout. See the 2026-06-18 OCT-portal smoke #2 deferred fix.
+  -->
+  <appender name="CONSOLE_RAW" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>${consolePattern}</pattern>
+    </encoder>
+  </appender>
+
+  <!--
     Phase E hardening (adjacent gap, 2026-06-10): structured JSON appender
     for SIEM / institutional log aggregation. Sits ALONGSIDE the existing
     20+ text appenders — sysadmins keep grep-able text, SIEM gets JSON.
@@ -542,6 +558,29 @@
     <logger additivity="false" name="jdbc.sqltiming">
         <level value="${logLevel}"/>
         <appender-ref ref="DB_LOGFILE"/>
+    </logger>
+
+    <!--
+      2026-06-19 — retinal-inference diagnostic loggers. Route DEBUG
+      from the remote sidecar client + retinal controllers straight to
+      CONSOLE_RAW (no facility filter chain). These packages emit the
+      "Remote /run failed", "Preprocess sidecar returned null", and
+      "Remote dispatch threw" WARN lines that the OCT-portal smoke
+      needs to debug GPU-side errors. Set to DEBUG (not INFO) so the
+      RestTemplate's exception body is captured when the sidecar
+      returns a non-2xx.
+    -->
+    <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.service.retinal" level="DEBUG">
+        <appender-ref ref="CONSOLE_RAW"/>
+    </logger>
+    <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.RetinalInferenceApiController" level="DEBUG">
+        <appender-ref ref="CONSOLE_RAW"/>
+    </logger>
+    <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.RetinalResultsApiController" level="DEBUG">
+        <appender-ref ref="CONSOLE_RAW"/>
+    </logger>
+    <logger additivity="false" name="at.ac.meduniwien.ophthalmology.libreclinica.controller.api.PublicOctUploadController" level="DEBUG">
+        <appender-ref ref="CONSOLE_RAW"/>
     </logger>
 
   <!-- Phase E.0 (2026-05-30): permanent root → CONSOLE at INFO. This
