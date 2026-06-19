@@ -372,7 +372,13 @@ function ringLabel(diameterMm: number): string {
         preserveAspectRatio="none"
       />
 
-      <!-- 1b. En-face biomarker projection (Wave 5) — stretched to bbox -->
+      <!-- 1b. En-face biomarker projection (Wave 5) — stretched to bbox.
+           NB: default image-rendering (auto) lets the browser interpolate
+           smoothly between B-scan rows so the per-A-scan PED region reads
+           as a continuous blob across the slice direction. The data IS
+           per-A-scan, but B-scans are sparsely placed on the fundus
+           (~10 px apart) so without interpolation the visual gap between
+           slices dominates and the projection looks like stripes. -->
       <image
         v-if="projectionUrl"
         data-testid="enface-projection"
@@ -382,7 +388,6 @@ function ringLabel(diameterMm: number): string {
         :width="scanBbox.width"
         :height="scanBbox.height"
         preserveAspectRatio="none"
-        style="image-rendering: pixelated"
         opacity="0.85"
       />
 
