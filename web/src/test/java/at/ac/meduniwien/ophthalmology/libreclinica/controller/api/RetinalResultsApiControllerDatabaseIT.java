@@ -28,12 +28,16 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.Timestamp;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.UserType;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 
+import org.springframework.mock.web.MockHttpSession;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -476,7 +480,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
 
             buildMockMvc().perform(get("/api/v1/retinal-jobs")
                     .param("status", "PARKED")
-                    .session(authenticatedSession()))
+                    .session(sysadminSession()))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$").isArray())
                     // both seeded jobs surface — order is enqueued_at desc
@@ -490,10 +494,15 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
                     .andExpect(jsonPath(
                             "$[?(@.jobId == " + jobIdNopatient + ")].patientId")
                             .value("UNKNOWN_42"))
-                    // nopatient parks have no candidate FK
+                    // nopatient parks have no candidate FK — the
+                    // filter returns a singleton list containing the
+                    // serialised null, so `everyItem(nullValue())`
+                    // matches whether jackson emits `null` or omits
+                    // the field entirely.
                     .andExpect(jsonPath(
                             "$[?(@.jobId == " + jobIdNopatient + ")].candidateStudySubjectId")
-                            .value(org.hamcrest.Matchers.empty()));
+                            .value(org.hamcrest.Matchers.everyItem(
+                                    org.hamcrest.Matchers.nullValue())));
         } finally {
             cleanupAuditAndJob(jobIdWithCandidate, AuditTypeIds.OCT_UPLOAD_PUBLIC);
             cleanupAuditAndJob(jobIdNopatient, AuditTypeIds.OCT_UPLOAD_PUBLIC);
@@ -508,7 +517,7 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
     void listParkedJobs_returns400OnUnknownStatusFilter() throws Exception {
         buildMockMvc().perform(get("/api/v1/retinal-jobs")
                 .param("status", "DONE")
-                .session(authenticatedSession()))
+                .session(sysadminSession()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message")
                         .value(org.hamcrest.Matchers.containsString("PARKED")));
@@ -627,5 +636,28 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
             ps.executeUpdate();
         }
         cleanupJobOnly(jobId);
+    }
+
+    /**
+     * 2026-06-19 — session variant where {@code userBean.isSysAdmin()}
+     * returns true. The cross-study parked-jobs admin endpoint
+     * (GET /retinal-jobs?status=PARKED) is sysadmin-only; without this
+     * flag the endpoint returns 403 before the test reaches its
+     * assertions. Mirrors the per-IT helper pattern used in
+     * ImportApiControllerBulkImportDatabaseIT et al.
+     */
+    private MockHttpSession sysadminSession() {
+        MockHttpSession session = new MockHttpSession();
+        UserAccountBean ub = new UserAccountBean();
+        ub.setId(1);
+        ub.setName("root");
+        ub.addUserType(UserType.SYSADMIN);
+        session.setAttribute("userBean", ub);
+        StudyBean study = new StudyBean();
+        study.setId(1);
+        study.setOid("default-study");
+        study.setName("default-study");
+        session.setAttribute("study", study);
+        return session;
     }
 }
