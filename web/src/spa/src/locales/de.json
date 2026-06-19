@@ -2014,6 +2014,23 @@
     },
     "locked": "Gesperrt"
   },
+  "events": {
+    "cancel": {
+      "title": "Visite stornieren",
+      "subtitle": "Visite »{label}«",
+      "reasonLabel": "Grund",
+      "reasonPlaceholder": "Bitte Grund auswählen…",
+      "reasonRequired": "Bitte einen Grund auswählen.",
+      "otherTextLabel": "Freitext-Begründung",
+      "otherTextRequired": "Bitte eine Begründung eingeben.",
+      "otherPlaceholder": "Begründung erfassen…",
+      "confirm": "Visite stornieren",
+      "cancel": "Abbrechen",
+      "errorLoadReasons": "Stornierungsgründe konnten nicht geladen werden — bitte später erneut versuchen.",
+      "errorSubmit": "Stornierung fehlgeschlagen — bitte später erneut versuchen.",
+      "successToast": "Visite storniert."
+    }
+  },
   "eventDetail": {
     "title": "CRFs dieser Visite",
     "subTitle": "Formulare",

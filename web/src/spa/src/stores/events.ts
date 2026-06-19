@@ -195,12 +195,24 @@ export const useEventsStore = defineStore('events', () => {
    * item_data as AUTO_DELETED. Role-gated to DM / Admin only;
    * Investigators must escalate.
    *
+   * <p>Wave 1A (app-feedback, 2026-06-19) — the call now carries the
+   * institutional cancel-reason metadata on the wire so the row's
+   * `cancel_reason_code` / `cancel_reason_text` columns capture why
+   * the visit was cancelled. The backend 400s when reasonCode is
+   * missing or when an is_other reason is paired with blank text.
+   *
    * <p>Returns 204 from the backend on success; the in-memory event
    * row is removed locally.
    */
-  async function cancelEvent(eventId: string): Promise<boolean> {
+  async function cancelEvent(
+    eventId: string,
+    reason: { reasonCode: string; reasonText?: string },
+  ): Promise<boolean> {
     try {
-      await apiDelete<void>(`/pages/api/v1/events/${encodeURIComponent(eventId)}`)
+      await apiDelete<void>(
+        `/pages/api/v1/events/${encodeURIComponent(eventId)}`,
+        reason,
+      )
       events.value = events.value.filter((e) => e.id !== eventId)
       return true
     } catch (e) {
