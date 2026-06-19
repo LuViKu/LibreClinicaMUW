@@ -2260,6 +2260,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/eventCrfs/{id}/previous-values": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["previousValues"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/eventCrfs/{id}/notes": {
         parameters: {
             query?: never;
@@ -2332,6 +2348,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listByEventCrf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/event-cancel-reasons": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listEventCancelReasons"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3038,6 +3070,7 @@ export interface components {
             firstName?: string;
             lastName?: string;
             dateOfBirth?: string;
+            label?: string;
         };
         StudyEnrollment: {
             studyUniqueIdentifier?: string;
@@ -4135,6 +4168,10 @@ export interface components {
             after?: string;
             reason?: string;
         };
+        CancelEventRequest: {
+            reasonCode?: string;
+            reasonText?: string;
+        };
         CrfVersionUsageEventDefinitionRef: {
             studyOid?: string;
             sedOid?: string;
@@ -4746,7 +4783,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CancelEventRequest"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {
@@ -8290,6 +8331,28 @@ export interface operations {
             };
         };
     };
+    previousValues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     notesRollup: {
         parameters: {
             query?: never;
@@ -8396,6 +8459,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listEventCancelReasons: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
                 };
             };
         };

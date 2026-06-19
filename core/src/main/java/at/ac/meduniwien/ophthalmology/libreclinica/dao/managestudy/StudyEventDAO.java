@@ -135,8 +135,15 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
         // YW 08-17-2007 <<
         this.setTypeExpected(14, TypeNames.BOOL); // start_time_flag
         this.setTypeExpected(15, TypeNames.BOOL); // end_time_flag
+        // Wave 1A (app-feedback 2026-06-19) — cancel reason columns
+        // exist on the table after the 2026-06-19 changeset; this
+        // overload must declare them too so SELECT * doesn't trip the
+        // EntityDAO column walker.
+        this.setTypeExpected(16, TypeNames.STRING); // cancel_reason_code
+        this.setTypeExpected(17, TypeNames.STRING); // cancel_reason_text
         if (withSubject) {
-            this.setTypeExpected(16, TypeNames.STRING);
+            // Wave 1A: bumped 16 → 18 because cancel columns shifted.
+            this.setTypeExpected(18, TypeNames.STRING);
         }
         // YW >>
     }
