@@ -1246,6 +1246,94 @@
       "button": "Validieren (Vorschau)",
       "success": "Sieht gut aus — {sections} Sektion(en), {items} Item(s).",
       "errorsTitle": "Die Vorschau hat den Entwurf abgelehnt:"
+    },
+    "canvas": {
+      "heading": "CRF-Builder",
+      "subheading": "Definition für {name}",
+      "subheadingGeneric": "CRF-Definition aufbauen",
+      "useLegacy": "Klassischen Wizard verwenden",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "saving": "Wird gespeichert …",
+      "versionName": "Versionsname",
+      "versionDescription": "Versionsbeschreibung",
+      "errorTitle": "Speichern fehlgeschlagen:",
+      "errors": {
+        "unknown": "Unbekannter Fehler."
+      },
+      "palette": {
+        "title": "Bausteine",
+        "primitives": "Primitive Items",
+        "presets": "Presets",
+        "prim": {
+          "ST": { "label": "Text", "description": "Einzeiliger oder mehrzeiliger Text." },
+          "INT": { "label": "Ganzzahl", "description": "Integer-Wert ohne Nachkommastellen." },
+          "REAL": { "label": "Reelle Zahl", "description": "Numerischer Wert mit Nachkommastellen." },
+          "DATE": { "label": "Datum", "description": "Vollständiges Datum (TT.MM.JJJJ)." },
+          "BL": { "label": "Boolean", "description": "Ja / Nein als einzelne Checkbox." },
+          "TRISTATE_REASON": { "label": "Ja / Nein / Unbekannt + Grund", "description": "Dreistufige Auswahl mit bedingtem Begründungsfeld." },
+          "FILE": { "label": "Dateianhang", "description": "Datei-Upload." }
+        }
+      },
+      "canvas": {
+        "dropHere": "Bausteine oder Presets aus dem linken Bereich hierher ziehen.",
+        "emptySection": "Diese Sektion enthält noch keine Items.",
+        "untitled": "(unbenannt)",
+        "removeItem": "Entfernen",
+        "dragItem": "Item neu anordnen"
+      },
+      "section": {
+        "add": "+ Neue Sektion hinzufügen",
+        "remove": "Sektion entfernen",
+        "titlePlaceholder": "Sektionstitel",
+        "labelPlaceholder": "Sektions-Label (z. B. S1)"
+      },
+      "properties": {
+        "title": "Eigenschaften",
+        "clear": "Auswahl aufheben",
+        "noSelection": "Wählen Sie ein Item im Canvas, um seine Eigenschaften zu bearbeiten.",
+        "labelField": "Item-Name",
+        "oidField": "Item-OID",
+        "oidHelper": "Wird aus dem Item-Namen vorgeschlagen; überschreibbar.",
+        "descriptionField": "Beschreibungs-Label",
+        "dataTypeField": "Datentyp",
+        "responseTypeField": "Antworttyp",
+        "unitsField": "Einheit",
+        "defaultField": "Standardwert",
+        "requiredField": "Pflichtfeld",
+        "validationSection": "Validierung",
+        "validationRegex": "Regex (z. B. ^-?\\d+$)",
+        "validationMessage": "Fehlermeldung",
+        "showWhenSection": "Bedingte Anzeige",
+        "showWhenToggle": "Nur anzeigen, wenn …",
+        "showWhenSourcePlaceholder": "Quell-Item auswählen …",
+        "showWhenLiteralPlaceholder": "Vergleichswert"
+      }
+    },
+    "presets": {
+      "iop": {
+        "label": "IOP-Messung",
+        "description": "Tonometrie mit Ja/Nein/Unbekannt + bedingtem IOP-Wert oder Grund.",
+        "parent": {
+          "label": "IOP gemessen?"
+        },
+        "option": {
+          "ja": "Ja",
+          "nein": "Nein",
+          "unbekannt": "Unbekannt"
+        },
+        "value": {
+          "label": "IOP-Wert (mmHg)",
+          "validation": "Bitte einen numerischen Wert eingeben (z. B. 14,5)."
+        },
+        "reason": {
+          "label": "Grund, warum IOP nicht gemessen wurde"
+        }
+      },
+      "ophthExam": {
+        "label": "Ophthalmologische bilaterale Untersuchung",
+        "description": "OD/OS-Paare für Standardmessungen (BCVA, IOP, CCT, CRT)."
+      }
     }
   },
   "ophthPreset": {

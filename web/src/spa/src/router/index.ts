@@ -135,7 +135,21 @@ const router = createRouter({
       path: '/crf-library',
       name: 'crf-library',
       component: () => import('@/views/CrfLibraryView.vue'),
-      meta: { title: 'CRF Library', role: ['Data Manager', 'Administrator'] as const },
+      // App-feedback Wave 2 (2026-06-19): the modal-style legacy wizard is
+      // mounted from inside CrfLibraryView; we leave it reachable via the
+      // legacy meta marker so a future menu can hide it once the canvas
+      // builder has stabilised.
+      meta: { title: 'CRF Library', role: ['Data Manager', 'Administrator'] as const, legacy: true },
+    },
+    /* App-feedback Wave 2 (2026-06-19) — full drag-and-drop CRF builder canvas.
+       Replaces the side-rail wizard for one release behind a feature flag;
+       the legacy wizard route stays mounted for fallback authoring while
+       the canvas stabilises. */
+    {
+      path: '/crf-authoring-canvas/:crfOid',
+      name: 'crfAuthoringCanvas',
+      component: () => import('@/views/CrfAuthoringCanvasView.vue'),
+      meta: { title: 'CRF Builder', role: ['Data Manager', 'Administrator'] as const, canvasBuilder: true },
     },
     /* Phase E A8.4 — sites / multi-center setup. */
     {
