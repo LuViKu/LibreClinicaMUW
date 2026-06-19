@@ -25,6 +25,7 @@ In addition to streaming the DCM back inline, this endpoint:
 
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import logging
@@ -254,6 +255,28 @@ async def preprocess(
         elif store is None:
             LOG.info("bscan_store unset; skipping companion-file persistence for e2e %s", uuid)
 
+        # 2026-06-19 — release the large per-request allocations before
+        # we exit the TemporaryDirectory context. `ds` (a pydicom
+        # Dataset) carries the full PixelData buffer (~192 MB for a
+        # 97×496×512 volume); `bv.volume_u8` carries the quantised
+        # volume (~48 MB). Neither is needed past this point — the
+        # response only needs the response body (`dcm_bytes`, already
+        # read from disk) and a handful of geometry scalars, which we
+        # copy out of `bv` into `geom_headers` before dropping it.
+        geom_headers: dict[str, str] = {}
+        if bv is not None:
+            geom_headers = {
+                "X-MUW-Pixel-Axial-Mm": f"{bv.axial_mm:.8f}",
+                "X-MUW-Pixel-Lateral-Mm": f"{bv.lateral_mm:.8f}",
+                "X-MUW-Pixel-Slice-Mm": f"{bv.slice_mm:.8f}",
+                "X-MUW-Bscan-Dim-Z": str(int(bv.n_bscans)),
+                "X-MUW-Bscan-Dim-Y": str(int(bv.rows)),
+                "X-MUW-Bscan-Dim-X": str(int(bv.cols)),
+            }
+        del ds
+        del bv
+        gc.collect()
+
     LOG.info(
         "POST /preprocess -> bscan.dcm (%d bytes, laterality=%s, e2e_uuid=%s)",
         len(dcm_bytes),
@@ -262,13 +285,7 @@ async def preprocess(
     )
 
     headers = {"Content-Disposition": 'attachment; filename="bscan.dcm"'}
-    if bv is not None:
-        headers["X-MUW-Pixel-Axial-Mm"] = f"{bv.axial_mm:.8f}"
-        headers["X-MUW-Pixel-Lateral-Mm"] = f"{bv.lateral_mm:.8f}"
-        headers["X-MUW-Pixel-Slice-Mm"] = f"{bv.slice_mm:.8f}"
-        headers["X-MUW-Bscan-Dim-Z"] = str(int(bv.n_bscans))
-        headers["X-MUW-Bscan-Dim-Y"] = str(int(bv.rows))
-        headers["X-MUW-Bscan-Dim-X"] = str(int(bv.cols))
+    headers.update(geom_headers)
     headers["X-MUW-E2E-Uuid"] = uuid
     headers["Access-Control-Expose-Headers"] = _EXPOSED_HEADERS
 

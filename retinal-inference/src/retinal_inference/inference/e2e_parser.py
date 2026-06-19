@@ -108,17 +108,31 @@ def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
     vol_meta = volumes[scan_index]
 
     arr = np.asarray(vol_meta.volume, dtype=np.float64)  # (n, rows, cols), 0..1
+    # 2026-06-19 — drop the oct-converter-side volume reference so the
+    # E2E parser's internal copy isn't pinned alongside `arr` during
+    # quantisation. oct-converter holds the same ndarray on
+    # `vol_meta.volume` until vol_meta is garbage-collected; clearing
+    # the attribute frees ~192 MB of float64 immediately.
+    try:
+        vol_meta.volume = None  # type: ignore[assignment]
+    except Exception:  # pylint: disable=broad-except
+        pass
     # oct-converter normalises to [0, 1]; map to 8-bit. The models min/max- and
     # per-image-normalise downstream, so absolute scaling is not critical.
     finite_max = float(np.nanmax(arr)) if arr.size else 1.0
     scale = 255.0 / finite_max if finite_max > 0 else 255.0
-    vol_u8 = np.clip(np.nan_to_num(arr) * scale, 0, 255).astype(np.uint8)
-    # 2026-06-19 — release the float64 source array as soon as the
-    # uint8 copy exists. For a 97×496×512 volume that's ~192 MB of
-    # peak heap freed before the downstream DICOM/geometry stages
-    # allocate again. Without the explicit `del` CPython holds the
-    # reference until `arr` goes out of scope at function return,
-    # stacking the two arrays at peak.
+    # 2026-06-19 — in-place float64 ops. The original chain
+    # `np.clip(np.nan_to_num(arr) * scale, 0, 255).astype(np.uint8)`
+    # allocates THREE transient float64 copies of the volume (one per
+    # operation), each ~192 MB for a typical 97×496×512 scan, peaking
+    # at ~770 MB of float64 heap before the uint8 cast. The in-place
+    # path keeps only the source `arr` and the final uint8 copy
+    # (~240 MB combined), then drops `arr` before downstream
+    # allocates.
+    np.nan_to_num(arr, copy=False)
+    arr *= scale
+    np.clip(arr, 0, 255, out=arr)
+    vol_u8 = arr.astype(np.uint8)
     del arr
 
     n, rows, cols = vol_u8.shape
