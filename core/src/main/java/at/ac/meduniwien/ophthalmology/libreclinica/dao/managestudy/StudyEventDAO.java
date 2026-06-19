@@ -104,6 +104,9 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
         this.setTypeExpected(14, TypeNames.BOOL); // start_time_flag
         this.setTypeExpected(15, TypeNames.BOOL); // end_time_flag
         // YW >>
+        // Wave 1A (app-feedback 2026-06-19) — cancel reason columns.
+        this.setTypeExpected(16, TypeNames.STRING); // cancel_reason_code
+        this.setTypeExpected(17, TypeNames.STRING); // cancel_reason_text
 
     }
 

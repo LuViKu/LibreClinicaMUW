@@ -118,6 +118,10 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         ind++; // study_eye
         this.setTypeExpected(ind, TypeNames.DATE);
         ind++; // screening_date
+        // Wave 1B (app-feedback 2026-06-19) — soft-link to global patient
+        // identity. Liquibase appends at the end of the table.
+        this.setTypeExpected(ind, TypeNames.STRING);
+        ind++; // patient_uuid
         // this.setTypeExpected(ind, TypeNames.INT);
         // ind++;
     }
