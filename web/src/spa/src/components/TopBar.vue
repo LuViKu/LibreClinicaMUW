@@ -242,6 +242,19 @@ function onReportBugClick() {
       >
         {{ t('topBar.systemAuditLog') }}
       </RouterLink>
+      <!-- 2026-06-19 — Administrator-only entry-point to the cross-
+           study parked-scans admin view. Same role gate as the system
+           audit-log link; needed because parked retinal jobs have no
+           study-subject linkage and therefore can't surface on a
+           per-subject page. -->
+      <RouterLink
+        v-if="primaryRole === 'Administrator'"
+        to="/retinal/parked"
+        class="mr-2 px-2 py-1 rounded-md text-xs text-slate-700 hover:bg-slate-100"
+        data-testid="topbar-retinal-parked-link"
+      >
+        {{ t('topBar.retinalParked') }}
+      </RouterLink>
 
       <div v-if="userName" class="relative" :class="primaryRole === 'Administrator' ? '' : 'ml-auto'">
         <button

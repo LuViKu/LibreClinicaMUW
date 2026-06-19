@@ -323,6 +323,42 @@ export function bindParkedJob(
 }
 
 /**
+ * 2026-06-19 cross-study parked-admin — one row in
+ * {@code GET /pages/api/v1/retinal-jobs?status=PARKED}.
+ *
+ * <p>Backs the Administrator-only "Geparkte Scans" admin view, where
+ * cross-study parked OCT uploads land for triage.
+ *
+ * <p>{@code patientId} is parsed server-side from the
+ * {@code OCT_UPLOAD_PUBLIC} audit row's {@code old_value}; may be null
+ * if the audit row is missing or malformed. {@code candidateStudySubjectId}
+ * is set when the resolve picked a single candidate at upload time
+ * (i.e. {@code novisit} / {@code ambiguous} parks); null for true
+ * {@code nopatient} parks.
+ */
+export interface ParkedJobAdminRow {
+  jobId: number
+  task: string
+  patientId: string | null
+  laterality: 'OD' | 'OS'
+  enqueuedAt: string
+  candidateStudySubjectId: number | null
+}
+
+/**
+ * 2026-06-19 — list cross-study parked retinal jobs. Sysadmin-only
+ * server-side; the caller is expected to have a router-level role
+ * guard so anonymous / non-admin sessions never reach this. The
+ * backend defaults the {@code status} query param to {@code PARKED}
+ * but the client passes it explicitly for clarity.
+ */
+export function listParkedJobs(): Promise<ParkedJobAdminRow[]> {
+  return apiGet<ParkedJobAdminRow[]>(
+    `/pages/api/v1/retinal-jobs?status=PARKED`,
+  )
+}
+
+/**
  * Wave 2B — one hit row from {@code GET /pages/api/v1/study-subjects/search?q=...}.
  * The backend filters by the operator's site-visibility scope before
  * returning so the SPA never sees a subject the operator can't open.
