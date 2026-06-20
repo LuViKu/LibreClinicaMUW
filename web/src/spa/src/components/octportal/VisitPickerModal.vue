@@ -123,6 +123,12 @@ async function load(): Promise<void> {
         // the {@link pillClass} default branch.
         status: p.status as StudyEvent['status'],
         repeating: p.repeating,
+        // nAMD Slice 1 (#226) added these to the StudyEvent surface.
+        // The public mirror endpoint doesn't carry them and the
+        // portal flow never uses scheduling — stub with the empty
+        // values the StudyEvent shape's Required<> wrapper demands.
+        scheduledFor: '',
+        scheduledIntervalDays: 0,
       }))
       const m = new Map<string, number | null>()
       for (const p of list) m.set(p.id, p.firstEventCrfId)
