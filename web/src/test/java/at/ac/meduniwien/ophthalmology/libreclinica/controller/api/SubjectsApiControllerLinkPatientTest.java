@@ -85,11 +85,10 @@ class SubjectsApiControllerLinkPatientTest extends AbstractApiControllerTest {
                     String sql = inv.getArgument(0);
                     capture.statements.add(sql);
                     PreparedStatement ps = Mockito.mock(PreparedStatement.class);
-                    if (sql.startsWith("SELECT")) {
+                    if (sql.startsWith("SELECT study_subject_id")) {
+                        // study_subject loadRow — alternating source / target.
                         ResultSet rs = Mockito.mock(ResultSet.class);
                         Mockito.when(ps.executeQuery()).thenReturn(rs);
-                        // Index: which SELECT this is — first wired to
-                        // the source row, second to the target.
                         int selectIndex = capture.selectCount++;
                         Mockito.when(rs.next()).thenReturn(true).thenReturn(false);
                         if (selectIndex == 0) {
@@ -98,15 +97,43 @@ class SubjectsApiControllerLinkPatientTest extends AbstractApiControllerTest {
                             Mockito.when(rs.getString("label")).thenReturn("M-001");
                             Mockito.when(rs.getInt("status_id")).thenReturn(1);
                             Mockito.when(rs.getString("patient_uuid")).thenReturn(sourceUuid);
+                            // C4: patient_id mirror — 0 + wasNull=true
+                            // models the pre-migration mock state (the
+                            // IT covers the link logic, not the FK
+                            // backfill). insertPatient / resolvePatientId
+                            // branches generate the real FK at write
+                            // time.
+                            Mockito.when(rs.getLong("patient_id")).thenReturn(0L);
                         } else {
                             Mockito.when(rs.getInt("study_subject_id")).thenReturn(22);
                             Mockito.when(rs.getInt("study_id")).thenReturn(targetStudyId);
                             Mockito.when(rs.getString("label")).thenReturn("GA-008");
                             Mockito.when(rs.getInt("status_id")).thenReturn(1);
                             Mockito.when(rs.getString("patient_uuid")).thenReturn(targetUuid);
+                            Mockito.when(rs.getLong("patient_id")).thenReturn(0L);
                         }
+                        Mockito.when(rs.wasNull()).thenReturn(true);
+                    } else if (sql.startsWith("SELECT patient_id FROM patient")) {
+                        // C4 resolvePatientIdByUuid — stub a deterministic
+                        // FK so the controller's audit + response carry a
+                        // sensible value. Returning 0 here would push the
+                        // controller into the defensive insertPatient
+                        // fallback; positive value short-circuits it.
+                        ResultSet rs = Mockito.mock(ResultSet.class);
+                        Mockito.when(ps.executeQuery()).thenReturn(rs);
+                        Mockito.when(rs.next()).thenReturn(true);
+                        Mockito.when(rs.getLong("patient_id")).thenReturn(777L);
+                    } else if (sql.startsWith("INSERT INTO patient")) {
+                        // C4 insertPatient — mint a fresh patient_id via
+                        // the RETURNING clause. Use a different stub id
+                        // so a test can tell mint vs resolve paths apart
+                        // if it captures the audit row.
+                        ResultSet rs = Mockito.mock(ResultSet.class);
+                        Mockito.when(ps.executeQuery()).thenReturn(rs);
+                        Mockito.when(rs.next()).thenReturn(true);
+                        Mockito.when(rs.getLong(1)).thenReturn(888L);
                     } else {
-                        // UPDATE or INSERT — executeUpdate returns 1.
+                        // UPDATE study_subject / INSERT INTO audit_log_event.
                         Mockito.when(ps.executeUpdate()).thenReturn(1);
                     }
                     return ps;
@@ -302,7 +329,12 @@ class SubjectsApiControllerLinkPatientTest extends AbstractApiControllerTest {
         int updates = 0;
         int audits  = 0;
         for (String sql : cap.statements) {
-            if (sql.startsWith("UPDATE study_subject SET patient_uuid")) updates++;
+            // C4: the UPDATE writes patient_uuid + patient_id together;
+            // line-wrap in the controller's PreparedStatement adds extra
+            // whitespace between SET and the column list.
+            if (sql.startsWith("UPDATE study_subject")
+                    && sql.contains("patient_uuid")
+                    && sql.contains("patient_id")) updates++;
             else if (sql.startsWith("INSERT INTO audit_log_event")) audits++;
         }
         org.junit.jupiter.api.Assertions.assertEquals(expectedUpdates, updates,
