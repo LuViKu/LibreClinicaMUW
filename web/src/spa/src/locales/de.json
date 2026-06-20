@@ -2663,6 +2663,10 @@
       "loading": "Vergleich wird geladen…",
       "errorPrefix": "Vergleich konnte nicht geladen werden:"
     },
+    "arm": {
+      "blindedLabel": "KI-Daten ausgeblendet (Studien-Arm)",
+      "blindedExplain": "Diese Visite ist einem Studien-Arm zugeordnet, in dem die KI-Quantifizierung nicht angezeigt wird. Die Werte werden weiterhin im Hintergrund berechnet und für die Endpunktanalyse gespeichert."
+    },
     "bscanViewer": {
       "header": "B-Scan-Navigator",
       "position": "Schnitt {current} / {total}",
