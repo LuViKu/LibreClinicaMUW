@@ -270,6 +270,11 @@
       "nameLineUnknown": "Name unknown",
       "unnamedSubject": "— no study ID —"
     },
+    "linkPatient": {
+      "linkSuccess": "[NEEDS_REVIEW] Patient linked to {label}.",
+      "linkConflict409": "[NEEDS_REVIEW] Both records are already linked to different patients.",
+      "linkError": "[NEEDS_REVIEW] Linking failed — please try again."
+    },
     "phiWarning": "Never include name, hospital ID, social security number, or any other identifying data.",
     "gender": {
       "female": "Female",
