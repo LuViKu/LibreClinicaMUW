@@ -319,7 +319,7 @@ async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
     // returned a persisted study_subject id. Errors are non-blocking
     // — the enrolment itself is already saved, and the toast row
     // gives the operator a clear next-step.
-    if (pendingLinkCandidate.value) {
+    if (pendingLinkCandidate.value && typeof subject.studySubjectId === 'number') {
       await callLinkPatient(subject.studySubjectId, pendingLinkCandidate.value.subjectId)
       pendingLinkCandidate.value = null
     }

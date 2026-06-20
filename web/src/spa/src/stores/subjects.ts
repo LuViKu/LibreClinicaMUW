@@ -279,7 +279,9 @@ export const useSubjectsStore = defineStore('subjects', () => {
    * (DR-008); {@link validateAddSubject} is kept as instant client-side
    * UX feedback (used by AddSubjectView's `liveErrors`).
    */
-  async function add(input: AddSubjectInput): Promise<Subject & { studySubjectId: number }> {
+  async function add(
+    input: AddSubjectInput,
+  ): Promise<Subject & { studySubjectId: number | undefined }> {
     isLoading.value = true
     error.value = null
     try {
