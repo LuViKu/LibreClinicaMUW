@@ -173,11 +173,11 @@ function onSectionLabelInput(sectionIndex: number, ev: Event): void {
 }
 
 /**
- * Bilateral pair grouping — port of the wizard's
- * {@code bilateralRowsForSection} (lines 578-666 of
- * CrfAuthoringWizard.vue). The canvas-side variant is intentionally
- * simpler: we only need the visual OD-left / OS-right pairing for
- * rendered preview, not the dual-editor body.
+ * Bilateral pair grouping — port of the legacy wizard's
+ * {@code bilateralRowsForSection} routine. The canvas-side variant is
+ * intentionally simpler: we only need the visual OD-left / OS-right
+ * pairing for rendered preview, not the dual-editor body. (The wizard
+ * component was removed in the D3 follow-up, 2026-06-20.)
  */
 interface BilateralRow {
   kind: 'bilateral' | 'both-eyes' | 'single'

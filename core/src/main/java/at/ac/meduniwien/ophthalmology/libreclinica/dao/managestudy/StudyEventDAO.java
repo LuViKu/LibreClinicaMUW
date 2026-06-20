@@ -107,7 +107,9 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
         // Wave 1A (app-feedback 2026-06-19) — cancel reason columns.
         this.setTypeExpected(16, TypeNames.STRING); // cancel_reason_code
         this.setTypeExpected(17, TypeNames.STRING); // cancel_reason_text
-
+        // nAMD Slice 1 (#226, 2026-06-19) — treat-and-extend scheduling.
+        this.setTypeExpected(18, TypeNames.DATE);   // scheduled_for
+        this.setTypeExpected(19, TypeNames.INT);    // scheduled_interval_days
     }
 
     public void setTypesExpected(boolean withSubject) {
@@ -141,9 +143,12 @@ public class StudyEventDAO extends AuditableEntityDAO<StudyEventBean> implements
         // EntityDAO column walker.
         this.setTypeExpected(16, TypeNames.STRING); // cancel_reason_code
         this.setTypeExpected(17, TypeNames.STRING); // cancel_reason_text
+        // nAMD Slice 1 (#226, 2026-06-19) — scheduling columns.
+        this.setTypeExpected(18, TypeNames.DATE);   // scheduled_for
+        this.setTypeExpected(19, TypeNames.INT);    // scheduled_interval_days
         if (withSubject) {
-            // Wave 1A: bumped 16 → 18 because cancel columns shifted.
-            this.setTypeExpected(18, TypeNames.STRING);
+            // PR #233: bumped to 20 because nAMD scheduling shifted it.
+            this.setTypeExpected(20, TypeNames.STRING);
         }
         // YW >>
     }

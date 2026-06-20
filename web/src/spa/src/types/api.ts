@@ -500,6 +500,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/study-subjects/{id}/link-patient": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["linkPatient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies": {
         parameters: {
             query?: never;
@@ -1076,6 +1092,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retinal-jobs/bulk-bind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["bulkBindParkedJobs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/response-sets": {
         parameters: {
             query?: never;
@@ -1246,6 +1278,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["startEventCrf"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/eventCrfs/{id}:autoPopulateRetinal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["autoPopulateRetinal"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2028,6 +2076,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["stream"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/retinal-jobs/{jobId}/compare-previous": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["compareToPrevious"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3093,6 +3157,10 @@ export interface components {
             /** Format: int32 */
             otherStudyCount?: number;
         };
+        LinkPatientRequest: {
+            /** Format: int32 */
+            targetSubjectId?: number;
+        };
         CreateStudyRequest: {
             name?: string;
             uniqueProtocolId?: string;
@@ -3328,6 +3396,11 @@ export interface components {
             oid?: string;
             value?: string;
             valueExpression?: string;
+        };
+        BulkBindRequest: {
+            jobIds?: number[];
+            /** Format: int32 */
+            eventCrfId?: number;
         };
         CreateResponseSetRequest: {
             label?: string;
@@ -5282,6 +5355,32 @@ export interface operations {
             };
         };
     };
+    linkPatient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["LinkPatientRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     list_2: {
         parameters: {
             query?: never;
@@ -6304,6 +6403,30 @@ export interface operations {
             };
         };
     };
+    bulkBindParkedJobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkBindRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     list_7: {
         parameters: {
             query?: {
@@ -6651,6 +6774,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["StartEventCrfResponse"];
+                };
+            };
+        };
+    };
+    autoPopulateRetinal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
@@ -8017,6 +8162,28 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    compareToPrevious: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
