@@ -88,7 +88,8 @@ class EventsApiControllerCancelReasonIT extends AbstractApiControllerTest {
         Mockito.when(rs.getInt("sort_order")).thenReturn(10);
 
         return mockMvcFor(new EventsApiController(ds,
-                Mockito.mock(SiteVisibilityFilter.class)));
+                Mockito.mock(SiteVisibilityFilter.class),
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator.class)));
     }
 
     /* ---------------------------------------------------------------------- */
