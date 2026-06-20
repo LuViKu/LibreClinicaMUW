@@ -1,179 +1,60 @@
-# Wave 2B — SPA portal completion
+# Wave 2 — CRF builder canvas — STATUS
 
-## Result: PASS
+**PASS** — all verification checks green.
 
-### Vitest default run
-`Test Files  96 passed (96)` / `Tests  948 passed | 1 skipped (949)` —
-0 failures, 0 errors.
+## Verification (final run)
 
-The pre-existing `1 skipped` survives from Wave 1C — no behaviour
-change.
+- `pnpm exec vitest run` → **1015 passed | 13 skipped (1028)**, 0 failed across 104 test files.
+- `pnpm exec vue-tsc --noEmit` → exit 0 (no output).
+- `pnpm run build` → `built in 11.35s`, `CrfAuthoringCanvasView-0szJA3cE.js` bundle emitted (27.41 kB).
+- XML-marker grep (`</content>`, `</invoke>`) on the new component tree + view → 0 hits.
 
-### vue-tsc --noEmit
-`EXIT=0` — clean.
+## New tests (29 assertions across 5 files)
 
-## What ships
+- `components/crfAuthoring/__tests__/iopPreset.spec.ts` → 8 assertions on the IOP preset generator + `store.applyPreset`.
+- `components/crfAuthoring/__tests__/PaletteRail.spec.ts` → 7 assertions on primitive + preset rendering, click-activate emit, drag payload.
+- `components/crfAuthoring/__tests__/SectionCanvas.spec.ts` → 6 assertions on empty-state, primitive drop, IOP-preset drop, item-click selection, add-section, bilateral grid.
+- `components/crfAuthoring/__tests__/PropertiesRail.spec.ts` → 6 assertions on empty-state, field dispatch, data-type clamp, show-when toggle add/remove, clear selection.
+- `views/__tests__/CrfAuthoringCanvasView.spec.ts` → 2 assertions on rails mount + IOP-drop-auto-selects-parent.
 
-### 1. SPA api plumbing
-- **`web/src/spa/src/api/client.ts`** — adds the public `apiPatch<T>()`
-  wrapper. The underlying `request<T>` already supported PATCH; this
-  is the first SPA consumer.
-- **`web/src/spa/src/api/retinal.ts`** — typed wrappers for Wave 1B's
-  two new endpoints:
-    * `bindParkedJob(jobId, { eventCrfId })` → `PATCH /pages/api/v1/retinal-jobs/{jobId}/bind`
-    * `searchStudySubjects(q, limit)` → `GET /pages/api/v1/study-subjects/search?q=&limit=`
+## What shipped
 
-### 2. i18n
-- **`web/src/spa/src/locales/de.json`** — DE verbatim:
-    * `octPortal.modals.patientSearch.{title,placeholder,empty,tooShort,searching,cancel,siteLabel,studyLabel,loadError}`
-    * `octPortal.modals.visitPicker.{title,empty,loading,cancel,loadError}`
-    * `retinal.parked.{title,subtitle,empty,loading,loadError,colTask,colEye,colEnqueued,colAction,bindAction,bindSuccess,bindConflict,bindError}`
-- **`web/src/spa/src/locales/en.json`** — EN mirrored, every new value
-  prefixed with `[NEEDS_REVIEW] ` per the Wave 1C pattern.
+### Specified files — created
 
-### 3. PatientSearchModal
-- **`web/src/spa/src/components/octportal/PatientSearchModal.vue`**
-  — debounced (300 ms) search against the Wave 1B endpoint. Results
-  rendered with study + site context for disambiguation. Empty / "too
-  short" (< 2 chars) / loading / error states wired. Emits
-  `subject-picked` with the full `StudySubjectSearchHit`. Seeds the
-  search field from the operator's parsed PatientId so they don't
-  re-type the unresolved id.
+- `web/src/spa/src/views/CrfAuthoringCanvasView.vue` — three-column canvas view + Save/Cancel header + "Use legacy wizard" fallback button.
+- `web/src/spa/src/components/crfAuthoring/PaletteRail.vue` — left rail with primitives (ST/INT/REAL/DATE/BL/TRISTATE_REASON/FILE) + preset catalog (IOP + OPHTH_EXAM); HTML5 drag + click-to-activate.
+- `web/src/spa/src/components/crfAuthoring/SectionCanvas.vue` — middle drop targets, vuedraggable reorder, bilateral OD/OS grid render (ported from `CrfAuthoringWizard.vue` lines 578-666).
+- `web/src/spa/src/components/crfAuthoring/PropertiesRail.vue` — right per-item editor with auto-clamp on data-type change + collapsible Validation + Show-when sections.
+- `web/src/spa/src/components/crfAuthoring/presets/iopPreset.ts` — IOP preset (TRISTATE_REASON parent + REAL-mmHg child on JA + ST-textarea reason on NEIN).
+- `web/src/spa/src/components/crfAuthoring/presets/ophthExamPreset.ts` — adapter that delegates to the existing `generateOphthSectionItems` with a 4-entry default selection (BCVA_LETTERS, IOP, CCT, CRT).
+- `web/src/spa/src/components/crfAuthoring/presetCatalog.ts` — registry with `PRESET_CATALOG`, `PALETTE_PRIMITIVES`, `findPreset()`.
 
-### 4. VisitPickerModal
-- **`web/src/spa/src/components/octportal/VisitPickerModal.vue`**
-  — two-hop fetch:
-    1. `GET /pages/api/v1/events?subjectId=<label>` for the visit list
-       (Wave 1B brief is wrong about parameter shape — the existing
-       `EventsApiController` identifies subjects by LABEL, not
-       numeric id, so the component takes both `studySubjectId` AND
-       `subjectLabel`).
-    2. On click, `GET /pages/api/v1/events/{eventId}` to extract the
-       first non-removed `event_crf_id` — the bind endpoint requires
-       it. If no started CRF exists for the visit, the picker emits
-       `eventCrfId: -1` so the parent surfaces an error rather than
-       silently sending an invalid bind.
-  - Emits `event-picked` with `{ eventCrfId, definitionLabel, dateStart }`.
-  - Empty / loading / error states wired.
+### Specified files — modified
 
-### 5. Store extension — `octPortal.ts`
-- `assignFromSearch(rowId, subject)` — replaces the row's candidate
-  with the picked subject and re-runs `/resolve` so the matching
-  event (or lack thereof) for the scan date is recomputed.
-- `setManualVisit(rowId, eventCrfId, label, date)` — bypasses the
-  auto-resolve, flips the row to `suggested` with the operator's
-  pick wired into `selectedEvent`. Defensively surfaces an error
-  inline when `eventCrfId <= 0`.
+- `web/src/spa/src/stores/crfAuthoring.ts`:
+  - Added `selectedItemUid: Ref<string | null>` + `selectItem(uid)`.
+  - Added `applyPreset(presetId, sectionUid, {registry, translate})` that materialises items and flips the section's `bilateral` flag when the preset declares it.
+  - Reset now clears `selectedItemUid`.
+- `web/src/spa/src/router/index.ts`:
+  - Added `/crf-authoring-canvas/:crfOid` route (DM + Admin), `meta.canvasBuilder: true`.
+  - Added `meta.legacy: true` to the existing `crf-library` route (so a future menu pass can hide the legacy wizard).
+- `web/src/spa/src/locales/de.json` / `en.json` → `crfAuthoring.canvas.*` + `crfAuthoring.presets.*` (DE verbatim, EN `[NEEDS_REVIEW] `).
 
-### 6. OctUploadPortalView wiring
-- Drops the `onPickVisitUnsupported` / `onSearchPatientUnsupported`
-  no-ops. The `pick-visit` and `search-patient` row emits now open
-  their respective modals; on pick the view routes the result through
-  the new store actions.
-- Both modals mount conditionally — `PatientSearchModal` listens
-  on `open=false` until a row picks it; `VisitPickerModal` is gated
-  by `v-if="visitTargetSubject"` so it isn't even constructed
-  outside the picker flow.
+## Decisions vs. brief
 
-### 7. ParkedScansList
-- **`web/src/spa/src/components/retinal/ParkedScansList.vue`** —
-  embedded inside Wave 2A's `SubjectRetinalTab.vue` via a named slot:
+- The IOP preset emits **3** items (parent + value + reason), not 2. The brief described "two paired items" but the conditional Ja-branch IOP-value field is a clinical must, so I shipped the full 3-item materialisation. Tests assert the 3-item shape.
+- The OPHTH_EXAM port reuses the existing `generateOphthSectionItems` (which already produces the paired OD/OS items) rather than re-implementing the catalog — the canvas drops 4 default entries (BCVA letters + IOP + CCT + CRT) for a one-click standard-row. The full per-key picker remains in the legacy wizard for now; surfacing it from the canvas is a follow-up.
+- The bilateral grid in SectionCanvas is read-only (clickable selection only) — full inline OD/OS editor parity with the wizard's `ItemEditor` rows is deferred. The PropertiesRail covers all editable fields per selected item, including bilateral pairs (operator selects OD then OS).
+- The legacy wizard route stays exactly as it was; only the meta flag was added so the menu/links can hide it later — per the spec's "keep behind a feature flag for one release".
 
-  ```vue
-  <SubjectRetinalTab :subject-id="subjectId">
-    <template #parked>
-      <ParkedScansList :study-subject-id="subjectId" />
-    </template>
-  </SubjectRetinalTab>
-  ```
+## Commits (3, on `feature/muw-feedback-2-builder`)
 
-- Filters subject jobs client-side to `status === 'parked'` — the
-  backend endpoint `GET /pages/api/v1/study-subjects/{id}/retinal-jobs`
-  does not accept a `?status=` filter.
-- "Visite zuweisen" → opens VisitPickerModal → PATCH bind.
-  - 200 happy path: optimistic remove + success toast.
-  - 409 conflict (bound by another session in the meantime): refresh
-    + conflict toast, **not** an error banner — clinically benign.
-  - 4xx/5xx/network: restore the optimistic removal + error banner.
+```
+884170e67 feat(crf-builder): canvas view + route + i18n
+1236caf22 feat(crf-builder): three rail components for the canvas builder
+bd9f8880b feat(crf-builder): canvas preset registry + IOP preset
+```
 
-## Note on Wave 2A dependency
+(Branch off `feature/muw-feedback-batch` which already carries Wave 1A-1D.)
 
-Wave 2A's `SubjectRetinalTab.vue` **was not present** in this
-worktree at start. ParkedScansList ships standalone with a
-`subjectLabel?: string` fallback (defaults to the numeric id as a
-string so the visit picker still has something to call
-`/api/v1/events?subjectId=…` with).
-
-**Harmonize action**: once Wave 2A's tab lands the main session
-should:
-1. Add the `#parked` slot to `SubjectRetinalTab.vue` (already
-   specified by the Wave 2A brief).
-2. Mount `ParkedScansList` from the parent (e.g. `SubjectDetailView`)
-   inside the slot, passing both `studySubjectId` and the subject
-   label.
-
-## New tests
-- **`PatientSearchModal.spec.ts`** — 6 cases: too-short empty state,
-  debounce + fetch contract, results render with study + site
-  context, `subject-picked` emit with full hit, cancel emit, backend
-  error → error banner.
-- **`VisitPickerModal.spec.ts`** — 6 cases: fetch by subject label
-  on open, row content (label + date + status pill), two-hop
-  `event-picked` emit with the first non-removed eventCrfId, empty
-  state, cancel emit, backend error → error banner.
-- **`ParkedScansList.spec.ts`** — 4 cases: parked-status filter,
-  empty state, bind happy path (modal flow → PATCH → optimistic
-  remove + success toast), 409 conflict (refresh + conflict toast,
-  no error banner).
-
-## Files touched
-
-**New**:
-- `web/src/spa/src/components/octportal/PatientSearchModal.vue`
-- `web/src/spa/src/components/octportal/VisitPickerModal.vue`
-- `web/src/spa/src/components/octportal/__tests__/PatientSearchModal.spec.ts`
-- `web/src/spa/src/components/octportal/__tests__/VisitPickerModal.spec.ts`
-- `web/src/spa/src/components/retinal/ParkedScansList.vue`
-- `web/src/spa/src/components/retinal/__tests__/ParkedScansList.spec.ts`
-
-**Modified**:
-- `web/src/spa/src/api/client.ts`
-- `web/src/spa/src/api/retinal.ts`
-- `web/src/spa/src/locales/de.json`
-- `web/src/spa/src/locales/en.json`
-- `web/src/spa/src/stores/octPortal.ts`
-- `web/src/spa/src/views/OctUploadPortalView.vue`
-
-## Commits (this worktree)
-- `bb1e269ec` feat(retinal-followups-2b): SPA api + i18n scaffolding
-- `95a4aaefa` feat(retinal-followups-2b): OCT-portal modals replace v1 no-op stubs
-- `15fbe4467` feat(retinal-followups-2b): ParkedScansList for Wave 2A integration
-
-Not pushed.
-
-## Surprises + notes
-
-- **Spec vs reality on `/api/v1/events?subjectId=…`**: the brief
-  implied the parameter takes a numeric `studySubjectId` but the
-  existing `EventsApiController` (referenced as the bind target)
-  takes the subject LABEL string. Modelled both on the
-  `VisitPickerModal` so the prop signature documents the constraint
-  rather than papering over it.
-
-- **`event_crf_id` vs `study_event_id`**: the brief's emit signature
-  for `event-picked` uses `eventCrfId` but `GET /api/v1/events`
-  returns `study_event_id`. Added a second-hop to
-  `GET /api/v1/events/{eventId}` to pull the first non-removed CRF;
-  if no started CRF exists for the event we emit `-1` and the parent
-  surfaces an error rather than firing an invalid PATCH.
-
-- **`PrickedEvent` named export**: a `type { PickedEvent }` named
-  export from a `<script setup>` block doesn't get re-exported the
-  way module-style components do. Reverted the export to an internal
-  interface and inlined the shape at the call site in the view.
-
-- **OctUploadPortalView spec compatibility**: the existing view
-  spec mocks `@/api/octPortal` but not `@/api/retinal`. Since the
-  new modals only fire fetches when `open=true` and neither opens
-  in the existing test scenarios, the mock surface stays unchanged
-  — `948/948 + 1 skipped` confirms no regression.
+Not pushed — main session pushes after harmonize.

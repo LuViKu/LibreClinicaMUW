@@ -35,7 +35,13 @@
     "error": {
       "title": "Ein Fehler ist aufgetreten",
       "dismiss": "Fehlermeldung schließen",
-      "reqIdLabel": "Fehler-ID"
+      "reqIdLabel": "Fehler-ID",
+      "detailsToggle": "Details anzeigen",
+      "detailsHide": "Details ausblenden",
+      "serverMessageLabel": "Server-Meldung",
+      "urlLabel": "URL",
+      "moreErrors": "{n} weitere Fehler",
+      "queuedListTitle": "Weitere Fehler"
     },
     "systemAuditLog": "System-Audit",
     "retinalParked": "Geparkte Scans"
@@ -622,6 +628,29 @@
       "placeholder": "Grund angeben…",
       "requiredTag": "Grund erforderlich",
       "inactiveHint": "Aktiv, sobald „{value}\" gewählt ist"
+    },
+    "prefill": {
+      "button": "Vom letzten Besuch übernehmen",
+      "modalTitle": "Werte vom letzten Besuch übernehmen",
+      "sourceLabel": "Quelle: Visite vom {date}",
+      "colItem": "Item",
+      "colValue": "Wert",
+      "colApply": "Übernehmen",
+      "confirm": "Übernehmen",
+      "cancel": "Abbrechen",
+      "empty": "Keine vorherige Visite gefunden",
+      "errorFetch": "Vorherige Werte konnten nicht geladen werden.",
+      "checkAll": "Alle auswählen",
+      "uncheckAll": "Keine auswählen"
+    }
+  },
+  "crfItem": {
+    "tristate": {
+      "tristateYes": "Ja",
+      "tristateNo": "Nein",
+      "tristateUnknown": "Unbekannt",
+      "reasonLabel": "Grund",
+      "reasonPlaceholder": "Grund angeben…"
     }
   },
   "dde": {
@@ -1217,6 +1246,94 @@
       "button": "Validieren (Vorschau)",
       "success": "Sieht gut aus — {sections} Sektion(en), {items} Item(s).",
       "errorsTitle": "Die Vorschau hat den Entwurf abgelehnt:"
+    },
+    "canvas": {
+      "heading": "CRF-Builder",
+      "subheading": "Definition für {name}",
+      "subheadingGeneric": "CRF-Definition aufbauen",
+      "useLegacy": "Klassischen Wizard verwenden",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "saving": "Wird gespeichert …",
+      "versionName": "Versionsname",
+      "versionDescription": "Versionsbeschreibung",
+      "errorTitle": "Speichern fehlgeschlagen:",
+      "errors": {
+        "unknown": "Unbekannter Fehler."
+      },
+      "palette": {
+        "title": "Bausteine",
+        "primitives": "Primitive Items",
+        "presets": "Presets",
+        "prim": {
+          "ST": { "label": "Text", "description": "Einzeiliger oder mehrzeiliger Text." },
+          "INT": { "label": "Ganzzahl", "description": "Integer-Wert ohne Nachkommastellen." },
+          "REAL": { "label": "Reelle Zahl", "description": "Numerischer Wert mit Nachkommastellen." },
+          "DATE": { "label": "Datum", "description": "Vollständiges Datum (TT.MM.JJJJ)." },
+          "BL": { "label": "Boolean", "description": "Ja / Nein als einzelne Checkbox." },
+          "TRISTATE_REASON": { "label": "Ja / Nein / Unbekannt + Grund", "description": "Dreistufige Auswahl mit bedingtem Begründungsfeld." },
+          "FILE": { "label": "Dateianhang", "description": "Datei-Upload." }
+        }
+      },
+      "canvas": {
+        "dropHere": "Bausteine oder Presets aus dem linken Bereich hierher ziehen.",
+        "emptySection": "Diese Sektion enthält noch keine Items.",
+        "untitled": "(unbenannt)",
+        "removeItem": "Entfernen",
+        "dragItem": "Item neu anordnen"
+      },
+      "section": {
+        "add": "+ Neue Sektion hinzufügen",
+        "remove": "Sektion entfernen",
+        "titlePlaceholder": "Sektionstitel",
+        "labelPlaceholder": "Sektions-Label (z. B. S1)"
+      },
+      "properties": {
+        "title": "Eigenschaften",
+        "clear": "Auswahl aufheben",
+        "noSelection": "Wählen Sie ein Item im Canvas, um seine Eigenschaften zu bearbeiten.",
+        "labelField": "Item-Name",
+        "oidField": "Item-OID",
+        "oidHelper": "Wird aus dem Item-Namen vorgeschlagen; überschreibbar.",
+        "descriptionField": "Beschreibungs-Label",
+        "dataTypeField": "Datentyp",
+        "responseTypeField": "Antworttyp",
+        "unitsField": "Einheit",
+        "defaultField": "Standardwert",
+        "requiredField": "Pflichtfeld",
+        "validationSection": "Validierung",
+        "validationRegex": "Regex (z. B. ^-?\\d+$)",
+        "validationMessage": "Fehlermeldung",
+        "showWhenSection": "Bedingte Anzeige",
+        "showWhenToggle": "Nur anzeigen, wenn …",
+        "showWhenSourcePlaceholder": "Quell-Item auswählen …",
+        "showWhenLiteralPlaceholder": "Vergleichswert"
+      }
+    },
+    "presets": {
+      "iop": {
+        "label": "IOP-Messung",
+        "description": "Tonometrie mit Ja/Nein/Unbekannt + bedingtem IOP-Wert oder Grund.",
+        "parent": {
+          "label": "IOP gemessen?"
+        },
+        "option": {
+          "ja": "Ja",
+          "nein": "Nein",
+          "unbekannt": "Unbekannt"
+        },
+        "value": {
+          "label": "IOP-Wert (mmHg)",
+          "validation": "Bitte einen numerischen Wert eingeben (z. B. 14,5)."
+        },
+        "reason": {
+          "label": "Grund, warum IOP nicht gemessen wurde"
+        }
+      },
+      "ophthExam": {
+        "label": "Ophthalmologische bilaterale Untersuchung",
+        "description": "OD/OS-Paare für Standardmessungen (BCVA, IOP, CCT, CRT)."
+      }
     }
   },
   "ophthPreset": {
@@ -2013,6 +2130,23 @@
       }
     },
     "locked": "Gesperrt"
+  },
+  "events": {
+    "cancel": {
+      "title": "Visite stornieren",
+      "subtitle": "Visite »{label}«",
+      "reasonLabel": "Grund",
+      "reasonPlaceholder": "Bitte Grund auswählen…",
+      "reasonRequired": "Bitte einen Grund auswählen.",
+      "otherTextLabel": "Freitext-Begründung",
+      "otherTextRequired": "Bitte eine Begründung eingeben.",
+      "otherPlaceholder": "Begründung erfassen…",
+      "confirm": "Visite stornieren",
+      "cancel": "Abbrechen",
+      "errorLoadReasons": "Stornierungsgründe konnten nicht geladen werden — bitte später erneut versuchen.",
+      "errorSubmit": "Stornierung fehlgeschlagen — bitte später erneut versuchen.",
+      "successToast": "Visite storniert."
+    }
   },
   "eventDetail": {
     "title": "CRFs dieser Visite",

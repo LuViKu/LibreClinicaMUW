@@ -949,11 +949,19 @@ public class SubjectsApiController {
      * accompany the lookup. The backend is liberal about partial
      * fields (matches need all three) and renders a permissive 400
      * with explicit reasons rather than leaking match counts.
+     *
+     * <p>App-feedback Wave 1B (2026-06-19) — added the optional
+     * {@code label} field so the dialog can ALSO surface cross-study
+     * label collisions ("M-001 is already in study GA-Studie"). When
+     * blank or omitted the endpoint falls back to PHI-only matching
+     * (the legacy Phase E.6 contract).
      */
     public record SubjectMatchPreflightRequest(
             String firstName,
             String lastName,
-            String dateOfBirth
+            String dateOfBirth,
+            /** App-feedback Wave 1B — optional cross-study label match. */
+            String label
     ) {}
 
     /**

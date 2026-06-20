@@ -35,7 +35,13 @@
     "error": {
       "title": "An error occurred",
       "dismiss": "Dismiss error message",
-      "reqIdLabel": "Error ID"
+      "reqIdLabel": "Error ID",
+      "detailsToggle": "[NEEDS_REVIEW] Show details",
+      "detailsHide": "[NEEDS_REVIEW] Hide details",
+      "serverMessageLabel": "[NEEDS_REVIEW] Server message",
+      "urlLabel": "[NEEDS_REVIEW] URL",
+      "moreErrors": "[NEEDS_REVIEW] {n} more error(s)",
+      "queuedListTitle": "[NEEDS_REVIEW] More errors"
     },
     "systemAuditLog": "System audit",
     "retinalParked": "[NEEDS_REVIEW] Parked scans"
@@ -622,6 +628,29 @@
       "placeholder": "Give a reason…",
       "requiredTag": "Reason required",
       "inactiveHint": "Active once \"{value}\" is selected"
+    },
+    "prefill": {
+      "button": "[NEEDS_REVIEW] Vom letzten Besuch übernehmen",
+      "modalTitle": "[NEEDS_REVIEW] Werte vom letzten Besuch übernehmen",
+      "sourceLabel": "[NEEDS_REVIEW] Quelle: Visite vom {date}",
+      "colItem": "[NEEDS_REVIEW] Item",
+      "colValue": "[NEEDS_REVIEW] Wert",
+      "colApply": "[NEEDS_REVIEW] Übernehmen",
+      "confirm": "[NEEDS_REVIEW] Übernehmen",
+      "cancel": "[NEEDS_REVIEW] Abbrechen",
+      "empty": "[NEEDS_REVIEW] Keine vorherige Visite gefunden",
+      "errorFetch": "[NEEDS_REVIEW] Vorherige Werte konnten nicht geladen werden.",
+      "checkAll": "[NEEDS_REVIEW] Alle auswählen",
+      "uncheckAll": "[NEEDS_REVIEW] Keine auswählen"
+    }
+  },
+  "crfItem": {
+    "tristate": {
+      "tristateYes": "[NEEDS_REVIEW] Ja",
+      "tristateNo": "[NEEDS_REVIEW] Nein",
+      "tristateUnknown": "[NEEDS_REVIEW] Unbekannt",
+      "reasonLabel": "[NEEDS_REVIEW] Grund",
+      "reasonPlaceholder": "[NEEDS_REVIEW] Grund angeben…"
     }
   },
   "dde": {
@@ -1217,6 +1246,94 @@
       "button": "Validate (preview)",
       "success": "Looks good — {sections} section(s), {items} item(s).",
       "errorsTitle": "The preview rejected the draft:"
+    },
+    "canvas": {
+      "heading": "[NEEDS_REVIEW] CRF builder",
+      "subheading": "[NEEDS_REVIEW] Definition for {name}",
+      "subheadingGeneric": "[NEEDS_REVIEW] Build CRF definition",
+      "useLegacy": "[NEEDS_REVIEW] Use classic wizard",
+      "cancel": "[NEEDS_REVIEW] Cancel",
+      "save": "[NEEDS_REVIEW] Save",
+      "saving": "[NEEDS_REVIEW] Saving …",
+      "versionName": "[NEEDS_REVIEW] Version name",
+      "versionDescription": "[NEEDS_REVIEW] Version description",
+      "errorTitle": "[NEEDS_REVIEW] Save failed:",
+      "errors": {
+        "unknown": "[NEEDS_REVIEW] Unknown error."
+      },
+      "palette": {
+        "title": "[NEEDS_REVIEW] Building blocks",
+        "primitives": "[NEEDS_REVIEW] Primitive items",
+        "presets": "[NEEDS_REVIEW] Presets",
+        "prim": {
+          "ST": { "label": "[NEEDS_REVIEW] Text", "description": "[NEEDS_REVIEW] Single- or multi-line text." },
+          "INT": { "label": "[NEEDS_REVIEW] Integer", "description": "[NEEDS_REVIEW] Whole-number value." },
+          "REAL": { "label": "[NEEDS_REVIEW] Real number", "description": "[NEEDS_REVIEW] Numeric value with decimals." },
+          "DATE": { "label": "[NEEDS_REVIEW] Date", "description": "[NEEDS_REVIEW] Full date (DD.MM.YYYY)." },
+          "BL": { "label": "[NEEDS_REVIEW] Boolean", "description": "[NEEDS_REVIEW] Yes / No as a single checkbox." },
+          "TRISTATE_REASON": { "label": "[NEEDS_REVIEW] Yes / No / Unknown + reason", "description": "[NEEDS_REVIEW] Three-state selector with conditional reason field." },
+          "FILE": { "label": "[NEEDS_REVIEW] File attachment", "description": "[NEEDS_REVIEW] File upload." }
+        }
+      },
+      "canvas": {
+        "dropHere": "[NEEDS_REVIEW] Drag building blocks or presets from the left panel here.",
+        "emptySection": "[NEEDS_REVIEW] This section is empty.",
+        "untitled": "[NEEDS_REVIEW] (untitled)",
+        "removeItem": "[NEEDS_REVIEW] Remove",
+        "dragItem": "[NEEDS_REVIEW] Reorder item"
+      },
+      "section": {
+        "add": "[NEEDS_REVIEW] + Add new section",
+        "remove": "[NEEDS_REVIEW] Remove section",
+        "titlePlaceholder": "[NEEDS_REVIEW] Section title",
+        "labelPlaceholder": "[NEEDS_REVIEW] Section label (e.g. S1)"
+      },
+      "properties": {
+        "title": "[NEEDS_REVIEW] Properties",
+        "clear": "[NEEDS_REVIEW] Clear selection",
+        "noSelection": "[NEEDS_REVIEW] Select an item in the canvas to edit its properties.",
+        "labelField": "[NEEDS_REVIEW] Item name",
+        "oidField": "[NEEDS_REVIEW] Item OID",
+        "oidHelper": "[NEEDS_REVIEW] Suggested from the item name; can be overridden.",
+        "descriptionField": "[NEEDS_REVIEW] Description label",
+        "dataTypeField": "[NEEDS_REVIEW] Data type",
+        "responseTypeField": "[NEEDS_REVIEW] Response type",
+        "unitsField": "[NEEDS_REVIEW] Units",
+        "defaultField": "[NEEDS_REVIEW] Default value",
+        "requiredField": "[NEEDS_REVIEW] Required",
+        "validationSection": "[NEEDS_REVIEW] Validation",
+        "validationRegex": "[NEEDS_REVIEW] Regex (e.g. ^-?\\d+$)",
+        "validationMessage": "[NEEDS_REVIEW] Error message",
+        "showWhenSection": "[NEEDS_REVIEW] Conditional display",
+        "showWhenToggle": "[NEEDS_REVIEW] Only show when …",
+        "showWhenSourcePlaceholder": "[NEEDS_REVIEW] Select source item …",
+        "showWhenLiteralPlaceholder": "[NEEDS_REVIEW] Compare value"
+      }
+    },
+    "presets": {
+      "iop": {
+        "label": "[NEEDS_REVIEW] IOP measurement",
+        "description": "[NEEDS_REVIEW] Tonometry with Yes/No/Unknown plus conditional IOP value or reason.",
+        "parent": {
+          "label": "[NEEDS_REVIEW] IOP measured?"
+        },
+        "option": {
+          "ja": "[NEEDS_REVIEW] Yes",
+          "nein": "[NEEDS_REVIEW] No",
+          "unbekannt": "[NEEDS_REVIEW] Unknown"
+        },
+        "value": {
+          "label": "[NEEDS_REVIEW] IOP value (mmHg)",
+          "validation": "[NEEDS_REVIEW] Enter a numeric value (e.g. 14.5)."
+        },
+        "reason": {
+          "label": "[NEEDS_REVIEW] Reason IOP was not measured"
+        }
+      },
+      "ophthExam": {
+        "label": "[NEEDS_REVIEW] Ophthalmology bilateral examination",
+        "description": "[NEEDS_REVIEW] OD/OS pairs for standard measurements (BCVA, IOP, CCT, CRT)."
+      }
     }
   },
   "ophthPreset": {
@@ -2013,6 +2130,23 @@
       }
     },
     "locked": "Locked"
+  },
+  "events": {
+    "cancel": {
+      "title": "[NEEDS_REVIEW] Cancel visit",
+      "subtitle": "[NEEDS_REVIEW] Visit «{label}»",
+      "reasonLabel": "[NEEDS_REVIEW] Reason",
+      "reasonPlaceholder": "[NEEDS_REVIEW] Select a reason…",
+      "reasonRequired": "[NEEDS_REVIEW] Please pick a reason.",
+      "otherTextLabel": "[NEEDS_REVIEW] Free-text rationale",
+      "otherTextRequired": "[NEEDS_REVIEW] Please supply a rationale.",
+      "otherPlaceholder": "[NEEDS_REVIEW] Capture the rationale…",
+      "confirm": "[NEEDS_REVIEW] Cancel visit",
+      "cancel": "[NEEDS_REVIEW] Dismiss",
+      "errorLoadReasons": "[NEEDS_REVIEW] Could not load cancel reasons — please try again later.",
+      "errorSubmit": "[NEEDS_REVIEW] Cancellation failed — please try again later.",
+      "successToast": "[NEEDS_REVIEW] Visit cancelled."
+    }
   },
   "eventDetail": {
     "title": "CRFs for this event",

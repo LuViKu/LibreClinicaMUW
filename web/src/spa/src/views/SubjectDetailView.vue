@@ -11,6 +11,7 @@ import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
+import CancelEventDialog from '@/components/CancelEventDialog.vue'
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
 import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
 import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
@@ -276,13 +277,30 @@ async function submitEditEvent() {
   }
 }
 
-async function onCancelEvent(ev: { eventId: string; label: string }) {
+/* ------------------------------------------------------------- */
+/* Wave 1A (app-feedback, 2026-06-19) — cancel-event modal state. */
+/*                                                                */
+/* Replaces the native browser confirm() with a proper modal that  */
+/* requires the operator to pick an institutional reason from the  */
+/* backend catalog. The store action carries the picked reason     */
+/* (and free text on the "Other" entry) on the wire so the row's   */
+/* cancel_reason_code / cancel_reason_text columns record why the  */
+/* visit was cancelled.                                            */
+/* ------------------------------------------------------------- */
+
+const cancelDialogOpen = ref(false)
+const cancelDialogEvent = ref<{ eventId: string; label: string } | null>(null)
+
+function onCancelEvent(ev: { eventId: string; label: string }) {
   if (!ev.eventId || !subject.value) return
-  if (!confirm(t('subjectDetail.event.cancelConfirm', { label: ev.label }))) return
-  const ok = await events.cancelEvent(ev.eventId)
-  if (ok) {
-    await subjects.fetchOne(subject.value.id)
-  }
+  cancelDialogEvent.value = ev
+  cancelDialogOpen.value = true
+}
+
+async function onEventCancelled() {
+  if (!subject.value) return
+  await subjects.fetchOne(subject.value.id)
+  cancelDialogEvent.value = null
 }
 
 function canEditEv(status: EventStatus): boolean {
@@ -1151,6 +1169,18 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       :subject-id="subject.id"
       :study-oid="activeStudyOid"
       @scheduled="onEventScheduled"
+    />
+
+    <!-- Wave 1A (app-feedback) — Cancel-event dialog. Renders only
+         while a cancel target is set so the catalog fetch only runs
+         when the operator actually opens it. -->
+    <CancelEventDialog
+      v-if="cancelDialogEvent"
+      v-model:open="cancelDialogOpen"
+      :event-id="cancelDialogEvent.eventId"
+      :event-label="cancelDialogEvent.label"
+      @cancelled="onEventCancelled"
+      @close="cancelDialogEvent = null"
     />
 
     <!-- Phase E.6 per-eye cohort transition — dialog. Sibling

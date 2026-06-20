@@ -254,8 +254,13 @@ export function apiPut<T>(path: string, body: unknown, opts?: RequestOptions): P
   return request<T>('PUT', path, body, opts)
 }
 
-export function apiDelete<T>(path: string, opts?: RequestOptions): Promise<T> {
-  return request<T>('DELETE', path, undefined, opts)
+export function apiDelete<T>(path: string, body?: unknown, opts?: RequestOptions): Promise<T> {
+  // Wave 1A (app-feedback) — DELETE now supports an optional JSON body
+  // so the cancel-visit dialog can carry { reasonCode, reasonText } on
+  // the wire. Pre-existing call sites pass no body and keep behaving
+  // identically (the request helper only attaches Content-Type when
+  // body !== undefined).
+  return request<T>('DELETE', path, body, opts)
 }
 
 /**

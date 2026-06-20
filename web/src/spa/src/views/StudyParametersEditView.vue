@@ -9,6 +9,7 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
 import { useStudyParametersStore } from '@/stores/studyParameters'
+import { useErrorsStore } from '@/stores/errors'
 import { ApiError } from '@/api/client'
 import { ALLOWED, type UpdateStudyParametersInput } from '@/types/studyParameters'
 
@@ -33,6 +34,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useStudyParametersStore()
+const errors = useErrorsStore()
 
 const oid = computed(() => String(route.params.oid))
 
@@ -116,6 +118,12 @@ onMounted(async () => {
   } catch (e) {
     if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
       router.replace({ name: 'study-picker' })
+    } else {
+      // Wave 1C hygiene — surface non-auth load failures (5xx / network /
+      // 4xx) via the global toast. Without this push, a failed load
+      // silently swallows the error and the operator sees an empty form
+      // with no explanation.
+      errors.push(e)
     }
   }
 })
@@ -149,6 +157,12 @@ async function submit() {
   } catch (e) {
     if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) {
       router.replace({ name: 'study-picker' })
+    } else {
+      // Wave 1C hygiene — surface non-auth submit failures (5xx / network)
+      // via the global toast. The store's discriminated `{ok:false}` path
+      // already covers structured 4xx responses; this catch handles only
+      // hard throws (network drop, unparseable error, etc.).
+      errors.push(e)
     }
   }
 }
