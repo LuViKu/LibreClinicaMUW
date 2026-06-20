@@ -25,8 +25,10 @@ import { ref } from 'vue'
 import { ApiError, ApiNetworkError } from '@/api/client'
 import {
   bindParkedJob,
+  bulkBindParkedJobs,
   listParkedJobs,
   type ParkedJobAdminRow,
+  type RetinalJobBulkBindResponse,
 } from '@/api/retinal'
 
 export const useRetinalParkedStore = defineStore('retinalParked', () => {
@@ -85,6 +87,41 @@ export const useRetinalParkedStore = defineStore('retinalParked', () => {
     }
   }
 
+  /**
+   * 2026-06-20 B2 — bulk-bind every job in {@code jobIds} to the same
+   * {@code eventCrfId}. Always resolves to the parsed response so the
+   * caller can render a single summary toast; only network / 4xx other
+   * than 400 are thrown.
+   *
+   * <p>Optimistic removal: every row whose backend status came back as
+   * {@code BOUND} is dropped from {@code list} immediately so the
+   * operator sees the bound rows disappear without waiting on a
+   * follow-up load. The view still re-loads afterwards as a safety net
+   * against backend / local-state divergence.
+   */
+  async function bulkBind(
+    jobIds: number[],
+    eventCrfId: number,
+  ): Promise<RetinalJobBulkBindResponse> {
+    error.value = null
+    try {
+      const response = await bulkBindParkedJobs({ jobIds, eventCrfId })
+      const boundIds = new Set(
+        response.results
+          .filter((r) => r.status === 'BOUND')
+          .map((r) => r.jobId),
+      )
+      if (boundIds.size > 0) {
+        list.value = list.value.filter((r) => !boundIds.has(r.jobId))
+      }
+      return response
+    } catch (e) {
+      if (e instanceof ApiError && (e.isUnauthorized || e.isForbidden)) throw e
+      error.value = humanError(e, 'bind')
+      throw e
+    }
+  }
+
   function humanError(e: unknown, op: 'load' | 'bind'): string {
     if (e instanceof ApiError) {
       const body = e.body as { message?: string } | null
@@ -97,5 +134,5 @@ export const useRetinalParkedStore = defineStore('retinalParked', () => {
       : 'Zuordnung fehlgeschlagen.'
   }
 
-  return { list, isLoading, error, bindingJobId, load, bind }
+  return { list, isLoading, error, bindingJobId, load, bind, bulkBind }
 })
