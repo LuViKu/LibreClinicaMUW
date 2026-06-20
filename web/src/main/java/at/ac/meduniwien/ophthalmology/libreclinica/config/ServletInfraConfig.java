@@ -112,6 +112,23 @@ public class ServletInfraConfig {
     }
 
     /**
+     * Phase E.8 legacy-retirement (2026-06-20) — explicit bean for the
+     * deprecation catalog. The catalog itself is annotated
+     * {@code @Component}, but its package
+     * ({@code …libreclinica.web.deprecation}) is not under either of
+     * the application's two narrow {@code scanBasePackages} settings
+     * ({@code .config} on the root context, {@code .controller} on the
+     * pages child context). Without this explicit bean Boot startup
+     * fails with "required a bean of type
+     * LegacyServletDeprecationCatalog that could not be found" — see
+     * the compose smoke-test failure on lc-develop tip 5bdefd25a.
+     */
+    @Bean
+    public LegacyServletDeprecationCatalog legacyServletDeprecationCatalog() {
+        return new LegacyServletDeprecationCatalog();
+    }
+
+    /**
      * Phase E.8 legacy-retirement (2026-06-20) — emits a structured
      * INFO line on the {@code legacy-access} logger for every request
      * that hits a {@link LegacyServletDeprecationCatalog} entry, and
