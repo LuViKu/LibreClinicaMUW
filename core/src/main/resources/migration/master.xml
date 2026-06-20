@@ -74,5 +74,6 @@
   <include  file="migration/lc-muw-2026-06-20-item-data-source-retinal-job.xml"/>
   <include  file="migration/lc-muw-2026-06-20-namd-visit-ai-items.xml"/>
   <include  file="migration/lc-muw-2026-06-20-patient-table.xml"/>
+  <include  file="migration/lc-muw-2026-06-20-study-subject-patient-id-nullable.xml"/>
 </databaseChangeLog>
 
