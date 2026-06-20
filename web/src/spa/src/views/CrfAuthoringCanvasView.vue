@@ -11,10 +11,10 @@ import { useCrfAuthoringStore } from '@/stores/crfAuthoring'
 /**
  * App-feedback Wave 2 (2026-06-19) — CRF authoring canvas view.
  *
- * <p>Replaces the {@link CrfAuthoringWizard} side-rail wizard for one
- * release behind a feature flag (the legacy wizard route stays in
- * {@code router/index.ts} via {@code meta.legacy = true} so the menu
- * can hide it cleanly later).
+ * <p>Replaces the legacy side-rail CRF authoring wizard. The wizard
+ * component + its mount in {@code CrfLibraryView} have been removed
+ * (D3 follow-up, 2026-06-20) — this canvas is now the sole authoring
+ * surface.
  *
  * <p>Layout: three columns side-by-side:
  *

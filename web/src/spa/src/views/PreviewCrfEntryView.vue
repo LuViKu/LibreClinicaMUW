@@ -10,13 +10,13 @@ import { useI18n } from 'vue-i18n'
  * persistence — Save / Mark complete are no-op stubs that flip
  * in-memory state only.
  *
- * <p>Used by the {@code CrfAuthoringWizard} via an inline overlay so
- * the operator can author + try out a CRF in the same window. The
- * view is also embeddable on its own (the store carries the schema +
- * the open flag) for non-wizard preview entry points later on.
+ * <p>Used by the CRF authoring canvas via an inline overlay so the
+ * operator can author + try out a CRF in the same window. The view is
+ * also embeddable on its own (the store carries the schema + the open
+ * flag) for non-canvas preview entry points later on.
  *
  * <p>Wired to render every CRF — the ophth preset, a vanilla
- * Demographics draft, anything the wizard hands it. The component
+ * Demographics draft, anything the canvas hands it. The component
  * doesn't carry preset-specific assumptions.
  */
 

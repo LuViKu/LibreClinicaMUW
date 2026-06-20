@@ -121,6 +121,10 @@ function resetForm() {
   formError.value = null
 }
 
+// `immediate: true` covers the production mount path where the dialog is
+// rendered conditionally (`v-if="cancelDialogEvent"`) with
+// `v-model:open` already true — without immediate the watch only fires
+// on a *change* of `open`, so the catalog never loads on first open.
 watch(
   () => props.open,
   (isOpen) => {
@@ -129,6 +133,7 @@ watch(
       void loadReasons()
     }
   },
+  { immediate: true },
 )
 
 function close() {

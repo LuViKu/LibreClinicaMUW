@@ -56,6 +56,29 @@
 <%-- this element must be designed to optionally include/exclude its internal DIVs --%>
 <view:sidebar />
 
+<%@ taglib uri="jakarta.tags.core" prefix="c" %>
+<%-- Phase E.8 legacy-retirement (2026-06-20) — deprecation banner.
+     Rendered only when LegacyServletTelemetryFilter set the attributes
+     (i.e. the path is a cataloged "safe to delete" servlet AND
+     LIBRECLINICA_LEGACY_BANNER=true). Static markup so it does NOT
+     execute scripts or query the DB; pure i18n + URL hand-off. --%>
+<c:if test="${not empty requestScope['muw.legacyDeprecation.bannerVisible']}">
+    <div id="legacyDeprecationBanner"
+         style="background:#fff7e6;border-bottom:2px solid #d97706;
+                color:#7c2d12;padding:10px 16px;font-size:13px;
+                line-height:1.4;font-family:Arial,sans-serif;">
+        <strong>⚠ Deprecated page —</strong>
+        please switch to the new SPA:
+        <a href="<c:url value='${requestScope[\"muw.legacyDeprecation.spaRoute\"]}'/>"
+           style="color:#7c2d12;text-decoration:underline;font-weight:bold;">
+            <c:out value="${requestScope['muw.legacyDeprecation.spaRoute']}"/>
+        </a>.
+        Scheduled removal:
+        <strong><c:out value="${requestScope['muw.legacyDeprecation.sunsetDate']}"/></strong>
+        (bucket: <c:out value="${requestScope['muw.legacyDeprecation.bucket']}"/>).
+    </div>
+</c:if>
+
 <div id="bodyDiv">
     <decorator:body />
     <div id="workflowDiv">

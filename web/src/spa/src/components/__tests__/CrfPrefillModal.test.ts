@@ -15,7 +15,7 @@
  * </ul>
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
@@ -49,7 +49,27 @@ function mountModal(open = true) {
   })
 }
 
-describe.skip('CrfPrefillModal', () => {
+/**
+ * The {@link Modal} primitive teleports its body into
+ * {@code document.body}, so any {@code wrapper.find(...)} call (which
+ * walks the component's own render tree) returns an empty wrapper. We
+ * resolve elements via {@code document.body.querySelector} instead and
+ * wrap them in a {@link DOMWrapper} when we need vue-test-utils helpers
+ * ({@code trigger}, {@code setValue}) — those internally dispatch
+ * native events that Vue's compiled listeners pick up under jsdom.
+ */
+function find<T extends HTMLElement = HTMLElement>(selector: string): DOMWrapper<T> {
+  const el = document.body.querySelector(selector) as T | null
+  if (!el) {
+    // Synthesise an empty wrapper so the existing `.exists()` checks
+    // still work cleanly when the element legitimately isn't there
+    // (empty state, error state, etc.).
+    return new DOMWrapper(null as unknown as T)
+  }
+  return new DOMWrapper(el)
+}
+
+describe('CrfPrefillModal', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.mocked(apiGet).mockReset()
@@ -66,13 +86,13 @@ describe.skip('CrfPrefillModal', () => {
     })
     const w = mountModal()
     await flushPromises()
-    expect(w.find('[data-testid="prefill-table"]').exists()).toBe(true)
-    expect(w.find('[data-testid="prefill-row-I_AGE"]').exists()).toBe(true)
-    expect(w.find('[data-testid="prefill-row-I_SEX"]').exists()).toBe(true)
+    expect(find('[data-testid="prefill-table"]').exists()).toBe(true)
+    expect(find('[data-testid="prefill-row-I_AGE"]').exists()).toBe(true)
+    expect(find('[data-testid="prefill-row-I_SEX"]').exists()).toBe(true)
     // Default-checked: both checkboxes start checked so the common
     // "apply all" path is one click.
-    const c1 = w.find<HTMLInputElement>('[data-testid="prefill-checkbox-I_AGE"]')
-    const c2 = w.find<HTMLInputElement>('[data-testid="prefill-checkbox-I_SEX"]')
+    const c1 = find<HTMLInputElement>('[data-testid="prefill-checkbox-I_AGE"]')
+    const c2 = find<HTMLInputElement>('[data-testid="prefill-checkbox-I_SEX"]')
     expect(c1.element.checked).toBe(true)
     expect(c2.element.checked).toBe(true)
     w.unmount()
@@ -90,10 +110,10 @@ describe.skip('CrfPrefillModal', () => {
     const w = mountModal()
     await flushPromises()
     // Uncheck the I_SEX row.
-    const c2 = w.find<HTMLInputElement>('[data-testid="prefill-checkbox-I_SEX"]')
+    const c2 = find<HTMLInputElement>('[data-testid="prefill-checkbox-I_SEX"]')
     await c2.setValue(false)
     // Confirm.
-    await w.find('[data-testid="prefill-confirm"]').trigger('click')
+    await find('[data-testid="prefill-confirm"]').trigger('click')
     const emits = w.emitted('apply')
     expect(emits).toBeTruthy()
     expect(emits?.[0][0]).toEqual({ I_AGE: '45' })
@@ -108,7 +128,7 @@ describe.skip('CrfPrefillModal', () => {
     })
     const w = mountModal()
     await flushPromises()
-    await w.find('[data-testid="prefill-cancel"]').trigger('click')
+    await find('[data-testid="prefill-cancel"]').trigger('click')
     expect(w.emitted('apply')).toBeFalsy()
     expect(w.emitted('close')).toBeTruthy()
     w.unmount()
@@ -120,11 +140,11 @@ describe.skip('CrfPrefillModal', () => {
     )
     const w = mountModal()
     await flushPromises()
-    expect(w.find('[data-testid="prefill-empty"]').exists()).toBe(true)
-    expect(w.find('[data-testid="prefill-table"]').exists()).toBe(false)
+    expect(find('[data-testid="prefill-empty"]').exists()).toBe(true)
+    expect(find('[data-testid="prefill-table"]').exists()).toBe(false)
     // Confirm button stays disabled in the empty state so the operator
     // can't accidentally apply an empty map.
-    const confirm = w.find<HTMLButtonElement>('[data-testid="prefill-confirm"]')
+    const confirm = find<HTMLButtonElement>('[data-testid="prefill-confirm"]')
     expect(confirm.attributes('disabled')).not.toBeUndefined()
     w.unmount()
   })
@@ -135,8 +155,8 @@ describe.skip('CrfPrefillModal', () => {
     )
     const w = mountModal()
     await flushPromises()
-    expect(w.find('[data-testid="prefill-error"]').exists()).toBe(true)
-    expect(w.text()).toContain('oops')
+    expect(find('[data-testid="prefill-error"]').exists()).toBe(true)
+    expect(document.body.textContent).toContain('oops')
     w.unmount()
   })
 
@@ -151,16 +171,16 @@ describe.skip('CrfPrefillModal', () => {
     })
     const w = mountModal()
     await flushPromises()
-    await w.find('[data-testid="prefill-uncheck-all"]').trigger('click')
+    await find('[data-testid="prefill-uncheck-all"]').trigger('click')
     expect(
-      w.find<HTMLInputElement>('[data-testid="prefill-checkbox-I_AGE"]').element.checked,
+      find<HTMLInputElement>('[data-testid="prefill-checkbox-I_AGE"]').element.checked,
     ).toBe(false)
     expect(
-      w.find<HTMLInputElement>('[data-testid="prefill-checkbox-I_SEX"]').element.checked,
+      find<HTMLInputElement>('[data-testid="prefill-checkbox-I_SEX"]').element.checked,
     ).toBe(false)
-    await w.find('[data-testid="prefill-check-all"]').trigger('click')
+    await find('[data-testid="prefill-check-all"]').trigger('click')
     expect(
-      w.find<HTMLInputElement>('[data-testid="prefill-checkbox-I_AGE"]').element.checked,
+      find<HTMLInputElement>('[data-testid="prefill-checkbox-I_AGE"]').element.checked,
     ).toBe(true)
     w.unmount()
   })
