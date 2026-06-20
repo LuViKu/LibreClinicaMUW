@@ -1,11 +1,12 @@
 import type { StudyModuleManifest } from './types'
+import namdManifest from './nAMD'
 
 /**
- * Registered study modules. The harmonize step adds the nAMD import
- * after the two parallel branches merge — for now this array stays
- * empty so the framework can be tested in isolation.
+ * Registered study modules. Order is presentation order in nav surfaces
+ * (the framework currently has no nav slot consumer, but the order
+ * matters for {@code injectionsFor} stability).
  */
-export const STUDY_MODULES: StudyModuleManifest[] = []
+export const STUDY_MODULES: StudyModuleManifest[] = [namdManifest]
 
 /**
  * Look up a manifest by {@code study.protocol_type}. Match is
