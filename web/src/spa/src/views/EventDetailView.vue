@@ -9,6 +9,7 @@ import DenseTable from '@/components/DenseTable.vue'
 import RetinalResultsTab from '@/components/RetinalResultsTab.vue'
 
 import { useEventDetailStore } from '@/stores/eventDetail'
+import { useStudyModuleStore } from '@/stores/studyModules'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
 
 /**
@@ -26,6 +27,12 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useEventDetailStore()
+// Pluggable study-module SPI — event-detail panels slot.
+// Each entry's optional predicate(ctx) is evaluated with the current
+// event ref so a module can gate per-event without hard-coded
+// per-event-name conditionals in shared code.
+const studyModules = useStudyModuleStore()
+const panelInjections = computed(() => studyModules.injectionsFor('event-detail.panels'))
 
 const eventId = computed<string>(() => String(route.params.eventId))
 
@@ -310,6 +317,22 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
           :key="`retinal-${crfId}`"
           :event-crf-id="crfId"
         />
+
+        <!-- Pluggable study-module SPI — event-detail panels slot.
+             Modules opt-in by registering an entry with an optional
+             predicate(ctx); the host passes the current event ref so
+             modules can gate by status / definition / etc. without
+             hard-coded conditionals in shared code. -->
+        <template
+          v-for="entry in panelInjections"
+          :key="entry.key"
+        >
+          <component
+            v-if="!entry.predicate || entry.predicate(event)"
+            :is="entry.component"
+            :context="event"
+          />
+        </template>
 
         <RouterLink :to="`/subjects/${event.subjectLabel}`" class="text-xs text-muw-blue underline" data-test="event-detail-back">
           {{ t('eventDetail.back') }}
