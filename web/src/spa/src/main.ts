@@ -158,6 +158,33 @@ if (typeof window !== 'undefined') {
  * The fix: install pinia + i18n first, run bootstrap, then install
  * the router so its first navigation sees the resolved state.
  */
+/**
+ * Pluggable study-module SPI — route registration.
+ *
+ * Every manifest's routes are prefixed with
+ * {@code /studies/:studyOid/modules/<protocolType-lowercased>} so the
+ * URL space is namespaced by-study and-by-module. The {@code
+ * meta.studyModule} stamp lets the router guard reject navigations
+ * whose target study doesn't match the active study's protocol_type
+ * (e.g. deep-linking into /studies/.../modules/namd while bound to a
+ * GA study would 403 in the UI before the component imports any
+ * code).
+ *
+ * Runs before {@code app.use(router)} so the initial navigation can
+ * resolve module routes — useful for refresh on a deep link into the
+ * workspace.
+ */
+import { STUDY_MODULES } from '@/studyModules/registry'
+for (const mod of STUDY_MODULES) {
+  for (const route of mod.routes) {
+    router.addRoute({
+      ...route,
+      path: `/studies/:studyOid/modules/${mod.protocolType.toLowerCase()}${route.path}`,
+      meta: { ...(route.meta ?? {}), studyModule: mod.protocolType },
+    })
+  }
+}
+
 useAuthStore(pinia).bootstrap().finally(() => {
   app.use(router)
   app.mount('#app')
