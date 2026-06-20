@@ -247,6 +247,13 @@ const router = createRouter({
       component: () => import('@/views/FirstLoginView.vue'),
       meta: { title: 'First-login profile', public: true },
     },
+    /* Phase E.8 Slice L2 (2026-06-20) — SPA replacement for /pages/Contact. */
+    {
+      path: '/contact',
+      name: 'contact',
+      component: () => import('@/views/ContactView.vue'),
+      meta: { title: 'Contact', public: true },
+    },
     /* Phase E.4 M1 — Study picker (post-login, when no study bound). */
     {
       path: '/pick-study',

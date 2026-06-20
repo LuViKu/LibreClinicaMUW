@@ -147,6 +147,11 @@ public class SecurityConfig {
                         "/pages/healthcheck/**",
                         "/pages/api/v1/anonymousform/**",
                         "/pages/api/v2/anonymousform/**",
+                        // Phase E.8 Slice L2 (2026-06-20): SPA replacement
+                        // for the legacy /pages/Contact JSP. Unauthenticated
+                        // by design — same audience as the legacy form.
+                        // Rate-limit lives at the reverse proxy.
+                        "/pages/api/v1/contact",
                         // Public OCT upload portal — see oct-upload-portal plan.
                         // Trust-the-reverse-proxy exposure: must NOT be exposed
                         // to public internet. CSRF is already disabled globally

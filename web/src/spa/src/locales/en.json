@@ -146,6 +146,26 @@
     "clear": "Clear",
     "export": "Export"
   },
+  "contact": {
+    "brandLine": "Department of Ophthalmology and Optometry, Medical University of Vienna",
+    "title": "Contact the administrator",
+    "subtitle": "Send a message to the LibreClinicaMUW administrator. Include enough detail that we can help quickly.",
+    "name": "Your name",
+    "email": "Your email address",
+    "subject": "Subject",
+    "message": "Message",
+    "send": "Send message",
+    "sending": "Sending…",
+    "successTitle": "Your message has been sent.",
+    "successBody": "The administrator has been notified. We may reply to the email address you provided.",
+    "sendAnother": "Send another message",
+    "backToLogin": "Back to sign-in",
+    "privacyNote": "Your message is delivered as a plain email to the institutional administrator. Do not include patient-identifying information.",
+    "errorValidation": "Please fix the highlighted fields.",
+    "errorUnavailable": "Contact form is not currently accepting messages; please contact the sysadmin directly.",
+    "errorGeneric": "Failed to send your message. Please try again later.",
+    "errorNetwork": "Network error — please check your connection and try again."
+  },
   "subjectMatrix": {
     "title": "Subject Matrix",
     "subjectsCountTrail": "subjects",
