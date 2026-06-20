@@ -21,7 +21,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.ApiSecurityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.LocaleFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.RequestIdFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation.LegacyServletDeprecationCatalog;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation.LegacyServletTelemetryFilter;
 import jakarta.servlet.Filter;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Phase C.14 cliff (2026-05-30): replaces the {@code <listener>}s and
@@ -104,6 +107,32 @@ public class ServletInfraConfig {
                 new FilterRegistrationBean<>(new RequestIdFilter());
         reg.addUrlPatterns("/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        reg.setAsyncSupported(true);
+        return reg;
+    }
+
+    /**
+     * Phase E.8 legacy-retirement (2026-06-20) — emits a structured
+     * INFO line on the {@code legacy-access} logger for every request
+     * that hits a {@link LegacyServletDeprecationCatalog} entry, and
+     * (when {@code LIBRECLINICA_LEGACY_SERVLETS_ENABLED=false}) returns
+     * 410 Gone with a JSON body pointing at the SPA replacement.
+     *
+     * <p>Ordered just after {@link #requestIdFilter()} so the
+     * {@code reqId} MDC value is already populated when this filter
+     * logs the hit.
+     */
+    @Bean
+    public FilterRegistrationBean<LegacyServletTelemetryFilter> legacyServletTelemetryFilter(
+            LegacyServletDeprecationCatalog catalog,
+            @Value("${libreclinica.legacy.servletsEnabled:true}") boolean servletsEnabled,
+            @Value("${libreclinica.legacy.banner:true}") boolean bannerEnabled,
+            @Value("${libreclinica.legacy.sunsetDate:2026-08-15}") String sunsetDate) {
+        FilterRegistrationBean<LegacyServletTelemetryFilter> reg =
+                new FilterRegistrationBean<>(new LegacyServletTelemetryFilter(
+                        catalog, servletsEnabled, bannerEnabled, sunsetDate));
+        reg.addUrlPatterns("/pages/*");
+        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
         reg.setAsyncSupported(true);
         return reg;
     }
