@@ -51,7 +51,9 @@ public class LegacyServletDeprecationCatalog {
         DISCREPANCY_NOTES,
         SITES_GROUPS_RULES,
         /** Phase E.8 Slice L2 (2026-06-20) — public unauthenticated forms. */
-        SUPPORT_FORMS
+        SUPPORT_FORMS,
+        /** Phase E.8 Slice L3 (2026-06-20) — sysadmin tooling. */
+        ADMIN_TOOLING
     }
 
     /**
@@ -205,6 +207,14 @@ public class LegacyServletDeprecationCatalog {
         // banner cover the historical URL.
         put(m, "/pages/Contact", "/app/contact", Bucket.SUPPORT_FORMS);
         put(m, "/Contact", "/app/contact", Bucket.SUPPORT_FORMS);
+
+        // --- ADMIN_TOOLING — SPA `/admin/*` (Phase E.8 Slice L3) ---
+        // SystemStatus has historically been wired at bare /SystemStatus
+        // (the menu link) in addition to /pages/SystemStatus.
+        put(m, "/pages/SystemStatus", "/app/admin/system-status", Bucket.ADMIN_TOOLING);
+        put(m, "/SystemStatus", "/app/admin/system-status", Bucket.ADMIN_TOOLING);
+        put(m, "/pages/ConfigurePasswordRequirements", "/app/admin/password-policy", Bucket.ADMIN_TOOLING);
+        put(m, "/pages/Configure", "/app/admin/config", Bucket.ADMIN_TOOLING);
 
         this.byPath = Map.copyOf(m);
     }

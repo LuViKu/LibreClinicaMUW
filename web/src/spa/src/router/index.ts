@@ -89,6 +89,25 @@ const router = createRouter({
       component: () => import('@/views/SystemAuditLogView.vue'),
       meta: { title: 'System Audit Log', role: 'Administrator' as const },
     },
+    /* Phase E.8 Slice L3 (2026-06-20) — sysadmin admin tooling. */
+    {
+      path: '/admin/system-status',
+      name: 'admin-system-status',
+      component: () => import('@/views/AdminSystemStatusView.vue'),
+      meta: { title: 'System Status', role: 'Administrator' as const },
+    },
+    {
+      path: '/admin/password-policy',
+      name: 'admin-password-policy',
+      component: () => import('@/views/AdminPasswordPolicyView.vue'),
+      meta: { title: 'Password Policy', role: 'Administrator' as const },
+    },
+    {
+      path: '/admin/config',
+      name: 'admin-config',
+      component: () => import('@/views/AdminConfigView.vue'),
+      meta: { title: 'App Configuration', role: 'Administrator' as const },
+    },
     /* Phase E.6 carry-over — Read-only CRF (Monitor's "View Within Record" path). */
     {
       path: '/event-crfs/:eventCrfOid/readonly',
