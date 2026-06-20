@@ -1,6 +1,5 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { createI18n } from 'vue-i18n'
 
 import App from './App.vue'
 import router from './router'
@@ -8,28 +7,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useErrorsStore } from '@/stores/errors'
 import { useConnectionStore } from '@/stores/connection'
 import { useClientLogsStore } from '@/stores/clientLogs'
-import deMessages from './locales/de.json'
-import enMessages from './locales/en.json'
+// Phase E.X studyModules (2026-06-20): i18n instance lifted to its own
+// module so the study-module store can call
+// {@code i18n.global.mergeLocaleMessage} on activation without
+// re-entering main.ts (which would create an import cycle).
+import { i18n } from '@/i18n'
 
 import './style.css'
-
-const i18n = createI18n({
-  legacy: false,
-  locale: 'de-AT',
-  fallbackLocale: 'en',
-  // Phase E hardening — A5 (2026-06-10): silence i18n warning spam in
-  // production builds. Vue-i18n logs both "missing key" and "fallback"
-  // warnings to the console by default; in dev those are signal (a
-  // typo'd key shows up immediately), but in prod they're noise that
-  // crowds out genuine errors. Mirror the Vue-i18n recommendation:
-  // gate both on `!import.meta.env.PROD`.
-  missingWarn: !import.meta.env.PROD,
-  fallbackWarn: !import.meta.env.PROD,
-  messages: {
-    'de-AT': deMessages,
-    en: enMessages,
-  },
-})
 
 const app = createApp(App)
 const pinia = createPinia()

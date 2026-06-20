@@ -133,6 +133,16 @@ export type ActiveStudySummary =
      */
     role?: UserRole
     roles?: UserRole[]
+    /**
+     * Study-module dispatch — matches the {@code study.protocol_type}
+     * DB column (free-form text, normalised case-insensitively by the
+     * SPA module registry). Drives {@code useStudyModuleStore} which
+     * activates a matching {@link StudyModuleManifest} on every
+     * study switch. Backend exposure landed in the same PR as the
+     * pluggable module SPI; the field is optional for forward
+     * compatibility with M1-era /me responses that don't yet emit it.
+     */
+    protocolType?: string | null
   }
 
 /**
