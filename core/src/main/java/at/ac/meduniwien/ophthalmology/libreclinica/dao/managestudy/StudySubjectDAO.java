@@ -122,8 +122,15 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         // identity. Liquibase appends at the end of the table.
         this.setTypeExpected(ind, TypeNames.STRING);
         ind++; // patient_uuid
-        // this.setTypeExpected(ind, TypeNames.INT);
-        // ind++;
+        // C4 (2026-06-20) — hard FK to patient.patient_id (BIGINT). Liquibase
+        // appended at the end of the table; LONG/BIGINT goes through the
+        // EntityDAO via TypeNames.INT (legacy aliases INT to Number; the
+        // jdbc layer up-casts the bigint into Number, so the bean's int
+        // accessor sees the truncated long — fine in practice while ids
+        // stay within int range, which is the case for every other
+        // BIGINT-backed FK on the platform).
+        this.setTypeExpected(ind, TypeNames.INT);
+        ind++; // patient_id
     }
 
     /**
@@ -154,6 +161,14 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         // Phase E.6 Tier 1 — ophthalmology study-eye + screening-date.
         eb.setStudyEye((String) hm.get("study_eye"));
         eb.setScreeningDate((Date) hm.get("screening_date"));
+        // C4 (2026-06-20) — hard FK to patient.patient_id. Postgres
+        // returns BIGINT as Long; the EntityDAO type map (INT) yields a
+        // Number → narrow to int. Zero when null (post-migration this
+        // shouldn't happen on real data, but the bean tolerates it).
+        Object patientIdObj = hm.get("patient_id");
+        if (patientIdObj instanceof Number) {
+            eb.setPatientId(((Number) patientIdObj).intValue());
+        }
         return eb;
     }
 
@@ -270,7 +285,9 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         // because setTypesExpected now declares 15 columns (was 13).
         // Wave 1B (app-feedback 2026-06-19): bumped 16 → 17 because
         // setTypesExpected gained patient_uuid (now declares 16 cols).
-        setTypeExpected(17, TypeNames.STRING);
+        // C4 (2026-06-20): bumped 17 → 18 because setTypesExpected gained
+        // patient_id (now declares 17 cols).
+        setTypeExpected(18, TypeNames.STRING);
 
         HashMap<Integer, Object> variables = variables(ID);
 
@@ -431,7 +448,8 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         // type for Study unique_identifier from StudySubject getWithFilterAndSort query
         // Phase E.6 Tier 1: positional override bumped 14 → 16.
         // Wave 1B (2026-06-19): bumped 16 → 17 (patient_uuid in setTypesExpected).
-        setTypeExpected(17, TypeNames.STRING);
+        // C4 (2026-06-20): bumped 17 → 18 (patient_id in setTypesExpected).
+        setTypeExpected(18, TypeNames.STRING);
         
         String partialSql;
         HashMap<Integer, Object> variables = variables(currentStudy.getId(), currentStudy.getId());
@@ -554,9 +572,10 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         setTypesExpected();
         // Phase E.6 Tier 1: positional overrides bumped 14/15/16 → 16/17/18.
         // Wave 1B (2026-06-19): bumped 16/17/18 → 17/18/19 (patient_uuid).
-        this.setTypeExpected(17, TypeNames.DATE);
-        this.setTypeExpected(18, TypeNames.STRING);
+        // C4 (2026-06-20): bumped 17/18/19 → 18/19/20 (patient_id).
+        this.setTypeExpected(18, TypeNames.DATE);
         this.setTypeExpected(19, TypeNames.STRING);
+        this.setTypeExpected(20, TypeNames.STRING);
 
         HashMap<Integer, Object> variables = variables(currentStudy.getId(), currentStudy.getId());
         String sql = digester.getQuery("getWithFilterAndSortAuditLog");
@@ -588,7 +607,8 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         // type for Study unique_identifier from StudySubject getWithFilterAndSort query
         // Phase E.6 Tier 1: positional override bumped 14 → 16.
         // Wave 1B (2026-06-19): bumped 16 → 17 (patient_uuid).
-        setTypeExpected(17, TypeNames.STRING);
+        // C4 (2026-06-20): bumped 17 → 18 (patient_id).
+        setTypeExpected(18, TypeNames.STRING);
 
         HashMap<Integer, Object> variables = variables(currentStudy.getId(), currentStudy.getId());
         String sql = digester.getQuery("getWithFilterAndSort");
@@ -704,7 +724,8 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         // type for 'unique_identifier' from the study table
         // Phase E.6 Tier 1: positional override bumped 14 → 16.
         // Wave 1B (2026-06-19): bumped 16 → 17 (patient_uuid).
-        setTypeExpected(17, TypeNames.STRING);
+        // C4 (2026-06-20): bumped 17 → 18 (patient_id).
+        setTypeExpected(18, TypeNames.STRING);
 
         HashMap<Integer, Object> variables = variables(subjectId, study.getId(), study.getId());
 
@@ -729,11 +750,12 @@ public class StudySubjectDAO extends AuditableEntityDAO<StudySubjectBean> {
         this.setTypesExpected();
         // Phase E.6 Tier 1: positional overrides bumped 14/15/16 → 16/17/18.
         // Wave 1B (2026-06-19): bumped 16/17/18 → 17/18/19 (patient_uuid).
-        this.setTypeExpected(17, TypeNames.STRING);
-        // unique_identifier
+        // C4 (2026-06-20): bumped 17/18/19 → 18/19/20 (patient_id).
         this.setTypeExpected(18, TypeNames.STRING);
-        // gender
+        // unique_identifier
         this.setTypeExpected(19, TypeNames.STRING);
+        // gender
+        this.setTypeExpected(20, TypeNames.STRING);
         // study.name
 
         HashMap<Integer, Object> variables = variables(studyId, studyId);
