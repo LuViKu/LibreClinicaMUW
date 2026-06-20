@@ -281,8 +281,18 @@ jobs:
           )
           fail=0
           for r in "${ROUTES[@]}"; do
-            code=$(curl --silent --location --output /dev/null --write-out '%{http_code}' "$BASE$r")
-            # Treat 200, 302 (auth redirect), 401, 403 as expected; only flag 404/500.
+            # NO --location: report the IMMEDIATE response code, not the
+            # final code after following redirects. Phase E.8 Slice L1
+            # (PR #235) made /pages/login/login redirect to
+            # /LibreClinica/app/login (the SPA). The compose Dockerfile
+            # builds with SKIP_SPA=true by default — the smoke image has
+            # no /LibreClinica/app/* assets — so following the 302
+            # lands on a 404. The smoke's job is to verify the legacy
+            # entry points exist + don't 5xx; the redirect target's
+            # reachability is out of scope here.
+            code=$(curl --silent --output /dev/null --write-out '%{http_code}' "$BASE$r")
+            # Treat 200, 302 (auth or SPA redirect), 401, 403 as expected;
+            # only flag 404/500.
             case "$code" in
               200|302|401|403) echo "  OK    $code  $r" ;;
               *)               echo "  FAIL  $code  $r"; fail=1 ;;
