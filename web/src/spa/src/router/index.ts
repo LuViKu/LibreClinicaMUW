@@ -51,6 +51,15 @@ const router = createRouter({
       component: () => import('@/views/CrfEntryView.vue'),
       meta: { title: 'CRF Entry', role: ['Investigator', 'Administrator'] as const },
     },
+    /* Phase E.8 Slice L4 (2026-06-20) — print-friendly CRF view,
+       SPA replacement for the legacy Print*CRF servlets. */
+    {
+      path: '/event-crfs/:eventCrfOid/print',
+      name: 'printable-crf',
+      component: () => import('@/views/PrintableCrfView.vue'),
+      meta: { title: 'Print CRF',
+              role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
+    },
     {
       // Phase E.6 dde — reconcile view; DM / Admin / Investigator only.
       // Backend guards (403 when role.id is not in {1, 3, 4}) are the

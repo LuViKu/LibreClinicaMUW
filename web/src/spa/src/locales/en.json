@@ -146,6 +146,18 @@
     "clear": "Clear",
     "export": "Export"
   },
+  "printableCrf": {
+    "title": "Print preview",
+    "printAgain": "Print again",
+    "back": "Back",
+    "eventCrfId": "Event CRF",
+    "status": "Status",
+    "lastSaved": "Last saved",
+    "noRows": "No rows recorded.",
+    "footerBrand": "LibreClinicaMUW — printable CRF view",
+    "yes": "Yes",
+    "no": "No"
+  },
   "contact": {
     "brandLine": "Department of Ophthalmology and Optometry, Medical University of Vienna",
     "title": "Contact the administrator",
@@ -566,6 +578,7 @@
   },
   "crfEntry": {
     "title": "CRF data entry",
+    "printButton": "Print",
     "railHeading": "Sections",
     "readOnlyTell": "Read-only · Monitor view",
     "lockedTell": "Locked · Subject signed",

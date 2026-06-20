@@ -581,6 +581,26 @@ function onPrefillApply(values: Record<string, string>) {
             </svg>
             {{ t('crfEntry.prefill.button') }}
           </button>
+          <!-- Phase E.8 Slice L4 (2026-06-20) — SPA replacement for the
+               legacy print servlets. Opens in a new tab so the operator
+               can keep editing; the new tab auto-triggers the browser
+               Print to PDF dialog via the printable route's onMounted. -->
+          <RouterLink
+            v-if="store.entry"
+            :to="{ name: 'printable-crf', params: { eventCrfOid: String($route.params.eventCrfOid) } }"
+            target="_blank"
+            rel="noopener"
+            :class="!isReadOnly && store.entry ? '' : 'ml-auto'"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-muw-blue-50 hover:border-muw-blue text-slate-700 hover:text-muw-blue-700 transition-colors"
+            data-testid="print-button"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+              <polyline points="6 9 6 2 18 2 18 9" />
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+              <rect x="6" y="14" width="12" height="8" />
+            </svg>
+            {{ t('crfEntry.printButton') }}
+          </RouterLink>
         </div>
       </div>
 
