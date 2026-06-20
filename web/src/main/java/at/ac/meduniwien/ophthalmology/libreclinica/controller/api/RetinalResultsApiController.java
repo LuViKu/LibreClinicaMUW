@@ -621,6 +621,13 @@ public class RetinalResultsApiController {
      * old_value carries {@code "parked"} and new_value carries the new
      * status so the timeline shows the bind + the transition in a
      * single row.
+     *
+     * <p>2026-06-20 (B2 bulk-bind): per-job logic moved into
+     * {@link #performBind(long, EventCRFBean, StudySubjectBean, int,
+     * UserAccountBean, StudyBean)} so {@link #bulkBindParkedJobs}
+     * can reuse it. This endpoint preserves its single-bind contract
+     * by translating the {@link BindOutcomeStatus} enum back into the
+     * legacy 200 / 404 / 409 / 403 HTTP codes the SPA already handles.
      */
     @PatchMapping(path = "/retinal-jobs/{jobId:[0-9]+}/bind",
                   produces = MediaType.APPLICATION_JSON_VALUE)
@@ -636,37 +643,270 @@ public class RetinalResultsApiController {
         }
         int eventCrfId = body.eventCrfId();
 
-        // ---- load the parked job ------------------------------------
-        ParkedJob job;
-        try (Connection c = dataSource.getConnection()) {
-            job = fetchParkedJob(c, jobId);
+        // ---- resolve event_crf + visibility once --------------------
+        BindContext ctx;
+        try {
+            ctx = resolveBindContext(eventCrfId, session);
         } catch (SQLException sqlEx) {
-            LOG.error("Failed to fetch retinal job {} for bind: {}",
-                    jobId, sqlEx.getMessage());
+            LOG.error("Failed to resolve bind context for event_crf {}: {}",
+                    eventCrfId, sqlEx.getMessage());
             return ResponseEntity.internalServerError().body(Map.of(
-                    "message", "Failed to fetch retinal job: " + sqlEx.getMessage()));
+                    "message", "Failed to resolve event_crf: " + sqlEx.getMessage()));
         }
-        if (job == null) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "No retinal_inference_job with id " + jobId));
+        if (ctx.notFound()) {
+            return ResponseEntity.status(404).body(Map.of("message", ctx.errorMessage()));
         }
-        if (!"parked".equals(job.status)) {
-            return ResponseEntity.status(409).body(Map.of(
-                    "message", "Job is not parked (status=" + job.status + ")"));
+        if (ctx.forbidden()) {
+            return ResponseEntity.status(403).body(Map.of("message", ctx.errorMessage()));
         }
 
-        // ---- visibility on the target event_crf ---------------------
+        // ---- delegate per-job work to the shared helper -------------
+        BindOutcome outcome = performBind(jobId, ctx.eventCrf(), ctx.studySubject(),
+                eventCrfId, ctx.currentUser(), ctx.currentStudy());
+        return switch (outcome.status()) {
+            case BOUND -> ResponseEntity.ok(Map.of(
+                    "jobId", jobId,
+                    "status", outcome.newStatus()));
+            case ALREADY_BOUND, INVALID_STATE ->
+                    ResponseEntity.status(409).body(Map.of("message", outcome.message()));
+            case FORBIDDEN ->
+                    ResponseEntity.status(403).body(Map.of("message", outcome.message()));
+            case NOT_FOUND ->
+                    ResponseEntity.status(404).body(Map.of("message", outcome.message()));
+            case ERROR ->
+                    ResponseEntity.internalServerError().body(Map.of("message", outcome.message()));
+        };
+    }
+
+    /* ====================================================================== */
+    /* POST /retinal-jobs/bulk-bind — B2 bulk park-bind                       */
+    /* ====================================================================== */
+
+    /**
+     * Request body for {@link #bulkBindParkedJobs(BulkBindRequest, HttpSession)}.
+     * One {@code eventCrfId} is applied to every {@code jobId} in the
+     * batch — the common case is one OCT upload session that emitted
+     * multiple scans (OD + OS, or repeat acquisitions) that all bind to
+     * the same visit.
+     */
+    public record BulkBindRequest(List<Long> jobIds, int eventCrfId) { }
+
+    /**
+     * Status of one job within a bulk-bind batch. Names mirror the SPA's
+     * toast strings ({@code bulkSummaryBound} / {@code bulkSummaryAlreadyBound}
+     * etc.) so the JSON keys are self-explanatory at the wire.
+     */
+    public enum BindOutcomeStatus {
+        /** The job was parked, the bind succeeded, audit + broadcast fired. */
+        BOUND,
+        /**
+         * The job already had an {@code event_crf_id} (either the same
+         * target or a different one). Skipped — no audit emitted.
+         */
+        ALREADY_BOUND,
+        /**
+         * The event_crf isn't visible to the current operator. For
+         * single-bind this is 403; for bulk we surface it per-row so a
+         * mixed selection still returns the rows the operator CAN see.
+         */
+        FORBIDDEN,
+        /**
+         * The job is in a state that can never transition to bound
+         * (e.g. {@code cancelled}). Distinct from {@link #ALREADY_BOUND}
+         * so the operator knows a re-upload is required.
+         */
+        INVALID_STATE,
+        /** No row with the supplied {@code jobId} exists. */
+        NOT_FOUND,
+        /** Internal DB error during the per-job transition. */
+        ERROR;
+    }
+
+    /**
+     * Internal per-job outcome carrier used by both endpoints.
+     *
+     * @param jobId      the job the outcome describes
+     * @param status     classification, see {@link BindOutcomeStatus}
+     * @param newStatus  on {@link BindOutcomeStatus#BOUND}, the new
+     *                   {@code retinal_inference_job.status} ({@code queued}
+     *                   or {@code remote_pending}); null otherwise
+     * @param message    operator-facing reason for skip / failure; null
+     *                   on {@link BindOutcomeStatus#BOUND}
+     */
+    public record BindOutcome(long jobId,
+                              BindOutcomeStatus status,
+                              String newStatus,
+                              String message) { }
+
+    /**
+     * B2 bulk-bind: assign one event_crf to every job in {@code jobIds}.
+     * Each row is processed in its own transaction — partial success is
+     * normal (e.g. one of the four scans in an upload session was already
+     * triaged by another operator).
+     *
+     * <p>Always returns 200 with a per-row results array + summary so
+     * the SPA can render a single "3 zugewiesen, 1 bereits gebunden"
+     * toast. The exception is input validation (400 on empty
+     * {@code jobIds} or non-positive {@code eventCrfId}).
+     *
+     * <p>Authz mirrors {@link #bindParkedJob}: session-bound user, site
+     * visibility on the target event_crf. When the event_crf is
+     * out-of-scope the whole batch returns 200 with every row marked
+     * {@link BindOutcomeStatus#FORBIDDEN} — the bulk endpoint is more
+     * lenient than single-bind so a stale UI selection doesn't fail
+     * the operator's whole queue.
+     */
+    @org.springframework.web.bind.annotation.PostMapping(
+            path = "/retinal-jobs/bulk-bind",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> bulkBindParkedJobs(@RequestBody BulkBindRequest body,
+                                                HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        if (body == null || body.jobIds() == null || body.jobIds().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "jobIds must be a non-empty array"));
+        }
+        if (body.eventCrfId() <= 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "eventCrfId is required"));
+        }
+        for (Long id : body.jobIds()) {
+            if (id == null || id <= 0) {
+                return ResponseEntity.badRequest().body(Map.of(
+                        "message", "jobIds must contain positive integers"));
+            }
+        }
+        int eventCrfId = body.eventCrfId();
+
+        // ---- resolve event_crf + visibility once for the whole batch ----
+        BindContext ctx;
+        try {
+            ctx = resolveBindContext(eventCrfId, session);
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to resolve bulk-bind context for event_crf {}: {}",
+                    eventCrfId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to resolve event_crf: " + sqlEx.getMessage()));
+        }
+        if (ctx.notFound()) {
+            return ResponseEntity.status(404).body(Map.of("message", ctx.errorMessage()));
+        }
+
+        // Whole-batch FORBIDDEN: surface per-row so the SPA's summary
+        // toast still renders. Single-bind keeps its 403 contract; bulk
+        // is lenient by design (see endpoint javadoc).
+        boolean batchForbidden = ctx.forbidden();
+
+        // ---- loop per job ------------------------------------------
+        List<BindOutcome> results = new ArrayList<>();
+        int bound = 0, alreadyBound = 0, forbidden = 0, invalidState = 0, notFound = 0, error = 0;
+        for (Long jobIdBoxed : body.jobIds()) {
+            long jobId = jobIdBoxed;
+            BindOutcome out;
+            if (batchForbidden) {
+                out = new BindOutcome(jobId, BindOutcomeStatus.FORBIDDEN,
+                        null, ctx.errorMessage());
+            } else {
+                out = performBind(jobId, ctx.eventCrf(), ctx.studySubject(),
+                        eventCrfId, ctx.currentUser(), ctx.currentStudy());
+            }
+            results.add(out);
+            switch (out.status()) {
+                case BOUND -> bound++;
+                case ALREADY_BOUND -> alreadyBound++;
+                case FORBIDDEN -> forbidden++;
+                case INVALID_STATE -> invalidState++;
+                case NOT_FOUND -> notFound++;
+                case ERROR -> error++;
+            }
+        }
+
+        // Marshal — keep response shape stable per the spec.
+        List<Map<String, Object>> rows = new ArrayList<>(results.size());
+        for (BindOutcome o : results) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("jobId", o.jobId());
+            row.put("status", o.status().name());
+            if (o.newStatus() != null) row.put("newStatus", o.newStatus());
+            if (o.message() != null) row.put("message", o.message());
+            rows.add(row);
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("bound", bound);
+        summary.put("alreadyBound", alreadyBound);
+        summary.put("forbidden", forbidden);
+        summary.put("invalidState", invalidState);
+        summary.put("notFound", notFound);
+        summary.put("error", error);
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("results", rows);
+        response.put("summary", summary);
+        LOG.info("Retinal bulk-bind: event_crf {} got {} jobs ({} bound, {} already, {} forbidden, "
+                        + "{} invalid, {} missing, {} errored)",
+                eventCrfId, body.jobIds().size(), bound, alreadyBound, forbidden,
+                invalidState, notFound, error);
+        return ResponseEntity.ok(response);
+    }
+
+    /* ====================================================================== */
+    /* shared bind helpers                                                    */
+    /* ====================================================================== */
+
+    /**
+     * Pre-resolved per-batch context for the bind helpers: the loaded
+     * event_crf + study_subject + the operator's identity. Built once
+     * by {@link #resolveBindContext(int, HttpSession)} and threaded
+     * through every per-job {@link #performBind} call so the same
+     * lookups don't repeat per row.
+     *
+     * <p>{@code errorMessage} is populated only when {@code notFound} or
+     * {@code forbidden} is set; on the happy path it's null.
+     */
+    private record BindContext(EventCRFBean eventCrf,
+                               StudySubjectBean studySubject,
+                               UserAccountBean currentUser,
+                               StudyBean currentStudy,
+                               boolean notFound,
+                               boolean forbidden,
+                               String errorMessage) {
+        static BindContext notFound(String message) {
+            return new BindContext(null, null, null, null, true, false, message);
+        }
+        static BindContext forbidden(String message,
+                                     EventCRFBean ecb,
+                                     StudySubjectBean ss,
+                                     UserAccountBean user,
+                                     StudyBean study) {
+            return new BindContext(ecb, ss, user, study, false, true, message);
+        }
+        static BindContext ok(EventCRFBean ecb,
+                              StudySubjectBean ss,
+                              UserAccountBean user,
+                              StudyBean study) {
+            return new BindContext(ecb, ss, user, study, false, false, null);
+        }
+    }
+
+    /**
+     * Resolve the event_crf + study chain + the session operator and
+     * decide whether the operator can bind anything to this event_crf.
+     * Shared by single-bind and bulk-bind so the lookup runs once even
+     * when the bulk request carries 30 jobs.
+     */
+    private BindContext resolveBindContext(int eventCrfId, HttpSession session) throws SQLException {
         EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
         EventCRFBean ecb = eventCrfDAO.findByPK(eventCrfId);
         if (ecb == null || ecb.getId() == 0) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "No event_crf with id " + eventCrfId));
+            return BindContext.notFound("No event_crf with id " + eventCrfId);
         }
         StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
         StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
         if (ss == null || ss.getStudyId() == 0) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "event_crf " + eventCrfId + " has no resolvable study"));
+            return BindContext.notFound(
+                    "event_crf " + eventCrfId + " has no resolvable study");
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
@@ -674,11 +914,55 @@ public class RetinalResultsApiController {
         Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
                 currentUser, currentStudy, currentRole);
         if (!visibleStudyIds.contains(ss.getStudyId())) {
-            return ResponseEntity.status(403).body(Map.of(
-                    "message", "event_crf " + eventCrfId + " belongs to a different study"));
+            return BindContext.forbidden(
+                    "event_crf " + eventCrfId + " belongs to a different study",
+                    ecb, ss, currentUser, currentStudy);
+        }
+        return BindContext.ok(ecb, ss, currentUser, currentStudy);
+    }
+
+    /**
+     * Per-job bind: load the {@code retinal_inference_job} row, validate
+     * its state, flip status + event_crf, emit audit, broadcast, and
+     * (when the remote sidecar is configured) hand off to
+     * {@link RetinalInferenceApiController#handleRemote}.
+     *
+     * <p>Each call runs in its own short-lived JDBC transaction (the
+     * single UPDATE auto-commits) so a 30-job bulk-bind never holds a
+     * long-running lock. Soft-fails for the remote dispatch are
+     * intentional — the row already carries {@code remote_pending} and
+     * the operator can re-trigger from the SPA's retry affordance.
+     */
+    private BindOutcome performBind(long jobId,
+                                    EventCRFBean ecb,
+                                    StudySubjectBean ss,
+                                    int eventCrfId,
+                                    UserAccountBean currentUser,
+                                    StudyBean currentStudy) {
+        // ---- load the parked job ------------------------------------
+        ParkedJob job;
+        try (Connection c = dataSource.getConnection()) {
+            job = fetchParkedJob(c, jobId);
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to fetch retinal job {} for bind: {}",
+                    jobId, sqlEx.getMessage());
+            return new BindOutcome(jobId, BindOutcomeStatus.ERROR, null,
+                    "Failed to fetch retinal job: " + sqlEx.getMessage());
+        }
+        if (job == null) {
+            return new BindOutcome(jobId, BindOutcomeStatus.NOT_FOUND, null,
+                    "No retinal_inference_job with id " + jobId);
+        }
+        if ("cancelled".equals(job.status)) {
+            return new BindOutcome(jobId, BindOutcomeStatus.INVALID_STATE, null,
+                    "Job is cancelled and cannot be bound (jobId=" + jobId + ")");
+        }
+        if (!"parked".equals(job.status)) {
+            return new BindOutcome(jobId, BindOutcomeStatus.ALREADY_BOUND, null,
+                    "Job is not parked (status=" + job.status + ")");
         }
 
-        // ---- flip the job + emit audit + broadcast ------------------
+        // ---- flip the job ------------------------------------------
         String newStatus = (remoteClient != null && remoteClient.isConfigured())
                 ? "remote_pending"
                 : "queued";
@@ -693,16 +977,17 @@ public class RetinalResultsApiController {
             ps.setLong(3, jobId);
             int updated = ps.executeUpdate();
             if (updated == 0) {
-                return ResponseEntity.status(404).body(Map.of(
-                        "message", "No retinal_inference_job with id " + jobId));
+                return new BindOutcome(jobId, BindOutcomeStatus.NOT_FOUND, null,
+                        "No retinal_inference_job with id " + jobId);
             }
         } catch (SQLException sqlEx) {
             LOG.error("Failed to bind retinal job {} to event_crf {}: {}",
                     jobId, eventCrfId, sqlEx.getMessage());
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "message", "Failed to bind retinal job: " + sqlEx.getMessage()));
+            return new BindOutcome(jobId, BindOutcomeStatus.ERROR, null,
+                    "Failed to bind retinal job: " + sqlEx.getMessage());
         }
 
+        // ---- emit audit + broadcast --------------------------------
         AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
         EventCrfsApiController.writeAuditEvent(
                 auditDAO, AuditTypeIds.RETINAL_PARK_BIND,
@@ -718,15 +1003,7 @@ public class RetinalResultsApiController {
             broadcaster.publish(jobId, newStatus);
         }
 
-        // 2026-06-18: when the remote sidecar is configured, hand the
-        // job off to RetinalInferenceApiController.handleRemote so it
-        // runs end-to-end (segment → persist → result → done) instead
-        // of sitting in `remote_pending` forever. The local DB-poll
-        // worker filters `remote_pending` out by design (DR-022 worker-
-        // race kill), so this is the only path that drains the queue.
-        // Soft-fail: if the dispatch throws, the row already carries
-        // `remote_pending` and the operator can re-bind / re-run from
-        // the SPA's existing affordances.
+        // ---- post-bind remote dispatch (soft-fail) ------------------
         String finalStatus = newStatus;
         if ("remote_pending".equals(newStatus) && inferenceController != null) {
             JobRunHandle handle = fetchJobRunHandle(jobId);
@@ -742,12 +1019,9 @@ public class RetinalResultsApiController {
             }
         }
 
-        Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("jobId", jobId);
-        resp.put("status", finalStatus);
         LOG.info("Retinal park-bind: job {} -> event_crf {} (status={})",
                 jobId, eventCrfId, finalStatus);
-        return ResponseEntity.ok(resp);
+        return new BindOutcome(jobId, BindOutcomeStatus.BOUND, finalStatus, null);
     }
 
     /* ====================================================================== */
