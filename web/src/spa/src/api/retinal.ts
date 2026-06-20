@@ -350,6 +350,69 @@ export function bindParkedJob(
 }
 
 /**
+ * 2026-06-20 B2 — body of {@code POST /pages/api/v1/retinal-jobs/bulk-bind}.
+ * One {@code eventCrfId} is applied to every entry in {@code jobIds};
+ * the common case is the multiple scans of one upload session (OD+OS
+ * or repeat acquisitions) sharing one visit.
+ */
+export interface RetinalJobBulkBindRequest {
+  jobIds: number[]
+  eventCrfId: number
+}
+
+/** Per-row outcome status — mirrors {@code BindOutcomeStatus} server-side. */
+export type RetinalBulkBindStatus =
+  | 'BOUND'
+  | 'ALREADY_BOUND'
+  | 'FORBIDDEN'
+  | 'INVALID_STATE'
+  | 'NOT_FOUND'
+  | 'ERROR'
+
+/** One row in the {@code results} array of a bulk-bind response. */
+export interface RetinalJobBulkBindRow {
+  jobId: number
+  status: RetinalBulkBindStatus
+  /** Present only when {@code status === 'BOUND'} — the new job status. */
+  newStatus?: string
+  /** Operator-facing reason when the row was skipped / errored. */
+  message?: string
+}
+
+/**
+ * Aggregate counters across the batch. Drives the SPA's summary toast
+ * ({@code "3 zugewiesen, 1 bereits gebunden"}).
+ */
+export interface RetinalJobBulkBindSummary {
+  bound: number
+  alreadyBound: number
+  forbidden: number
+  invalidState: number
+  notFound: number
+  error: number
+}
+
+/** Full response shape of the bulk-bind endpoint. */
+export interface RetinalJobBulkBindResponse {
+  results: RetinalJobBulkBindRow[]
+  summary: RetinalJobBulkBindSummary
+}
+
+/**
+ * 2026-06-20 B2 — bulk-bind multiple parked jobs to one event_crf.
+ * Always resolves to 200 with a per-row results array + summary; the
+ * SPA renders the summary as a toast and removes successfully-bound
+ * rows from the local list. The backend's 400 (empty {@code jobIds}
+ * or non-positive {@code eventCrfId}) surfaces as a regular
+ * {@link ApiError}.
+ */
+export function bulkBindParkedJobs(
+  body: RetinalJobBulkBindRequest,
+): Promise<RetinalJobBulkBindResponse> {
+  return apiPost<RetinalJobBulkBindResponse>(`${BASE}/bulk-bind`, body)
+}
+
+/**
  * 2026-06-19 retry — response body of {@code POST /retinal-jobs/{jobId}/retry}.
  * Always {@code status: 'remote_pending'} on success; the SSE channel
  * surfaces the post-dispatch transition asynchronously.

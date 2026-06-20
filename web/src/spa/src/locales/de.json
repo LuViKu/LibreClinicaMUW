@@ -1653,6 +1653,19 @@
       "bindOk": "Scan erfolgreich zugeordnet.",
       "bindRaced": "Wurde inzwischen von jemand anderem zugeordnet — Liste aktualisiert.",
       "noEventCrf": "Keine Eingabemaske für diese Visite — bitte den Studienteilnehmer zuerst über die Visite öffnen, damit die CRF angelegt wird. Anschließend erneut zuordnen."
+    },
+    "bulkBind": {
+      "selectedCount": "{count} von {total} ausgewählt",
+      "selectionClear": "Auswahl aufheben",
+      "selectAllAria": "Alle Scans auswählen",
+      "selectRowAria": "Scan #{jobId} auswählen",
+      "bulkAction": "Markierte zuweisen …",
+      "bulkConfirm": "Sie weisen {count} Scans dem nächsten Besuch zu.",
+      "bulkSummaryBound": "{count} zugewiesen",
+      "bulkSummaryAlreadyBound": "{count} bereits gebunden",
+      "bulkSummaryForbidden": "{count} nicht erlaubt",
+      "bulkSummaryInvalidState": "{count} ungültiger Status",
+      "bulkErrorPartial": "Mehrfachzuordnung fehlgeschlagen — bitte erneut versuchen."
     }
   },
   "modalities": {
