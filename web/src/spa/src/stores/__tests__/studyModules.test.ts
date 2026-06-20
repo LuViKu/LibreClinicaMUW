@@ -2,6 +2,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { defineComponent, nextTick } from 'vue'
 
+/** Run every queued microtask + Vue tick until the watcher chain settles. */
+async function flushAll(): Promise<void> {
+  // Two nextTicks + a macrotask drain are enough for: watcher-fire →
+  // loadI18n() Promise resolve → mergeLocaleMessage calls → state update.
+  await nextTick()
+  await Promise.resolve()
+  await Promise.resolve()
+  await nextTick()
+}
+
 /**
  * Spec for {@code useStudyModuleStore}.
  *
@@ -18,7 +28,12 @@ import { defineComponent, nextTick } from 'vue'
  * on each assignment.
  */
 
-const mergeLocaleMessage = vi.fn()
+// vi.mock factories are hoisted to the top of the file, so any
+// references they capture must be created via vi.hoisted (also hoisted)
+// rather than as plain top-level consts.
+const { mergeLocaleMessage } = vi.hoisted(() => ({
+  mergeLocaleMessage: vi.fn(),
+}))
 vi.mock('@/i18n', () => ({
   i18n: {
     global: {
@@ -146,9 +161,7 @@ describe('useStudyModuleStore', () => {
     // no-op.
     auth.user = userWithProtocol('NAMD')
     auth.state = 'authenticated'
-    await nextTick()
-    // Wait one microtask for the async loadI18n() to resolve.
-    await loadI18n.mock.results[0]?.value
+    await flushAll()
 
     expect(loadI18n).toHaveBeenCalledTimes(1)
     expect(mergeLocaleMessage).toHaveBeenCalledWith('de', dePayload)
@@ -164,17 +177,16 @@ describe('useStudyModuleStore', () => {
     useStudyModuleStore()
     auth.user = userWithProtocol('NAMD')
     auth.state = 'authenticated'
-    await nextTick()
-    await loadI18n.mock.results[0]?.value
+    await flushAll()
 
     expect(loadI18n).toHaveBeenCalledTimes(1)
 
     // Switch away and back; loadI18n must NOT fire again because the
     // store caches the load per module id.
     auth.user = userWithProtocol(null)
-    await nextTick()
+    await flushAll()
     auth.user = userWithProtocol('NAMD')
-    await nextTick()
+    await flushAll()
 
     expect(loadI18n).toHaveBeenCalledTimes(1)
   })

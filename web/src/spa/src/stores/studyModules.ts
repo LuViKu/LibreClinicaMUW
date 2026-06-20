@@ -2,6 +2,7 @@ import { defineStore, storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import type { ComputedRef } from 'vue'
 import { useAuthStore } from './auth'
+import { i18n } from '@/i18n'
 import { findModule } from '@/studyModules/registry'
 import type { InjectionEntry, InjectionSlotId, StudyModuleManifest } from '@/studyModules/types'
 
@@ -46,10 +47,11 @@ export const useStudyModuleStore = defineStore('studyModules', () => {
   }
 
   /**
-   * Lazy i18n merge — runs once per module per session. We import the
-   * i18n instance inside the watcher so unit tests can mock it via
-   * {@code vi.mock('@/main')} (or skip the assertion entirely) without
-   * pulling the full Vue app at module-load time.
+   * Lazy i18n merge — runs once per module per session. The i18n
+   * instance comes from the dedicated {@code @/i18n} module so unit
+   * tests can mock it via {@code vi.mock('@/i18n')}. Watcher is
+   * {@code immediate: true} so refresh-into-a-bound-study activates
+   * the manifest without waiting for the next study switch.
    */
   watch(
     activeModule,
@@ -64,7 +66,6 @@ export const useStudyModuleStore = defineStore('studyModules', () => {
       }
       try {
         const payload = await m.loadI18n()
-        const { i18n } = await import('@/i18n')
         i18n.global.mergeLocaleMessage('de', payload.de)
         i18n.global.mergeLocaleMessage('de-AT', payload.de)
         i18n.global.mergeLocaleMessage('en', payload.en)
