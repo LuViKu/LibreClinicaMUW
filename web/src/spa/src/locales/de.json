@@ -146,6 +146,18 @@
     "clear": "Zurücksetzen",
     "export": "Export"
   },
+  "printableCrf": {
+    "title": "Druckvorschau",
+    "printAgain": "Erneut drucken",
+    "back": "Zurück",
+    "eventCrfId": "Event-CRF",
+    "status": "Status",
+    "lastSaved": "Zuletzt gespeichert",
+    "noRows": "Keine Datensätze vorhanden.",
+    "footerBrand": "LibreClinicaMUW — druckbare CRF-Ansicht",
+    "yes": "Ja",
+    "no": "Nein"
+  },
   "subjectMatrix": {
     "title": "Studienteilnehmer-Übersicht",
     "subjectsCountTrail": "Teilnehmer",
@@ -493,6 +505,7 @@
   },
   "crfEntry": {
     "title": "CRF-Datenerfassung",
+    "printButton": "Drucken",
     "railHeading": "Abschnitte",
     "readOnlyTell": "Schreibgeschützt · Monitor-Ansicht",
     "lockedTell": "Gesperrt · Teilnehmer signiert",

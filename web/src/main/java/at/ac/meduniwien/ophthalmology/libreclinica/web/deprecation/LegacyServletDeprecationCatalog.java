@@ -49,7 +49,9 @@ public class LegacyServletDeprecationCatalog {
         USER_ACCOUNTS,
         AUDIT_TRAIL,
         DISCREPANCY_NOTES,
-        SITES_GROUPS_RULES
+        SITES_GROUPS_RULES,
+        /** Phase E.8 Slice L4 (2026-06-20) — print-friendly views. */
+        PRINT_PDF
     }
 
     /**
@@ -195,6 +197,16 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/pages/TestRule", "/app/rules", Bucket.SITES_GROUPS_RULES);
         put(m, "/pages/ViewRuleSet", "/app/rules", Bucket.SITES_GROUPS_RULES);
         put(m, "/pages/ViewRuleAssignment", "/app/rules", Bucket.SITES_GROUPS_RULES);
+
+        // --- PRINT_PDF — SPA `/event-crfs/:eventCrfOid/print` (Phase E.8 Slice L4) ---
+        // The legacy servlet family rendered print-friendly HTML the
+        // operator then sent to Print to PDF. The SPA replacement keeps
+        // that flow (read-only Vue view + @media print stylesheet) so the
+        // institutional muscle memory doesn't change.
+        put(m, "/pages/PrintEventCRF",        "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
+        put(m, "/pages/PrintCRFById",         "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
+        put(m, "/pages/PrintAllEventCRF",     "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
+        put(m, "/pages/PrintAllSiteEventCRF", "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
 
         this.byPath = Map.copyOf(m);
     }
