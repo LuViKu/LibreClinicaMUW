@@ -55,7 +55,9 @@ public class LegacyServletDeprecationCatalog {
         /** Phase E.8 Slice L3 (2026-06-20) — sysadmin tooling. */
         ADMIN_TOOLING,
         /** Phase E.8 Slice L4 (2026-06-20) — print-friendly views. */
-        PRINT_PDF
+        PRINT_PDF,
+        /** Phase E.8 Slice L5 (2026-06-20) — Quartz job admin. */
+        JOB_ADMIN
     }
 
     /**
@@ -227,6 +229,15 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/pages/PrintCRFById",         "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
         put(m, "/pages/PrintAllEventCRF",     "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
         put(m, "/pages/PrintAllSiteEventCRF", "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
+
+        // --- JOB_ADMIN — SPA `/admin/jobs` (Phase E.8 Slice L5) ---
+        // All four legacy job-admin entry points route to the same
+        // unified Quartz-trigger listing in the SPA.
+        put(m, "/pages/ViewAllJobs",   "/app/admin/jobs", Bucket.JOB_ADMIN);
+        put(m, "/pages/ViewJob",       "/app/admin/jobs", Bucket.JOB_ADMIN);
+        put(m, "/pages/ViewImportJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
+        put(m, "/pages/ViewSingleJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
+        put(m, "/pages/PauseJob",      "/app/admin/jobs", Bucket.JOB_ADMIN);
 
         this.byPath = Map.copyOf(m);
     }

@@ -146,6 +146,24 @@
     "clear": "Clear",
     "export": "Export"
   },
+  "adminJobs": {
+    "title": "Scheduled jobs",
+    "subtitle": "Read-only listing of every Quartz trigger registered against the application's shared scheduler.",
+    "refresh": "Refresh",
+    "refreshedAt": "Refreshed at {ts}",
+    "loadFailed": "Failed to load scheduled jobs.",
+    "scheduler": "Scheduler",
+    "started": "started",
+    "notStarted": "not started",
+    "standby": "standby",
+    "name": "Name",
+    "group": "Group",
+    "state": "State",
+    "prevFire": "Previous fire",
+    "nextFire": "Next fire",
+    "description": "Description",
+    "noJobs": "No scheduled jobs."
+  },
   "printableCrf": {
     "title": "Print preview",
     "printAgain": "Print again",

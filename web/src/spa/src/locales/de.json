@@ -146,6 +146,24 @@
     "clear": "Zurücksetzen",
     "export": "Export"
   },
+  "adminJobs": {
+    "title": "Geplante Jobs",
+    "subtitle": "Schreibgeschützte Übersicht aller Quartz-Trigger, die am gemeinsamen Anwendungs-Scheduler registriert sind.",
+    "refresh": "Aktualisieren",
+    "refreshedAt": "Aktualisiert um {ts}",
+    "loadFailed": "Job-Liste konnte nicht geladen werden.",
+    "scheduler": "Scheduler",
+    "started": "gestartet",
+    "notStarted": "nicht gestartet",
+    "standby": "Standby",
+    "name": "Name",
+    "group": "Gruppe",
+    "state": "Status",
+    "prevFire": "Letzter Lauf",
+    "nextFire": "Nächster Lauf",
+    "description": "Beschreibung",
+    "noJobs": "Keine geplanten Jobs."
+  },
   "printableCrf": {
     "title": "Druckvorschau",
     "printAgain": "Erneut drucken",
