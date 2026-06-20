@@ -146,6 +146,26 @@
     "clear": "Zurücksetzen",
     "export": "Export"
   },
+  "contact": {
+    "brandLine": "Universitätsklinik für Augenheilkunde und Optometrie, Medizinische Universität Wien",
+    "title": "Administrator kontaktieren",
+    "subtitle": "Nachricht an den LibreClinicaMUW-Administrator senden. Bitte ausreichend Details angeben, damit wir rasch helfen können.",
+    "name": "Ihr Name",
+    "email": "Ihre E-Mail-Adresse",
+    "subject": "Betreff",
+    "message": "Nachricht",
+    "send": "Nachricht senden",
+    "sending": "Wird gesendet…",
+    "successTitle": "Ihre Nachricht wurde gesendet.",
+    "successBody": "Der Administrator wurde benachrichtigt. Eine Antwort erfolgt gegebenenfalls an die angegebene E-Mail-Adresse.",
+    "sendAnother": "Weitere Nachricht senden",
+    "backToLogin": "Zurück zur Anmeldung",
+    "privacyNote": "Ihre Nachricht wird als unverschlüsselte E-Mail an den Administrator zugestellt. Bitte keine patientenidentifizierenden Daten angeben.",
+    "errorValidation": "Bitte korrigieren Sie die markierten Felder.",
+    "errorUnavailable": "Das Kontaktformular nimmt derzeit keine Nachrichten an. Bitte wenden Sie sich direkt an den Systemadministrator.",
+    "errorGeneric": "Senden der Nachricht fehlgeschlagen. Bitte später erneut versuchen.",
+    "errorNetwork": "Netzwerkfehler — bitte Verbindung prüfen und erneut versuchen."
+  },
   "adminSystemStatus": {
     "title": "Systemstatus",
     "refresh": "Aktualisieren",
@@ -317,6 +337,11 @@
       "nameLine": "{lastName}, {firstName}",
       "nameLineUnknown": "Name unbekannt",
       "unnamedSubject": "— ohne Studien-ID —"
+    },
+    "linkPatient": {
+      "linkSuccess": "Patient verknüpft mit {label}.",
+      "linkConflict409": "Beide Datensätze sind bereits unterschiedlichen Patient:innen zugeordnet.",
+      "linkError": "Verknüpfung fehlgeschlagen — bitte erneut versuchen."
     },
     "phiWarning": "Niemals Name, Krankenhaus-ID, Sozialversicherungsnummer oder andere identifizierende Daten verwenden.",
     "gender": {
@@ -1701,6 +1726,19 @@
       "bindOk": "Scan erfolgreich zugeordnet.",
       "bindRaced": "Wurde inzwischen von jemand anderem zugeordnet — Liste aktualisiert.",
       "noEventCrf": "Keine Eingabemaske für diese Visite — bitte den Studienteilnehmer zuerst über die Visite öffnen, damit die CRF angelegt wird. Anschließend erneut zuordnen."
+    },
+    "bulkBind": {
+      "selectedCount": "{count} von {total} ausgewählt",
+      "selectionClear": "Auswahl aufheben",
+      "selectAllAria": "Alle Scans auswählen",
+      "selectRowAria": "Scan #{jobId} auswählen",
+      "bulkAction": "Markierte zuweisen …",
+      "bulkConfirm": "Sie weisen {count} Scans dem nächsten Besuch zu.",
+      "bulkSummaryBound": "{count} zugewiesen",
+      "bulkSummaryAlreadyBound": "{count} bereits gebunden",
+      "bulkSummaryForbidden": "{count} nicht erlaubt",
+      "bulkSummaryInvalidState": "{count} ungültiger Status",
+      "bulkErrorPartial": "Mehrfachzuordnung fehlgeschlagen — bitte erneut versuchen."
     }
   },
   "modalities": {

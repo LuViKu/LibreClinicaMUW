@@ -12,7 +12,7 @@
  *    global errors store.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
 
@@ -62,7 +62,39 @@ function mountDialog(props: Partial<{ open: boolean; eventId: string; eventLabel
   })
 }
 
-describe.skip('CancelEventDialog', () => {
+/**
+ * The reason picker is a {@code <SelectInput>} primitive whose root
+ * element is a wrapping {@code <div class="relative">} — so the
+ * {@code data-testid="cancel-event-reason"} attribute lands on the div,
+ * not on the underlying {@code <select>}. The actual control carries
+ * the {@code id="cancel-event-reason"} attribute (set inside
+ * {@link SelectInput}). Looking it up by id avoids the
+ * {@code wrapper.setValue() cannot be called on DIV} trap and lets us
+ * drive the value through {@link DOMWrapper.setValue} which trips Vue's
+ * native {@code @change} handler (a bare
+ * {@code dispatchEvent(new Event('change'))} doesn't wake the listener
+ * under jsdom + Teleport).
+ */
+function pickReason(code: string) {
+  const select = document.body.querySelector('select#cancel-event-reason')
+  if (!select) throw new Error('select#cancel-event-reason not in DOM yet')
+  return new DOMWrapper(select as HTMLSelectElement).setValue(code)
+}
+
+/**
+ * Same trap as {@link pickReason} but for the conditional reason
+ * textarea — this one lives in the dialog template directly (no
+ * primitive wrapper), so the {@code data-testid} attribute is on the
+ * textarea itself. We keep the helper symmetric so the test bodies stay
+ * one-shot.
+ */
+function setOtherText(value: string) {
+  const ta = document.body.querySelector('textarea#cancel-event-other-text')
+  if (!ta) throw new Error('textarea#cancel-event-other-text not in DOM yet')
+  return new DOMWrapper(ta as HTMLTextAreaElement).setValue(value)
+}
+
+describe('CancelEventDialog', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     document.body.innerHTML = ''
@@ -77,8 +109,10 @@ describe.skip('CancelEventDialog', () => {
 
     expect(apiGet).toHaveBeenCalledWith('/pages/api/v1/event-cancel-reasons')
 
+    // SelectInput's root is a wrapping <div> — the underlying control
+    // lives at #cancel-event-reason. Query by id, not by data-testid.
     const select = document.body.querySelector<HTMLSelectElement>(
-      '[data-testid="cancel-event-reason"]',
+      'select#cancel-event-reason',
     )
     expect(select).not.toBeNull()
     // 3 seeded options + 1 placeholder.
@@ -97,17 +131,12 @@ describe.skip('CancelEventDialog', () => {
     expect(document.body.querySelector('[data-testid="cancel-event-other-text"]')).toBeNull()
 
     // Pick a non-other reason — textarea stays hidden.
-    const select = document.body.querySelector<HTMLSelectElement>(
-      '[data-testid="cancel-event-reason"]',
-    )!
-    select.value = 'PATIENT_NO_SHOW'
-    select.dispatchEvent(new Event('change'))
+    await pickReason('PATIENT_NO_SHOW')
     await flushPromises()
     expect(document.body.querySelector('[data-testid="cancel-event-other-text"]')).toBeNull()
 
     // Pick OTHER — textarea appears.
-    select.value = 'OTHER'
-    select.dispatchEvent(new Event('change'))
+    await pickReason('OTHER')
     await flushPromises()
     expect(document.body.querySelector('[data-testid="cancel-event-other-text"]')).not.toBeNull()
 
@@ -123,11 +152,7 @@ describe.skip('CancelEventDialog', () => {
     const events = useEventsStore()
     const spy = vi.spyOn(events, 'cancelEvent')
 
-    const select = document.body.querySelector<HTMLSelectElement>(
-      '[data-testid="cancel-event-reason"]',
-    )!
-    select.value = 'PATIENT_NO_SHOW'
-    select.dispatchEvent(new Event('change'))
+    await pickReason('PATIENT_NO_SHOW')
     await flushPromises()
 
     const confirmBtn = document.body.querySelector<HTMLButtonElement>(
@@ -150,11 +175,7 @@ describe.skip('CancelEventDialog', () => {
     const events = useEventsStore()
     const spy = vi.spyOn(events, 'cancelEvent')
 
-    const select = document.body.querySelector<HTMLSelectElement>(
-      '[data-testid="cancel-event-reason"]',
-    )!
-    select.value = 'OTHER'
-    select.dispatchEvent(new Event('change'))
+    await pickReason('OTHER')
     await flushPromises()
 
     const confirmBtn = document.body.querySelector<HTMLButtonElement>(
@@ -177,18 +198,9 @@ describe.skip('CancelEventDialog', () => {
     const events = useEventsStore()
     const spy = vi.spyOn(events, 'cancelEvent')
 
-    const select = document.body.querySelector<HTMLSelectElement>(
-      '[data-testid="cancel-event-reason"]',
-    )!
-    select.value = 'OTHER'
-    select.dispatchEvent(new Event('change'))
+    await pickReason('OTHER')
     await flushPromises()
-
-    const textarea = document.body.querySelector<HTMLTextAreaElement>(
-      '[data-testid="cancel-event-other-text"]',
-    )!
-    textarea.value = 'Patient meldete sich krank'
-    textarea.dispatchEvent(new Event('input'))
+    await setOtherText('Patient meldete sich krank')
     await flushPromises()
 
     const confirmBtn = document.body.querySelector<HTMLButtonElement>(
