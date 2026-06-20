@@ -27,6 +27,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubject
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -135,7 +136,8 @@ class EventsApiControllerCancelReasonTest extends AbstractApiControllerTest {
                         Mockito.any(), Mockito.any(), Mockito.any()))
                 .thenReturn(Set.of(1));
 
-        return mockMvcFor(new EventsApiController(ds, visibility));
+        return mockMvcFor(new EventsApiController(ds, visibility,
+                Mockito.mock(VisitIntervalCalculator.class)));
     }
 
     /* ---------------------------------------------------------------------- */
