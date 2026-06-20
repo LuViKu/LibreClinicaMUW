@@ -29,8 +29,10 @@ import FundusOverlay from '@/components/FundusOverlay.vue'
 import RetinalKpiTile from '@/components/RetinalKpiTile.vue'
 import RetinalArtifactList from '@/components/RetinalArtifactList.vue'
 import RetinalVisitComparison from '@/components/RetinalVisitComparison.vue'
+import ArmBadge from '@/components/ArmBadge.vue'
 import JsonTree from '@/components/JsonTree.vue'
 import type { FundusOverlayTask } from '@/components/FundusOverlay.vue'
+import { useStudyArm } from '@/composables/useStudyArm'
 
 import { useRetinalJobStore } from '@/stores/retinalJob'
 import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
@@ -74,6 +76,14 @@ const currentBscanZ = computed<number>(() => {
   const n = geometry.value?.bscan?.dim_z_bscans ?? 0
   return Math.max(0, Math.floor(n / 2))
 })
+
+/**
+ * nAMD Slice 6 — honour-system arm gate. When the subject is in
+ * Arm B (`AI_HIDDEN`) we hide the KPI strip, en-face overlay layer,
+ * and visit-to-visit comparison panel. The B-scan navigator + bbox
+ * + ETDRS rings stay visible — those don't expose AI output.
+ */
+const armGate = useStudyArm(() => job.value?.subjectArm ?? null)
 function onHoverBscan(z: number | null) {
   hoveredBscanZ.value = z
 }
@@ -412,19 +422,34 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
           {{ t('retinal.empty.noMetric') }}
         </div>
 
+        <!-- Slice 6 — honour-system arm badge. Renders once at the
+             top of the view when the subject is in Arm B so the
+             operator knows AI is intentionally hidden (not failed). -->
+        <div v-if="armGate.showBadge.value" class="mb-4">
+          <ArmBadge :arm="job.subjectArm" />
+          <p class="mt-1.5 text-xs text-slate-500">
+            {{ t('retinal.arm.blindedExplain') }}
+          </p>
+        </div>
+
         <!-- Slice 4 — visit-to-visit comparison panel. Self-hides
              when there is no prior visit. Only meaningful for fluid
              (the only task with multi-metric deltas the panel
-             knows how to render); other tasks fall through. -->
+             knows how to render); other tasks fall through.
+             Slice 6 — also hide for Arm B. -->
         <RetinalVisitComparison
-          v-if="job.task === 'fluid' && job.status === 'done'"
+          v-if="job.task === 'fluid' && job.status === 'done' && !armGate.hideAi.value"
           :job-id="job.jobId"
         />
 
         <!-- 3-column grid: KPIs / fundus / per-B-scan trace -->
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-5">
-          <!-- KPI strip -->
-          <div class="lg:col-span-1 space-y-3" data-testid="retinal-view-kpis">
+          <!-- KPI strip — hidden for Arm B by the arm gate -->
+          <div
+            v-if="!armGate.hideAi.value"
+            class="lg:col-span-1 space-y-3"
+            data-testid="retinal-view-kpis"
+          >
             <RetinalKpiTile
               v-for="tile in kpiTiles"
               :key="tile.label"
@@ -451,6 +476,12 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
               {{ t('retinal.empty.fundusNotAvailable') }}
             </div>
             <div v-else class="aspect-square w-full">
+              <!-- Slice 6 — when Arm B, drop projection artifacts from
+                   the overlay so the en-face PED / IRF / SRF layers
+                   don't render. FundusOverlay's per-biomarker /
+                   composite gates already key off artifactNames, so
+                   passing an empty list is the cleanest gate without
+                   threading a new prop into the component. -->
               <FundusOverlay
                 :fundus-url="job.fundusUrl"
                 :geometry="geometry"
@@ -459,7 +490,7 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                 :laterality="job.laterality"
                 :hovered-bscan-z="hoveredBscanZ"
                 :job-id="job.jobId"
-                :artifact-names="job.artifactNames"
+                :artifact-names="armGate.hideAi.value ? [] : job.artifactNames"
                 @hover-bscan="onHoverBscan"
               />
             </div>

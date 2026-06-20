@@ -195,7 +195,18 @@ public class RetinalResultsApiController {
             List<String> companionNames,
             String fundusUrl,
             String geometryUrl,
-            String bscanDcmUrl) { }
+            String bscanDcmUrl,
+            /**
+             * nAMD treat-and-extend Slice 6 (2026-06-20) — the
+             * subject's arm assignment in the active study, derived
+             * from study_group.name. Honour-system gating: when set
+             * to "AI_HIDDEN" the SPA hides the AI panels (KPIs,
+             * en-face overlay, comparison) so an Arm B physician
+             * doesn't see the quantification by accident. Null when
+             * the subject isn't in either AI_SHOWN or AI_HIDDEN
+             * (non-T-and-E studies pass through unchanged).
+             */
+            String subjectArm) { }
 
     public record RetinalJobSummaryDto(
             long jobId,
@@ -264,6 +275,16 @@ public class RetinalResultsApiController {
         Map<String, Object> outputPayload = parsePayload(row.outputPayloadJson);
         PrimaryMetric pm = primaryMetric(row.primaryMetricValue, row.primaryMetricUnit);
 
+        // nAMD Slice 6 — resolve the subject's arm via groupAssignments
+        // so the SPA can honour-system-gate the AI panels for Arm B.
+        String subjectArm = null;
+        try (Connection c = dataSource.getConnection()) {
+            subjectArm = resolveSubjectArm(c, row.eventCrfId);
+        } catch (SQLException sqlEx) {
+            LOG.warn("subjectArm lookup failed for job {} (ecrf={}): {}",
+                    jobId, row.eventCrfId, sqlEx.getMessage());
+        }
+
         RetinalJobDetailDto dto = new RetinalJobDetailDto(
                 row.jobId,
                 row.eventCrfId,
@@ -281,8 +302,43 @@ public class RetinalResultsApiController {
                 companions,
                 fundusUrl,
                 geometryUrl,
-                bscanDcmUrl);
+                bscanDcmUrl,
+                subjectArm);
         return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * nAMD Slice 6 — derive the subject's arm from its
+     * {@code subject_group_map} membership. Walks
+     * event_crf → study_event → study_subject → subject_group_map
+     * → study_group + group_class, then returns the first study_group
+     * name that matches {@code "AI_SHOWN"} or {@code "AI_HIDDEN"}.
+     * Returns null when the subject isn't in either (non-T-and-E
+     * studies pass through unchanged) so the SPA falls back to the
+     * "no gating" rendering path.
+     *
+     * <p>The match is case-insensitive on the group name to absorb
+     * institutional capitalisation variants.
+     */
+    private static String resolveSubjectArm(Connection c, int eventCrfId) throws SQLException {
+        String sql = "SELECT sg.name "
+                + "  FROM event_crf ec "
+                + "  JOIN study_event ev ON ev.study_event_id = ec.study_event_id "
+                + "  JOIN subject_group_map sgm "
+                + "    ON sgm.study_subject_id = ev.study_subject_id "
+                + "   AND sgm.status_id = 1 "
+                + "  JOIN study_group sg ON sg.study_group_id = sgm.study_group_id "
+                + " WHERE ec.event_crf_id = ? "
+                + "   AND UPPER(sg.name) IN ('AI_SHOWN', 'AI_HIDDEN') "
+                + " LIMIT 1";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, eventCrfId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                String name = rs.getString(1);
+                return name == null ? null : name.toUpperCase();
+            }
+        }
     }
 
     /* ====================================================================== */

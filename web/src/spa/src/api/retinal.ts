@@ -89,6 +89,13 @@ export interface RetinalJobDetail {
   fundusUrl: string | null
   geometryUrl: string | null
   bscanDcmUrl: string | null
+  /**
+   * nAMD Slice 6 (2026-06-20) — the subject's arm assignment for
+   * honour-system AI panel gating. "AI_HIDDEN" hides the KPI strip,
+   * en-face overlay, and visit-to-visit comparison; "AI_SHOWN" or
+   * null falls through to the existing rendering.
+   */
+  subjectArm: 'AI_SHOWN' | 'AI_HIDDEN' | null
 }
 
 /** Lean summary returned by the per-event-CRF + per-subject list endpoints. */
