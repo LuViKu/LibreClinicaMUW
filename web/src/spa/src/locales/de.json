@@ -2663,6 +2663,12 @@
       "loading": "Vergleich wird geladen…",
       "errorPrefix": "Vergleich konnte nicht geladen werden:"
     },
+    "bscanViewer": {
+      "header": "B-Scan-Navigator",
+      "position": "Schnitt {current} / {total}",
+      "loading": "Viewer wird geladen…",
+      "errorPrefix": "B-Scan-Viewer konnte nicht geladen werden:"
+    },
     "trends": {
       "title": "Biomarker-Verlauf",
       "chartHeader": "Verlauf",
