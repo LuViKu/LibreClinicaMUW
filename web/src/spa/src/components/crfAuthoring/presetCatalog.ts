@@ -25,6 +25,16 @@ import {
   OPHTH_EXAM_PRESET_ID,
   generateOphthExamPresetItems,
 } from './presets/ophthExamPreset'
+import { BCVA_PRESET_ID, generateBcvaPresetItems } from './presets/bcvaPreset'
+import { RNFL_PRESET_ID, generateRnflPresetItems } from './presets/rnflPreset'
+import {
+  THICKNESS_MAP_PRESET_ID,
+  generateThicknessMapPresetItems,
+} from './presets/thicknessMapPreset'
+import {
+  SLIT_LAMP_PRESET_ID,
+  generateSlitLampPresetItems,
+} from './presets/slitLampPreset'
 
 export type PresetTranslator = (key: string) => string
 
@@ -66,6 +76,34 @@ export const PRESET_CATALOG: ReadonlyArray<PresetDescriptor> = [
     descriptionKey: 'crfAuthoring.presets.ophthExam.description',
     bilateralSection: true,
     generate: (t) => generateOphthExamPresetItems(t),
+  },
+  {
+    id: BCVA_PRESET_ID,
+    labelKey: 'crfAuthoring.presets.bcva.label',
+    descriptionKey: 'crfAuthoring.presets.bcva.description',
+    bilateralSection: true,
+    generate: (t) => generateBcvaPresetItems(t),
+  },
+  {
+    id: RNFL_PRESET_ID,
+    labelKey: 'crfAuthoring.presets.rnfl.label',
+    descriptionKey: 'crfAuthoring.presets.rnfl.description',
+    bilateralSection: true,
+    generate: (t) => generateRnflPresetItems(t),
+  },
+  {
+    id: THICKNESS_MAP_PRESET_ID,
+    labelKey: 'crfAuthoring.presets.thicknessMap.label',
+    descriptionKey: 'crfAuthoring.presets.thicknessMap.description',
+    bilateralSection: true,
+    generate: (t) => generateThicknessMapPresetItems(t),
+  },
+  {
+    id: SLIT_LAMP_PRESET_ID,
+    labelKey: 'crfAuthoring.presets.slitLamp.label',
+    descriptionKey: 'crfAuthoring.presets.slitLamp.description',
+    bilateralSection: true,
+    generate: (t) => generateSlitLampPresetItems(t),
   },
 ]
 
