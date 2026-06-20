@@ -43,6 +43,13 @@ import { useJobStatusStream } from '@/composables/useJobStatusStream'
  */
 const PerBscanTrace = defineAsyncComponent(() => import('@/components/PerBscanTrace.vue'))
 
+/**
+ * nAMD Slice 5 — Cornerstone.js B-scan viewer is large
+ * (~150 KB gzipped including the dicom-image-loader web-worker).
+ * Lazy-load only when the operator opens a retinal view.
+ */
+const BscanViewer = defineAsyncComponent(() => import('@/components/BscanViewer.vue'))
+
 const { t } = useI18n()
 const route = useRoute()
 const store = useRetinalJobStore()
@@ -59,6 +66,14 @@ const isLoading = computed<boolean>(() => !!store.loading[jobId.value])
 const loadError = computed<string | null>(() => store.errors[jobId.value] ?? null)
 
 const hoveredBscanZ = ref<number | null>(null)
+
+/** Always a defined integer for the BscanViewer's v-model — falls
+ *  back to the middle slice when no hover has set hoveredBscanZ. */
+const currentBscanZ = computed<number>(() => {
+  if (hoveredBscanZ.value != null) return hoveredBscanZ.value
+  const n = geometry.value?.bscan?.dim_z_bscans ?? 0
+  return Math.max(0, Math.floor(n / 2))
+})
 function onHoverBscan(z: number | null) {
   hoveredBscanZ.value = z
 }
@@ -466,6 +481,19 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
             </div>
           </div>
         </div>
+
+        <!-- Slice 5 — B-scan navigator (Cornerstone.js). Shows when
+             we have a bscan.dcm artifact + a known n_bscans from the
+             geometry payload. Bidirectional hover sync with the
+             FundusOverlay via the shared `hoveredBscanZ` ref. -->
+        <BscanViewer
+          v-if="job.bscanDcmUrl && (geometry?.bscan?.dim_z_bscans ?? 0) > 0"
+          :bscan-dcm-url="job.bscanDcmUrl"
+          :n-bscans="geometry!.bscan!.dim_z_bscans"
+          :model-value="currentBscanZ"
+          class="mb-5"
+          @update:model-value="(z) => hoveredBscanZ = z"
+        />
 
         <!-- ETDRS sub-totals -->
         <section

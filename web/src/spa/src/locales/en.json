@@ -2663,6 +2663,12 @@
       "loading": "Loading comparison…",
       "errorPrefix": "Could not load comparison:"
     },
+    "bscanViewer": {
+      "header": "B-scan navigator",
+      "position": "Slice {current} / {total}",
+      "loading": "Loading viewer…",
+      "errorPrefix": "Could not load B-scan viewer:"
+    },
     "trends": {
       "title": "[NEEDS_REVIEW] Biomarker trends",
       "chartHeader": "[NEEDS_REVIEW] Trend",
