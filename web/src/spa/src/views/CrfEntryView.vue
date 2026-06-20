@@ -33,6 +33,7 @@ import { parseShowWhen } from '@/components/showWhen'
 import { useCrfEntryStore } from '@/stores/crfEntry'
 import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
+import { useStudyModuleStore } from '@/stores/studyModules'
 import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
@@ -44,6 +45,10 @@ const router = useRouter()
 const store = useCrfEntryStore()
 const advanced = useCrfEntryAdvancedStore()
 const auth = useAuthStore()
+// Pluggable study-module SPI — top-of-form banner slot. Modules use
+// this for AI-auto-populate hints, regimen-specific reminders, etc.
+const studyModules = useStudyModuleStore()
+const bannerInjections = computed(() => studyModules.injectionsFor('crf-entry.banner'))
 // Phase E.6 ophth-field-catalog (2026-06-11): the per-item widget
 // renderer reads the catalog entry to decide between number-stepper /
 // snellen / segmented Ja-Nein / conditional reason chrome. Pre-load
@@ -658,6 +663,20 @@ function onPrefillApply(values: Record<string, string>) {
       <!-- Phase E.6 crf-entry-advanced: soft-lock concurrent-editor
            warning. Renders when another session's heartbeat is active. -->
       <ConcurrentEditBanner v-if="!isReadOnly" :probe="advanced.lockProbe" />
+
+      <!-- Pluggable study-module SPI — crf-entry banner slot.
+           Mounted only when a registered module advertises at least one
+           entry for this slot. Modules typically use this to surface an
+           AI-prefill hint, T&E reminder, or regimen-specific guidance
+           that's not worth carving a per-CRF widget for. -->
+      <div v-if="bannerInjections.length" class="mb-4 space-y-2">
+        <template
+          v-for="entry in bannerInjections"
+          :key="entry.key"
+        >
+          <component :is="entry.component" />
+        </template>
+      </div>
 
       <form
         v-if="store.entry && !store.isLoading"

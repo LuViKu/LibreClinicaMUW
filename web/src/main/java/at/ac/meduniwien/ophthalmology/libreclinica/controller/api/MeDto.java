@@ -115,5 +115,16 @@ public record MeDto(
              */
             String uniqueIdentifier,
             boolean isSite,
-            List<String> roles) {}
+            List<String> roles,
+            /**
+             * {@code study.protocol_type} — drives the SPA's pluggable
+             * study-module SPI. The SPA's {@code useStudyModuleStore}
+             * looks the value up in {@code STUDY_MODULES} (case-
+             * insensitive) and activates the matching manifest on every
+             * study switch. Free-form text in the DB (no enum
+             * constraint); matched cosmetic-case insensitively by the
+             * registry. Nullable for studies authored before the field
+             * was used.
+             */
+            String protocolType) {}
 }

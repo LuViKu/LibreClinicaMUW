@@ -178,6 +178,19 @@ public class MeApiController {
 
         MeDto.ActiveStudyDto activeStudy = null;
         if (currentStudy != null && currentStudy.getId() > 0) {
+            // study.protocol_type — StudyBean.getProtocolType() returns
+            // the i18n-resolved label rather than the raw column value,
+            // which is fine for display but the SPA's pluggable
+            // study-module SPI matches on the raw key. Use
+            // getProtocolTypeKey() so the dispatch is locale-independent
+            // (a localized "Beobachtungsstudie" would not match the
+            // registry's 'observational' protocolType in the de-AT
+            // session). Empty key → null on the wire so the SPA's
+            // findModule() short-circuits cleanly.
+            String protocolTypeKey = currentStudy.getProtocolTypeKey();
+            if (protocolTypeKey != null && protocolTypeKey.isBlank()) {
+                protocolTypeKey = null;
+            }
             activeStudy = new MeDto.ActiveStudyDto(
                     currentStudy.getId(),
                     currentStudy.getOid(),
@@ -193,7 +206,8 @@ public class MeApiController {
                     // set onto the active-study payload so the SPA's
                     // HomeView reads the full set instead of falling back
                     // to the top-level single highest-priority projection.
-                    spaRoles
+                    spaRoles,
+                    protocolTypeKey
             );
         }
 

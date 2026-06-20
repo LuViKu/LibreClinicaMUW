@@ -521,6 +521,27 @@ export function guard(
     if (!ok) return { name: 'home' }
   }
 
+  // Pluggable study-module SPI — meta.studyModule guard.
+  //
+  // Routes added by a registered StudyModuleManifest are stamped with
+  // meta.studyModule = manifest.protocolType. The guard rejects
+  // navigations whose active study's protocol_type doesn't match
+  // — match is case-insensitive (the DB column is free-form text and
+  // the registry already normalises via toUpperCase()). On mismatch
+  // we redirect home with an error-toast hint so the operator sees
+  // *why* they bounced instead of staring at a silent reroute.
+  const studyModuleMeta = to.meta.studyModule as string | undefined
+  if (studyModuleMeta) {
+    const active = auth.user?.activeStudy?.protocolType ?? null
+    if (!active || active.toUpperCase() !== studyModuleMeta.toUpperCase()) {
+      useErrorsStore().push(
+        new Error(`Module ${studyModuleMeta} requires a study of that protocol type.`),
+        'studyModule.guard',
+      )
+      return { name: 'home' }
+    }
+  }
+
   return true
 }
 
