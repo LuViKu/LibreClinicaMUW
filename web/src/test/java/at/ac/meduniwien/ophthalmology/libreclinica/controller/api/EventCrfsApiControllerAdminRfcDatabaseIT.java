@@ -42,7 +42,8 @@ class EventCrfsApiControllerAdminRfcDatabaseIT extends AbstractApiControllerData
                 DATA_SOURCE,
                 new SiteVisibilityFilter(DATA_SOURCE),
                 Mockito.mock(CrfFileStorageService.class),
-                new EventCrfPresenceRegistry());
+                new EventCrfPresenceRegistry(),
+                new at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator(DATA_SOURCE));
         return MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();

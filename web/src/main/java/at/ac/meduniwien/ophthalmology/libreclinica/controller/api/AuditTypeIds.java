@@ -263,4 +263,16 @@ public final class AuditTypeIds {
     // ------------------------------------------------------------------
 
     public static final int STUDY_SUBJECT_PATIENT_LINKED    = 119;
+
+    /**
+     * nAMD treat-and-extend (2026-06-20) — emitted per item_data row
+     * the {@code RetinalResultItemDataPopulator} writes from a
+     * completed retinal_inference_result. Auditable so the study
+     * timeline shows "AI value X populated into CRF item Y from
+     * job Z" alongside operator-entered values. Writer is
+     * {@code EventCrfsApiController.autoPopulateRetinal};
+     * audit_table = {@code item_data}, entity_id = item_data_id;
+     * new_value packs {@code "job:<jobId>,item:<item_oid>,value:<v>"}.
+     */
+    public static final int RETINAL_INFERENCE_AUTOPOPULATE  = 120;
 }

@@ -165,16 +165,21 @@ public class EventCrfsApiController {
     private final SiteVisibilityFilter siteVisibilityFilter;
     private final CrfFileStorageService fileStorageService;
     private final EventCrfPresenceRegistry presenceRegistry;
+    private final at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator
+            retinalAutoPopulator;
 
     @Autowired
     public EventCrfsApiController(@Qualifier("dataSource") DataSource dataSource,
                                   SiteVisibilityFilter siteVisibilityFilter,
                                   CrfFileStorageService fileStorageService,
-                                  EventCrfPresenceRegistry presenceRegistry) {
+                                  EventCrfPresenceRegistry presenceRegistry,
+                                  at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator
+                                          retinalAutoPopulator) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.fileStorageService = fileStorageService;
         this.presenceRegistry = presenceRegistry;
+        this.retinalAutoPopulator = retinalAutoPopulator;
     }
 
     @GetMapping("/{id:[0-9]+}")
@@ -3041,4 +3046,95 @@ public class EventCrfsApiController {
         int id = role.getRole().getId();
         return id == 1 || id == 3 || id == 4;
     }
+
+    /* ====================================================================== */
+    /* POST /event-crfs/{id}:autoPopulateRetinal — nAMD Slice 3              */
+    /* ====================================================================== */
+
+    /**
+     * Copy AI fluid metrics from every completed
+     * {@code retinal_inference_result} linked to {@code eventCrfId}
+     * into the matching CRF item_data rows. Idempotent — re-running
+     * updates rows from the same source job; operator-entered rows
+     * are never overwritten.
+     *
+     * <p>Response body carries {@link RetinalAutoPopulateResponse}
+     * with the per-run counts so the SPA can render a toast
+     * ("Populated 4 items from 1 job").
+     *
+     * <p>401 when not authenticated, 404 when the event_crf is
+     * outside the caller's visibility, 200 on success (including
+     * the "no jobs to populate" case — the SPA renders that as
+     * "Nothing to populate yet" rather than as an error).
+     */
+    @org.springframework.web.bind.annotation.PostMapping(path = "/{id:[0-9]+}:autoPopulateRetinal",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> autoPopulateRetinal(@PathVariable("id") int eventCrfId,
+                                                 HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        // Reuse the existing visibility check from this controller's
+        // getEventCrf — if the user can't see the row, the populate
+        // call must 404 too.
+        ResponseEntity<?> visibility = guardEventCrfVisibility(eventCrfId, currentUser, session);
+        if (visibility != null) return visibility;
+
+        at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator.PopulateResult result;
+        try {
+            result = retinalAutoPopulator.populateForEventCrf(eventCrfId, currentUser.getId());
+        } catch (IllegalStateException isEx) {
+            LOG.error("autoPopulateRetinal failed for ecrf={}: {}", eventCrfId, isEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to populate retinal values: " + isEx.getMessage()));
+        }
+        return ResponseEntity.ok(new RetinalAutoPopulateResponse(
+                result.eventCrfId(),
+                result.jobsProcessed(),
+                result.rowsWritten(),
+                result.warnings()));
+    }
+
+    /**
+     * Reuse the visibility logic from {@code getEventCrf} for the
+     * auto-populate endpoint without duplicating ~50 LOC of session
+     * + DAO walks. Returns null when the caller can see the row,
+     * or a ready-to-return ResponseEntity (401 / 404) otherwise.
+     */
+    private ResponseEntity<?> guardEventCrfVisibility(int eventCrfId,
+                                                     UserAccountBean currentUser,
+                                                     HttpSession session) {
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = ecDao.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ecb.getStudySubjectId());
+        if (ss == null || ss.getStudyId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "event_crf " + eventCrfId + " has no resolvable study"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        java.util.Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "event_crf " + eventCrfId + " belongs to a study outside your scope"));
+        }
+        return null;
+    }
+
+    /**
+     * Response body of {@code POST /event-crfs/{id}:autoPopulateRetinal}.
+     */
+    @io.swagger.v3.oas.annotations.media.Schema(name = "RetinalAutoPopulateResponse")
+    public record RetinalAutoPopulateResponse(
+            int eventCrfId,
+            int jobsProcessed,
+            int rowsWritten,
+            java.util.List<String> warnings) {}
 }
