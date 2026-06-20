@@ -279,7 +279,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
    * (DR-008); {@link validateAddSubject} is kept as instant client-side
    * UX feedback (used by AddSubjectView's `liveErrors`).
    */
-  async function add(input: AddSubjectInput): Promise<Subject> {
+  async function add(input: AddSubjectInput): Promise<Subject & { studySubjectId: number }> {
     isLoading.value = true
     error.value = null
     try {
@@ -340,7 +340,12 @@ export const useSubjectsStore = defineStore('subjects', () => {
       // Prepend so the just-created row is the first thing the user
       // sees when navigated back to the matrix.
       rows.value = [subject, ...rows.value]
-      return subject
+      // App-feedback Wave 1B (2026-06-19) — surface the PK so the
+      // AddSubject view can chain a link-patient call after the
+      // newly-created enrolment is in the DB. The matrix `Subject`
+      // type intentionally doesn't carry the PK (it uses label as the
+      // identity); we attach it on the return object only.
+      return Object.assign({}, subject, { studySubjectId: detail.studySubjectId })
     } catch (e) {
       // 400 validation: backend returns { message, errors: [{field, message}] }
       if (e instanceof ApiError && e.status === 400 && hasFieldErrors(e.body)) {
@@ -864,6 +869,31 @@ export const useSubjectsStore = defineStore('subjects', () => {
   }
 
   /**
+   * App-feedback Wave 1B (2026-06-19) — cross-study patient identity
+   * soft-link.
+   *
+   * <p>Calls
+   * {@code POST /api/v1/study-subjects/{currentSsId}/link-patient} with
+   * {@code { targetSubjectId }}. The backend ties both rows under a
+   * common {@code patient_uuid} and returns it; the SPA surfaces a
+   * toast/error per the resolution branch (200 idempotent / 200 new
+   * link / 409 mismatch / 4xx role refusal).
+   *
+   * <p>Errors bubble as {@link ApiError} for the caller to map; the
+   * store keeps no local cache of the link since the cross-study
+   * patient-overview view re-fetches independently.
+   */
+  async function linkPatient(
+    currentSsId: number,
+    targetSubjectId: number,
+  ): Promise<{ patientUuid: string }> {
+    return apiPost<{ patientUuid: string }>(
+      `/pages/api/v1/study-subjects/${encodeURIComponent(String(currentSsId))}/link-patient`,
+      { targetSubjectId },
+    )
+  }
+
+  /**
    * Phase E.6 — live Study-Subject-ID availability check.
    *
    * <p>Fires from the AddSubject form on debounced input of the
@@ -944,6 +974,7 @@ export const useSubjectsStore = defineStore('subjects', () => {
     transitionEye,
     transitionPreflight,
     preflightMatch,
+    linkPatient,
     checkLabelAvailability,
     reset,
   }

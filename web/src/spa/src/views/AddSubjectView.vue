@@ -21,6 +21,7 @@ import {
   type AddSubjectInput,
   type SubjectMatchCandidate,
 } from '@/stores/subjects'
+import { ApiError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import type { Gender, StudyEye } from '@/types/subject'
 
@@ -225,10 +226,56 @@ watch(() => form.firstName, maybePreflight)
 watch(() => form.lastName, maybePreflight)
 watch(() => form.dateOfBirth, maybePreflight)
 
+/**
+ * App-feedback Wave 1B (2026-06-19) — when the operator clicks
+ * "Verknüpfen" on a match candidate, we defer the actual POST until
+ * AFTER the enrolment save (the link endpoint needs a persisted
+ * study_subject id, which doesn't exist until the create round-trip
+ * lands). The pending candidate is stored here and consumed by
+ * {@link submit} once the new row is in the DB.
+ *
+ * <p>Distinct from {@link form.acknowledgeMatchSubjectId} (which only
+ * records that the operator saw the match and confirmed create-new)
+ * — `pendingLinkCandidate` is the affirmative "yes, soft-link the
+ * new enrolment to this existing patient" choice.
+ */
+const pendingLinkCandidate = ref<SubjectMatchCandidate | null>(null)
+
+const linkSuccessToast = ref<string | null>(null)
+const linkErrorToast = ref<string | null>(null)
+
 function onMatchLink(candidate: SubjectMatchCandidate) {
+  // Stash the pick and close the dialog. The submit() flow handles
+  // the actual POST after the new study_subject exists; we also flip
+  // the create-new acknowledgement so the form's submit-gate passes.
+  pendingLinkCandidate.value = candidate
+  form.acknowledgeMatchSubjectId = candidate.subjectId
   matchDialogOpen.value = false
-  if (candidate.uniqueIdentifier) {
-    router.push({ path: `/subjects/${encodeURIComponent(candidate.uniqueIdentifier)}` })
+}
+
+/**
+ * App-feedback Wave 1B — chained link-patient call after the create
+ * round-trip succeeds. Toasts surface on the AddSubject view; errors
+ * are non-blocking (the enrolment itself is already saved, so a
+ * link-only 4xx leaves the operator with a recoverable state).
+ */
+async function callLinkPatient(currentSsId: number, targetSubjectId: number) {
+  try {
+    await subjects.linkPatient(currentSsId, targetSubjectId)
+    linkSuccessToast.value = t('addSubject.linkPatient.linkSuccess', {
+      label: pendingLinkCandidate.value?.uniqueIdentifier ?? '?',
+    })
+    linkErrorToast.value = null
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      linkErrorToast.value = t('addSubject.linkPatient.linkConflict409')
+    } else if (err instanceof ApiError) {
+      linkErrorToast.value = err.message || t('addSubject.linkPatient.linkError')
+    } else {
+      linkErrorToast.value =
+        err instanceof Error ? err.message : t('addSubject.linkPatient.linkError')
+    }
+    linkSuccessToast.value = null
   }
 }
 
@@ -266,6 +313,16 @@ async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
 
   try {
     const subject = await subjects.add({ ...form })
+    // App-feedback Wave 1B — if the operator chose to soft-link the
+    // new enrolment to an existing patient via "Verknüpfen", fire the
+    // chained link-patient call now that the create round-trip has
+    // returned a persisted study_subject id. Errors are non-blocking
+    // — the enrolment itself is already saved, and the toast row
+    // gives the operator a clear next-step.
+    if (pendingLinkCandidate.value) {
+      await callLinkPatient(subject.studySubjectId, pendingLinkCandidate.value.subjectId)
+      pendingLinkCandidate.value = null
+    }
     if (redirect === 'matrix') {
       router.push({ name: 'subject-matrix' })
     } else if (redirect === 'addNext') {
@@ -565,6 +622,28 @@ const genderOptions: { code: Gender; label: () => string }[] = [
           role="alert"
         >
           {{ serverError }}
+        </div>
+
+        <!-- App-feedback Wave 1B — link-patient toast region. Surfaces
+             the chained POST /study-subjects/{id}/link-patient result
+             after the enrolment save lands. Success is green; the
+             409 mismatch + every other 4xx/5xx lands in the error
+             slot. -->
+        <div
+          v-if="linkSuccessToast"
+          class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800"
+          role="status"
+          data-testid="link-patient-success-toast"
+        >
+          {{ linkSuccessToast }}
+        </div>
+        <div
+          v-if="linkErrorToast"
+          class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-800"
+          role="alert"
+          data-testid="link-patient-error-toast"
+        >
+          {{ linkErrorToast }}
         </div>
 
         <!-- Save action row -->
