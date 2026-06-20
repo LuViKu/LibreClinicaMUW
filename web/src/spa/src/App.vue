@@ -141,7 +141,12 @@ const showTopBar = computed(
   () =>
     route.name !== 'login' &&
     route.name !== 'first-login' &&
-    route.name !== 'oct-upload-portal',
+    route.name !== 'oct-upload-portal' &&
+    // Phase E.8 Slice L4 — the printable-CRF view is meant to feed
+    // the browser's "Print to PDF" cleanly. The TopBar would show up
+    // in the captured PDF and the printable view has its own minimal
+    // header instead.
+    route.name !== 'printable-crf',
 )
 
 /**

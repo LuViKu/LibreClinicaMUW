@@ -131,9 +131,35 @@ public class WebMvcConfig {
     }
 
 
+    /**
+     * Phase E.8 legacy-retirement Slice L1 (2026-06-20) — every GET on
+     * the legacy form-login JSP {@code /pages/login/login} now 302s to
+     * the SPA's {@code /app/login} view, preserving any query string
+     * (e.g. {@code ?error=bad_credentials} that the legacy
+     * AuthenticationFailureHandler appends, or {@code ?returnTo=...}
+     * that pre-auth bookmarks inject).
+     *
+     * <p>The SPA's LoginView already handles the {@code ?error=*}
+     * query-param surface — see
+     * {@code web/src/spa/src/views/LoginView.vue}. POST {@code /j_spring_security_check}
+     * is unchanged; the legacy form-auth filter still owns the
+     * credential check, the redirect only moves the input UI.
+     *
+     * <p>The legacy JSP {@code /WEB-INF/jsp/login/login.jsp} stays in
+     * the tree as a build-time artifact but receives no traffic after
+     * this redirect; it will be deleted in Phase D once the
+     * {@code legacy-access} log confirms zero hits for one grace
+     * cycle.
+     */
     @Bean(name = "/login/login")
-    public UrlFilenameViewController loginLoginController() {
-        return new UrlFilenameViewController();
+    public org.springframework.web.servlet.mvc.Controller loginLoginRedirectController() {
+        return (request, response) -> {
+            String query = request.getQueryString();
+            String target = "/LibreClinica/app/login" + (query == null ? "" : "?" + query);
+            response.setStatus(jakarta.servlet.http.HttpServletResponse.SC_FOUND);
+            response.setHeader("Location", target);
+            return null;
+        };
     }
 
     @Bean(name = "/denied")

@@ -50,6 +50,12 @@ public class LegacyServletDeprecationCatalog {
         AUDIT_TRAIL,
         DISCREPANCY_NOTES,
         SITES_GROUPS_RULES,
+        /** Phase E.8 Slice L2 (2026-06-20) — public unauthenticated forms. */
+        SUPPORT_FORMS,
+        /** Phase E.8 Slice L3 (2026-06-20) — sysadmin tooling. */
+        ADMIN_TOOLING,
+        /** Phase E.8 Slice L4 (2026-06-20) — print-friendly views. */
+        PRINT_PDF,
         /** Phase E.8 Slice L5 (2026-06-20) — Quartz job admin. */
         JOB_ADMIN
     }
@@ -197,6 +203,32 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/pages/TestRule", "/app/rules", Bucket.SITES_GROUPS_RULES);
         put(m, "/pages/ViewRuleSet", "/app/rules", Bucket.SITES_GROUPS_RULES);
         put(m, "/pages/ViewRuleAssignment", "/app/rules", Bucket.SITES_GROUPS_RULES);
+
+        // --- SUPPORT_FORMS — SPA `/contact` (Phase E.8 Slice L2) ---
+        // The legacy Contact form is wired under both /pages/Contact (the
+        // standard prefix) and bare /Contact (the form action used by the
+        // login-screen "Contact" link). Catalog both so the telemetry +
+        // banner cover the historical URL.
+        put(m, "/pages/Contact", "/app/contact", Bucket.SUPPORT_FORMS);
+        put(m, "/Contact", "/app/contact", Bucket.SUPPORT_FORMS);
+
+        // --- ADMIN_TOOLING — SPA `/admin/*` (Phase E.8 Slice L3) ---
+        // SystemStatus has historically been wired at bare /SystemStatus
+        // (the menu link) in addition to /pages/SystemStatus.
+        put(m, "/pages/SystemStatus", "/app/admin/system-status", Bucket.ADMIN_TOOLING);
+        put(m, "/SystemStatus", "/app/admin/system-status", Bucket.ADMIN_TOOLING);
+        put(m, "/pages/ConfigurePasswordRequirements", "/app/admin/password-policy", Bucket.ADMIN_TOOLING);
+        put(m, "/pages/Configure", "/app/admin/config", Bucket.ADMIN_TOOLING);
+
+        // --- PRINT_PDF — SPA `/event-crfs/:eventCrfOid/print` (Phase E.8 Slice L4) ---
+        // The legacy servlet family rendered print-friendly HTML the
+        // operator then sent to Print to PDF. The SPA replacement keeps
+        // that flow (read-only Vue view + @media print stylesheet) so the
+        // institutional muscle memory doesn't change.
+        put(m, "/pages/PrintEventCRF",        "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
+        put(m, "/pages/PrintCRFById",         "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
+        put(m, "/pages/PrintAllEventCRF",     "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
+        put(m, "/pages/PrintAllSiteEventCRF", "/app/event-crfs/:eventCrfOid/print", Bucket.PRINT_PDF);
 
         // --- JOB_ADMIN — SPA `/admin/jobs` (Phase E.8 Slice L5) ---
         // All four legacy job-admin entry points route to the same
