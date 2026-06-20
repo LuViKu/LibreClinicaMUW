@@ -3065,6 +3065,7 @@ export interface components {
             uniqueIdentifier?: string;
             isSite?: boolean;
             roles?: string[];
+            protocolType?: string;
         };
         MeDto: {
             username?: string;

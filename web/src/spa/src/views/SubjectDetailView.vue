@@ -22,6 +22,7 @@ import { listSubjectJobs } from '@/api/retinal'
 import { useSubjectsStore } from '@/stores/subjects'
 import { useEventsStore } from '@/stores/events'
 import { useAuthStore } from '@/stores/auth'
+import { useStudyModuleStore } from '@/stores/studyModules'
 import type { EventStatus, Gender, StudyEye, EyeTransitionDto, TransitionEyeRequest } from '@/types/subject'
 import { canManageSubjectLifecycle, canEditSubject } from '@/types/subject'
 import { roleSatisfies, userRolesFromAuth } from '@/router'
@@ -34,6 +35,13 @@ const router = useRouter()
 const subjects = useSubjectsStore()
 const events = useEventsStore()
 const auth = useAuthStore()
+// Pluggable study-module SPI — workspace slot injection.
+// When the active study's protocol_type matches a registered module,
+// the module's 'subject-detail.workspace' entries render under the
+// header (typically a "open <module> workspace" CTA card). The host
+// view treats the slot as opaque — no per-module conditionals here.
+const studyModules = useStudyModuleStore()
+const workspaceInjections = computed(() => studyModules.injectionsFor('subject-detail.workspace'))
 
 /**
  * Phase E A3 — role-gated "Remove subject" action. The button only
@@ -660,6 +668,14 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
             <StatusPill v-if="subject.locked" variant="warning">{{ t('subjectDetail.locked') }}</StatusPill>
           </h1>
         </div>
+
+        <!-- Pluggable study-module SPI — workspace slot.
+             Active manifest's 'subject-detail.workspace' entries render
+             here (typically a CTA card to enter the module's dedicated
+             workspace). Each entry is opaque to the host. -->
+        <template v-for="entry in workspaceInjections" :key="entry.key">
+          <component :is="entry.component" />
+        </template>
 
         <!-- Identity / enrolment card -->
         <section class="bg-white border border-slate-200 rounded-muw p-5 mb-5">

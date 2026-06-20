@@ -1,0 +1,80 @@
+{
+  "studyModules": {
+    "namd": {
+      "label": "nAMD Fluid-Monitoring",
+      "open": "nAMD-Workspace öffnen",
+      "openHint": "OCT-Trend, Vergleich und Bericht für die exsudative AMD-Behandlung.",
+      "workspaceBreadcrumb": "nAMD Fluid-Monitoring",
+      "loading": "Workspace-Daten werden geladen …",
+      "errorPrefix": "Fehler beim Laden:",
+      "activityActive": "Exsudation aktiv",
+      "activityDry": "Trocken",
+      "patientPrefix": "Patient",
+      "eyeOd": "rechtes Auge",
+      "eyeOs": "linkes Auge",
+      "banner": {
+        "visit": "Besuch",
+        "lastInjection": "Letzte Injektion",
+        "totalFluid": "Gesamt-Fluid"
+      },
+      "tab": {
+        "overview": "Übersicht",
+        "viewer": "OCT-Viewer",
+        "compare": "Vergleich",
+        "report": "Bericht"
+      },
+      "fluid": {
+        "IRF": { "long": "Intraretinale Flüssigkeit" },
+        "SRF": { "long": "Subretinale Flüssigkeit" },
+        "PED": { "long": "Pigmentepithelabhebung" }
+      },
+      "overview": {
+        "current": "Aktueller Status",
+        "trend": "Flüssigkeitsverlauf",
+        "crt": "Zentrale Netzhautdicke",
+        "legend": "Legende"
+      },
+      "viewer": {
+        "volume": "OCT-Volumen · aktueller Besuch",
+        "aiSeg": "KI-Segmentierung",
+        "hint": "Durch das Volumen scrollen (Slider, Heatmap oder ▶ Auto-Play). Die KI-Maske hebt IRF, SRF und PED farbcodiert hervor und lässt sich pro Scan ein-/ausblenden.",
+        "segCardsHeader": "Segmentierung · dieser Scan",
+        "empty": "Für diese Visite ist keine OCT-Aufnahme verknüpft."
+      },
+      "compare": {
+        "delta": "Delta zwischen Visiten",
+        "paneA": "Visite A",
+        "paneB": "Visite B",
+        "bcva": "BCVA"
+      },
+      "decision": {
+        "header": "Entscheidung",
+        "treat": "Behandeln",
+        "observe": "Beobachten",
+        "interval": "Intervall (Wochen)",
+        "confirm": "Entscheidung bestätigen",
+        "confirmed": "Entscheidung dokumentiert.",
+        "back": "Zurück",
+        "aiSuggests": "KI-Vorschlag: {rec}"
+      },
+      "trend": {
+        "aria": "Verlauf der Flüssigkeitsvolumina IRF, SRF und PED über die letzten Visiten."
+      },
+      "report": {
+        "letterhead": "nAMD Fluid-Monitoring · Bericht",
+        "subtitle": "MedUni Wien · Universitätsklinik für Augenheilkunde und Optometrie",
+        "print": "Drucken",
+        "patient": "Patientendaten",
+        "patientId": "ID",
+        "eye": "Auge",
+        "diagnosis": "Diagnose",
+        "regimen": "Regime",
+        "current": "Aktueller Status",
+        "trend": "Verlauf",
+        "history": "Behandlungs- und Befundverlauf",
+        "signaturePhysician": "Unterschrift Arzt/Ärztin",
+        "signatureDate": "Datum"
+      }
+    }
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "studyModules": {
+    "namd": {
+      "label": "[NEEDS_REVIEW] nAMD Fluid Monitoring",
+      "open": "[NEEDS_REVIEW] Open nAMD workspace",
+      "openHint": "[NEEDS_REVIEW] OCT trend, comparison and report for exudative AMD treatment.",
+      "workspaceBreadcrumb": "[NEEDS_REVIEW] nAMD Fluid Monitoring",
+      "loading": "[NEEDS_REVIEW] Loading workspace data …",
+      "errorPrefix": "[NEEDS_REVIEW] Failed to load:",
+      "activityActive": "[NEEDS_REVIEW] Exudation active",
+      "activityDry": "[NEEDS_REVIEW] Dry",
+      "patientPrefix": "[NEEDS_REVIEW] Patient",
+      "eyeOd": "[NEEDS_REVIEW] right eye",
+      "eyeOs": "[NEEDS_REVIEW] left eye",
+      "banner": {
+        "visit": "[NEEDS_REVIEW] Visit",
+        "lastInjection": "[NEEDS_REVIEW] Last injection",
+        "totalFluid": "[NEEDS_REVIEW] Total fluid"
+      },
+      "tab": {
+        "overview": "[NEEDS_REVIEW] Overview",
+        "viewer": "[NEEDS_REVIEW] OCT viewer",
+        "compare": "[NEEDS_REVIEW] Compare",
+        "report": "[NEEDS_REVIEW] Report"
+      },
+      "fluid": {
+        "IRF": { "long": "[NEEDS_REVIEW] Intraretinal fluid" },
+        "SRF": { "long": "[NEEDS_REVIEW] Subretinal fluid" },
+        "PED": { "long": "[NEEDS_REVIEW] Pigment epithelial detachment" }
+      },
+      "overview": {
+        "current": "[NEEDS_REVIEW] Current status",
+        "trend": "[NEEDS_REVIEW] Fluid trend",
+        "crt": "[NEEDS_REVIEW] Central retinal thickness",
+        "legend": "[NEEDS_REVIEW] Legend"
+      },
+      "viewer": {
+        "volume": "[NEEDS_REVIEW] OCT volume · current visit",
+        "aiSeg": "[NEEDS_REVIEW] AI segmentation",
+        "hint": "[NEEDS_REVIEW] Scroll through the volume (slider, heatmap or ▶ auto-play). The AI mask highlights IRF, SRF and PED in colour and toggles per scan.",
+        "segCardsHeader": "[NEEDS_REVIEW] Segmentation · this scan",
+        "empty": "[NEEDS_REVIEW] No OCT acquisition is linked to this visit."
+      },
+      "compare": {
+        "delta": "[NEEDS_REVIEW] Delta between visits",
+        "paneA": "[NEEDS_REVIEW] Visit A",
+        "paneB": "[NEEDS_REVIEW] Visit B",
+        "bcva": "[NEEDS_REVIEW] BCVA"
+      },
+      "decision": {
+        "header": "[NEEDS_REVIEW] Decision",
+        "treat": "[NEEDS_REVIEW] Treat",
+        "observe": "[NEEDS_REVIEW] Observe",
+        "interval": "[NEEDS_REVIEW] Interval (weeks)",
+        "confirm": "[NEEDS_REVIEW] Confirm decision",
+        "confirmed": "[NEEDS_REVIEW] Decision documented.",
+        "back": "[NEEDS_REVIEW] Back",
+        "aiSuggests": "[NEEDS_REVIEW] AI suggests: {rec}"
+      },
+      "trend": {
+        "aria": "[NEEDS_REVIEW] Trend of fluid volumes IRF, SRF and PED across the last visits."
+      },
+      "report": {
+        "letterhead": "[NEEDS_REVIEW] nAMD Fluid Monitoring · Report",
+        "subtitle": "[NEEDS_REVIEW] MedUni Vienna · Department of Ophthalmology and Optometry",
+        "print": "[NEEDS_REVIEW] Print",
+        "patient": "[NEEDS_REVIEW] Patient",
+        "patientId": "[NEEDS_REVIEW] ID",
+        "eye": "[NEEDS_REVIEW] Eye",
+        "diagnosis": "[NEEDS_REVIEW] Diagnosis",
+        "regimen": "[NEEDS_REVIEW] Regimen",
+        "current": "[NEEDS_REVIEW] Current status",
+        "trend": "[NEEDS_REVIEW] Trend",
+        "history": "[NEEDS_REVIEW] Treatment and findings history",
+        "signaturePhysician": "[NEEDS_REVIEW] Physician signature",
+        "signatureDate": "[NEEDS_REVIEW] Date"
+      }
+    }
+  }
+}
