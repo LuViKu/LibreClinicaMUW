@@ -89,6 +89,13 @@ const router = createRouter({
       component: () => import('@/views/SystemAuditLogView.vue'),
       meta: { title: 'System Audit Log', role: 'Administrator' as const },
     },
+    /* Phase E.8 Slice L5 (2026-06-20) — sysadmin Quartz job admin. */
+    {
+      path: '/admin/jobs',
+      name: 'admin-jobs',
+      component: () => import('@/views/AdminJobsView.vue'),
+      meta: { title: 'Scheduled jobs', role: 'Administrator' as const },
+    },
     /* Phase E.6 carry-over — Read-only CRF (Monitor's "View Within Record" path). */
     {
       path: '/event-crfs/:eventCrfOid/readonly',

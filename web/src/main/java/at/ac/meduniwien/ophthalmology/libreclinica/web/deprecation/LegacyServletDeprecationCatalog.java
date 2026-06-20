@@ -49,7 +49,9 @@ public class LegacyServletDeprecationCatalog {
         USER_ACCOUNTS,
         AUDIT_TRAIL,
         DISCREPANCY_NOTES,
-        SITES_GROUPS_RULES
+        SITES_GROUPS_RULES,
+        /** Phase E.8 Slice L5 (2026-06-20) — Quartz job admin. */
+        JOB_ADMIN
     }
 
     /**
@@ -195,6 +197,15 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/pages/TestRule", "/app/rules", Bucket.SITES_GROUPS_RULES);
         put(m, "/pages/ViewRuleSet", "/app/rules", Bucket.SITES_GROUPS_RULES);
         put(m, "/pages/ViewRuleAssignment", "/app/rules", Bucket.SITES_GROUPS_RULES);
+
+        // --- JOB_ADMIN — SPA `/admin/jobs` (Phase E.8 Slice L5) ---
+        // All four legacy job-admin entry points route to the same
+        // unified Quartz-trigger listing in the SPA.
+        put(m, "/pages/ViewAllJobs",   "/app/admin/jobs", Bucket.JOB_ADMIN);
+        put(m, "/pages/ViewJob",       "/app/admin/jobs", Bucket.JOB_ADMIN);
+        put(m, "/pages/ViewImportJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
+        put(m, "/pages/ViewSingleJob", "/app/admin/jobs", Bucket.JOB_ADMIN);
+        put(m, "/pages/PauseJob",      "/app/admin/jobs", Bucket.JOB_ADMIN);
 
         this.byPath = Map.copyOf(m);
     }
