@@ -2657,6 +2657,12 @@
     "biomarkerToggle": {
       "tooltip": "{name}-Schicht ein-/ausblenden"
     },
+    "compare": {
+      "header": "Vergleich zum vorherigen Besuch",
+      "daysAgo": "Vor {days} Tagen",
+      "loading": "Vergleich wird geladen…",
+      "errorPrefix": "Vergleich konnte nicht geladen werden:"
+    },
     "trends": {
       "title": "Biomarker-Verlauf",
       "chartHeader": "Verlauf",

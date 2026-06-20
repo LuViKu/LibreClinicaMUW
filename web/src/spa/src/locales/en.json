@@ -2657,6 +2657,12 @@
     "biomarkerToggle": {
       "tooltip": "Toggle {name} layer"
     },
+    "compare": {
+      "header": "Vs previous visit",
+      "daysAgo": "{days} days ago",
+      "loading": "Loading comparison…",
+      "errorPrefix": "Could not load comparison:"
+    },
     "trends": {
       "title": "[NEEDS_REVIEW] Biomarker trends",
       "chartHeader": "[NEEDS_REVIEW] Trend",

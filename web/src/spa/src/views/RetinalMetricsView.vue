@@ -28,6 +28,7 @@ import DenseTable from '@/components/DenseTable.vue'
 import FundusOverlay from '@/components/FundusOverlay.vue'
 import RetinalKpiTile from '@/components/RetinalKpiTile.vue'
 import RetinalArtifactList from '@/components/RetinalArtifactList.vue'
+import RetinalVisitComparison from '@/components/RetinalVisitComparison.vue'
 import JsonTree from '@/components/JsonTree.vue'
 import type { FundusOverlayTask } from '@/components/FundusOverlay.vue'
 
@@ -395,6 +396,15 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
         >
           {{ t('retinal.empty.noMetric') }}
         </div>
+
+        <!-- Slice 4 — visit-to-visit comparison panel. Self-hides
+             when there is no prior visit. Only meaningful for fluid
+             (the only task with multi-metric deltas the panel
+             knows how to render); other tasks fall through. -->
+        <RetinalVisitComparison
+          v-if="job.task === 'fluid' && job.status === 'done'"
+          :job-id="job.jobId"
+        />
 
         <!-- 3-column grid: KPIs / fundus / per-B-scan trace -->
         <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-5">
