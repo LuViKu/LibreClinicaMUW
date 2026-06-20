@@ -185,7 +185,7 @@ async function mountView(opts: { status: CrfEntryStatus; role?: string }) {
   return wrapper
 }
 
-describe.skip('CrfEntryView — completed-CRF read-only lock', () => {
+describe('CrfEntryView — completed-CRF read-only lock', () => {
   beforeEach(() => {
     apiGetMock.mockReset()
     apiPostMock.mockReset()

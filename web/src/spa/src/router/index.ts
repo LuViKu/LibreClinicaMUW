@@ -98,6 +98,25 @@ const router = createRouter({
       component: () => import('@/views/SystemAuditLogView.vue'),
       meta: { title: 'System Audit Log', role: 'Administrator' as const },
     },
+    /* Phase E.8 Slice L3 (2026-06-20) — sysadmin admin tooling. */
+    {
+      path: '/admin/system-status',
+      name: 'admin-system-status',
+      component: () => import('@/views/AdminSystemStatusView.vue'),
+      meta: { title: 'System Status', role: 'Administrator' as const },
+    },
+    {
+      path: '/admin/password-policy',
+      name: 'admin-password-policy',
+      component: () => import('@/views/AdminPasswordPolicyView.vue'),
+      meta: { title: 'Password Policy', role: 'Administrator' as const },
+    },
+    {
+      path: '/admin/config',
+      name: 'admin-config',
+      component: () => import('@/views/AdminConfigView.vue'),
+      meta: { title: 'App Configuration', role: 'Administrator' as const },
+    },
     /* Phase E.6 carry-over — Read-only CRF (Monitor's "View Within Record" path). */
     {
       path: '/event-crfs/:eventCrfOid/readonly',
@@ -144,16 +163,12 @@ const router = createRouter({
       path: '/crf-library',
       name: 'crf-library',
       component: () => import('@/views/CrfLibraryView.vue'),
-      // App-feedback Wave 2 (2026-06-19): the modal-style legacy wizard is
-      // mounted from inside CrfLibraryView; we leave it reachable via the
-      // legacy meta marker so a future menu can hide it once the canvas
-      // builder has stabilised.
-      meta: { title: 'CRF Library', role: ['Data Manager', 'Administrator'] as const, legacy: true },
+      meta: { title: 'CRF Library', role: ['Data Manager', 'Administrator'] as const },
     },
     /* App-feedback Wave 2 (2026-06-19) — full drag-and-drop CRF builder canvas.
-       Replaces the side-rail wizard for one release behind a feature flag;
-       the legacy wizard route stays mounted for fallback authoring while
-       the canvas stabilises. */
+       Now the sole CRF authoring surface; the legacy side-rail wizard
+       was removed in the D3 follow-up (2026-06-20) per its
+       "one-release-on-flag" promise. */
     {
       path: '/crf-authoring-canvas/:crfOid',
       name: 'crfAuthoringCanvas',
@@ -255,6 +270,13 @@ const router = createRouter({
       name: 'first-login',
       component: () => import('@/views/FirstLoginView.vue'),
       meta: { title: 'First-login profile', public: true },
+    },
+    /* Phase E.8 Slice L2 (2026-06-20) — SPA replacement for /pages/Contact. */
+    {
+      path: '/contact',
+      name: 'contact',
+      component: () => import('@/views/ContactView.vue'),
+      meta: { title: 'Contact', public: true },
     },
     /* Phase E.4 M1 — Study picker (post-login, when no study bound). */
     {

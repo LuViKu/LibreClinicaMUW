@@ -132,6 +132,9 @@ public class ItemDataDAO extends AuditableEntityDAO<ItemDataBean> {
         this.setTypeExpected(10, TypeNames.INT);// ordinal
         this.setTypeExpected(11, TypeNames.INT);// old_status_id
         this.setTypeExpected(12, TypeNames.BOOL);// ocform_deleted
+        // nAMD Slice 3 (#229, 2026-06-20) — item_data source tracking.
+        this.setTypeExpected(13, TypeNames.STRING); // source_kind
+        this.setTypeExpected(14, TypeNames.LONG);   // source_retinal_job_id (BIGINT)
     }
 
     @Override

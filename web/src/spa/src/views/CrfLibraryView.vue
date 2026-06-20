@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import SideRail from '@/components/SideRail.vue'
@@ -7,7 +8,6 @@ import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
-import CrfAuthoringWizard from '@/components/CrfAuthoringWizard.vue'
 
 import { useCrfLibraryStore } from '@/stores/crfLibrary'
 import { useAuthStore } from '@/stores/auth'
@@ -29,6 +29,7 @@ import type { Crf } from '@/types/crfLibrary'
  * backend re-checks (sysadmin / director / coordinator triad).
  */
 const { t } = useI18n()
+const router = useRouter()
 const lib = useCrfLibraryStore()
 const auth = useAuthStore()
 
@@ -137,18 +138,12 @@ async function submitUpload() {
   }
 }
 
-/* --------------------------- Author wizard ------------------------ */
-// Phase E.6 Milestone A — JSON-body wizard launched per-CRF from the
-// list. On close, reload the library so the freshly-authored version
-// appears under its parent CRF.
-interface AuthoringState { crfOid: string; crfName: string }
-const authoring = ref<AuthoringState | null>(null)
-function openAuthoring(crf: Crf) {
-  authoring.value = { crfOid: crf.oid, crfName: crf.name }
-}
-function closeAuthoring() {
-  authoring.value = null
-  refresh()
+/* --------------------------- Author canvas ------------------------ */
+// Routes the operator to the canvas builder (Wave 2 / PR #224). The
+// inline wizard overlay was retired in this release — the canvas view
+// is now the only authoring surface reachable from the library.
+function openAuthoring(crf: Crf): void {
+  router.push({ name: 'crfAuthoringCanvas', params: { crfOid: crf.oid } })
 }
 
 /* ----------------------------- Disable ---------------------------- */
@@ -430,14 +425,6 @@ const visibleRows = computed(() =>
         </div>
       </div>
     </main>
-
-    <CrfAuthoringWizard
-      v-if="authoring"
-      :open="true"
-      :crf-oid="authoring.crfOid"
-      :crf-name="authoring.crfName"
-      @close="closeAuthoring"
-    />
 
     <!-- Hard-remove blocker modal — renders the 409 VersionUsageReport
          when a hard-remove can't proceed. Migrate-dialog wiring lives

@@ -17,57 +17,101 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.util.Set;
 
 import javax.sql.DataSource;
 
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyEventBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Wave 1A (app-feedback, 2026-06-19) — MockMvc IT for the cancel-event
- * reason-validation contract.
+ * Wave 1A (app-feedback, 2026-06-19) — MockMvc unit test for the
+ * cancel-event reason-validation contract.
  *
- * <p>The DELETE handler short-circuits at the session-guard / role-guard
- * layer for the cases pinned here, so we can drive everything against
- * mocked DataSource collaborators without a Testcontainers Postgres.
- * The reason-lookup path is exercised against a JDBC mock so the 400
+ * <p>The DELETE handler walks two DAO lookups (study_event, study_subject)
+ * BEFORE it reaches the reason-code validation guard. We use
+ * {@link Mockito#mockConstruction(Class) Mockito.mockConstruction} to
+ * intercept the {@code new StudyEventDAO(ds)} / {@code new StudySubjectDAO(ds)}
+ * calls inside the controller and short-circuit {@code findByPK} so the
+ * request lands on the body-validation branch instead of a 404.
+ *
+ * <p>The reason-lookup path is exercised against a JDBC mock so the 400
  * for unknown codes lands at the right guard.
  *
  * <p>Coverage matrix:
  * <ul>
- *   <li>DELETE with missing body → 400 (helpful "reasonCode is required"
- *       message; SPA matches on the message prefix).</li>
- *   <li>DELETE with {@code OTHER} + blank text → 400 (after the JDBC
- *       lookup resolves is_other=true).</li>
+ *   <li>DELETE with missing body → 400 ("reasonCode is required").</li>
+ *   <li>DELETE with blank {@code reasonCode} → 400.</li>
  *   <li>DELETE with an unknown code → 400 ("Unknown cancel reasonCode").</li>
+ *   <li>DELETE with {@code OTHER} + blank text → 400.</li>
  *   <li>GET event-cancel-reasons anonymous → 401.</li>
- *   <li>GET event-cancel-reasons authenticated → 200 (one mocked row).</li>
+ *   <li>GET event-cancel-reasons authenticated → 200.</li>
  * </ul>
  *
  * <p>The 204 happy path needs a real StudyEventDAO + downstream cascade
- * walk so it stays on the manual smoke + integration harness for now;
- * the contract pinned here is enough to catch the SPA-facing wire
- * shape from drifting.
+ * walk so it stays on the manual smoke + integration harness; the
+ * contract pinned here is enough to catch the SPA-facing wire shape
+ * from drifting.
  */
-@org.junit.jupiter.api.Disabled("Wave 1A: IT lacks event_crf fixture seeding; controller hits 404 before reaching validation. Follow-up: seed event_crf in @BeforeEach.")
-class EventsApiControllerCancelReasonIT extends AbstractApiControllerTest {
+class EventsApiControllerCancelReasonTest extends AbstractApiControllerTest {
+
+    /** Active for every {@code cancel*} test — close in @AfterEach. */
+    private MockedConstruction<StudyEventDAO> seDaoMock;
+    /** Active for every {@code cancel*} test — close in @AfterEach. */
+    private MockedConstruction<StudySubjectDAO> ssDaoMock;
+
+    @BeforeEach
+    void interceptDaoLookups() {
+        StudyEventBean ev = Mockito.mock(StudyEventBean.class);
+        Mockito.when(ev.getId()).thenReturn(1);
+        Mockito.when(ev.getStudySubjectId()).thenReturn(1);
+        // Null status + null SubjectEventStatus = "not deleted, not signed,
+        // not locked" — the controller falls through to body validation.
+
+        StudySubjectBean ss = Mockito.mock(StudySubjectBean.class);
+        Mockito.when(ss.getId()).thenReturn(1);
+        Mockito.when(ss.getStudyId()).thenReturn(1);
+        // Null status = not LOCKED → SubjectLockGuard.refuseIfLocked returns
+        // null.
+
+        seDaoMock = Mockito.mockConstruction(StudyEventDAO.class,
+                (mock, ctx) -> Mockito.when(mock.findByPK(Mockito.anyInt())).thenReturn(ev));
+        ssDaoMock = Mockito.mockConstruction(StudySubjectDAO.class,
+                (mock, ctx) -> Mockito.when(mock.findByPK(Mockito.anyInt())).thenReturn(ss));
+    }
+
+    @AfterEach
+    void releaseDaoMocks() {
+        if (seDaoMock != null) {
+            seDaoMock.close();
+        }
+        if (ssDaoMock != null) {
+            ssDaoMock.close();
+        }
+    }
 
     /**
      * Build a MockMvc against a DataSource pre-wired with the JDBC mocks
-     * the cancel-reason lookups need. The supplier hands the test a
-     * fresh PreparedStatement on every getConnection() so {@link
-     * EventsApiController#loadCancelReasonIsOther} and the GET catalog
-     * scan don't share state across calls inside a single request.
+     * the cancel-reason lookups need. The SiteVisibilityFilter mock is
+     * stubbed to surface study id 1 so the visibility check passes for
+     * the mocked study_subject row.
      */
     private MockMvc mockMvcWithReason(boolean rowExists, boolean isOther) throws Exception {
         DataSource ds = Mockito.mock(DataSource.class);
 
-        // PreparedStatement returned for the is_other lookup query.
         Connection conn = Mockito.mock(Connection.class);
         Mockito.when(ds.getConnection()).thenReturn(conn);
 
@@ -87,9 +131,13 @@ class EventsApiControllerCancelReasonIT extends AbstractApiControllerTest {
         Mockito.when(rs.getString("label_en")).thenReturn("Patient did not attend");
         Mockito.when(rs.getInt("sort_order")).thenReturn(10);
 
-        return mockMvcFor(new EventsApiController(ds,
-                Mockito.mock(SiteVisibilityFilter.class),
-                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator.class)));
+        SiteVisibilityFilter visibility = Mockito.mock(SiteVisibilityFilter.class);
+        Mockito.when(visibility.visibleStudyIds(
+                        Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(Set.of(1));
+
+        return mockMvcFor(new EventsApiController(ds, visibility,
+                Mockito.mock(VisitIntervalCalculator.class)));
     }
 
     /* ---------------------------------------------------------------------- */
