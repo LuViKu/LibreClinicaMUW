@@ -12,6 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -214,6 +215,30 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
                         // dispatch path; the local-queue branch in this IT
                         // (remoteClient.isConfigured()=false) never reaches
                         // the dispatch, so null is safe.
+                        null))
+                .setControllerAdvice(new ApiExceptionHandler())
+                .build();
+    }
+
+    /**
+     * 2026-06-20 B2 — MockMvc variant whose {@link SiteVisibilityFilter}
+     * returns an empty visible-set, simulating an operator outside the
+     * event_crf's site. Used by the bulk-bind FORBIDDEN-per-row test
+     * to confirm the bulk endpoint surfaces per-row visibility refusals
+     * instead of failing the whole batch with 403.
+     */
+    private MockMvc buildMockMvcWithEmptyVisibility() {
+        RemoteRetinalInferenceClient remoteClient = Mockito.mock(RemoteRetinalInferenceClient.class);
+        Mockito.when(remoteClient.isConfigured()).thenReturn(false);
+        SiteVisibilityFilter emptyFilter = Mockito.mock(SiteVisibilityFilter.class);
+        Mockito.when(emptyFilter.visibleStudyIds(Mockito.any(), Mockito.any(), Mockito.any()))
+                .thenReturn(java.util.Set.of());
+        return MockMvcBuilders.standaloneSetup(
+                new RetinalResultsApiController(
+                        DATA_SOURCE, emptyFilter, artifactStore,
+                        new StudySubjectFinder(DATA_SOURCE),
+                        remoteClient,
+                        new RetinalJobStatusBroadcaster(),
                         null))
                 .setControllerAdvice(new ApiExceptionHandler())
                 .build();
@@ -455,6 +480,185 @@ class RetinalResultsApiControllerDatabaseIT extends AbstractApiControllerDatabas
         } finally {
             cleanupJobOnly(jobId);
         }
+    }
+
+    /* ====================================================================== */
+    /* POST /retinal-jobs/bulk-bind — B2 bulk park-bind                       */
+    /* ====================================================================== */
+
+    /**
+     * Happy path: every job in the batch is parked → every row comes
+     * back with status BOUND and the summary counts match.
+     */
+    @Test
+    void bulkBind_happyPath_allBound() throws Exception {
+        long jobA = seedParkedJob();
+        long jobB = seedParkedJob();
+        try {
+            String body = "{\"jobIds\":[" + jobA + "," + jobB + "],\"eventCrfId\":1}";
+            buildMockMvc().perform(post("/api/v1/retinal-jobs/bulk-bind")
+                    .session(authenticatedSession())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.results").isArray())
+                    .andExpect(jsonPath("$.results.length()").value(2))
+                    .andExpect(jsonPath(
+                            "$.results[?(@.jobId == " + jobA + ")].status")
+                            .value("BOUND"))
+                    .andExpect(jsonPath(
+                            "$.results[?(@.jobId == " + jobB + ")].status")
+                            .value("BOUND"))
+                    .andExpect(jsonPath("$.summary.bound").value(2))
+                    .andExpect(jsonPath("$.summary.alreadyBound").value(0))
+                    .andExpect(jsonPath("$.summary.forbidden").value(0))
+                    .andExpect(jsonPath("$.summary.invalidState").value(0));
+
+            // Verify both rows actually flipped.
+            try (Connection c = DATA_SOURCE.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "SELECT job_id, event_crf_id, status FROM retinal_inference_job "
+                                 + "WHERE job_id IN (?, ?) ORDER BY job_id")) {
+                ps.setLong(1, jobA);
+                ps.setLong(2, jobB);
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertEquals(1, rs.getInt("event_crf_id"));
+                    assertEquals("queued", rs.getString("status"));
+                    assertTrue(rs.next());
+                    assertEquals(1, rs.getInt("event_crf_id"));
+                    assertEquals("queued", rs.getString("status"));
+                }
+            }
+        } finally {
+            cleanupAuditAndJob(jobA, AuditTypeIds.RETINAL_PARK_BIND);
+            cleanupAuditAndJob(jobB, AuditTypeIds.RETINAL_PARK_BIND);
+        }
+    }
+
+    /**
+     * Mixed batch: one parked + one already-done job → the parked row
+     * is BOUND, the done row is ALREADY_BOUND. The whole batch still
+     * returns 200 + a populated summary so the SPA can render the
+     * "1 zugewiesen · 1 bereits gebunden" toast.
+     */
+    @Test
+    void bulkBind_mixedBoundAndAlreadyBound() throws Exception {
+        long jobParked = seedParkedJob();
+        // jobId 9001 is seeded as 'done' in @BeforeEach — non-parked
+        // jobs map to ALREADY_BOUND in the new bulk semantics.
+        try {
+            String body = "{\"jobIds\":[" + jobParked + ",9001],\"eventCrfId\":1}";
+            buildMockMvc().perform(post("/api/v1/retinal-jobs/bulk-bind")
+                    .session(authenticatedSession())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.results.length()").value(2))
+                    .andExpect(jsonPath(
+                            "$.results[?(@.jobId == " + jobParked + ")].status")
+                            .value("BOUND"))
+                    .andExpect(jsonPath("$.results[?(@.jobId == 9001)].status")
+                            .value("ALREADY_BOUND"))
+                    .andExpect(jsonPath("$.summary.bound").value(1))
+                    .andExpect(jsonPath("$.summary.alreadyBound").value(1));
+
+            // The parked row flipped to queued; the done row stayed put.
+            try (Connection c = DATA_SOURCE.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "SELECT status FROM retinal_inference_job WHERE job_id = ?")) {
+                ps.setLong(1, jobParked);
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertEquals("queued", rs.getString("status"));
+                }
+                ps.setLong(1, 9001L);
+                try (ResultSet rs = ps.executeQuery()) {
+                    assertTrue(rs.next());
+                    assertEquals("done", rs.getString("status"));
+                }
+            }
+        } finally {
+            cleanupAuditAndJob(jobParked, AuditTypeIds.RETINAL_PARK_BIND);
+        }
+    }
+
+    /**
+     * When the operator can't see the event_crf, the bulk endpoint
+     * surfaces per-row FORBIDDEN instead of failing the whole batch
+     * with 403. The single-bind endpoint still returns 403 (covered by
+     * its own contract) — bulk is lenient by design so the SPA can
+     * show the operator a summary toast instead of dropping the
+     * entire selection.
+     */
+    @Test
+    void bulkBind_allForbiddenStillReturns200WithPerRowReasons() throws Exception {
+        long jobA = seedParkedJob();
+        long jobB = seedParkedJob();
+        try {
+            // 2026-06-20 — root has SYSADMIN, so the bulk-bind
+            // visibility check on any event_crf passes. To exercise
+            // the per-row FORBIDDEN branch we mount a separate
+            // controller with a SiteVisibilityFilter override that
+            // returns an empty visible set, simulating an operator
+            // outside the event's site.
+            MockMvc mvc = buildMockMvcWithEmptyVisibility();
+            String body = "{\"jobIds\":[" + jobA + "," + jobB + "],\"eventCrfId\":1}";
+            mvc.perform(post("/api/v1/retinal-jobs/bulk-bind")
+                    .session(authenticatedSession())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.results.length()").value(2))
+                    .andExpect(jsonPath(
+                            "$.results[?(@.jobId == " + jobA + ")].status")
+                            .value("FORBIDDEN"))
+                    .andExpect(jsonPath(
+                            "$.results[?(@.jobId == " + jobB + ")].status")
+                            .value("FORBIDDEN"))
+                    .andExpect(jsonPath("$.summary.forbidden").value(2))
+                    .andExpect(jsonPath("$.summary.bound").value(0));
+
+            // No row should have flipped status.
+            try (Connection c = DATA_SOURCE.getConnection();
+                 PreparedStatement ps = c.prepareStatement(
+                         "SELECT status FROM retinal_inference_job WHERE job_id IN (?, ?)")) {
+                ps.setLong(1, jobA);
+                ps.setLong(2, jobB);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        assertEquals("parked", rs.getString("status"));
+                    }
+                }
+            }
+        } finally {
+            cleanupJobOnly(jobA);
+            cleanupJobOnly(jobB);
+        }
+    }
+
+    /** Empty jobIds → 400 validation error before reaching the per-job loop. */
+    @Test
+    void bulkBind_returns400OnEmptyJobIds() throws Exception {
+        buildMockMvc().perform(post("/api/v1/retinal-jobs/bulk-bind")
+                .session(authenticatedSession())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"jobIds\":[],\"eventCrfId\":1}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("jobIds")));
+    }
+
+    /** Missing eventCrfId → 400 before reaching the per-job loop. */
+    @Test
+    void bulkBind_returns400OnZeroEventCrfId() throws Exception {
+        buildMockMvc().perform(post("/api/v1/retinal-jobs/bulk-bind")
+                .session(authenticatedSession())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"jobIds\":[42],\"eventCrfId\":0}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                        org.hamcrest.Matchers.containsString("eventCrfId")));
     }
 
     /* ====================================================================== */

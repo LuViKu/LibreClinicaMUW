@@ -208,7 +208,7 @@ describe('CrfItemWidget — DATE / PDATE rendering', () => {
   })
 })
 
-describe.skip('CrfItemWidget — TRISTATE_REASON (Ja / Nein / Unbekannt)', () => {
+describe('CrfItemWidget — TRISTATE_REASON (Ja / Nein / Unbekannt)', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
   })
@@ -217,7 +217,7 @@ describe.skip('CrfItemWidget — TRISTATE_REASON (Ja / Nein / Unbekannt)', () =>
     // Heuristic-only path — no catalog entry needed. Item carries a
     // select-one wire shape with three options (the materialised pair
     // emitted by the Wave 2 builder).
-    const item = mkItem('OD_IOP_MEASURED_TRISTATE', 'IOP gemessen?', 'select-one', {
+    const item = mkItem('OD_SPECTRALIS_TRISTATE', 'IOP gemessen?', 'select-one', {
       options: [
         { code: 'ja', label: 'Ja' },
         { code: 'nein', label: 'Nein' },
@@ -235,7 +235,7 @@ describe.skip('CrfItemWidget — TRISTATE_REASON (Ja / Nein / Unbekannt)', () =>
   })
 
   it('emits the operator-authored option code on chip click', async () => {
-    const item = mkItem('OD_IOP_MEASURED_TRISTATE', 'IOP gemessen?', 'select-one', {
+    const item = mkItem('OD_SPECTRALIS_TRISTATE', 'IOP gemessen?', 'select-one', {
       options: [
         { code: 'ja', label: 'Ja' },
         { code: 'nein', label: 'Nein' },
@@ -253,7 +253,7 @@ describe.skip('CrfItemWidget — TRISTATE_REASON (Ja / Nein / Unbekannt)', () =>
   })
 
   it('does NOT reveal the reason textarea while parent is "Ja"', () => {
-    const item = mkItem('OD_IOP_MEASURED_TRISTATE', 'IOP gemessen?', 'select-one', {
+    const item = mkItem('OD_SPECTRALIS_TRISTATE', 'IOP gemessen?', 'select-one', {
       options: [
         { code: 'ja', label: 'Ja' },
         { code: 'nein', label: 'Nein' },
@@ -268,7 +268,7 @@ describe.skip('CrfItemWidget — TRISTATE_REASON (Ja / Nein / Unbekannt)', () =>
   })
 
   it('reveals the reason textarea (autofocus, NOT readonly/disabled) when parent flips to "Nein"', async () => {
-    const item = mkItem('OD_IOP_MEASURED_TRISTATE', 'IOP gemessen?', 'select-one', {
+    const item = mkItem('OD_SPECTRALIS_TRISTATE', 'IOP gemessen?', 'select-one', {
       options: [
         { code: 'ja', label: 'Ja' },
         { code: 'nein', label: 'Nein' },
@@ -292,7 +292,7 @@ describe.skip('CrfItemWidget — TRISTATE_REASON (Ja / Nein / Unbekannt)', () =>
   })
 
   it('emits update:tristate-reason when the operator types in the textarea', async () => {
-    const item = mkItem('OD_IOP_MEASURED_TRISTATE', 'IOP gemessen?', 'select-one', {
+    const item = mkItem('OD_SPECTRALIS_TRISTATE', 'IOP gemessen?', 'select-one', {
       options: [
         { code: 'ja', label: 'Ja' },
         { code: 'nein', label: 'Nein' },

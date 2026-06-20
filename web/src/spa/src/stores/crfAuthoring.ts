@@ -628,12 +628,12 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     /**
      * When set, REPLACE the section at this index (keeping the
      * existing {@code uid} + {@code ordinal}) instead of appending a
-     * new section. Used by the magic-label hotkey path
-     * (CrfAuthoringWizard.vue keydown handler): operators type
-     * {@code OPHTHA_EXAM} as a section label and press Shift+Enter,
-     * which opens the picker; on confirm the picker overwrites the
-     * trigger section in place so the operator doesn't end up with a
-     * leftover empty trigger row.
+     * new section. Used by the magic-label hotkey path on the canvas
+     * surface: operators type {@code OPHTHA_EXAM} as a section label
+     * and press Shift+Enter, which opens the picker; on confirm the
+     * picker overwrites the trigger section in place so the operator
+     * doesn't end up with a leftover empty trigger row. (Originated
+     * in the now-removed legacy CrfAuthoringWizard keydown handler.)
      */
     replaceAtIndex?: number
   }): void {
