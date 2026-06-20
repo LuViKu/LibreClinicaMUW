@@ -10,7 +10,6 @@ import { onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import FieldLabel from '@/components/FieldLabel.vue'
-import TextInput from '@/components/TextInput.vue'
 
 import { apiGet, apiPut, ApiError } from '@/api/client'
 
@@ -103,17 +102,23 @@ onMounted(load)
       <div class="grid grid-cols-3 gap-3">
         <div>
           <FieldLabel for="minLength" required>{{ t('adminPasswordPolicy.minLength') }}</FieldLabel>
-          <TextInput id="minLength" v-model.number="data.minLength" type="number" :aria-invalid="!!fieldErrors.minLength" />
+          <input id="minLength" v-model.number="data.minLength" type="number" min="1" max="256"
+                 class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm muw-focus"
+                 :aria-invalid="!!fieldErrors.minLength" />
           <p v-if="fieldErrors.minLength" class="mt-1 text-[11px] text-rose-700">{{ fieldErrors.minLength }}</p>
         </div>
         <div>
           <FieldLabel for="maxLength" required>{{ t('adminPasswordPolicy.maxLength') }}</FieldLabel>
-          <TextInput id="maxLength" v-model.number="data.maxLength" type="number" :aria-invalid="!!fieldErrors.maxLength" />
+          <input id="maxLength" v-model.number="data.maxLength" type="number" min="1" max="256"
+                 class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm muw-focus"
+                 :aria-invalid="!!fieldErrors.maxLength" />
           <p v-if="fieldErrors.maxLength" class="mt-1 text-[11px] text-rose-700">{{ fieldErrors.maxLength }}</p>
         </div>
         <div>
           <FieldLabel for="expirationDays" required>{{ t('adminPasswordPolicy.expirationDays') }}</FieldLabel>
-          <TextInput id="expirationDays" v-model.number="data.expirationDays" type="number" :aria-invalid="!!fieldErrors.expirationDays" />
+          <input id="expirationDays" v-model.number="data.expirationDays" type="number" min="0" max="3650"
+                 class="block w-full rounded-md border border-slate-300 px-3 py-2 text-sm shadow-sm muw-focus"
+                 :aria-invalid="!!fieldErrors.expirationDays" />
           <p v-if="fieldErrors.expirationDays" class="mt-1 text-[11px] text-rose-700">{{ fieldErrors.expirationDays }}</p>
           <p class="mt-1 text-[10px] text-slate-400">{{ t('adminPasswordPolicy.zeroDaysNote') }}</p>
         </div>
