@@ -58,7 +58,7 @@ function optionLabel(itemOid: string, values: Record<string, unknown>): string {
         // select-multi may carry a comma string or an array.
         const keys: string[] = Array.isArray(v) ? v.map(String) : String(v).split(',')
         const labels = keys.map((k) => {
-          const o = item.options!.find((opt) => String(opt.value) === k.trim())
+          const o = item.options!.find((opt) => String(opt.code) === k.trim())
           return o ? o.label : k.trim()
         })
         return labels.join(', ')
@@ -100,7 +100,7 @@ onMounted(async () => {
     <header class="screen-only flex items-baseline justify-between px-6 py-3 border-b border-slate-200">
       <div class="text-sm">
         <span class="font-medium">{{ t('printableCrf.title') }}</span>
-        <span v-if="store.entry" class="text-slate-500 ml-2">{{ store.entry.schema.title }}</span>
+        <span v-if="store.entry" class="text-slate-500 ml-2">{{ store.entry.schema.name }}</span>
       </div>
       <div class="flex items-center gap-2">
         <button type="button" class="px-3 py-1.5 text-xs border border-slate-300 rounded bg-white hover:bg-slate-50 muw-focus" @click="printNow">
@@ -113,8 +113,7 @@ onMounted(async () => {
     </header>
 
     <main v-if="ready && store.entry" class="px-6 py-6 max-w-3xl mx-auto text-sm">
-      <h1 class="text-base font-semibold mb-1">{{ store.entry.schema.title }}</h1>
-      <p v-if="store.entry.schema.description" class="text-xs text-slate-600 mb-4">{{ store.entry.schema.description }}</p>
+      <h1 class="text-base font-semibold mb-1">{{ store.entry.schema.name }}<span v-if="store.entry.schema.version" class="text-slate-400 font-normal text-xs ml-2">{{ store.entry.schema.version }}</span></h1>
 
       <div class="text-[11px] text-slate-500 mb-6 grid grid-cols-3 gap-2">
         <div><dt class="inline text-slate-400">{{ t('printableCrf.eventCrfId') }}:</dt> <dd class="inline ml-1">{{ store.entry.eventCrfOid }}</dd></div>
@@ -123,7 +122,7 @@ onMounted(async () => {
       </div>
 
       <section v-for="section in store.entry.schema.sections" :key="section.oid" class="mb-6 break-inside-avoid">
-        <h2 class="text-sm font-semibold border-b border-slate-300 pb-1 mb-2">{{ section.label }}</h2>
+        <h2 class="text-sm font-semibold border-b border-slate-300 pb-1 mb-2">{{ section.title }}</h2>
         <p v-if="section.instructions" class="text-[11px] text-slate-500 mb-2">{{ section.instructions }}</p>
 
         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-[12px]">
