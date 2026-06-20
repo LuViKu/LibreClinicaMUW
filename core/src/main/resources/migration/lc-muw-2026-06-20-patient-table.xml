@@ -1,0 +1,194 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        C4 (2026-06-20): cross-study patient identity — hard table.
+
+        Wave 1B (2026-06-19) introduced `study_subject.patient_uuid`
+        VARCHAR(36) as a soft cross-study link: two rows shared a UUID to
+        represent "same human across studies". That worked for the
+        cross-study overview list but had no referential integrity, no
+        place to attach patient-level data (demographics, notes, consents),
+        and let stray edits to `patient_uuid` silently un-anchor a thread.
+
+        This changeset introduces a real `patient` table:
+
+          patient(patient_id BIGSERIAL PK,
+                  patient_uuid VARCHAR(36) UNIQUE NOT NULL,
+                  created_at  TIMESTAMP DEFAULT NOW() NOT NULL,
+                  created_by  INT NOT NULL)
+
+        and a NOT NULL FK `study_subject.patient_id -> patient.patient_id`.
+
+        Backfill strategy (all in this changeset):
+
+          1. INSERT one `patient` row per DISTINCT non-null
+             study_subject.patient_uuid → preserves existing cross-study
+             links.
+
+          2. For every study_subject with NULL patient_uuid, mint a fresh
+             gen_random_uuid() (Postgres 13+ ships pgcrypto out-of-tree
+             in 13+; available as a built-in in 14+ via random-UUID).
+             Insert one patient row per such study_subject; UPDATE the
+             study_subject's patient_uuid to match. After this step no
+             study_subject row has NULL patient_uuid.
+
+          3. Backfill study_subject.patient_id = patient.patient_id by
+             matching on patient_uuid, then ALTER patient_id to NOT NULL.
+
+          4. Add the FK constraint with ON DELETE RESTRICT — refuse to
+             delete a `patient` while any study_subject still references
+             it; the operator must first transfer or remove enrollments.
+
+        DELIBERATE NON-CHANGE: `study_subject.patient_uuid` stays for one
+        release as a soft-deprecated mirror so external SQL queries
+        (reports, manual joins, the Wave 1B link-patient SELECT path)
+        keep working. A follow-up migration drops the column after the
+        codebase has stopped reading it directly.
+
+        created_by audit anchor: 0 for the backfill rows. The link-patient
+        endpoint and any future patient-CRUD code will fill the actual
+        user_account.user_id of the operator.
+    -->
+
+    <changeSet id="2026-06-20-patient-table"
+               author="muw-ophthalmology"
+               dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <not>
+                <tableExists tableName="patient"/>
+            </not>
+        </preConditions>
+        <comment>
+            Hard patient table anchoring cross-study identity. Adds an FK
+            study_subject.patient_id -> patient.patient_id. The legacy
+            patient_uuid column stays for one release as a soft-deprecated
+            mirror — drop in a follow-up after callers stop reading it.
+        </comment>
+
+        <createTable tableName="patient">
+            <column autoIncrement="true" name="patient_id" type="BIGSERIAL">
+                <constraints nullable="false" primaryKey="true"/>
+            </column>
+            <column name="patient_uuid" type="VARCHAR(36)"
+                    remarks="Cross-study identity natural key — UNIQUE; backfilled from study_subject.patient_uuid or freshly minted via gen_random_uuid() during the C4 migration.">
+                <constraints nullable="false" unique="true"
+                             uniqueConstraintName="uq_patient_patient_uuid"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP"
+                    defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by" type="INT"
+                    remarks="user_account.user_id of the operator who created the patient row. 0 for backfill rows.">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <!--
+            Explicit index in addition to the UNIQUE constraint above —
+            Postgres does create an implicit index for UNIQUE, but the
+            other lc-muw migrations declare lookup indexes explicitly so
+            the intent is greppable.
+        -->
+        <createIndex tableName="patient"
+                     indexName="idx_patient_patient_uuid">
+            <column name="patient_uuid"/>
+        </createIndex>
+
+        <!-- Step 1: backfill patient rows from existing distinct UUIDs. -->
+        <sql>
+            INSERT INTO patient(patient_uuid, created_by)
+            SELECT DISTINCT patient_uuid, 0
+              FROM study_subject
+             WHERE patient_uuid IS NOT NULL;
+        </sql>
+
+        <!--
+            Step 2: mint a fresh UUID per study_subject row with NULL
+            patient_uuid. Use a PL/pgSQL DO block so we can loop and
+            mint+propagate atomically per row — the cleaner CTE approach
+            (INSERT … RETURNING + UPDATE) can't be expressed in one
+            statement because the freshly-minted UUID has no back-link to
+            the originating study_subject_id.
+
+            gen_random_uuid() ships with pgcrypto on 13.x and as a
+            built-in on 14+ — CREATE EXTENSION IF NOT EXISTS is a no-op
+            on 14+ and loads the extension on 13.x.
+        -->
+        <sql>
+            CREATE EXTENSION IF NOT EXISTS pgcrypto;
+        </sql>
+        <sql splitStatements="false"><![CDATA[
+            DO $$
+            DECLARE
+                ss_row RECORD;
+                fresh_uuid TEXT;
+            BEGIN
+                FOR ss_row IN
+                    SELECT study_subject_id
+                      FROM study_subject
+                     WHERE patient_uuid IS NULL
+                     ORDER BY study_subject_id
+                LOOP
+                    fresh_uuid := gen_random_uuid()::text;
+                    INSERT INTO patient(patient_uuid, created_by)
+                         VALUES (fresh_uuid, 0);
+                    UPDATE study_subject
+                       SET patient_uuid = fresh_uuid
+                     WHERE study_subject_id = ss_row.study_subject_id;
+                END LOOP;
+            END
+            $$;
+        ]]></sql>
+
+        <!-- Step 3a: add the FK column (nullable while we backfill). -->
+        <addColumn tableName="study_subject">
+            <column name="patient_id" type="BIGINT"
+                    remarks="C4: FK to patient.patient_id. NOT NULL after backfill in the same changeset."/>
+        </addColumn>
+
+        <!-- Step 3b: backfill patient_id from patient_uuid. -->
+        <sql>
+            UPDATE study_subject ss
+               SET patient_id = p.patient_id
+              FROM patient p
+             WHERE p.patient_uuid = ss.patient_uuid;
+        </sql>
+
+        <!-- Step 3c: enforce NOT NULL now that the backfill is done. -->
+        <addNotNullConstraint tableName="study_subject"
+                              columnName="patient_id"
+                              columnDataType="BIGINT"/>
+
+        <!-- Step 4: FK + index. -->
+        <addForeignKeyConstraint baseTableName="study_subject"
+                                 baseColumnNames="patient_id"
+                                 constraintName="fk_study_subject_patient"
+                                 referencedTableName="patient"
+                                 referencedColumnNames="patient_id"
+                                 onDelete="RESTRICT"
+                                 onUpdate="RESTRICT"/>
+
+        <createIndex tableName="study_subject"
+                     indexName="idx_study_subject_patient_id">
+            <column name="patient_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="study_subject"
+                       indexName="idx_study_subject_patient_id"/>
+            <dropForeignKeyConstraint baseTableName="study_subject"
+                                      constraintName="fk_study_subject_patient"/>
+            <dropColumn tableName="study_subject" columnName="patient_id"/>
+            <dropIndex tableName="patient"
+                       indexName="idx_patient_patient_uuid"/>
+            <dropTable tableName="patient"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

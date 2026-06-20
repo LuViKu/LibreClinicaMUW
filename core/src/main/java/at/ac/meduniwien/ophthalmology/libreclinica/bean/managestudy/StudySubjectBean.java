@@ -93,6 +93,19 @@ public class StudySubjectBean extends AuditableEntityBean {
      */
     private Date screeningDate;
 
+    /**
+     * C4 (2026-06-20) — hard FK to the {@code patient} table.
+     *
+     * <p>Every {@code study_subject} row carries a non-NULL
+     * {@code patient_id} after the C4 migration; the legacy
+     * {@code patient_uuid} column mirrors {@code patient.patient_uuid}
+     * for one deprecation release. Zero means "not yet hydrated on this
+     * bean" — the create-StudySubject paths still rely on the legacy
+     * INSERT and have the {@code patient_id} backfilled by the
+     * link-patient flow or a future fresh-patient-mint hook.
+     */
+    private int patientId;
+
 	public StudySubjectBean() {
         studyGroupMaps = new ArrayList<>();
     }
@@ -341,6 +354,21 @@ public class StudySubjectBean extends AuditableEntityBean {
      */
     public void setScreeningDate(Date screeningDate) {
         this.screeningDate = screeningDate;
+    }
+
+    /**
+     * @return the {@code patient.patient_id} this study_subject points
+     *         at, or zero when the bean is not yet hydrated from a row.
+     */
+    public int getPatientId() {
+        return patientId;
+    }
+
+    /**
+     * @param patientId the {@code patient.patient_id} FK.
+     */
+    public void setPatientId(int patientId) {
+        this.patientId = patientId;
     }
 
 }

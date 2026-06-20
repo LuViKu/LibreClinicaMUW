@@ -85,6 +85,14 @@
   <bean id="resolutionStatusDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.ResolutionStatusDao" parent="abstractDomainDao" autowire="byName" />
   <bean id="studyUserRoleDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.StudyUserRoleDao" parent="abstractDomainDao" autowire="byName" />
   <bean id="subjectDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.SubjectDao" parent="abstractDomainDao" autowire="byName" />
+
+  <!--
+      C4 (2026-06-20): hard patient table backing cross-study identity.
+      The link-patient endpoint resolves a patient_uuid via PatientDao
+      and writes a freshly-minted Patient row when neither study_subject
+      carried a uuid yet.
+  -->
+  <bean id="patientDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.hibernate.PatientDao" parent="abstractDomainDao" autowire="byName" />
   
   <bean id="viewNotesDao" class="at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.ViewNotesDaoImpl">
     <property name="dataSource" ref="dataSource"/>
