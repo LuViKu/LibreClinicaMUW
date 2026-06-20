@@ -1,0 +1,455 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        nAMD treat-and-extend Slice 2 (2026-06-20) — per-visit decision CRF.
+
+        Seeds a reusable "NAMD_VISIT" CRF (v1.0) covering the four
+        sections the physician captures at every treat-and-extend
+        visit. Visual acuity + IOP are NOT duplicated here — those
+        live in the modality-baselines subsystem from PR #159 and
+        auto-populate the per-eye summary panel on `SubjectDetailView`.
+        This CRF focuses on the decision the physician records that
+        drives the study endpoint:
+
+          1. Treatment given today (eye + anti-VEGF type + dose)
+          2. Fluid assessment (physician's read of fluid presence,
+             independent of the AI quantification)
+          3. Decision basis + next visit interval (drives Slice 1's
+             auto-scheduler via the `scheduled_interval_days` write)
+          4. Safety (adverse event grading)
+
+        ID allocation assuming the existing demo seed
+        (`lc-muw-2026-06-01-seed-demo-data.xml`) + the OPHTH_VISIT
+        seed are the only prior CRF contributors:
+
+          - crf_id = 3                  (demo=1, ophth_visit=2)
+          - crf_version_id = 21         (highest existing = 20)
+          - section_id = 7..10          (1..6 taken)
+          - response_set_id = 8..15     (1..7 taken)
+          - item_id = 44..51            (1..43 taken)
+          - item_form_metadata_id = 21..28
+
+        Item naming convention: `NAMD_<DOMAIN>_<SUBFIELD>` to
+        pattern-match per-visit columns in SAS exports.
+
+        Per-eye items use OD / OS suffixes per the laterality
+        convention from memory `reference_ophth_laterality` (OD on
+        the LEFT in clinician-facing layouts — the SPA renders this
+        for the operator; data captured by item is laterality-coded
+        not by column).
+
+        Context: `demo` — matches the OPHTH_VISIT seed. Production
+        institutional deployments opt in by removing the context
+        filter via a follow-up migration.
+
+        See `plans/polished-jumping-swan.md` for the broader nAMD
+        build plan; Slice 1 (PR #226) shipped the scheduling layer
+        this CRF feeds via its `NAMD_NEXT_INTERVAL_WEEKS` item.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-20-namd-visit-crf-metadata" context="demo">
+        <comment>NAMD_VISIT CRF v1.0 — 1 crf + 1 crf_version + 4 sections + 8 items + 7 response_sets + 8 item_form_metadata.</comment>
+
+        <!-- ============================================================
+             CRF + version
+             ============================================================ -->
+        <insert tableName="crf">
+            <column name="crf_id" valueNumeric="3"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="name" value="nAMD Treat-and-Extend Visit"/>
+            <column name="description" value="Per-visit physician decision for neovascular AMD treat-and-extend protocols: treatment given, fluid assessment, AI-quantification use, next-visit interval, and safety. The IRF/SRF/PED metrics are surfaced separately via the retinal-inference viewer and (optionally) auto-populated into the linked CRF items. Visual acuity + IOP are captured outside this CRF via the modality-baselines subsystem."/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="F_NAMD_VISIT"/>
+        </insert>
+        <insert tableName="crf_version">
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="crf_id" valueNumeric="3"/>
+            <column name="name" value="v1.0"/>
+            <column name="description" value="Initial nAMD Treat-and-Extend Visit version — MUW Department of Ophthalmology &amp; Optometry."/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="oc_oid" value="F_NAMD_VISIT_V1"/>
+        </insert>
+
+        <!-- ============================================================
+             Sections (4)
+             ============================================================ -->
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="7"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_NAMD_TREATMENT"/>
+            <column name="title" value="Treatment given today"/>
+            <column name="instructions" value="Record which eye was treated, the anti-VEGF agent, and the dose. Leave blank if no injection was given (e.g. observation-only visit)."/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="8"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_NAMD_FLUID"/>
+            <column name="title" value="Fluid assessment"/>
+            <column name="instructions" value="Physician's read of fluid presence on the current OCT. Record INDEPENDENTLY of the AI quantification — the study endpoint compares physician-read vs AI-quantified findings per arm."/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="9"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_NAMD_DECISION"/>
+            <column name="title" value="Treat-and-extend decision"/>
+            <column name="instructions" value="Record the decision basis + the next-visit interval. The interval (in weeks) drives the platform's auto-scheduler — entering a value here creates / proposes the next scheduled study event for this subject."/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="10"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_NAMD_SAFETY"/>
+            <column name="title" value="Adverse event"/>
+            <column name="instructions" value="Record any adverse event observed at this visit. Use the standard CTCAE grading; expand in the rationale field if relevant."/>
+            <column name="ordinal" valueNumeric="4"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+
+        <!-- ============================================================
+             Response sets (7 new + the existing rs_id=7 freetext reuse)
+             ============================================================ -->
+
+        <!-- rs_id=8 Treated eye — radio (OD/OS/OU/none).
+             OD/OS use the clinician-facing layout where applicable
+             but the data value carries the laterality code so
+             exports stay unambiguous. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="8"/>
+            <column name="response_type_id" valueNumeric="5"/> <!-- radio -->
+            <column name="label" value="namd_treated_eye"/>
+            <column name="options_text" value="Right (OD),Left (OS),Both (OU),None (observation only)"/>
+            <column name="options_values" value="OD,OS,OU,NONE"/>
+            <column name="version_id" valueNumeric="21"/>
+        </insert>
+
+        <!-- rs_id=9 Anti-VEGF agent — radio. Listed in MUW-standard
+             order; "Other" lets the physician capture a non-listed
+             biosimilar without blocking the workflow. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="9"/>
+            <column name="response_type_id" valueNumeric="5"/> <!-- radio -->
+            <column name="label" value="namd_antivegf_agent"/>
+            <column name="options_text" value="Ranibizumab (Lucentis),Aflibercept (Eylea),Brolucizumab (Beovu),Faricimab (Vabysmo),Bevacizumab (Avastin, off-label),Other"/>
+            <column name="options_values" value="RANIBIZUMAB,AFLIBERCEPT,BROLUCIZUMAB,FARICIMAB,BEVACIZUMAB,OTHER"/>
+            <column name="version_id" valueNumeric="21"/>
+        </insert>
+
+        <!-- rs_id=10 Fluid type read by physician — single-select.
+             "Mixed" captures IRF + SRF or other combinations in a
+             single bucket; granular per-marker breakdown lives in
+             the AI quantification (auto-populated separately in
+             Slice 3). -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="10"/>
+            <column name="response_type_id" valueNumeric="6"/> <!-- single-select -->
+            <column name="label" value="namd_fluid_type"/>
+            <column name="options_text" value="No fluid,IRF only,SRF only,PED only,Mixed (multiple compartments),Indeterminate"/>
+            <column name="options_values" value="NONE,IRF,SRF,PED,MIXED,INDETERMINATE"/>
+            <column name="version_id" valueNumeric="21"/>
+        </insert>
+
+        <!-- rs_id=11 AI quantification basis — radio. Core study
+             endpoint: physicians in Arm A see AI metrics, Arm B
+             don't. This item records what actually happened in the
+             decision — the SPA arm-gate (Slice 6) is the enforcement
+             mechanism, this captures the *post-hoc* truth. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="11"/>
+            <column name="response_type_id" valueNumeric="5"/> <!-- radio -->
+            <column name="label" value="namd_ai_basis"/>
+            <column name="options_text" value="AI quantification confirmed my read,AI quantification disagreed with my read,AI quantification was not shown at this visit (Arm B),AI quantification was shown but not used"/>
+            <column name="options_values" value="AI_CONFIRMED,AI_DISAGREED,AI_BLINDED,AI_IGNORED"/>
+            <column name="version_id" valueNumeric="21"/>
+        </insert>
+
+        <!-- rs_id=12 Adverse event grade — radio per CTCAE. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="12"/>
+            <column name="response_type_id" valueNumeric="5"/> <!-- radio -->
+            <column name="label" value="namd_ae_grade"/>
+            <column name="options_text" value="None,Grade 1 (mild),Grade 2 (moderate),Grade 3 (severe),Grade 4 (life-threatening),Grade 5 (death)"/>
+            <column name="options_values" value="NONE,G1,G2,G3,G4,G5"/>
+            <column name="version_id" valueNumeric="21"/>
+        </insert>
+
+        <!-- rs_id=13 Dose unit dropdown — documents the unit so
+             downstream exports never need to infer it. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="13"/>
+            <column name="response_type_id" valueNumeric="6"/> <!-- single-select -->
+            <column name="label" value="namd_dose_unit"/>
+            <column name="options_text" value="mg"/>
+            <column name="options_values" value="mg"/>
+            <column name="version_id" valueNumeric="21"/>
+        </insert>
+
+        <!-- rs_id=14 Free-text reuse — duplicate of rs_id=7 but
+             versioned under crf_version=21 so the form-rendering
+             layer's per-version response-set lookup hits a real
+             row. The data type semantics are the same. -->
+        <insert tableName="response_set">
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="response_type_id" valueNumeric="1"/> <!-- text -->
+            <column name="label" value="freetext_namd"/>
+            <column name="options_text" value=""/>
+            <column name="options_values" value=""/>
+            <column name="version_id" valueNumeric="21"/>
+        </insert>
+
+        <!-- ============================================================
+             Items (8)
+             ============================================================ -->
+
+        <!-- Section 1: Treatment (item_id 44..46) -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="44"/>
+            <column name="name" value="NAMD_TREATED_EYE"/>
+            <column name="description" value="Which eye received treatment at this visit. NONE = observation-only visit (no injection)."/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_TREATED_EYE"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="45"/>
+            <column name="name" value="NAMD_ANTIVEGF_AGENT"/>
+            <column name="description" value="Anti-VEGF agent injected (single code per visit; document a multi-injection visit by repeating the event)."/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_ANTIVEGF_AGENT"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="46"/>
+            <column name="name" value="NAMD_ANTIVEGF_DOSE_MG"/>
+            <column name="description" value="Anti-VEGF dose, mg. Captured as a decimal so off-label / low-dose protocols can record fractional values."/>
+            <column name="units" value="mg"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_ANTIVEGF_DOSE_MG"/>
+        </insert>
+
+        <!-- Section 2: Fluid assessment (item_id 47) -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="47"/>
+            <column name="name" value="NAMD_FLUID_TYPE"/>
+            <column name="description" value="Fluid type read by the physician on the current OCT — captured INDEPENDENTLY of the AI quantification. Compared against the AI fluid_volume metrics at analysis time."/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_FLUID_TYPE"/>
+        </insert>
+
+        <!-- Section 3: Decision (item_id 48..50) -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="48"/>
+            <column name="name" value="NAMD_AI_BASIS"/>
+            <column name="description" value="What role the AI fluid quantification played in today's treat-and-extend decision. AI_BLINDED means Arm B (physician didn't see AI metrics by protocol)."/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_AI_BASIS"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="49"/>
+            <column name="name" value="NAMD_NEXT_INTERVAL_WEEKS"/>
+            <column name="description" value="Interval to the next visit, in weeks. Drives the auto-scheduler (Slice 1) — submitting this CRF with a value here proposes the next study_event date as today + interval × 7 days. Range 1..16 per typical T-and-E protocols; 0 = same-day re-evaluation, &gt;16 = atypical extension."/>
+            <column name="units" value="weeks"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="6"/> <!-- INT -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_NEXT_INTERVAL_WEEKS"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="50"/>
+            <column name="name" value="NAMD_RATIONALE"/>
+            <column name="description" value="Free-text rationale for the chosen interval and treatment. Optional; useful for atypical extensions or AI/physician disagreements at analysis time."/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_RATIONALE"/>
+        </insert>
+
+        <!-- Section 4: Safety (item_id 51) -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="51"/>
+            <column name="name" value="NAMD_AE_GRADE"/>
+            <column name="description" value="Worst adverse event grade observed at this visit per CTCAE. Use the rationale field to add detail (event description, time of onset)."/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="5"/> <!-- ST -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_AE_GRADE"/>
+        </insert>
+
+        <!-- ============================================================
+             item_form_metadata — render-time wiring for each item.
+             ============================================================ -->
+
+        <!-- Section 1 Treatment -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="21"/>
+            <column name="item_id" valueNumeric="44"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="7"/>
+            <column name="response_set_id" valueNumeric="8"/> <!-- treated_eye -->
+            <column name="left_item_text" value="Treated eye"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="22"/>
+            <column name="item_id" valueNumeric="45"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="7"/>
+            <column name="response_set_id" valueNumeric="9"/> <!-- antivegf_agent -->
+            <column name="left_item_text" value="Anti-VEGF agent"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="23"/>
+            <column name="item_id" valueNumeric="46"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="7"/>
+            <column name="response_set_id" valueNumeric="14"/> <!-- freetext_namd -->
+            <column name="left_item_text" value="Dose"/>
+            <column name="right_item_text" value="mg"/>
+            <column name="width_decimal" value="(4,2)"/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+
+        <!-- Section 2 Fluid -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="24"/>
+            <column name="item_id" valueNumeric="47"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="8"/>
+            <column name="response_set_id" valueNumeric="10"/> <!-- fluid_type -->
+            <column name="left_item_text" value="Fluid type (physician's read)"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+
+        <!-- Section 3 Decision -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="25"/>
+            <column name="item_id" valueNumeric="48"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="11"/> <!-- ai_basis -->
+            <column name="left_item_text" value="AI quantification basis"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="26"/>
+            <column name="item_id" valueNumeric="49"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="14"/> <!-- freetext (typed via INT) -->
+            <column name="left_item_text" value="Next visit interval"/>
+            <column name="right_item_text" value="weeks (1-16)"/>
+            <column name="regexp" value="^(1[0-6]|[0-9])$"/>
+            <column name="regexp_error_msg" value="Interval must be an integer 0-16 weeks."/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="27"/>
+            <column name="item_id" valueNumeric="50"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="9"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Rationale (optional)"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+
+        <!-- Section 4 Safety -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="28"/>
+            <column name="item_id" valueNumeric="51"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="10"/>
+            <column name="response_set_id" valueNumeric="12"/> <!-- ae_grade -->
+            <column name="left_item_text" value="Adverse event grade (CTCAE)"/>
+            <column name="right_item_text" value=""/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="true"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="item_form_metadata">
+                <where>item_form_metadata_id BETWEEN 21 AND 28</where>
+            </delete>
+            <delete tableName="item">
+                <where>item_id BETWEEN 44 AND 51</where>
+            </delete>
+            <delete tableName="response_set">
+                <where>response_set_id BETWEEN 8 AND 14 AND version_id = 21</where>
+            </delete>
+            <delete tableName="section">
+                <where>section_id BETWEEN 7 AND 10</where>
+            </delete>
+            <delete tableName="crf_version">
+                <where>crf_version_id = 21</where>
+            </delete>
+            <delete tableName="crf">
+                <where>crf_id = 3</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
