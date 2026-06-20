@@ -262,6 +262,31 @@ export async function getJob(jobId: number): Promise<RetinalJobDetail> {
   }
 }
 
+/**
+ * nAMD treat-and-extend Slice 4 (2026-06-20) — response shape of
+ * `GET /retinal-jobs/{jobId}/compare-previous`. The endpoint
+ * returns the current job's per-key metrics + the previous done
+ * job's metrics for the same (subject, task, eye_laterality) +
+ * per-key deltas (current minus previous) + the number of days
+ * between visits. {@code previousJobId} is null when no prior
+ * visit exists; the SPA renders that case as "First visit, no
+ * comparison available."
+ */
+export interface RetinalJobCompare {
+  currentJobId: number
+  currentCompletedAt: string | null
+  currentMetrics: Record<string, number | string | null>
+  previousJobId: number | null
+  previousCompletedAt: string | null
+  previousMetrics: Record<string, number | string | null>
+  daysBetween: number | null
+  deltas: Record<string, number>
+}
+
+export async function comparePrevious(jobId: number): Promise<RetinalJobCompare> {
+  return apiGet<RetinalJobCompare>(`${BASE}/${jobId}/compare-previous`)
+}
+
 /** Prepend the Tomcat context path (matches {@code api/client.ts}'s
  *  internal CONTEXT_PATH) to a server-supplied URL, idempotently. */
 function prefixCtx(url: string | null): string | null {

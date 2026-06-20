@@ -1424,4 +1424,150 @@ public class RetinalResultsApiController {
         if (lower.endsWith(".json")) return MediaType.APPLICATION_JSON;
         return MediaType.APPLICATION_OCTET_STREAM;
     }
+
+    /* ====================================================================== */
+    /* GET /retinal-jobs/{jobId}/compare-previous — nAMD Slice 4              */
+    /* ====================================================================== */
+
+    /**
+     * For the given job, find the previous done job for the same
+     * subject + task + eye_laterality and return a delta summary so
+     * the SPA can render "Vs previous visit (N days ago)" KPI tiles.
+     *
+     * <p>The "previous" job is selected by max(completed_at) under
+     * (study_subject_id, task, eye_laterality) where completed_at is
+     * strictly less than the current job's. Returns 200 with
+     * {@code previousJobId=null} when no prior visit exists — the
+     * SPA renders that as "First visit, no comparison available."
+     */
+    @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/compare-previous",
+                produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> compareToPrevious(@PathVariable("jobId") long jobId,
+                                               HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        JobRow current;
+        try (Connection c = dataSource.getConnection()) {
+            current = fetchJobDetail(c, jobId);
+        } catch (SQLException sqlEx) {
+            LOG.error("compareToPrevious: fetch current failed for job {}: {}",
+                    jobId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to load job: " + sqlEx.getMessage()));
+        }
+        if (current == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
+        ResponseEntity<?> visGuard = guardJobVisibility(current, session);
+        if (visGuard != null) return visGuard;
+
+        Map<String, Object> currentMetrics = parsePayload(current.outputPayloadJson);
+        PreviousJobView previous;
+        try (Connection c = dataSource.getConnection()) {
+            previous = fetchPreviousJob(c, jobId);
+        } catch (SQLException sqlEx) {
+            LOG.error("compareToPrevious: previous-job lookup failed for job {}: {}",
+                    jobId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to load previous job: " + sqlEx.getMessage()));
+        }
+
+        Map<String, Double> deltas = new LinkedHashMap<>();
+        Map<String, Object> previousMetrics = previous == null
+                ? Map.of()
+                : parsePayload(previous.outputPayloadJson);
+        if (previous != null) {
+            for (String key : List.of("irf_mm3", "srf_mm3", "ped_mm3", "total_fluid_volume_mm3")) {
+                Double curV = asDouble(currentMetrics.get(key));
+                Double prevV = asDouble(previousMetrics.get(key));
+                if (curV != null && prevV != null) {
+                    deltas.put(key, curV - prevV);
+                }
+            }
+        }
+        Integer daysBetween = (previous == null
+                || current.completedAt == null
+                || previous.completedAt == null)
+                ? null
+                : (int) java.time.temporal.ChronoUnit.DAYS.between(
+                        previous.completedAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
+                        current.completedAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate());
+
+        return ResponseEntity.ok(new RetinalJobCompareDto(
+                current.jobId,
+                toIso(current.completedAt),
+                currentMetrics,
+                previous == null ? null : previous.jobId,
+                previous == null ? null : toIso(previous.completedAt),
+                previousMetrics,
+                daysBetween,
+                deltas));
+    }
+
+    private PreviousJobView fetchPreviousJob(Connection c, long currentJobId) throws SQLException {
+        String sql = "WITH cur AS ("
+                + "  SELECT j.job_id, j.task, j.eye_laterality, j.completed_at, "
+                + "         ev.study_subject_id "
+                + "    FROM retinal_inference_job j "
+                + "    JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "    JOIN study_event ev ON ev.study_event_id = ec.study_event_id "
+                + "   WHERE j.job_id = ?) "
+                + "SELECT prev.job_id, prev.completed_at, prev_r.output_payload::text "
+                + "  FROM retinal_inference_job prev "
+                + "  JOIN retinal_inference_result prev_r ON prev_r.job_id = prev.job_id "
+                + "  JOIN event_crf ec2 ON ec2.event_crf_id = prev.event_crf_id "
+                + "  JOIN study_event ev2 ON ev2.study_event_id = ec2.study_event_id "
+                + "  JOIN cur ON cur.study_subject_id = ev2.study_subject_id "
+                + "   AND cur.task = prev.task "
+                + "   AND cur.eye_laterality = prev.eye_laterality "
+                + " WHERE prev.status = 'done' "
+                + "   AND prev.completed_at < cur.completed_at "
+                + " ORDER BY prev.completed_at DESC "
+                + " LIMIT 1";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setLong(1, currentJobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                PreviousJobView v = new PreviousJobView();
+                v.jobId = rs.getLong("job_id");
+                v.completedAt = rs.getTimestamp("completed_at");
+                v.outputPayloadJson = rs.getString("output_payload");
+                return v;
+            }
+        }
+    }
+
+    private static Double asDouble(Object value) {
+        if (value == null) return null;
+        if (value instanceof Number n) return n.doubleValue();
+        if (value instanceof String s) {
+            try { return Double.parseDouble(s); }
+            catch (NumberFormatException ignored) { return null; }
+        }
+        return null;
+    }
+
+    private static final class PreviousJobView {
+        long jobId;
+        java.sql.Timestamp completedAt;
+        String outputPayloadJson;
+    }
+
+    /**
+     * Slice 4 response — current job metrics + previous-job metrics
+     * + per-key deltas + days between visits. {@code previousJobId}
+     * is null when no prior visit exists.
+     */
+    @io.swagger.v3.oas.annotations.media.Schema(name = "RetinalJobCompareDto")
+    public record RetinalJobCompareDto(
+            long currentJobId,
+            String currentCompletedAt,
+            Map<String, Object> currentMetrics,
+            Long previousJobId,
+            String previousCompletedAt,
+            Map<String, Object> previousMetrics,
+            Integer daysBetween,
+            Map<String, Double> deltas) {}
 }
