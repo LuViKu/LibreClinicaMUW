@@ -49,7 +49,9 @@ public class LegacyServletDeprecationCatalog {
         USER_ACCOUNTS,
         AUDIT_TRAIL,
         DISCREPANCY_NOTES,
-        SITES_GROUPS_RULES
+        SITES_GROUPS_RULES,
+        /** Phase E.8 Slice L3 (2026-06-20) — sysadmin tooling. */
+        ADMIN_TOOLING
     }
 
     /**
@@ -195,6 +197,14 @@ public class LegacyServletDeprecationCatalog {
         put(m, "/pages/TestRule", "/app/rules", Bucket.SITES_GROUPS_RULES);
         put(m, "/pages/ViewRuleSet", "/app/rules", Bucket.SITES_GROUPS_RULES);
         put(m, "/pages/ViewRuleAssignment", "/app/rules", Bucket.SITES_GROUPS_RULES);
+
+        // --- ADMIN_TOOLING — SPA `/admin/*` (Phase E.8 Slice L3) ---
+        // SystemStatus has historically been wired at bare /SystemStatus
+        // (the menu link) in addition to /pages/SystemStatus.
+        put(m, "/pages/SystemStatus", "/app/admin/system-status", Bucket.ADMIN_TOOLING);
+        put(m, "/SystemStatus", "/app/admin/system-status", Bucket.ADMIN_TOOLING);
+        put(m, "/pages/ConfigurePasswordRequirements", "/app/admin/password-policy", Bucket.ADMIN_TOOLING);
+        put(m, "/pages/Configure", "/app/admin/config", Bucket.ADMIN_TOOLING);
 
         this.byPath = Map.copyOf(m);
     }
