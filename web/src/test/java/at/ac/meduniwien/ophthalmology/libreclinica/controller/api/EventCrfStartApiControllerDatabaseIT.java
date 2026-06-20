@@ -68,7 +68,8 @@ class EventCrfStartApiControllerDatabaseIT extends AbstractApiControllerDatabase
     private MockMvc mockMvc() {
         EventsApiController controller = new EventsApiController(
                 DATA_SOURCE,
-                new SiteVisibilityFilter(DATA_SOURCE));
+                new SiteVisibilityFilter(DATA_SOURCE),
+                new at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator(DATA_SOURCE));
         // No ApiExceptionHandler so any underlying NPE / SQLException
         // bubbles out as a ServletException with the real cause —
         // production wrapping is already pinned by the mock-DS test.

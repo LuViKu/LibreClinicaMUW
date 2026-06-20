@@ -58,6 +58,8 @@ public class StudyEvent extends DataMapDomainObject  {
 	private Integer sampleOrdinal;
 	private Date dateStart;
 	private Date dateEnd;
+	private Date scheduledFor;
+	private Integer scheduledIntervalDays;
 	private Date dateCreated;
 	private Date dateUpdated;
 	private Integer updateId;
@@ -192,6 +194,42 @@ public class StudyEvent extends DataMapDomainObject  {
 
 	public void setDateEnd(Date dateEnd) {
 		this.dateEnd = dateEnd;
+	}
+
+	/**
+	 * nAMD treat-and-extend (2026-06-19) — the date the coordinator
+	 * (or auto-scheduler) planned the visit to happen. May differ from
+	 * {@link #getDateStart()} when the patient reschedules; the
+	 * difference between the two is the per-visit slip that the study
+	 * endpoint analysis tracks.
+	 *
+	 * <p>NULL on legacy rows and on non-treat-and-extend studies.
+	 */
+	@Temporal(TemporalType.DATE)
+	@Column(name = "scheduled_for")
+	public Date getScheduledFor() {
+		return this.scheduledFor;
+	}
+
+	public void setScheduledFor(Date scheduledFor) {
+		this.scheduledFor = scheduledFor;
+	}
+
+	/**
+	 * nAMD treat-and-extend (2026-06-19) — the interval in days from
+	 * the previous visit that the physician (or auto-scheduler) chose
+	 * at the end of the prior visit. Audited per visit so the study
+	 * endpoint can compare physician decisions arm-by-arm.
+	 *
+	 * <p>NULL on legacy rows and on non-treat-and-extend studies.
+	 */
+	@Column(name = "scheduled_interval_days")
+	public Integer getScheduledIntervalDays() {
+		return this.scheduledIntervalDays;
+	}
+
+	public void setScheduledIntervalDays(Integer scheduledIntervalDays) {
+		this.scheduledIntervalDays = scheduledIntervalDays;
 	}
 
 	@Temporal(TemporalType.TIMESTAMP)

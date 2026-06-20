@@ -69,6 +69,15 @@ const formError = ref<string | null>(null)
 const isSubmitting = ref(false)
 
 /**
+ * nAMD treat-and-extend (2026-06-19) — optional interval (in weeks)
+ * since the prior visit. Operators enter weeks (clinically intuitive);
+ * the SPA converts to days before submitting. Empty string = not
+ * applicable; non-T-and-E studies leave it blank and the backend
+ * skips the scheduled-for write.
+ */
+const intervalWeeks = ref<string>('')
+
+/**
  * Drop the soft-deleted slots from the picker — those are no longer
  * scheduleable, even though the legacy store still returns them.
  */
@@ -123,6 +132,18 @@ async function onSubmit() {
     return
   }
 
+  // nAMD T-and-E — parse the weeks stepper into days. Empty string
+  // is "not applicable"; non-empty must be a non-negative integer.
+  let scheduledIntervalDays: number | null = null
+  if (intervalWeeks.value.trim() !== '') {
+    const weeks = Number(intervalWeeks.value)
+    if (!Number.isFinite(weeks) || !Number.isInteger(weeks) || weeks < 0) {
+      fieldErrors.value.intervalWeeks = t('scheduleEvent.error.intervalInvalid')
+      return
+    }
+    scheduledIntervalDays = weeks * 7
+  }
+
   isSubmitting.value = true
   try {
     const trimmedLocation = location.value.trim()
@@ -131,6 +152,7 @@ async function onSubmit() {
       eventDefinitionOid: eventDefinitionOid.value,
       dateStarted: dateStarted.value,
       ...(trimmedLocation ? { location: trimmedLocation } : {}),
+      ...(scheduledIntervalDays != null ? { scheduledIntervalDays } : {}),
     })
     if (created) {
       emit('scheduled', created)
@@ -215,6 +237,33 @@ async function onSubmit() {
           v-model="location"
           :placeholder="t('scheduleEvent.placeholder.location')"
         />
+      </div>
+
+      <!-- nAMD treat-and-extend (2026-06-19) — optional next-visit
+           interval. Operators leave it blank for non-T-and-E studies;
+           on T-and-E protocols it drives the auto-scheduler and lands
+           in `study_event.scheduled_interval_days` for endpoint
+           analysis. -->
+      <div>
+        <FieldLabel for="schedule-event-interval">
+          {{ t('scheduleEvent.field.intervalWeeks') }}
+        </FieldLabel>
+        <TextInput
+          id="schedule-event-interval"
+          v-model="intervalWeeks"
+          type="number"
+          inputmode="numeric"
+          min="0"
+          step="1"
+          :placeholder="t('scheduleEvent.placeholder.intervalWeeks')"
+          :error="!!fieldErrors.intervalWeeks"
+        />
+        <p class="mt-1 text-[11px] text-slate-500">
+          {{ t('scheduleEvent.help.intervalWeeks') }}
+        </p>
+        <ErrorText v-if="fieldErrors.intervalWeeks">
+          {{ fieldErrors.intervalWeeks }}
+        </ErrorText>
       </div>
 
       <p v-if="formError" class="text-xs text-rose-700" role="alert">{{ formError }}</p>

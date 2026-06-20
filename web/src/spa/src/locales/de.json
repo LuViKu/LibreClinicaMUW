@@ -2203,11 +2203,16 @@
     "field": {
       "eventDefinition": "Visite",
       "dateStarted": "Startdatum",
-      "location": "Ort"
+      "location": "Ort",
+      "intervalWeeks": "Nächstes Intervall (Wochen)"
     },
     "placeholder": {
       "eventDefinition": "Visite auswählen…",
-      "location": "Optional"
+      "location": "Optional",
+      "intervalWeeks": "z. B. 8"
+    },
+    "help": {
+      "intervalWeeks": "Optional — für Treat-and-Extend-Protokolle. Das nächste Visiten-Soll-Datum wird automatisch errechnet."
     },
     "submit": "Planen",
     "empty": "Für diese Studie sind keine Visiten verfügbar.",
@@ -2215,6 +2220,7 @@
       "eventDefinitionRequired": "Bitte eine Visite auswählen.",
       "dateRequired": "Startdatum ist erforderlich.",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
+      "intervalInvalid": "Intervall muss eine ganze Zahl ≥ 0 sein.",
       "generic": "Visite konnte nicht geplant werden. Bitte erneut versuchen."
     }
   },

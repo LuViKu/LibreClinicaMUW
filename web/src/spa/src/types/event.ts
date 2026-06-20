@@ -44,7 +44,16 @@ type GeneratedScheduleEventRequest =
   components['schemas']['ScheduleEventRequest']
 export type ScheduleEventRequest =
   Required<Pick<GeneratedScheduleEventRequest, 'subjectId' | 'eventDefinitionOid' | 'dateStarted'>> &
-  Pick<GeneratedScheduleEventRequest, 'location'>
+  Pick<GeneratedScheduleEventRequest, 'location'> & {
+    /**
+     * nAMD treat-and-extend (2026-06-19) — optional next-visit interval
+     * (in days). When set, the backend computes
+     * {@code scheduled_for = dateStarted + scheduledIntervalDays} and
+     * the response carries both back so the SPA can show "Next visit
+     * due on YYYY-MM-DD" immediately after the dialog confirms.
+     */
+    scheduledIntervalDays?: number | null
+  }
 
 /* ------------------------------------------------------------------ */
 /* Phase E A4 — event edit / cancel role helpers.                     */

@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        nAMD treat-and-extend Slice 1 — variable visit intervals.
+
+        Treat-and-extend protocols set each visit's interval based on
+        the previous visit's clinical findings (no fluid → extend by N
+        weeks; fluid recurrence → shorten by N weeks). The existing
+        study_event table has only date_start / date_end (when the
+        visit actually happened); it carries no "this visit was
+        scheduled to happen on date X with interval Y" metadata that
+        the coordinator UI can read back later or that the auto-
+        scheduler can use to propose the next visit's due date.
+
+        This changeset adds two nullable columns:
+
+          - study_event.scheduled_for       : the date the coordinator
+            (or auto-scheduler) intends the visit to happen. Distinct
+            from date_start, which is set when the visit actually
+            starts being recorded — they can differ by days when the
+            patient reschedules.
+          - study_event.scheduled_interval_days : the interval (in
+            days) since the prior visit that the physician picked at
+            the end of the prior visit. Audited per visit so the study
+            endpoint analysis can compare physician decisions arm-by-
+            arm.
+
+        Both columns are NULLABLE so all existing rows + non-T-and-E
+        studies pass through unchanged.
+
+        See `plans/polished-jumping-swan.md` for the broader nAMD
+        build plan.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-19-event-scheduled-interval">
+        <addColumn tableName="study_event">
+            <column name="scheduled_for" type="DATE">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <addColumn tableName="study_event">
+            <column name="scheduled_interval_days" type="INTEGER">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+
+        <!-- Index supporting "subject's upcoming visits" lookups by date. -->
+        <createIndex tableName="study_event" indexName="i_study_event_scheduled_for">
+            <column name="scheduled_for"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="study_event" indexName="i_study_event_scheduled_for"/>
+            <dropColumn tableName="study_event" columnName="scheduled_interval_days"/>
+            <dropColumn tableName="study_event" columnName="scheduled_for"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

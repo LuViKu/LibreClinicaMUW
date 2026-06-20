@@ -2956,6 +2956,9 @@ export interface components {
             location?: string;
             status?: string;
             repeating?: boolean;
+            scheduledFor?: string;
+            /** Format: int32 */
+            scheduledIntervalDays?: number;
         };
         CreateDatasetRequest: {
             name?: string;
@@ -3465,6 +3468,8 @@ export interface components {
             eventDefinitionOid?: string;
             dateStarted?: string;
             location?: string;
+            /** Format: int32 */
+            scheduledIntervalDays?: number;
         };
         StartEventCrfRequest: {
             /** Format: int32 */
