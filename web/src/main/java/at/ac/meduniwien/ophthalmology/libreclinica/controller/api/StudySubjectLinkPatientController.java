@@ -40,24 +40,35 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 /**
  * App-feedback Wave 1B (2026-06-19) — cross-study patient identity
- * soft-link endpoint.
+ * soft-link endpoint. C4 (2026-06-20) — promoted to the hard
+ * {@code patient} table FK; the {@code patient_uuid} column is now a
+ * soft-deprecated mirror written alongside {@code patient_id} on every
+ * UPDATE for one deprecation release.
  *
  * <p>{@code POST /api/v1/study-subjects/{id}/link-patient} ties two
- * {@code study_subject} rows together under a single
- * {@code patient_uuid}, so the cross-study patient-overview view can
- * surface "this human is M-001 in default-study AND GA-008 in GA-Studie"
- * even when the two enrolments live in studies with disjoint subject
- * naming conventions. The column was seeded by
- * {@code lc-muw-2026-06-19-study-subject-patient-uuid.xml}; the audit
- * type id {@link AuditTypeIds#STUDY_SUBJECT_PATIENT_LINKED} (119) was
- * seeded by the same changeset.
+ * {@code study_subject} rows together under a single {@code patient_id}
+ * (and the mirrored {@code patient_uuid}), so the cross-study
+ * patient-overview view can surface "this human is M-001 in
+ * default-study AND GA-008 in GA-Studie" even when the two enrolments
+ * live in studies with disjoint subject naming conventions. The
+ * {@code patient_uuid} column was seeded by
+ * {@code lc-muw-2026-06-19-study-subject-patient-uuid.xml}; the hard
+ * {@code patient} table + {@code patient_id} FK by
+ * {@code lc-muw-2026-06-20-patient-table.xml}; the audit type id
+ * {@link AuditTypeIds#STUDY_SUBJECT_PATIENT_LINKED} (119) by the
+ * Wave 1B changeset.
  *
- * <p><strong>Semantics:</strong>
+ * <p><strong>Semantics</strong> (the migration guarantees no row has
+ * NULL patient_uuid/patient_id after upgrade, but the controller still
+ * handles the both-null branch defensively for tests that bypass the
+ * migration + for new INSERT paths that might land here before the
+ * fresh-patient-mint hook is wired):
  * <ul>
- *   <li>Both rows have NULL {@code patient_uuid} → generate one fresh
- *       {@link UUID#randomUUID()} and apply it to BOTH.</li>
- *   <li>Exactly one row has a {@code patient_uuid} → copy that value to
- *       the other.</li>
+ *   <li>Both rows have NULL {@code patient_uuid} → mint a fresh
+ *       {@link UUID#randomUUID()} AND a fresh {@code patient} row, then
+ *       apply both to BOTH study_subjects.</li>
+ *   <li>Exactly one row has a {@code patient_uuid} → copy that value
+ *       (and its existing {@code patient_id}) to the other.</li>
  *   <li>Both rows carry the same {@code patient_uuid} → 200 idempotent
  *       (no audit, no UPDATE).</li>
  *   <li>Both rows carry DIFFERENT {@code patient_uuid}s → 409 Conflict.
@@ -77,9 +88,10 @@ import io.swagger.v3.oas.annotations.tags.Tag;
  * {@code audit_log_event} row is emitted per updated {@code study_subject}
  * with {@code audit_log_event_type_id=119}; {@code entity_id} carries
  * the {@code study_subject_id}; {@code new_value} packs
- * {@code "linked-to:<otherSsId>:patientUuid:<uuid>"} so the timeline
- * shows the cross-link explicitly. The audit emission rides on the
- * same connection as the UPDATEs (single transaction).
+ * {@code "linked-to:<otherSsId>:patientUuid:<uuid>:patientId:<id>"} so
+ * the timeline shows the resolved hard id explicitly. The audit
+ * emission rides on the same connection as the UPDATEs (single
+ * transaction).
  */
 @RestController
 @RequestMapping("/api/v1/study-subjects")
@@ -192,22 +204,30 @@ public class StudySubjectLinkPatientController {
         // ---- decide the resulting UUID + which rows to UPDATE ---------
         String sourceUuid = source.patientUuid;
         String targetUuid = target.patientUuid;
-        String resolved;
+        String resolvedUuid;
         boolean updateSource;
         boolean updateTarget;
+        boolean mintPatient;
 
         if (sourceUuid == null && targetUuid == null) {
-            resolved = UUID.randomUUID().toString();
+            // Defensive path — the C4 migration guarantees no row hits
+            // production with NULL patient_uuid, but tests + future
+            // INSERT paths may. Mint both the UUID and a hard patient
+            // row inside the same transaction below.
+            resolvedUuid = UUID.randomUUID().toString();
             updateSource = true;
             updateTarget = true;
+            mintPatient = true;
         } else if (sourceUuid != null && targetUuid == null) {
-            resolved = sourceUuid;
+            resolvedUuid = sourceUuid;
             updateSource = false;
             updateTarget = true;
+            mintPatient = false;
         } else if (sourceUuid == null) { // targetUuid != null
-            resolved = targetUuid;
+            resolvedUuid = targetUuid;
             updateSource = true;
             updateTarget = false;
+            mintPatient = false;
         } else if (sourceUuid.equals(targetUuid)) {
             // Idempotent — both rows already linked under the same UUID.
             // No UPDATE, no audit row. The SPA can re-fire the call
@@ -216,6 +236,15 @@ public class StudySubjectLinkPatientController {
                     id, targetId, sourceUuid);
             Map<String, Object> resp = new LinkedHashMap<>();
             resp.put("patientUuid", sourceUuid);
+            // Surface the resolved patient_id when at least one row has
+            // it hydrated (it should — the C4 migration backfilled
+            // every row; this is just a defensive null-check in case a
+            // future code path inserts a study_subject without it).
+            if (source.patientId > 0) {
+                resp.put("patientId", source.patientId);
+            } else if (target.patientId > 0) {
+                resp.put("patientId", target.patientId);
+            }
             return ResponseEntity.ok(resp);
         } else {
             // Different non-null UUIDs — refuse. Merging would collapse
@@ -228,21 +257,48 @@ public class StudySubjectLinkPatientController {
                     "Both study_subject rows are already linked to different patients."));
         }
 
-        // ---- single transaction: UPDATE + audit -----------------------
+        // ---- single transaction: mint patient (if needed) + UPDATE + audit ----
+        long resolvedPatientId;
         try (Connection c = dataSource.getConnection()) {
             c.setAutoCommit(false);
             try {
+                if (mintPatient) {
+                    // Both study_subjects had NULL — create the patient
+                    // row inside this transaction so a rollback discards
+                    // the unreferenced patient too.
+                    resolvedPatientId = insertPatient(c, resolvedUuid, currentUser.getId());
+                } else {
+                    // Resolve the hard FK from whichever side held the
+                    // existing patient_uuid. The migration guarantees
+                    // this lookup hits a row when the uuid is non-null.
+                    resolvedPatientId = resolvePatientIdByUuid(c, resolvedUuid);
+                    if (resolvedPatientId <= 0) {
+                        // Legacy data: a study_subject carries a
+                        // patient_uuid that has no `patient` row.
+                        // Should be impossible after the C4 migration,
+                        // but defensively mint one so the FK invariant
+                        // holds going forward.
+                        LOG.warn("Link-patient: patient_uuid={} on study_subject {} has no "
+                                + "patient row — minting one defensively.",
+                                resolvedUuid, sourceUuid != null ? id : targetId);
+                        resolvedPatientId = insertPatient(c, resolvedUuid, currentUser.getId());
+                    }
+                }
                 if (updateSource) {
-                    applyUuid(c, id, resolved);
+                    applyLink(c, id, resolvedUuid, resolvedPatientId);
                     writeAuditRow(c, AuditTypeIds.STUDY_SUBJECT_PATIENT_LINKED,
                             currentUser.getId(), id,
-                            "linked-to:" + targetId + ":patientUuid:" + resolved);
+                            "linked-to:" + targetId
+                                    + ":patientUuid:" + resolvedUuid
+                                    + ":patientId:" + resolvedPatientId);
                 }
                 if (updateTarget) {
-                    applyUuid(c, targetId, resolved);
+                    applyLink(c, targetId, resolvedUuid, resolvedPatientId);
                     writeAuditRow(c, AuditTypeIds.STUDY_SUBJECT_PATIENT_LINKED,
                             currentUser.getId(), targetId,
-                            "linked-to:" + id + ":patientUuid:" + resolved);
+                            "linked-to:" + id
+                                    + ":patientUuid:" + resolvedUuid
+                                    + ":patientId:" + resolvedPatientId);
                 }
                 c.commit();
             } catch (SQLException txEx) {
@@ -259,24 +315,29 @@ public class StudySubjectLinkPatientController {
         }
 
         LOG.info("Link-patient: study_subject {} ({}) <-> study_subject {} ({}) "
-                        + "under patient_uuid={} by user={}",
-                id, source.label, targetId, target.label, resolved, currentUser.getName());
+                        + "under patient_uuid={} (patient_id={}) by user={}",
+                id, source.label, targetId, target.label,
+                resolvedUuid, resolvedPatientId, currentUser.getName());
 
         Map<String, Object> resp = new LinkedHashMap<>();
-        resp.put("patientUuid", resolved);
+        resp.put("patientUuid", resolvedUuid);
+        resp.put("patientId", resolvedPatientId);
         return ResponseEntity.ok(resp);
     }
 
     /**
      * Load the {@code study_subject} row's identity + study + current
-     * {@code patient_uuid} in one SELECT. The column is added by
-     * {@code lc-muw-2026-06-19-study-subject-patient-uuid.xml}; before
-     * that changeset the lookup will throw a column-missing SQLException
-     * which the caller surfaces as a 500.
+     * {@code patient_uuid} + {@code patient_id} in one SELECT. The
+     * {@code patient_uuid} column is added by
+     * {@code lc-muw-2026-06-19-study-subject-patient-uuid.xml}; the
+     * {@code patient_id} FK by {@code lc-muw-2026-06-20-patient-table.xml}.
+     * Before either changeset the lookup throws a column-missing
+     * SQLException which the caller surfaces as a 500.
      */
     private LinkRow loadRow(Connection c, int studySubjectId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT study_subject_id, study_id, label, status_id, patient_uuid "
+                "SELECT study_subject_id, study_id, label, status_id, "
+                        + "       patient_uuid, patient_id "
                         + "  FROM study_subject "
                         + " WHERE study_subject_id = ?")) {
             ps.setInt(1, studySubjectId);
@@ -288,17 +349,71 @@ public class StudySubjectLinkPatientController {
                 row.label = rs.getString("label");
                 row.statusId = rs.getInt("status_id");
                 row.patientUuid = rs.getString("patient_uuid");
+                long pid = rs.getLong("patient_id");
+                row.patientId = rs.wasNull() ? 0L : pid;
                 return row;
             }
         }
     }
 
-    private void applyUuid(Connection c, int studySubjectId, String uuid) throws SQLException {
+    /**
+     * Apply the resolved hard FK + mirrored UUID to one
+     * {@code study_subject} row. Both columns are written together so
+     * the deprecated {@code patient_uuid} mirror stays in sync with
+     * {@code patient_id} until the post-C4 follow-up drops it.
+     */
+    private void applyLink(Connection c, int studySubjectId,
+                           String uuid, long patientId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "UPDATE study_subject SET patient_uuid = ? WHERE study_subject_id = ?")) {
+                "UPDATE study_subject "
+                        + "   SET patient_uuid = ?, patient_id = ? "
+                        + " WHERE study_subject_id = ?")) {
             ps.setString(1, uuid);
-            ps.setInt(2, studySubjectId);
+            ps.setLong(2, patientId);
+            ps.setInt(3, studySubjectId);
             ps.executeUpdate();
+        }
+    }
+
+    /**
+     * INSERT a fresh {@code patient} row and return its generated
+     * {@code patient_id}. Used in the both-null branch and the
+     * defensive fallback where a {@code patient_uuid} on
+     * {@code study_subject} has no matching {@code patient} row
+     * (impossible after the C4 migration, but possible in test
+     * harnesses that bypass Liquibase).
+     */
+    private long insertPatient(Connection c, String uuid, int createdByUserId)
+            throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "INSERT INTO patient (patient_uuid, created_by) "
+                        + "VALUES (?, ?) RETURNING patient_id")) {
+            ps.setString(1, uuid);
+            ps.setInt(2, createdByUserId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    throw new SQLException(
+                            "Patient INSERT returned no patient_id row for uuid=" + uuid);
+                }
+                return rs.getLong(1);
+            }
+        }
+    }
+
+    /**
+     * Resolve the hard {@code patient_id} for an existing
+     * {@code patient_uuid}. Returns 0 when the lookup misses — the
+     * caller treats that as "legacy data without a patient row" and
+     * mints one defensively to restore the FK invariant.
+     */
+    private long resolvePatientIdByUuid(Connection c, String uuid) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT patient_id FROM patient WHERE patient_uuid = ?")) {
+            ps.setString(1, uuid);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return 0L;
+                return rs.getLong("patient_id");
+            }
         }
     }
 
@@ -338,5 +453,7 @@ public class StudySubjectLinkPatientController {
         String label;
         int statusId;
         String patientUuid;
+        /** 0 when the row's {@code patient_id} FK is NULL. */
+        long patientId;
     }
 }

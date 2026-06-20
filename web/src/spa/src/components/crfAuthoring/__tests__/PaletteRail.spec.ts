@@ -63,6 +63,14 @@ describe('PaletteRail', () => {
     expect(w.find('[data-testid="crf-canvas-palette-preset-iop"]').exists()).toBe(true)
   })
 
+  it('renders the D4 (2026-06-20) preset batch: BCVA, RNFL, thickness-map, slit-lamp', () => {
+    const w = mountRail()
+    expect(w.find('[data-testid="crf-canvas-palette-preset-bcva"]').exists()).toBe(true)
+    expect(w.find('[data-testid="crf-canvas-palette-preset-rnfl"]').exists()).toBe(true)
+    expect(w.find('[data-testid="crf-canvas-palette-preset-thicknessMap"]').exists()).toBe(true)
+    expect(w.find('[data-testid="crf-canvas-palette-preset-slitLamp"]').exists()).toBe(true)
+  })
+
   it('emits primitive-activated when a primitive is clicked', async () => {
     const w = mountRail()
     await w.find('[data-testid="crf-canvas-palette-prim-INT"]').trigger('click')

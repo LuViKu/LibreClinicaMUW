@@ -283,6 +283,18 @@ def _load_bscan_data(
         if 0 <= scan_index < len(volumes):
             vol_meta = volumes[scan_index]
         else:
+            # Multi-acquisition uploads can land here when an upstream
+            # caller passes a stale or zero scan_index against an .e2e
+            # with multiple volumes. Falling back to the largest is the
+            # historical behaviour — keep it so dedup writes downstream
+            # don't crash mid-pipeline — but emit a warning so operators
+            # see that the bscan_data they get back is NOT for the
+            # volume they requested.
+            LOG.warning(
+                "bscan_data fallback: scan_index %d out of range for %s "
+                "(file has %d volumes); picking largest by num_slices",
+                scan_index, e2e_path, len(volumes),
+            )
             vol_meta = max(volumes, key=lambda v: int(getattr(v, "num_slices", 0) or 0))
         md = getattr(vol_meta, "metadata", None) or {}
         return list(md.get("bscan_data", []) or [])

@@ -1437,6 +1437,66 @@
       "ophthExam": {
         "label": "Ophthalmologische bilaterale Untersuchung",
         "description": "OD/OS-Paare für Standardmessungen (BCVA, IOP, CCT, CRT)."
+      },
+      "bcva": {
+        "label": "BCVA (ETDRS-Buchstaben)",
+        "description": "Bestkorrigierter Visus nach ETDRS — Buchstaben pro Auge plus optionale Refraktion (Sphäre / Zylinder / Achse).",
+        "items": {
+          "letters": "BCVA — Buchstaben",
+          "lettersValidation": "Ganzzahl 0–100 erwartet.",
+          "sphere": "Refraktion — Sphäre",
+          "cylinder": "Refraktion — Zylinder",
+          "axis": "Refraktion — Achse",
+          "refractionValidation": "Bitte einen numerischen Wert eingeben (z. B. -1,75).",
+          "axisValidation": "Ganzzahl 0–180 erwartet."
+        }
+      },
+      "rnfl": {
+        "label": "RNFL (peripapillär, Heidelberg HRA / Spectralis ONH)",
+        "description": "Peripapilläre Nervenfaserschicht — globaler Mittelwert + Quadranten (S/T/I/N) + Signalqualität pro Auge.",
+        "items": {
+          "global": "RNFL — globaler Mittelwert",
+          "superior": "RNFL — superior (S)",
+          "temporal": "RNFL — temporal (T)",
+          "inferior": "RNFL — inferior (I)",
+          "nasal": "RNFL — nasal (N)",
+          "signalQuality": "Signalqualität (0–10)",
+          "umValidation": "Ganzzahl 0–999 µm erwartet.",
+          "signalValidation": "Ganzzahl 0–10 erwartet."
+        }
+      },
+      "thicknessMap": {
+        "label": "Makuladickenkarte (ETDRS 9-Felder)",
+        "description": "ETDRS-Makulagitter mit 9 Subfeldern pro Auge plus Geräte-Kennung (Spectralis / Cirrus / Topcon).",
+        "items": {
+          "central": "Zentrales Subfeld (1 mm)",
+          "innerSuperior": "Inner — superior (1–3 mm)",
+          "innerTemporal": "Inner — temporal (1–3 mm)",
+          "innerInferior": "Inner — inferior (1–3 mm)",
+          "innerNasal": "Inner — nasal (1–3 mm)",
+          "outerSuperior": "Outer — superior (3–6 mm)",
+          "outerTemporal": "Outer — temporal (3–6 mm)",
+          "outerInferior": "Outer — inferior (3–6 mm)",
+          "outerNasal": "Outer — nasal (3–6 mm)",
+          "modality": "Gerätemodalität",
+          "modalitySpectralis": "Spectralis",
+          "modalityCirrus": "Cirrus",
+          "modalityTopcon": "Topcon",
+          "modalityOther": "Andere",
+          "umValidation": "Ganzzahl 0–999 µm erwartet."
+        }
+      },
+      "slitLamp": {
+        "label": "Spaltlampe — Vorderabschnitt",
+        "description": "Hornhaut / Vorderkammer / Iris / Linse / Glaskörper pro Auge + Bemerkung.",
+        "items": {
+          "cornea": "Hornhaut",
+          "ac": "Vorderkammer",
+          "iris": "Iris",
+          "lens": "Linse",
+          "vitreous": "Glaskörper (anterior)",
+          "remark": "Bemerkung"
+        }
       }
     }
   },

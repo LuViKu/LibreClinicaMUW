@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        C4 follow-up (PR #240) — relax study_subject.patient_id back to
+        NULLABLE.
+
+        The sibling changeset lc-muw-2026-06-20-patient-table.xml flips
+        the new patient_id FK to NOT NULL after backfilling existing
+        rows. That broke every code path that INSERTs a new
+        study_subject row (StudySubjectDAO.create, the Hibernate
+        enrolment paths, several IT suites) because none of them mint a
+        patient row first — surfaced by PR #240's CI as 17 NOT-NULL
+        violations across SubjectEnrolmentIT, StudyEventScheduleIT, the
+        rule-set DAOs that load study_subject transitively, and more.
+
+        Soft FK is the right surface for now: the link-patient endpoint
+        backfills patient_id on every successful link write; existing
+        rows are already populated by the sibling changeset's backfill;
+        new rows can land with NULL and pick up patient_id when the
+        operator runs the link-patient action. A future create-path
+        retrofit that pairs every study_subject INSERT with a patient
+        mint can re-add the NOT NULL constraint.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-20-study-subject-patient-id-nullable">
+        <dropNotNullConstraint tableName="study_subject"
+                               columnName="patient_id"
+                               columnDataType="BIGINT"/>
+
+        <rollback>
+            <!-- Rolling back means re-adding NOT NULL. Existing rows
+                 carry patient_id from the original backfill, so the
+                 constraint goes back on without an extra backfill
+                 pass. New rows inserted while this rollback is active
+                 may carry NULL and would break the re-add — accept
+                 that as an explicit operator deferred-back risk. -->
+            <addNotNullConstraint tableName="study_subject"
+                                  columnName="patient_id"
+                                  columnDataType="BIGINT"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

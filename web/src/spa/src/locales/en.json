@@ -1437,6 +1437,66 @@
       "ophthExam": {
         "label": "[NEEDS_REVIEW] Ophthalmology bilateral examination",
         "description": "[NEEDS_REVIEW] OD/OS pairs for standard measurements (BCVA, IOP, CCT, CRT)."
+      },
+      "bcva": {
+        "label": "[NEEDS_REVIEW] BCVA (ETDRS letters)",
+        "description": "[NEEDS_REVIEW] Best-corrected visual acuity per ETDRS — letters per eye plus optional refraction (sphere / cylinder / axis).",
+        "items": {
+          "letters": "[NEEDS_REVIEW] BCVA — letters",
+          "lettersValidation": "[NEEDS_REVIEW] Integer 0–100 expected.",
+          "sphere": "[NEEDS_REVIEW] Refraction — sphere",
+          "cylinder": "[NEEDS_REVIEW] Refraction — cylinder",
+          "axis": "[NEEDS_REVIEW] Refraction — axis",
+          "refractionValidation": "[NEEDS_REVIEW] Enter a numeric value (e.g. -1.75).",
+          "axisValidation": "[NEEDS_REVIEW] Integer 0–180 expected."
+        }
+      },
+      "rnfl": {
+        "label": "[NEEDS_REVIEW] RNFL (peripapillary, Heidelberg HRA / Spectralis ONH)",
+        "description": "[NEEDS_REVIEW] Peripapillary nerve fiber layer — global mean + quadrants (S/T/I/N) + signal quality per eye.",
+        "items": {
+          "global": "[NEEDS_REVIEW] RNFL — global mean",
+          "superior": "[NEEDS_REVIEW] RNFL — superior (S)",
+          "temporal": "[NEEDS_REVIEW] RNFL — temporal (T)",
+          "inferior": "[NEEDS_REVIEW] RNFL — inferior (I)",
+          "nasal": "[NEEDS_REVIEW] RNFL — nasal (N)",
+          "signalQuality": "[NEEDS_REVIEW] Signal quality (0–10)",
+          "umValidation": "[NEEDS_REVIEW] Integer 0–999 µm expected.",
+          "signalValidation": "[NEEDS_REVIEW] Integer 0–10 expected."
+        }
+      },
+      "thicknessMap": {
+        "label": "[NEEDS_REVIEW] Macular thickness map (ETDRS 9-subfield)",
+        "description": "[NEEDS_REVIEW] ETDRS macular grid with nine subfields per eye plus device modality (Spectralis / Cirrus / Topcon).",
+        "items": {
+          "central": "[NEEDS_REVIEW] Central subfield (1 mm)",
+          "innerSuperior": "[NEEDS_REVIEW] Inner — superior (1–3 mm)",
+          "innerTemporal": "[NEEDS_REVIEW] Inner — temporal (1–3 mm)",
+          "innerInferior": "[NEEDS_REVIEW] Inner — inferior (1–3 mm)",
+          "innerNasal": "[NEEDS_REVIEW] Inner — nasal (1–3 mm)",
+          "outerSuperior": "[NEEDS_REVIEW] Outer — superior (3–6 mm)",
+          "outerTemporal": "[NEEDS_REVIEW] Outer — temporal (3–6 mm)",
+          "outerInferior": "[NEEDS_REVIEW] Outer — inferior (3–6 mm)",
+          "outerNasal": "[NEEDS_REVIEW] Outer — nasal (3–6 mm)",
+          "modality": "[NEEDS_REVIEW] Device modality",
+          "modalitySpectralis": "[NEEDS_REVIEW] Spectralis",
+          "modalityCirrus": "[NEEDS_REVIEW] Cirrus",
+          "modalityTopcon": "[NEEDS_REVIEW] Topcon",
+          "modalityOther": "[NEEDS_REVIEW] Other",
+          "umValidation": "[NEEDS_REVIEW] Integer 0–999 µm expected."
+        }
+      },
+      "slitLamp": {
+        "label": "[NEEDS_REVIEW] Slit-lamp — anterior segment",
+        "description": "[NEEDS_REVIEW] Cornea / AC / iris / lens / vitreous per eye + overall remark.",
+        "items": {
+          "cornea": "[NEEDS_REVIEW] Cornea",
+          "ac": "[NEEDS_REVIEW] Anterior chamber",
+          "iris": "[NEEDS_REVIEW] Iris",
+          "lens": "[NEEDS_REVIEW] Lens",
+          "vitreous": "[NEEDS_REVIEW] Vitreous (anterior)",
+          "remark": "[NEEDS_REVIEW] Remark"
+        }
       }
     }
   },
