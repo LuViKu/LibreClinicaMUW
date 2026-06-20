@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        nAMD treat-and-extend Slice 3 (2026-06-20) — item_data source
+        tracking + audit type for AI-populated values.
+
+        Adds two nullable columns to {@code item_data} so the SPA can
+        distinguish operator-entered values from values the platform
+        auto-populated from upstream sources:
+
+          - source_kind            : tag identifying the upstream
+            ("retinal_inference", "modality_baseline", etc.). Free-
+            form VARCHAR so new sources don't need a schema change.
+          - source_retinal_job_id  : nullable FK to
+            retinal_inference_job(job_id) — set when source_kind =
+            "retinal_inference" so the SPA can render a tooltip
+            linking back to the source job for traceability.
+            Cascading isn't appropriate here (deleting a job should
+            NOT delete CRF data); ON DELETE SET NULL keeps the value
+            but drops the back-reference.
+
+        Both columns are NULLABLE so all existing rows + operator-
+        entered values pass through unchanged.
+
+        Audit type 120 records each auto-populate write so the
+        institutional audit log shows who/when triggered the populate
+        + which job was the source. Operator overrides land as
+        regular item_data UPDATEs (audit_log_event_type=15 the
+        existing item_data_update path).
+
+        See `plans/polished-jumping-swan.md` Slice 3.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-20-item-data-source-retinal-job">
+        <addColumn tableName="item_data">
+            <column name="source_kind" type="VARCHAR(32)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+        <addColumn tableName="item_data">
+            <column name="source_retinal_job_id" type="BIGINT">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+
+        <addForeignKeyConstraint
+                constraintName="fk_item_data_source_retinal_job"
+                baseTableName="item_data"
+                baseColumnNames="source_retinal_job_id"
+                referencedTableName="retinal_inference_job"
+                referencedColumnNames="job_id"
+                onDelete="SET NULL"
+                onUpdate="RESTRICT"/>
+
+        <!-- Composite index for "find all auto-populated rows that
+             came from this job" — used by the SPA's auto-populate
+             badge + by the analysis pipeline. -->
+        <createIndex tableName="item_data" indexName="i_item_data_source">
+            <column name="source_kind"/>
+            <column name="source_retinal_job_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="item_data" indexName="i_item_data_source"/>
+            <dropForeignKeyConstraint baseTableName="item_data"
+                    constraintName="fk_item_data_source_retinal_job"/>
+            <dropColumn tableName="item_data" columnName="source_retinal_job_id"/>
+            <dropColumn tableName="item_data" columnName="source_kind"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-06-20-audit-type-retinal-autopop" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 120;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            Seed audit type 120 — retinal_inference_autopopulate.
+            Surfaces in per-study audit views so the timeline shows
+            "AI value populated from job X by user Y" alongside the
+            regular operator-entered events.
+        </comment>
+
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="120"/>
+            <column name="name" value="retinal_inference_autopopulate"/>
+            <column name="display_name" value="Retinal inference value auto-populated into CRF"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 120</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

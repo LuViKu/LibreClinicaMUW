@@ -71,5 +71,7 @@
   <include  file="migration/lc-muw-2026-06-19-study-subject-patient-uuid.xml"/>
   <include  file="migration/lc-muw-2026-06-19-event-scheduled-interval.xml"/>
   <include  file="migration/lc-muw-2026-06-20-namd-visit-crf-seed.xml"/>
+  <include  file="migration/lc-muw-2026-06-20-item-data-source-retinal-job.xml"/>
+  <include  file="migration/lc-muw-2026-06-20-namd-visit-ai-items.xml"/>
 </databaseChangeLog>
 
