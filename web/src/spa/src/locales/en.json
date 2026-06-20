@@ -2203,11 +2203,16 @@
     "field": {
       "eventDefinition": "Event definition",
       "dateStarted": "Start date",
-      "location": "Location"
+      "location": "Location",
+      "intervalWeeks": "Next interval (weeks)"
     },
     "placeholder": {
       "eventDefinition": "Select an event definition…",
-      "location": "Optional"
+      "location": "Optional",
+      "intervalWeeks": "e.g. 8"
+    },
+    "help": {
+      "intervalWeeks": "Optional — for treat-and-extend protocols. The next visit's due date is computed automatically."
     },
     "submit": "Schedule",
     "empty": "No event definitions are available for this study.",
@@ -2215,6 +2220,7 @@
       "eventDefinitionRequired": "Select an event definition.",
       "dateRequired": "Start date is required.",
       "dateInvalid": "Date must be in YYYY-MM-DD format.",
+      "intervalInvalid": "Interval must be a non-negative integer.",
       "generic": "Could not schedule the event. Please try again."
     }
   },

@@ -49,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -117,12 +118,15 @@ public class EventsApiController {
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
+    private final VisitIntervalCalculator visitIntervalCalculator;
 
     @Autowired
     public EventsApiController(@Qualifier("dataSource") DataSource dataSource,
-                               SiteVisibilityFilter siteVisibilityFilter) {
+                               SiteVisibilityFilter siteVisibilityFilter,
+                               VisitIntervalCalculator visitIntervalCalculator) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
+        this.visitIntervalCalculator = visitIntervalCalculator;
     }
 
     /**
@@ -594,7 +598,9 @@ public class EventsApiController {
                         ev.getDateEnded() == null ? null : ISO_DATE.format(ev.getDateEnded()),
                         blankToNull(ev.getLocation()),
                         status,
-                        def.isRepeating()));
+                        def.isRepeating(),
+                        /* scheduledFor */ null,
+                        /* scheduledIntervalDays */ null));
             }
         }
 
@@ -738,6 +744,26 @@ public class EventsApiController {
                                 created.getId(), bodyRef.subjectId(), defRef.getOid(),
                                 nextOrdinalRef, bodyRef.dateStarted(), ubRef.getName());
 
+                        // nAMD T-and-E (2026-06-19) — when the caller
+                        // supplied an interval, write the new
+                        // scheduled_for + scheduled_interval_days
+                        // columns via the dedicated service. Returns
+                        // the derived `scheduled_for` date for the
+                        // SPA to display ("Next visit due on YYYY-MM-
+                        // DD") right after the schedule succeeds.
+                        java.time.LocalDate scheduledForDate = null;
+                        if (bodyRef.scheduledIntervalDays() != null) {
+                            try {
+                                scheduledForDate = visitIntervalCalculator.applyInterval(
+                                        created.getId(),
+                                        startDateRef,
+                                        bodyRef.scheduledIntervalDays());
+                            } catch (IllegalArgumentException iae) {
+                                throw new IllegalStateException(
+                                        "Invalid scheduledIntervalDays: " + iae.getMessage(), iae);
+                            }
+                        }
+
                         StudyEventDto dto = new StudyEventDto(
                                 String.valueOf(created.getId()),
                                 ssRef.getLabel(),
@@ -748,7 +774,9 @@ public class EventsApiController {
                                 null,
                                 blankToNull(created.getLocation()),
                                 "scheduled",
-                                defRef.isRepeating());
+                                defRef.isRepeating(),
+                                scheduledForDate == null ? null : scheduledForDate.toString(),
+                                bodyRef.scheduledIntervalDays());
 
                         return ResponseEntity.status(201).body(dto);
                     });
@@ -980,7 +1008,9 @@ public class EventsApiController {
                                 refreshed.getDateEnded() == null ? null : ISO_DATE.format(refreshed.getDateEnded()),
                                 blankToNull(refreshed.getLocation()),
                                 statusForSubjectEventStatus(refreshed.getSubjectEventStatus()),
-                                def != null && def.isRepeating());
+                                def != null && def.isRepeating(),
+                                /* scheduledFor */ null,
+                                /* scheduledIntervalDays */ null);
                         return ResponseEntity.ok(dto);
                     });
         } catch (Exception e) {
@@ -1355,7 +1385,9 @@ public class EventsApiController {
                 refreshed.getDateEnded() == null ? null : ISO_DATE.format(refreshed.getDateEnded()),
                 blankToNull(refreshed.getLocation()),
                 statusForSubjectEventStatus(refreshed.getSubjectEventStatus()),
-                def != null && def.isRepeating());
+                def != null && def.isRepeating(),
+                /* scheduledFor */ null,
+                /* scheduledIntervalDays */ null);
         return ResponseEntity.ok(dto);
     }
 
@@ -1475,12 +1507,21 @@ public class EventsApiController {
         return (s == null || s.isBlank()) ? null : s;
     }
 
-    /** Body of POST /pages/api/v1/events — schedule a new study event. */
+    /**
+     * Body of POST /pages/api/v1/events — schedule a new study event.
+     *
+     * <p>2026-06-19 — {@code scheduledIntervalDays} added for the nAMD
+     * treat-and-extend workflow. Optional + nullable; non-null values
+     * trigger a follow-up UPDATE that sets
+     * {@code study_event.scheduled_for} =
+     * {@code dateStarted + scheduledIntervalDays}.
+     */
     public record ScheduleEventRequest(
             String subjectId,
             String eventDefinitionOid,
             String dateStarted,
-            String location
+            String location,
+            Integer scheduledIntervalDays
     ) {}
 
     /**
