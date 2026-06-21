@@ -2319,6 +2319,7 @@
     "event": {
       "edit": "Edit",
       "cancel": "Cancel",
+      "sign": "[NEEDS_REVIEW] Sign visit",
       "moreActions": "[NEEDS_REVIEW] More actions",
       "save": "Save",
       "location": "Location",
@@ -2405,6 +2406,17 @@
       "errorSubmit": "[NEEDS_REVIEW] Cancellation failed — please try again later.",
       "successToast": "[NEEDS_REVIEW] Visit cancelled."
     }
+  },
+  "eventSign": {
+    "title": "[NEEDS_REVIEW] Sign visit",
+    "subtitle": "[NEEDS_REVIEW] Electronically sign visit {event} of {subject}.",
+    "passwordLabel": "[NEEDS_REVIEW] Password",
+    "passwordRequired": "[NEEDS_REVIEW] Password is required.",
+    "showPassword": "[NEEDS_REVIEW] Show password",
+    "attestation": "[NEEDS_REVIEW] I confirm I have reviewed the data for this visit and electronically attest to it.",
+    "attestationRequired": "[NEEDS_REVIEW] Attestation is required.",
+    "cancel": "[NEEDS_REVIEW] Cancel",
+    "confirm": "[NEEDS_REVIEW] Sign"
   },
   "eventDetail": {
     "title": "CRFs for this event",

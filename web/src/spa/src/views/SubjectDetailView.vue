@@ -12,6 +12,7 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
 import CancelEventDialog from '@/components/CancelEventDialog.vue'
+import SignEventDialog from '@/components/SignEventDialog.vue'
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
 import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
 import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
@@ -397,6 +398,63 @@ function onMenuEdit(ev: {
 function onMenuCancel(ev: { eventId: string; label: string }): void {
   openMenuEventId.value = null
   onCancelEvent(ev)
+}
+
+/**
+ * 2026-06-21 round 7 — per-visit sign action. Investigators (and any
+ * other writer role per EventEditAuthorization.roleMayEdit) can attest
+ * a single completed visit without committing the whole subject. The
+ * inline dialog collects the password + attestation; the result feeds
+ * back into the modal as an inline error on 401 / 412 (preflight).
+ */
+const signDialogEvent = ref<{ eventId: string; label: string } | null>(null)
+const signDialogSubmitting = ref(false)
+const signDialogError = ref<string | null>(null)
+
+function canSignEv(status: EventStatus): boolean {
+  // Mirror EventEditAuthorization.roleMayEdit on the client +
+  // the backend's "must be at least data-entry-started" check.
+  // Show the menu entry only for visits actually attestable.
+  const role = auth.user?.role ?? null
+  if (!role) return false
+  if (!(role === 'Investigator' || role === 'CRC' || role === 'Data Manager' || role === 'Administrator')) {
+    return false
+  }
+  return status === 'data-entry-started' || status === 'completed'
+}
+
+function onMenuSign(ev: { eventId: string; label: string }): void {
+  openMenuEventId.value = null
+  signDialogError.value = null
+  signDialogEvent.value = ev
+}
+
+async function onSignSubmit(payload: { password: string; attestation: boolean }): Promise<void> {
+  if (!signDialogEvent.value || !subject.value) return
+  signDialogSubmitting.value = true
+  signDialogError.value = null
+  try {
+    const result = await events.signEvent(
+      signDialogEvent.value.eventId,
+      payload.password,
+      payload.attestation,
+    )
+    if (!result.ok) {
+      signDialogError.value = result.message
+      return
+    }
+    // Refetch subject so the visit's status pill in the casebook
+    // flips to "Signiert" without a hard reload.
+    await subjects.fetchOne(subject.value.id)
+    signDialogEvent.value = null
+  } finally {
+    signDialogSubmitting.value = false
+  }
+}
+
+function onSignCancel(): void {
+  signDialogEvent.value = null
+  signDialogError.value = null
 }
 
 async function onEventCancelled() {
@@ -994,7 +1052,13 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
              markComplete navigation from CrfEntryView. The natural
              first-fold of subject-detail is the demographics card,
              so the hash makes the events panel jump into view. -->
-        <section id="events" class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5">
+        <!-- 2026-06-21 round 7 — the previous `overflow-clip` clipped
+             the kebab menu of any visit row near the bottom edge of
+             the card. The card still rounds correctly without the
+             clip (no children paint outside the radius normally), so
+             dropping it lets the absolute-positioned popover overflow
+             cleanly. -->
+        <section id="events" class="bg-white border border-slate-200 rounded-muw mb-5">
           <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
               {{ t('subjectDetail.eventsHeading') }}
@@ -1065,7 +1129,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                       <span>{{ t('subjectDetail.openEvent') }}</span>
                     </RouterLink>
                     <div
-                      v-if="canEditEv(ev.status) || canCancelEv(ev.status)"
+                      v-if="canEditEv(ev.status) || canCancelEv(ev.status) || canSignEv(ev.status)"
                       v-click-outside="() => (openMenuEventId === ev.eventId ? (openMenuEventId = null) : null)"
                       class="relative"
                       data-testid="event-row-more-menu"
@@ -1079,7 +1143,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                       >⋮</button>
                       <div
                         v-if="openMenuEventId === ev.eventId"
-                        class="absolute right-0 mt-1 min-w-[10rem] rounded-md border border-slate-200 bg-white shadow-md z-10 py-1 text-left"
+                        class="absolute right-0 mt-1 min-w-[10rem] rounded-md border border-slate-200 bg-white shadow-lg z-50 py-1 text-left"
                       >
                         <button
                           v-if="canEditEv(ev.status)"
@@ -1088,6 +1152,13 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                           data-testid="event-row-edit-button"
                           @click="onMenuEdit(ev)"
                         >{{ t('subjectDetail.event.edit') }}</button>
+                        <button
+                          v-if="canSignEv(ev.status)"
+                          type="button"
+                          class="block w-full text-left px-3 py-1.5 text-xs text-muw-blue hover:bg-slate-100"
+                          data-testid="event-row-sign-button"
+                          @click="onMenuSign(ev)"
+                        >{{ t('subjectDetail.event.sign') }}</button>
                         <button
                           v-if="canCancelEv(ev.status)"
                           type="button"
@@ -1315,6 +1386,17 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       :event-label="cancelDialogEvent.label"
       @cancelled="onEventCancelled"
       @close="cancelDialogEvent = null"
+    />
+
+    <!-- 2026-06-21 round 7 — per-visit electronic signature. -->
+    <SignEventDialog
+      :open="signDialogEvent !== null"
+      :event-label="signDialogEvent?.label ?? ''"
+      :subject-label="subject?.id ?? ''"
+      :is-submitting="signDialogSubmitting"
+      :error-message="signDialogError"
+      @submit="onSignSubmit"
+      @cancel="onSignCancel"
     />
 
     <!-- Phase E.6 per-eye cohort transition — dialog. Sibling

@@ -2321,6 +2321,7 @@
     "event": {
       "edit": "Bearbeiten",
       "cancel": "Stornieren",
+      "sign": "Visite signieren",
       "moreActions": "Weitere Aktionen",
       "save": "Speichern",
       "location": "Ort",
@@ -2407,6 +2408,17 @@
       "errorSubmit": "Stornierung fehlgeschlagen — bitte später erneut versuchen.",
       "successToast": "Visite storniert."
     }
+  },
+  "eventSign": {
+    "title": "Visite signieren",
+    "subtitle": "Visite {event} von {subject} elektronisch signieren.",
+    "passwordLabel": "Passwort",
+    "passwordRequired": "Bitte das Passwort eingeben.",
+    "showPassword": "Passwort anzeigen",
+    "attestation": "Ich bestätige, die Daten dieser Visite geprüft zu haben und attestiere sie hiermit elektronisch.",
+    "attestationRequired": "Die Bestätigung ist erforderlich.",
+    "cancel": "Abbrechen",
+    "confirm": "Signieren"
   },
   "eventDetail": {
     "title": "CRFs dieser Visite",
