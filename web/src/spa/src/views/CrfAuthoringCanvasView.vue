@@ -7,6 +7,8 @@ import PaletteRail from '@/components/crfAuthoring/PaletteRail.vue'
 import SectionCanvas from '@/components/crfAuthoring/SectionCanvas.vue'
 import PropertiesRail from '@/components/crfAuthoring/PropertiesRail.vue'
 import { useCrfAuthoringStore } from '@/stores/crfAuthoring'
+import { useCrfPreviewStore } from '@/stores/crfPreview'
+import PreviewCrfEntryView from '@/views/PreviewCrfEntryView.vue'
 import { CrfAuthoringErrorsKey } from '@/components/crfAuthoring/errorsInjection'
 import { humanizeValidationError } from '@/components/crfAuthoring/humanizeValidationError'
 
@@ -44,6 +46,21 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useCrfAuthoringStore()
+
+/**
+ * 2026-06-21 user-feedback batch — preview button + overlay. The
+ * preview store hydrates from the live authoring draft and the
+ * existing PreviewCrfEntryView renders the same widgets the runtime
+ * CRF-entry view uses. No persistence; close returns to the canvas.
+ */
+const previewStore = useCrfPreviewStore()
+
+function onPreview(): void {
+  previewStore.load(store.draft, { crfName: crfName.value })
+}
+function onClosePreview(): void {
+  previewStore.close()
+}
 
 const crfOid = computed(() => {
   const raw = route.params.crfOid
@@ -228,6 +245,14 @@ function onUseLegacyWizard(): void {
         </button>
         <button
           type="button"
+          class="text-xs px-3 py-1.5 rounded border border-slate-300 text-slate-700 hover:bg-slate-100"
+          data-testid="crf-canvas-preview"
+          @click="onPreview"
+        >
+          {{ t('crfAuthoring.canvas.preview') }}
+        </button>
+        <button
+          type="button"
           class="text-xs px-3 py-1.5 rounded border border-muw-blue text-muw-blue hover:bg-muw-blue/5 disabled:opacity-50"
           :disabled="isValidating || !crfOid"
           data-testid="crf-canvas-validate"
@@ -334,5 +359,14 @@ function onUseLegacyWizard(): void {
         />
       </label>
     </footer>
+
+    <!-- 2026-06-21 user-feedback batch — preview overlay. Mounted only
+         when the preview store is open so descendants don't pay the
+         render cost while the operator's still authoring. -->
+    <PreviewCrfEntryView
+      v-if="previewStore.isOpen"
+      as-overlay
+      @close="onClosePreview"
+    />
   </div>
 </template>
