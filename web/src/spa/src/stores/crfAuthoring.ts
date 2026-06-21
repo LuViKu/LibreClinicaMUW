@@ -767,6 +767,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
         id: string
         labelKey: string
         bilateralSection?: boolean
+        sectionLabel?: string
         generate: (translate: (k: string) => string) => Array<Omit<AuthoringItem, 'uid'>>
       }>
       translate: (key: string) => string
@@ -783,6 +784,11 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
 
     const bilateral = preset.bilateralSection ?? false
     const presetTitle = opts.translate(preset.labelKey)
+    // 2026-06-21 round 3 — preset overrides the section tag in addition to
+    // the title. Uniqueness across siblings is enforced by appending a
+    // numeric suffix when the bare tag already exists (e.g. dropping IOP
+    // twice produces IOP + IOP_2).
+    const presetTag = preset.sectionLabel?.trim() ?? ''
 
     const target = draft.value.sections.find((s) => s.uid === targetSectionUid)
     // Transform an empty target section in place rather than leaving a
@@ -792,13 +798,17 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
       target.title = presetTitle
       target.bilateral = bilateral
       target.items = seeded
+      if (presetTag) {
+        target.label = uniqueSectionLabel(presetTag, target.uid)
+      }
       return target.uid
     }
 
     const nextOrdinal = draft.value.sections.length + 1
+    const fallbackLabel = `S${nextOrdinal}`
     const newSection: AuthoringSection = {
       uid: nextUid('sec'),
-      label: `S${nextOrdinal}`,
+      label: presetTag ? uniqueSectionLabel(presetTag, null) : fallbackLabel,
       title: presetTitle,
       instructions: '',
       ordinal: nextOrdinal,
@@ -820,6 +830,29 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
       s.ordinal = i + 1
     })
     return newSection.uid
+  }
+
+  /**
+   * 2026-06-21 round 3 — return {@code base} if no other section is
+   * using that exact label, otherwise append {@code _2}, {@code _3}, …
+   * until a free slot is found. {@code excludeUid} skips the named
+   * section's own label (used when transforming an empty section
+   * in-place, where the section being renamed must not collide with
+   * itself).
+   */
+  function uniqueSectionLabel(base: string, excludeUid: string | null): string {
+    const taken = new Set(
+      draft.value.sections
+        .filter((s) => s.uid !== excludeUid)
+        .map((s) => s.label.trim().toUpperCase()),
+    )
+    const seed = base.trim().toUpperCase()
+    if (!taken.has(seed)) return seed
+    for (let i = 2; i < 1000; i++) {
+      const candidate = `${seed}_${i}`
+      if (!taken.has(candidate)) return candidate
+    }
+    return seed
   }
 
   /**
