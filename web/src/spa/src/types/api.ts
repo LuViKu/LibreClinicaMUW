@@ -4274,6 +4274,8 @@ export interface components {
             eventCrfOid?: string;
             subjectId?: string;
             eventLabel?: string;
+            /** Format: int32 */
+            studyEventId?: number;
             schema?: components["schemas"]["CrfSchemaDto"];
             values?: {
                 [key: string]: unknown;
