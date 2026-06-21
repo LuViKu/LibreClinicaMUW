@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, inject, ref } from 'vue'
+import type { ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
+import { CrfAuthoringErrorsKey } from './errorsInjection'
 
 import {
   useCrfAuthoringStore,
@@ -44,6 +46,26 @@ import { findPreset } from './presetCatalog'
 
 const { t } = useI18n()
 const store = useCrfAuthoringStore()
+
+/**
+ * Per-field error map provided by CrfAuthoringCanvasView. Defaults to an
+ * empty computed so item rows render normally when no validation has
+ * been attempted yet.
+ */
+const fieldErrors = inject<ComputedRef<Record<string, string>>>(
+  CrfAuthoringErrorsKey,
+  computed(() => ({})),
+)
+
+/**
+ * Look up an item's error by OID. Used by the item-row v-class +
+ * inline error message under the row. Returns {@code undefined} when
+ * the item is clean (or the OID is blank — defensive).
+ */
+function errorForItem(oid: string): string | undefined {
+  if (!oid) return undefined
+  return fieldErrors.value[oid]
+}
 
 const sections = computed(() => store.draft.sections)
 
@@ -398,8 +420,11 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
             <template #item="{ element: item, index: iIdx }">
               <div
                 :key="item.uid"
+                :data-item-uid="item.uid"
                 class="flex items-center gap-2 px-2 py-1.5 rounded border bg-white hover:border-muw-blue/50 cursor-pointer"
-                :class="store.selectedItemUid === item.uid ? 'border-muw-blue ring-1 ring-muw-blue/40' : 'border-slate-200'"
+                :class="errorForItem(item.oid)
+                  ? 'border-red-500 ring-1 ring-red-300 bg-red-50/40'
+                  : (store.selectedItemUid === item.uid ? 'border-muw-blue ring-1 ring-muw-blue/40' : 'border-slate-200')"
                 :data-testid="`crf-canvas-item-${sIdx}-${iIdx}`"
                 @click="onItemClick(item)"
               >
@@ -422,6 +447,13 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
                   </div>
                   <div class="text-[10px] font-mono text-slate-500 truncate">
                     {{ item.oid || '—' }} · {{ item.dataType }}
+                  </div>
+                  <div
+                    v-if="errorForItem(item.oid)"
+                    class="text-[10px] text-red-700 mt-0.5"
+                    :data-testid="`crf-canvas-item-error-${sIdx}-${iIdx}`"
+                  >
+                    {{ errorForItem(item.oid) }}
                   </div>
                 </div>
                 <button

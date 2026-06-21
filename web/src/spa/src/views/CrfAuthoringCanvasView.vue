@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, provide, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
 
@@ -7,6 +7,7 @@ import PaletteRail from '@/components/crfAuthoring/PaletteRail.vue'
 import SectionCanvas from '@/components/crfAuthoring/SectionCanvas.vue'
 import PropertiesRail from '@/components/crfAuthoring/PropertiesRail.vue'
 import { useCrfAuthoringStore } from '@/stores/crfAuthoring'
+import { CrfAuthoringErrorsKey } from '@/components/crfAuthoring/errorsInjection'
 
 /**
  * App-feedback Wave 2 (2026-06-19) — CRF authoring canvas view.
@@ -57,6 +58,14 @@ const crfName = computed(() => {
 const formError = ref<string | null>(null)
 const submitParseErrors = ref<string[]>([])
 const submitFieldErrors = ref<Record<string, string>>({})
+// Validate-only state: separate from save errors so re-validating after
+// edits doesn't tear down a still-pending save banner. Lit-up the
+// inline highlights via provide/inject (CrfAuthoringErrorsKey) so any
+// descendant can opt-in without prop drilling.
+const isValidating = ref(false)
+const lastValidationOk = ref<boolean | null>(null)
+
+provide(CrfAuthoringErrorsKey, computed(() => submitFieldErrors.value))
 
 onMounted(() => {
   // Fresh draft + drop any catalog cache from a previous session.
@@ -64,10 +73,83 @@ onMounted(() => {
   void store.loadResponseSetCatalog()
 })
 
+async function onValidate(): Promise<void> {
+  if (!crfOid.value) return
+  formError.value = null
+  submitParseErrors.value = []
+  submitFieldErrors.value = {}
+  isValidating.value = true
+  lastValidationOk.value = null
+  try {
+    const result = await store.preview(crfOid.value)
+    if (result.ok) {
+      lastValidationOk.value = true
+      return
+    }
+    lastValidationOk.value = false
+    formError.value = result.message ?? t('crfAuthoring.canvas.errors.unknown')
+    submitParseErrors.value = result.parseErrors
+    submitFieldErrors.value = result.fieldErrors
+  } finally {
+    isValidating.value = false
+  }
+}
+
+/**
+ * Build a flat list of failures the summary card can render.
+ * Each entry knows its OID + the section/item indices needed for the
+ * "Springen" anchor link so the operator can scroll to the offending
+ * item.
+ */
+interface FieldErrorEntry {
+  oid: string
+  message: string
+  sectionIndex: number | null
+  itemUid: string | null
+  itemName: string | null
+}
+
+const fieldErrorList = computed<FieldErrorEntry[]>(() => {
+  const out: FieldErrorEntry[] = []
+  for (const [oid, message] of Object.entries(submitFieldErrors.value)) {
+    let sectionIndex: number | null = null
+    let itemUid: string | null = null
+    let itemName: string | null = null
+    // OIDs come back with optional `items[oid].field` or `sections[label].*`
+    // paths from the backend validator; match the bare OID first.
+    const directMatch = oid.replace(/^items\./, '').replace(/\.(name|oid|.*)$/, '')
+    for (let si = 0; si < store.draft.sections.length; si++) {
+      const sec = store.draft.sections[si]!
+      const found = sec.items.find((it) => it.oid === directMatch || it.oid === oid)
+      if (found) {
+        sectionIndex = si
+        itemUid = found.uid
+        itemName = found.name || found.oid
+        break
+      }
+    }
+    out.push({ oid, message, sectionIndex, itemUid, itemName })
+  }
+  return out
+})
+
+function jumpToError(entry: FieldErrorEntry): void {
+  if (entry.itemUid) {
+    store.selectItem(entry.itemUid)
+    // Defer scroll until the next tick so the item card is mounted /
+    // re-rendered with its error highlight.
+    void nextTick(() => {
+      const el = document.querySelector(`[data-item-uid="${entry.itemUid}"]`)
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }
+}
+
 async function onSave(): Promise<void> {
   formError.value = null
   submitParseErrors.value = []
   submitFieldErrors.value = {}
+  lastValidationOk.value = null
   const result = await store.submit(crfOid.value)
   if (result.ok) {
     // Land back on the CRF library so the operator can verify the new
@@ -120,6 +202,15 @@ function onUseLegacyWizard(): void {
         </button>
         <button
           type="button"
+          class="text-xs px-3 py-1.5 rounded border border-muw-blue text-muw-blue hover:bg-muw-blue/5 disabled:opacity-50"
+          :disabled="isValidating || !crfOid"
+          data-testid="crf-canvas-validate"
+          @click="onValidate"
+        >
+          {{ isValidating ? t('crfAuthoring.canvas.validating') : t('crfAuthoring.canvas.validate') }}
+        </button>
+        <button
+          type="button"
           class="text-xs px-3 py-1.5 rounded bg-muw-blue text-white hover:bg-muw-blue/90 disabled:opacity-50"
           :disabled="store.isSubmitting || !crfOid"
           data-testid="crf-canvas-save"
@@ -130,16 +221,57 @@ function onUseLegacyWizard(): void {
       </div>
     </header>
 
-    <!-- Error banner -->
+    <!-- Validate-only success toast — disappears on the next change. -->
+    <div
+      v-if="lastValidationOk === true"
+      class="px-4 py-2 bg-emerald-50 border-b border-emerald-200 text-xs text-emerald-800"
+      role="status"
+      data-testid="crf-canvas-validate-ok"
+    >
+      {{ t('crfAuthoring.canvas.validationOk') }}
+    </div>
+
+    <!-- Error banner — top summary listing every offending item with
+         "Springen" anchor links + parse-error tail. Same data drives
+         the inline red borders inside the canvas via inject. -->
     <div
       v-if="formError"
-      class="px-4 py-2 bg-red-50 border-b border-red-200 text-xs text-red-800"
+      class="px-4 py-3 bg-red-50 border-b border-red-200 text-xs text-red-800"
       role="alert"
       data-testid="crf-canvas-error"
     >
-      <strong>{{ t('crfAuthoring.canvas.errorTitle') }}</strong>
-      {{ formError }}
-      <ul v-if="submitParseErrors.length > 0" class="mt-1 list-disc list-inside">
+      <div class="flex items-start gap-2">
+        <strong class="shrink-0">{{ t('crfAuthoring.canvas.errorTitle') }}</strong>
+        <span>{{ formError }}</span>
+      </div>
+      <ul
+        v-if="fieldErrorList.length > 0"
+        class="mt-2 space-y-1"
+        data-testid="crf-canvas-error-list"
+      >
+        <li
+          v-for="entry in fieldErrorList"
+          :key="entry.oid"
+          class="flex items-start gap-1.5"
+        >
+          <span class="text-red-500">•</span>
+          <button
+            v-if="entry.itemUid"
+            type="button"
+            class="text-left underline decoration-dotted hover:text-red-900"
+            :data-testid="`crf-canvas-error-jump-${entry.oid}`"
+            @click="jumpToError(entry)"
+          >
+            <span class="font-semibold">{{ entry.itemName || entry.oid }}</span>
+            <span class="ml-1.5 text-red-700">{{ entry.message }}</span>
+          </button>
+          <span v-else>
+            <span class="font-semibold">{{ entry.oid }}</span>
+            <span class="ml-1.5 text-red-700">{{ entry.message }}</span>
+          </span>
+        </li>
+      </ul>
+      <ul v-if="submitParseErrors.length > 0" class="mt-2 list-disc list-inside">
         <li v-for="(msg, idx) in submitParseErrors" :key="idx">{{ msg }}</li>
       </ul>
     </div>
