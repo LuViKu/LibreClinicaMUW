@@ -2276,7 +2276,7 @@
     "eventsCount": "events",
     "scheduleEvent": "Schedule event",
     "openQueries": "Open queries",
-    "openEvent": "Open CRFs →",
+    "openEvent": "Open CRFs",
     "column": {
       "event": "Event",
       "dateStart": "Start date",

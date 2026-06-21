@@ -2278,7 +2278,7 @@
     "eventsCount": "Visiten",
     "scheduleEvent": "Visite planen",
     "openQueries": "Offene Rückfragen",
-    "openEvent": "CRFs öffnen →",
+    "openEvent": "CRFs öffnen",
     "column": {
       "event": "Visite",
       "dateStart": "Startdatum",
