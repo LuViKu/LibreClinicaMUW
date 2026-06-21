@@ -31,13 +31,19 @@ async function flushAll(): Promise<void> {
 // vi.mock factories are hoisted to the top of the file, so any
 // references they capture must be created via vi.hoisted (also hoisted)
 // rather than as plain top-level consts.
-const { mergeLocaleMessage } = vi.hoisted(() => ({
+const { mergeLocaleMessage, getLocaleMessage } = vi.hoisted(() => ({
   mergeLocaleMessage: vi.fn(),
+  // Returning an empty object models "first module loading" — the
+  // collision detector (fix #7) walks the result against the
+  // incoming payload; a non-overlapping baseline produces zero
+  // warnings, which matches the existing happy-path tests.
+  getLocaleMessage: vi.fn(() => ({})),
 }))
 vi.mock('@/i18n', () => ({
   i18n: {
     global: {
       mergeLocaleMessage,
+      getLocaleMessage,
     },
   },
 }))
@@ -200,5 +206,61 @@ describe('useStudyModuleStore', () => {
 
     const { activeModule } = useActiveStudyModule()
     expect(activeModule.value).toBe(namd)
+  })
+})
+
+/* ---------------------------------------------------------------- */
+/* PR #245 hardening — fix #7 — i18n collision detector             */
+/* ---------------------------------------------------------------- */
+
+describe('detectI18nCollisions()', () => {
+  it('logs nothing when keys do not overlap', async () => {
+    const { detectI18nCollisions } = await import('../studyModules')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    detectI18nCollisions(
+      'NAMD',
+      'de',
+      { studyModules: { other: { label: 'X' } } },
+      { studyModules: { namd: { label: 'Y' } } },
+    )
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('logs once per overlapping leaf key with the locale + dotted path', async () => {
+    const { detectI18nCollisions } = await import('../studyModules')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    detectI18nCollisions(
+      'NAMD',
+      'de',
+      { studyModules: { namd: { label: 'A', other: 'keep' } } },
+      { studyModules: { namd: { label: 'B' } } },
+    )
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0][0]).toContain('de.studyModules.namd.label')
+    expect(warn.mock.calls[0][0]).toContain('NAMD')
+    warn.mockRestore()
+  })
+
+  it('stays silent when the incoming value matches the existing one (same string)', async () => {
+    const { detectI18nCollisions } = await import('../studyModules')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    detectI18nCollisions(
+      'NAMD',
+      'de',
+      { foo: 'X' },
+      { foo: 'X' },
+    )
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it('is a no-op when the existing tree is null/undefined (first module loading)', async () => {
+    const { detectI18nCollisions } = await import('../studyModules')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    detectI18nCollisions('NAMD', 'de', null, { studyModules: { namd: { label: 'A' } } })
+    detectI18nCollisions('NAMD', 'de', undefined, { studyModules: { namd: { label: 'A' } } })
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
   })
 })
