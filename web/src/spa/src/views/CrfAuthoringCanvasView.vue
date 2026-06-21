@@ -157,8 +157,9 @@ function onUseLegacyWizard(): void {
         <span>{{ t('crfAuthoring.canvas.versionName') }}</span>
         <input
           type="text"
-          class="text-xs border-slate-200 rounded px-2 py-0.5"
+          class="text-xs border border-slate-300 bg-white rounded px-2 py-0.5 focus:outline-none focus:border-muw-blue focus:ring-1 focus:ring-muw-blue placeholder:text-slate-400"
           :value="store.draft.versionName"
+          :placeholder="t('crfAuthoring.canvas.versionNamePlaceholder')"
           data-testid="crf-canvas-version-name"
           @input="(ev) => store.setVersionName((ev.target as HTMLInputElement).value)"
         />
@@ -167,8 +168,9 @@ function onUseLegacyWizard(): void {
         <span>{{ t('crfAuthoring.canvas.versionDescription') }}</span>
         <input
           type="text"
-          class="flex-1 text-xs border-slate-200 rounded px-2 py-0.5"
+          class="flex-1 text-xs border border-slate-300 bg-white rounded px-2 py-0.5 focus:outline-none focus:border-muw-blue focus:ring-1 focus:ring-muw-blue placeholder:text-slate-400"
           :value="store.draft.versionDescription"
+          :placeholder="t('crfAuthoring.canvas.versionDescriptionPlaceholder')"
           data-testid="crf-canvas-version-description"
           @input="(ev) => store.setVersionDescription((ev.target as HTMLInputElement).value)"
         />

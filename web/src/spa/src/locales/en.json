@@ -1361,6 +1361,8 @@
       "saving": "[NEEDS_REVIEW] Saving …",
       "versionName": "[NEEDS_REVIEW] Version name",
       "versionDescription": "[NEEDS_REVIEW] Version description",
+      "versionNamePlaceholder": "[NEEDS_REVIEW] e.g. v1.0",
+      "versionDescriptionPlaceholder": "[NEEDS_REVIEW] Short description of changes in this version",
       "errorTitle": "[NEEDS_REVIEW] Save failed:",
       "errors": {
         "unknown": "[NEEDS_REVIEW] Unknown error."
@@ -1401,7 +1403,28 @@
         "oidHelper": "[NEEDS_REVIEW] Suggested from the item name; can be overridden.",
         "descriptionField": "[NEEDS_REVIEW] Description label",
         "dataTypeField": "[NEEDS_REVIEW] Data type",
+        "dataTypeHint": {
+          "ST": "[NEEDS_REVIEW] Free-form text (single or multi-line).",
+          "INT": "[NEEDS_REVIEW] Whole number without decimals, e.g. letter count.",
+          "REAL": "[NEEDS_REVIEW] Numeric value with decimals, e.g. mmHg.",
+          "DATE": "[NEEDS_REVIEW] Full date (DD.MM.YYYY).",
+          "PDATE": "[NEEDS_REVIEW] Partial date (year or month/year).",
+          "BL": "[NEEDS_REVIEW] Yes/no value, stored as a boolean column.",
+          "TRISTATE_REASON": "[NEEDS_REVIEW] Three-state: Yes / No / Unknown plus a required reason on “No”.",
+          "FILE": "[NEEDS_REVIEW] File attachment (e.g. PDF, image)."
+        },
         "responseTypeField": "[NEEDS_REVIEW] Response type",
+        "responseTypeHint": {
+          "text": "[NEEDS_REVIEW] Single-line input.",
+          "textarea": "[NEEDS_REVIEW] Multi-line text input.",
+          "radio": "[NEEDS_REVIEW] Single choice as radio buttons (compact, all options visible).",
+          "single-select": "[NEEDS_REVIEW] Single choice as dropdown (compact for many options).",
+          "multi-select": "[NEEDS_REVIEW] Multi-choice dropdown.",
+          "checkbox": "[NEEDS_REVIEW] Single checkbox (yes/no) or list of checkboxes.",
+          "calculation": "[NEEDS_REVIEW] Value is computed automatically from other items.",
+          "number-stepper": "[NEEDS_REVIEW] Numeric input with up/down arrows.",
+          "file": "[NEEDS_REVIEW] File upload control."
+        },
         "unitsField": "[NEEDS_REVIEW] Units",
         "defaultField": "[NEEDS_REVIEW] Default value",
         "requiredField": "[NEEDS_REVIEW] Required",

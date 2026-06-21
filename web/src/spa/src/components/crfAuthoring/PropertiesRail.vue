@@ -286,6 +286,9 @@ function onClearSelection(): void {
           >
             <option v-for="dt in DATA_TYPES" :key="dt" :value="dt">{{ dt }}</option>
           </select>
+          <p class="mt-1 text-[10.5px] leading-snug text-slate-500">
+            {{ t(`crfAuthoring.canvas.properties.dataTypeHint.${selectedItem.dataType}`) }}
+          </p>
         </div>
 
         <!-- Response type -->
@@ -302,6 +305,9 @@ function onClearSelection(): void {
           >
             <option v-for="rt in allowedResponseTypes" :key="rt" :value="rt">{{ rt }}</option>
           </select>
+          <p class="mt-1 text-[10.5px] leading-snug text-slate-500">
+            {{ t(`crfAuthoring.canvas.properties.responseTypeHint.${selectedItem.responseType}`) }}
+          </p>
         </div>
 
         <!-- Units -->

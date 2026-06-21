@@ -23,8 +23,6 @@
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { useAuthStore } from '@/stores/auth'
-import NamdHeader from '../components/NamdHeader.vue'
 import NamdPatientBanner from '../components/NamdPatientBanner.vue'
 import NamdTabs, { type NamdTabId } from '../components/NamdTabs.vue'
 import NamdOverviewTab from './NamdOverviewTab.vue'
@@ -34,7 +32,6 @@ import NamdReportTab from './NamdReportTab.vue'
 import { useNamdVisitData } from '../composables/useNamdVisitData'
 
 const route = useRoute()
-const auth = useAuthStore()
 const { t } = useI18n()
 
 const tab = ref<NamdTabId>('overview')
@@ -51,19 +48,12 @@ const { data, loading, error } = useNamdVisitData({
   mock: isMock,
 })
 
-const studyLabel = computed(() => {
-  const s = auth.user?.activeStudy
-  if (!s) return ''
-  return s.name ?? ''
-})
-
-const userLabel = computed(() => auth.user?.displayName ?? auth.user?.username ?? '')
 </script>
 
 <template>
   <div data-testid="namd-workspace-view" class="min-h-screen bg-slate-50">
-    <NamdHeader :study-label="studyLabel" :user-label="userLabel" />
-
+    <!-- The shared TopBar handles study breadcrumb + workspace nav entry.
+         The workspace view starts at the patient banner. -->
     <NamdPatientBanner
       v-if="data"
       :patient="data.patient"

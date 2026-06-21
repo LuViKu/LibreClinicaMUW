@@ -1361,6 +1361,8 @@
       "saving": "Wird gespeichert …",
       "versionName": "Versionsname",
       "versionDescription": "Versionsbeschreibung",
+      "versionNamePlaceholder": "z. B. v1.0",
+      "versionDescriptionPlaceholder": "Kurze Beschreibung der Änderungen in dieser Version",
       "errorTitle": "Speichern fehlgeschlagen:",
       "errors": {
         "unknown": "Unbekannter Fehler."
@@ -1401,7 +1403,28 @@
         "oidHelper": "Wird aus dem Item-Namen vorgeschlagen; überschreibbar.",
         "descriptionField": "Beschreibungs-Label",
         "dataTypeField": "Datentyp",
+        "dataTypeHint": {
+          "ST": "Frei eingegebener Text (einzeilig oder mehrzeilig).",
+          "INT": "Ganzzahl ohne Nachkommastellen, z. B. Anzahl Buchstaben.",
+          "REAL": "Numerischer Wert mit Nachkommastellen, z. B. mmHg.",
+          "DATE": "Vollständiges Datum (TT.MM.JJJJ).",
+          "PDATE": "Partielles Datum (Jahr oder Monat/Jahr).",
+          "BL": "Ja/Nein-Wert, im Hintergrund als boolesche Spalte gespeichert.",
+          "TRISTATE_REASON": "Dreistufig: Ja / Nein / Unbekannt mit Pflicht-Begründungsfeld bei „Nein“.",
+          "FILE": "Dateianhang (z. B. PDF, Bild)."
+        },
         "responseTypeField": "Antworttyp",
+        "responseTypeHint": {
+          "text": "Einzeiliges Eingabefeld.",
+          "textarea": "Mehrzeiliges Texteingabefeld.",
+          "radio": "Einzelauswahl als Radio-Buttons (kompakt, alle Optionen sichtbar).",
+          "single-select": "Einzelauswahl als Dropdown (kompakt für viele Optionen).",
+          "multi-select": "Mehrfachauswahl als Dropdown.",
+          "checkbox": "Einzelne Checkbox (Ja/Nein) oder Liste von Checkboxen.",
+          "calculation": "Wert wird automatisch aus anderen Items berechnet.",
+          "number-stepper": "Numerische Eingabe mit Hoch/Runter-Tasten.",
+          "file": "Datei-Upload-Steuerelement."
+        },
         "unitsField": "Einheit",
         "defaultField": "Standardwert",
         "requiredField": "Pflichtfeld",
