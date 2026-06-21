@@ -2532,6 +2532,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/crfs/{crfOid}/versions/{versionOid}/contents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getVersionContents"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -8972,6 +8988,29 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    getVersionContents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                crfOid: string;
+                versionOid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CrfVersionAuthoringRequest"];
                 };
             };
         };

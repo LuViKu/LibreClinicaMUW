@@ -1189,6 +1189,11 @@
       "failed": "Migration fehlgeschlagen: {message}"
     },
     "authorManually": "Neue Version anlegen",
+    "forkMenu": {
+      "label": "Aus Vorversion übernehmen",
+      "heading": "Aus Vorversion übernehmen",
+      "fromVersion": "aus „{name}\" kopieren"
+    },
     "ophthCatalog": {
       "title": "Aus Ophthalmologie-Katalog hinzufügen",
       "subtitle": "Vordefinierte Felder mit OID + Einheit + Modalitätsbindung — wählen Sie ein Feld, das in den aktuellen Abschnitt eingefügt werden soll.",
@@ -1366,6 +1371,12 @@
       "validate": "Validieren",
       "validating": "Validiere …",
       "validationOk": "Validierung erfolgreich — keine Fehler.",
+      "fork": {
+        "loading": "Inhalte der Vorversion werden geladen …",
+        "loaded": "Inhalte der Vorversion übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",
+        "loadedNamed": "Inhalte aus Version „{name}\" übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",
+        "failed": "Vorversion konnte nicht geladen werden — Entwurf wurde mit einer leeren Sektion gestartet."
+      },
       "preview": "Vorschau",
       "previewing": "Erzeuge Vorschau …",
       "versionName": "Versionsname",

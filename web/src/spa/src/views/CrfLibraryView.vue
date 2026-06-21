@@ -150,7 +150,49 @@ async function submitUpload() {
 // inline wizard overlay was retired in this release — the canvas view
 // is now the only authoring surface reachable from the library.
 function openAuthoring(crf: Crf): void {
+  forkMenuCrfOid.value = null
   router.push({ name: 'crfAuthoringCanvas', params: { crfOid: crf.oid } })
+}
+
+/**
+ * 2026-06-21 user-feedback round 6 — fork picker state. Single ref
+ * means clicking another CRF's chevron implicitly closes the previous
+ * menu, and the click-outside directive resets it when the operator
+ * clicks anywhere else.
+ */
+const forkMenuCrfOid = ref<string | null>(null)
+function toggleForkMenu(oid: string): void {
+  forkMenuCrfOid.value = forkMenuCrfOid.value === oid ? null : oid
+}
+function forkFromVersion(crf: Crf, v: { oid: string; name: string }): void {
+  forkMenuCrfOid.value = null
+  router.push({
+    name: 'crfAuthoringCanvas',
+    params: { crfOid: crf.oid },
+    query: { fromVersion: v.oid, fromVersionName: v.name },
+  })
+}
+
+/**
+ * Local click-outside directive — see SubjectDetailView for the
+ * shape rationale. Inlined here so library + subject detail don't
+ * yet need to share a util.
+ */
+const vClickOutside = {
+  mounted(el: HTMLElement & { __clickOutside?: (ev: Event) => void }, binding: { value: () => void }) {
+    el.__clickOutside = (ev: Event) => {
+      if (!el.contains(ev.target as Node)) {
+        binding.value?.()
+      }
+    }
+    document.addEventListener('pointerdown', el.__clickOutside, true)
+  },
+  unmounted(el: HTMLElement & { __clickOutside?: (ev: Event) => void }) {
+    if (el.__clickOutside) {
+      document.removeEventListener('pointerdown', el.__clickOutside, true)
+      delete el.__clickOutside
+    }
+  },
 }
 
 /* ----------------------------- Disable ---------------------------- */
@@ -287,16 +329,57 @@ const visibleRows = computed(() =>
               <p v-if="crf.description" class="text-xs text-slate-500 mt-1">{{ crf.description }}</p>
             </div>
             <div v-if="canManage && crf.status !== 'removed'" class="flex items-center gap-2 text-xs">
-              <!-- 2026-06-21 user-feedback batch — pivoting authoring
-                   to the canvas builder; the "Version hochladen" XLSX
-                   upload action is no longer surfaced here. The
-                   upload endpoint + the dialog remain in place so the
-                   legacy entry point can be restored if a sponsor
-                   workbook needs to round-trip. -->
-              <button
-                class="text-muw-blue hover:underline"
-                @click="openAuthoring(crf)"
-              >{{ t('crfLibrary.authorManually') }}</button>
+              <!-- 2026-06-21 user-feedback round 6 — split-button: the
+                   primary action stays "Neue Version anlegen" (blank
+                   canvas) and the adjacent chevron opens a picker that
+                   lets the operator fork from a prior version. The
+                   canvas reads ?fromVersion=<oid> + ?fromVersionName=<name>
+                   and seeds the draft via store.loadFromVersion().
+                   The upload endpoint + dialog stay in place even
+                   though the surface is hidden — the legacy entry
+                   point can be restored if a sponsor workbook needs
+                   to round-trip. -->
+              <div
+                class="inline-flex items-center"
+                v-click-outside="() => (forkMenuCrfOid === crf.oid ? (forkMenuCrfOid = null) : null)"
+              >
+                <button
+                  class="text-muw-blue hover:underline"
+                  @click="openAuthoring(crf)"
+                >{{ t('crfLibrary.authorManually') }}</button>
+                <button
+                  v-if="crf.versions.length > 0"
+                  type="button"
+                  class="ml-1 px-1.5 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-100 inline-flex items-center"
+                  :aria-label="t('crfLibrary.forkMenu.label')"
+                  :aria-expanded="forkMenuCrfOid === crf.oid"
+                  data-testid="crf-library-fork-toggle"
+                  @click="toggleForkMenu(crf.oid)"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <div
+                  v-if="forkMenuCrfOid === crf.oid"
+                  class="absolute mt-7 z-20 min-w-[14rem] rounded-md border border-slate-200 bg-white shadow-md py-1"
+                  data-testid="crf-library-fork-menu"
+                >
+                  <div class="px-3 py-1.5 text-[10px] uppercase tracking-wider text-slate-400">
+                    {{ t('crfLibrary.forkMenu.heading') }}
+                  </div>
+                  <button
+                    v-for="v in crf.versions.filter((x) => x.status !== 'removed')"
+                    :key="`fork-${v.oid}`"
+                    type="button"
+                    class="block w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+                    :data-testid="`crf-library-fork-from-${v.oid}`"
+                    @click="forkFromVersion(crf, v)"
+                  >
+                    {{ t('crfLibrary.forkMenu.fromVersion', { name: v.name }) }}
+                  </button>
+                </div>
+              </div>
               <span class="text-slate-300">·</span>
               <button class="text-rose-600 hover:underline" @click="onDisableCrf(crf)">
                 {{ t('crfLibrary.disable') }}

@@ -255,6 +255,48 @@ export type AuthoringSubmitResult =
   | { ok: true; version: CrfVersion }
   | { ok: false; fieldErrors: Record<string, string>; parseErrors: string[]; message?: string }
 
+/**
+ * 2026-06-21 user-feedback round 6 — wire shape for the fork-from-version
+ * endpoint ({@code GET /pages/api/v1/crfs/{oid}/versions/{vid}/contents}).
+ * Mirrors {@code CrfVersionAuthoringRequest} on the backend; only the
+ * fields the SPA hydrates are typed (extra fields are ignored).
+ */
+export interface ForkContentsWire {
+  versionName?: string
+  versionDescription?: string
+  revisionNotes?: string
+  sections?: ForkSectionWire[]
+}
+
+interface ForkSectionWire {
+  label?: string
+  title?: string
+  instructions?: string
+  ordinal?: number
+  items?: ForkItemWire[]
+}
+
+interface ForkItemWire {
+  name?: string
+  oid?: string
+  descriptionLabel?: string
+  leftItemText?: string
+  rightItemText?: string
+  units?: string
+  dataType?: string
+  defaultValue?: string
+  required?: boolean
+  responseSet?: ForkResponseSetWire | null
+  validation?: { regexp?: string; errorMessage?: string } | null
+}
+
+interface ForkResponseSetWire {
+  type?: string
+  label?: string
+  options?: Array<{ text?: string; value?: string }>
+  ref?: { label?: string } | null
+}
+
 export interface AuthoringPreviewSuccess {
   crfOid: string
   versionName: string
@@ -369,6 +411,117 @@ function nextUid(prefix: string): string {
   return `${prefix}-${uidCounter}`
 }
 
+/**
+ * 2026-06-21 user-feedback round 6 — convert the wire payload from the
+ * fork-from-version endpoint into an {@link AuthoringDraft}. Defensive
+ * against any missing/null field so a partially-populated legacy
+ * version still produces a usable draft.
+ *
+ * <p>{@code versionName} is intentionally blanked: the operator types a
+ * fresh name for the forked version and the backend's unique-name
+ * check would otherwise reject the submit with the prior version's name.
+ */
+function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
+  const sections = (wire.sections ?? []).map((s, idx) => forkSection(s, idx + 1))
+  if (sections.length === 0) {
+    sections.push({
+      uid: nextUid('sec'),
+      label: 'S1',
+      title: 'Section 1',
+      instructions: '',
+      ordinal: 1,
+      items: [],
+    })
+  }
+  return {
+    versionName: '',
+    versionDescription: wire.versionDescription ?? '',
+    revisionNotes: wire.revisionNotes ?? '',
+    sections,
+  }
+}
+
+function forkSection(wire: ForkSectionWire, fallbackOrdinal: number): AuthoringSection {
+  return {
+    uid: nextUid('sec'),
+    label: wire.label?.trim() || `S${fallbackOrdinal}`,
+    title: wire.title?.trim() || `Section ${fallbackOrdinal}`,
+    instructions: wire.instructions ?? '',
+    ordinal: wire.ordinal ?? fallbackOrdinal,
+    items: (wire.items ?? []).map(forkItem),
+  }
+}
+
+function forkItem(wire: ForkItemWire): AuthoringItem {
+  const responseType: AuthoringResponseType =
+    wire.responseSet?.type && isAuthoringResponseType(wire.responseSet.type)
+      ? wire.responseSet.type
+      : 'text'
+  return {
+    uid: nextUid('item'),
+    name: wire.name ?? '',
+    oid: wire.oid ?? '',
+    descriptionLabel: wire.descriptionLabel ?? '',
+    leftItemText: wire.leftItemText ?? '',
+    rightItemText: wire.rightItemText ?? '',
+    units: wire.units ?? '',
+    dataType: normaliseDataType(wire.dataType),
+    responseType,
+    defaultValue: wire.defaultValue ?? '',
+    required: wire.required ?? false,
+    responseSet: forkResponseSet(wire.responseSet ?? null),
+    validation: {
+      regexp: wire.validation?.regexp ?? '',
+      errorMessage: wire.validation?.errorMessage ?? '',
+    },
+  }
+}
+
+function forkResponseSet(wire: ForkResponseSetWire | null): AuthoringResponseSet {
+  if (!wire) return null
+  if (wire.ref?.label) {
+    return { ref: { label: wire.ref.label } }
+  }
+  const type = wire.type && isAuthoringResponseType(wire.type) ? wire.type : 'text'
+  const opts = (wire.options ?? [])
+    .map((o) => ({ text: o.text ?? '', value: o.value ?? '' }))
+    .filter((o) => o.text !== '' || o.value !== '')
+  // Only emit an InlineResponseSet when the type implies options; the
+  // open-text branches stay null so the canvas's empty-picker state
+  // shows up as expected.
+  if (opts.length === 0 && !OPTION_RESPONSE_TYPES.has(type)) return null
+  return { type, label: wire.label ?? '', options: opts }
+}
+
+function normaliseDataType(raw: string | undefined): AuthoringDataType {
+  switch ((raw ?? '').toUpperCase()) {
+    case 'INT':
+    case 'INTEGER':
+      return 'INT'
+    case 'REAL':
+      return 'REAL'
+    case 'DATE':
+      return 'DATE'
+    case 'PDATE':
+      return 'PDATE'
+    case 'FILE':
+      return 'FILE'
+    case 'BL':
+      return 'BL'
+    case 'TRISTATE_REASON':
+      return 'TRISTATE_REASON'
+    case 'ST':
+    default:
+      return 'ST'
+  }
+}
+
+function isAuthoringResponseType(s: string): s is AuthoringResponseType {
+  return s === 'text' || s === 'textarea' || s === 'radio'
+    || s === 'single-select' || s === 'multi-select'
+    || s === 'checkbox' || s === 'file'
+}
+
 function emptyDraft(): AuthoringDraft {
   return {
     versionName: '',
@@ -436,6 +589,49 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     isSubmitting.value = false
     isPreviewing.value = false
     selectedItemUid.value = null
+  }
+
+  /**
+   * 2026-06-21 user-feedback round 6 — fork-from-version. The CRF
+   * library's "Neue Version anlegen" flow can pre-seed the canvas with
+   * the contents of a prior version so the operator only has to tweak
+   * what changed instead of re-authoring the entire form.
+   *
+   * <p>The backend's {@code GET /pages/api/v1/crfs/{oid}/versions/{vid}/contents}
+   * returns the wire-shaped {@code CrfVersionAuthoringRequest}; this
+   * action shape-converts it into an {@link AuthoringDraft} and
+   * replaces {@link draft} verbatim. {@code versionName} is intentionally
+   * blanked so the operator types a fresh name and the unique-name
+   * check doesn't trip on the prior version's name.
+   *
+   * <p>Returns {@code true} on success; on failure the draft stays
+   * untouched and {@link error} is populated so the canvas can surface
+   * a banner. Network + 404 + 401 all surface as a single error
+   * string — the caller will route the operator back to the library.
+   */
+  async function loadFromVersion(
+    crfOid: string,
+    versionOid: string,
+  ): Promise<boolean> {
+    try {
+      const body = await apiGet<ForkContentsWire>(
+        `/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions/${encodeURIComponent(versionOid)}/contents`,
+      )
+      draft.value = forkContentsToDraft(body)
+      selectedItemUid.value = null
+      return true
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const errBody = e.body as { message?: string } | null
+        error.value = errBody?.message
+          ?? `Vorversion konnte nicht geladen werden (HTTP ${e.status}).`
+      } else if (e instanceof ApiNetworkError) {
+        error.value = 'Backend nicht erreichbar — Vorversion konnte nicht geladen werden.'
+      } else {
+        error.value = e instanceof Error ? e.message : 'Vorversion konnte nicht geladen werden.'
+      }
+      return false
+    }
   }
 
   function setMetadata(patch: Partial<Pick<AuthoringDraft, 'versionName' | 'versionDescription' | 'revisionNotes'>>): void {
@@ -1254,6 +1450,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     selectedItemUid,
     selectItem,
     reset,
+    loadFromVersion,
     setMetadata,
     setVersionName,
     setVersionDescription,

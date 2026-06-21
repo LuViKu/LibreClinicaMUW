@@ -115,10 +115,46 @@ const versionDescriptionError = computed<string | null>(
   () => localizedFieldErrors.value.versionDescription ?? null,
 )
 
-onMounted(() => {
-  // Fresh draft + drop any catalog cache from a previous session.
-  store.reset()
+/**
+ * 2026-06-21 user-feedback round 6 — fork-from-version. The CRF library
+ * deep-links into the canvas with {@code ?fromVersion=<versionOid>} when
+ * the operator chose "aus v1.0 kopieren" instead of a blank-start. The
+ * canvas seeds its draft via {@code store.loadFromVersion()} when the
+ * query param is present and shows an info banner with the source name
+ * so the operator can confirm the fork. Falls back to the standard
+ * blank-start when loading the prior version fails or no fromVersion
+ * is present.
+ */
+const fromVersionOid = computed<string | null>(() => {
+  const raw = route.query.fromVersion
+  if (Array.isArray(raw)) return raw[0] ?? null
+  return (raw as string | undefined) ?? null
+})
+const fromVersionName = computed<string | null>(() => {
+  const raw = route.query.fromVersionName
+  if (Array.isArray(raw)) return raw[0] ?? null
+  return (raw as string | undefined) ?? null
+})
+const isForking = ref(false)
+const forkLoaded = ref(false)
+const forkFailed = ref(false)
+
+onMounted(async () => {
+  // Drop any catalog cache from a previous session.
   void store.loadResponseSetCatalog()
+  if (crfOid.value && fromVersionOid.value) {
+    isForking.value = true
+    try {
+      const ok = await store.loadFromVersion(crfOid.value, fromVersionOid.value)
+      forkLoaded.value = ok
+      forkFailed.value = !ok
+      if (!ok) store.reset()
+    } finally {
+      isForking.value = false
+    }
+    return
+  }
+  store.reset()
 })
 
 async function onValidate(): Promise<void> {
@@ -286,6 +322,34 @@ function onUseLegacyWizard(): void {
         </button>
       </div>
     </header>
+
+    <!-- 2026-06-21 round 6 — fork-from-version status banners. -->
+    <div
+      v-if="isForking"
+      class="px-4 py-2 bg-sky-50 border-b border-sky-200 text-xs text-sky-800"
+      role="status"
+      data-testid="crf-canvas-fork-loading"
+    >
+      {{ t('crfAuthoring.canvas.fork.loading') }}
+    </div>
+    <div
+      v-else-if="forkLoaded"
+      class="px-4 py-2 bg-sky-50 border-b border-sky-200 text-xs text-sky-800"
+      role="status"
+      data-testid="crf-canvas-fork-loaded"
+    >
+      {{ fromVersionName
+          ? t('crfAuthoring.canvas.fork.loadedNamed', { name: fromVersionName })
+          : t('crfAuthoring.canvas.fork.loaded') }}
+    </div>
+    <div
+      v-else-if="forkFailed"
+      class="px-4 py-2 bg-amber-50 border-b border-amber-200 text-xs text-amber-900"
+      role="alert"
+      data-testid="crf-canvas-fork-failed"
+    >
+      {{ t('crfAuthoring.canvas.fork.failed') }}
+    </div>
 
     <!-- Validate-only success toast — disappears on the next change. -->
     <div

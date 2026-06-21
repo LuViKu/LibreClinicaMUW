@@ -1189,6 +1189,11 @@
       "failed": "Migration failed: {message}"
     },
     "authorManually": "[NEEDS_REVIEW] New version",
+    "forkMenu": {
+      "label": "[NEEDS_REVIEW] Fork from prior version",
+      "heading": "[NEEDS_REVIEW] Fork from prior version",
+      "fromVersion": "[NEEDS_REVIEW] Copy from \"{name}\""
+    },
     "ophthCatalog": {
       "title": "Add from ophthalmology catalog",
       "subtitle": "Pre-defined fields with OID + unit + modality binding — pick one to insert into the current section.",
@@ -1366,6 +1371,12 @@
       "validate": "[NEEDS_REVIEW] Validate",
       "validating": "[NEEDS_REVIEW] Validating …",
       "validationOk": "[NEEDS_REVIEW] Validation succeeded — no errors.",
+      "fork": {
+        "loading": "[NEEDS_REVIEW] Loading prior-version contents …",
+        "loaded": "[NEEDS_REVIEW] Prior-version contents copied into the draft.",
+        "loadedNamed": "[NEEDS_REVIEW] Contents from version \"{name}\" copied into the draft.",
+        "failed": "[NEEDS_REVIEW] Could not load the prior version — started the draft with a blank section."
+      },
       "versionName": "[NEEDS_REVIEW] Version name",
       "versionDescription": "[NEEDS_REVIEW] Version description",
       "versionNamePlaceholder": "[NEEDS_REVIEW] e.g. v1.0",
