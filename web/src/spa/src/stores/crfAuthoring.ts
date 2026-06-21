@@ -452,10 +452,11 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     draft.value.versionDescription = versionDescription
   }
 
-  function addSection(seed?: Partial<AuthoringSection>): void {
+  function addSection(seed?: Partial<AuthoringSection>): string {
     const next = draft.value.sections.length + 1
+    const uid = seed?.uid ?? nextUid('sec')
     draft.value.sections.push({
-      uid: seed?.uid ?? nextUid('sec'),
+      uid,
       label: seed?.label ?? `S${next}`,
       title: seed?.title ?? `Section ${next}`,
       instructions: seed?.instructions ?? '',
@@ -463,6 +464,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
       items: seed?.items ?? [],
       bilateral: seed?.bilateral ?? false,
     })
+    return uid
   }
 
   /**

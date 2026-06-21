@@ -198,6 +198,44 @@ function onAddSection(): void {
   store.addSection()
 }
 
+/**
+ * 2026-06-21 user-feedback round 4 — drop-on-new-section. The
+ * "Neue Sektion hinzufügen" footer accepts a palette drag-released
+ * payload. Primitives spin up a fresh empty section + append the item;
+ * presets re-use the empty-target-in-place branch of
+ * {@link applyPresetAsSection} so the section's title + tag come from
+ * the preset rather than the auto-numbered Sn fallback.
+ */
+const dragOverNewSection = ref(false)
+function onNewSectionDragOver(ev: DragEvent): void {
+  ev.preventDefault()
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy'
+  dragOverNewSection.value = true
+}
+function onNewSectionDragLeave(_ev: DragEvent): void {
+  dragOverNewSection.value = false
+}
+function onNewSectionDrop(ev: DragEvent): void {
+  ev.preventDefault()
+  dragOverNewSection.value = false
+  const payload = readPalettePayload(ev)
+  if (!payload) return
+  const newSectionUid = store.addSection()
+  if (!newSectionUid) return
+  const newIndex = store.draft.sections.findIndex((s) => s.uid === newSectionUid)
+  if (newIndex < 0) return
+  if (payload.kind === 'primitive') {
+    store.addItem(newIndex, { dataType: payload.value as AuthoringItem['dataType'] })
+    const section = store.draft.sections[newIndex]
+    const last = section?.items[section.items.length - 1]
+    if (last) store.selectItem(last.uid)
+    return
+  }
+  if (payload.kind === 'preset') {
+    void applyPresetById(payload.value, newSectionUid)
+  }
+}
+
 function onRemoveSection(sectionIndex: number): void {
   store.removeSection(sectionIndex)
 }
@@ -549,12 +587,25 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
       </template>
     </draggable>
 
+    <!-- 2026-06-21 user-feedback round 4 — the "Neue Sektion hinzufügen"
+         area now accepts a drag-released primitive or preset. Dropping
+         a primitive seeds a fresh section + appends the item; dropping
+         a preset materialises the preset as a brand-new section (the
+         "transform empty target in place" path inside applyPresetAsSection
+         kicks in automatically). dragOverNewSection drives the dashed
+         border highlight so the drop target reads as "this works". -->
     <div class="px-4 pb-4 text-center">
       <button
         type="button"
-        class="text-xs text-muw-blue hover:underline px-3 py-1.5 border border-dashed border-slate-300 rounded-md w-full"
+        class="text-xs text-muw-blue px-3 py-1.5 border border-dashed rounded-md w-full transition"
+        :class="dragOverNewSection
+          ? 'border-muw-blue bg-muw-blue/5'
+          : 'border-slate-300 hover:underline'"
         data-testid="crf-canvas-add-section"
         @click="onAddSection"
+        @dragover="onNewSectionDragOver"
+        @dragleave="onNewSectionDragLeave"
+        @drop="onNewSectionDrop"
       >
         {{ t('crfAuthoring.canvas.section.add') }}
       </button>
