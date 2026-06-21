@@ -4,6 +4,8 @@
       "label": "nAMD Fluid-Monitoring",
       "open": "nAMD-Workspace öffnen",
       "openHint": "OCT-Trend, Vergleich und Bericht für die exsudative AMD-Behandlung.",
+      "openFromEvent": "nAMD-Workspace zu dieser Visite öffnen",
+      "openFromEventHint": "OCT-Trend & Vergleich für {subject}.",
       "workspaceBreadcrumb": "nAMD Fluid-Monitoring",
       "loading": "Workspace-Daten werden geladen …",
       "errorPrefix": "Fehler beim Laden:",

@@ -33,6 +33,13 @@ const manifest: StudyModuleManifest = {
         component: () => import('./components/NamdWorkspaceCta.vue'),
       },
     ],
+    'event-detail.panels': [
+      {
+        key: 'open-from-event',
+        labelKey: 'studyModules.namd.openFromEvent',
+        component: () => import('./components/NamdEventDetailCta.vue'),
+      },
+    ],
     'nav.modules': [
       {
         key: 'topbar-workspace',
