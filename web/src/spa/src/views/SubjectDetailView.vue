@@ -1214,6 +1214,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       :current-study-oid="auth.user?.activeStudy?.oid ?? ''"
       :available-studies="otherStudies"
       :is-submitting="transitionSubmitting"
+      :error-message="transitionError"
       @submit="onTransitionSubmit"
       @cancel="dialogState = null"
     />

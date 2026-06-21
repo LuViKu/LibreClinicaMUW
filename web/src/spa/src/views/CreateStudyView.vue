@@ -10,6 +10,7 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 
 import { useStudyStore } from '@/stores/study'
+import { useAuthStore } from '@/stores/auth'
 
 /**
  * Phase E A8.1 — Create Study view (sysadmin only).
@@ -26,6 +27,7 @@ import { useStudyStore } from '@/stores/study'
 const { t } = useI18n()
 const router = useRouter()
 const studies = useStudyStore()
+const auth = useAuthStore()
 
 interface Form {
   name: string
@@ -86,7 +88,20 @@ async function submit() {
       phase: form.value.phase.trim() || undefined,
     })
     if (result.ok) {
-      // Land directly on the new study's build dashboard.
+      // 2026-06-21 user-feedback round 4 — auto-bind the new study
+      // as the operator's active study so the build dashboard lands
+      // on the freshly-created study rather than whichever study the
+      // operator was last on. The backend's create endpoint already
+      // auto-binds the caller as COORDINATOR; pickStudy then resolves
+      // that grant + sets the session "study" / "userRole" attributes
+      // so the SPA + JSP layers see the same active study.
+      try {
+        await auth.pickStudy(result.study.oid)
+      } catch {
+        // pickStudy failed (e.g. backend hiccup setting the role). The
+        // create itself succeeded — still navigate so the operator can
+        // pick the study manually from the top bar if needed.
+      }
       router.push('/build-study')
     } else {
       fieldErrors.value = result.fieldErrors
