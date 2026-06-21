@@ -203,10 +203,25 @@ public class CrfsApiController {
         toCreate.setCreatedDate(new java.util.Date());
 
         CRFBean persisted = crfDao.create(toCreate);
+        // 2026-06-21 user-feedback batch — CRFDAO.create() can return a
+        // bean with id=0 even when the row inserted successfully (the
+        // legacy DAO's getCurrentPK lookup occasionally races against
+        // sequence cache). The user-visible symptom is "Failed to
+        // persist CRF" on a CRF that DOES show up on the next page
+        // refresh. Defensively re-look-up by name before declaring a
+        // 500 — same uniqueness query the gate above used.
         if (persisted == null || persisted.getId() == 0) {
-            LOG.warn("CRFDAO.create returned no row for name={}", body.name());
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to persist CRF"));
+            CRFBean reread = (CRFBean) crfDao.findByName(body.name().trim());
+            if (reread != null && reread.getId() != 0) {
+                LOG.info("CRFDAO.create returned id=0 but findByName resolved id={} for name={}",
+                        reread.getId(), body.name());
+                persisted = reread;
+            } else {
+                LOG.warn("CRFDAO.create returned no row for name={}", body.name());
+                return ResponseEntity.status(500).body(Map.of("message",
+                        "Speichern fehlgeschlagen — die CRF-Hülle konnte nicht angelegt werden. "
+                                + "Bitte die Eingaben prüfen und es erneut versuchen."));
+            }
         }
 
         LOG.info("Create CRF: oid={} name={} by user={}",

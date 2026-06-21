@@ -93,6 +93,13 @@ const uploadParseErrors = ref<string[]>([])
 const uploadFormError = ref<string | null>(null)
 const isUploading = ref(false)
 
+// 2026-06-21 user-feedback batch — the XLSX-upload UI was removed
+// per user direction; the backend endpoint + the dialog state below
+// stay in the source for a quick restore path if a sponsor workbook
+// needs the legacy round-trip. @ts-ignore so tsc stops warning about
+// the unreferenced helper.
+// @ts-expect-error openUpload retained for legacy upload restore path
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function openUpload(crf: Crf) {
   uploading.value = {
     crfOid: crf.oid,
@@ -251,9 +258,11 @@ const visibleRows = computed(() =>
         </div>
       </div>
 
-      <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 mb-4">
-        {{ t('crfLibrary.parserActiveNote') }}
-      </div>
+      <!-- 2026-06-21 user-feedback batch — the XLSX-parser hint banner
+           was removed: the canvas builder is the primary authoring
+           surface. The legacy parser stays available via the per-CRF
+           card actions for back-compat (parser-bound studies, legacy
+           workbook reuse) but it no longer needs front-page real estate. -->
 
       <p v-if="lib.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
       <p v-else-if="lib.error" class="text-rose-700">{{ lib.error }}</p>
@@ -278,11 +287,12 @@ const visibleRows = computed(() =>
               <p v-if="crf.description" class="text-xs text-slate-500 mt-1">{{ crf.description }}</p>
             </div>
             <div v-if="canManage && crf.status !== 'removed'" class="flex items-center gap-2 text-xs">
-              <button
-                class="text-muw-blue hover:underline"
-                @click="openUpload(crf)"
-              >{{ t('crfLibrary.uploadVersion') }}</button>
-              <span class="text-slate-300">·</span>
+              <!-- 2026-06-21 user-feedback batch — pivoting authoring
+                   to the canvas builder; the "Version hochladen" XLSX
+                   upload action is no longer surfaced here. The
+                   upload endpoint + the dialog remain in place so the
+                   legacy entry point can be restored if a sponsor
+                   workbook needs to round-trip. -->
               <button
                 class="text-muw-blue hover:underline"
                 @click="openAuthoring(crf)"
