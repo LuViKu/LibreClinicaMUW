@@ -137,6 +137,19 @@ public class EventsApiController {
     }
 
     /**
+     * 2026-06-21 round 7 — backwards-compatible 3-arg constructor used
+     * by the existing MockMvc test suites. The sign endpoint is the
+     * only path that touches {@link #securityManager}; tests that
+     * never exercise sign can safely pass null. Production wiring
+     * always goes through the 4-arg constructor above.
+     */
+    public EventsApiController(DataSource dataSource,
+                               SiteVisibilityFilter siteVisibilityFilter,
+                               VisitIntervalCalculator visitIntervalCalculator) {
+        this(dataSource, siteVisibilityFilter, visitIntervalCalculator, null);
+    }
+
+    /**
      * Phase E.6 — Event Detail adapter. Replaces the legacy
      * {@code /pages/EnterDataForStudyEvent?eventId=…} JSP redirect
      * the SubjectDetailView used to bridge into; the SPA now stays
