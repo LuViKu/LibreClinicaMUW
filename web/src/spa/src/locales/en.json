@@ -1392,7 +1392,11 @@
         "add": "[NEEDS_REVIEW] + Add new section",
         "remove": "[NEEDS_REVIEW] Remove section",
         "titlePlaceholder": "[NEEDS_REVIEW] Section title",
-        "labelPlaceholder": "[NEEDS_REVIEW] Section label (e.g. S1)"
+        "labelPlaceholder": "[NEEDS_REVIEW] Section label (e.g. S1)",
+        "bilateralOn": "[NEEDS_REVIEW] Bilateral active — items shown in OD/OS grid. Click to switch to unilateral.",
+        "bilateralOff": "[NEEDS_REVIEW] Unilateral — items in a flat list. Click to switch to bilateral (OD left / OS right).",
+        "bilateralOnShort": "[NEEDS_REVIEW] OD/OS",
+        "bilateralOffShort": "[NEEDS_REVIEW] Uni"
       },
       "properties": {
         "title": "[NEEDS_REVIEW] Properties",

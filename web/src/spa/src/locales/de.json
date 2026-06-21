@@ -1392,7 +1392,11 @@
         "add": "+ Neue Sektion hinzufügen",
         "remove": "Sektion entfernen",
         "titlePlaceholder": "Sektionstitel",
-        "labelPlaceholder": "Sektions-Label (z. B. S1)"
+        "labelPlaceholder": "Sektions-Label (z. B. S1)",
+        "bilateralOn": "Bilateral aktiv — Items werden im OD/OS-Raster angezeigt. Klicken, um auf unilateral umzuschalten.",
+        "bilateralOff": "Unilateral — Items als flache Liste. Klicken, um auf bilateral umzuschalten (OD links / OS rechts).",
+        "bilateralOnShort": "OD/OS",
+        "bilateralOffShort": "Uni"
       },
       "properties": {
         "title": "Eigenschaften",

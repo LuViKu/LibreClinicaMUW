@@ -67,7 +67,10 @@ export const PRESET_CATALOG: ReadonlyArray<PresetDescriptor> = [
     id: IOP_PRESET_ID,
     labelKey: 'crfAuthoring.presets.iop.label',
     descriptionKey: 'crfAuthoring.presets.iop.description',
-    bilateralSection: false,
+    // 2026-06-21 — eye-related presets default bilateral per user
+    // feedback. Section toggle lets the operator switch to unilateral
+    // when only one eye is monitored (e.g. monocular follow-up).
+    bilateralSection: true,
     generate: (t) => generateIopPresetItems(t),
   },
   {

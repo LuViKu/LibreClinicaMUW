@@ -122,18 +122,21 @@ async function applyPresetById(presetId: string, sectionUid: string): Promise<vo
   const preset = findPreset(presetId)
   if (!preset) return
   const { PRESET_CATALOG } = await import('./presetCatalog')
-  const added = store.applyPreset(presetId, sectionUid, {
+  // 2026-06-21 user-feedback batch — each preset materialises as its
+  // own section, never mixed into the target section. If the target is
+  // empty (typical: dropping onto the default "Section 1"), the store
+  // transforms it in-place rather than leaving a dangling empty
+  // section above the new content.
+  const newSectionUid = store.applyPresetAsSection(presetId, sectionUid, {
     registry: PRESET_CATALOG,
     translate: t,
   })
-  if (added > 0) {
-    const section = store.draft.sections.find((s) => s.uid === sectionUid)
-    if (section) {
-      // Select the parent item (first emitted) so the operator can
-      // tweak the label / OID immediately.
-      const first = section.items[section.items.length - added]
-      if (first) store.selectItem(first.uid)
-    }
+  if (!newSectionUid) return
+  const section = store.draft.sections.find((s) => s.uid === newSectionUid)
+  if (section && section.items.length > 0) {
+    // Select the parent item (first emitted) so the operator can
+    // tweak the label / OID immediately.
+    store.selectItem(section.items[0]!.uid)
   }
 }
 
@@ -277,6 +280,27 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
               @input="(ev) => onSectionLabelInput(sIdx, ev)"
             />
           </div>
+          <!-- 2026-06-21 user-feedback batch — uni/bi-lateral toggle.
+               Operator can flip an existing section between bilateral
+               (OD-left / OS-right grid) and unilateral (flat list)
+               without re-adding items. Preset drops still seed this
+               from PresetDescriptor.bilateralSection. -->
+          <button
+            type="button"
+            class="text-[11px] px-2 py-0.5 rounded border transition-colors"
+            :class="section.bilateral
+              ? 'bg-muw-blue text-white border-muw-blue hover:bg-muw-blue-700'
+              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'"
+            :data-testid="`crf-canvas-section-bilateral-${sIdx}`"
+            :title="section.bilateral
+              ? t('crfAuthoring.canvas.section.bilateralOn')
+              : t('crfAuthoring.canvas.section.bilateralOff')"
+            @click="store.setSectionBilateralByUid(section.uid, !section.bilateral)"
+          >
+            {{ section.bilateral
+              ? t('crfAuthoring.canvas.section.bilateralOnShort')
+              : t('crfAuthoring.canvas.section.bilateralOffShort') }}
+          </button>
           <button
             v-if="sections.length > 1"
             type="button"

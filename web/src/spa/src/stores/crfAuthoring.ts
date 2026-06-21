@@ -739,6 +739,103 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   }
 
   /**
+   * 2026-06-21 user-feedback batch — each preset corresponds to a whole
+   * section, not items inside an existing section. The earlier
+   * {@link applyPreset} mixed presets together inside the target
+   * section, which produced a confused bilateral grid when (for example)
+   * an unbilateral IOP and a bilateral BCVA landed in the same section.
+   *
+   * <p>Semantics:
+   *
+   * <ul>
+   *   <li>If the target section is empty (no items), transform it in
+   *       place — re-title it, set the bilateral flag from the preset
+   *       catalog, and fill it with the preset's items.</li>
+   *   <li>Otherwise create a NEW section immediately after the target,
+   *       carry the same conventions, and select the parent item so the
+   *       properties rail focuses on the freshly-materialised preset.</li>
+   * </ul>
+   *
+   * <p>Returns the new section's uid so the caller can drive selection
+   * / animation, or {@code null} when the preset id is unknown.
+   */
+  function applyPresetAsSection(
+    presetId: string,
+    targetSectionUid: string,
+    opts: {
+      registry: ReadonlyArray<{
+        id: string
+        labelKey: string
+        bilateralSection?: boolean
+        generate: (translate: (k: string) => string) => Array<Omit<AuthoringItem, 'uid'>>
+      }>
+      translate: (key: string) => string
+    },
+  ): string | null {
+    const preset = opts.registry.find((p) => p.id === presetId)
+    if (!preset) return null
+
+    const items = preset.generate(opts.translate)
+    const seeded: AuthoringItem[] = items.map((item) => ({
+      ...item,
+      uid: nextUid('item'),
+    }))
+
+    const bilateral = preset.bilateralSection ?? false
+    const presetTitle = opts.translate(preset.labelKey)
+
+    const target = draft.value.sections.find((s) => s.uid === targetSectionUid)
+    // Transform an empty target section in place rather than leaving a
+    // dangling empty Section 1 above the new content — common case
+    // when the operator drops the very first preset onto a fresh draft.
+    if (target && target.items.length === 0) {
+      target.title = presetTitle
+      target.bilateral = bilateral
+      target.items = seeded
+      return target.uid
+    }
+
+    const nextOrdinal = draft.value.sections.length + 1
+    const newSection: AuthoringSection = {
+      uid: nextUid('sec'),
+      label: `S${nextOrdinal}`,
+      title: presetTitle,
+      instructions: '',
+      ordinal: nextOrdinal,
+      items: seeded,
+      bilateral,
+    }
+    // Insert immediately after the drop target if found; otherwise
+    // append.
+    const idx = target
+      ? draft.value.sections.findIndex((s) => s.uid === target.uid)
+      : -1
+    if (idx >= 0) {
+      draft.value.sections.splice(idx + 1, 0, newSection)
+    } else {
+      draft.value.sections.push(newSection)
+    }
+    // Re-number ordinals so the persisted payload stays contiguous.
+    draft.value.sections.forEach((s, i) => {
+      s.ordinal = i + 1
+    })
+    return newSection.uid
+  }
+
+  /**
+   * Flip a section's bilateral flag by uid (the SectionCanvas toggle
+   * does NOT have the array index to hand). Mirrors {@link
+   * setSectionBilateral} but keyed on the uid rather than the
+   * positional index, which is the right primitive for the canvas
+   * because the user can reorder sections.
+   */
+  function setSectionBilateralByUid(sectionUid: string, value: boolean): void {
+    const section = draft.value.sections.find((s) => s.uid === sectionUid)
+    if (!section) return
+    section.bilateral = value
+  }
+
+  /**
    * Auto-suggest an item OID from the operator-typed item name.
    * Simple convention: uppercase + collapse non-word chars to a
    * single underscore. Operators can override the suggestion at the
@@ -1069,6 +1166,8 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     addCatalogItem,
     addOphthPresetSection,
     applyPreset,
+    applyPresetAsSection,
+    setSectionBilateralByUid,
     setItemField,
     removeItem,
     reorderItems,
