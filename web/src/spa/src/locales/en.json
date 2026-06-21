@@ -2308,6 +2308,7 @@
     "event": {
       "edit": "Edit",
       "cancel": "Cancel",
+      "moreActions": "[NEEDS_REVIEW] More actions",
       "save": "Save",
       "location": "Location",
       "dateInvalid": "Date must be in YYYY-MM-DD format.",

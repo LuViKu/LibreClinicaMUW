@@ -779,11 +779,6 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     if (!preset) return null
 
     const items = preset.generate(opts.translate)
-    const seeded: AuthoringItem[] = items.map((item) => ({
-      ...item,
-      uid: nextUid('item'),
-    }))
-
     const bilateral = preset.bilateralSection ?? false
     const presetTitle = opts.translate(preset.labelKey)
     // 2026-06-21 round 3 — preset overrides the section tag in addition to
@@ -797,24 +792,32 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     // dangling empty Section 1 above the new content — common case
     // when the operator drops the very first preset onto a fresh draft.
     if (target && target.items.length === 0) {
+      const resolvedLabel = presetTag ? uniqueSectionLabel(presetTag, target.uid) : null
+      // 2026-06-21 round 6 — when the resolved section tag collides
+      // with a sibling and gets the `_N` suffix, the items inside
+      // would still collide on OID/name (e.g. dropping IOP twice
+      // gave two OD_IOP_GEMESSEN items). Apply the same suffix to
+      // the items so the CRF JSON validator's uniqueness check
+      // passes without operator-side renaming.
+      const suffix = resolvedLabel ? extractCollisionSuffix(presetTag, resolvedLabel) : ''
       target.title = presetTitle
       target.bilateral = bilateral
-      target.items = seeded
-      if (presetTag) {
-        target.label = uniqueSectionLabel(presetTag, target.uid)
-      }
+      target.items = seedPresetItems(items, suffix)
+      if (resolvedLabel) target.label = resolvedLabel
       return target.uid
     }
 
     const nextOrdinal = draft.value.sections.length + 1
     const fallbackLabel = `S${nextOrdinal}`
+    const resolvedLabel = presetTag ? uniqueSectionLabel(presetTag, null) : fallbackLabel
+    const suffix = presetTag ? extractCollisionSuffix(presetTag, resolvedLabel) : ''
     const newSection: AuthoringSection = {
       uid: nextUid('sec'),
-      label: presetTag ? uniqueSectionLabel(presetTag, null) : fallbackLabel,
+      label: resolvedLabel,
       title: presetTitle,
       instructions: '',
       ordinal: nextOrdinal,
-      items: seeded,
+      items: seedPresetItems(items, suffix),
       bilateral,
     }
     // Insert immediately after the drop target if found; otherwise
@@ -832,6 +835,68 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
       s.ordinal = i + 1
     })
     return newSection.uid
+  }
+
+  /**
+   * 2026-06-21 round 6 — derive the {@code _N} collision suffix from a
+   * resolved section label vs its bare preset tag. Returns the empty
+   * string when no collision happened (resolved equals base).
+   *
+   * <p>Examples:
+   * <ul>
+   *   <li>{@code base="IOP"}, {@code resolved="IOP"} → {@code ""}</li>
+   *   <li>{@code base="IOP"}, {@code resolved="IOP_2"} → {@code "_2"}</li>
+   *   <li>{@code base="IOP"}, {@code resolved="IOP_3"} → {@code "_3"}</li>
+   * </ul>
+   *
+   * <p>The caller appends this suffix to the per-item OID + name + the
+   * children's show-when source OID so a second drop of the same preset
+   * produces items that don't collide with the first drop.
+   */
+  function extractCollisionSuffix(base: string, resolved: string): string {
+    const trimmedBase = base.trim().toUpperCase()
+    const trimmedResolved = resolved.trim().toUpperCase()
+    if (trimmedBase === trimmedResolved) return ''
+    if (trimmedResolved.startsWith(trimmedBase + '_')) {
+      return trimmedResolved.slice(trimmedBase.length)
+    }
+    return ''
+  }
+
+  /**
+   * 2026-06-21 round 6 — materialise preset items with an optional
+   * collision suffix. When {@code suffix} is empty the items are seeded
+   * verbatim (just with fresh uids). When set (e.g. {@code "_2"}) every
+   * item's {@code name} + {@code oid} get the suffix appended AND every
+   * child's {@code showWhen.sourceItemOid} is rewritten through the
+   * same rename map so the conditional show-when references still point
+   * at the (now renamed) parent.
+   */
+  function seedPresetItems(
+    items: Array<Omit<AuthoringItem, 'uid'>>,
+    suffix: string,
+  ): AuthoringItem[] {
+    const seeded: AuthoringItem[] = items.map((item) => ({
+      ...item,
+      uid: nextUid('item'),
+    }))
+    if (!suffix) return seeded
+    // Build the OID rename map from the (now seeded but not yet
+    // suffixed) items so the showWhen rewrites can hit any sibling
+    // reference, not just the parent-with-children pair.
+    const renameMap = new Map<string, string>()
+    for (const it of seeded) {
+      if (it.oid) renameMap.set(it.oid, it.oid + suffix)
+    }
+    for (const it of seeded) {
+      if (it.name) it.name = it.name + suffix
+      if (it.oid) it.oid = it.oid + suffix
+      if (it.showWhen?.sourceItemOid) {
+        const renamed = renameMap.get(it.showWhen.sourceItemOid)
+        if (renamed) it.showWhen = { ...it.showWhen, sourceItemOid: renamed }
+      }
+    }
+    return seeded
   }
 
   /**

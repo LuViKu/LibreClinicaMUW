@@ -211,6 +211,45 @@ const editEventLocked = computed(() => {
   return editEvent.value.openedFrom === 'complete' && !editEvent.value.unlocked
 })
 
+/**
+ * 2026-06-21 round 6 — proxy the edit-event dateStart input through
+ * a DD.MM.YYYY display. Backend wants ISO YYYY-MM-DD; operators want
+ * to type in the German convention. The display computed renders the
+ * model verbatim when it's already DD.MM.YYYY (mid-typing) and only
+ * formats when the model is a parseable ISO date. The input handler
+ * accepts either format and only writes back when a parse succeeds.
+ */
+const editEventDateDisplay = computed<string>(() => {
+  const raw = editEvent.value?.dateStart ?? ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split('-')
+    return `${d}.${m}.${y}`
+  }
+  return raw
+})
+
+function onEditEventDateInput(next: string): void {
+  if (!editEvent.value) return
+  const trimmed = (next ?? '').trim()
+  // DD.MM.YYYY → ISO
+  const de = trimmed.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+  if (de) {
+    const dd = de[1]!.padStart(2, '0')
+    const mm = de[2]!.padStart(2, '0')
+    editEvent.value.dateStart = `${de[3]}-${mm}-${dd}`
+    return
+  }
+  // YYYY-MM-DD pass-through (paste-friendly).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    editEvent.value.dateStart = trimmed
+    return
+  }
+  // Partial / invalid input — store verbatim so the field keeps the
+  // operator's keystrokes; the existing dateInvalid guard surfaces
+  // the parse error when they hit Save.
+  editEvent.value.dateStart = trimmed
+}
+
 function openEditEvent(ev: {
   eventId: string
   eventDefinitionOid: string
@@ -933,7 +972,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                 <th scope="col" class="px-5 py-2 font-medium w-40">{{ t('subjectDetail.column.status') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-44">{{ t('subjectDetail.column.dataEntryStage') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-24 text-right">{{ t('subjectDetail.column.openQueries') }}</th>
-                <th scope="col" class="px-5 py-2 font-medium w-[19rem] text-right whitespace-nowrap"></th>
+                <th scope="col" class="px-5 py-2 font-medium w-44 text-right whitespace-nowrap"></th>
               </tr>
             </template>
             <template v-for="ev in subject.events" :key="ev.eventDefinitionOid">
@@ -952,37 +991,17 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   <span v-else class="text-slate-400">—</span>
                 </td>
                 <td class="px-5 py-2.5 text-right text-xs whitespace-nowrap">
-                  <!-- 2026-06-21 user-feedback round 4 — the three
-                       visit-row actions used to stack as bare text
-                       links, which made the destructive Stornieren
-                       sit one px away from the primary edit / open
-                       actions and caused mis-clicks. Now: real
-                       padded buttons, a vertical separator between
-                       the secondary (edit/cancel) cluster and the
-                       primary "CRFs öffnen" link, and the destructive
-                       action visually distinct (red text + outlined
-                       border). eventId is empty when no study_event
-                       row exists yet (event-definition slot is
-                       unscheduled) — hide everything in that case;
-                       the Schedule button covers the path. -->
-                  <div v-if="ev.eventId" class="flex items-center justify-end gap-1.5 whitespace-nowrap">
-                    <button
-                      v-if="canEditEv(ev.status)"
-                      type="button"
-                      class="px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-muw-blue whitespace-nowrap"
-                      data-testid="event-row-edit-button"
-                      @click="openEditEvent(ev)"
-                    >{{ t('subjectDetail.event.edit') }}</button>
-                    <button
-                      v-if="canCancelEv(ev.status)"
-                      type="button"
-                      class="px-2 py-1 rounded border border-rose-300 text-rose-700 hover:bg-rose-50 focus:outline-none focus:ring-1 focus:ring-rose-400 whitespace-nowrap"
-                      data-testid="event-row-cancel-button"
-                      @click="onCancelEvent(ev)"
-                    >{{ t('subjectDetail.event.cancel') }}</button>
-                    <!-- Phase E.6: link straight to the SPA's Event
-                         Detail view (see EventDetailView.vue) so the
-                         operator stays in-shell. -->
+                  <!-- 2026-06-21 user-feedback round 6 — three inline
+                       buttons (Bearbeiten / Stornieren / CRFs öffnen)
+                       still clipped on the "Abgeschlossen" rows where
+                       the "Erfassung abgeschlossen" status pill ate
+                       more horizontal space. Collapsed the two
+                       secondary actions (edit + cancel) into a
+                       single-button overflow popover ⋮ next to the
+                       primary CRFs-öffnen link. The popover is a plain
+                       <details> element — no popover lib needed; click
+                       outside closes it via the native blur. -->
+                  <div v-if="ev.eventId" class="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
                     <RouterLink
                       :to="`/events/${ev.eventId}`"
                       class="px-2.5 py-1 rounded bg-muw-blue text-white hover:bg-muw-blue/90 focus:outline-none focus:ring-2 focus:ring-muw-blue/40 inline-flex items-center gap-1 whitespace-nowrap"
@@ -990,6 +1009,34 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                     >
                       <span>{{ t('subjectDetail.openEvent') }}</span>
                     </RouterLink>
+                    <details
+                      v-if="canEditEv(ev.status) || canCancelEv(ev.status)"
+                      class="relative"
+                      data-testid="event-row-more-menu"
+                    >
+                      <summary
+                        class="list-none cursor-pointer px-1.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-100 select-none"
+                        :aria-label="t('subjectDetail.event.moreActions')"
+                      >⋮</summary>
+                      <div
+                        class="absolute right-0 mt-1 min-w-[10rem] rounded-md border border-slate-200 bg-white shadow-md z-10 py-1 text-left"
+                      >
+                        <button
+                          v-if="canEditEv(ev.status)"
+                          type="button"
+                          class="block w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+                          data-testid="event-row-edit-button"
+                          @click="openEditEvent(ev)"
+                        >{{ t('subjectDetail.event.edit') }}</button>
+                        <button
+                          v-if="canCancelEv(ev.status)"
+                          type="button"
+                          class="block w-full text-left px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-50"
+                          data-testid="event-row-cancel-button"
+                          @click="onCancelEvent(ev)"
+                        >{{ t('subjectDetail.event.cancel') }}</button>
+                      </div>
+                    </details>
                   </div>
                 </td>
               </tr>
@@ -1016,11 +1063,19 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   <fieldset :disabled="editEventLocked" class="grid grid-cols-3 gap-3">
                     <div>
                       <FieldLabel for="edit-event-date">{{ t('subjectDetail.column.dateStart') }}</FieldLabel>
+                      <!-- 2026-06-21 round 6 — display DD.MM.YYYY but
+                           continue to bind the ISO YYYY-MM-DD string
+                           on the model (the backend's update endpoint
+                           requires ISO). The computed proxy parses
+                           user input on the fly; invalid drafts leave
+                           the model unchanged until a parseable date
+                           is typed. -->
                       <TextInput
                         id="edit-event-date"
-                        v-model="editEvent.dateStart"
-                        placeholder="YYYY-MM-DD"
+                        :model-value="editEventDateDisplay"
+                        placeholder="TT.MM.JJJJ"
                         :disabled="editEventLocked"
+                        @update:model-value="onEditEventDateInput"
                       />
                     </div>
                     <div>

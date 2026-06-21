@@ -77,11 +77,16 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref<string | null>(null)
   const availableStudies = ref<StudyOption[]>([])
 
+  // 2026-06-21 user-feedback round 6 — institutional Shibboleth SSO is
+  // no longer available to the deployment. The login page falls back
+  // to the local-credentials form only; flipping this back to enabled
+  // (with a real entryUrl) is the one-line escape hatch when SSO is
+  // re-instated.
   const ssoConfig = ref<SsoConfig>({
-    enabled: true,
+    enabled: false,
     buttonLabel: 'Sign in with MedUni Wien',
-    entryUrl: 'http://localhost:8080/LibreClinica/saml2/authenticate/meduniwien',
-    providerHint: 'You will be redirected to login.meduniwien.ac.at for single sign-on.',
+    entryUrl: '',
+    providerHint: '',
   })
 
   const isAuthenticated = computed(() => state.value === 'authenticated')

@@ -2310,6 +2310,7 @@
     "event": {
       "edit": "Bearbeiten",
       "cancel": "Stornieren",
+      "moreActions": "Weitere Aktionen",
       "save": "Speichern",
       "location": "Ort",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
