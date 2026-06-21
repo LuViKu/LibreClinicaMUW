@@ -144,7 +144,11 @@
     "search": "Search",
     "filter": "Filter",
     "clear": "Clear",
-    "export": "Export"
+    "export": "Export",
+    "eye": {
+      "od": "right",
+      "os": "left"
+    }
   },
   "adminJobs": {
     "title": "Scheduled jobs",

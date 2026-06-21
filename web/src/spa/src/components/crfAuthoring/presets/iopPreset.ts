@@ -53,26 +53,37 @@ export type Translator = (key: string) => string
 
 export interface IopPresetOptions {
   /**
-   * OID prefix for the materialised items. Defaults to {@code 'IOP'}
-   * so a single drop produces {@code IOP_GEMESSEN} + {@code IOP_VALUE}
-   * + {@code IOP_REASON}. Operators can rename via the properties rail.
+   * OID prefix for the materialised items. Defaults to {@code 'IOP'}.
+   * Operators can rename via the properties rail.
    */
   oidPrefix?: string
 }
 
-export function generateIopPresetItems(
+/**
+ * Build the three IOP items (parent + value + reason) for a single
+ * eye. Pulled out so we can call it twice when generating the OD/OS
+ * bilateral pair without duplicating the structure.
+ */
+function buildIopTriple(
   translate: Translator,
-  opts: IopPresetOptions = {},
+  eyePrefix: string,
+  prefix: string,
 ): Array<Omit<AuthoringItem, 'uid'>> {
-  const prefix = (opts.oidPrefix ?? 'IOP').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'IOP'
-  const parentOid = `${prefix}_GEMESSEN`
-  const valueOid = `${prefix}_VALUE`
-  const reasonOid = `${prefix}_REASON`
+  const tag = eyePrefix ? `${eyePrefix}_` : ''
+  const parentOid = `${tag}${prefix}_GEMESSEN`
+  const valueOid = `${tag}${prefix}_VALUE`
+  const reasonOid = `${tag}${prefix}_REASON`
+
+  const eyeSuffix = eyePrefix === 'OD'
+    ? ` (${translate('common.eye.od')})`
+    : eyePrefix === 'OS'
+      ? ` (${translate('common.eye.os')})`
+      : ''
 
   const parent: Omit<AuthoringItem, 'uid'> = {
     name: parentOid,
     oid: parentOid,
-    descriptionLabel: translate('crfAuthoring.presets.iop.parent.label'),
+    descriptionLabel: translate('crfAuthoring.presets.iop.parent.label') + eyeSuffix,
     leftItemText: '',
     rightItemText: '',
     units: '',
@@ -82,7 +93,7 @@ export function generateIopPresetItems(
     required: false,
     responseSet: {
       type: 'single-select',
-      label: 'iop_tristate',
+      label: `iop_tristate${eyePrefix ? '_' + eyePrefix.toLowerCase() : ''}`,
       options: [
         { text: translate('crfAuthoring.presets.iop.option.ja'), value: IOP_PARENT_OPTIONS.JA },
         { text: translate('crfAuthoring.presets.iop.option.nein'), value: IOP_PARENT_OPTIONS.NEIN },
@@ -95,7 +106,7 @@ export function generateIopPresetItems(
   const value: Omit<AuthoringItem, 'uid'> = {
     name: valueOid,
     oid: valueOid,
-    descriptionLabel: translate('crfAuthoring.presets.iop.value.label'),
+    descriptionLabel: translate('crfAuthoring.presets.iop.value.label') + eyeSuffix,
     leftItemText: '',
     rightItemText: '',
     units: 'mmHg',
@@ -118,7 +129,7 @@ export function generateIopPresetItems(
   const reason: Omit<AuthoringItem, 'uid'> = {
     name: reasonOid,
     oid: reasonOid,
-    descriptionLabel: translate('crfAuthoring.presets.iop.reason.label'),
+    descriptionLabel: translate('crfAuthoring.presets.iop.reason.label') + eyeSuffix,
     leftItemText: '',
     rightItemText: '',
     units: '',
@@ -136,6 +147,32 @@ export function generateIopPresetItems(
   }
 
   return [parent, value, reason]
+}
+
+/**
+ * 2026-06-21 user-feedback batch — IOP preset emits OD + OS pairs so
+ * the bilateral grid in SectionCanvas can pair items by suffix the
+ * same way OPHTH_EXAM / BCVA / RNFL do. The operator can flip the
+ * section to unilateral via the section header toggle; the items
+ * stay (labelled OD_/OS_) and render as a flat list — operators can
+ * delete the second-eye items manually for true monocular follow-up.
+ */
+export function generateIopPresetItems(
+  translate: Translator,
+  opts: IopPresetOptions = {},
+): Array<Omit<AuthoringItem, 'uid'>> {
+  const prefix = (opts.oidPrefix ?? 'IOP')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '') || 'IOP'
+
+  // Interleave OD/OS so the per-eye parent + its show-when children
+  // stay adjacent in the items list — important for the bilateral
+  // grid pairing AND for the unilateral fallback flat list.
+  const od = buildIopTriple(translate, 'OD', prefix)
+  const os = buildIopTriple(translate, 'OS', prefix)
+  return [od[0]!, os[0]!, od[1]!, os[1]!, od[2]!, os[2]!]
 }
 
 export const IOP_PRESET_ID = 'iop'

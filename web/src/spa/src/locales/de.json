@@ -144,7 +144,11 @@
     "search": "Suche",
     "filter": "Filter",
     "clear": "Zurücksetzen",
-    "export": "Export"
+    "export": "Export",
+    "eye": {
+      "od": "rechts",
+      "os": "links"
+    }
   },
   "adminJobs": {
     "title": "Geplante Jobs",
