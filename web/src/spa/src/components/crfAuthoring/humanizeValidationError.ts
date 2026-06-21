@@ -45,30 +45,32 @@ interface PrefixRule {
 }
 
 const EXACT_RULES: ExactRule[] = [
-  { source: 'Item name is required',                key: 'crfAuthoring.validation.itemNameRequired' },
-  { source: 'Description label is required',        key: 'crfAuthoring.validation.descriptionRequired' },
-  { source: 'Data type is required',                key: 'crfAuthoring.validation.dataTypeRequired' },
-  { source: 'Response type is required',            key: 'crfAuthoring.validation.responseTypeRequired' },
-  { source: 'Section title is required',            key: 'crfAuthoring.validation.sectionTitleRequired' },
-  { source: 'Section label is required',            key: 'crfAuthoring.validation.sectionLabelRequired' },
-  { source: 'At least one section is required',     key: 'crfAuthoring.validation.atLeastOneSection' },
-  { source: 'Section must contain at least one item', key: 'crfAuthoring.validation.atLeastOneItem' },
-  { source: 'Option text is required',              key: 'crfAuthoring.validation.optionTextRequired' },
-  { source: 'Option value is required',             key: 'crfAuthoring.validation.optionValueRequired' },
-  { source: 'Calculation formula must not be empty', key: 'crfAuthoring.validation.calculationFormulaRequired' },
-  { source: 'Expression must not be empty',         key: 'crfAuthoring.validation.expressionRequired' },
-  { source: 'versionName is required',              key: 'crfAuthoring.validation.versionNameRequired' },
-  { source: 'versionDescription is required',       key: 'crfAuthoring.validation.versionDescriptionRequired' },
+  { source: 'Item name is required',                key: 'crfAuthoring.canvas.validation.itemNameRequired' },
+  { source: 'Description label is required',        key: 'crfAuthoring.canvas.validation.descriptionRequired' },
+  { source: 'Data type is required',                key: 'crfAuthoring.canvas.validation.dataTypeRequired' },
+  { source: 'Response type is required',            key: 'crfAuthoring.canvas.validation.responseTypeRequired' },
+  { source: 'Section title is required',            key: 'crfAuthoring.canvas.validation.sectionTitleRequired' },
+  { source: 'Section label is required',            key: 'crfAuthoring.canvas.validation.sectionLabelRequired' },
+  { source: 'At least one section is required',     key: 'crfAuthoring.canvas.validation.atLeastOneSection' },
+  { source: 'Section must contain at least one item', key: 'crfAuthoring.canvas.validation.atLeastOneItem' },
+  { source: 'Option text is required',              key: 'crfAuthoring.canvas.validation.optionTextRequired' },
+  { source: 'Option value is required',             key: 'crfAuthoring.canvas.validation.optionValueRequired' },
+  { source: 'Calculation formula must not be empty', key: 'crfAuthoring.canvas.validation.calculationFormulaRequired' },
+  { source: 'Expression must not be empty',         key: 'crfAuthoring.canvas.validation.expressionRequired' },
+  { source: 'versionName is required',              key: 'crfAuthoring.canvas.validation.versionNameRequired' },
+  { source: 'versionName must be 255 characters or fewer',
+    key: 'crfAuthoring.canvas.validation.versionNameTooLong' },
+  { source: 'versionDescription is required',       key: 'crfAuthoring.canvas.validation.versionDescriptionRequired' },
   { source: "Items with data type FILE must declare a 'file' response set",
-    key: 'crfAuthoring.validation.fileResponseSetRequired' },
+    key: 'crfAuthoring.canvas.validation.fileResponseSetRequired' },
   { source: 'Item name must contain only letters, digits and underscores',
-    key: 'crfAuthoring.validation.itemNameInvalidChars' },
+    key: 'crfAuthoring.canvas.validation.itemNameInvalidChars' },
 ]
 
 const PREFIX_RULES: PrefixRule[] = [
-  { prefix: 'Data type must be one of',     key: 'crfAuthoring.validation.dataTypeUnsupported' },
-  { prefix: 'Response type must be one of', key: 'crfAuthoring.validation.responseTypeUnsupported' },
-  { prefix: 'Duplicate item name',          key: 'crfAuthoring.validation.duplicateItemName' },
+  { prefix: 'Data type must be one of',     key: 'crfAuthoring.canvas.validation.dataTypeUnsupported' },
+  { prefix: 'Response type must be one of', key: 'crfAuthoring.canvas.validation.responseTypeUnsupported' },
+  { prefix: 'Duplicate item name',          key: 'crfAuthoring.canvas.validation.duplicateItemName' },
 ]
 
 /**

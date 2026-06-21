@@ -100,6 +100,21 @@ const localizedFieldErrors = computed<Record<string, string>>(() => {
 // inline message stays in German alongside the top summary card.
 provide(CrfAuthoringErrorsKey, localizedFieldErrors)
 
+/**
+ * 2026-06-21 user-feedback round 3 — footer-level versionName /
+ * versionDescription inputs live OUTSIDE SectionCanvas, so the
+ * provide/inject channel above does not reach them. The two computeds
+ * below mirror the same localised lookup directly into the canvas
+ * template so a "versionName is required" error highlights the matching
+ * input + renders the German message under it.
+ */
+const versionNameError = computed<string | null>(
+  () => localizedFieldErrors.value.versionName ?? null,
+)
+const versionDescriptionError = computed<string | null>(
+  () => localizedFieldErrors.value.versionDescription ?? null,
+)
+
 onMounted(() => {
   // Fresh draft + drop any catalog cache from a previous session.
   store.reset()
@@ -340,23 +355,45 @@ function onUseLegacyWizard(): void {
         <span>{{ t('crfAuthoring.canvas.versionName') }}</span>
         <input
           type="text"
-          class="text-xs border border-slate-300 bg-white rounded px-2 py-0.5 focus:outline-none focus:border-muw-blue focus:ring-1 focus:ring-muw-blue placeholder:text-slate-400"
+          class="text-xs bg-white rounded px-2 py-0.5 focus:outline-none focus:ring-1 placeholder:text-slate-400"
+          :class="versionNameError
+            ? 'border border-red-500 focus:border-red-600 focus:ring-red-300'
+            : 'border border-slate-300 focus:border-muw-blue focus:ring-muw-blue'"
           :value="store.draft.versionName"
           :placeholder="t('crfAuthoring.canvas.versionNamePlaceholder')"
           data-testid="crf-canvas-version-name"
+          :aria-invalid="versionNameError ? 'true' : 'false'"
           @input="(ev) => store.setVersionName((ev.target as HTMLInputElement).value)"
         />
+        <span
+          v-if="versionNameError"
+          class="text-[10px] text-red-700"
+          data-testid="crf-canvas-version-name-error"
+        >
+          {{ versionNameError }}
+        </span>
       </label>
       <label class="flex items-center gap-1.5 text-slate-700 flex-1">
         <span>{{ t('crfAuthoring.canvas.versionDescription') }}</span>
         <input
           type="text"
-          class="flex-1 text-xs border border-slate-300 bg-white rounded px-2 py-0.5 focus:outline-none focus:border-muw-blue focus:ring-1 focus:ring-muw-blue placeholder:text-slate-400"
+          class="flex-1 text-xs bg-white rounded px-2 py-0.5 focus:outline-none focus:ring-1 placeholder:text-slate-400"
+          :class="versionDescriptionError
+            ? 'border border-red-500 focus:border-red-600 focus:ring-red-300'
+            : 'border border-slate-300 focus:border-muw-blue focus:ring-muw-blue'"
           :value="store.draft.versionDescription"
           :placeholder="t('crfAuthoring.canvas.versionDescriptionPlaceholder')"
           data-testid="crf-canvas-version-description"
+          :aria-invalid="versionDescriptionError ? 'true' : 'false'"
           @input="(ev) => store.setVersionDescription((ev.target as HTMLInputElement).value)"
         />
+        <span
+          v-if="versionDescriptionError"
+          class="text-[10px] text-red-700"
+          data-testid="crf-canvas-version-description-error"
+        >
+          {{ versionDescriptionError }}
+        </span>
       </label>
     </footer>
 

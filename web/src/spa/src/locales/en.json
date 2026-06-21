@@ -1188,7 +1188,7 @@
       "committed": "Migrated {count} event definition(s).",
       "failed": "Migration failed: {message}"
     },
-    "authorManually": "Manually author",
+    "authorManually": "[NEEDS_REVIEW] New version",
     "ophthCatalog": {
       "title": "Add from ophthalmology catalog",
       "subtitle": "Pre-defined fields with OID + unit + modality binding — pick one to insert into the current section.",
@@ -1465,6 +1465,7 @@
         "calculationFormulaRequired": "[NEEDS_REVIEW] Calculation formula must not be empty.",
         "expressionRequired": "[NEEDS_REVIEW] Expression must not be empty.",
         "versionNameRequired": "[NEEDS_REVIEW] Version name is required.",
+        "versionNameTooLong": "[NEEDS_REVIEW] Version name must be 255 characters or fewer.",
         "versionDescriptionRequired": "[NEEDS_REVIEW] Version description is required.",
         "fileResponseSetRequired": "[NEEDS_REVIEW] FILE items require a 'file' response set.",
         "itemNameInvalidChars": "[NEEDS_REVIEW] Item name may only contain letters, digits and underscores.",

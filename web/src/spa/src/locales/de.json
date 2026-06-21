@@ -1188,7 +1188,7 @@
       "committed": "{count} Event-Definition(en) migriert.",
       "failed": "Migration fehlgeschlagen: {message}"
     },
-    "authorManually": "Manuell anlegen",
+    "authorManually": "Neue Version anlegen",
     "ophthCatalog": {
       "title": "Aus Ophthalmologie-Katalog hinzufügen",
       "subtitle": "Vordefinierte Felder mit OID + Einheit + Modalitätsbindung — wählen Sie ein Feld, das in den aktuellen Abschnitt eingefügt werden soll.",
@@ -1467,6 +1467,7 @@
         "calculationFormulaRequired": "Berechnungsformel darf nicht leer sein.",
         "expressionRequired": "Ausdruck darf nicht leer sein.",
         "versionNameRequired": "Versionsname ist erforderlich.",
+        "versionNameTooLong": "Versionsname darf höchstens 255 Zeichen lang sein.",
         "versionDescriptionRequired": "Versionsbeschreibung ist erforderlich.",
         "fileResponseSetRequired": "Items vom Datentyp FILE benötigen ein 'file'-Antwortset.",
         "itemNameInvalidChars": "Item-Name darf nur Buchstaben, Ziffern und Unterstriche enthalten.",
