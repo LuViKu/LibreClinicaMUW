@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { UserRole } from '@/types/auth'
+import { useStudyModuleStore } from '@/stores/studyModules'
 
 interface BreadcrumbItem {
   label: string
@@ -46,6 +47,15 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const { t } = useI18n()
+
+/**
+ * Active study-module nav-slot entries. The store returns entries from
+ * the active manifest only — empty when no module is active or when
+ * the active module doesn't advertise a {@code nav.modules} injection.
+ * Each entry's component is responsible for its own routing target.
+ */
+const studyModules = useStudyModuleStore()
+const navInjections = computed(() => studyModules.injectionsFor('nav.modules'))
 
 /**
  * Coalesced role set — prefer the explicit multi-role list; fall
@@ -228,6 +238,15 @@ function onReportBugClick() {
           </svg>
         </template>
       </nav>
+
+      <!-- PR #245 hardening fix #3 — nav.modules slot. Each entry's
+           component is a self-contained <RouterLink> targeting the
+           module's primary route. Renders only when the active study
+           matches a registered module; otherwise the slot returns
+           empty and no chrome shows. -->
+      <template v-for="entry in navInjections" :key="entry.key">
+        <component :is="entry.component" />
+      </template>
 
       <!-- Phase E hardening B — sysadmin-only entry-point to the
            system-wide audit trail. Gated on Administrator role
