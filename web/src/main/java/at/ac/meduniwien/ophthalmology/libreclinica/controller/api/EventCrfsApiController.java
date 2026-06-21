@@ -423,6 +423,9 @@ public class EventCrfsApiController {
                 String.valueOf(ecb.getId()),
                 ss.getLabel(),
                 eventLabel,
+                // 2026-06-21 user-feedback round 5 — surfaced so the SPA
+                // can deep-link back to the parent visit on completion.
+                se != null && se.getId() != 0 ? se.getId() : null,
                 schema,
                 // Server-side blinding: pass-2 callers see an empty
                 // values map so they cannot copy the IDE entry.
@@ -822,7 +825,16 @@ public class EventCrfsApiController {
                                     /* new */ Instant.now().toString());
                         }
 
-                        cascadeEventStatusIfAllCrfsComplete(ecbRef.getStudyEventId(), userRef);
+                        // 2026-06-21 user-feedback round 5 — the
+                        // auto-cascade-to-COMPLETED was removed.
+                        // Operators told us the visit-completion
+                        // decision is theirs; the manual "Visite
+                        // abschließen" action on EventDetailView
+                        // (POST /api/v1/events/{id}/complete) now
+                        // owns that transition. The cascade helper
+                        // is kept (private, unused) in case a future
+                        // workflow needs to opt back in per study.
+                        // cascadeEventStatusIfAllCrfsComplete(ecbRef.getStudyEventId(), userRef);
 
                         EventCRFBean refreshed = eventCrfDAORef.findByPK(ecbRef.getId());
 
@@ -2321,6 +2333,7 @@ public class EventCrfsApiController {
     /* SIGNED / LOCKED visits are terminal — left alone in both helpers. */
     /* ------------------------------------------------------------------ */
 
+    @SuppressWarnings("unused")
     private void cascadeEventStatusIfAllCrfsComplete(int studyEventId, UserAccountBean actor) {
         try {
             StudyEventDAO seDAO = new StudyEventDAO(dataSource);

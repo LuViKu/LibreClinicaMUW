@@ -2424,7 +2424,9 @@
     "action": {
       "open": "CRF öffnen →",
       "startSpa": "Datenerfassung starten →",
-      "starting": "Wird gestartet…"
+      "starting": "Wird gestartet…",
+      "markComplete": "Visite abschließen",
+      "completing": "Wird abgeschlossen…"
     },
     "error": {
       "notFound": "Visite nicht gefunden.",

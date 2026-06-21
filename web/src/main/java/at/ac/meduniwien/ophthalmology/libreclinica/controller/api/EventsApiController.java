@@ -842,10 +842,15 @@ public class EventsApiController {
                 case "scheduled": newStatusId = SubjectEventStatus.SCHEDULED.getId(); break;
                 case "stopped":   newStatusId = SubjectEventStatus.STOPPED.getId();   break;
                 case "skipped":   newStatusId = SubjectEventStatus.SKIPPED.getId();   break;
+                // 2026-06-21 user-feedback round 5 — manual visit
+                // completion. The auto-cascade in EventCrfsApiController
+                // is disabled; the operator now drives the COMPLETED
+                // transition explicitly from EventDetailView.
+                case "completed": newStatusId = SubjectEventStatus.COMPLETED.getId(); break;
                 default:
                     return ResponseEntity.badRequest().body(Map.of("message",
-                            "'status' must be one of: scheduled | stopped | skipped "
-                                    + "(derived statuses are not user-editable)"));
+                            "'status' must be one of: scheduled | stopped | skipped | completed "
+                                    + "(signed / locked require their own endpoint)"));
             }
         }
         // Date validation — pre-parse so we can write back with the

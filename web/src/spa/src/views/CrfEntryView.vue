@@ -229,7 +229,20 @@ function statusLabel(s: CrfEntryStatus): string {
   return t(`crfEntry.status.${s}`)
 }
 
+/**
+ * 2026-06-21 user-feedback round 5 — required-field highlights only
+ * surface once the operator has actually attempted a save or mark-
+ * complete. The previous behaviour painted every required field
+ * red on initial load, which read as "you've done something wrong"
+ * before the operator had a chance to type anything. The flag flips
+ * once on the first onSave / onMarkComplete attempt and stays on
+ * afterwards (the inline messages then track itemErrors live so
+ * fields turn green as the operator fills them in).
+ */
+const submitAttempted = ref(false)
+
 function showError(item: CrfItem): string | null {
+  if (!submitAttempted.value) return null
   return store.itemErrors[item.oid] ?? null
 }
 
@@ -318,6 +331,7 @@ const saveBlockedByRfc = computed(
 )
 
 function onSave() {
+  submitAttempted.value = true
   // If the operator clicks Save on a post-complete entry without
   // every reason staged, route through the modal rather than firing
   // a save that the backend will 400. The store's guard does the
@@ -329,14 +343,23 @@ function onSave() {
   void store.save()
 }
 async function onMarkComplete() {
+  submitAttempted.value = true
   await store.markComplete()
   if (store.status === 'complete') {
-    // Phase E.6 polish — after marking complete, return the operator
-    // to the casebook view for the subject they were entering, with
-    // the events panel scrolled into view. Falls back to the subject
-    // matrix when the entry happens to have no subjectId (shouldn't
-    // happen in practice, but the guard keeps the post-complete UX
-    // from dead-ending).
+    // 2026-06-21 user-feedback round 5 — return to the parent visit
+    // view rather than the subject casebook. The operator was just
+    // working through a CRF for a specific visit; landing them back
+    // on the event-detail page keeps the workflow tight and surfaces
+    // the new "Visite abschließen" button (the visit no longer
+    // auto-completes — see EventCrfsApiController cascade removal).
+    const eventId = store.entry?.studyEventId
+    if (eventId != null) {
+      router.push({
+        name: 'event-detail',
+        params: { eventId: String(eventId) },
+      })
+      return
+    }
     const subjectId = store.entry?.subjectId
     if (subjectId) {
       router.push({

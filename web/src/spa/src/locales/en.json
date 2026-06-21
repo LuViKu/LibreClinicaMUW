@@ -2422,7 +2422,9 @@
     "action": {
       "open": "Open CRF →",
       "startSpa": "Start data entry →",
-      "starting": "Starting…"
+      "starting": "Starting…",
+      "markComplete": "[NEEDS_REVIEW] Mark visit complete",
+      "completing": "[NEEDS_REVIEW] Marking complete…"
     },
     "error": {
       "notFound": "Event not found.",

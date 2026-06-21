@@ -9,6 +9,7 @@ import DenseTable from '@/components/DenseTable.vue'
 import RetinalResultsTab from '@/components/RetinalResultsTab.vue'
 
 import { useEventDetailStore } from '@/stores/eventDetail'
+import { useEventsStore } from '@/stores/events'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
@@ -34,6 +35,41 @@ const store = useEventDetailStore()
 // per-event-name conditionals in shared code.
 const studyModules = useStudyModuleStore()
 const panelInjections = computed(() => studyModules.injectionsFor('event-detail.panels'))
+
+/**
+ * 2026-06-21 user-feedback round 5 — manual "Visite abschließen"
+ * action. The cascade in EventCrfsApiController that flipped the
+ * visit to COMPLETED on the last CRF mark-complete was removed; the
+ * operator now drives the transition explicitly from this view.
+ */
+const events = useEventsStore()
+const isMarkingEventComplete = ref(false)
+const markEventCompleteError = ref<string | null>(null)
+const canMarkEventComplete = computed(() => {
+  const s = event.value?.status
+  if (!s) return false
+  // Terminal-ish states block: completed (already), signed, locked,
+  // stopped, skipped. Anything else may be marked complete by the
+  // operator (matches the role gate on the PUT endpoint).
+  return s !== 'completed' && s !== 'signed' && s !== 'locked'
+      && s !== 'stopped' && s !== 'skipped'
+})
+async function onMarkEventComplete(): Promise<void> {
+  if (!event.value || !canMarkEventComplete.value) return
+  markEventCompleteError.value = null
+  isMarkingEventComplete.value = true
+  try {
+    const result = await events.updateEvent(String(event.value.id), { status: 'completed' })
+    if (!result.ok) {
+      markEventCompleteError.value = result.message
+      return
+    }
+    // Refresh the local detail so the status pill + button gating react.
+    await store.load(eventId.value)
+  } finally {
+    isMarkingEventComplete.value = false
+  }
+}
 
 const eventId = computed<string>(() => String(route.params.eventId))
 
@@ -198,7 +234,36 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
             {{ event.eventDefinitionName }}
             <StatusPill :variant="statusVariant(event.status)">{{ t(`subjectMatrix.status.${event.status}`) }}</StatusPill>
           </h1>
-          <p class="text-xs text-slate-500 mt-1 font-mono">{{ formatDate(event.dateStart) }}</p>
+          <div class="mt-1 flex items-center justify-between gap-3 flex-wrap">
+            <p class="text-xs text-slate-500 font-mono">{{ formatDate(event.dateStart) }}</p>
+            <!-- 2026-06-21 user-feedback round 5 — manual visit-completion
+                 button. The cascade in EventCrfsApiController used to
+                 flip the visit to COMPLETED automatically on the last
+                 CRF mark-complete, which surprised operators. The
+                 transition is now driven from here so the operator owns
+                 the call. The button is disabled when the visit is
+                 already in a terminal-ish state (completed / stopped /
+                 skipped / signed / locked) — no double-complete. -->
+            <button
+              v-if="canMarkEventComplete"
+              type="button"
+              class="text-xs px-3 py-1.5 rounded bg-muw-blue text-white hover:bg-muw-blue/90 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              :disabled="isMarkingEventComplete"
+              data-test="event-detail-mark-complete"
+              @click="onMarkEventComplete"
+            >
+              {{ isMarkingEventComplete
+                  ? t('eventDetail.action.completing')
+                  : t('eventDetail.action.markComplete') }}
+            </button>
+          </div>
+          <div
+            v-if="markEventCompleteError"
+            class="mt-2 rounded-muw border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+            role="alert"
+          >
+            {{ markEventCompleteError }}
+          </div>
         </div>
 
         <!-- Phase E.6 — inline error toast for the "start data entry" action.

@@ -933,7 +933,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                 <th scope="col" class="px-5 py-2 font-medium w-40">{{ t('subjectDetail.column.status') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-44">{{ t('subjectDetail.column.dataEntryStage') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-24 text-right">{{ t('subjectDetail.column.openQueries') }}</th>
-                <th scope="col" class="px-5 py-2 font-medium w-72 text-right"></th>
+                <th scope="col" class="px-5 py-2 font-medium w-[19rem] text-right whitespace-nowrap"></th>
               </tr>
             </template>
             <template v-for="ev in subject.events" :key="ev.eventDefinitionOid">
@@ -951,7 +951,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   <StatusPill v-if="ev.openQueries > 0" compact variant="danger">{{ ev.openQueries }}</StatusPill>
                   <span v-else class="text-slate-400">—</span>
                 </td>
-                <td class="px-5 py-2.5 text-right text-xs">
+                <td class="px-5 py-2.5 text-right text-xs whitespace-nowrap">
                   <!-- 2026-06-21 user-feedback round 4 — the three
                        visit-row actions used to stack as bare text
                        links, which made the destructive Stornieren
