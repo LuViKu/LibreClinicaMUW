@@ -11,6 +11,7 @@ import StatusPill from '@/components/StatusPill.vue'
 
 import { useSystemAuditLogStore } from '@/stores/systemAuditLog'
 import type { AuditEvent, AuditEventVariant } from '@/types/audit'
+import { formatDate } from '@/lib/dateFormat'
 
 /**
  * Phase E hardening B (sysadmin audit UI).
@@ -36,10 +37,9 @@ function variantLabel(v: AuditEventVariant): string {
   return t(`auditLog.variant.${v}`)
 }
 
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+// 2026-06-21 user-feedback round 4 — DD.MM.YYYY everywhere.
 function formatDateHeading(iso: string): string {
-  const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10))
-  return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[(m ?? 1) - 1] ?? '???'}-${y}`
+  return formatDate(iso)
 }
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })

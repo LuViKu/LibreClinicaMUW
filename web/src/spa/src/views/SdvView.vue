@@ -14,6 +14,7 @@ import { useSdvStore } from '@/stores/sdv'
 import { useAuthStore } from '@/stores/auth'
 import type { SdvRow, SdvRequirement, SdvStatus } from '@/types/sdv'
 import { canUnverifySdv } from '@/types/sdv'
+import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const sdv = useSdvStore()
@@ -71,11 +72,7 @@ const statusVariant = (s: SdvStatus): 'success' | 'info' | 'warning' | 'danger' 
 const requirementLabel = (r: SdvRequirement) => t(`sdv.requirement.${r}`)
 const statusLabel = (s: SdvStatus) => t(`sdv.status.${s}`)
 
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10))
-  return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[(m ?? 1) - 1] ?? '???'}-${y}`
-}
+// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4)
 
 /* ----- Bulk-verify confirmation modal ----- */
 const confirmOpen = ref(false)

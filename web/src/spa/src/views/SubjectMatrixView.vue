@@ -13,6 +13,7 @@ import { useStudyStore } from '@/stores/study'
 import { useAuthStore } from '@/stores/auth'
 import StudyMetricsModal from '@/components/StudyMetricsModal.vue'
 import type { EventStatus, Subject } from '@/types/subject'
+import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const subjects = useSubjectsStore()
@@ -117,14 +118,8 @@ const statusVariant = (status: EventStatus): 'success' | 'info' | 'warning' | 'n
 
 const statusLabel = (status: EventStatus): string => t(`subjectMatrix.status.${status}`)
 
-/** ISO `YYYY-MM-DD` → `dd-MMM-yyyy` (clinical convention). */
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10))
-  const mi = (m ?? 1) - 1
-  return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[mi] ?? '???'}-${y}`
-}
+// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4).
+// The DD.MM.YYYY German short-date is the SPA-wide convention.
 
 type Filter =
   | 'all'

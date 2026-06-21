@@ -28,6 +28,7 @@ import ErrorText from '@/components/ErrorText.vue'
 
 import { useModalityBaselinesStore, baselinesKey, type EyeScope } from '@/stores/modalityBaselines'
 import type { ModalityBaseline, ModalityBaselineSnapshot } from '@/types/baselines'
+import { formatDate } from '@/lib/dateFormat'
 
 interface Props {
   subjectLabel: string
@@ -60,10 +61,7 @@ function modalityLabel(row: ModalityBaseline): string {
   return props.i18nLocale === 'en' ? row.labelEn : row.labelDe
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  return iso
-}
+// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4).
 
 function formatValue(snapshot: ModalityBaselineSnapshot, row: ModalityBaseline): string {
   if (snapshot.value === null) return '—'

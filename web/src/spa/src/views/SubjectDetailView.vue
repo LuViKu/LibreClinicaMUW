@@ -28,6 +28,7 @@ import { canManageSubjectLifecycle, canEditSubject } from '@/types/subject'
 import { roleSatisfies, userRolesFromAuth } from '@/router'
 import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
+import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -571,12 +572,7 @@ function statusVariant(status: EventStatus): 'success' | 'info' | 'warning' | 'n
   }
 }
 
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10))
-  return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[(m ?? 1) - 1] ?? '???'}-${y}`
-}
+// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4)
 
 function genderLabel(g: string): string {
   return t(`addSubject.gender.${g === 'F' ? 'female' : g === 'M' ? 'male' : g === 'O' ? 'other' : 'unknown'}`)
@@ -937,7 +933,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                 <th scope="col" class="px-5 py-2 font-medium w-40">{{ t('subjectDetail.column.status') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-44">{{ t('subjectDetail.column.dataEntryStage') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-24 text-right">{{ t('subjectDetail.column.openQueries') }}</th>
-                <th scope="col" class="px-5 py-2 font-medium w-28 text-right"></th>
+                <th scope="col" class="px-5 py-2 font-medium w-72 text-right"></th>
               </tr>
             </template>
             <template v-for="ev in subject.events" :key="ev.eventDefinitionOid">
@@ -955,39 +951,46 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   <StatusPill v-if="ev.openQueries > 0" compact variant="danger">{{ ev.openQueries }}</StatusPill>
                   <span v-else class="text-slate-400">—</span>
                 </td>
-                <td class="px-5 py-2.5 text-right text-xs space-x-2">
-                  <!-- Phase E A4: edit + cancel buttons. eventId is empty
-                       when no study_event row exists yet (event-definition
-                       slot is unscheduled) — hide both actions in that
-                       case; the user would use the Schedule button instead. -->
-                  <button
-                    v-if="ev.eventId && canEditEv(ev.status)"
-                    type="button"
-                    class="text-muw-blue hover:underline"
-                    data-testid="event-row-edit-button"
-                    @click="openEditEvent(ev)"
-                  >{{ t('subjectDetail.event.edit') }}</button>
-                  <button
-                    v-if="ev.eventId && canCancelEv(ev.status)"
-                    type="button"
-                    class="text-rose-700 hover:underline"
-                    @click="onCancelEvent(ev)"
-                  >{{ t('subjectDetail.event.cancel') }}</button>
-                  <!-- Phase E.6: link straight to the SPA's Event
-                       Detail view (see EventDetailView.vue) so the
-                       operator stays in-shell. v0 sent users into the
-                       legacy /pages/EnterDataForStudyEvent JSP which
-                       was jarring + often errored for non-Investigator
-                       roles. eventId is empty until the event row is
-                       actually scheduled — render nothing in that
-                       case (Schedule button covers the path). -->
-                  <RouterLink
-                    v-if="ev.eventId"
-                    :to="`/events/${ev.eventId}`"
-                    class="text-muw-blue hover:underline"
-                  >
-                    {{ t('subjectDetail.openEvent') }}
-                  </RouterLink>
+                <td class="px-5 py-2.5 text-right text-xs">
+                  <!-- 2026-06-21 user-feedback round 4 — the three
+                       visit-row actions used to stack as bare text
+                       links, which made the destructive Stornieren
+                       sit one px away from the primary edit / open
+                       actions and caused mis-clicks. Now: real
+                       padded buttons, a vertical separator between
+                       the secondary (edit/cancel) cluster and the
+                       primary "CRFs öffnen" link, and the destructive
+                       action visually distinct (red text + outlined
+                       border). eventId is empty when no study_event
+                       row exists yet (event-definition slot is
+                       unscheduled) — hide everything in that case;
+                       the Schedule button covers the path. -->
+                  <div v-if="ev.eventId" class="flex items-center justify-end gap-1.5 whitespace-nowrap">
+                    <button
+                      v-if="canEditEv(ev.status)"
+                      type="button"
+                      class="px-2 py-1 rounded border border-slate-300 text-slate-700 hover:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-muw-blue whitespace-nowrap"
+                      data-testid="event-row-edit-button"
+                      @click="openEditEvent(ev)"
+                    >{{ t('subjectDetail.event.edit') }}</button>
+                    <button
+                      v-if="canCancelEv(ev.status)"
+                      type="button"
+                      class="px-2 py-1 rounded border border-rose-300 text-rose-700 hover:bg-rose-50 focus:outline-none focus:ring-1 focus:ring-rose-400 whitespace-nowrap"
+                      data-testid="event-row-cancel-button"
+                      @click="onCancelEvent(ev)"
+                    >{{ t('subjectDetail.event.cancel') }}</button>
+                    <!-- Phase E.6: link straight to the SPA's Event
+                         Detail view (see EventDetailView.vue) so the
+                         operator stays in-shell. -->
+                    <RouterLink
+                      :to="`/events/${ev.eventId}`"
+                      class="px-2.5 py-1 rounded bg-muw-blue text-white hover:bg-muw-blue/90 focus:outline-none focus:ring-2 focus:ring-muw-blue/40 inline-flex items-center gap-1 whitespace-nowrap"
+                      data-testid="event-row-open-link"
+                    >
+                      <span>{{ t('subjectDetail.openEvent') }}</span>
+                    </RouterLink>
+                  </div>
                 </td>
               </tr>
 

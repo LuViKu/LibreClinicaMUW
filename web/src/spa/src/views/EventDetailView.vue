@@ -11,6 +11,7 @@ import RetinalResultsTab from '@/components/RetinalResultsTab.vue'
 import { useEventDetailStore } from '@/stores/eventDetail'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
+import { formatDate } from '@/lib/dateFormat'
 
 /**
  * Phase E.6 — standalone Event Detail view (replaces the legacy
@@ -122,12 +123,8 @@ const retinalCrfIds = computed<number[]>(() => {
     .filter((id): id is number => id != null)
 })
 
-const MONTH_ABBR = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10))
-  return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[(m ?? 1) - 1] ?? '???'}-${y}`
-}
+// 2026-06-21 user-feedback round 4 — formatDate now lives in
+// @/lib/dateFormat so every view renders DD.MM.YYYY (German short).
 
 /**
  * Phase E.6 — start data entry for a CRF slot that has no

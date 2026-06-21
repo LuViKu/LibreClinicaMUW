@@ -21,6 +21,7 @@ import SideRail from '@/components/SideRail.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDatasetsStore } from '@/stores/datasets'
 import type { ExportFormat } from '@/types/export'
+import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -175,12 +176,7 @@ async function runQuickOdm() {
 
 /* ----------------------------- Helpers ----------------------------- */
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.valueOf())) return '—'
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' })
-}
+// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4).
 
 function formatBytes(n: number): string {
   if (!n || n < 0) return '—'
