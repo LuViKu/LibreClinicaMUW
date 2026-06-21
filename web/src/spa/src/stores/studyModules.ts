@@ -40,10 +40,10 @@ export const useStudyModuleStore = defineStore('studyModules', () => {
     return findModule(pt)
   })
 
-  function injectionsFor(slotId: InjectionSlotId): InjectionEntry[] {
+  function injectionsFor<S extends InjectionSlotId>(slotId: S): InjectionEntry<S>[] {
     const m = activeModule.value
     if (!m) return []
-    return m.injections?.[slotId] ?? []
+    return (m.injections?.[slotId] as InjectionEntry<S>[] | undefined) ?? []
   }
 
   /**
