@@ -140,11 +140,15 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       // is opened from the SubjectDetailView which passes the OID; for
       // v1 we coerce — production wiring will route through a typed
       // {@code /api/v1/subjects/{oid}} resolver. When the oid isn't a
-      // numeric string, surface the mock fixture so the workspace stays
-      // usable.
+      // numeric string, surface an empty workspace so the view can
+      // render its empty state. 2026-06-21 round 7 — previously we
+      // fell back to buildMockData() so the workspace stayed
+      // "usable"; that surfaced fixture patient S-0042 on real
+      // operator screens whenever a non-numeric subject id was
+      // passed. The empty state is the correct signal.
       const numericId = Number.parseInt(oid, 10)
       if (Number.isNaN(numericId)) {
-        data.value = buildMockData()
+        data.value = null
         return
       }
       const summaries = await listSubjectJobs(numericId)

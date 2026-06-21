@@ -36,6 +36,31 @@ const router = useRouter()
 const subjects = useSubjectsStore()
 const events = useEventsStore()
 const auth = useAuthStore()
+
+/**
+ * 2026-06-21 round 6 follow-up — local click-outside directive used by
+ * the kebab menu in the visit row. Keep this inline (no shared util) so
+ * the directive doesn't leak into views that don't need it. The handler
+ * runs on `pointerdown` capture so it fires before the bubbling
+ * `click` that the inner buttons listen for — that ordering matters
+ * when the trigger button toggles the menu state itself.
+ */
+const vClickOutside = {
+  mounted(el: HTMLElement & { __clickOutside?: (ev: Event) => void }, binding: { value: () => void }) {
+    el.__clickOutside = (ev: Event) => {
+      if (!el.contains(ev.target as Node)) {
+        binding.value?.()
+      }
+    }
+    document.addEventListener('pointerdown', el.__clickOutside, true)
+  },
+  unmounted(el: HTMLElement & { __clickOutside?: (ev: Event) => void }) {
+    if (el.__clickOutside) {
+      document.removeEventListener('pointerdown', el.__clickOutside, true)
+      delete el.__clickOutside
+    }
+  },
+}
 // Pluggable study-module SPI — workspace slot injection.
 // When the active study's protocol_type matches a registered module,
 // the module's 'subject-detail.workspace' entries render under the
@@ -343,6 +368,35 @@ function onCancelEvent(ev: { eventId: string; label: string }) {
   if (!ev.eventId || !subject.value) return
   cancelDialogEvent.value = ev
   cancelDialogOpen.value = true
+}
+
+/**
+ * 2026-06-21 round 6 follow-up — per-row kebab menu state. We track the
+ * single open menu by event id rather than a per-row boolean so clicking
+ * a different row's kebab implicitly closes the previously-open one. The
+ * v-click-outside directive below closes the menu on any pointerdown
+ * outside its wrapper.
+ */
+const openMenuEventId = ref<string | null>(null)
+
+function toggleEventMenu(eventId: string): void {
+  openMenuEventId.value = openMenuEventId.value === eventId ? null : eventId
+}
+
+function onMenuEdit(ev: {
+  eventId: string
+  eventDefinitionOid: string
+  dateStart: string | null
+  location: string | null
+  status: EventStatus
+}): void {
+  openMenuEventId.value = null
+  openEditEvent(ev)
+}
+
+function onMenuCancel(ev: { eventId: string; label: string }): void {
+  openMenuEventId.value = null
+  onCancelEvent(ev)
 }
 
 async function onEventCancelled() {
@@ -993,14 +1047,15 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                 <td class="px-5 py-2.5 text-right text-xs whitespace-nowrap">
                   <!-- 2026-06-21 user-feedback round 6 — three inline
                        buttons (Bearbeiten / Stornieren / CRFs öffnen)
-                       still clipped on the "Abgeschlossen" rows where
-                       the "Erfassung abgeschlossen" status pill ate
-                       more horizontal space. Collapsed the two
-                       secondary actions (edit + cancel) into a
-                       single-button overflow popover ⋮ next to the
-                       primary CRFs-öffnen link. The popover is a plain
-                       <details> element — no popover lib needed; click
-                       outside closes it via the native blur. -->
+                       clipped on the "Abgeschlossen" rows. Collapsed
+                       the two secondary actions into a single-button
+                       overflow popover (⋮) next to the primary
+                       CRFs-öffnen link. Custom div/button + ref-based
+                       toggle (NOT <details>): the native element does
+                       not close on outside-click and operators kept
+                       leaving stale menus open. The vClickOutside
+                       directive wired below closes the open menu on
+                       any pointerdown outside its wrapper. -->
                   <div v-if="ev.eventId" class="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
                     <RouterLink
                       :to="`/events/${ev.eventId}`"
@@ -1009,16 +1064,21 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                     >
                       <span>{{ t('subjectDetail.openEvent') }}</span>
                     </RouterLink>
-                    <details
+                    <div
                       v-if="canEditEv(ev.status) || canCancelEv(ev.status)"
+                      v-click-outside="() => (openMenuEventId === ev.eventId ? (openMenuEventId = null) : null)"
                       class="relative"
                       data-testid="event-row-more-menu"
                     >
-                      <summary
-                        class="list-none cursor-pointer px-1.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-100 select-none"
+                      <button
+                        type="button"
+                        class="cursor-pointer px-1.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-100 select-none"
                         :aria-label="t('subjectDetail.event.moreActions')"
-                      >⋮</summary>
+                        :aria-expanded="openMenuEventId === ev.eventId"
+                        @click="toggleEventMenu(ev.eventId)"
+                      >⋮</button>
                       <div
+                        v-if="openMenuEventId === ev.eventId"
                         class="absolute right-0 mt-1 min-w-[10rem] rounded-md border border-slate-200 bg-white shadow-md z-10 py-1 text-left"
                       >
                         <button
@@ -1026,17 +1086,17 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                           type="button"
                           class="block w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
                           data-testid="event-row-edit-button"
-                          @click="openEditEvent(ev)"
+                          @click="onMenuEdit(ev)"
                         >{{ t('subjectDetail.event.edit') }}</button>
                         <button
                           v-if="canCancelEv(ev.status)"
                           type="button"
                           class="block w-full text-left px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-50"
                           data-testid="event-row-cancel-button"
-                          @click="onCancelEvent(ev)"
+                          @click="onMenuCancel(ev)"
                         >{{ t('subjectDetail.event.cancel') }}</button>
                       </div>
-                    </details>
+                    </div>
                   </div>
                 </td>
               </tr>

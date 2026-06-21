@@ -81,12 +81,29 @@ const { data, loading, error } = useNamdVisitData({
       >
         {{ t('studyModules.namd.errorPrefix') }} {{ error }}
       </div>
-      <template v-else-if="data">
+      <template v-else-if="data && data.visits.length > 0">
         <NamdOverviewTab v-if="tab === 'overview'" :data="data" />
         <NamdViewerTab v-else-if="tab === 'viewer'" :data="data" />
         <NamdCompareTab v-else-if="tab === 'compare'" :data="data" />
         <NamdReportTab v-else-if="tab === 'report'" :data="data" />
       </template>
+      <!-- 2026-06-21 round 7 — empty state for the case where the
+           operator opened the workspace for a subject that has no
+           inference jobs yet. Previously the composable would silently
+           fall back to a mocked T&E timeline (Patient S-0042) which
+           read as real data. -->
+      <div
+        v-else
+        data-testid="namd-workspace-empty"
+        class="rounded-muw bg-white border border-dashed border-slate-300 px-6 py-10 text-center"
+      >
+        <div class="text-base font-semibold text-slate-700">
+          {{ t('studyModules.namd.empty.title') }}
+        </div>
+        <p class="text-xs text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+          {{ t('studyModules.namd.empty.hint') }}
+        </p>
+      </div>
     </main>
   </div>
 </template>
