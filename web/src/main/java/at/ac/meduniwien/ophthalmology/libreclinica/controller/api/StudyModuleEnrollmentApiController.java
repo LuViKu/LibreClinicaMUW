@@ -23,7 +23,6 @@ import javax.sql.DataSource;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudyDAO;
-import at.ac.meduniwien.ophthalmology.libreclinica.service.api.StudyAdminAuthorization;
 
 import jakarta.servlet.http.HttpSession;
 
