@@ -31,6 +31,56 @@ import type { InjectionEntry, InjectionSlotId, StudyModuleManifest } from '@/stu
  * store survives unit tests that don't boot {@code main.ts} (the
  * spec stubs the merge calls via {@code vi.mock}).
  */
+/**
+ * Walk an incoming i18n bundle against the locale messages already
+ * loaded into vue-i18n; emit a {@code console.warn} for every leaf key
+ * that the incoming bundle would overwrite with a different value.
+ *
+ * <p>Detects the silent "last-loaded-wins" failure mode where two
+ * modules independently define {@code studyModules.foo.bar} — vue-i18n
+ * has no collision warning of its own. Only fires in dev to keep
+ * production builds quiet.
+ *
+ * <p>Recursion stays object-only; arrays + primitives are treated as
+ * leaves. Values that match (same string) are not warnings — only
+ * actual overwrites are surfaced.
+ */
+export function detectI18nCollisions(
+  moduleId: string,
+  locale: string,
+  existing: Record<string, unknown> | null | undefined,
+  incoming: Record<string, unknown>,
+  prefix = '',
+): void {
+  if (!existing) return
+  for (const [k, v] of Object.entries(incoming)) {
+    const path = prefix ? `${prefix}.${k}` : k
+    const prior = (existing as Record<string, unknown>)[k]
+    if (
+      v !== null &&
+      typeof v === 'object' &&
+      !Array.isArray(v) &&
+      prior !== null &&
+      typeof prior === 'object' &&
+      !Array.isArray(prior)
+    ) {
+      detectI18nCollisions(
+        moduleId,
+        locale,
+        prior as Record<string, unknown>,
+        v as Record<string, unknown>,
+        path,
+      )
+    } else if (prior !== undefined && prior !== v) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[studyModules] i18n collision on "${locale}.${path}" — ` +
+          `module "${moduleId}" overwrites a value previously set by another module.`,
+      )
+    }
+  }
+}
+
 export const useStudyModuleStore = defineStore('studyModules', () => {
   const auth = useAuthStore()
   const loadedModuleIds = ref<Set<string>>(new Set<string>())
@@ -40,10 +90,10 @@ export const useStudyModuleStore = defineStore('studyModules', () => {
     return findModule(pt)
   })
 
-  function injectionsFor(slotId: InjectionSlotId): InjectionEntry[] {
+  function injectionsFor<S extends InjectionSlotId>(slotId: S): InjectionEntry<S>[] {
     const m = activeModule.value
     if (!m) return []
-    return m.injections?.[slotId] ?? []
+    return (m.injections?.[slotId] as InjectionEntry<S>[] | undefined) ?? []
   }
 
   /**
@@ -66,6 +116,20 @@ export const useStudyModuleStore = defineStore('studyModules', () => {
       }
       try {
         const payload = await m.loadI18n()
+        if (import.meta.env.DEV) {
+          detectI18nCollisions(
+            m.protocolType,
+            'de',
+            i18n.global.getLocaleMessage('de') as Record<string, unknown>,
+            payload.de,
+          )
+          detectI18nCollisions(
+            m.protocolType,
+            'en',
+            i18n.global.getLocaleMessage('en') as Record<string, unknown>,
+            payload.en,
+          )
+        }
         i18n.global.mergeLocaleMessage('de', payload.de)
         i18n.global.mergeLocaleMessage('de-AT', payload.de)
         i18n.global.mergeLocaleMessage('en', payload.en)

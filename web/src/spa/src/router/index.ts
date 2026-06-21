@@ -540,6 +540,24 @@ export function guard(
       )
       return { name: 'home' }
     }
+
+    // PR #245 hardening — verify the URL's :studyOid matches the active
+    // study's OID. The protocolType check above only proves "the active
+    // study CAN host this module"; it doesn't prove "the URL targets the
+    // active study." Without this, a user with study A active can
+    // bookmark study B's module URL and land inside module A's workspace
+    // showing study B context (silent data-routing bug).
+    const urlOid = (to.params.studyOid as string | undefined) ?? null
+    const activeOid = auth.user?.activeStudy?.oid ?? null
+    if (urlOid && activeOid && urlOid !== activeOid) {
+      useErrorsStore().push(
+        new Error(
+          `Module URL references study ${urlOid}, but the active study is ${activeOid}.`,
+        ),
+        'studyModule.guard',
+      )
+      return { name: 'home' }
+    }
   }
 
   return true

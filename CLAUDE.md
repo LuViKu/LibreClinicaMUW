@@ -81,6 +81,7 @@ Dependabot updates weekly (`.github/dependabot.yml`), grouped by ecosystem (Spri
 | [`odm/`](odm/) | CDISC ODM 1.3 JAXB bindings |
 | [`docs/`](docs/) | Jekyll-style static documentation |
 | [`docs/development/modernization/`](docs/development/modernization/) | Decision records, modernization-specific docs |
+| [`docs/development/study-modules/`](docs/development/study-modules/) | SPA study-module SPI — start with [authoring.md](docs/development/study-modules/authoring.md) when writing a new module |
 | [`docker/`](docker/) | Runtime config (`datainfo.properties`, logback.xml) |
 
 Java packages live under `at.ac.meduniwien.ophthalmology.libreclinica.*` since Phase B.11 (2026-05-29). The heritage `org.akaza.openclinica.*` namespace was renamed in commit `4f531f9f7` per DR-010. Liquibase changelogs under `core/src/main/resources/migration/` keep historical `org.akaza.openclinica` references in column-comment strings — those are historical data, not class refs, and changing them would break checksum validation.

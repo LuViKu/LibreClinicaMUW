@@ -63,13 +63,38 @@ describe('studyModules/registry', () => {
       STUDY_MODULES.push(makeManifest('NAMD'))
       expect(findModule('GA')).toBeNull()
     })
+
+    /* PR #245 hardening — fix #6 — tolerate whitespace + cosmetic case. */
+    it('trims surrounding whitespace before matching', () => {
+      const namd = makeManifest('NAMD')
+      STUDY_MODULES.push(namd)
+      expect(findModule(' NAMD ')).toBe(namd)
+      expect(findModule('\tNAMD\n')).toBe(namd)
+      expect(findModule(' nAMD')).toBe(namd)
+    })
+
+    it('returns null when input is whitespace-only', () => {
+      STUDY_MODULES.push(makeManifest('NAMD'))
+      expect(findModule('   ')).toBeNull()
+      expect(findModule('\t')).toBeNull()
+    })
+
+    it('tolerates a manifest that itself carries cosmetic whitespace', () => {
+      const namd = makeManifest('  NAMD  ')
+      STUDY_MODULES.push(namd)
+      expect(findModule('NAMD')).toBe(namd)
+      expect(findModule(' namd ')).toBe(namd)
+    })
   })
 
   describe('STUDY_MODULES', () => {
-    it('ships empty so the framework can be tested in isolation', () => {
-      // Note: beforeEach above clears the registry, so this assertion
-      // alone does not prove the shipped default is empty. The intent
-      // is documented by the registry.ts header comment.
+    it('contains the nAMD manifest auto-registered via import.meta.glob', () => {
+      // After beforeEach() truncates the array, the test contract is
+      // just "the exported symbol is an array." The shipped default
+      // (auto-populated from studyModules/*/index.ts) is verified at
+      // module-import time by the glob in registry.ts; if any module
+      // fails to default-export a manifest, that import itself would
+      // throw and this test file wouldn't even load.
       expect(Array.isArray(STUDY_MODULES)).toBe(true)
     })
   })

@@ -33,6 +33,13 @@ const manifest: StudyModuleManifest = {
         component: () => import('./components/NamdWorkspaceCta.vue'),
       },
     ],
+    'nav.modules': [
+      {
+        key: 'topbar-workspace',
+        labelKey: 'studyModules.namd.label',
+        component: () => import('./components/NamdNavEntry.vue'),
+      },
+    ],
   },
   loadI18n: async () => ({
     de: ((await import('./locales/de.json')) as { default: Record<string, unknown> }).default,
