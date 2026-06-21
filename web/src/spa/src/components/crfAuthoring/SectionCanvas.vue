@@ -48,6 +48,34 @@ const { t } = useI18n()
 const store = useCrfAuthoringStore()
 
 /**
+ * 2026-06-21 user-feedback batch — collapsed-section state. Per-section
+ * boolean tracked client-side (not persisted) so the operator can hide
+ * a tall section to glance at the form structure without scrolling.
+ * Keyed on section.uid so re-orders keep the collapse state stable.
+ */
+const collapsedSections = ref<Set<string>>(new Set())
+
+function isSectionCollapsed(sectionUid: string): boolean {
+  return collapsedSections.value.has(sectionUid)
+}
+
+function toggleSectionCollapsed(sectionUid: string): void {
+  const next = new Set(collapsedSections.value)
+  if (next.has(sectionUid)) next.delete(sectionUid)
+  else next.add(sectionUid)
+  collapsedSections.value = next
+}
+
+/**
+ * 2026-06-21 user-feedback batch — section reorder via drag handle.
+ * Forwards the new array to the store's reorderSections() which
+ * re-numbers ordinals so the persisted payload stays contiguous.
+ */
+function onSectionReorder(reordered: typeof store.draft.sections): void {
+  store.reorderSections(reordered as AuthoringSection[])
+}
+
+/**
  * Per-field error map provided by CrfAuthoringCanvasView. Defaults to an
  * empty computed so item rows render normally when no validation has
  * been attempted yet.
@@ -271,9 +299,18 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
     class="flex-1 min-w-0 overflow-y-auto bg-white"
     data-testid="crf-canvas-section-root"
   >
-    <div class="p-4 space-y-4">
+    <draggable
+      :model-value="sections"
+      :item-key="(s: AuthoringSection) => s.uid"
+      handle=".crf-canvas-section-drag-handle"
+      animation="120"
+      tag="div"
+      class="p-4 space-y-4"
+      data-testid="crf-canvas-sections-draggable"
+      @update:model-value="onSectionReorder"
+    >
+      <template #item="{ element: section, index: sIdx }">
       <div
-        v-for="(section, sIdx) in sections"
         :key="section.uid"
         class="rounded-lg border bg-white"
         :class="dragOverSectionUid === section.uid ? 'border-muw-blue ring-2 ring-muw-blue/30' : 'border-slate-200'"
@@ -284,6 +321,44 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
       >
         <!-- Section header -->
         <div class="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
+          <!-- 2026-06-21 user-feedback batch — drag handle for section
+               reorder. Vuedraggable's handle prop limits drag to this
+               element so input clicks + bilateral toggle stay clickable. -->
+          <span
+            class="crf-canvas-section-drag-handle inline-flex items-center text-slate-400 hover:text-slate-700 cursor-grab"
+            :title="t('crfAuthoring.canvas.section.dragHandle')"
+            :aria-label="t('crfAuthoring.canvas.section.dragHandle')"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <circle cx="9" cy="6" r="1.3" fill="currentColor" />
+              <circle cx="15" cy="6" r="1.3" fill="currentColor" />
+              <circle cx="9" cy="12" r="1.3" fill="currentColor" />
+              <circle cx="15" cy="12" r="1.3" fill="currentColor" />
+              <circle cx="9" cy="18" r="1.3" fill="currentColor" />
+              <circle cx="15" cy="18" r="1.3" fill="currentColor" />
+            </svg>
+          </span>
+          <!-- Collapse toggle. Chevron points right when collapsed,
+               down when expanded. -->
+          <button
+            type="button"
+            class="inline-flex items-center text-slate-500 hover:text-slate-800 px-1"
+            :title="isSectionCollapsed(section.uid)
+              ? t('crfAuthoring.canvas.section.expand')
+              : t('crfAuthoring.canvas.section.collapse')"
+            :aria-expanded="!isSectionCollapsed(section.uid)"
+            :data-testid="`crf-canvas-section-collapse-${sIdx}`"
+            @click="toggleSectionCollapsed(section.uid)"
+          >
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.2"
+              class="transition-transform"
+              :class="isSectionCollapsed(section.uid) ? '-rotate-90' : ''"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
           <div class="flex-1 grid grid-cols-2 gap-2 min-w-0">
             <input
               type="text"
@@ -334,8 +409,10 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
           </button>
         </div>
 
-        <!-- Section body -->
-        <div class="p-3 space-y-2">
+        <!-- Section body — collapse-aware. v-show preserves the
+             draggable list state inside so reorders + selection
+             survive the toggle. -->
+        <div v-show="!isSectionCollapsed(section.uid)" class="p-3 space-y-2">
           <!-- Empty state -->
           <div
             v-if="section.items.length === 0"
@@ -469,17 +546,18 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
           </draggable>
         </div>
       </div>
+      </template>
+    </draggable>
 
-      <div class="text-center">
-        <button
-          type="button"
-          class="text-xs text-muw-blue hover:underline px-3 py-1.5 border border-dashed border-slate-300 rounded-md w-full"
-          data-testid="crf-canvas-add-section"
-          @click="onAddSection"
-        >
-          {{ t('crfAuthoring.canvas.section.add') }}
-        </button>
-      </div>
+    <div class="px-4 pb-4 text-center">
+      <button
+        type="button"
+        class="text-xs text-muw-blue hover:underline px-3 py-1.5 border border-dashed border-slate-300 rounded-md w-full"
+        data-testid="crf-canvas-add-section"
+        @click="onAddSection"
+      >
+        {{ t('crfAuthoring.canvas.section.add') }}
+      </button>
     </div>
   </section>
 </template>

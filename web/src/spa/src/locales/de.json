@@ -1406,7 +1406,10 @@
         "bilateralOn": "Bilateral aktiv — Items werden im OD/OS-Raster angezeigt. Klicken, um auf unilateral umzuschalten.",
         "bilateralOff": "Unilateral — Items als flache Liste. Klicken, um auf bilateral umzuschalten (OD links / OS rechts).",
         "bilateralOnShort": "OD/OS",
-        "bilateralOffShort": "Uni"
+        "bilateralOffShort": "Uni",
+        "collapse": "Sektion einklappen",
+        "expand": "Sektion ausklappen",
+        "dragHandle": "Sektion ziehen, um Reihenfolge zu ändern"
       },
       "properties": {
         "title": "Eigenschaften",

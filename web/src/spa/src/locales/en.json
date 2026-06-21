@@ -1404,7 +1404,10 @@
         "bilateralOn": "[NEEDS_REVIEW] Bilateral active — items shown in OD/OS grid. Click to switch to unilateral.",
         "bilateralOff": "[NEEDS_REVIEW] Unilateral — items in a flat list. Click to switch to bilateral (OD left / OS right).",
         "bilateralOnShort": "[NEEDS_REVIEW] OD/OS",
-        "bilateralOffShort": "[NEEDS_REVIEW] Uni"
+        "bilateralOffShort": "[NEEDS_REVIEW] Uni",
+        "collapse": "[NEEDS_REVIEW] Collapse section",
+        "expand": "[NEEDS_REVIEW] Expand section",
+        "dragHandle": "[NEEDS_REVIEW] Drag section to reorder"
       },
       "properties": {
         "title": "[NEEDS_REVIEW] Properties",
