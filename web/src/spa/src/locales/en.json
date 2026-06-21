@@ -1368,7 +1368,8 @@
       "versionDescriptionPlaceholder": "[NEEDS_REVIEW] Short description of changes in this version",
       "errorTitle": "[NEEDS_REVIEW] Save failed:",
       "errors": {
-        "unknown": "[NEEDS_REVIEW] Unknown error."
+        "unknown": "[NEEDS_REVIEW] Unknown error.",
+        "validationFailed": "[NEEDS_REVIEW] The inputs are incomplete or invalid — please check the highlighted fields below."
       },
       "palette": {
         "title": "[NEEDS_REVIEW] Building blocks",
@@ -1442,6 +1443,27 @@
         "showWhenToggle": "[NEEDS_REVIEW] Only show when …",
         "showWhenSourcePlaceholder": "[NEEDS_REVIEW] Select source item …",
         "showWhenLiteralPlaceholder": "[NEEDS_REVIEW] Compare value"
+      },
+      "validation": {
+        "itemNameRequired": "[NEEDS_REVIEW] Item name is required.",
+        "descriptionRequired": "[NEEDS_REVIEW] Description label is required.",
+        "dataTypeRequired": "[NEEDS_REVIEW] Data type is required.",
+        "responseTypeRequired": "[NEEDS_REVIEW] Response type is required.",
+        "sectionTitleRequired": "[NEEDS_REVIEW] Section title is required.",
+        "sectionLabelRequired": "[NEEDS_REVIEW] Section label is required.",
+        "atLeastOneSection": "[NEEDS_REVIEW] At least one section is required.",
+        "atLeastOneItem": "[NEEDS_REVIEW] Section must contain at least one item.",
+        "optionTextRequired": "[NEEDS_REVIEW] Option text is required.",
+        "optionValueRequired": "[NEEDS_REVIEW] Option value is required.",
+        "calculationFormulaRequired": "[NEEDS_REVIEW] Calculation formula must not be empty.",
+        "expressionRequired": "[NEEDS_REVIEW] Expression must not be empty.",
+        "versionNameRequired": "[NEEDS_REVIEW] Version name is required.",
+        "versionDescriptionRequired": "[NEEDS_REVIEW] Version description is required.",
+        "fileResponseSetRequired": "[NEEDS_REVIEW] FILE items require a 'file' response set.",
+        "itemNameInvalidChars": "[NEEDS_REVIEW] Item name may only contain letters, digits and underscores.",
+        "dataTypeUnsupported": "[NEEDS_REVIEW] Data type is not accepted by the server.",
+        "responseTypeUnsupported": "[NEEDS_REVIEW] Response type is not accepted by the server.",
+        "duplicateItemName": "[NEEDS_REVIEW] Duplicate item name in this section."
       }
     },
     "presets": {

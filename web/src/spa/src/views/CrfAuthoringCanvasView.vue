@@ -8,6 +8,7 @@ import SectionCanvas from '@/components/crfAuthoring/SectionCanvas.vue'
 import PropertiesRail from '@/components/crfAuthoring/PropertiesRail.vue'
 import { useCrfAuthoringStore } from '@/stores/crfAuthoring'
 import { CrfAuthoringErrorsKey } from '@/components/crfAuthoring/errorsInjection'
+import { humanizeValidationError } from '@/components/crfAuthoring/humanizeValidationError'
 
 /**
  * App-feedback Wave 2 (2026-06-19) — CRF authoring canvas view.
@@ -65,7 +66,22 @@ const submitFieldErrors = ref<Record<string, string>>({})
 const isValidating = ref(false)
 const lastValidationOk = ref<boolean | null>(null)
 
-provide(CrfAuthoringErrorsKey, computed(() => submitFieldErrors.value))
+/**
+ * Field-error map provided to descendants (SectionCanvas) via inject.
+ * Localising up-front keeps the inline red-border message in step
+ * with the top summary card.
+ */
+const localizedFieldErrors = computed<Record<string, string>>(() => {
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(submitFieldErrors.value)) {
+    out[k] = humanizeValidationError(v, t)
+  }
+  return out
+})
+
+// Provide the LOCALIZED error map to descendants so SectionCanvas's
+// inline message stays in German alongside the top summary card.
+provide(CrfAuthoringErrorsKey, localizedFieldErrors)
 
 onMounted(() => {
   // Fresh draft + drop any catalog cache from a previous session.
@@ -87,7 +103,9 @@ async function onValidate(): Promise<void> {
       return
     }
     lastValidationOk.value = false
-    formError.value = result.message ?? t('crfAuthoring.canvas.errors.unknown')
+    formError.value = result.message === 'Validation failed'
+      ? t('crfAuthoring.canvas.errors.validationFailed')
+      : result.message ?? t('crfAuthoring.canvas.errors.unknown')
     submitParseErrors.value = result.parseErrors
     submitFieldErrors.value = result.fieldErrors
   } finally {
@@ -128,7 +146,15 @@ const fieldErrorList = computed<FieldErrorEntry[]>(() => {
         break
       }
     }
-    out.push({ oid, message, sectionIndex, itemUid, itemName })
+    // 2026-06-21 user-feedback batch — surface the German equivalent
+    // when the backend validator emits a known English string.
+    out.push({
+      oid,
+      message: humanizeValidationError(message, t),
+      sectionIndex,
+      itemUid,
+      itemName,
+    })
   }
   return out
 })

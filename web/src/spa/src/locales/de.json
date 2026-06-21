@@ -1362,13 +1362,16 @@
       "validate": "Validieren",
       "validating": "Validiere …",
       "validationOk": "Validierung erfolgreich — keine Fehler.",
+      "preview": "Vorschau",
+      "previewing": "Erzeuge Vorschau …",
       "versionName": "Versionsname",
       "versionDescription": "Versionsbeschreibung",
       "versionNamePlaceholder": "z. B. v1.0",
       "versionDescriptionPlaceholder": "Kurze Beschreibung der Änderungen in dieser Version",
       "errorTitle": "Speichern fehlgeschlagen:",
       "errors": {
-        "unknown": "Unbekannter Fehler."
+        "unknown": "Unbekannter Fehler.",
+        "validationFailed": "Die Eingaben sind unvollständig oder ungültig — bitte die unten markierten Felder prüfen."
       },
       "palette": {
         "title": "Bausteine",
@@ -1442,6 +1445,27 @@
         "showWhenToggle": "Nur anzeigen, wenn …",
         "showWhenSourcePlaceholder": "Quell-Item auswählen …",
         "showWhenLiteralPlaceholder": "Vergleichswert"
+      },
+      "validation": {
+        "itemNameRequired": "Item-Name ist erforderlich.",
+        "descriptionRequired": "Beschreibungs-Label ist erforderlich.",
+        "dataTypeRequired": "Datentyp ist erforderlich.",
+        "responseTypeRequired": "Antworttyp ist erforderlich.",
+        "sectionTitleRequired": "Sektionstitel ist erforderlich.",
+        "sectionLabelRequired": "Sektions-Label ist erforderlich.",
+        "atLeastOneSection": "Mindestens eine Sektion ist erforderlich.",
+        "atLeastOneItem": "Die Sektion muss mindestens ein Item enthalten.",
+        "optionTextRequired": "Optionstext ist erforderlich.",
+        "optionValueRequired": "Optionswert ist erforderlich.",
+        "calculationFormulaRequired": "Berechnungsformel darf nicht leer sein.",
+        "expressionRequired": "Ausdruck darf nicht leer sein.",
+        "versionNameRequired": "Versionsname ist erforderlich.",
+        "versionDescriptionRequired": "Versionsbeschreibung ist erforderlich.",
+        "fileResponseSetRequired": "Items vom Datentyp FILE benötigen ein 'file'-Antwortset.",
+        "itemNameInvalidChars": "Item-Name darf nur Buchstaben, Ziffern und Unterstriche enthalten.",
+        "dataTypeUnsupported": "Datentyp wird vom Server nicht akzeptiert.",
+        "responseTypeUnsupported": "Antworttyp wird vom Server nicht akzeptiert.",
+        "duplicateItemName": "Item-Name ist bereits in dieser Sektion vergeben."
       }
     },
     "presets": {
