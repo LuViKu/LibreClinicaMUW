@@ -26,13 +26,14 @@ function makeTo(opts: {
   meta?: Record<string, unknown>
   fullPath?: string
   path?: string
+  params?: Record<string, string>
 }): RouteLocationNormalized {
   return {
     name: opts.name ?? 'mock-route',
     fullPath: opts.fullPath ?? opts.path ?? '/mock',
     path: opts.path ?? '/mock',
     query: {},
-    params: {},
+    params: opts.params ?? {},
     hash: '',
     matched: [],
     redirectedFrom: undefined,
@@ -135,6 +136,56 @@ describe('router guard — meta.studyModule', () => {
       name: 'namd-workspace',
       path: '/studies/S_DEFAULTS1/modules/namd',
       meta: { studyModule: 'namd' },
+    })
+    expect(guard(auth, to)).toBe(true)
+  })
+
+  /* --------------------------------------------------------------------- */
+  /* PR #245 hardening — studyOid path-param verification                  */
+  /* --------------------------------------------------------------------- */
+
+  it('redirects when URL :studyOid does not match the active study OID', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo('NAMD')
+    auth.state = 'authenticated'
+
+    // userBoundTo seeds activeStudy.oid = 'S_DEFAULTS1' — picking a
+    // different OID in the URL models a bookmarked URL or a typo.
+    const to = makeTo({
+      name: 'namd-workspace',
+      path: '/studies/S_GA_TRIAL/modules/namd',
+      params: { studyOid: 'S_GA_TRIAL' },
+      meta: { studyModule: 'NAMD' },
+    })
+    expect(guard(auth, to)).toEqual({ name: 'home' })
+  })
+
+  it('passes when URL :studyOid matches the active study OID', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo('NAMD')
+    auth.state = 'authenticated'
+
+    const to = makeTo({
+      name: 'namd-workspace',
+      path: '/studies/S_DEFAULTS1/modules/namd',
+      params: { studyOid: 'S_DEFAULTS1' },
+      meta: { studyModule: 'NAMD' },
+    })
+    expect(guard(auth, to)).toBe(true)
+  })
+
+  it('passes when the URL carries no :studyOid (defensive — non-module routes)', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo('NAMD')
+    auth.state = 'authenticated'
+
+    // If a future module declares a route without :studyOid (or the
+    // user navigates to a non-module route stamped with studyModule
+    // meta by mistake), the OID check should not block.
+    const to = makeTo({
+      name: 'namd-summary',
+      path: '/modules/namd/summary',
+      meta: { studyModule: 'NAMD' },
     })
     expect(guard(auth, to)).toBe(true)
   })
