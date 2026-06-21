@@ -2166,6 +2166,15 @@
     "binding": "Wird gebunden…",
     "signOut": "Abmelden"
   },
+  "studyModuleEnrollment": {
+    "title": "SPA-Studienmodule",
+    "hint": "Aktivieren Sie die studienspezifischen SPA-Module für diese Studie. Ein Modul erscheint nur in der Navigation, wenn es hier eingeschaltet UND der Protokolltyp der Studie zum Modul passt.",
+    "enrolled": "Aktiv",
+    "notEnrolled": "Aktivieren",
+    "noModules": "Keine SPA-Module registriert.",
+    "loadError": "Modulzuordnungen konnten nicht geladen werden.",
+    "toggleError": "Änderung der Modulzuordnung fehlgeschlagen."
+  },
   "studyParameters": {
     "title": "Studienparameter",
     "intro": "Konfigurieren Sie, wie diese Studie Probanden-IDs, Datenabweichungen, Interviewer-/Datums-Vorbelegungen und optionale Module behandelt. Änderungen werden pro Parameter auditiert.",

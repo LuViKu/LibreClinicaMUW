@@ -111,9 +111,34 @@ export const useStudyModuleStore = defineStore('studyModules', () => {
   const auth = useAuthStore()
   const loadedModuleIds = ref<Set<string>>(new Set<string>())
 
+  /**
+   * 2026-06-21 user-feedback batch — admin-controlled module enrollment.
+   *
+   * <p>Activation is now an AND of two conditions:
+   *
+   * <ol>
+   *   <li>{@code study.protocol_type} matches a registered manifest's
+   *       {@code protocolType} (case-insensitive, whitespace-trimmed) —
+   *       same as before.</li>
+   *   <li>The admin has explicitly enrolled the module on this study
+   *       via the study-builder toggle, surfaced as
+   *       {@code activeStudy.enabledModules}.</li>
+   * </ol>
+   *
+   * <p>The {@code enabledModules} field is optional on the wire so
+   * legacy clients without the field treat every study as "no modules
+   * enrolled" and lose the workspace surface — graceful degradation.
+   */
   const activeModule = computed<StudyModuleManifest | null>(() => {
-    const pt = auth.user?.activeStudy?.protocolType ?? null
-    return findModule(pt)
+    const study = auth.user?.activeStudy
+    if (!study) return null
+    const candidate = findModule(study.protocolType ?? null)
+    if (!candidate) return null
+    const enrolledRaw =
+      (study as unknown as { enabledModules?: string[] }).enabledModules ?? []
+    const enrolled = enrolledRaw.map((m) => m.trim().toUpperCase())
+    if (!enrolled.includes(candidate.protocolType.trim().toUpperCase())) return null
+    return candidate
   })
 
   function injectionsFor<S extends InjectionSlotId>(slotId: S): InjectionEntry<S>[] {

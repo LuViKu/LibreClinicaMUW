@@ -2166,6 +2166,15 @@
     "binding": "Binding…",
     "signOut": "Sign out"
   },
+  "studyModuleEnrollment": {
+    "title": "[NEEDS_REVIEW] SPA study modules",
+    "hint": "[NEEDS_REVIEW] Enable the study-specific SPA modules for this study. A module only appears in the navigation when it is toggled on here AND the study's protocol type matches the module.",
+    "enrolled": "[NEEDS_REVIEW] Enrolled",
+    "notEnrolled": "[NEEDS_REVIEW] Enable",
+    "noModules": "[NEEDS_REVIEW] No SPA modules are registered.",
+    "loadError": "[NEEDS_REVIEW] Failed to load module enrollments.",
+    "toggleError": "[NEEDS_REVIEW] Failed to toggle module enrollment."
+  },
   "studyParameters": {
     "title": "Study parameters",
     "intro": "Configure how this study handles subject identifiers, data discrepancies, interviewer/date prefills, and optional modules. Changes are audited per handle.",

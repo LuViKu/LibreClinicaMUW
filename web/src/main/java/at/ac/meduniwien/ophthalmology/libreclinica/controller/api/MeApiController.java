@@ -191,6 +191,20 @@ public class MeApiController {
             if (protocolTypeKey != null && protocolTypeKey.isBlank()) {
                 protocolTypeKey = null;
             }
+            // 2026-06-21 user-feedback batch — admin-managed module
+            // enrollment list. Failing to load defaults to an empty
+            // list (the SPA treats empty as "no modules enabled") —
+            // never let a /me lookup 500 over an enrollment-table read
+            // error.
+            java.util.List<String> enabledModules;
+            try {
+                enabledModules = StudyModuleEnrollmentApiController
+                        .loadEnrolledModuleIds(dataSource, currentStudy.getId());
+            } catch (java.sql.SQLException e) {
+                LOG.warn("Failed to load module enrollments for study={}: {}",
+                        currentStudy.getOid(), e.getMessage());
+                enabledModules = java.util.List.of();
+            }
             activeStudy = new MeDto.ActiveStudyDto(
                     currentStudy.getId(),
                     currentStudy.getOid(),
@@ -207,7 +221,8 @@ public class MeApiController {
                     // HomeView reads the full set instead of falling back
                     // to the top-level single highest-priority projection.
                     spaRoles,
-                    protocolTypeKey
+                    protocolTypeKey,
+                    enabledModules
             );
         }
 

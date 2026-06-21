@@ -75,5 +75,6 @@
   <include  file="migration/lc-muw-2026-06-20-namd-visit-ai-items.xml"/>
   <include  file="migration/lc-muw-2026-06-20-patient-table.xml"/>
   <include  file="migration/lc-muw-2026-06-20-study-subject-patient-id-nullable.xml"/>
+  <include  file="migration/lc-muw-2026-06-21-study-module-enrollment.xml"/>
 </databaseChangeLog>
 
