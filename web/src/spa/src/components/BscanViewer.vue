@@ -164,20 +164,35 @@ function paintOverlay(): void {
     return
   }
   if (env.kind === 'surface_y') {
-    const [, cols] = env.shape
-    if (!cols) return
-    // Use a reasonable canvas height — surface_y values are pixel
-    // rows in the original DICOM frame. We render at a fixed
-    // canvas-height bucket then stretch via CSS, but the y
-    // value should already be in original-image rows. Use 1024
-    // as a generous bucket so the polyline doesn't quantise.
+    // 2026-06-22 — surface_y now supports two shape ranks:
+    //   shape=(z, cols)            — single surface (legacy)
+    //   shape=(n_surfaces, z, cols) — multiple stacked surfaces (onl / pr)
+    // Labels colour each surface — the layer thickness reads as the
+    // gap between adjacent polylines.
     const data = env.data as Float32Array
-    const offset = z * cols
-    // Find max-y so we know the canvas height to allocate.
+    let nSurfaces = 1
+    let zStride = 0
+    let cols = 0
+    let surfaceStride = 0
+    if (env.shape.length === 3) {
+      nSurfaces = env.shape[0] ?? 1
+      zStride = env.shape[2] ?? 0
+      cols = zStride
+      surfaceStride = (env.shape[1] ?? 0) * cols
+    } else {
+      cols = env.shape[1] ?? 0
+      zStride = cols
+    }
+    if (!cols) return
+    // Discover the canvas height from the max Y across surfaces.
     let maxY = 0
-    for (let x = 0; x < cols; x++) {
-      const yv = data[offset + x] ?? 0
-      if (yv > maxY) maxY = yv
+    for (let s = 0; s < nSurfaces; s++) {
+      const surfaceOffset = s * surfaceStride
+      const sliceOffset = surfaceOffset + z * zStride
+      for (let x = 0; x < cols; x++) {
+        const yv = data[sliceOffset + x] ?? 0
+        if (yv > maxY) maxY = yv
+      }
     }
     const h = Math.max(16, Math.ceil(maxY) + 2)
     canvas.width = cols
@@ -185,27 +200,44 @@ function paintOverlay(): void {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, cols, h)
-    ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)' // sky-400
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    let drawing = false
-    for (let x = 0; x < cols; x++) {
-      const yv = data[offset + x] ?? 0
-      if (yv <= 0) {
-        drawing = false
-        continue
+    const palette = SURFACE_PALETTE
+    for (let s = 0; s < nSurfaces; s++) {
+      ctx.strokeStyle = palette[s % palette.length] ?? palette[0]!
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      const surfaceOffset = s * surfaceStride
+      const sliceOffset = surfaceOffset + z * zStride
+      let drawing = false
+      for (let x = 0; x < cols; x++) {
+        const yv = data[sliceOffset + x] ?? 0
+        if (yv <= 0) {
+          drawing = false
+          continue
+        }
+        if (!drawing) {
+          ctx.moveTo(x, yv)
+          drawing = true
+        } else {
+          ctx.lineTo(x, yv)
+        }
       }
-      if (!drawing) {
-        ctx.moveTo(x, yv)
-        drawing = true
-      } else {
-        ctx.lineTo(x, yv)
-      }
+      ctx.stroke()
     }
-    ctx.stroke()
     return
   }
 }
+
+/**
+ * Surface-line palette — one per stacked surface. Two entries cover
+ * the ONL (OPL-HFL + BMEIS) and PR (BMEIS + OB-OPR) cases; the
+ * modulo wrap accommodates any future task with more surfaces.
+ */
+const SURFACE_PALETTE = [
+  'rgba(56, 189, 248, 0.85)',  // sky-400
+  'rgba(251, 146, 60, 0.85)',  // orange-400
+  'rgba(217, 70, 239, 0.85)',  // fuchsia-500
+  'rgba(34, 197, 94, 0.85)',   // emerald-500
+] as const
 
 watch([segEnvelope, () => props.modelValue], () => {
   paintOverlay()

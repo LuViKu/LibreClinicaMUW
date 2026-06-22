@@ -8,11 +8,19 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -75,9 +83,26 @@ public final class SegmentationEnvelopeLoader {
             case "fluid" -> {
                 return loadFluid(bscanMasksDir);
             }
-            case "ga", "onl", "pr" -> {
-                LOG.debug("segmentation envelope: task '{}' not yet implemented", task);
-                return null;
+            case "ga" -> {
+                return loadGa(bscanMasksDir);
+            }
+            case "onl" -> {
+                // ONL is bounded by OPL-HFL (upper) + BMEIS (lower);
+                // emit both surfaces so the operator can read the layer
+                // thickness from the gap between the two polylines.
+                return loadSurfacePair(
+                        bscanMasksDir,
+                        "onl",
+                        new String[]{"OPL-HFL", "BMEIS"},
+                        new String[]{"*OPL-HFL*.csv", "*BMEIS*.csv"});
+            }
+            case "pr" -> {
+                // PR is bounded by BMEIS (upper) + OB-OPR (lower).
+                return loadSurfacePair(
+                        bscanMasksDir,
+                        "pr",
+                        new String[]{"BMEIS", "OB-OPR"},
+                        new String[]{"*BMEIS*.csv", "*OB?OPR*.csv"});
             }
             default -> {
                 return null;
@@ -123,6 +148,166 @@ public final class SegmentationEnvelopeLoader {
         }
         LOG.warn("fluidseg.npz at {} did not contain segmentation.npy entry", npz);
         return null;
+    }
+
+    /** ga: read {@code *RPEL*.csv} → uint8 (z, cols) binary mask. */
+    private static SegmentationEnvelope loadGa(Path bscanMasksDir) throws IOException {
+        Path rpel = findFirst(bscanMasksDir, "RPEL", ".csv");
+        if (rpel == null) {
+            LOG.warn("ga segmentation envelope: no *RPEL*.csv under {}", bscanMasksDir);
+            return null;
+        }
+        double[][] rows = readCsvNumeric(rpel);
+        if (rows.length == 0) return null;
+        int z = rows.length;
+        int cols = rows[0].length;
+        // Binarise: anything > 0 → 1. RPEL is already 0/1 per the runner's
+        // --threshold flag, but defensive in case the upstream emits floats.
+        byte[] data = new byte[z * cols];
+        for (int i = 0; i < z; i++) {
+            double[] row = rows[i];
+            for (int x = 0; x < cols; x++) {
+                if (x < row.length && row[x] > 0.0) {
+                    data[i * cols + x] = 1;
+                }
+            }
+        }
+        return new SegmentationEnvelope(
+                "binary_2d",
+                "uint8",
+                new int[]{z, cols},
+                List.of("RPEL"),
+                "ga",
+                data
+        );
+    }
+
+    /**
+     * onl/pr: read two layer-interface CSVs into a single float32
+     * envelope shaped (n_surfaces, z, cols). Each row of the CSV is
+     * the Y position of the layer interface in original-image rows
+     * for that A-scan column; missing values map to 0.0 which the
+     * SPA renderer treats as "no surface here, skip this segment".
+     */
+    private static SegmentationEnvelope loadSurfacePair(
+            Path bscanMasksDir,
+            String task,
+            String[] labels,
+            String[] globs
+    ) throws IOException {
+        if (labels.length != globs.length) {
+            throw new IllegalArgumentException("labels + globs must have matching length");
+        }
+        List<double[][]> surfaces = new ArrayList<>(labels.length);
+        int z = -1;
+        int cols = -1;
+        for (int i = 0; i < globs.length; i++) {
+            String token = globs[i].replace("*", "").replace("?", "")
+                    .replace(".csv", "");
+            Path csv = findFirst(bscanMasksDir, token, ".csv");
+            if (csv == null) {
+                LOG.warn("{} segmentation envelope: no {} CSV under {}",
+                        task, labels[i], bscanMasksDir);
+                return null;
+            }
+            double[][] rows = readCsvNumeric(csv);
+            if (rows.length == 0) return null;
+            int zRows = rows.length;
+            int cs = rows[0].length;
+            if (z < 0) z = zRows;
+            if (cols < 0) cols = cs;
+            // Tolerate small mismatches by clamping to the smaller of
+            // the two surfaces (sese_pr / sese_onl sometimes emit a
+            // trailing blank row).
+            if (zRows != z) {
+                LOG.warn("{} surface {}: row count {} differs from baseline {} — clamping",
+                        task, labels[i], zRows, z);
+                if (zRows < z) z = zRows;
+            }
+            if (cs != cols) {
+                LOG.warn("{} surface {}: col count {} differs from baseline {} — clamping",
+                        task, labels[i], cs, cols);
+                if (cs < cols) cols = cs;
+            }
+            surfaces.add(rows);
+        }
+        if (z <= 0 || cols <= 0) return null;
+        // Pack as float32 little-endian, surface-major:
+        // surface 0 row 0..z-1 col 0..cols-1, then surface 1, etc.
+        int sliceLen = z * cols;
+        ByteBuffer bb = ByteBuffer.allocate(surfaces.size() * sliceLen * 4)
+                .order(ByteOrder.LITTLE_ENDIAN);
+        for (double[][] surface : surfaces) {
+            for (int rIdx = 0; rIdx < z; rIdx++) {
+                double[] row = surface[rIdx];
+                for (int x = 0; x < cols; x++) {
+                    float v = x < row.length ? (float) row[x] : 0f;
+                    bb.putFloat(v);
+                }
+            }
+        }
+        return new SegmentationEnvelope(
+                "surface_y",
+                "float32",
+                new int[]{surfaces.size(), z, cols},
+                List.of(labels),
+                task,
+                bb.array()
+        );
+    }
+
+    /**
+     * Find the first regular file in {@code dir} whose name contains
+     * {@code marker} (case-insensitive) AND ends with {@code suffix}.
+     * Returns null when nothing matches.
+     */
+    private static Path findFirst(Path dir, String marker, String suffix) throws IOException {
+        if (!Files.isDirectory(dir)) return null;
+        String markerLower = marker == null ? "" : marker.toLowerCase();
+        String suffixLower = suffix == null ? "" : suffix.toLowerCase();
+        List<Path> matches = new ArrayList<>();
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir)) {
+            for (Path p : ds) {
+                if (!Files.isRegularFile(p)) continue;
+                String n = p.getFileName().toString().toLowerCase();
+                if (!n.endsWith(suffixLower)) continue;
+                if (!markerLower.isEmpty() && !n.contains(markerLower)) continue;
+                matches.add(p);
+            }
+        }
+        Collections.sort(matches, Comparator.comparing(p -> p.getFileName().toString()));
+        return matches.isEmpty() ? null : matches.get(0);
+    }
+
+    /**
+     * Read a CSV of plain numeric values into a 2D double[][]. Skips
+     * empty lines + tolerates trailing commas. Numeric parse failures
+     * fall through as 0.0 rather than throwing — better to surface a
+     * partial surface than a 500.
+     */
+    private static double[][] readCsvNumeric(Path csv) throws IOException {
+        List<double[]> rows = new ArrayList<>();
+        try (BufferedReader rdr = Files.newBufferedReader(csv, StandardCharsets.US_ASCII)) {
+            String line;
+            while ((line = rdr.readLine()) != null) {
+                if (line.isBlank()) continue;
+                String[] tokens = line.split(",");
+                double[] vals = new double[tokens.length];
+                int valid = 0;
+                for (int i = 0; i < tokens.length; i++) {
+                    String t = tokens[i].trim();
+                    if (t.isEmpty()) continue;
+                    try {
+                        vals[i] = Double.parseDouble(t);
+                        valid++;
+                    } catch (NumberFormatException nfe) {
+                        vals[i] = 0.0;
+                    }
+                }
+                if (valid > 0) rows.add(vals);
+            }
+        }
+        return rows.toArray(new double[0][]);
     }
 
     /**

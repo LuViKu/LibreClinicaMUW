@@ -17,7 +17,7 @@
  * <p>The composable caches the result by jobId so the BscanViewer can
  * scrub through slices without re-decoding. One fetch per job.
  */
-import { ref, type Ref } from 'vue'
+import { ref, watch, type Ref } from 'vue'
 
 export interface SegmentationEnvelope {
   task: string
@@ -106,6 +106,11 @@ export function useSegmentationEnvelope(jobId: Ref<number | null>): {
     }
   }
 
-  void refresh()
+  // Re-fire whenever the jobId source changes — props bind on the
+  // parent's first render so the initial setup-time call usually
+  // sees null. Without a watcher the canvas would stay empty until
+  // a manual re-mount. Immediate so we still kick off on the
+  // initial value.
+  watch(jobId, () => { void refresh() }, { immediate: true })
   return { envelope, loading, error }
 }
