@@ -54,50 +54,46 @@ async function initViewer(): Promise<void> {
   status.value = 'loading'
   errorMessage.value = null
   try {
+    // 2026-06-22 — @cornerstonejs/dicom-image-loader 1.86 ships two
+    // bundles in dist/: the default web-worker build (needs an
+    // explicit worker URL via Vite worker-bundling) and a
+    // no-web-workers build that decodes on the main thread. The
+    // latter avoids the worker-path bootstrapping entirely; we're
+    // viewing one DICOM at a time so the main-thread decode is fine
+    // performance-wise. Hitting the file path directly bypasses
+    // package-exports inversions that older bundler resolutions
+    // sometimes apply to the default UMD entry.
     const [
       cornerstoneCoreModule,
       cornerstoneLoaderModule,
       dicomParserModule,
     ] = await Promise.all([
       import('@cornerstonejs/core'),
-      import('@cornerstonejs/dicom-image-loader'),
+      // @ts-expect-error — sub-path import with no .d.ts;
+      // the runtime shape matches the with-workers bundle minus
+      // webWorkerManager.
+      import('@cornerstonejs/dicom-image-loader/dist/cornerstoneDICOMImageLoaderNoWebWorkers.bundle.min.js'),
       import('dicom-parser'),
     ])
-    // 2026-06-22 — @cornerstonejs/dicom-image-loader 1.86 ships a UMD
-    // bundle whose namespace lives under .default for ESM dynamic
-    // imports. Earlier versions exposed the API at the top level. Try
-    // both so a future package upgrade doesn't break us again.
+    // Dynamic import may wrap the namespace under .default for UMD
+    // bundles; unwrap defensively so a future ESM-native release
+    // doesn't double-wrap.
     const cornerstoneCore = (cornerstoneCoreModule as { default?: unknown }).default ?? cornerstoneCoreModule
     const cornerstoneLoader = (cornerstoneLoaderModule as { default?: unknown }).default ?? cornerstoneLoaderModule
     const dicomParser = (dicomParserModule as { default?: unknown }).default ?? dicomParserModule
 
     // Wire the DICOM image loader against the cornerstone core + the
     // parser. Subsequent component mounts in the same session no-op
-    // via the loader's internal singleton.
+    // via the loader's internal singleton. The NoWebWorkers build
+    // does NOT expose webWorkerManager / init at the top level —
+    // decoding kicks in transparently on first wadouri fetch.
     type CornerstoneLoader = {
       external: { cornerstone: unknown; dicomParser: unknown }
-      webWorkerManager?: {
-        initialize: (config: Record<string, unknown>) => void
-      }
-      init?: (config: Record<string, unknown>) => void
     }
     const loader = cornerstoneLoader as CornerstoneLoader
     loader.external.cornerstone = cornerstoneCore
     loader.external.dicomParser = dicomParser
     await (cornerstoneCore as { init: () => Promise<void> }).init()
-    // v1.86 surface: webWorkerManager.initialize(...). Older versions
-    // exposed a top-level .init(...). Call whichever is present so we
-    // tolerate either lineage without a hard pin.
-    const workerConfig = { maxWebWorkers: 1, startWebWorkersOnDemand: true }
-    if (typeof loader.webWorkerManager?.initialize === 'function') {
-      loader.webWorkerManager.initialize(workerConfig)
-    } else if (typeof loader.init === 'function') {
-      loader.init(workerConfig)
-    } else {
-      throw new Error(
-        'cornerstone-dicom-image-loader exposes neither webWorkerManager.initialize nor init',
-      )
-    }
 
     const engineId = `bscan-engine-${Math.floor(performance.now())}`
     const viewportId = `bscan-viewport-${Math.floor(performance.now())}`

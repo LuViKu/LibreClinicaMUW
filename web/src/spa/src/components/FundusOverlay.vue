@@ -304,37 +304,51 @@ function computeFluidBscanLines(
     0, // guard against -Infinity when all arrays empty
   )
   const denom = maxAcross > 0 ? maxAcross : 1
-  return polylines.map((p) => {
-    const z = p.z
-    const i = irf[z] ?? 0
-    const s = srf[z] ?? 0
-    const d = ped[z] ?? 0
-    let label = 'irf'
-    let value = i
-    let stroke: string = BIOMARKER_COLORS.irf
-    if (s > value) {
-      label = 'srf'
-      value = s
-      stroke = BIOMARKER_COLORS.srf
-    }
-    if (d > value) {
-      label = 'ped'
-      value = d
-      stroke = BIOMARKER_COLORS.ped
-    }
-    const opacity = Math.max(0, Math.min(1, value / denom))
-    return {
-      z,
-      x1: p.x1,
-      y1: p.y1,
-      x2: p.x2,
-      y2: p.y2,
-      stroke,
-      opacity,
-      dominantLabel: label.toUpperCase(),
-      dominantValue: value,
-    }
-  })
+  // 2026-06-22 round 9 — drop lines whose biomarker presence is
+  // exactly zero across all three channels. Operator review:
+  // rendering every B-scan's polyline (97 lines per casebook,
+  // most of them transparent) still left the per-B-scan
+  // mouse-hit areas (stroke-width=8 transparent overlay) in place,
+  // and adjacent zero-value lines visually merged into a continuous
+  // block when the projection PNG was absent. Filtering them out
+  // collapses the layer to just the slices the segmenter actually
+  // fired on, which reads as discrete stripes again.
+  return polylines
+    .filter((p) => {
+      const z = p.z
+      return (irf[z] ?? 0) > 0 || (srf[z] ?? 0) > 0 || (ped[z] ?? 0) > 0
+    })
+    .map((p) => {
+      const z = p.z
+      const i = irf[z] ?? 0
+      const s = srf[z] ?? 0
+      const d = ped[z] ?? 0
+      let label = 'irf'
+      let value = i
+      let stroke: string = BIOMARKER_COLORS.irf
+      if (s > value) {
+        label = 'srf'
+        value = s
+        stroke = BIOMARKER_COLORS.srf
+      }
+      if (d > value) {
+        label = 'ped'
+        value = d
+        stroke = BIOMARKER_COLORS.ped
+      }
+      const opacity = Math.max(0, Math.min(1, value / denom))
+      return {
+        z,
+        x1: p.x1,
+        y1: p.y1,
+        x2: p.x2,
+        y2: p.y2,
+        stroke,
+        opacity,
+        dominantLabel: label.toUpperCase(),
+        dominantValue: value,
+      }
+    })
 }
 
 function computeGaBscanLines(
@@ -344,25 +358,29 @@ function computeGaBscanLines(
   const per = (payload['per_bscan_mm2'] ?? []) as number[]
   const max = Math.max(...per, 0)
   const denom = max > 0 ? max : 1
-  return polylines.map((p) => {
-    const z = p.z
-    const v = per[z] ?? 0
-    const intensity = Math.max(0, Math.min(1, v / denom))
-    // Magenta-to-amber ramp keyed off intensity. Cold areas drift
-    // toward amber (low GA); hot areas saturate toward magenta-pink.
-    const stroke = intensity > 0.5 ? '#ec4899' : '#fbbf24' // pink-500 / amber-400
-    return {
-      z,
-      x1: p.x1,
-      y1: p.y1,
-      x2: p.x2,
-      y2: p.y2,
-      stroke,
-      opacity: 0.25 + intensity * 0.75,
-      dominantLabel: 'GA',
-      dominantValue: v,
-    }
-  })
+  // Same drop-empty rule as the fluid path — only render the
+  // slices the segmenter actually fired on.
+  return polylines
+    .filter((p) => (per[p.z] ?? 0) > 0)
+    .map((p) => {
+      const z = p.z
+      const v = per[z] ?? 0
+      const intensity = Math.max(0, Math.min(1, v / denom))
+      // Magenta-to-amber ramp keyed off intensity. Cold areas drift
+      // toward amber (low GA); hot areas saturate toward magenta-pink.
+      const stroke = intensity > 0.5 ? '#ec4899' : '#fbbf24' // pink-500 / amber-400
+      return {
+        z,
+        x1: p.x1,
+        y1: p.y1,
+        x2: p.x2,
+        y2: p.y2,
+        stroke,
+        opacity: 0.25 + intensity * 0.75,
+        dominantLabel: 'GA',
+        dominantValue: v,
+      }
+    })
 }
 
 /* ------- Hover handling --------------------------------------------- */
