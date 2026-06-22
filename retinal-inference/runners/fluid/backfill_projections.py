@@ -34,12 +34,20 @@ from pathlib import Path
 
 import numpy as np
 
-# Import the production helper. The script lives next to projection.py
-# so the relative import works whether you run it via
-# `python backfill_projections.py …` or
-# `python -m runners.fluid.backfill_projections …`.
+# Import the production helper. Two valid context paths:
+#  1. Inside the LOCAL retinal-inference sidecar image, the projection
+#     module lives at retinal_inference.projection_fluid (via the
+#     `src/` package layout). Try this first because the local sidecar
+#     is the canonical home of the derivation logic per the
+#     2026-06-22 architecture directive.
+#  2. Inside the legacy cluster-runner image (or any context where
+#     this script is co-located with projection.py), the relative
+#     import works.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from projection import render_fluid_projection  # noqa: E402
+try:
+    from retinal_inference.projection_fluid import render_fluid_projection  # type: ignore[import-not-found]
+except ModuleNotFoundError:
+    from projection import render_fluid_projection  # type: ignore[import-not-found,no-redef]
 
 LOG = logging.getLogger("backfill_projections")
 
