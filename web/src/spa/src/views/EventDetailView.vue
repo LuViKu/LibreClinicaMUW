@@ -59,7 +59,7 @@ async function onMarkEventComplete(): Promise<void> {
   markEventCompleteError.value = null
   isMarkingEventComplete.value = true
   try {
-    const result = await events.updateEvent(String(event.value.id), { status: 'completed' })
+    const result = await events.updateEvent(String(event.value.eventId), { status: 'completed' })
     if (!result.ok) {
       markEventCompleteError.value = result.message
       return

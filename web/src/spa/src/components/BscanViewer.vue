@@ -487,8 +487,7 @@ onBeforeUnmount(() => {
       <canvas
         v-show="segEnvelope && status === 'ready'"
         ref="overlayCanvasEl"
-        class="absolute inset-0 w-full h-full pointer-events-none mix-blend-screen"
-        style="object-fit: contain;"
+        class="absolute inset-0 w-full h-full pointer-events-none"
         data-testid="bscan-viewer-seg-overlay"
         :aria-label="t('retinal.bscanViewer.segOverlayAlt', { current: modelValue + 1, total: nBscans })"
       />

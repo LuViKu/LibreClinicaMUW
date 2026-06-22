@@ -420,7 +420,7 @@ function canSignEv(status: EventStatus): boolean {
   if (!(role === 'Investigator' || role === 'CRC' || role === 'Data Manager' || role === 'Administrator')) {
     return false
   }
-  return status === 'data-entry-started' || status === 'completed'
+  return status === 'in-progress' || status === 'complete'
 }
 
 function onMenuSign(ev: { eventId: string; label: string }): void {
