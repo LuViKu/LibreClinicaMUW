@@ -1082,6 +1082,14 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               </span>
             </div>
           </div>
+          <!-- 2026-06-22 round 9 — horizontal-scroll wrapper so the
+               sticky-right actions column has a scrolling context. With
+               many visits + long "Erfassung abgeschlossen" stage text
+               the table would push the CRFs-öffnen + kebab cluster
+               past the viewport edge; the wrapper now scrolls and the
+               actions <th> + <td> stay pinned to the right edge via
+               position:sticky. -->
+          <div class="overflow-x-auto">
           <DenseTable :bordered="false">
             <template #header>
               <tr class="border-b border-slate-200">
@@ -1090,7 +1098,12 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                 <th scope="col" class="px-5 py-2 font-medium w-40">{{ t('subjectDetail.column.status') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-44">{{ t('subjectDetail.column.dataEntryStage') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-24 text-right">{{ t('subjectDetail.column.openQueries') }}</th>
-                <th scope="col" class="px-5 py-2 font-medium w-44 text-right whitespace-nowrap"></th>
+                <!-- 2026-06-22 round 9 — sticky-right so the action cluster
+                     stays visible when the table overflows horizontally
+                     (long Erfassungsstand strings + many visits push the
+                     actions off-screen otherwise). Pairs with the matching
+                     sticky-right class on each row's actions <td>. -->
+                <th scope="col" class="px-5 py-2 font-medium w-44 text-right whitespace-nowrap sticky right-0 bg-slate-50 z-10"></th>
               </tr>
             </template>
             <template v-for="ev in subject.events" :key="ev.eventDefinitionOid">
@@ -1108,7 +1121,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   <StatusPill v-if="ev.openQueries > 0" compact variant="danger">{{ ev.openQueries }}</StatusPill>
                   <span v-else class="text-slate-400">—</span>
                 </td>
-                <td class="px-5 py-2.5 text-right text-xs whitespace-nowrap">
+                <td class="px-5 py-2.5 text-right text-xs whitespace-nowrap sticky right-0 bg-white">
                   <!-- 2026-06-21 user-feedback round 6 — three inline
                        buttons (Bearbeiten / Stornieren / CRFs öffnen)
                        clipped on the "Abgeschlossen" rows. Collapsed
@@ -1257,6 +1270,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               </tr>
             </template>
           </DenseTable>
+          </div>
         </section>
 
         <!-- Wave 2A — retinal-trends section. Only mounts when the

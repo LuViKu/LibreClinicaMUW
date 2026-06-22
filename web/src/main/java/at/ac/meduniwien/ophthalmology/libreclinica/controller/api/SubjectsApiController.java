@@ -278,6 +278,22 @@ public class SubjectsApiController {
 
         StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
         StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
+        // 2026-06-22 user-feedback round 8 — the SPA constructs the
+        // path arg as `SS_<label>` from the subject's label by
+        // convention, which works for subjects whose seed/auto-OID
+        // followed that pattern but misses on demo seeds that use a
+        // non-standard OID (e.g. `SS_EIAMD139_RIS` for label
+        // EIAMD139). Fall back to a label lookup in the active study
+        // when the bare OID misses, recovering the row without
+        // forcing a database rename.
+        if ((ss == null || ss.getId() == 0) && studySubjectOid != null) {
+            String label = studySubjectOid.startsWith("SS_")
+                    ? studySubjectOid.substring(3) : studySubjectOid;
+            StudySubjectBean fallback = studySubjectDAO.findByLabelAndStudy(label, currentStudy);
+            if (fallback != null && fallback.getId() != 0) {
+                ss = fallback;
+            }
+        }
         if (ss == null || ss.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "Subject with OID '" + studySubjectOid + "' not found."
