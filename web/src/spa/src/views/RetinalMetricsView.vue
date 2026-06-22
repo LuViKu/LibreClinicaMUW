@@ -788,7 +788,7 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                    so the column height doesn't jump on first click. -->
               <div
                 v-if="selectedSum"
-                class="px-5 py-3 border-t border-slate-100 bg-amber-50/60 flex flex-col gap-2"
+                class="px-5 py-3 border-t border-slate-100 bg-muw-sky-50/60 flex flex-col gap-2"
                 data-testid="retinal-view-etdrs-selection"
               >
                 <div class="flex items-center gap-2 flex-wrap min-w-0">
@@ -799,12 +799,12 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                     v-for="r in selectedEtdrsRegions"
                     :key="`chip-${r}`"
                     type="button"
-                    class="inline-flex items-center gap-1.5 rounded-full bg-white border border-amber-300 text-amber-800 text-[11px] font-semibold px-2.5 py-0.5 hover:bg-amber-50"
+                    class="inline-flex items-center gap-1.5 rounded-full bg-white border border-muw-sky-200 text-muw-sky-700 text-[11px] font-semibold px-2.5 py-0.5 hover:bg-muw-sky-50"
                     :data-testid="`retinal-view-etdrs-chip-${r}`"
                     @click="selectedEtdrsRegions = selectedEtdrsRegions.filter((x) => x !== r)"
                   >
                     {{ regionLabel(r) }}
-                    <span aria-hidden="true" class="text-amber-400">×</span>
+                    <span aria-hidden="true" class="text-slate-400">×</span>
                   </button>
                   <button
                     type="button"

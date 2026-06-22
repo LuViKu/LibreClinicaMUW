@@ -386,15 +386,14 @@ function toggleRegion(id: EtdrsRegion): void {
 
 /**
  * Region fill driven by selection + hover. Selected regions get a
- * persistent translucent amber fill that matches the dashed yellow
- * ETDRS ring stroke; hovered (but not yet selected) regions get a
- * fainter preview tint. Unselected + un-hovered regions stay
- * near-transparent — the underlying fundus + projection PNG read
- * through cleanly.
+ * persistent translucent MUW-sky fill; hovered (but not yet selected)
+ * regions get a fainter preview tint. Unselected + un-hovered regions
+ * stay near-transparent — the underlying fundus + projection PNG
+ * read through cleanly.
  */
 function regionFill(id: EtdrsRegion): string {
-  if (isSelected(id)) return 'rgba(250, 204, 21, 0.30)' // amber-300 (matches ring stroke) @ 30%
-  if (hoveredRegion.value === id) return 'rgba(250, 204, 21, 0.14)' // hover preview
+  if (isSelected(id)) return 'rgba(95, 180, 229, 0.32)' // muw-sky-500 @ 32%
+  if (hoveredRegion.value === id) return 'rgba(95, 180, 229, 0.15)' // hover preview
   return 'rgba(255, 255, 255, 0.001)' // near-zero but non-zero so hit-tests fire
 }
 
