@@ -73,7 +73,10 @@ const props = withDefaults(defineProps<Props>(), {
   artifactNames: () => [],
 })
 
-const emit = defineEmits<{
+// 2026-06-22 — emit removed alongside the per-B-scan stripe layer.
+// FundusOverlay no longer originates hover events; the per-B-scan
+// trace chart owns that signal now via the hoveredBscanZ prop.
+defineEmits<{
   (e: 'hoverBscan', z: number | null): void
 }>()
 
@@ -396,19 +399,9 @@ watch(
   },
 )
 
-function onLineEnter(z: number) {
-  internalHoverZ.value = z
-  emit('hoverBscan', z)
-}
-
-function onLineLeave() {
-  internalHoverZ.value = null
-  emit('hoverBscan', null)
-}
-
-function isHovered(z: number): boolean {
-  return internalHoverZ.value === z
-}
+// 2026-06-22 — onLineEnter / onLineLeave / isHovered removed alongside
+// the per-B-scan stripe layer. Hover-driven highlighting now comes
+// only from the per-B-scan trace chart via the hoveredBscanZ prop.
 
 /**
  * 2026-06-22 round 9 — single hovered B-scan line (only when the

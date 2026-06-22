@@ -32,7 +32,12 @@ export interface SegmentationEnvelope {
 const cache = new Map<number, Promise<SegmentationEnvelope | null>>()
 
 async function fetchEnvelope(jobId: number): Promise<SegmentationEnvelope | null> {
-  const url = `/pages/api/v1/retinal-jobs/${encodeURIComponent(String(jobId))}/segmentation`
+  // /LibreClinica is the WAR context path the Vite dev proxy
+  // forwards to Tomcat — `apiGet` in @/api/client prepends it
+  // implicitly, but this composable uses raw fetch (we need the
+  // ArrayBuffer body + custom response headers, neither of which
+  // apiGet exposes), so prepend explicitly.
+  const url = `/LibreClinica/pages/api/v1/retinal-jobs/${encodeURIComponent(String(jobId))}/segmentation`
   const resp = await fetch(url, {
     headers: { Accept: 'application/octet-stream' },
     credentials: 'same-origin',
