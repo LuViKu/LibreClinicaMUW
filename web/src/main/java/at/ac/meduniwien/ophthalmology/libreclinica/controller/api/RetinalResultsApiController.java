@@ -42,6 +42,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.SegmentationEnvelopeLoader;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
@@ -650,6 +651,101 @@ public class RetinalResultsApiController {
             // Headers were already sent — best we can do is abort the body.
         }
         return null;
+    }
+
+    /* ====================================================================== */
+    /* GET /retinal-jobs/{jobId}/segmentation                                  */
+    /*                                                                        */
+    /* 2026-06-22 — task-agnostic segmentation envelope. The SPA's B-scan      */
+    /* viewer no longer consumes per-slice PNGs; it fetches this one binary    */
+    /* envelope and decodes it on a 2D canvas overlay. Shape + dtype + kind    */
+    /* + labels travel as response headers so the client doesn't need to      */
+    /* parse npy/csv per task — it just sees a typed byte array.              */
+    /*                                                                        */
+    /* Per-task kinds: fluid = "volume" uint8 (z, rows, cols); ga = binary_2d; */
+    /* onl/pr = surface_y float32 (z, cols). Only fluid is wired in this     */
+    /* push; ga/onl/pr surface 501 Not Implemented until their loaders land. */
+    /* ====================================================================== */
+    @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/segmentation")
+    public ResponseEntity<?> streamSegmentation(@PathVariable("jobId") long jobId,
+                                                HttpSession session,
+                                                HttpServletResponse response) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        JobRow row;
+        try (Connection c = dataSource.getConnection()) {
+            row = fetchJobDetail(c, jobId);
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to fetch retinal job {}: {}", jobId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to fetch retinal job: " + sqlEx.getMessage()));
+        }
+        if (row == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
+        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        if (visGuard != null) return visGuard;
+
+        if (row.bscanMasksDir == null || row.bscanMasksDir.isBlank()) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No segmentation directory for job " + jobId));
+        }
+        Path dir = Paths.get(row.bscanMasksDir).toAbsolutePath().normalize();
+
+        SegmentationEnvelopeLoader.SegmentationEnvelope env;
+        try {
+            env = SegmentationEnvelopeLoader.load(row.task, dir);
+        } catch (IOException ioEx) {
+            LOG.error("Failed to load segmentation envelope for job {} (task={}): {}",
+                    jobId, row.task, ioEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to load segmentation envelope: " + ioEx.getMessage()));
+        }
+        if (env == null) {
+            return ResponseEntity.status(501).body(Map.of(
+                    "message", "Segmentation envelope for task '" + row.task
+                            + "' is not implemented yet"));
+        }
+
+        response.setStatus(HttpServletResponse.SC_OK);
+        response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+        response.setHeader("X-MUW-Seg-Kind", env.kind());
+        response.setHeader("X-MUW-Seg-Dtype", env.dtype());
+        response.setHeader("X-MUW-Seg-Shape", joinInts(env.shape()));
+        response.setHeader("X-MUW-Seg-Task", env.task());
+        if (env.labels() != null && !env.labels().isEmpty()) {
+            response.setHeader("X-MUW-Seg-Labels", String.join(",", env.labels()));
+        }
+        // Expose the X-MUW-Seg-* headers to the SPA fetch — without
+        // this CORS hides them client-side (same-origin in dev /
+        // single-domain in prod, but the headers also need to be in
+        // Access-Control-Expose-Headers when the SPA reads them via
+        // fetch().headers.get(...)).
+        response.setHeader("Access-Control-Expose-Headers",
+                "X-MUW-Seg-Kind, X-MUW-Seg-Dtype, X-MUW-Seg-Shape, "
+                        + "X-MUW-Seg-Labels, X-MUW-Seg-Task");
+        response.setContentLengthLong(env.data().length);
+        response.setHeader(HttpHeaders.CACHE_CONTROL,
+                CacheControl.maxAge(Duration.ofHours(1)).cachePrivate().getHeaderValue());
+        try {
+            response.getOutputStream().write(env.data());
+            response.getOutputStream().flush();
+        } catch (IOException copyEx) {
+            LOG.error("Failed to stream segmentation envelope for job {}: {}",
+                    jobId, copyEx.getMessage());
+        }
+        return null;
+    }
+
+    private static String joinInts(int[] dims) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < dims.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(dims[i]);
+        }
+        return sb.toString();
     }
 
     /* ====================================================================== */

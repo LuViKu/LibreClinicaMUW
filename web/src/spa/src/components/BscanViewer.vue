@@ -21,6 +21,7 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
 
 const { t } = useI18n()
 
@@ -32,15 +33,15 @@ interface Props {
   /** Current B-scan index (0-based) — bidirectional via v-model. */
   modelValue: number
   /**
-   * 2026-06-22 — list of per-B-scan segmentation overlay artifact
-   * names (e.g. {@code seg_bscan_0042.png}). The viewer overlays
-   * the matching slice's PNG on top of the cornerstone canvas so
-   * the operator sees the IRF / SRF / PED segmentation on the
-   * exact B-scan it applies to. Pass {@code []} or omit to hide
-   * the overlay (legacy jobs without per-slice PNGs).
+   * 2026-06-22 — retinal job id used to fetch the segmentation
+   * envelope ({@code GET /retinal-jobs/{id}/segmentation}). The
+   * viewer decodes the envelope on a 2D canvas overlay so the
+   * operator sees per-pixel IRF / SRF / PED labels (fluid),
+   * binary GA presence (ga), or layer surface positions (onl/pr)
+   * on the matching B-scan. Pass {@code null} or omit to hide
+   * the overlay.
    */
-  segOverlayUrlBase?: string
-  segOverlayArtifactNames?: string[]
+  jobId?: number | null
 }
 
 const props = defineProps<Props>()
@@ -60,26 +61,155 @@ const renderingEngineRef = shallowRef<{ destroy: () => void } | null>(null)
 const sliderMax = computed(() => Math.max(0, props.nBscans - 1))
 
 /**
- * 2026-06-22 — URL of the segmentation overlay PNG for the current
- * slice, or null when the runner didn't emit a PNG for this z
- * (slices with no biomarker voxels are skipped server-side). The
- * SPA absolutely-positions an <img> at the same size as the
- * cornerstone canvas so it overlays in pixel-space (the per-slice
- * PNG is emitted at the DICOM frame's native (rows, cols)).
+ * 2026-06-22 — canvas-based segmentation overlay.
+ *
+ * <p>The composable fetches the per-job segmentation envelope once
+ * via {@code GET /api/v1/retinal-jobs/{id}/segmentation} and
+ * caches it; the canvas re-paints on slice change without any
+ * additional network traffic. Three kinds are supported, all
+ * rendered into the same overlay canvas:
+ *
+ * <ul>
+ *   <li>{@code volume}: per-pixel labelled mask
+ *       {@code (z, rows, cols) uint8}. Colours follow the
+ *       FundusOverlay palette — IRF sky-400, SRF orange-400,
+ *       PED fuchsia-500.</li>
+ *   <li>{@code binary_2d}: per-A-scan boolean mask
+ *       {@code (z, cols)}. Renders a tinted vertical column
+ *       (full-height) at every A-scan where the mask is set.</li>
+ *   <li>{@code surface_y}: per-A-scan layer-surface row index
+ *       {@code (z, cols)} as float32. Renders a 2-pixel polyline
+ *       through (x, surface[z][x]) — the layer boundary as the
+ *       segmenter located it.</li>
+ * </ul>
+ *
+ * <p>The canvas is sized to the segmentation's native (rows × cols)
+ * for volume/surface kinds, then stretched via CSS to match the
+ * cornerstone viewport. Stretching is sub-pixel — the DOM scales
+ * uniformly so the mask still lines up with the DICOM frame
+ * underneath.
  */
-const segOverlayUrl = computed<string | null>(() => {
-  const base = props.segOverlayUrlBase
-  const names = props.segOverlayArtifactNames
-  if (!base || !names || names.length === 0) return null
-  // Filenames are zero-padded to four digits — `seg_bscan_0042.png`.
-  const padded = String(props.modelValue).padStart(4, '0')
-  const expected = `seg_bscan_${padded}.png`
-  if (!names.includes(expected)) return null
-  // Compose the artifact URL the same way RetinalMetricsView builds
-  // the rest of the per-job artifact links. The base ends with the
-  // job's artifact directory; just append the filename.
-  return `${base}${expected}`
-})
+const jobIdRef = computed<number | null>(() => props.jobId ?? null)
+const { envelope: segEnvelope } = useSegmentationEnvelope(jobIdRef)
+const overlayCanvasEl = ref<HTMLCanvasElement | null>(null)
+
+/** Label-colour ramp — matches FundusOverlay's BIOMARKER_COLORS. */
+const FLUID_LABEL_COLOURS: Record<number, [number, number, number]> = {
+  1: [56, 189, 248],   // sky-400 — IRF
+  2: [251, 146, 60],   // orange-400 — SRF
+  3: [217, 70, 239],   // fuchsia-500 — PED
+}
+const OVERLAY_ALPHA = 160 // ~63%
+
+function paintOverlay(): void {
+  const canvas = overlayCanvasEl.value
+  const env = segEnvelope.value
+  if (!canvas) return
+  if (!env) {
+    // Clear any stale paint so a job-id change doesn't leave the
+    // previous job's overlay underneath.
+    const ctx0 = canvas.getContext('2d')
+    if (ctx0) ctx0.clearRect(0, 0, canvas.width, canvas.height)
+    return
+  }
+  const z = clampZ(props.modelValue)
+  if (env.kind === 'volume') {
+    const [, rows, cols] = env.shape
+    if (!rows || !cols) return
+    canvas.width = cols
+    canvas.height = rows
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const data = env.data as Uint8Array
+    const sliceStride = rows * cols
+    const sliceOffset = z * sliceStride
+    const img = ctx.createImageData(cols, rows)
+    for (let i = 0; i < sliceStride; i++) {
+      const label = data[sliceOffset + i] ?? 0
+      const px = i * 4
+      const rgb = FLUID_LABEL_COLOURS[label]
+      if (rgb) {
+        img.data[px] = rgb[0]
+        img.data[px + 1] = rgb[1]
+        img.data[px + 2] = rgb[2]
+        img.data[px + 3] = OVERLAY_ALPHA
+      } else {
+        img.data[px + 3] = 0
+      }
+    }
+    ctx.putImageData(img, 0, 0)
+    return
+  }
+  if (env.kind === 'binary_2d') {
+    const [, cols] = env.shape
+    if (!cols) return
+    canvas.width = cols
+    canvas.height = 32 // arbitrary thin strip — CSS stretches to viewport
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const data = env.data as Uint8Array
+    const offset = z * cols
+    const img = ctx.createImageData(cols, canvas.height)
+    for (let x = 0; x < cols; x++) {
+      if ((data[offset + x] ?? 0) === 0) continue
+      for (let y = 0; y < canvas.height; y++) {
+        const px = (y * cols + x) * 4
+        img.data[px] = 217 // fuchsia-500
+        img.data[px + 1] = 70
+        img.data[px + 2] = 239
+        img.data[px + 3] = OVERLAY_ALPHA
+      }
+    }
+    ctx.putImageData(img, 0, 0)
+    return
+  }
+  if (env.kind === 'surface_y') {
+    const [, cols] = env.shape
+    if (!cols) return
+    // Use a reasonable canvas height — surface_y values are pixel
+    // rows in the original DICOM frame. We render at a fixed
+    // canvas-height bucket then stretch via CSS, but the y
+    // value should already be in original-image rows. Use 1024
+    // as a generous bucket so the polyline doesn't quantise.
+    const data = env.data as Float32Array
+    const offset = z * cols
+    // Find max-y so we know the canvas height to allocate.
+    let maxY = 0
+    for (let x = 0; x < cols; x++) {
+      const yv = data[offset + x] ?? 0
+      if (yv > maxY) maxY = yv
+    }
+    const h = Math.max(16, Math.ceil(maxY) + 2)
+    canvas.width = cols
+    canvas.height = h
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.clearRect(0, 0, cols, h)
+    ctx.strokeStyle = 'rgba(56, 189, 248, 0.85)' // sky-400
+    ctx.lineWidth = 2
+    ctx.beginPath()
+    let drawing = false
+    for (let x = 0; x < cols; x++) {
+      const yv = data[offset + x] ?? 0
+      if (yv <= 0) {
+        drawing = false
+        continue
+      }
+      if (!drawing) {
+        ctx.moveTo(x, yv)
+        drawing = true
+      } else {
+        ctx.lineTo(x, yv)
+      }
+    }
+    ctx.stroke()
+    return
+  }
+}
+
+watch([segEnvelope, () => props.modelValue], () => {
+  paintOverlay()
+}, { flush: 'post' })
 
 async function initViewer(): Promise<void> {
   if (!containerEl.value) return
@@ -181,7 +311,10 @@ async function initViewer(): Promise<void> {
     } catch {
       /* prefetch is best-effort; never blocks the scroll path */
     }
-    prefetchSegOverlays()
+    // Seg overlay envelope kicks itself off via useSegmentationEnvelope
+    // — the composable cache means we don't need to explicitly prefetch.
+    // Paint the first slice once cornerstone + envelope are both ready.
+    paintOverlay()
   } catch (e) {
     errorMessage.value = e instanceof Error ? e.message : 'Cornerstone init failed'
     status.value = 'error'
@@ -246,24 +379,6 @@ function onWheel(ev: WheelEvent): void {
   hasInteracted.value = true
   pendingZ = clampZ(next)
   schedulePendingZ()
-}
-
-/**
- * Prefetch every per-slice seg overlay PNG so the `<img src>` swap
- * on scroll lands an already-cached resource. Uses `new Image()`
- * because the browser's image cache key matches what `<img src>`
- * resolves against; no need to roundtrip through fetch().
- */
-function prefetchSegOverlays(): void {
-  const base = props.segOverlayUrlBase
-  const names = props.segOverlayArtifactNames
-  if (!base || !names || names.length === 0) return
-  for (const name of names) {
-    if (!name.startsWith('seg_bscan_') || !name.endsWith('.png')) continue
-    const img = new Image()
-    img.decoding = 'async'
-    img.src = `${base}${name}`
-  }
 }
 
 async function setZ(z: number) {
@@ -337,13 +452,13 @@ onBeforeUnmount(() => {
         @keydown.right.prevent="setZ(modelValue + 1)"
         @wheel.prevent="onWheel"
       />
-      <img
-        v-if="segOverlayUrl && status === 'ready'"
-        :src="segOverlayUrl"
-        :alt="t('retinal.bscanViewer.segOverlayAlt', { current: modelValue + 1, total: nBscans })"
+      <canvas
+        v-show="segEnvelope && status === 'ready'"
+        ref="overlayCanvasEl"
         class="absolute inset-0 w-full h-full pointer-events-none mix-blend-screen"
         style="object-fit: contain;"
         data-testid="bscan-viewer-seg-overlay"
+        :aria-label="t('retinal.bscanViewer.segOverlayAlt', { current: modelValue + 1, total: nBscans })"
       />
       <!-- Discoverability hint — auto-fades after the operator has
            used the scroll/scrub once (the hint is only useful for the

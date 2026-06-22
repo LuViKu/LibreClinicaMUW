@@ -568,8 +568,7 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
           :bscan-dcm-url="job.bscanDcmUrl"
           :n-bscans="geometry!.bscan!.dim_z_bscans"
           :model-value="currentBscanZ"
-          :seg-overlay-url-base="`/pages/api/v1/retinal-jobs/${job.jobId}/artifacts/`"
-          :seg-overlay-artifact-names="job.artifactNames ?? []"
+          :job-id="job.jobId"
           class="mb-5"
           @update:model-value="(z) => hoveredBscanZ = z"
         />
