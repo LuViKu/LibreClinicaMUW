@@ -162,6 +162,26 @@ async function initViewer(): Promise<void> {
     await vp.setImageIdIndex(clampZ(props.modelValue))
     vp.render()
     status.value = 'ready'
+
+    // 2026-06-22 — pre-warm caches so scroll-through is smooth.
+    //  1. Cornerstone image cache: kick off loadAndCacheImages for
+    //     every wadouri frame. The wheel handler then hits an
+    //     in-memory cache instead of re-decoding the multi-frame
+    //     DICOM on every notch.
+    //  2. Seg overlay PNG cache: prefetch the artifact PNGs via
+    //     `new Image()` so swapping the `<img src>` on slice change
+    //     resolves from the browser's HTTP cache.
+    // Both run in the background; failures are non-fatal — the
+    // foreground scroll path still works even if prefetch breaks.
+    try {
+      const il = (cornerstoneCore as unknown as {
+        imageLoader: { loadAndCacheImages?: (ids: string[], opts?: unknown) => unknown }
+      }).imageLoader
+      il?.loadAndCacheImages?.(imageIds, { priority: 0, requestType: 'prefetch' })
+    } catch {
+      /* prefetch is best-effort; never blocks the scroll path */
+    }
+    prefetchSegOverlays()
   } catch (e) {
     errorMessage.value = e instanceof Error ? e.message : 'Cornerstone init failed'
     status.value = 'error'
@@ -187,18 +207,62 @@ function clampZ(z: number): number {
  */
 let wheelAccum = 0
 const hasInteracted = ref(false)
+
+/**
+ * 2026-06-22 — coalesce wheel events: track the latest pending
+ * slice index and only fire setImageIdIndex once per animation
+ * frame. Trackpads fire ~60 wheel events / sec; without this the
+ * SPA queued one cornerstone render per event and lagged behind
+ * the user's gesture. Now the visible slice always reflects the
+ * latest accumulated delta, even if intermediate events were
+ * dropped.
+ */
+let pendingZ: number | null = null
+let rafId: number | null = null
+function schedulePendingZ(): void {
+  if (rafId != null) return
+  rafId = requestAnimationFrame(() => {
+    rafId = null
+    if (pendingZ == null) return
+    const target = pendingZ
+    pendingZ = null
+    void setZ(target)
+  })
+}
+
 function onWheel(ev: WheelEvent): void {
   if (status.value !== 'ready') return
   wheelAccum += ev.deltaY
   const threshold = 24 // px — calibrated for both notched mice (~100 per notch) and trackpads (~5-20 per tick)
+  let next: number | null = null
   if (wheelAccum >= threshold) {
     wheelAccum = 0
-    hasInteracted.value = true
-    void setZ(props.modelValue + 1)
+    next = (pendingZ ?? props.modelValue) + 1
   } else if (wheelAccum <= -threshold) {
     wheelAccum = 0
-    hasInteracted.value = true
-    void setZ(props.modelValue - 1)
+    next = (pendingZ ?? props.modelValue) - 1
+  }
+  if (next == null) return
+  hasInteracted.value = true
+  pendingZ = clampZ(next)
+  schedulePendingZ()
+}
+
+/**
+ * Prefetch every per-slice seg overlay PNG so the `<img src>` swap
+ * on scroll lands an already-cached resource. Uses `new Image()`
+ * because the browser's image cache key matches what `<img src>`
+ * resolves against; no need to roundtrip through fetch().
+ */
+function prefetchSegOverlays(): void {
+  const base = props.segOverlayUrlBase
+  const names = props.segOverlayArtifactNames
+  if (!base || !names || names.length === 0) return
+  for (const name of names) {
+    if (!name.startsWith('seg_bscan_') || !name.endsWith('.png')) continue
+    const img = new Image()
+    img.decoding = 'async'
+    img.src = `${base}${name}`
   }
 }
 
