@@ -288,36 +288,70 @@ watch([segEnvelope, () => props.modelValue], () => {
  */
 function recomputeOverlayBbox(): void {
   const vp = viewport.value as
-    | { worldToCanvas?: (w: [number, number, number]) => [number, number] | null }
+    | {
+        worldToCanvas?: (w: [number, number, number]) => [number, number] | null
+        getCanvas?: () => HTMLCanvasElement | undefined
+        getImageData?: () => { dimensions?: number[]; spacing?: number[]; origin?: number[] } | undefined
+      }
     | null
   const dims = bscanImageDims.value
   if (!vp || !dims || dims.rows <= 0 || dims.cols <= 0) {
-    overlayBbox.value = null
+    // Defensive fallback: show the overlay across the entire container
+    // so the user at least sees the seg even if the transform-based
+    // path isn't available. Better-than-invisible.
+    overlayBbox.value = fallbackContainerBbox()
     return
   }
   try {
-    // Stack viewports treat world coords as image-pixel coords. The
-    // image's TOP-LEFT pixel corner is at world (-0.5, -0.5) and its
-    // BOTTOM-RIGHT at (cols-0.5, rows-0.5) under cornerstone3D's
-    // pixel-center convention (each integer coord is the centre of a
-    // pixel). We use the inclusive corners (0, 0) → (cols-1, rows-1)
-    // first and expand by half a pixel each side post-hoc so the bbox
-    // edges sit on the pixel boundaries, not pixel centres.
+    // Stack viewports treat world coords as image-pixel coords. Pixel
+    // corners are at (-0.5, -0.5) and (cols-0.5, rows-0.5) under the
+    // pixel-centre convention. Some cornerstone3D builds give world =
+    // image pixel index; others give world = patient mm. We probe both
+    // and accept whichever returns finite numbers.
     const tl = vp.worldToCanvas?.([-0.5, -0.5, 0])
     const br = vp.worldToCanvas?.([dims.cols - 0.5, dims.rows - 0.5, 0])
-    if (!tl || !br) {
-      overlayBbox.value = null
-      return
+    const tlOk = tl && Number.isFinite(tl[0]) && Number.isFinite(tl[1])
+    const brOk = br && Number.isFinite(br[0]) && Number.isFinite(br[1])
+
+    if (tlOk && brOk && tl && br) {
+      const left = Math.min(tl[0], br[0])
+      const top = Math.min(tl[1], br[1])
+      const width = Math.abs(br[0] - tl[0])
+      const height = Math.abs(br[1] - tl[1])
+      if (width > 0 && height > 0) {
+        // The canvas returned by getCanvas() is positioned inside
+        // containerEl (absolute inset-0). worldToCanvas() reports
+        // pixel coords RELATIVE TO THE CANVAS ELEMENT in CSS px.
+        // Our overlay sits as a sibling of containerEl, so its
+        // (0,0) is the same as the canvas's (0,0).
+        overlayBbox.value = { left, top, width, height }
+        // eslint-disable-next-line no-console
+        console.debug('[BscanViewer] overlay bbox via worldToCanvas:', overlayBbox.value)
+        return
+      }
     }
-    overlayBbox.value = {
-      left: tl[0],
-      top: tl[1],
-      width: br[0] - tl[0],
-      height: br[1] - tl[1],
-    }
-  } catch {
-    overlayBbox.value = null
+
+    // worldToCanvas didn't yield a usable bbox — log so we can see why,
+    // and fall back to the container-fill behaviour.
+    // eslint-disable-next-line no-console
+    console.warn('[BscanViewer] worldToCanvas unusable (tl=%o br=%o), falling back to container bbox', tl, br)
+    overlayBbox.value = fallbackContainerBbox()
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn('[BscanViewer] recomputeOverlayBbox threw, falling back:', e)
+    overlayBbox.value = fallbackContainerBbox()
   }
+}
+
+/**
+ * Cover the entire container element. Used when worldToCanvas isn't
+ * usable yet (or at all). At least the seg is visible and roughly
+ * aligned via the container's intrinsic aspect.
+ */
+function fallbackContainerBbox(): { left: number; top: number; width: number; height: number } | null {
+  const el = containerEl.value
+  if (!el) return null
+  return { left: 0, top: 0, width: el.clientWidth, height: el.clientHeight }
 }
 
 // Recompute the bbox whenever cornerstone repaints (slice change) or
