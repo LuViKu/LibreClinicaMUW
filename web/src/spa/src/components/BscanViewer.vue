@@ -178,23 +178,35 @@ function paintOverlay(): void {
     return
   }
   if (env.kind === 'binary_2d') {
+    // 2026-06-22 — GA RPEL classification per A-scan. Render as a
+    // soft full-height column wash + a saturated band along the
+    // bottom 12% so the operator can read which A-scans are
+    // classified as GA without the column tint dominating the
+    // retinal anatomy underneath. The previous full-strip-at-160-
+    // alpha rendering swamped the RPE/choroid layers we still
+    // want to see for visual sanity-checking.
     const [, cols] = env.shape
     if (!cols) return
+    const H = 100 // logical buffer height; CSS stretches uniformly to bbox
     canvas.width = cols
-    canvas.height = 32 // arbitrary thin strip — CSS stretches to viewport
+    canvas.height = H
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     const data = env.data as Uint8Array
     const offset = z * cols
-    const img = ctx.createImageData(cols, canvas.height)
+    const img = ctx.createImageData(cols, H)
+    const bandStart = Math.floor(H * 0.88) // bottom 12%
+    const COLOUR = [217, 70, 239] // fuchsia-500
+    const WASH_ALPHA = 40       // ~16% — full-column tint
+    const BAND_ALPHA = 200      // ~78% — saturated band
     for (let x = 0; x < cols; x++) {
       if ((data[offset + x] ?? 0) === 0) continue
-      for (let y = 0; y < canvas.height; y++) {
+      for (let y = 0; y < H; y++) {
         const px = (y * cols + x) * 4
-        img.data[px] = 217 // fuchsia-500
-        img.data[px + 1] = 70
-        img.data[px + 2] = 239
-        img.data[px + 3] = OVERLAY_ALPHA
+        img.data[px] = COLOUR[0]
+        img.data[px + 1] = COLOUR[1]
+        img.data[px + 2] = COLOUR[2]
+        img.data[px + 3] = y >= bandStart ? BAND_ALPHA : WASH_ALPHA
       }
     }
     ctx.putImageData(img, 0, 0)
