@@ -410,6 +410,17 @@ function isHovered(z: number): boolean {
   return internalHoverZ.value === z
 }
 
+/**
+ * 2026-06-22 round 9 — single hovered B-scan line (only when the
+ * per-B-scan trace chart's mouse hover is over a slice the
+ * segmenter actually fired on). Returns null otherwise so the
+ * fundus overlay stays clean by default.
+ */
+const hoveredLine = computed<BscanLine | null>(() => {
+  if (internalHoverZ.value == null) return null
+  return bscanLines.value.find((l) => l.z === internalHoverZ.value) ?? null
+})
+
 /* ------- Labels ------------------------------------------------------ */
 
 /**
@@ -566,44 +577,32 @@ function ringLabel(diameterMm: number): string {
         </template>
       </g>
 
-      <!-- 4. Per-B-scan indicators — hidden when the en-face projection
-           is rendered. The projection encodes the same biomarker info at
-           per-A-scan spatial fidelity, so the per-B-scan stripe layer
-           becomes redundant noise once a projection PNG is available. -->
-      <g v-if="!projectionUrl" data-testid="bscan-lines">
-        <g
-          v-for="line in bscanLines"
-          :key="`bscan-${line.z}`"
-          @mouseenter="onLineEnter(line.z)"
-          @mouseleave="onLineLeave"
-        >
-          <!-- Transparent hit area, wider stroke for hover detection. -->
-          <line
-            :x1="line.x1"
-            :y1="line.y1"
-            :x2="line.x2"
-            :y2="line.y2"
-            stroke="transparent"
-            stroke-width="8"
-            stroke-linecap="round"
-            class="cursor-pointer"
-          />
-          <!-- Visible stroke; brighter + thicker when hovered. -->
-          <line
-            :x1="line.x1"
-            :y1="line.y1"
-            :x2="line.x2"
-            :y2="line.y2"
-            :stroke="line.stroke"
-            :stroke-width="isHovered(line.z) ? 3 : 1.5"
-            :style="{ strokeOpacity: isHovered(line.z) ? 1 : line.opacity }"
-            stroke-linecap="round"
-            vector-effect="non-scaling-stroke"
-            :data-testid="`bscan-line-${line.z}`"
-            :data-dominant="line.dominantLabel"
-            pointer-events="none"
-          />
-        </g>
+      <!-- 4. Hover-only B-scan indicator. 2026-06-22 round 9 follow-up
+           — operator review: rendering one stripe per detected B-scan
+           was clinically misleading because the stripes span the
+           entire bbox width, suggesting the biomarker is present
+           across the whole A-scan range when in practice it's
+           localised. Without the projection PNG (per-A-scan
+           fidelity), the safer default is to render NOTHING on the
+           fundus by default. We still keep a single thin highlight
+           line for the operator-hovered B-scan so the per-B-scan
+           trace chart's hover handoff still has a visual cue on the
+           fundus. -->
+      <g v-if="!projectionUrl && hoveredLine" data-testid="bscan-lines">
+        <line
+          :x1="hoveredLine.x1"
+          :y1="hoveredLine.y1"
+          :x2="hoveredLine.x2"
+          :y2="hoveredLine.y2"
+          :stroke="hoveredLine.stroke"
+          stroke-width="2"
+          stroke-linecap="round"
+          vector-effect="non-scaling-stroke"
+          :data-testid="`bscan-line-${hoveredLine.z}`"
+          :data-dominant="hoveredLine.dominantLabel"
+          pointer-events="none"
+          opacity="0.9"
+        />
       </g>
 
       <!-- 5. Fovea crosshair -->
