@@ -299,31 +299,14 @@ const router = createRouter({
       component: () => import('@/views/ChangePasswordView.vue'),
       meta: { title: 'Change password' },
     },
-    /* Phase E.6 — Data Export Phase 2 — create-dataset wizard. */
+    /* Phase E.6 — dataset list (companions: /datasets/new + /datasets/:id/edit
+       defined earlier in the routes table). */
     {
       path: '/datasets',
       name: 'datasets',
       component: () => import('@/views/DatasetListView.vue'),
       meta: {
         title: 'Datasets',
-        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
-      },
-    },
-    {
-      path: '/datasets/new',
-      name: 'dataset-new',
-      component: () => import('@/views/CreateDatasetView.vue'),
-      meta: {
-        title: 'Create dataset',
-        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
-      },
-    },
-    {
-      path: '/datasets/:datasetId/edit',
-      name: 'dataset-edit',
-      component: () => import('@/views/CreateDatasetView.vue'),
-      meta: {
-        title: 'Edit dataset',
         role: ['Monitor', 'Data Manager', 'Administrator'] as const,
       },
     },
