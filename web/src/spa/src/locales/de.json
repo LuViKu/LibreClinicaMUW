@@ -2846,54 +2846,73 @@
     }
   },
   "retinal": {
-    "loading": "Loading retinal scan metrics…",
-    "failedToLoad": "Failed to load retinal job: {error}",
+    "loading": "Netzhaut-Auswertung wird geladen …",
+    "failedToLoad": "Netzhaut-Job konnte nicht geladen werden: {error}",
     "header": {
-      "eventCrfLabel": "Event-CRF #{id} · Retinal inference job #{jobId}",
-      "title": "Retinal scan metrics",
-      "modelLabel": "Model:",
-      "runLabel": "Run:",
-      "confidenceLabel": "Confidence:"
+      "eventCrfLabel": "Event-CRF #{id} · Inferenz-Job #{jobId}",
+      "title": "Netzhaut-Auswertung",
+      "modelLabel": "Modell:",
+      "runLabel": "Lauf:",
+      "confidenceLabel": "Konfidenz:"
+    },
+    "live": {
+      "indicator": "Live-Aktualisierung"
+    },
+    "status": {
+      "queued": "In Warteschlange",
+      "remote_pending": "Wartet auf Sidecar",
+      "preprocessing": "Vorverarbeitung",
+      "segmenting": "Segmentierung",
+      "succeeded": "Erfolgreich",
+      "failed": "Fehlgeschlagen",
+      "parked": "Geparkt"
+    },
+    "task": {
+      "fluid": "Flüssigkeit",
+      "onl": "ONL-Dicke",
+      "pr": "PR-Dicke",
+      "ga": "GA-Fläche",
+      "bmeis": "BMEIS"
     },
     "empty": {
-      "awaitingSidecar": "Awaiting sidecar…",
-      "preprocessing": "Preprocessing the OCT volume…",
-      "segmenting": "Running segmentation — metrics will appear when the sidecar completes.",
-      "failed": "Inference failed — segmentation artifacts (if any) are still available below.",
-      "noMetric": "Metrics couldn't be computed — segmentation artifacts are still available below.",
-      "noKpi": "No KPI yet.",
-      "fundusNotAvailable": "Fundus image not yet available.",
-      "noPerBscan": "No per-B-scan trace for this task."
+      "awaitingSidecar": "Warte auf Sidecar …",
+      "preprocessing": "OCT-Volumen wird vorverarbeitet …",
+      "segmenting": "Segmentierung läuft — Metriken erscheinen, sobald der Sidecar fertig ist.",
+      "failed": "Inferenz fehlgeschlagen — Segmentierungs-Artefakte (sofern vorhanden) sind unten weiterhin verfügbar.",
+      "noMetric": "Metriken konnten nicht berechnet werden — Segmentierungs-Artefakte sind unten weiterhin verfügbar.",
+      "noKpi": "Noch keine Kennzahlen.",
+      "fundusNotAvailable": "Fundus-Bild ist noch nicht verfügbar.",
+      "noPerBscan": "Für diesen Task gibt es keine Per-B-Scan-Auswertung."
     },
     "kpi": {
       "irf": "IRF",
       "srf": "SRF",
       "ped": "PED",
-      "total": "Total",
-      "gaArea": "GA area",
-      "onlThickness": "ONL thickness",
-      "prThickness": "PR thickness",
-      "validAscans": "{valid} / {total} A-scans valid"
+      "total": "Gesamt",
+      "gaArea": "GA-Fläche",
+      "onlThickness": "ONL-Dicke",
+      "prThickness": "PR-Dicke",
+      "validAscans": "{valid} / {total} A-Scans gültig"
     },
     "etdrs": {
-      "header": "ETDRS sub-totals",
+      "header": "ETDRS-Teilsummen",
       "colRing": "Ring",
       "colIrf": "IRF mm³",
       "colSrf": "SRF mm³",
       "colPed": "PED mm³",
-      "colTotal": "Total mm³",
-      "colGaArea": "GA area mm²",
+      "colTotal": "Gesamt mm³",
+      "colGaArea": "GA-Fläche mm²",
       "ringLabel": "{mm} mm"
     },
     "downloads": {
       "header": "Downloads",
-      "empty": "No artifacts available yet.",
-      "sectionPerScan": "Per-scan",
-      "sectionSegmentation": "Segmentation",
-      "action": "Download"
+      "empty": "Noch keine Artefakte verfügbar.",
+      "sectionPerScan": "Pro Scan",
+      "sectionSegmentation": "Segmentierung",
+      "action": "Herunterladen"
     },
     "jsonTree": {
-      "rawPayloadHeader": "Raw output payload"
+      "rawPayloadHeader": "Rohe Ausgabe-Daten"
     },
     "retry": {
       "cta": "Erneut versuchen",
@@ -2901,28 +2920,28 @@
       "error": "Neustart fehlgeschlagen — bitte später erneut versuchen."
     },
     "nav": {
-      "backToSubjects": "← Back to subjects",
-      "home": "Home"
+      "backToSubjects": "← Zurück zur Probandenmatrix",
+      "home": "Start"
     },
     "perBscan": {
-      "header": "Per-B-scan trace",
-      "empty": "No per-B-scan data.",
-      "xAxisLabel": "B-scan index",
+      "header": "Per-B-Scan-Verlauf",
+      "empty": "Keine Per-B-Scan-Daten.",
+      "xAxisLabel": "B-Scan-Index",
       "yAxisLabel": "mm²",
-      "tooltipPrefix": "B-scan {label}"
+      "tooltipPrefix": "B-Scan {label}"
     },
     "results": {
-      "header": "Retinal results",
-      "jobsLabel": "{n} job(s)",
-      "loading": "Loading…",
-      "empty": "No retinal inference jobs yet.",
+      "header": "Netzhaut-Auswertungen",
+      "jobsLabel": "{n} Auswertung(en)",
+      "loading": "Wird geladen …",
+      "empty": "Noch keine Netzhaut-Inferenzläufe.",
       "colTask": "Task",
-      "colEye": "Eye",
+      "colEye": "Auge",
       "colStatus": "Status",
-      "colPrimaryMetric": "Primary metric",
-      "colModel": "Model",
-      "colCompleted": "Completed",
-      "viewMetricsLink": "View metrics"
+      "colPrimaryMetric": "Hauptmetrik",
+      "colModel": "Modell",
+      "colCompleted": "Abgeschlossen",
+      "viewMetricsLink": "Metriken anzeigen"
     },
     "fundusOverlay": {
       "aria": "Fundus image with retinal overlays, {laterality}",

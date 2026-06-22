@@ -67,6 +67,25 @@ const geometry = computed(() => {
 const isLoading = computed<boolean>(() => !!store.loading[jobId.value])
 const loadError = computed<string | null>(() => store.errors[jobId.value] ?? null)
 
+/**
+ * 2026-06-22 round 9 follow-up — German status + task labels.
+ * Falls through to the raw value when the SPA hasn't shipped a
+ * translation for the token (e.g. a new sidecar emits a new
+ * task name).
+ */
+function statusLabel(status: string | null | undefined): string {
+  if (!status) return ''
+  const key = `retinal.status.${status}`
+  const translated = t(key)
+  return translated === key ? status : translated
+}
+function taskLabel(task: string | null | undefined): string {
+  if (!task) return ''
+  const key = `retinal.task.${task}`
+  const translated = t(key)
+  return translated === key ? String(task).toUpperCase() : translated
+}
+
 const hoveredBscanZ = ref<number | null>(null)
 
 /** Always a defined integer for the BscanViewer's v-model — falls
@@ -358,16 +377,16 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
           <h1 class="text-xl font-semibold tracking-tight flex items-center gap-3 flex-wrap" data-testid="retinal-view-heading">
             {{ t('retinal.header.title') }}
             <StatusPill variant="info">{{ String(job.laterality) }}</StatusPill>
-            <StatusPill v-if="job.task" variant="neutral">{{ String(job.task).toUpperCase() }}</StatusPill>
+            <StatusPill v-if="job.task" variant="neutral">{{ taskLabel(job.task) }}</StatusPill>
             <StatusPill
               v-if="job.status === 'succeeded'"
               variant="success"
-            >{{ job.status }}</StatusPill>
+            >{{ statusLabel(job.status) }}</StatusPill>
             <StatusPill
               v-else-if="job.status === 'failed'"
               variant="danger"
-            >{{ job.status }}</StatusPill>
-            <StatusPill v-else variant="warning">{{ job.status }}</StatusPill>
+            >{{ statusLabel(job.status) }}</StatusPill>
+            <StatusPill v-else variant="warning">{{ statusLabel(job.status) }}</StatusPill>
             <!-- Wave 2A — Live indicator. Visible while the SSE
                  stream is connected (i.e. the job is in flight + the
                  EventSource has at least handshaked). The animated
