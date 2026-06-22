@@ -622,18 +622,27 @@ async function onRerunAs(task: RerunTask): Promise<void> {
     // this, a 500 / SQL-constraint / sidecar failure would silently
     // close the dropdown and leave the source view unchanged, looking
     // like a no-op.
-    const err = e as { status?: number; payload?: { existingJobId?: number; message?: string } }
-    // Backend returns 409 with {existingJobId} when a job for this
-    // scan + task already exists. Treat that as "navigate to twin"
-    // rather than a toast — it's the same end state.
-    const existing = err.payload?.existingJobId
+    //
+    // ApiError carries the server response on `.body`, not `.payload`.
+    // Pull the existingJobId for the 409 duplicate path + the server's
+    // own message text for the rest so the toast prefix is actionable.
+    const apiErr = e as {
+      status?: number
+      body?: { existingJobId?: number; message?: string } | string | null
+    }
+    const body = (apiErr.body && typeof apiErr.body === 'object') ? apiErr.body : null
+    const existing = body?.existingJobId
     if (typeof existing === 'number' && existing > 0) {
       outcome = { kind: 'duplicate', task, jobId: existing }
       await router.push(`/retinal-jobs/${existing}`)
     } else {
-      const serverMsg = err.payload?.message
+      const status = apiErr.status
+      const serverMsg = body?.message ?? (typeof apiErr.body === 'string' ? apiErr.body : '')
       const baseMsg = t('retinal.rerunAs.error')
-      const fullMsg = serverMsg ? `${baseMsg} — ${serverMsg}` : baseMsg
+      const parts = [baseMsg]
+      if (status) parts.push(`HTTP ${status}`)
+      if (serverMsg) parts.push(serverMsg)
+      const fullMsg = parts.join(' — ')
       errors.push(e instanceof Error
         ? Object.assign(new Error(fullMsg), { cause: e })
         : new Error(fullMsg),
