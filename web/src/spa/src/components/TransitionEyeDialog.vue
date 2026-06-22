@@ -25,7 +25,6 @@ import { useI18n } from 'vue-i18n'
 import FieldLabel from '@/components/FieldLabel.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import TextInput from '@/components/TextInput.vue'
-import DateInput from '@/components/DateInput.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import { useSubjectsStore } from '@/stores/subjects'
 import type {
@@ -82,34 +81,12 @@ const targetLabel = ref('')
  */
 const userTouchedTargetLabel = ref(false)
 const reason = ref('')
-const transitionedAt = ref('')
 const submitted = ref(false)
 
 const trimmedReason = computed(() => reason.value.trim())
 const trimmedTargetLabel = computed(() => targetLabel.value.trim())
-const trimmedTransitionedAt = computed(() => transitionedAt.value.trim())
 
 const reasonInvalid = computed(() => submitted.value && trimmedReason.value === '')
-
-// Pre-launch retrospective backfill: the operator pastes a date from
-// paper records. Default to today (prospective case). Reject obviously
-// junk strings + any future date so the audit row never claims a
-// hand-off that hasn't happened. The backend re-validates.
-function todayIso(): string {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-const transitionedAtInvalid = computed(() => {
-  if (!submitted.value) return false
-  const v = trimmedTransitionedAt.value
-  if (v === '') return false
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return true
-  return v > todayIso()
-})
 
 /* ----------------------------------------------------------------- */
 /* 2026-06-10 — branched UI: alreadyEnrolled vs new-enrollment       */
@@ -168,13 +145,6 @@ const targetLabelAvailable = computed(() => {
 const canSubmit = computed(() => {
   if (targetStudyOid.value === '') return false
   if (trimmedReason.value === '') return false
-  if (
-    trimmedTransitionedAt.value !== ''
-    && (!/^\d{4}-\d{2}-\d{2}$/.test(trimmedTransitionedAt.value)
-      || trimmedTransitionedAt.value > todayIso())
-  ) {
-    return false
-  }
   // New-enrollment branch: targetLabel mandatory AND must be available.
   if (showNewEnrollmentPanel.value) {
     if (trimmedTargetLabel.value === '') return false
@@ -273,7 +243,6 @@ function resetForm() {
   targetLabel.value = ''
   userTouchedTargetLabel.value = false
   reason.value = ''
-  transitionedAt.value = todayIso()
   submitted.value = false
   preflightState.value = null
   preflightLoading.value = false
@@ -298,9 +267,6 @@ function onSubmit() {
   // alreadyEnrolled=true reuses the existing target row.
   if (showNewEnrollmentPanel.value && trimmedTargetLabel.value !== '') {
     payload.targetLabel = trimmedTargetLabel.value
-  }
-  if (trimmedTransitionedAt.value !== '') {
-    payload.transitionedAt = trimmedTransitionedAt.value
   }
   emit('submit', payload)
 }
@@ -432,22 +398,6 @@ onBeforeUnmount(() => {
               label: preflightState?.existingTargetLabel ?? '',
             })
           }}
-        </div>
-
-        <div>
-          <FieldLabel for="transition-eye-transitioned-at">
-            {{ t('subjectDetail.eyeTransition.field.transitionedAt') }}
-          </FieldLabel>
-          <DateInput
-            id="transition-eye-transitioned-at"
-            v-model="transitionedAt"
-            :max="todayIso()"
-            :error="transitionedAtInvalid"
-            data-testid="transition-eye-transitioned-at"
-          />
-          <ErrorText v-if="transitionedAtInvalid">
-            {{ t('subjectDetail.eyeTransition.error.transitionedAtFuture') }}
-          </ErrorText>
         </div>
 
         <div>

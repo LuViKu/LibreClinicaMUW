@@ -10,7 +10,6 @@ import DateInput from '@/components/DateInput.vue'
 import HelperText from '@/components/HelperText.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import StatusPill from '@/components/StatusPill.vue'
-import PatientMatchDialog from '@/components/PatientMatchDialog.vue'
 
 import {
   useSubjectsStore,
@@ -19,9 +18,7 @@ import {
   type AddSubjectError,
   type AddSubjectErrorField,
   type AddSubjectInput,
-  type SubjectMatchCandidate,
 } from '@/stores/subjects'
-import { ApiError } from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import type { Gender, StudyEye } from '@/types/subject'
 
@@ -63,11 +60,6 @@ const form = reactive<AddSubjectInput>({
   // null keeps non-ophth studies free of forced eye scope.
   studyEye: null,
   screeningDate: '',
-  // Phase E.6 retrospective-backfill — PHI triplet for dedup.
-  firstName: '',
-  lastName: '',
-  dateOfBirth: '',
-  acknowledgeMatchSubjectId: null,
 })
 
 const submitAttempted = ref(false)
@@ -165,132 +157,6 @@ function clearServerErrorFor(field: AddSubjectErrorField) {
   if (serverFieldErrors.value.length === 0) serverFieldErrors.value = null
 }
 
-/* -------------------------------------------------------------- */
-/* Phase E.6 retrospective-backfill — match-preflight + dialog.   */
-/*                                                                 */
-/* Fires once the operator has filled all three of first/last/DoB. */
-/* If the backend returns at least one candidate, the dialog opens */
-/* and the form's submit is gated until the operator either picks  */
-/* "Use existing" (route to existing subject's detail) or "Create  */
-/* new anyway" (which records the acknowledgement on the form so   */
-/* the backend's audit log can see the operator chose to override).*/
-/* -------------------------------------------------------------- */
-
-const matchCandidates = ref<SubjectMatchCandidate[]>([])
-const matchDialogOpen = ref(false)
-const isPreflighting = ref(false)
-const preflightDebounce = ref<number | null>(null)
-
-/**
- * Debounced preflight — when all three PHI fields are populated, fire
- * the lookup. The 350ms window keeps keypress-by-keypress noise off
- * the wire without making the UX feel laggy.
- */
-function maybePreflight() {
-  if (preflightDebounce.value !== null) {
-    window.clearTimeout(preflightDebounce.value)
-    preflightDebounce.value = null
-  }
-  const first = (form.firstName ?? '').trim()
-  const last = (form.lastName ?? '').trim()
-  const dob = (form.dateOfBirth ?? '').trim()
-  if (!first || !last || !/^\d{4}-\d{2}-\d{2}$/.test(dob)) {
-    matchCandidates.value = []
-    matchDialogOpen.value = false
-    return
-  }
-  // The operator may already have acknowledged; if they edit the
-  // triplet, drop the acknowledgement so the next match is fresh.
-  form.acknowledgeMatchSubjectId = null
-  preflightDebounce.value = window.setTimeout(() => {
-    void runPreflight(first, last, dob)
-  }, 350)
-}
-
-async function runPreflight(first: string, last: string, dob: string) {
-  isPreflighting.value = true
-  try {
-    const candidates = await subjects.preflightMatch(first, last, dob)
-    matchCandidates.value = candidates
-    matchDialogOpen.value = candidates.length > 0
-  } catch {
-    // Preflight is best-effort — never block enrolment on a 5xx.
-    matchCandidates.value = []
-    matchDialogOpen.value = false
-  } finally {
-    isPreflighting.value = false
-  }
-}
-
-watch(() => form.firstName, maybePreflight)
-watch(() => form.lastName, maybePreflight)
-watch(() => form.dateOfBirth, maybePreflight)
-
-/**
- * App-feedback Wave 1B (2026-06-19) — when the operator clicks
- * "Verknüpfen" on a match candidate, we defer the actual POST until
- * AFTER the enrolment save (the link endpoint needs a persisted
- * study_subject id, which doesn't exist until the create round-trip
- * lands). The pending candidate is stored here and consumed by
- * {@link submit} once the new row is in the DB.
- *
- * <p>Distinct from {@link form.acknowledgeMatchSubjectId} (which only
- * records that the operator saw the match and confirmed create-new)
- * — `pendingLinkCandidate` is the affirmative "yes, soft-link the
- * new enrolment to this existing patient" choice.
- */
-const pendingLinkCandidate = ref<SubjectMatchCandidate | null>(null)
-
-const linkSuccessToast = ref<string | null>(null)
-const linkErrorToast = ref<string | null>(null)
-
-function onMatchLink(candidate: SubjectMatchCandidate) {
-  // Stash the pick and close the dialog. The submit() flow handles
-  // the actual POST after the new study_subject exists; we also flip
-  // the create-new acknowledgement so the form's submit-gate passes.
-  pendingLinkCandidate.value = candidate
-  form.acknowledgeMatchSubjectId = candidate.subjectId
-  matchDialogOpen.value = false
-}
-
-/**
- * App-feedback Wave 1B — chained link-patient call after the create
- * round-trip succeeds. Toasts surface on the AddSubject view; errors
- * are non-blocking (the enrolment itself is already saved, so a
- * link-only 4xx leaves the operator with a recoverable state).
- */
-async function callLinkPatient(currentSsId: number, targetSubjectId: number) {
-  try {
-    await subjects.linkPatient(currentSsId, targetSubjectId)
-    linkSuccessToast.value = t('addSubject.linkPatient.linkSuccess', {
-      label: pendingLinkCandidate.value?.uniqueIdentifier ?? '?',
-    })
-    linkErrorToast.value = null
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 409) {
-      linkErrorToast.value = t('addSubject.linkPatient.linkConflict409')
-    } else if (err instanceof ApiError) {
-      linkErrorToast.value = err.message || t('addSubject.linkPatient.linkError')
-    } else {
-      linkErrorToast.value =
-        err instanceof Error ? err.message : t('addSubject.linkPatient.linkError')
-    }
-    linkSuccessToast.value = null
-  }
-}
-
-function onMatchCreateNew() {
-  // Echo the first candidate's id back on submit so the backend audit
-  // captures which match the operator overrode. A multi-candidate
-  // override only echoes the topmost — the dialog already lists them.
-  form.acknowledgeMatchSubjectId = matchCandidates.value[0]?.subjectId ?? null
-  matchDialogOpen.value = false
-}
-
-function onMatchCancel() {
-  matchDialogOpen.value = false
-}
-
 async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
   submitAttempted.value = true
   serverError.value = null
@@ -304,25 +170,9 @@ async function submit(redirect: 'matrix' | 'addNext' | 'schedule') {
   // surfacing the same field error inline saves the operator a
   // failed POST round trip.
   if (labelTakenError.value) return
-  // Block the submit if a match dialog is open and the operator
-  // hasn't acknowledged.
-  if (matchCandidates.value.length > 0 && form.acknowledgeMatchSubjectId == null) {
-    matchDialogOpen.value = true
-    return
-  }
 
   try {
     const subject = await subjects.add({ ...form })
-    // App-feedback Wave 1B — if the operator chose to soft-link the
-    // new enrolment to an existing patient via "Verknüpfen", fire the
-    // chained link-patient call now that the create round-trip has
-    // returned a persisted study_subject id. Errors are non-blocking
-    // — the enrolment itself is already saved, and the toast row
-    // gives the operator a clear next-step.
-    if (pendingLinkCandidate.value && typeof subject.studySubjectId === 'number') {
-      await callLinkPatient(subject.studySubjectId, pendingLinkCandidate.value.subjectId)
-      pendingLinkCandidate.value = null
-    }
     if (redirect === 'matrix') {
       router.push({ name: 'subject-matrix' })
     } else if (redirect === 'addNext') {
@@ -509,42 +359,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
               <ErrorText v-if="errorFor('gender')">{{ errorFor('gender') }}</ErrorText>
             </div>
 
-            <!-- Phase E.6 retrospective-backfill — PHI triplet. Both
-                 names + the full DoB drive the cross-study dedup
-                 match-preflight; the operator can still submit with
-                 them blank for legacy non-retrospective flows. -->
-            <div>
-              <FieldLabel for="first-name">{{ t('addSubject.field.firstName') }}</FieldLabel>
-              <TextInput
-                id="first-name"
-                v-model="form.firstName"
-                :placeholder="t('addSubject.placeholder.firstName')"
-                data-testid="add-subject-first-name"
-              />
-              <ErrorText v-if="errorFor('firstName')">{{ errorFor('firstName') }}</ErrorText>
-            </div>
-            <div>
-              <FieldLabel for="last-name">{{ t('addSubject.field.lastName') }}</FieldLabel>
-              <TextInput
-                id="last-name"
-                v-model="form.lastName"
-                :placeholder="t('addSubject.placeholder.lastName')"
-                data-testid="add-subject-last-name"
-              />
-              <ErrorText v-if="errorFor('lastName')">{{ errorFor('lastName') }}</ErrorText>
-            </div>
-            <div>
-              <FieldLabel for="date-of-birth">{{ t('addSubject.field.dateOfBirth') }}</FieldLabel>
-              <DateInput
-                id="date-of-birth"
-                v-model="form.dateOfBirth"
-                :max="todayIso"
-                data-testid="add-subject-date-of-birth"
-              />
-              <HelperText>{{ t('addSubject.helper.dateOfBirth') }}</HelperText>
-              <ErrorText v-if="errorFor('dateOfBirth')">{{ errorFor('dateOfBirth') }}</ErrorText>
-            </div>
-
             <!-- Group assignment dropdown is deliberately omitted.
                  The historical hardcoded "Arm A / Arm B" stub
                  (pre-Phase-E.6) never read from the active study's
@@ -624,28 +438,6 @@ const genderOptions: { code: Gender; label: () => string }[] = [
           {{ serverError }}
         </div>
 
-        <!-- App-feedback Wave 1B — link-patient toast region. Surfaces
-             the chained POST /study-subjects/{id}/link-patient result
-             after the enrolment save lands. Success is green; the
-             409 mismatch + every other 4xx/5xx lands in the error
-             slot. -->
-        <div
-          v-if="linkSuccessToast"
-          class="rounded-md bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800"
-          role="status"
-          data-testid="link-patient-success-toast"
-        >
-          {{ linkSuccessToast }}
-        </div>
-        <div
-          v-if="linkErrorToast"
-          class="rounded-md bg-rose-50 border border-rose-200 px-3 py-2 text-xs text-rose-800"
-          role="alert"
-          data-testid="link-patient-error-toast"
-        >
-          {{ linkErrorToast }}
-        </div>
-
         <!-- Save action row -->
         <div class="flex items-center justify-between pt-1">
           <RouterLink to="/subjects" class="text-xs text-slate-500 hover:text-slate-700">
@@ -691,14 +483,5 @@ const genderOptions: { code: Gender; label: () => string }[] = [
         <p class="leading-relaxed">{{ t('addSubject.modesHelp') }}</p>
       </div>
     </main>
-
-    <!-- Phase E.6 retrospective-backfill — match-preflight prompt. -->
-    <PatientMatchDialog
-      :open="matchDialogOpen"
-      :candidates="matchCandidates"
-      @link="onMatchLink"
-      @create-new="onMatchCreateNew"
-      @cancel="onMatchCancel"
-    />
   </div>
 </template>

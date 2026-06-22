@@ -336,42 +336,16 @@
       "enrolledOn": "Aufnahmedatum",
       "gender": "Geschlecht",
       "yearOfBirth": "Geburtsjahr",
-      "groupLabel": "Gruppenzuordnung",
-      "firstName": "Vorname",
-      "lastName": "Nachname",
-      "dateOfBirth": "Geburtsdatum"
+      "groupLabel": "Gruppenzuordnung"
     },
     "placeholder": {
       "subjectId": "z. B. M-042",
       "secondaryId": "Optional",
-      "yearOfBirth": "JJJJ",
-      "firstName": "z. B. Maria",
-      "lastName": "z. B. Müller"
+      "yearOfBirth": "JJJJ"
     },
     "helper": {
       "subjectId": "Die in den Quelldokumenten verwendete Kennung. Nach dem Speichern nicht mehr änderbar.",
-      "yearOfBirth": "Optional — abhängig von der Studienkonfiguration.",
-      "dateOfBirth": "Vollständiges Geburtsdatum (TT.MM.JJJJ). Wird zur studienübergreifenden Dublettenprüfung verwendet."
-    },
-    "matchDialog": {
-      "title": "Patient ggf. bereits erfasst ({n})",
-      "description": "Diese Person ist bereits im System unter dem angegebenen Geburtsdatum/Namen vorhanden. Bestehende Erfassung übernehmen oder als neue Person fortfahren.",
-      "actionLink": "Diesen Patienten verwenden",
-      "actionCreateNew": "Andere Person — trotzdem neu anlegen",
-      "actionCancel": "Eingabe ändern",
-      "noStudies": "Keine aktive Erfassung",
-      "studiesVisible": "Aktiv in: {list}",
-      "studiesHiddenOnly": "Bekannt in {n} weiteren Studien (kein Zugriff)",
-      "studiesMixed": "Aktiv in: {list} (+ {n} weitere ohne Zugriff)",
-      "studyEnrolment": "{study} ({label})",
-      "nameLine": "{lastName}, {firstName}",
-      "nameLineUnknown": "Name unbekannt",
-      "unnamedSubject": "— ohne Studien-ID —"
-    },
-    "linkPatient": {
-      "linkSuccess": "Patient verknüpft mit {label}.",
-      "linkConflict409": "Beide Datensätze sind bereits unterschiedlichen Patient:innen zugeordnet.",
-      "linkError": "Verknüpfung fehlgeschlagen — bitte erneut versuchen."
+      "yearOfBirth": "Optional — abhängig von der Studienkonfiguration."
     },
     "phiWarning": "Niemals Name, Krankenhaus-ID, Sozialversicherungsnummer oder andere identifizierende Daten verwenden.",
     "gender": {
@@ -2257,8 +2231,7 @@
       "field": {
         "targetStudy": "Zielstudie",
         "targetLabel": "Teilnehmer-ID in Zielstudie (optional)",
-        "reason": "Begründung",
-        "transitionedAt": "Datum der Verlagerung"
+        "reason": "Begründung"
       },
       "action": {
         "transition": "In andere Studie verlagern",
@@ -2270,8 +2243,7 @@
         "reasonRequired": "Eine Begründung ist erforderlich.",
         "eyeAlreadyTracked": "Das Auge wird in der Zielstudie bereits geführt.",
         "unknownStudy": "Zielstudie nicht gefunden.",
-        "network": "Verlagerung konnte nicht gespeichert werden — bitte erneut versuchen.",
-        "transitionedAtFuture": "Datum darf nicht in der Zukunft liegen."
+        "network": "Verlagerung konnte nicht gespeichert werden — bitte erneut versuchen."
       },
       "banner": {
         "source": "{eye} am {date} in {study} ({label}) verlagert",

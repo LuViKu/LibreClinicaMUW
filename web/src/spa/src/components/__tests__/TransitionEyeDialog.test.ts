@@ -261,12 +261,10 @@ describe('TransitionEyeDialog', () => {
       targetStudyOid: string
       targetLabel?: string
       reason: string
-      transitionedAt?: string
     }
     expect(payload.targetStudyOid).toBe('S_GA2')
     expect(payload.targetLabel).toBe('M-101')
     expect(payload.reason).toBe('GA threshold crossed at visit 7')
-    expect(payload.transitionedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/)
 
     wrapper.unmount()
   })
