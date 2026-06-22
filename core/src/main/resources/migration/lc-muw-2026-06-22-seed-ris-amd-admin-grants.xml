@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet id="2026-06-22-seed-ris-amd-admin-grants"
+               author="muw-ophthalmology"
+               context="demo">
+        <preConditions onFail="MARK_RAN">
+            <!-- Only fire when the RIS demo study exists (i.e. the
+                 2026-06-19 OCT-portal seed has been applied) AND root
+                 doesn't already have a grant on it. -->
+            <and>
+                <sqlCheck expectedResult="1">
+                    SELECT COUNT(*) FROM study WHERE oc_oid = 'S_RIS_DEMO';
+                </sqlCheck>
+                <sqlCheck expectedResult="0">
+                    SELECT COUNT(*) FROM study_user_role
+                     WHERE user_name = 'root'
+                       AND study_id IN (
+                         SELECT study_id FROM study
+                          WHERE oc_oid IN ('S_RIS_DEMO', 'S_AMD_DEMO'));
+                </sqlCheck>
+            </and>
+        </preConditions>
+        <comment>
+            2026-06-22 user-feedback round 8: the OCT-portal demo
+            studies (RIS, AMD) were seeded with subjects + event
+            definitions but no study_user_role rows, so no operator
+            account could reach them via the study picker. The public
+            OCT upload portal does cross-study subject matching that
+            bypasses the grant table, which is why EIAMD139 resolves
+            into the RIS study during an upload — but the in-shell
+            SPA path can't view that match because root has no role
+            on the RIS row.
+
+            Grant root the Administrator role on both demo studies so
+            they appear in the picker and the in-shell view of the
+            uploader-matched subjects becomes possible. status_id=1 =
+            AVAILABLE; role_name=admin maps to Role.ADMIN via the
+            legacy lookup (see Role.java).
+        </comment>
+
+        <insert tableName="study_user_role">
+            <column name="role_name" value="admin"/>
+            <column name="study_id" valueComputed="(SELECT study_id FROM study WHERE oc_oid = 'S_RIS_DEMO')"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-22"/>
+            <column name="user_name" value="root"/>
+        </insert>
+        <insert tableName="study_user_role">
+            <column name="role_name" value="admin"/>
+            <column name="study_id" valueComputed="(SELECT study_id FROM study WHERE oc_oid = 'S_AMD_DEMO')"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-22"/>
+            <column name="user_name" value="root"/>
+        </insert>
+    </changeSet>
+
+</databaseChangeLog>
