@@ -18,9 +18,9 @@
  * which the view forwards as {@code hoveredBscanZ} to the overlay so
  * the matching B-scan polyline highlights on the fundus image.
  */
-import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
@@ -46,6 +46,7 @@ const BscanViewer = defineAsyncComponent(() => import('@/components/BscanViewer.
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 const store = useRetinalJobStore()
 
 const jobId = computed<number>(() => Number(route.params.jobId))
@@ -150,7 +151,23 @@ async function load() {
 
 onMounted(() => {
   void load()
+  // 2026-06-22 — outside-click + escape close the rerun-as menu.
+  // The buttons themselves use @click.stop so they don't auto-close.
+  document.addEventListener('click', closeRerunMenu)
+  document.addEventListener('keydown', closeRerunMenuOnEscape)
 })
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', closeRerunMenu)
+  document.removeEventListener('keydown', closeRerunMenuOnEscape)
+})
+
+function closeRerunMenu(): void {
+  rerunMenuOpen.value = false
+}
+function closeRerunMenuOnEscape(ev: KeyboardEvent): void {
+  if (ev.key === 'Escape') rerunMenuOpen.value = false
+}
 
 watch(jobId, () => {
   void load()
@@ -557,6 +574,44 @@ async function onRetry(): Promise<void> {
   }
 }
 
+/* ------------------------------------------------------------- */
+/* 2026-06-22 — rerun-as: dispatch the same e2e + scan as a      */
+/* different inference task. Operator picks from a dropdown next */
+/* to the retry button; on success we navigate to the new job's  */
+/* metrics view so the next page-load tracks the new SSE stream. */
+/* ------------------------------------------------------------- */
+type RerunTask = 'fluid' | 'ga' | 'onl' | 'pr'
+const RERUN_TASKS: readonly RerunTask[] = ['fluid', 'ga', 'onl', 'pr'] as const
+const rerunMenuOpen = ref(false)
+const rerunning = computed<boolean>(() => !!store.rerunAsInflight[jobId.value])
+
+/** Tasks the operator can pick — everything except the current job's task. */
+const rerunCandidates = computed<RerunTask[]>(() => {
+  const current = job.value?.task
+  return RERUN_TASKS.filter((t) => t !== current)
+})
+
+async function onRerunAs(task: RerunTask): Promise<void> {
+  rerunMenuOpen.value = false
+  try {
+    const newJobId = await store.rerunJobAs(jobId.value, task)
+    await router.push(`/retinal-jobs/${newJobId}`)
+  } catch (e) {
+    // The store's rerunJobAs throws on any non-2xx; surface a 409 with an
+    // existingJobId by parsing the message payload + navigating there so
+    // the operator lands on the existing twin rather than seeing a raw
+    // "duplicate" toast.
+    const err = e as { status?: number; payload?: { existingJobId?: number } }
+    const existing = err.payload?.existingJobId
+    if (typeof existing === 'number' && existing > 0) {
+      await router.push(`/retinal-jobs/${existing}`)
+      return
+    }
+    const message = e instanceof Error ? e.message : t('retinal.rerunAs.error')
+    store.errors[jobId.value] = message
+  }
+}
+
 const showJson = ref(false)
 
 /* ------------------------------------------------------------- */
@@ -702,6 +757,54 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                 </svg>
                 {{ retrying ? t('retinal.retry.inflight') : t('retinal.retry.cta') }}
               </button>
+
+              <!-- 2026-06-22 — "Re-run with different task" dropdown.
+                   The button itself toggles the menu; each menu item
+                   posts to /rerun-as and routes the operator to the
+                   new job's metrics view. Closes on outside-click via
+                   the document-level handler in onMounted. -->
+              <div class="relative" data-testid="retinal-view-rerun-as">
+                <button
+                  type="button"
+                  class="px-3.5 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  :disabled="rerunning || rerunCandidates.length === 0"
+                  :aria-expanded="rerunMenuOpen"
+                  aria-haspopup="menu"
+                  @click.stop="rerunMenuOpen = !rerunMenuOpen"
+                >
+                  <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" />
+                  </svg>
+                  {{ rerunning ? t('retinal.rerunAs.inflight') : t('retinal.rerunAs.cta') }}
+                  <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <div
+                  v-if="rerunMenuOpen"
+                  class="absolute right-0 mt-1.5 w-52 bg-white rounded-lg border border-slate-200 shadow-lg z-20 py-1.5"
+                  role="menu"
+                  data-testid="retinal-view-rerun-as-menu"
+                  @click.stop
+                >
+                  <div class="px-3 py-1.5 text-[10px] uppercase tracking-[0.08em] font-semibold text-slate-400">
+                    {{ t('retinal.rerunAs.menuHeader') }}
+                  </div>
+                  <button
+                    v-for="task in rerunCandidates"
+                    :key="`rerun-${task}`"
+                    type="button"
+                    role="menuitem"
+                    class="w-full text-left px-3 py-1.5 text-[13px] font-medium text-slate-700 hover:bg-slate-50 inline-flex items-center justify-between"
+                    :data-testid="`retinal-view-rerun-as-${task}`"
+                    @click="onRerunAs(task)"
+                  >
+                    <span>{{ t(`retinal.task.${task}`) }}</span>
+                    <span class="font-mono text-[10px] text-slate-400 uppercase">{{ task }}</span>
+                  </button>
+                </div>
+              </div>
+
               <a
                 href="#retinal-downloads"
                 class="px-3.5 py-2 text-[13px] font-semibold bg-muw-blue text-white rounded-lg hover:bg-muw-blue-700 inline-flex items-center gap-2 shadow-[0_1px_2px_rgba(17,29,78,.18)]"

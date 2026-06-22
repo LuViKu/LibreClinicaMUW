@@ -2929,6 +2929,12 @@
       "inflight": "Restarting…",
       "error": "Retry failed — please try again later."
     },
+    "rerunAs": {
+      "cta": "[NEEDS_REVIEW] Run as different task",
+      "inflight": "[NEEDS_REVIEW] Starting…",
+      "menuHeader": "[NEEDS_REVIEW] New inference task",
+      "error": "[NEEDS_REVIEW] Run with different task failed."
+    },
     "nav": {
       "backToSubjects": "[NEEDS_REVIEW] ← Back to subjects",
       "home": "[NEEDS_REVIEW] Home"

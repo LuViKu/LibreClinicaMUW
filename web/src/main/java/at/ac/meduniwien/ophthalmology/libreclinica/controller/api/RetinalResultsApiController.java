@@ -18,7 +18,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1321,6 +1323,225 @@ public class RetinalResultsApiController {
                 jobId, priorMessage.isEmpty() ? "(no prior message)" : priorMessage);
         Map<String, Object> resp = new LinkedHashMap<>();
         resp.put("jobId", jobId);
+        resp.put("status", "remote_pending");
+        return ResponseEntity.accepted().body(resp);
+    }
+
+    /* ====================================================================== */
+    /* POST /retinal-jobs/{jobId}/rerun-as — re-dispatch as a different task */
+    /* ====================================================================== */
+
+    /** Tasks the operator can pick from the rerun-as dropdown. Mirrors the
+     *  runner profiles + the FUNDUS overlay's recognised task discriminator. */
+    private static final java.util.Set<String> ALLOWED_RERUN_TASKS =
+            java.util.Set.of("fluid", "ga", "onl", "pr");
+
+    /**
+     * Re-dispatch the same uploaded .e2e (referenced by {@code sourceJobId})
+     * as a DIFFERENT inference task. Inserts a NEW {@code retinal_inference_job}
+     * row scoped to the new task — the original job + its results stay intact
+     * so the audit trail records each task as its own first-class run.
+     *
+     * <p>The new row reuses {@code event_crf_id}, {@code e2e_path},
+     * {@code e2e_sha256}, {@code eye_laterality}, and {@code scan_index} from
+     * the source. The unique key on
+     * {@code (e2e_sha256, scan_index, task)} (widened 2026-06-22) keeps the
+     * (scan slot × task) pair from being duplicated; if a job for the
+     * requested task already exists on the same scan, returns 409 with the
+     * existing job_id so the SPA can navigate the operator there.
+     *
+     * <p>Body: {@code {"task": "ga"}} (or fluid / onl / pr).
+     * Response: {@code {"jobId": <new>, "task": "<task>", "status": "remote_pending"}}.
+     */
+    @org.springframework.web.bind.annotation.PostMapping(
+            path = "/retinal-jobs/{jobId:[0-9]+}/rerun-as",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> rerunAs(@PathVariable("jobId") long sourceJobId,
+                                     @RequestBody Map<String, String> body,
+                                     HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        String newTask = body == null ? null : body.get("task");
+        if (newTask != null) newTask = newTask.trim().toLowerCase(java.util.Locale.ROOT);
+        if (newTask == null || !ALLOWED_RERUN_TASKS.contains(newTask)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "task must be one of " + ALLOWED_RERUN_TASKS));
+        }
+
+        // ---- load the source job's immutable metadata ----------------
+        FailedJob source;
+        String sourceSha256;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT status, status_message, event_crf_id, task, "
+                             + "       e2e_path, eye_laterality, scan_index, e2e_sha256 "
+                             + "  FROM retinal_inference_job WHERE job_id = ?")) {
+            ps.setLong(1, sourceJobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return ResponseEntity.status(404).body(Map.of(
+                            "message", "No retinal_inference_job with id " + sourceJobId));
+                }
+                source = new FailedJob();
+                source.status = rs.getString("status");
+                source.statusMessage = rs.getString("status_message");
+                int ecId = rs.getInt("event_crf_id");
+                source.eventCrfId = rs.wasNull() ? null : ecId;
+                source.task = rs.getString("task");
+                source.e2ePath = rs.getString("e2e_path");
+                source.eyeLaterality = rs.getString("eye_laterality");
+                source.scanIndex = rs.getInt("scan_index");
+                sourceSha256 = rs.getString("e2e_sha256");
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to fetch source retinal job {} for rerun-as: {}",
+                    sourceJobId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to fetch source job: " + sqlEx.getMessage()));
+        }
+
+        if (source.eventCrfId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Source job " + sourceJobId + " has no event_crf — "
+                            + "park it to a visit first via /bind"));
+        }
+        if (newTask.equals(source.task)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Source job is already task=" + newTask
+                            + "; use /retry to re-dispatch the same task"));
+        }
+        if (sourceSha256 == null || sourceSha256.isBlank()) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Source job is missing e2e_sha256 — predates the "
+                            + "dedup gate; cannot rerun-as safely"));
+        }
+
+        // ---- visibility check via the source job's event_crf --------
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(source.eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No event_crf with id " + source.eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        if (ss == null || ss.getStudyId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "event_crf " + source.eventCrfId + " has no resolvable study"));
+        }
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Source job " + sourceJobId + " belongs to a different study"));
+        }
+        if (remoteClient == null || !remoteClient.isConfigured()) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Remote GPU sidecar not configured — rerun-as unavailable"));
+        }
+        if (inferenceController == null) {
+            return ResponseEntity.status(503).body(Map.of(
+                    "message", "Rerun-as temporarily unavailable"));
+        }
+
+        // ---- dedup gate: prefer surfacing an existing twin row over a 500 -
+        long existingTwinJobId = -1;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT job_id FROM retinal_inference_job "
+                             + "WHERE e2e_sha256 = ? AND scan_index = ? AND task = ?")) {
+            ps.setString(1, sourceSha256);
+            ps.setInt(2, source.scanIndex);
+            ps.setString(3, newTask);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) existingTwinJobId = rs.getLong(1);
+            }
+        } catch (SQLException sqlEx) {
+            // Non-fatal — fall through to the INSERT and let the unique
+            // constraint catch any race.
+            LOG.warn("rerun-as dedup probe failed for job {}: {}", sourceJobId, sqlEx.getMessage());
+        }
+        if (existingTwinJobId > 0) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "A job already exists for this scan + task — "
+                            + "navigate there instead",
+                    "existingJobId", existingTwinJobId));
+        }
+
+        // ---- insert the new job row ---------------------------------
+        long newJobId;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO retinal_inference_job ("
+                             + "event_crf_id, task, e2e_path, eye_laterality, status, "
+                             + "scan_index, enqueued_at, e2e_sha256"
+                             + ") VALUES (?, ?, ?, ?, 'remote_pending', ?, ?, ?)",
+                     Statement.RETURN_GENERATED_KEYS)) {
+            ps.setInt(1, source.eventCrfId);
+            ps.setString(2, newTask);
+            ps.setString(3, source.e2ePath);
+            ps.setString(4, source.eyeLaterality);
+            ps.setInt(5, source.scanIndex);
+            ps.setTimestamp(6, Timestamp.from(Instant.now()));
+            ps.setString(7, sourceSha256);
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (!keys.next()) {
+                    throw new SQLException("rerun-as INSERT returned no PK");
+                }
+                newJobId = keys.getLong(1);
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to insert rerun-as job (source={}, task={}): {}",
+                    sourceJobId, newTask, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to enqueue rerun-as job: " + sqlEx.getMessage()));
+        }
+
+        // ---- audit (reuses the RETRY type id — the action shape is
+        //      the same: operator-initiated re-dispatch of an existing
+        //      scan slot) -------------------------------------------
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        EventCrfsApiController.writeAuditEvent(
+                auditDAO, AuditTypeIds.RETINAL_JOB_RETRY,
+                currentUser, currentStudy, ss,
+                "Retinal job rerun-as " + newTask + " (source job " + sourceJobId + ")",
+                /* auditTable */ "retinal_inference_job",
+                /* entityId   */ (int) newJobId,
+                /* columnName */ "task",
+                /* oldValue   */ source.task,
+                /* newValue   */ newTask);
+
+        if (broadcaster != null) {
+            broadcaster.publish(newJobId, "remote_pending");
+        }
+
+        // ---- fire handleRemote async; SSE surfaces the final state --
+        final String taskForDispatch = newTask;
+        final Integer ecfId = source.eventCrfId;
+        final String e2ePath = source.e2ePath;
+        final String lat = source.eyeLaterality;
+        final int scanIdx = source.scanIndex;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                inferenceController.handleRemote(
+                        newJobId, taskForDispatch, e2ePath, lat, scanIdx, ecfId);
+            } catch (Exception remoteEx) {
+                LOG.warn("Remote dispatch threw for rerun-as job {}: {}",
+                        newJobId, remoteEx.getMessage());
+            }
+        });
+
+        LOG.info("Retinal rerun-as: source={} → new job {} (task {}→{})",
+                sourceJobId, newJobId, source.task, newTask);
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("jobId", newJobId);
+        resp.put("task", newTask);
         resp.put("status", "remote_pending");
         return ResponseEntity.accepted().body(resp);
     }

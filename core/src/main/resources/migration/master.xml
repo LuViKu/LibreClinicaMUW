@@ -78,5 +78,6 @@
   <include  file="migration/lc-muw-2026-06-21-study-module-enrollment.xml"/>
   <include  file="migration/lc-muw-2026-06-22-seed-ris-amd-admin-grants.xml"/>
   <include  file="migration/lc-muw-2026-06-22-upgrade-root-coordinator-grants.xml"/>
+  <include  file="migration/lc-muw-2026-06-22-retinal-job-multitask-unique.xml"/>
 </databaseChangeLog>
 

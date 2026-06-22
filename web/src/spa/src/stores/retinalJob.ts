@@ -31,6 +31,7 @@ import {
   listEventCrfJobs,
   listSubjectJobs,
   retryRetinalJob,
+  rerunRetinalJobAs,
   type GeometryJson,
   type RetinalJobDetail,
   type RetinalJobSummary,
@@ -147,6 +148,31 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
     }
   }
 
+  /**
+   * 2026-06-22 — rerun an existing scan as a DIFFERENT task. The backend
+   * inserts a new job row + dispatches; we return the new jobId so the
+   * caller (RetinalMetricsView) can route to the new job's view.
+   *
+   * <p>On a 409 with an existingJobId in the response body we surface
+   * it via the thrown error's `cause` so the caller can navigate to
+   * the existing twin instead of double-creating it.
+   */
+  const rerunAsInflight = ref<Record<number, boolean>>({})
+  async function rerunJobAs(
+    sourceJobId: number,
+    task: 'fluid' | 'ga' | 'onl' | 'pr',
+  ): Promise<number> {
+    rerunAsInflight.value = { ...rerunAsInflight.value, [sourceJobId]: true }
+    try {
+      const resp = await rerunRetinalJobAs(sourceJobId, task)
+      return resp.jobId
+    } finally {
+      const next = { ...rerunAsInflight.value }
+      delete next[sourceJobId]
+      rerunAsInflight.value = next
+    }
+  }
+
   /** Fetch + cache the summary list for one study-subject. */
   async function loadSubjectJobs(
     studySubjectId: number,
@@ -177,10 +203,12 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
     eventCrfLoading,
     subjectLoading,
     retryInflight,
+    rerunAsInflight,
     loadJob,
     loadGeometry,
     loadEventCrfJobs,
     loadSubjectJobs,
     retryJob,
+    rerunJobAs,
   }
 })

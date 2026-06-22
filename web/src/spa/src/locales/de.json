@@ -2941,6 +2941,12 @@
       "inflight": "Wird neu gestartet…",
       "error": "Neustart fehlgeschlagen — bitte später erneut versuchen."
     },
+    "rerunAs": {
+      "cta": "Anderen Task ausführen",
+      "inflight": "Wird gestartet…",
+      "menuHeader": "Neuer Inferenz-Task",
+      "error": "Start mit anderem Task fehlgeschlagen."
+    },
     "nav": {
       "backToSubjects": "← Zurück zur Probandenmatrix",
       "home": "Start"
