@@ -34,6 +34,7 @@ import type { FundusOverlayTask } from '@/components/FundusOverlay.vue'
 import { useStudyArm } from '@/composables/useStudyArm'
 
 import { useRetinalJobStore } from '@/stores/retinalJob'
+import { useErrorsStore } from '@/stores/errors'
 import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
 
@@ -48,6 +49,7 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useRetinalJobStore()
+const errors = useErrorsStore()
 
 const jobId = computed<number>(() => Number(route.params.jobId))
 
@@ -591,24 +593,54 @@ const rerunCandidates = computed<RerunTask[]>(() => {
   return RERUN_TASKS.filter((t) => t !== current)
 })
 
+/**
+ * Last-action notice for the rerun-as flow. Drives a brief banner at
+ * the top of the metrics view (auto-cleared on slice / jobId change).
+ * Three shapes:
+ *   - success: a new job was enqueued + we navigated to it
+ *   - duplicate: a job for this scan + task already existed; we
+ *     navigated to it instead of creating a twin
+ *   - error: handled via the GlobalErrorToast; we don't double-render
+ */
+type RerunNotice =
+  | { kind: 'success'; task: RerunTask; jobId: number }
+  | { kind: 'duplicate'; task: RerunTask; jobId: number }
+const rerunNotice = ref<RerunNotice | null>(null)
+
+watch(jobId, () => { rerunNotice.value = null })
+
 async function onRerunAs(task: RerunTask): Promise<void> {
   rerunMenuOpen.value = false
+  let outcome: RerunNotice | null = null
   try {
     const newJobId = await store.rerunJobAs(jobId.value, task)
+    outcome = { kind: 'success', task, jobId: newJobId }
     await router.push(`/retinal-jobs/${newJobId}`)
   } catch (e) {
-    // The store's rerunJobAs throws on any non-2xx; surface a 409 with an
-    // existingJobId by parsing the message payload + navigating there so
-    // the operator lands on the existing twin rather than seeing a raw
-    // "duplicate" toast.
-    const err = e as { status?: number; payload?: { existingJobId?: number } }
+    // 2026-06-22 — surface every rerun-as failure through the global
+    // error toast so the operator gets immediate feedback. Without
+    // this, a 500 / SQL-constraint / sidecar failure would silently
+    // close the dropdown and leave the source view unchanged, looking
+    // like a no-op.
+    const err = e as { status?: number; payload?: { existingJobId?: number; message?: string } }
+    // Backend returns 409 with {existingJobId} when a job for this
+    // scan + task already exists. Treat that as "navigate to twin"
+    // rather than a toast — it's the same end state.
     const existing = err.payload?.existingJobId
     if (typeof existing === 'number' && existing > 0) {
+      outcome = { kind: 'duplicate', task, jobId: existing }
       await router.push(`/retinal-jobs/${existing}`)
-      return
+    } else {
+      const serverMsg = err.payload?.message
+      const baseMsg = t('retinal.rerunAs.error')
+      const fullMsg = serverMsg ? `${baseMsg} — ${serverMsg}` : baseMsg
+      errors.push(e instanceof Error
+        ? Object.assign(new Error(fullMsg), { cause: e })
+        : new Error(fullMsg),
+      'retinal.rerunAs')
     }
-    const message = e instanceof Error ? e.message : t('retinal.rerunAs.error')
-    store.errors[jobId.value] = message
+  } finally {
+    if (outcome) rerunNotice.value = outcome
   }
 }
 
@@ -816,6 +848,43 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                 {{ t('retinal.header.downloadAll') }}
               </a>
             </div>
+          </div>
+
+          <!-- 2026-06-22 — Rerun-as outcome banner. Replaces the
+               previous silent close-the-dropdown behaviour: the
+               operator now sees a confirmation when a new job is
+               enqueued, or a "navigated to existing twin" notice
+               when the dedup gate fired. The banner is dismissable
+               and auto-clears on jobId change. Failures go through
+               GlobalErrorToast (see onRerunAs catch). -->
+          <div
+            v-if="rerunNotice"
+            class="mb-5 rounded-2xl border px-4 py-3 text-xs flex items-center gap-3"
+            :class="rerunNotice.kind === 'duplicate'
+              ? 'border-amber-200 bg-amber-50 text-amber-900'
+              : 'border-emerald-200 bg-emerald-50 text-emerald-900'"
+            data-testid="retinal-view-rerun-notice"
+          >
+            <span class="flex-1">
+              <template v-if="rerunNotice.kind === 'success'">
+                {{ t('retinal.rerunAs.successBanner', {
+                    task: t(`retinal.task.${rerunNotice.task}`),
+                    jobId: rerunNotice.jobId,
+                  }) }}
+              </template>
+              <template v-else>
+                {{ t('retinal.rerunAs.duplicateBanner', {
+                    task: t(`retinal.task.${rerunNotice.task}`),
+                    jobId: rerunNotice.jobId,
+                  }) }}
+              </template>
+            </span>
+            <button
+              type="button"
+              class="text-[11px] underline hover:no-underline"
+              data-testid="retinal-view-rerun-notice-dismiss"
+              @click="rerunNotice = null"
+            >{{ t('common.dismiss') }}</button>
           </div>
 
           <!-- Empty / in-flight banner -->

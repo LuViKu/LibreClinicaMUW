@@ -144,6 +144,7 @@
     "search": "Suche",
     "filter": "Filter",
     "clear": "Zurücksetzen",
+    "dismiss": "Schließen",
     "export": "Export",
     "eye": {
       "od": "rechts",
@@ -2950,7 +2951,9 @@
       "cta": "Anderen Task ausführen",
       "inflight": "Wird gestartet…",
       "menuHeader": "Neuer Inferenz-Task",
-      "error": "Start mit anderem Task fehlgeschlagen."
+      "error": "Start mit anderem Task fehlgeschlagen.",
+      "successBanner": "Neuer {task}-Job (#{jobId}) wurde gestartet.",
+      "duplicateBanner": "Für diesen Scan existiert bereits ein {task}-Job (#{jobId}) — Sie wurden dorthin geleitet."
     },
     "nav": {
       "backToSubjects": "← Zurück zur Probandenmatrix",

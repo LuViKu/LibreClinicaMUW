@@ -144,6 +144,7 @@
     "search": "Search",
     "filter": "Filter",
     "clear": "Clear",
+    "dismiss": "Dismiss",
     "export": "Export",
     "eye": {
       "od": "right",
@@ -2938,7 +2939,9 @@
       "cta": "[NEEDS_REVIEW] Run as different task",
       "inflight": "[NEEDS_REVIEW] Starting…",
       "menuHeader": "[NEEDS_REVIEW] New inference task",
-      "error": "[NEEDS_REVIEW] Run with different task failed."
+      "error": "[NEEDS_REVIEW] Run with different task failed.",
+      "successBanner": "[NEEDS_REVIEW] New {task} job (#{jobId}) started.",
+      "duplicateBanner": "[NEEDS_REVIEW] A {task} job (#{jobId}) already exists for this scan — you were navigated there."
     },
     "nav": {
       "backToSubjects": "[NEEDS_REVIEW] ← Back to subjects",
