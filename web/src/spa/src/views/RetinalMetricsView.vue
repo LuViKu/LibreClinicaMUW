@@ -286,19 +286,28 @@ const etdrsRows = computed<EtdrsRow[]>(() => {
   if (fluidPayload.value) {
     const m = fluidPayload.value.etdrs_mm3
     if (m == null) return []
+    // Disjoint ring contributions, derived by subtraction from the
+    // cumulative central discs the runner reports.
+    const ring13 = ringDiff(m.central_3mm, m.central_1mm)
+    const ring36 = ringDiff(m.central_6mm, m.central_3mm)
+    function row(label: string, c: { irf?: number; srf?: number; ped?: number; total?: number }): EtdrsRow {
+      return {
+        label,
+        values: [
+          formatNumber(c.irf),
+          formatNumber(c.srf),
+          formatNumber(c.ped),
+          formatNumber(c.total),
+        ],
+      }
+    }
     return [
-      [t('retinal.etdrs.ringLabel', { mm: 1 }), m.central_1mm],
-      [t('retinal.etdrs.ringLabel', { mm: 3 }), m.central_3mm],
-      [t('retinal.etdrs.ringLabel', { mm: 6 }), m.central_6mm],
-    ].map(([label, ring]) => ({
-      label: label as string,
-      values: [
-        formatNumber((ring as { irf?: number }).irf),
-        formatNumber((ring as { srf?: number }).srf),
-        formatNumber((ring as { ped?: number }).ped),
-        formatNumber((ring as { total?: number }).total),
-      ],
-    }))
+      row(t('retinal.etdrs.ringLabel', { mm: 1 }), m.central_1mm ?? {}),
+      row(t('retinal.etdrs.ringLabel', { mm: 3 }), m.central_3mm ?? {}),
+      row(t('retinal.etdrs.ringLabel', { mm: 6 }), m.central_6mm ?? {}),
+      row(t('retinal.etdrs.ringLabelRange', { from: 1, to: 3 }), ring13),
+      row(t('retinal.etdrs.ringLabelRange', { from: 3, to: 6 }), ring36),
+    ]
   }
   if (gaPayload.value) {
     const m = gaPayload.value.etdrs_mm2
@@ -770,6 +779,55 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                   />
                 </div>
               </div>
+
+              <!-- 2026-06-22 — selection summary. Lives in the fundus
+                   column right below the overlay so the chips +
+                   biomarker sum visually attach to the regions the
+                   operator just clicked. Hidden when nothing is
+                   selected — a hint occupies the same vertical space
+                   so the column height doesn't jump on first click. -->
+              <div
+                v-if="selectedSum"
+                class="px-5 py-3 border-t border-slate-100 bg-amber-50/60 flex flex-col gap-2"
+                data-testid="retinal-view-etdrs-selection"
+              >
+                <div class="flex items-center gap-2 flex-wrap min-w-0">
+                  <span class="text-[11px] uppercase tracking-[0.08em] font-semibold text-muw-blue">
+                    {{ t('retinal.etdrs.selectionHeader') }}
+                  </span>
+                  <button
+                    v-for="r in selectedEtdrsRegions"
+                    :key="`chip-${r}`"
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-full bg-white border border-amber-300 text-amber-800 text-[11px] font-semibold px-2.5 py-0.5 hover:bg-amber-50"
+                    :data-testid="`retinal-view-etdrs-chip-${r}`"
+                    @click="selectedEtdrsRegions = selectedEtdrsRegions.filter((x) => x !== r)"
+                  >
+                    {{ regionLabel(r) }}
+                    <span aria-hidden="true" class="text-amber-400">×</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="text-[11px] text-slate-500 hover:text-muw-blue underline ml-1"
+                    data-testid="retinal-view-etdrs-clear"
+                    @click="selectedEtdrsRegions = []"
+                  >
+                    {{ t('retinal.etdrs.selectionClear') }}
+                  </button>
+                </div>
+                <div class="flex items-center gap-x-4 gap-y-1 flex-wrap text-[12.5px] font-mono tabular-nums text-slate-700">
+                  <span><span class="text-cyan-700 font-semibold">IRF</span> {{ formatNumber(selectedSum.irf) }}</span>
+                  <span><span class="text-amber-700 font-semibold">SRF</span> {{ formatNumber(selectedSum.srf) }}</span>
+                  <span><span class="text-fuchsia-700 font-semibold">PED</span> {{ formatNumber(selectedSum.ped) }}</span>
+                  <span class="ml-auto"><span class="text-slate-500 font-semibold">∑</span> {{ formatNumber(selectedSum.total) }} mm³</span>
+                </div>
+              </div>
+              <div
+                v-else
+                class="px-5 py-3 border-t border-slate-100 text-[11px] text-slate-400"
+              >
+                {{ t('retinal.etdrs.selectionHint') }}
+              </div>
             </section>
 
             <!-- B-Scan navigator -->
@@ -799,55 +857,10 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
               class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] overflow-clip"
               data-testid="retinal-view-etdrs"
             >
-              <div class="px-5 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between gap-4">
+              <div class="px-5 pt-4 pb-3 border-b border-slate-100">
                 <h3 class="text-[12px] font-semibold uppercase tracking-[0.1em] text-muw-blue">
                   {{ t('retinal.etdrs.header') }}
                 </h3>
-                <span class="text-[11px] text-slate-400 hidden md:inline">
-                  {{ t('retinal.etdrs.selectionHint') }}
-                </span>
-              </div>
-
-              <!-- 2026-06-22 — selection summary. Shows the chips for
-                   the currently-selected ETDRS regions + a single row
-                   summing their biomarker contributions. Hidden when
-                   nothing is selected; the regular ring rows below
-                   remain the reference table. -->
-              <div
-                v-if="selectedSum"
-                class="px-5 py-3 bg-muw-sky-50/60 border-b border-slate-100 flex items-start gap-4 flex-wrap"
-                data-testid="retinal-view-etdrs-selection"
-              >
-                <div class="flex items-center gap-2 flex-wrap min-w-0">
-                  <span class="text-[11px] uppercase tracking-[0.08em] font-semibold text-muw-blue">
-                    {{ t('retinal.etdrs.selectionHeader') }}
-                  </span>
-                  <button
-                    v-for="r in selectedEtdrsRegions"
-                    :key="`chip-${r}`"
-                    type="button"
-                    class="inline-flex items-center gap-1.5 rounded-full bg-white border border-muw-sky-200 text-muw-sky-700 text-[11px] font-semibold px-2.5 py-0.5 hover:bg-muw-sky-50"
-                    :data-testid="`retinal-view-etdrs-chip-${r}`"
-                    @click="selectedEtdrsRegions = selectedEtdrsRegions.filter((x) => x !== r)"
-                  >
-                    {{ regionLabel(r) }}
-                    <span aria-hidden="true" class="text-slate-400">×</span>
-                  </button>
-                  <button
-                    type="button"
-                    class="text-[11px] text-slate-500 hover:text-muw-blue underline ml-1"
-                    data-testid="retinal-view-etdrs-clear"
-                    @click="selectedEtdrsRegions = []"
-                  >
-                    {{ t('retinal.etdrs.selectionClear') }}
-                  </button>
-                </div>
-                <div class="ml-auto flex items-center gap-4 text-[12.5px] font-mono tabular-nums text-slate-700">
-                  <span><span class="text-cyan-700 font-semibold">IRF</span> {{ formatNumber(selectedSum.irf) }}</span>
-                  <span><span class="text-amber-700 font-semibold">SRF</span> {{ formatNumber(selectedSum.srf) }}</span>
-                  <span><span class="text-fuchsia-700 font-semibold">PED</span> {{ formatNumber(selectedSum.ped) }}</span>
-                  <span><span class="text-slate-500 font-semibold">∑</span> {{ formatNumber(selectedSum.total) }} mm³</span>
-                </div>
               </div>
               <DenseTable :bordered="false">
                 <template #header>

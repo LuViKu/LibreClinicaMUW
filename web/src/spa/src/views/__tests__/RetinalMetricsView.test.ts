@@ -212,15 +212,19 @@ describe('RetinalMetricsView — task surfaces', () => {
     expect(joined).toContain('Gesamt')
   })
 
-  it('renders the ETDRS sub-totals table with three rings for fluid', async () => {
+  it('renders the ETDRS sub-totals table with three full circles + two annular rings for fluid', async () => {
     const w = await mountView(makeFluidJob())
     const etdrs = w.find('[data-testid="retinal-view-etdrs"]')
     expect(etdrs.exists()).toBe(true)
     const rows = etdrs.findAll('[data-testid="retinal-etdrs-row"]')
-    expect(rows.length).toBe(3)
+    // 2026-06-22 — 3 cumulative central discs (1mm / 3mm / 6mm) +
+    // 2 disjoint annular rings (1–3 mm / 3–6 mm).
+    expect(rows.length).toBe(5)
     expect(rows[0].text()).toContain('1 mm')
     expect(rows[1].text()).toContain('3 mm')
     expect(rows[2].text()).toContain('6 mm')
+    expect(rows[3].text()).toContain('1–3 mm')
+    expect(rows[4].text()).toContain('3–6 mm')
   })
 
   it('renders 1 KPI tile + ETDRS sub-totals for the GA task', async () => {
