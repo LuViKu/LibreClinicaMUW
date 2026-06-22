@@ -2964,7 +2964,9 @@
       "header": "B-Scan-Navigator",
       "position": "Schnitt {current} / {total}",
       "loading": "Viewer wird geladen…",
-      "errorPrefix": "B-Scan-Viewer konnte nicht geladen werden:"
+      "errorPrefix": "B-Scan-Viewer konnte nicht geladen werden:",
+      "segOverlayAlt": "Segmentierungs-Overlay für Schnitt {current} von {total}",
+      "scrollHint": "Scrollen = Slice wechseln"
     },
     "trends": {
       "title": "Biomarker-Verlauf",

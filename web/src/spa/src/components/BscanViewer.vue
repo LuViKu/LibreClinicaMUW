@@ -31,6 +31,16 @@ interface Props {
   nBscans: number
   /** Current B-scan index (0-based) — bidirectional via v-model. */
   modelValue: number
+  /**
+   * 2026-06-22 — list of per-B-scan segmentation overlay artifact
+   * names (e.g. {@code seg_bscan_0042.png}). The viewer overlays
+   * the matching slice's PNG on top of the cornerstone canvas so
+   * the operator sees the IRF / SRF / PED segmentation on the
+   * exact B-scan it applies to. Pass {@code []} or omit to hide
+   * the overlay (legacy jobs without per-slice PNGs).
+   */
+  segOverlayUrlBase?: string
+  segOverlayArtifactNames?: string[]
 }
 
 const props = defineProps<Props>()
@@ -48,6 +58,28 @@ const viewport = shallowRef<unknown | null>(null)
 const renderingEngineRef = shallowRef<{ destroy: () => void } | null>(null)
 
 const sliderMax = computed(() => Math.max(0, props.nBscans - 1))
+
+/**
+ * 2026-06-22 — URL of the segmentation overlay PNG for the current
+ * slice, or null when the runner didn't emit a PNG for this z
+ * (slices with no biomarker voxels are skipped server-side). The
+ * SPA absolutely-positions an <img> at the same size as the
+ * cornerstone canvas so it overlays in pixel-space (the per-slice
+ * PNG is emitted at the DICOM frame's native (rows, cols)).
+ */
+const segOverlayUrl = computed<string | null>(() => {
+  const base = props.segOverlayUrlBase
+  const names = props.segOverlayArtifactNames
+  if (!base || !names || names.length === 0) return null
+  // Filenames are zero-padded to four digits — `seg_bscan_0042.png`.
+  const padded = String(props.modelValue).padStart(4, '0')
+  const expected = `seg_bscan_${padded}.png`
+  if (!names.includes(expected)) return null
+  // Compose the artifact URL the same way RetinalMetricsView builds
+  // the rest of the per-job artifact links. The base ends with the
+  // job's artifact directory; just append the filename.
+  return `${base}${expected}`
+})
 
 async function initViewer(): Promise<void> {
   if (!containerEl.value) return
@@ -140,6 +172,36 @@ function clampZ(z: number): number {
   return Math.max(0, Math.min(z, sliderMax.value))
 }
 
+/**
+ * 2026-06-22 round 9 follow-up — mouse-wheel scrolls through B-scans
+ * when the cursor is over the viewer. Matches Heidelberg HRA + most
+ * clinical OCT viewers; operators muscle-memory the same gesture
+ * from the device they came from. The @wheel.prevent on the
+ * container stops the gesture from also scrolling the page.
+ *
+ * Accumulator: trackpad gestures fire many small deltaY values per
+ * physical scroll; reducing every event to +1/-1 with a tiny
+ * dead-zone keeps the slice change predictable + matches mouse-wheel
+ * "one notch = one slice" feel without resorting to a real
+ * time-based throttle.
+ */
+let wheelAccum = 0
+const hasInteracted = ref(false)
+function onWheel(ev: WheelEvent): void {
+  if (status.value !== 'ready') return
+  wheelAccum += ev.deltaY
+  const threshold = 24 // px — calibrated for both notched mice (~100 per notch) and trackpads (~5-20 per tick)
+  if (wheelAccum >= threshold) {
+    wheelAccum = 0
+    hasInteracted.value = true
+    void setZ(props.modelValue + 1)
+  } else if (wheelAccum <= -threshold) {
+    wheelAccum = 0
+    hasInteracted.value = true
+    void setZ(props.modelValue - 1)
+  }
+}
+
 async function setZ(z: number) {
   const clamped = clampZ(z)
   if (clamped !== props.modelValue) emit('update:modelValue', clamped)
@@ -193,14 +255,42 @@ onBeforeUnmount(() => {
       </span>
     </header>
 
-    <div
-      ref="containerEl"
-      data-testid="bscan-viewer-canvas"
-      class="aspect-[4/3] w-full bg-black"
-      tabindex="0"
-      @keydown.left.prevent="setZ(modelValue - 1)"
-      @keydown.right.prevent="setZ(modelValue + 1)"
-    />
+    <!-- 2026-06-22 — wrap the canvas + the per-slice seg overlay so
+         the overlay can be absolutely positioned over the canvas
+         without competing with the cornerstone DOM. The overlay
+         <img> covers the same box as the canvas (object-fit:
+         contain matches the way cornerstone draws inside the
+         aspect-[4/3] container) so the per-A-scan biomarker mask
+         lands in-pixel. pointer-events:none so the canvas still
+         receives the keydown / wheel events. -->
+    <div class="relative aspect-[4/3] w-full bg-black">
+      <div
+        ref="containerEl"
+        data-testid="bscan-viewer-canvas"
+        class="absolute inset-0"
+        tabindex="0"
+        @keydown.left.prevent="setZ(modelValue - 1)"
+        @keydown.right.prevent="setZ(modelValue + 1)"
+        @wheel.prevent="onWheel"
+      />
+      <img
+        v-if="segOverlayUrl && status === 'ready'"
+        :src="segOverlayUrl"
+        :alt="t('retinal.bscanViewer.segOverlayAlt', { current: modelValue + 1, total: nBscans })"
+        class="absolute inset-0 w-full h-full pointer-events-none mix-blend-screen"
+        style="object-fit: contain;"
+        data-testid="bscan-viewer-seg-overlay"
+      />
+      <!-- Discoverability hint — auto-fades after the operator has
+           used the scroll/scrub once (the hint is only useful for the
+           first interaction; after that it's noise). -->
+      <div
+        v-if="status === 'ready' && !hasInteracted"
+        class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-slate-900/70 text-slate-200 text-[10px] uppercase tracking-wider pointer-events-none"
+      >
+        {{ t('retinal.bscanViewer.scrollHint') }}
+      </div>
+    </div>
 
     <div
       v-if="status === 'loading'"

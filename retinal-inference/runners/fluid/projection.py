@@ -86,6 +86,47 @@ def _write_rgba_png(rgba: Any, out_path: Path) -> None:
     out_path.write_bytes(signature + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b""))
 
 
+def _render_per_bscan_slice_pngs(seg: Any, out_dir: Path) -> int:
+    """Emit one RGBA PNG per B-scan slice with the per-pixel
+    segmentation mask coloured by biomarker.
+
+    ``seg`` shape is ``(n_bscans, rows, cols)`` with labels
+    1=IRF / 2=SRF / 3=PED. The output PNG is ``(rows, cols)`` —
+    same lateral × axial plane as the DICOM frame the cornerstone
+    viewer renders — so the SPA can absolutely-position the PNG on
+    top of the canvas without resampling.
+
+    Skips slices that have no positive voxels across all three
+    biomarkers (most casebooks have biomarkers on a small subset
+    of slices) so the artifact directory + the SPA's per-frame
+    fetch stays light. Returns the count of slices written for
+    logging.
+    """
+    import numpy as np
+
+    n_bscans = seg.shape[0]
+    written = 0
+    for z in range(n_bscans):
+        slice_seg = seg[z]
+        if not np.any(slice_seg):
+            continue
+        h, w = slice_seg.shape
+        rgba = np.zeros((h, w, 4), dtype=np.uint8)
+        for label, color in (
+            (1, _COLOR_IRF),
+            (2, _COLOR_SRF),
+            (3, _COLOR_PED),
+        ):
+            mask = slice_seg == label
+            rgba[mask, 0] = color[0]
+            rgba[mask, 1] = color[1]
+            rgba[mask, 2] = color[2]
+            rgba[mask, 3] = 160  # ~63% opacity — readable over the B-scan
+        _write_rgba_png(rgba, out_dir / f"seg_bscan_{z:04d}.png")
+        written += 1
+    return written
+
+
 def _render_single_biomarker_png(
     mask: Any, color: tuple[int, int, int], out_path: Path
 ) -> None:
@@ -156,6 +197,15 @@ def render_fluid_projection(seg: Any, out_dir: Path) -> tuple[str, dict[str, lis
     _render_single_biomarker_png(irf, _COLOR_IRF, out_dir / "projection_fluid_irf.png")
     _render_single_biomarker_png(srf, _COLOR_SRF, out_dir / "projection_fluid_srf.png")
     _render_single_biomarker_png(ped, _COLOR_PED, out_dir / "projection_fluid_ped.png")
+
+    # 2026-06-22 — per-B-scan overlay PNGs. Each slice gets one RGBA
+    # PNG whose pixels are coloured per-biomarker exactly where the
+    # segmenter detected presence. The SPA's BscanViewer absolutely-
+    # positions this PNG on top of the cornerstone canvas at the
+    # current frame, so the operator sees the segmentation on the
+    # B-scan it actually applies to. Slices without any positive
+    # voxels skip the write so the artifact list stays compact.
+    _render_per_bscan_slice_pngs(seg, out_dir)
 
     # Per-B-scan totals for the stripe renderer.
     per_bscan = {

@@ -2943,7 +2943,9 @@
       "header": "B-scan navigator",
       "position": "Slice {current} / {total}",
       "loading": "Loading viewer…",
-      "errorPrefix": "Could not load B-scan viewer:"
+      "errorPrefix": "Could not load B-scan viewer:",
+      "segOverlayAlt": "[NEEDS_REVIEW] Segmentation overlay for slice {current} of {total}",
+      "scrollHint": "[NEEDS_REVIEW] Scroll = change slice"
     },
     "trends": {
       "title": "[NEEDS_REVIEW] Biomarker trends",
