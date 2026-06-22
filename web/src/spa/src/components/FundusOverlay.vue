@@ -238,29 +238,6 @@ interface BscanLine {
   dominantValue: number
 }
 
-/**
- * 2026-06-19 — flatten the raw bscan positions into clean horizontal
- * lines that span the scan bbox exactly. The .e2e file carries the
- * actual (slightly tilted) B-scan endpoints, but operators report a
- * cleaner UI when each indicator runs perfectly horizontally + matches
- * the visible scan rectangle width. We keep each B-scan's actual y
- * midpoint so the vertical position still reflects where that slice
- * was acquired; only the small lateral tilt + endpoint drift is
- * removed.
- */
-function flattenToBboxRect(
-  polylines: GeometryJson['bscan_positions_fundus_px'],
-  bbox: { x: number; y: number; width: number; height: number },
-): GeometryJson['bscan_positions_fundus_px'] {
-  if (!bbox || bbox.width <= 0) return polylines
-  const xLeft = bbox.x
-  const xRight = bbox.x + bbox.width
-  return polylines.map((p) => {
-    const yMid = (p.y1 + p.y2) / 2
-    return { z: p.z, x1: xLeft, y1: yMid, x2: xRight, y2: yMid }
-  })
-}
-
 /* ------- Hover handling --------------------------------------------- */
 
 const internalHoverZ = ref<number | null>(null)
@@ -280,30 +257,38 @@ watch(
 
 /**
  * 2026-06-22 — current-B-scan position line tracking the BscanViewer's
- * slider via the {@code hoveredBscanZ} prop. Drawn directly from the
- * RAW geometry positions so every slice has a line — not filtered to
- * slices with biomarker presence. Clipped to {@code dim_z_bscans}
- * because Heidelberg multi-pass acquisitions can pack more entries
- * into {@code bscan_data} than the displayed volume actually has
- * slices; matching by z without that clip would route slider-z=N to
- * a polyline from a *different* scan pass when N collides.
+ * slider via the {@code hoveredBscanZ} prop.
+ *
+ * <p>Linear interpolation between the scan bbox's top edge (slider z=0)
+ * and its bottom edge (slider z=n_bscans-1). We deliberately do NOT
+ * use {@code geometry.bscan_positions_fundus_px} here even though the
+ * per-slice positions are nominally available: Heidelberg multi-pass
+ * acquisitions pack additional pass entries into oct-converter's
+ * bscan_data, which the preprocess sidecar emits without de-duplication.
+ * The resulting positions list has more entries than {@code dim_z_bscans}
+ * AND the entries are not ordered consistently with slice z, so picking
+ * the polyline by z routinely lands on a different scan's geometry.
+ *
+ * <p>The linear-interp approach assumes raster acquisition order
+ * (top→bottom of fundus) which is the Spectralis default. For non-raster
+ * scan patterns (star, radial) this would need per-slice geometry — but
+ * those patterns aren't in scope for the current pipeline.
  */
 const currentBscanLine = computed<BscanLine | null>(() => {
   if (internalHoverZ.value == null) return null
-  const raw = props.geometry.bscan_positions_fundus_px ?? []
-  const maxZ = props.geometry.bscan?.dim_z_bscans ?? Infinity
-  // Filter to in-range z, then flatten to bbox horizontally + use the
-  // y midpoint so the line reads as a clean horizontal stroke.
-  const inRange = raw.filter((p) => p.z >= 0 && p.z < maxZ)
-  const flat = flattenToBboxRect(inRange, scanBbox.value)
-  const match = flat.find((p) => p.z === internalHoverZ.value)
-  if (!match) return null
+  const bbox = scanBbox.value
+  if (!bbox || bbox.width <= 0 || bbox.height <= 0) return null
+  const nBscans = Number(props.geometry.bscan?.dim_z_bscans ?? 0)
+  if (nBscans <= 0) return null
+  const z = Math.max(0, Math.min(nBscans - 1, internalHoverZ.value))
+  const frac = nBscans <= 1 ? 0 : z / (nBscans - 1)
+  const y = bbox.y + frac * bbox.height
   return {
-    z: match.z,
-    x1: match.x1,
-    y1: match.y1,
-    x2: match.x2,
-    y2: match.y2,
+    z,
+    x1: bbox.x,
+    y1: y,
+    x2: bbox.x + bbox.width,
+    y2: y,
     stroke: '#7fd0ff',
     opacity: 0.95,
     dominantLabel: '',
