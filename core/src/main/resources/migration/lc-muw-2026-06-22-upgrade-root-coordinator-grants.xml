@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <changeSet id="2026-06-22-upgrade-root-coordinator-grants"
+               author="muw-ophthalmology">
+        <preConditions onFail="MARK_RAN">
+            <!-- Only fire when at least one such row exists. Keeps the
+                 changeset idempotent across re-runs + safe to ship on
+                 fresh databases that never had the pre-fix
+                 StudiesApiController.create binding root as
+                 COORDINATOR. -->
+            <sqlCheck expectedResult="1">
+                SELECT CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END
+                  FROM study_user_role
+                 WHERE user_name = 'root'
+                   AND role_name = 'coordinator'
+                   AND status_id = 1;
+            </sqlCheck>
+        </preConditions>
+        <comment>
+            2026-06-22 user-feedback round 8 follow-up. The
+            create-study endpoint used to bind every creator (including
+            sysadmins) as Role.COORDINATOR. The 2026-06-22 fix flipped
+            sysadmin creators to Role.ADMIN going forward, but
+            study_user_role rows persisted from earlier creates
+            (e.g. a GA Studie a sysadmin created during round-2 testing)
+            still showed the operator as "CRC" in the study picker —
+            mismatching the "Administrator" pill they see on the
+            seeded Default Study.
+
+            Flip any AVAILABLE coordinator-binding root holds on a
+            user-created study to admin so the picker presents a
+            consistent role label. Defence in depth: only the root
+            user is touched; other CRC bindings (physician /
+            datamanager / monitor demo users) keep their roles. The
+            preCondition gates on at least one row existing so the
+            changeset is a no-op on fresh databases.
+        </comment>
+
+        <sql>
+            UPDATE study_user_role
+               SET role_name = 'admin',
+                   date_updated = NOW(),
+                   update_id = (SELECT user_id FROM user_account WHERE user_name = 'root')
+             WHERE user_name = 'root'
+               AND role_name = 'coordinator'
+               AND status_id = 1;
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>
