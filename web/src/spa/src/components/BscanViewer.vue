@@ -94,25 +94,40 @@ const { envelope: segEnvelope } = useSegmentationEnvelope(jobIdRef)
 const overlayCanvasEl = ref<HTMLCanvasElement | null>(null)
 
 /**
- * 2026-06-22 — the inner aspect-preserving wrapper sizes itself to
- * the underlying B-scan's true cols/rows. For fluid we have the
- * dims directly on the envelope (kind=volume, shape=(z, rows, cols)).
- * For binary_2d / surface_y the envelope carries only (z, cols)
- * because the layer / RPEL CSVs don't include the axial row count;
- * fall back to the Heidelberg default (~2:1 cols:rows) so the
- * letterboxing roughly matches the cornerstone canvas. The
- * cornerstone-side aspect is the ground truth — once we have a
- * dim_y_rows on the geometry endpoint, thread it in.
+ * 2026-06-22 round 3 — size the inner wrapper at the bscan's
+ * *physical* aspect (mm-correct), not its pixel aspect. Cornerstone3D
+ * honours DICOM ``PixelSpacing`` and renders the image at physical
+ * proportions (Heidelberg axial 0.00387 mm/px vs lateral 0.00566
+ * mm/px → physical aspect ~3.0, vs pixel aspect ~2.07). If the inner
+ * div is at pixel aspect, cornerstone letterboxes the bscan inside
+ * the div while the overlay canvas — which is CSS-stretched to the
+ * full div — fills it uniformly. Result: the overlay drifts off the
+ * bscan in the cornerstone view even when the seg data is correctly
+ * placed in the underlying volume (the OS-scan misalignment we
+ * observed visually was entirely this aspect mismatch).
+ *
+ * We therefore prefer the physical aspect derived from cornerstone's
+ * imagePlaneModule (``pixelSpacing``) + imagePixelModule (rows/cols)
+ * metadata. The pixel-derived fallback is kept for the brief window
+ * between cornerstone init and the first metadata read, and for
+ * inputs without ``PixelSpacing``.
  */
+const bscanImageDims = ref<{ rows: number; cols: number } | null>(null)
+const bscanPhysicalAspect = ref<string | null>(null)
 const bscanAspect = computed<string>(() => {
+  if (bscanPhysicalAspect.value) return bscanPhysicalAspect.value
+  const dims = bscanImageDims.value
+  if (dims && dims.rows > 0 && dims.cols > 0) {
+    return `${dims.cols} / ${dims.rows}`
+  }
   const env = segEnvelope.value
   if (env?.kind === 'volume' && env.shape.length >= 3) {
     const rows = env.shape[1] ?? 0
     const cols = env.shape[2] ?? 0
     if (rows > 0 && cols > 0) return `${cols} / ${rows}`
   }
-  // Default Heidelberg Spectralis ratio (1024 wide × 496 tall) — used
-  // until a stricter geometry source threads through.
+  // Default Heidelberg Spectralis pixel ratio (1024 wide × 496 tall) —
+  // used only during cornerstone init before the first metadata read.
   return '1024 / 496'
 })
 
@@ -355,6 +370,42 @@ async function initViewer(): Promise<void> {
     await vp.setStack(imageIds)
     await vp.setImageIdIndex(clampZ(props.modelValue))
     vp.render()
+
+    // 2026-06-22 — read the displayed image's true (rows, cols) +
+    // PixelSpacing so the aspect-preserving wrapper sizes to the
+    // bscan's PHYSICAL extent (mm-correct). The imagePixelModule +
+    // imagePlaneModule metadata is populated by the DICOM image
+    // loader as part of stack init.
+    try {
+      type MetaDataAccess = {
+        get: (m: string, id: string) =>
+          | { rows?: number; columns?: number; pixelSpacing?: [number, number] | number[] }
+          | undefined
+      }
+      const md = (cornerstoneCore as unknown as { metaData: MetaDataAccess }).metaData
+      const firstImageId = imageIds[0]
+      const pix = firstImageId ? md?.get('imagePixelModule', firstImageId) : undefined
+      const plane = firstImageId ? md?.get('imagePlaneModule', firstImageId) : undefined
+      const rows = Number(pix?.rows ?? 0)
+      const cols = Number(pix?.columns ?? 0)
+      if (rows > 0 && cols > 0) {
+        bscanImageDims.value = { rows, cols }
+      }
+      // PixelSpacing is [row spacing (axial mm/px), col spacing (lateral mm/px)] per
+      // DICOM PS3.3 §C.7.6.2 — same convention our preprocess sidecar writes in
+      // e2e_parser.write_bscan_dcm (PixelSpacing = [axial, lateral]).
+      const ps = plane?.pixelSpacing
+      const axialMm = Array.isArray(ps) ? Number(ps[0] ?? 0) : 0
+      const lateralMm = Array.isArray(ps) ? Number(ps[1] ?? 0) : 0
+      if (rows > 0 && cols > 0 && axialMm > 0 && lateralMm > 0) {
+        const physWidth = cols * lateralMm
+        const physHeight = rows * axialMm
+        bscanPhysicalAspect.value = `${physWidth} / ${physHeight}`
+      }
+    } catch {
+      /* aspect falls back to pixel dims, then seg dims, then Heidelberg default */
+    }
+
     status.value = 'ready'
 
     // 2026-06-22 — pre-warm caches so scroll-through is smooth.
