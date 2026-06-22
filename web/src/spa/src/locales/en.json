@@ -2904,7 +2904,10 @@
       "colPed": "[NEEDS_REVIEW] PED mm³",
       "colTotal": "[NEEDS_REVIEW] Total mm³",
       "colGaArea": "[NEEDS_REVIEW] GA area mm²",
-      "ringLabel": "[NEEDS_REVIEW] {mm} mm"
+      "ringLabel": "[NEEDS_REVIEW] {mm} mm",
+      "selectionHint": "[NEEDS_REVIEW] Click regions on the fundus to sum biomarkers",
+      "selectionHeader": "[NEEDS_REVIEW] Selection",
+      "selectionClear": "[NEEDS_REVIEW] Clear selection"
     },
     "downloads": {
       "header": "[NEEDS_REVIEW] Downloads",
@@ -2951,7 +2954,13 @@
     },
     "fundusOverlay": {
       "aria": "[NEEDS_REVIEW] Fundus image with retinal overlays, {laterality}",
-      "foveaTooltip": "[NEEDS_REVIEW] Fovea estimate ({source})"
+      "foveaTooltip": "[NEEDS_REVIEW] Fovea estimate ({source})",
+      "region": {
+        "center": "[NEEDS_REVIEW] Central 1 mm",
+        "ring_1_3": "[NEEDS_REVIEW] Ring 1–3 mm",
+        "ring_3_6": "[NEEDS_REVIEW] Ring 3–6 mm",
+        "corners": "[NEEDS_REVIEW] Outside 6 mm (corners)"
+      }
     },
     "biomarkerToggle": {
       "tooltip": "Toggle {name} layer"

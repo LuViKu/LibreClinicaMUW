@@ -25,7 +25,7 @@ import { RouterLink, useRoute } from 'vue-router'
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
-import FundusOverlay from '@/components/FundusOverlay.vue'
+import FundusOverlay, { type EtdrsRegion } from '@/components/FundusOverlay.vue'
 import RetinalArtifactList from '@/components/RetinalArtifactList.vue'
 import RetinalVisitComparison from '@/components/RetinalVisitComparison.vue'
 import ArmBadge from '@/components/ArmBadge.vue'
@@ -106,6 +106,15 @@ const downloadableArtifacts = computed<string[]>(() => {
 })
 
 const hoveredBscanZ = ref<number | null>(null)
+
+/**
+ * 2026-06-22 — ETDRS region multi-select. The operator clicks one or
+ * more rings/discs on the en-face fundus to scope the biomarker
+ * quantification. Owned at the view level so the selection persists
+ * across slice scrubbing, SSE-driven re-fetches, and FundusOverlay
+ * remounts. Empty set → show the standard 1mm / 3mm / 6mm rows.
+ */
+const selectedEtdrsRegions = ref<EtdrsRegion[]>([])
 
 /** Always a defined integer for the BscanViewer's v-model — falls
  *  back to the middle slice when no hover has set hoveredBscanZ. */
@@ -310,6 +319,95 @@ const overlayTask = computed<FundusOverlayTask>(() => {
   if (t === 'fluid' || t === 'onl' || t === 'pr' || t === 'ga') return t
   return 'fluid'
 })
+
+/* -------- ETDRS region biomarker sums (2026-06-22) ----------------- */
+
+/**
+ * Biomarker contributions per disjoint ETDRS region.
+ *
+ * <p>The runner reports CUMULATIVE central discs:
+ * {@code central_1mm}, {@code central_3mm}, {@code central_6mm}.
+ * We derive the disjoint annular rings + the bbox-corner remainder
+ * by subtraction so the operator can multi-select non-overlapping
+ * areas and we can sum them without double-counting.
+ *
+ * <ul>
+ *   <li>center   = central_1mm</li>
+ *   <li>ring_1_3 = central_3mm − central_1mm</li>
+ *   <li>ring_3_6 = central_6mm − central_3mm</li>
+ *   <li>corners  = biomarkers (full volume) − central_6mm</li>
+ * </ul>
+ *
+ * Returns null when the underlying ETDRS / biomarkers payload is
+ * missing — the template falls back to the standard ETDRS rows.
+ */
+interface RegionContribution {
+  irf: number
+  srf: number
+  ped: number
+  total: number
+}
+type RegionBreakdown = Record<EtdrsRegion, RegionContribution>
+
+function ringDiff(
+  a: { irf?: number; srf?: number; ped?: number; total?: number } | undefined,
+  b: { irf?: number; srf?: number; ped?: number; total?: number } | undefined,
+): RegionContribution {
+  return {
+    irf: Math.max(0, (a?.irf ?? 0) - (b?.irf ?? 0)),
+    srf: Math.max(0, (a?.srf ?? 0) - (b?.srf ?? 0)),
+    ped: Math.max(0, (a?.ped ?? 0) - (b?.ped ?? 0)),
+    total: Math.max(0, (a?.total ?? 0) - (b?.total ?? 0)),
+  }
+}
+
+const regionBreakdown = computed<RegionBreakdown | null>(() => {
+  const fp = fluidPayload.value
+  if (!fp || !fp.etdrs_mm3) return null
+  const e = fp.etdrs_mm3
+  const center: RegionContribution = {
+    irf: e.central_1mm?.irf ?? 0,
+    srf: e.central_1mm?.srf ?? 0,
+    ped: e.central_1mm?.ped ?? 0,
+    total: e.central_1mm?.total ?? 0,
+  }
+  const ring_1_3 = ringDiff(e.central_3mm, e.central_1mm)
+  const ring_3_6 = ringDiff(e.central_6mm, e.central_3mm)
+  const fullVolume = {
+    irf: fp.biomarkers?.irf_mm3 ?? 0,
+    srf: fp.biomarkers?.srf_mm3 ?? 0,
+    ped: fp.biomarkers?.ped_mm3 ?? 0,
+    total: fp.biomarkers?.total_mm3 ?? 0,
+  }
+  const corners = ringDiff(fullVolume, e.central_6mm)
+  return { center, ring_1_3, ring_3_6, corners }
+})
+
+/**
+ * Sum of biomarker contributions across all currently-selected regions.
+ * Empty when no region is selected (the template hides the summary row
+ * in that case).
+ */
+const selectedSum = computed<RegionContribution | null>(() => {
+  if (selectedEtdrsRegions.value.length === 0) return null
+  const bd = regionBreakdown.value
+  if (!bd) return null
+  const acc: RegionContribution = { irf: 0, srf: 0, ped: 0, total: 0 }
+  for (const id of selectedEtdrsRegions.value) {
+    const r = bd[id]
+    if (!r) continue
+    acc.irf += r.irf
+    acc.srf += r.srf
+    acc.ped += r.ped
+    acc.total += r.total
+  }
+  return acc
+})
+
+/** Localised label for an ETDRS region — used in the selection chip row. */
+function regionLabel(id: EtdrsRegion): string {
+  return t(`retinal.fundusOverlay.region.${id}`)
+}
 
 /* -------- Header laterality long-form -------------------------------- */
 /**
@@ -666,7 +764,9 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                     :hovered-bscan-z="currentBscanZ"
                     :job-id="job.jobId"
                     :artifact-names="armGate.hideAi.value ? [] : job.artifactNames"
+                    :selected-regions="selectedEtdrsRegions"
                     @hover-bscan="onHoverBscan"
+                    @update:selected-regions="(r: EtdrsRegion[]) => selectedEtdrsRegions = r"
                   />
                 </div>
               </div>
@@ -699,10 +799,55 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
               class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] overflow-clip"
               data-testid="retinal-view-etdrs"
             >
-              <div class="px-5 pt-4 pb-3 border-b border-slate-100">
+              <div class="px-5 pt-4 pb-3 border-b border-slate-100 flex items-center justify-between gap-4">
                 <h3 class="text-[12px] font-semibold uppercase tracking-[0.1em] text-muw-blue">
                   {{ t('retinal.etdrs.header') }}
                 </h3>
+                <span class="text-[11px] text-slate-400 hidden md:inline">
+                  {{ t('retinal.etdrs.selectionHint') }}
+                </span>
+              </div>
+
+              <!-- 2026-06-22 — selection summary. Shows the chips for
+                   the currently-selected ETDRS regions + a single row
+                   summing their biomarker contributions. Hidden when
+                   nothing is selected; the regular ring rows below
+                   remain the reference table. -->
+              <div
+                v-if="selectedSum"
+                class="px-5 py-3 bg-muw-sky-50/60 border-b border-slate-100 flex items-start gap-4 flex-wrap"
+                data-testid="retinal-view-etdrs-selection"
+              >
+                <div class="flex items-center gap-2 flex-wrap min-w-0">
+                  <span class="text-[11px] uppercase tracking-[0.08em] font-semibold text-muw-blue">
+                    {{ t('retinal.etdrs.selectionHeader') }}
+                  </span>
+                  <button
+                    v-for="r in selectedEtdrsRegions"
+                    :key="`chip-${r}`"
+                    type="button"
+                    class="inline-flex items-center gap-1.5 rounded-full bg-white border border-muw-sky-200 text-muw-sky-700 text-[11px] font-semibold px-2.5 py-0.5 hover:bg-muw-sky-50"
+                    :data-testid="`retinal-view-etdrs-chip-${r}`"
+                    @click="selectedEtdrsRegions = selectedEtdrsRegions.filter((x) => x !== r)"
+                  >
+                    {{ regionLabel(r) }}
+                    <span aria-hidden="true" class="text-slate-400">×</span>
+                  </button>
+                  <button
+                    type="button"
+                    class="text-[11px] text-slate-500 hover:text-muw-blue underline ml-1"
+                    data-testid="retinal-view-etdrs-clear"
+                    @click="selectedEtdrsRegions = []"
+                  >
+                    {{ t('retinal.etdrs.selectionClear') }}
+                  </button>
+                </div>
+                <div class="ml-auto flex items-center gap-4 text-[12.5px] font-mono tabular-nums text-slate-700">
+                  <span><span class="text-cyan-700 font-semibold">IRF</span> {{ formatNumber(selectedSum.irf) }}</span>
+                  <span><span class="text-amber-700 font-semibold">SRF</span> {{ formatNumber(selectedSum.srf) }}</span>
+                  <span><span class="text-fuchsia-700 font-semibold">PED</span> {{ formatNumber(selectedSum.ped) }}</span>
+                  <span><span class="text-slate-500 font-semibold">∑</span> {{ formatNumber(selectedSum.total) }} mm³</span>
+                </div>
               </div>
               <DenseTable :bordered="false">
                 <template #header>

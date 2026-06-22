@@ -2916,7 +2916,10 @@
       "colPed": "PED mm³",
       "colTotal": "Gesamt mm³",
       "colGaArea": "GA-Fläche mm²",
-      "ringLabel": "{mm} mm"
+      "ringLabel": "{mm} mm",
+      "selectionHint": "Bereiche im Fundus zum Aufsummieren anklicken",
+      "selectionHeader": "Auswahl",
+      "selectionClear": "Auswahl leeren"
     },
     "downloads": {
       "header": "Downloads",
@@ -2963,7 +2966,13 @@
     },
     "fundusOverlay": {
       "aria": "Fundus image with retinal overlays, {laterality}",
-      "foveaTooltip": "Fovea estimate ({source})"
+      "foveaTooltip": "Fovea estimate ({source})",
+      "region": {
+        "center": "Zentral 1 mm",
+        "ring_1_3": "Ring 1–3 mm",
+        "ring_3_6": "Ring 3–6 mm",
+        "corners": "Außerhalb 6 mm (Ecken)"
+      }
     },
     "biomarkerToggle": {
       "tooltip": "{name}-Schicht ein-/ausblenden"

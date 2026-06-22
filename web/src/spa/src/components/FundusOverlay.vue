@@ -38,6 +38,23 @@ const { t } = useI18n()
 
 export type FundusOverlayTask = 'fluid' | 'onl' | 'pr' | 'ga'
 
+/**
+ * 2026-06-22 — interactive ETDRS-region IDs the operator can
+ * multi-select to scope the biomarker quantification.
+ *
+ * <ul>
+ *   <li>{@code center}    — central 1 mm disc.</li>
+ *   <li>{@code ring_1_3}  — annular ring between 1 mm and 3 mm.</li>
+ *   <li>{@code ring_3_6}  — annular ring between 3 mm and 6 mm,
+ *       visually clipped to the scan bbox since the area outside is
+ *       not quantified.</li>
+ *   <li>{@code corners}   — area inside the scan bbox and outside the
+ *       6 mm circle (all four bbox corners; they always toggle as
+ *       one logical region).</li>
+ * </ul>
+ */
+export type EtdrsRegion = 'center' | 'ring_1_3' | 'ring_3_6' | 'corners'
+
 interface Props {
   /** Absolute URL of the {@code fundus.png} companion. */
   fundusUrl: string
@@ -64,19 +81,25 @@ interface Props {
    * {@code <image>} stretched over {@code scan_bbox_fundus_px}.
    */
   artifactNames?: string[]
+  /**
+   * 2026-06-22 — currently-selected ETDRS regions for biomarker
+   * quantification. Owned by the parent (the metrics view) so the
+   * selection persists across slice scrubbing + survives a fundus
+   * remount. Default: empty (no selection).
+   */
+  selectedRegions?: EtdrsRegion[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
   hoveredBscanZ: null,
   jobId: null,
   artifactNames: () => [],
+  selectedRegions: () => [],
 })
 
-// 2026-06-22 — emit removed alongside the per-B-scan stripe layer.
-// FundusOverlay no longer originates hover events; the per-B-scan
-// trace chart owns that signal now via the hoveredBscanZ prop.
-defineEmits<{
+const emit = defineEmits<{
   (e: 'hoverBscan', z: number | null): void
+  (e: 'update:selectedRegions', regions: EtdrsRegion[]): void
 }>()
 
 /* ------- Constants (kept colocated so tests can lift them) ----------- */
@@ -311,6 +334,69 @@ const foveaTooltip = computed(() => {
 function ringLabel(diameterMm: number): string {
   return t('retinal.etdrs.ringLabel', { mm: diameterMm })
 }
+
+/* ════════════════════════════════════════════════════════════════════
+ * Interactive ETDRS region selection (2026-06-22).
+ * ════════════════════════════════════════════════════════════════════ */
+
+/** Lookup table from `mm` → fundus-pixel radius. */
+const r1Px = computed(() => mmToPx(0.5))
+const r3Px = computed(() => mmToPx(1.5))
+const r6Px = computed(() => mmToPx(3.0))
+
+/** Unique ids for the SVG `<clipPath>` / `<mask>` defs — namespaced
+ *  by jobId so two FundusOverlays on the same DOM can't collide. */
+const defsId = computed(() => `fundus-${props.jobId ?? 'novj'}`)
+
+/**
+ * Annulus SVG path between two concentric circles centred at (cx, cy).
+ * Drawn with two full circles in the SAME winding direction; the
+ * caller renders this with {@code fill-rule="evenodd"} so the inner
+ * disc is punched out.
+ */
+function annulusPath(cx: number, cy: number, rOuter: number, rInner: number): string {
+  return [
+    `M ${cx},${cy - rOuter}`,
+    `A ${rOuter},${rOuter} 0 1,0 ${cx},${cy + rOuter}`,
+    `A ${rOuter},${rOuter} 0 1,0 ${cx},${cy - rOuter} Z`,
+    `M ${cx},${cy - rInner}`,
+    `A ${rInner},${rInner} 0 1,0 ${cx},${cy + rInner}`,
+    `A ${rInner},${rInner} 0 1,0 ${cx},${cy - rInner} Z`,
+  ].join(' ')
+}
+
+const ring13Path = computed(() => annulusPath(fovea.value.x, fovea.value.y, r3Px.value, r1Px.value))
+const ring36Path = computed(() => annulusPath(fovea.value.x, fovea.value.y, r6Px.value, r3Px.value))
+
+/* ── Selection + hover state ─────────────────────────────────────── */
+
+const hoveredRegion = ref<EtdrsRegion | null>(null)
+const selectedSet = computed<Set<EtdrsRegion>>(() => new Set(props.selectedRegions))
+
+function isSelected(id: EtdrsRegion): boolean {
+  return selectedSet.value.has(id)
+}
+
+function toggleRegion(id: EtdrsRegion): void {
+  const next = new Set(selectedSet.value)
+  if (next.has(id)) next.delete(id)
+  else next.add(id)
+  emit('update:selectedRegions', Array.from(next))
+}
+
+/**
+ * Region fill driven by selection + hover. Selected regions get a
+ * persistent translucent fill in the MUW sky palette; hovered (but
+ * not yet selected) regions get a fainter preview tint. Unselected +
+ * un-hovered regions stay near-transparent — the underlying fundus
+ * + projection PNG read through cleanly.
+ */
+function regionFill(id: EtdrsRegion): string {
+  if (isSelected(id)) return 'rgba(95, 180, 229, 0.32)' // muw-sky-500 @ 32%
+  if (hoveredRegion.value === id) return 'rgba(95, 180, 229, 0.15)' // hover preview
+  return 'rgba(255, 255, 255, 0.001)' // near-zero but non-zero so hit-tests fire
+}
+
 </script>
 
 <template>
@@ -428,8 +514,110 @@ function ringLabel(diameterMm: number): string {
         vector-effect="non-scaling-stroke"
       />
 
-      <!-- 3. ETDRS rings -->
+      <!-- 3. Interactive ETDRS regions (2026-06-22).
+           Four mutually-disjoint regions cover the entire scan bbox.
+           Each one is clickable (toggle) + hover-previews. The
+           parent (RetinalMetricsView) holds the selection set, sums
+           biomarker contributions per region, and renders the total
+           in the ETDRS card. -->
+      <defs>
+        <!-- Clip the 3-6 mm ring to the scan bbox: area outside the bbox is
+             not quantified by the model, so the operator can't select it
+             through this region. -->
+        <clipPath :id="`${defsId}-bboxClip`">
+          <rect
+            :x="scanBbox.x"
+            :y="scanBbox.y"
+            :width="scanBbox.width"
+            :height="scanBbox.height"
+          />
+        </clipPath>
+        <!-- Mask for the "corners" region: white inside the bbox, black
+             inside the 6 mm disc → the disc punches a hole out of the
+             bbox rectangle and only the four corners remain visible /
+             hittable. -->
+        <mask :id="`${defsId}-cornersMask`">
+          <rect
+            :x="scanBbox.x"
+            :y="scanBbox.y"
+            :width="scanBbox.width"
+            :height="scanBbox.height"
+            fill="white"
+          />
+          <circle :cx="fovea.x" :cy="fovea.y" :r="r6Px" fill="black" />
+        </mask>
+      </defs>
+
       <g data-testid="etdrs-rings">
+        <!-- Region: corners (rendered FIRST so dashed circles draw on top) -->
+        <rect
+          data-testid="etdrs-region-corners"
+          :x="scanBbox.x"
+          :y="scanBbox.y"
+          :width="scanBbox.width"
+          :height="scanBbox.height"
+          :mask="`url(#${defsId}-cornersMask)`"
+          :fill="regionFill('corners')"
+          stroke="none"
+          style="cursor: pointer"
+          @mouseenter="hoveredRegion = 'corners'"
+          @mouseleave="hoveredRegion = null"
+          @click="toggleRegion('corners')"
+        >
+          <title>{{ t('retinal.fundusOverlay.region.corners') }}</title>
+        </rect>
+
+        <!-- Region: ring 3-6 mm (clipped to bbox) -->
+        <g :clip-path="`url(#${defsId}-bboxClip)`">
+          <path
+            data-testid="etdrs-region-ring-3-6"
+            :d="ring36Path"
+            fill-rule="evenodd"
+            :fill="regionFill('ring_3_6')"
+            stroke="none"
+            style="cursor: pointer"
+            @mouseenter="hoveredRegion = 'ring_3_6'"
+            @mouseleave="hoveredRegion = null"
+            @click="toggleRegion('ring_3_6')"
+          >
+            <title>{{ t('retinal.fundusOverlay.region.ring_3_6') }}</title>
+          </path>
+        </g>
+
+        <!-- Region: ring 1-3 mm -->
+        <path
+          data-testid="etdrs-region-ring-1-3"
+          :d="ring13Path"
+          fill-rule="evenodd"
+          :fill="regionFill('ring_1_3')"
+          stroke="none"
+          style="cursor: pointer"
+          @mouseenter="hoveredRegion = 'ring_1_3'"
+          @mouseleave="hoveredRegion = null"
+          @click="toggleRegion('ring_1_3')"
+        >
+          <title>{{ t('retinal.fundusOverlay.region.ring_1_3') }}</title>
+        </path>
+
+        <!-- Region: center 1 mm disc -->
+        <circle
+          data-testid="etdrs-region-center"
+          :cx="fovea.x"
+          :cy="fovea.y"
+          :r="r1Px"
+          :fill="regionFill('center')"
+          stroke="none"
+          style="cursor: pointer"
+          @mouseenter="hoveredRegion = 'center'"
+          @mouseleave="hoveredRegion = null"
+          @click="toggleRegion('center')"
+        >
+          <title>{{ t('retinal.fundusOverlay.region.center') }}</title>
+        </circle>
+
+        <!-- Dashed reference circles, painted on top of the hit-test
+             layer so they read as clear visual anchors. Stroke opacity
+             dims for non-active regions to reduce clutter. -->
         <template v-for="ring in etdrsRadiiPx" :key="`ring-${ring.mm}`">
           <circle
             :cx="fovea.x"
@@ -440,6 +628,8 @@ function ringLabel(diameterMm: number): string {
             stroke-dasharray="4 4"
             fill="none"
             vector-effect="non-scaling-stroke"
+            pointer-events="none"
+            opacity="0.85"
           />
           <text
             :x="fovea.x + ring.px + 4"
@@ -447,6 +637,7 @@ function ringLabel(diameterMm: number): string {
             :fill="ETDRS_STROKE"
             font-size="11"
             dominant-baseline="middle"
+            pointer-events="none"
             class="select-none"
           >{{ ringLabel(ring.mm) }}</text>
         </template>
