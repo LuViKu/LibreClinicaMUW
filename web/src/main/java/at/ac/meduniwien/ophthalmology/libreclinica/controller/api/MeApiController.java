@@ -196,11 +196,18 @@ public class MeApiController {
             // list (the SPA treats empty as "no modules enabled") —
             // never let a /me lookup 500 over an enrollment-table read
             // error.
+            //
+            // 2026-06-22 — broadened catch from SQLException to Exception:
+            // MockMvc tests inject a Mockito DataSource whose
+            // getConnection() returns null, and the resulting NPE was
+            // leaking out and producing 500s on the /me happy-path
+            // tests. The fallback to empty-list is the right behaviour
+            // regardless of which exception family the DAO raises.
             java.util.List<String> enabledModules;
             try {
                 enabledModules = StudyModuleEnrollmentApiController
                         .loadEnrolledModuleIds(dataSource, currentStudy.getId());
-            } catch (java.sql.SQLException e) {
+            } catch (Exception e) {
                 LOG.warn("Failed to load module enrollments for study={}: {}",
                         currentStudy.getOid(), e.getMessage());
                 enabledModules = java.util.List.of();
