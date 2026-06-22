@@ -2853,7 +2853,13 @@
       "title": "Netzhaut-Auswertung",
       "modelLabel": "Modell:",
       "runLabel": "Lauf:",
-      "confidenceLabel": "Konfidenz:"
+      "confidenceLabel": "Konfidenz:",
+      "downloadAll": "Alle herunterladen",
+      "lateralityLong": {
+        "OS": "OS · linkes Auge",
+        "OD": "OD · rechtes Auge",
+        "OU": "OU · beide Augen"
+      }
     },
     "live": {
       "indicator": "Live-Aktualisierung"
@@ -2892,7 +2898,12 @@
       "gaArea": "GA-Fläche",
       "onlThickness": "ONL-Dicke",
       "prThickness": "PR-Dicke",
-      "validAscans": "{valid} / {total} A-Scans gültig"
+      "validAscans": "{valid} / {total} A-Scans gültig",
+      "subtitle": {
+        "notDetected": "nicht detektiert",
+        "affected": "{count} von {total} B-Scans betroffen",
+        "totalLoad": "Fluid-Last gesamt"
+      }
     },
     "etdrs": {
       "header": "ETDRS-Teilsummen",
@@ -2910,6 +2921,10 @@
       "sectionPerScan": "Pro Scan",
       "sectionSegmentation": "Segmentierung",
       "action": "Herunterladen"
+    },
+    "fundus": {
+      "header": "En-face · ETDRS-Lokalisation",
+      "bscanPosition": "B-Scan-Position"
     },
     "jsonTree": {
       "rawPayloadHeader": "Rohe Ausgabe-Daten"
@@ -2966,7 +2981,9 @@
       "loading": "Viewer wird geladen…",
       "errorPrefix": "B-Scan-Viewer konnte nicht geladen werden:",
       "segOverlayAlt": "Segmentierungs-Overlay für Schnitt {current} von {total}",
-      "scrollHint": "Scrollen = Slice wechseln"
+      "scrollHint": "Scrollen = Slice wechseln",
+      "previous": "Vorheriger Schnitt",
+      "next": "Nächster Schnitt"
     },
     "trends": {
       "title": "Biomarker-Verlauf",

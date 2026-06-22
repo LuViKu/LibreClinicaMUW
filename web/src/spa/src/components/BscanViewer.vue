@@ -643,15 +643,36 @@ onBeforeUnmount(() => {
 <template>
   <section
     data-testid="bscan-viewer"
-    class="bg-slate-900 rounded-muw overflow-clip border border-slate-200"
+    class="bg-slate-900 rounded-2xl overflow-clip border border-slate-800"
   >
-    <header class="px-3 py-1.5 flex items-baseline justify-between bg-slate-800 text-slate-200">
-      <h3 class="text-xs font-semibold uppercase tracking-wider">
+    <header class="px-4 py-2.5 flex items-center justify-between gap-3 bg-slate-900 border-b border-white/10 text-white/80">
+      <h3 class="text-[11px] font-semibold uppercase tracking-[0.12em]">
         {{ t('retinal.bscanViewer.header') }}
       </h3>
-      <span class="text-[11px] text-slate-400 tabular-nums">
-        {{ t('retinal.bscanViewer.position', { current: modelValue + 1, total: nBscans }) }}
-      </span>
+      <div class="flex items-center gap-4">
+        <!-- 2026-06-22 — biomarker legend. Shown only when the
+             segmentation envelope is a volume kind (fluid), since
+             that's the only task that paints multi-label per-A-scan
+             colours on the overlay. -->
+        <div
+          v-if="segEnvelope?.kind === 'volume'"
+          class="hidden sm:flex items-center gap-3 text-[11px]"
+          data-testid="bscan-viewer-legend"
+        >
+          <span class="inline-flex items-center gap-1.5 text-white/70">
+            <span class="w-2.5 h-2.5 rounded-[3px] bg-cyan-400" />IRF
+          </span>
+          <span class="inline-flex items-center gap-1.5 text-white/70">
+            <span class="w-2.5 h-2.5 rounded-[3px] bg-amber-400" />SRF
+          </span>
+          <span class="inline-flex items-center gap-1.5 text-white/70">
+            <span class="w-2.5 h-2.5 rounded-[3px] bg-fuchsia-500" />PED
+          </span>
+        </div>
+        <span class="text-[11px] text-white/60 tabular-nums font-mono">
+          {{ t('retinal.bscanViewer.position', { current: modelValue + 1, total: nBscans }) }}
+        </span>
+      </div>
     </header>
 
     <!-- 2026-06-22 round 4 — outer 4:3 box keeps the viewer's footprint
@@ -704,31 +725,33 @@ onBeforeUnmount(() => {
       {{ t('retinal.bscanViewer.errorPrefix') }} {{ errorMessage }}
     </div>
 
-    <div class="px-3 py-2 flex items-center gap-2 bg-slate-800">
+    <div class="px-4 py-3 flex items-center gap-3 bg-slate-900 border-t border-white/10">
       <button
         type="button"
-        class="text-slate-300 hover:text-white px-2 py-0.5 text-xs"
+        class="shrink-0 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 text-white inline-flex items-center justify-center transition"
         :disabled="modelValue <= 0"
+        :aria-label="t('retinal.bscanViewer.previous', 'Previous slice')"
         @click="setZ(modelValue - 1)"
       >
-        ←
+        ‹
       </button>
       <input
         type="range"
         min="0"
         :max="sliderMax"
         :value="modelValue"
-        class="flex-1"
+        class="flex-1 accent-muw-sky"
         data-testid="bscan-viewer-slider"
         @input="(e) => setZ(Number((e.target as HTMLInputElement).value))"
       />
       <button
         type="button"
-        class="text-slate-300 hover:text-white px-2 py-0.5 text-xs"
+        class="shrink-0 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 text-white inline-flex items-center justify-center transition"
         :disabled="modelValue >= sliderMax"
+        :aria-label="t('retinal.bscanViewer.next', 'Next slice')"
         @click="setZ(modelValue + 1)"
       >
-        →
+        ›
       </button>
     </div>
   </section>

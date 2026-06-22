@@ -26,7 +26,6 @@ import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
 import FundusOverlay from '@/components/FundusOverlay.vue'
-import RetinalKpiTile from '@/components/RetinalKpiTile.vue'
 import RetinalArtifactList from '@/components/RetinalArtifactList.vue'
 import RetinalVisitComparison from '@/components/RetinalVisitComparison.vue'
 import ArmBadge from '@/components/ArmBadge.vue'
@@ -37,13 +36,6 @@ import { useStudyArm } from '@/composables/useStudyArm'
 import { useRetinalJobStore } from '@/stores/retinalJob'
 import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
-
-/**
- * Lazy-load the per-B-scan trace — Chart.js + vue-chartjs only ship
- * to operators who land on the metrics viewer (see
- * {@code PatientDetailModal} for the exact same pattern).
- */
-const PerBscanTrace = defineAsyncComponent(() => import('@/components/PerBscanTrace.vue'))
 
 /**
  * nAMD Slice 5 — Cornerstone.js B-scan viewer is large
@@ -197,11 +189,46 @@ const kpiTiles = computed<KpiTile[]>(() => {
       ped_mm3: 0,
       total_mm3: 0,
     }
+    const totalSlices = totalBscanCount.value
+    function subtitleFor(label: 'irf' | 'srf' | 'ped', value: number): string {
+      if (value <= 0) return t('retinal.kpi.subtitle.notDetected')
+      if (totalSlices > 0) {
+        return t('retinal.kpi.subtitle.affected', {
+          count: affectedBscanCount(label),
+          total: totalSlices,
+        })
+      }
+      return ''
+    }
     return [
-      { label: t('retinal.kpi.irf'), value: formatNumber(b.irf_mm3), unit: 'mm³', tone: 'irf' },
-      { label: t('retinal.kpi.srf'), value: formatNumber(b.srf_mm3), unit: 'mm³', tone: 'srf' },
-      { label: t('retinal.kpi.ped'), value: formatNumber(b.ped_mm3), unit: 'mm³', tone: 'ped' },
-      { label: t('retinal.kpi.total'), value: formatNumber(b.total_mm3), unit: 'mm³', tone: 'neutral' },
+      {
+        label: t('retinal.kpi.irf'),
+        value: formatNumber(b.irf_mm3),
+        unit: 'mm³',
+        subtitle: subtitleFor('irf', b.irf_mm3 ?? 0),
+        tone: 'irf',
+      },
+      {
+        label: t('retinal.kpi.srf'),
+        value: formatNumber(b.srf_mm3),
+        unit: 'mm³',
+        subtitle: subtitleFor('srf', b.srf_mm3 ?? 0),
+        tone: 'srf',
+      },
+      {
+        label: t('retinal.kpi.ped'),
+        value: formatNumber(b.ped_mm3),
+        unit: 'mm³',
+        subtitle: subtitleFor('ped', b.ped_mm3 ?? 0),
+        tone: 'ped',
+      },
+      {
+        label: t('retinal.kpi.total'),
+        value: formatNumber(b.total_mm3),
+        unit: 'mm³',
+        subtitle: t('retinal.kpi.subtitle.totalLoad'),
+        tone: 'neutral',
+      },
     ]
   }
   if (gaPayload.value) {
@@ -284,8 +311,68 @@ const overlayTask = computed<FundusOverlayTask>(() => {
   return 'fluid'
 })
 
-const showPerBscan = computed(() => isFluid.value || isGa.value)
-const perBscanTask = computed<'fluid' | 'ga'>(() => (isGa.value ? 'ga' : 'fluid'))
+/* -------- Header laterality long-form -------------------------------- */
+/**
+ * "OS · linkes Auge" / "OD · rechtes Auge". Falls back to the raw
+ * laterality token when the locale doesn't carry a long form for it.
+ */
+const lateralityLongText = computed<string>(() => {
+  const lat = job.value?.laterality
+  if (!lat) return ''
+  const key = `retinal.header.lateralityLong.${lat}`
+  const translated = t(key)
+  return translated === key ? String(lat) : translated
+})
+
+/* -------- KPI tile subtitles (design-spec hints) -------------------- */
+/**
+ * 2026-06-22 — count of B-scans where at least one biomarker voxel
+ * exists, by label. Drives the PED card's "{count} von {total} B-Scans
+ * betroffen" subtitle. Reads from the fluid payload's
+ * `per_bscan_mm2[label][]` series (already populated by the cluster
+ * runner). Returns 0 when the series is missing — silent degrade
+ * since the subtitle is informational only.
+ */
+function affectedBscanCount(label: 'irf' | 'srf' | 'ped'): number {
+  const series = (fluidPayload.value?.per_bscan_mm2 ?? {})[label]
+  if (!Array.isArray(series)) return 0
+  return series.reduce<number>((n, v) => (Number(v) > 1e-9 ? n + 1 : n), 0)
+}
+
+const totalBscanCount = computed<number>(
+  () => geometry.value?.bscan?.dim_z_bscans ?? 0,
+)
+
+/**
+ * 2026-06-22 — biomarker-tone → Tailwind classes for the inline
+ * metric-card variant. Kept inline (not via RetinalKpiTile) so the
+ * design's mockup styling (rounded-2xl, absolute left bar, larger
+ * value font) lives in one place — and so the existing
+ * RetinalKpiTile component, with subtly different styling, can stay
+ * untouched for other call sites + the histoire story.
+ */
+function metricBarClass(tone: KpiTile['tone']): string {
+  switch (tone) {
+    case 'irf': return 'bg-cyan-400'
+    case 'srf': return 'bg-amber-400'
+    case 'ped': return 'bg-fuchsia-500'
+    case 'ga': return 'bg-pink-500'
+    case 'thickness': return 'bg-sky-500'
+    case 'neutral':
+    default: return 'bg-muw-blue'
+  }
+}
+function metricLabelClass(tone: KpiTile['tone']): string {
+  switch (tone) {
+    case 'irf': return 'text-cyan-700'
+    case 'srf': return 'text-amber-700'
+    case 'ped': return 'text-fuchsia-700'
+    case 'ga': return 'text-pink-700'
+    case 'thickness': return 'text-sky-700'
+    case 'neutral':
+    default: return 'text-slate-500'
+  }
+}
 
 /* -------- Display formatting helpers -------------------------------- */
 
@@ -382,275 +469,308 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
       </RouterLink>
     </SideRail>
 
-    <main class="flex-1 max-w-6xl px-8 py-6">
-      <p v-if="isLoading && !job" class="text-slate-500 italic" data-testid="retinal-view-loading">
-        {{ t('retinal.loading') }}
-      </p>
+    <main class="flex-1 min-w-0 px-8 py-7">
+      <div class="max-w-[1200px] mx-auto">
+        <p v-if="isLoading && !job" class="text-slate-500 italic" data-testid="retinal-view-loading">
+          {{ t('retinal.loading') }}
+        </p>
 
-      <div
-        v-else-if="loadError && !job"
-        class="rounded-muw border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800"
-        data-testid="retinal-view-error"
-      >
-        {{ t('retinal.failedToLoad', { error: loadError }) }}
-      </div>
-
-      <template v-else-if="job">
-        <!-- Header -->
-        <div class="mb-5">
-          <div class="text-xs text-slate-500 mb-1">
-            {{ t('retinal.header.eventCrfLabel', { id: job.eventCrfId, jobId: job.jobId }) }}
-          </div>
-          <h1 class="text-xl font-semibold tracking-tight flex items-center gap-3 flex-wrap" data-testid="retinal-view-heading">
-            {{ t('retinal.header.title') }}
-            <StatusPill variant="info">{{ String(job.laterality) }}</StatusPill>
-            <StatusPill v-if="job.task" variant="neutral">{{ taskLabelText }}</StatusPill>
-            <StatusPill
-              v-if="job.status === 'succeeded'"
-              variant="success"
-            >{{ statusLabelText }}</StatusPill>
-            <StatusPill
-              v-else-if="job.status === 'failed'"
-              variant="danger"
-            >{{ statusLabelText }}</StatusPill>
-            <StatusPill v-else variant="warning">{{ statusLabelText }}</StatusPill>
-            <!-- Wave 2A — Live indicator. Visible while the SSE
-                 stream is connected (i.e. the job is in flight + the
-                 EventSource has at least handshaked). The animated
-                 dot is purely cosmetic; the semantic for screen
-                 readers is the i18n key value. -->
-            <span
-              v-if="liveConnected"
-              class="inline-flex items-center gap-1.5 text-xs text-emerald-700"
-              data-testid="retinal-view-live-indicator"
-              :title="t('retinal.live.indicator')"
-            >
-              <span
-                aria-hidden="true"
-                class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"
-              />
-              {{ t('retinal.live.indicator') }}
-            </span>
-          </h1>
-          <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-x-4 gap-y-1">
-            <span>{{ t('retinal.header.modelLabel') }} <span class="font-mono">{{ job.modelVersion ?? '—' }}</span></span>
-            <span>{{ t('retinal.header.runLabel') }} <span class="font-mono">{{ formatIsoDate(job.completedAt ?? job.enqueuedAt) }}</span></span>
-            <span>{{ t('retinal.header.confidenceLabel') }} <span class="font-mono">{{ job.confidence != null ? job.confidence.toFixed(2) : '—' }}</span></span>
-          </div>
-        </div>
-
-        <!-- Empty / in-flight banner -->
         <div
-          v-if="inflightMessage"
-          class="mb-5 rounded-muw border px-4 py-3 text-xs flex items-center justify-between gap-3"
-          :class="job.status === 'failed'
-            ? 'border-rose-200 bg-rose-50 text-rose-900'
-            : 'border-amber-200 bg-amber-50 text-amber-900'"
-          data-testid="retinal-view-inflight"
+          v-else-if="loadError && !job"
+          class="rounded-muw border border-rose-200 bg-rose-50 px-4 py-3 text-xs text-rose-800"
+          data-testid="retinal-view-error"
         >
-          <span>{{ inflightMessage }}</span>
-          <button
-            v-if="job.status === 'failed'"
-            type="button"
-            class="px-3 py-1.5 rounded-md bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 text-white text-xs font-medium whitespace-nowrap"
-            :disabled="retrying"
-            data-testid="retinal-view-retry"
-            @click="onRetry"
-          >
-            {{ retrying ? t('retinal.retry.inflight') : t('retinal.retry.cta') }}
-          </button>
-        </div>
-        <div
-          v-else-if="!job.primaryMetric"
-          class="mb-5 rounded-muw border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"
-          data-testid="retinal-view-no-metric"
-        >
-          {{ t('retinal.empty.noMetric') }}
+          {{ t('retinal.failedToLoad', { error: loadError }) }}
         </div>
 
-        <!-- Slice 6 — honour-system arm badge. Renders once at the
-             top of the view when the subject is in Arm B so the
-             operator knows AI is intentionally hidden (not failed). -->
-        <div v-if="armGate.showBadge.value" class="mb-4">
-          <ArmBadge :arm="job.subjectArm" />
-          <p class="mt-1.5 text-xs text-slate-500">
-            {{ t('retinal.arm.blindedExplain') }}
-          </p>
-        </div>
+        <template v-else-if="job">
+          <!-- ════════ Page header ════════ -->
+          <div class="flex items-start justify-between gap-6 mb-5">
+            <div class="min-w-0">
+              <div class="text-[12.5px] text-slate-500 mb-1.5">
+                {{ t('retinal.header.eventCrfLabel', { id: job.eventCrfId, jobId: job.jobId }) }}
+              </div>
+              <h1
+                class="font-serif text-[26px] font-semibold tracking-tight text-slate-900 leading-none mb-2.5"
+                data-testid="retinal-view-heading"
+              >
+                {{ t('retinal.header.title') }}
+              </h1>
+              <div class="flex items-center gap-2 flex-wrap">
+                <StatusPill variant="info">{{ lateralityLongText || String(job.laterality) }}</StatusPill>
+                <StatusPill v-if="job.task" variant="neutral">{{ taskLabelText }}</StatusPill>
+                <StatusPill
+                  v-if="job.status === 'succeeded'"
+                  variant="success"
+                >{{ statusLabelText }}</StatusPill>
+                <StatusPill
+                  v-else-if="job.status === 'failed'"
+                  variant="danger"
+                >{{ statusLabelText }}</StatusPill>
+                <StatusPill v-else variant="warning">{{ statusLabelText }}</StatusPill>
+                <!-- Wave 2A — Live indicator. Visible while the SSE
+                     stream is connected (job in flight + handshake
+                     done). The pulse is cosmetic; the i18n key is the
+                     SR-readable label. -->
+                <span
+                  v-if="liveConnected"
+                  class="inline-flex items-center gap-1.5 text-xs text-emerald-700"
+                  data-testid="retinal-view-live-indicator"
+                  :title="t('retinal.live.indicator')"
+                >
+                  <span aria-hidden="true" class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  {{ t('retinal.live.indicator') }}
+                </span>
+              </div>
+              <div class="flex items-center gap-x-5 gap-y-1 flex-wrap mt-3 text-[12.5px] text-slate-500">
+                <span>{{ t('retinal.header.modelLabel') }}
+                  <span class="font-mono text-slate-700">{{ job.modelVersion ?? '—' }}</span>
+                </span>
+                <span class="text-slate-300">·</span>
+                <span>{{ t('retinal.header.runLabel') }}
+                  <span class="font-mono text-slate-700">{{ formatIsoDate(job.completedAt ?? job.enqueuedAt) }}</span>
+                </span>
+                <span class="text-slate-300">·</span>
+                <span class="inline-flex items-center gap-2">{{ t('retinal.header.confidenceLabel') }}
+                  <span class="inline-flex items-center gap-1.5">
+                    <span class="w-20 h-1.5 rounded-full bg-slate-200 overflow-hidden inline-block align-middle">
+                      <span
+                        class="block h-full rounded-full bg-muw-blue"
+                        :style="{ width: `${Math.round(Math.max(0, Math.min(1, job.confidence ?? 0)) * 100)}%` }"
+                      />
+                    </span>
+                    <span class="font-semibold text-slate-700 tabular-nums">
+                      {{ job.confidence != null ? job.confidence.toFixed(2) : '—' }}
+                    </span>
+                  </span>
+                </span>
+              </div>
+            </div>
+            <div class="flex items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                class="px-3.5 py-2 text-[13px] font-medium border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                :disabled="retrying"
+                data-testid="retinal-view-retry"
+                @click="onRetry"
+              >
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 2v6h6M21 12a9 9 0 1 1-3-6.7L21 8" />
+                </svg>
+                {{ retrying ? t('retinal.retry.inflight') : t('retinal.retry.cta') }}
+              </button>
+              <a
+                href="#retinal-downloads"
+                class="px-3.5 py-2 text-[13px] font-semibold bg-muw-blue text-white rounded-lg hover:bg-muw-blue-700 inline-flex items-center gap-2 shadow-[0_1px_2px_rgba(17,29,78,.18)]"
+                data-testid="retinal-view-download-all"
+              >
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" />
+                </svg>
+                {{ t('retinal.header.downloadAll') }}
+              </a>
+            </div>
+          </div>
 
-        <!-- Slice 4 — visit-to-visit comparison panel. Self-hides
-             when there is no prior visit. Only meaningful for fluid
-             (the only task with multi-metric deltas the panel
-             knows how to render); other tasks fall through.
-             Slice 6 — also hide for Arm B. -->
-        <RetinalVisitComparison
-          v-if="job.task === 'fluid' && job.status === 'done' && !armGate.hideAi.value"
-          :job-id="job.jobId"
-        />
-
-        <!-- 3-column grid: KPIs / fundus / per-B-scan trace -->
-        <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-5">
-          <!-- KPI strip — hidden for Arm B by the arm gate -->
+          <!-- Empty / in-flight banner -->
           <div
-            v-if="!armGate.hideAi.value"
-            class="lg:col-span-1 space-y-3"
+            v-if="inflightMessage"
+            class="mb-5 rounded-2xl border px-4 py-3 text-xs"
+            :class="job.status === 'failed'
+              ? 'border-rose-200 bg-rose-50 text-rose-900'
+              : 'border-amber-200 bg-amber-50 text-amber-900'"
+            data-testid="retinal-view-inflight"
+          >
+            {{ inflightMessage }}
+          </div>
+          <div
+            v-else-if="!job.primaryMetric"
+            class="mb-5 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900"
+            data-testid="retinal-view-no-metric"
+          >
+            {{ t('retinal.empty.noMetric') }}
+          </div>
+
+          <!-- Slice 6 — honour-system arm badge -->
+          <div v-if="armGate.showBadge.value" class="mb-4">
+            <ArmBadge :arm="job.subjectArm" />
+            <p class="mt-1.5 text-xs text-slate-500">
+              {{ t('retinal.arm.blindedExplain') }}
+            </p>
+          </div>
+
+          <!-- Slice 4 — visit-to-visit comparison panel -->
+          <RetinalVisitComparison
+            v-if="job.task === 'fluid' && job.status === 'done' && !armGate.hideAi.value"
+            :job-id="job.jobId"
+          />
+
+          <!-- ════════ Metric cards — 4-card horizontal strip ════════ -->
+          <div
+            v-if="!armGate.hideAi.value && kpiTiles.length"
+            class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5"
             data-testid="retinal-view-kpis"
           >
-            <RetinalKpiTile
+            <div
               v-for="tile in kpiTiles"
               :key="tile.label"
-              :label="tile.label"
-              :value="tile.value"
-              :unit="tile.unit"
-              :subtitle="tile.subtitle"
-              :tone="tile.tone"
-            />
-            <div
-              v-if="kpiTiles.length === 0"
-              class="bg-slate-50 border border-dashed border-slate-300 rounded-muw px-4 py-3 text-xs text-slate-500"
+              class="relative rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] pl-5 pr-4 py-3.5 overflow-hidden"
+              data-testid="retinal-kpi-tile"
             >
-              {{ t('retinal.empty.noKpi') }}
+              <span class="absolute left-0 top-0 bottom-0 w-1.5" :class="metricBarClass(tile.tone)" />
+              <div class="text-[11px] font-semibold uppercase tracking-[0.08em]" :class="metricLabelClass(tile.tone)">
+                {{ tile.label }}
+              </div>
+              <div class="flex items-baseline gap-1 mt-1">
+                <span class="text-[24px] font-semibold text-slate-900 tabular-nums leading-none">{{ tile.value }}</span>
+                <span class="text-[12px] text-slate-400">{{ tile.unit }}</span>
+              </div>
+              <div v-if="tile.subtitle" class="text-[11px] text-slate-400 mt-1.5">{{ tile.subtitle }}</div>
             </div>
           </div>
-
-          <!-- Fundus overlay -->
-          <div class="lg:col-span-2" data-testid="retinal-view-fundus">
-            <div
-              v-if="!job.fundusUrl || !geometry"
-              class="aspect-square w-full bg-slate-100 border border-dashed border-slate-300 rounded-muw flex items-center justify-center text-xs text-slate-500"
-            >
-              {{ t('retinal.empty.fundusNotAvailable') }}
-            </div>
-            <div v-else class="aspect-square w-full">
-              <!-- Slice 6 — when Arm B, drop projection artifacts from
-                   the overlay so the en-face PED / IRF / SRF layers
-                   don't render. FundusOverlay's per-biomarker /
-                   composite gates already key off artifactNames, so
-                   passing an empty list is the cleanest gate without
-                   threading a new prop into the component. -->
-              <FundusOverlay
-                :fundus-url="job.fundusUrl"
-                :geometry="geometry"
-                :payload="job.outputPayload"
-                :task="overlayTask"
-                :laterality="job.laterality"
-                :hovered-bscan-z="hoveredBscanZ"
-                :job-id="job.jobId"
-                :artifact-names="armGate.hideAi.value ? [] : job.artifactNames"
-                @hover-bscan="onHoverBscan"
-              />
-            </div>
-          </div>
-
-          <!-- Per-B-scan trace -->
-          <div class="lg:col-span-1" data-testid="retinal-view-trace">
-            <PerBscanTrace
-              v-if="showPerBscan"
-              :payload="job.outputPayload"
-              :task="perBscanTask"
-              @hover-bscan="onHoverBscan"
-            />
-            <div
-              v-else
-              class="bg-white border border-slate-200 rounded-muw p-3 h-64 flex items-center justify-center text-xs text-slate-500 italic"
-            >
-              {{ t('retinal.empty.noPerBscan') }}
-            </div>
-          </div>
-        </div>
-
-        <!-- Slice 5 — B-scan navigator (Cornerstone.js). Shows when
-             we have a bscan.dcm artifact + a known n_bscans from the
-             geometry payload. Bidirectional hover sync with the
-             FundusOverlay via the shared `hoveredBscanZ` ref. -->
-        <BscanViewer
-          v-if="job.bscanDcmUrl && (geometry?.bscan?.dim_z_bscans ?? 0) > 0"
-          :bscan-dcm-url="job.bscanDcmUrl"
-          :n-bscans="geometry!.bscan!.dim_z_bscans"
-          :model-value="currentBscanZ"
-          :job-id="job.jobId"
-          class="mb-5"
-          @update:model-value="(z) => hoveredBscanZ = z"
-        />
-
-        <!-- ETDRS sub-totals -->
-        <section
-          v-if="etdrsRows.length"
-          class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5"
-          data-testid="retinal-view-etdrs"
-        >
-          <div class="px-5 py-3 border-b border-slate-200">
-            <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              {{ t('retinal.etdrs.header') }}
-            </h2>
-          </div>
-          <DenseTable :bordered="false">
-            <template #header>
-              <tr class="border-b border-slate-200">
-                <th
-                  v-for="h in etdrsHeaders"
-                  :key="h"
-                  scope="col"
-                  class="px-5 py-2 font-medium"
-                >
-                  {{ h }}
-                </th>
-              </tr>
-            </template>
-            <tr v-for="row in etdrsRows" :key="row.label" data-testid="retinal-etdrs-row">
-              <td class="px-5 py-2.5 font-medium text-xs">{{ row.label }}</td>
-              <td
-                v-for="(value, idx) in row.values"
-                :key="`${row.label}-${idx}`"
-                class="px-5 py-2.5 text-xs tabular-nums font-mono"
-              >
-                {{ value }}
-              </td>
-            </tr>
-          </DenseTable>
-        </section>
-
-        <!-- 2026-06-22 — drop derived presentation PNGs from the
-             downloads list. projection_fluid*.png + per-slice
-             seg_bscan_NNNN.png are renders of the raw fluidseg.npz
-             segmentation; the operator only needs the canonical
-             source artifact. The PNGs remain on disk for the
-             FundusOverlay + BscanViewer to fetch via the
-             artifact-URL endpoint. -->
-        <RetinalArtifactList
-          class="mb-5"
-          :job-id="job.jobId"
-          :artifact-names="downloadableArtifacts"
-          :companion-names="job.companionNames"
-        />
-
-        <!-- Raw output payload (collapsible) -->
-        <section
-          class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5"
-          data-testid="retinal-view-json"
-        >
-          <button
-            type="button"
-            class="w-full px-5 py-3 border-b border-slate-200 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-500 hover:bg-slate-50"
-            :aria-expanded="showJson"
-            @click="showJson = !showJson"
+          <div
+            v-else-if="!armGate.hideAi.value"
+            class="mb-5 bg-slate-50 border border-dashed border-slate-300 rounded-2xl px-4 py-3 text-xs text-slate-500"
+            data-testid="retinal-view-kpis"
           >
-            <span>{{ t('retinal.jsonTree.rawPayloadHeader') }}</span>
-            <span class="text-slate-400">{{ showJson ? '▾' : '▸' }}</span>
-          </button>
-          <div v-if="showJson" class="p-4 bg-slate-50 overflow-auto max-h-[40rem]">
-            <JsonTree :value="job.outputPayload" />
+            {{ t('retinal.empty.noKpi') }}
           </div>
-        </section>
 
-        <RouterLink
-          v-if="job.eventCrfId"
-          to="/subjects"
-          class="text-xs text-muw-blue underline"
-        >
-          {{ t('retinal.nav.backToSubjects') }}
-        </RouterLink>
-      </template>
+          <!-- ════════ Viewer row: en-face (5) + B-scan (7) ════════ -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5 items-stretch">
+            <!-- En-face fundus locator -->
+            <section
+              class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] flex flex-col"
+              data-testid="retinal-view-fundus"
+            >
+              <div class="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-100">
+                <h3 class="text-[12px] font-semibold uppercase tracking-[0.1em] text-muw-blue">
+                  {{ t('retinal.fundus.header') }}
+                </h3>
+                <span class="text-[11px] text-slate-400">{{ t('retinal.fundus.bscanPosition') }}</span>
+              </div>
+              <div class="p-4 flex-1 flex items-center">
+                <div
+                  v-if="!job.fundusUrl || !geometry"
+                  class="aspect-square w-full bg-slate-100 border border-dashed border-slate-300 rounded-xl flex items-center justify-center text-xs text-slate-500"
+                >
+                  {{ t('retinal.empty.fundusNotAvailable') }}
+                </div>
+                <div v-else class="w-full">
+                  <FundusOverlay
+                    :fundus-url="job.fundusUrl"
+                    :geometry="geometry"
+                    :payload="job.outputPayload"
+                    :task="overlayTask"
+                    :laterality="job.laterality"
+                    :hovered-bscan-z="hoveredBscanZ"
+                    :job-id="job.jobId"
+                    :artifact-names="armGate.hideAi.value ? [] : job.artifactNames"
+                    @hover-bscan="onHoverBscan"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <!-- B-Scan navigator -->
+            <div class="lg:col-span-7 flex flex-col">
+              <BscanViewer
+                v-if="job.bscanDcmUrl && (geometry?.bscan?.dim_z_bscans ?? 0) > 0"
+                :bscan-dcm-url="job.bscanDcmUrl"
+                :n-bscans="geometry!.bscan!.dim_z_bscans"
+                :model-value="currentBscanZ"
+                :job-id="job.jobId"
+                class="flex-1"
+                @update:model-value="(z) => hoveredBscanZ = z"
+              />
+              <div
+                v-else
+                class="flex-1 rounded-2xl border border-slate-200 bg-slate-50 flex items-center justify-center text-xs text-slate-500 italic min-h-[300px]"
+              >
+                {{ t('retinal.empty.fundusNotAvailable') }}
+              </div>
+            </div>
+          </div>
+
+          <!-- ════════ ETDRS + Downloads row ════════ -->
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 mb-5">
+            <section
+              v-if="etdrsRows.length"
+              class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] overflow-clip"
+              data-testid="retinal-view-etdrs"
+            >
+              <div class="px-5 pt-4 pb-3 border-b border-slate-100">
+                <h3 class="text-[12px] font-semibold uppercase tracking-[0.1em] text-muw-blue">
+                  {{ t('retinal.etdrs.header') }}
+                </h3>
+              </div>
+              <DenseTable :bordered="false">
+                <template #header>
+                  <tr class="text-left text-slate-400 text-[11px] uppercase tracking-[0.06em]">
+                    <th
+                      v-for="(h, idx) in etdrsHeaders"
+                      :key="h"
+                      scope="col"
+                      :class="['px-5 py-2.5 font-semibold', idx > 0 ? 'text-right' : '']"
+                    >
+                      {{ h }}
+                    </th>
+                  </tr>
+                </template>
+                <tr v-for="row in etdrsRows" :key="row.label" data-testid="retinal-etdrs-row" class="border-t border-slate-100">
+                  <td class="px-5 py-3 font-medium text-slate-700 text-[13px]">{{ row.label }}</td>
+                  <td
+                    v-for="(value, idx) in row.values"
+                    :key="`${row.label}-${idx}`"
+                    class="px-5 py-3 text-[12.5px] tabular-nums font-mono text-right text-slate-700"
+                  >
+                    {{ value }}
+                  </td>
+                </tr>
+              </DenseTable>
+            </section>
+
+            <RetinalArtifactList
+              id="retinal-downloads"
+              class="lg:col-span-5"
+              :class="etdrsRows.length ? '' : 'lg:col-span-12'"
+              :job-id="job.jobId"
+              :artifact-names="downloadableArtifacts"
+              :companion-names="job.companionNames"
+            />
+          </div>
+
+          <!-- Raw output payload (collapsible) -->
+          <section
+            class="rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] overflow-clip mb-6"
+            data-testid="retinal-view-json"
+          >
+            <button
+              type="button"
+              class="w-full px-5 py-3.5 flex items-center justify-between text-[12px] font-semibold uppercase tracking-[0.1em] text-muw-blue hover:bg-slate-50"
+              :aria-expanded="showJson"
+              @click="showJson = !showJson"
+            >
+              <span>{{ t('retinal.jsonTree.rawPayloadHeader') }}</span>
+              <span class="text-slate-400">{{ showJson ? '▾' : '▸' }}</span>
+            </button>
+            <div v-if="showJson" class="p-5 bg-slate-50 overflow-auto max-h-[40rem] border-t border-slate-100">
+              <JsonTree :value="job.outputPayload" />
+            </div>
+          </section>
+
+          <RouterLink
+            v-if="job.eventCrfId"
+            to="/subjects"
+            class="inline-flex items-center gap-2 text-[13px] font-medium text-muw-blue hover:text-muw-blue-700"
+          >
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            {{ t('retinal.nav.backToSubjects') }}
+          </RouterLink>
+        </template>
+      </div>
     </main>
   </div>
 </template>

@@ -2851,7 +2851,13 @@
       "title": "[NEEDS_REVIEW] Retinal scan metrics",
       "modelLabel": "[NEEDS_REVIEW] Model:",
       "runLabel": "[NEEDS_REVIEW] Run:",
-      "confidenceLabel": "[NEEDS_REVIEW] Confidence:"
+      "confidenceLabel": "[NEEDS_REVIEW] Confidence:",
+      "downloadAll": "[NEEDS_REVIEW] Download all",
+      "lateralityLong": {
+        "OS": "[NEEDS_REVIEW] OS · left eye",
+        "OD": "[NEEDS_REVIEW] OD · right eye",
+        "OU": "[NEEDS_REVIEW] OU · both eyes"
+      }
     },
     "empty": {
       "awaitingSidecar": "[NEEDS_REVIEW] Awaiting sidecar…",
@@ -2871,7 +2877,12 @@
       "gaArea": "[NEEDS_REVIEW] GA area",
       "onlThickness": "[NEEDS_REVIEW] ONL thickness",
       "prThickness": "[NEEDS_REVIEW] PR thickness",
-      "validAscans": "[NEEDS_REVIEW] {valid} / {total} A-scans valid"
+      "validAscans": "[NEEDS_REVIEW] {valid} / {total} A-scans valid",
+      "subtitle": {
+        "notDetected": "[NEEDS_REVIEW] not detected",
+        "affected": "[NEEDS_REVIEW] {count} of {total} B-scans affected",
+        "totalLoad": "[NEEDS_REVIEW] Total fluid load"
+      }
     },
     "etdrs": {
       "header": "[NEEDS_REVIEW] ETDRS sub-totals",
@@ -2889,6 +2900,10 @@
       "sectionPerScan": "[NEEDS_REVIEW] Per-scan",
       "sectionSegmentation": "[NEEDS_REVIEW] Segmentation",
       "action": "[NEEDS_REVIEW] Download"
+    },
+    "fundus": {
+      "header": "[NEEDS_REVIEW] En-face · ETDRS locator",
+      "bscanPosition": "[NEEDS_REVIEW] B-scan position"
     },
     "jsonTree": {
       "rawPayloadHeader": "[NEEDS_REVIEW] Raw output payload"
@@ -2945,7 +2960,9 @@
       "loading": "Loading viewer…",
       "errorPrefix": "Could not load B-scan viewer:",
       "segOverlayAlt": "[NEEDS_REVIEW] Segmentation overlay for slice {current} of {total}",
-      "scrollHint": "[NEEDS_REVIEW] Scroll = change slice"
+      "scrollHint": "[NEEDS_REVIEW] Scroll = change slice",
+      "previous": "[NEEDS_REVIEW] Previous slice",
+      "next": "[NEEDS_REVIEW] Next slice"
     },
     "trends": {
       "title": "[NEEDS_REVIEW] Biomarker trends",
