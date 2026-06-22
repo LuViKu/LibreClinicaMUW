@@ -94,41 +94,39 @@ const { envelope: segEnvelope } = useSegmentationEnvelope(jobIdRef)
 const overlayCanvasEl = ref<HTMLCanvasElement | null>(null)
 
 /**
- * 2026-06-22 round 3 — size the inner wrapper at the bscan's
- * *physical* aspect (mm-correct), not its pixel aspect. Cornerstone3D
- * honours DICOM ``PixelSpacing`` and renders the image at physical
- * proportions (Heidelberg axial 0.00387 mm/px vs lateral 0.00566
- * mm/px → physical aspect ~3.0, vs pixel aspect ~2.07). If the inner
- * div is at pixel aspect, cornerstone letterboxes the bscan inside
- * the div while the overlay canvas — which is CSS-stretched to the
- * full div — fills it uniformly. Result: the overlay drifts off the
- * bscan in the cornerstone view even when the seg data is correctly
- * placed in the underlying volume (the OS-scan misalignment we
- * observed visually was entirely this aspect mismatch).
+ * 2026-06-22 round 4 — position the overlay canvas at the bscan's
+ * *actual rendered* bounding box via cornerstone's worldToCanvas
+ * coordinate transform. Previous attempts (pixel-aspect wrapper,
+ * physical-aspect wrapper) tried to make a CSS aspect-ratio match
+ * how cornerstone internally scales the image — but cornerstone's
+ * fit logic is its own + may apply additional pan/zoom/rotation
+ * the SPA can't predict. The only authoritative source for "where
+ * is image pixel (col, row) actually drawn" is the viewport itself.
  *
- * We therefore prefer the physical aspect derived from cornerstone's
- * imagePlaneModule (``pixelSpacing``) + imagePixelModule (rows/cols)
- * metadata. The pixel-derived fallback is kept for the brief window
- * between cornerstone init and the first metadata read, and for
- * inputs without ``PixelSpacing``.
+ * We therefore query ``viewport.worldToCanvas([col, row, 0])`` for
+ * the two corners (0,0) and (cols, rows) after each render, and
+ * absolutely-position the overlay canvas at that bbox in the same
+ * parent as the cornerstone container. The overlay canvas's pixel
+ * buffer stays at seg native resolution; CSS scales it uniformly
+ * to the bbox, so each seg voxel lands on the same screen pixel
+ * as the bscan voxel underneath.
  */
 const bscanImageDims = ref<{ rows: number; cols: number } | null>(null)
-const bscanPhysicalAspect = ref<string | null>(null)
-const bscanAspect = computed<string>(() => {
-  if (bscanPhysicalAspect.value) return bscanPhysicalAspect.value
-  const dims = bscanImageDims.value
-  if (dims && dims.rows > 0 && dims.cols > 0) {
-    return `${dims.cols} / ${dims.rows}`
+const overlayBbox = ref<{ left: number; top: number; width: number; height: number } | null>(null)
+const overlayBboxStyle = computed<Record<string, string>>(() => {
+  const b = overlayBbox.value
+  if (!b || b.width <= 0 || b.height <= 0) {
+    return { display: 'none', position: 'absolute', left: '0', top: '0', width: '0', height: '0', pointerEvents: 'none' }
   }
-  const env = segEnvelope.value
-  if (env?.kind === 'volume' && env.shape.length >= 3) {
-    const rows = env.shape[1] ?? 0
-    const cols = env.shape[2] ?? 0
-    if (rows > 0 && cols > 0) return `${cols} / ${rows}`
+  return {
+    display: 'block',
+    position: 'absolute',
+    left: `${b.left}px`,
+    top: `${b.top}px`,
+    width: `${b.width}px`,
+    height: `${b.height}px`,
+    pointerEvents: 'none',
   }
-  // Default Heidelberg Spectralis pixel ratio (1024 wide × 496 tall) —
-  // used only during cornerstone init before the first metadata read.
-  return '1024 / 496'
 })
 
 /** Label-colour ramp — matches FundusOverlay's BIOMARKER_COLORS. */
@@ -281,6 +279,57 @@ watch([segEnvelope, () => props.modelValue], () => {
   paintOverlay()
 }, { flush: 'post' })
 
+/**
+ * 2026-06-22 — query cornerstone for where the bscan's pixel corners
+ * (0, 0) and (cols, rows) ACTUALLY end up on the canvas, then size the
+ * overlay div to span exactly that rectangle. Works regardless of how
+ * cornerstone scales the image — fit-inside, physical-mm aspect, pan,
+ * zoom — because we're asking the viewport itself.
+ */
+function recomputeOverlayBbox(): void {
+  const vp = viewport.value as
+    | { worldToCanvas?: (w: [number, number, number]) => [number, number] | null }
+    | null
+  const dims = bscanImageDims.value
+  if (!vp || !dims || dims.rows <= 0 || dims.cols <= 0) {
+    overlayBbox.value = null
+    return
+  }
+  try {
+    // Stack viewports treat world coords as image-pixel coords. The
+    // image's TOP-LEFT pixel corner is at world (-0.5, -0.5) and its
+    // BOTTOM-RIGHT at (cols-0.5, rows-0.5) under cornerstone3D's
+    // pixel-center convention (each integer coord is the centre of a
+    // pixel). We use the inclusive corners (0, 0) → (cols-1, rows-1)
+    // first and expand by half a pixel each side post-hoc so the bbox
+    // edges sit on the pixel boundaries, not pixel centres.
+    const tl = vp.worldToCanvas?.([-0.5, -0.5, 0])
+    const br = vp.worldToCanvas?.([dims.cols - 0.5, dims.rows - 0.5, 0])
+    if (!tl || !br) {
+      overlayBbox.value = null
+      return
+    }
+    overlayBbox.value = {
+      left: tl[0],
+      top: tl[1],
+      width: br[0] - tl[0],
+      height: br[1] - tl[1],
+    }
+  } catch {
+    overlayBbox.value = null
+  }
+}
+
+// Recompute the bbox whenever cornerstone repaints (slice change) or
+// the container resizes (window resize, layout reflow, drawer toggle).
+let resizeObs: ResizeObserver | null = null
+watch(() => props.modelValue, () => {
+  if (status.value === 'ready') {
+    // run after cornerstone's render commit
+    requestAnimationFrame(recomputeOverlayBbox)
+  }
+})
+
 async function initViewer(): Promise<void> {
   if (!containerEl.value) return
   status.value = 'loading'
@@ -371,42 +420,28 @@ async function initViewer(): Promise<void> {
     await vp.setImageIdIndex(clampZ(props.modelValue))
     vp.render()
 
-    // 2026-06-22 — read the displayed image's true (rows, cols) +
-    // PixelSpacing so the aspect-preserving wrapper sizes to the
-    // bscan's PHYSICAL extent (mm-correct). The imagePixelModule +
-    // imagePlaneModule metadata is populated by the DICOM image
-    // loader as part of stack init.
+    // 2026-06-22 — read the displayed image's true (rows, cols) so
+    // recomputeOverlayBbox knows which world coords map to the image
+    // corners. The imagePixelModule metadata is populated by the DICOM
+    // image loader as part of stack init.
     try {
       type MetaDataAccess = {
-        get: (m: string, id: string) =>
-          | { rows?: number; columns?: number; pixelSpacing?: [number, number] | number[] }
-          | undefined
+        get: (m: string, id: string) => { rows?: number; columns?: number } | undefined
       }
       const md = (cornerstoneCore as unknown as { metaData: MetaDataAccess }).metaData
       const firstImageId = imageIds[0]
       const pix = firstImageId ? md?.get('imagePixelModule', firstImageId) : undefined
-      const plane = firstImageId ? md?.get('imagePlaneModule', firstImageId) : undefined
       const rows = Number(pix?.rows ?? 0)
       const cols = Number(pix?.columns ?? 0)
       if (rows > 0 && cols > 0) {
         bscanImageDims.value = { rows, cols }
       }
-      // PixelSpacing is [row spacing (axial mm/px), col spacing (lateral mm/px)] per
-      // DICOM PS3.3 §C.7.6.2 — same convention our preprocess sidecar writes in
-      // e2e_parser.write_bscan_dcm (PixelSpacing = [axial, lateral]).
-      const ps = plane?.pixelSpacing
-      const axialMm = Array.isArray(ps) ? Number(ps[0] ?? 0) : 0
-      const lateralMm = Array.isArray(ps) ? Number(ps[1] ?? 0) : 0
-      if (rows > 0 && cols > 0 && axialMm > 0 && lateralMm > 0) {
-        const physWidth = cols * lateralMm
-        const physHeight = rows * axialMm
-        bscanPhysicalAspect.value = `${physWidth} / ${physHeight}`
-      }
     } catch {
-      /* aspect falls back to pixel dims, then seg dims, then Heidelberg default */
+      /* bscanImageDims falls back to seg dims for the bbox computation */
     }
 
     status.value = 'ready'
+    recomputeOverlayBbox()
 
     // 2026-06-22 — pre-warm caches so scroll-through is smooth.
     //  1. Cornerstone image cache: kick off loadAndCacheImages for
@@ -524,10 +559,20 @@ watch(
   },
 )
 
-onMounted(initViewer)
+onMounted(async () => {
+  await initViewer()
+  // Recompute on resize so the overlay tracks the bscan as the
+  // browser window or surrounding layout changes.
+  if (containerEl.value && 'ResizeObserver' in window) {
+    resizeObs = new ResizeObserver(() => recomputeOverlayBbox())
+    resizeObs.observe(containerEl.value)
+  }
+})
 
 onBeforeUnmount(() => {
   try {
+    resizeObs?.disconnect()
+    resizeObs = null
     renderingEngineRef.value?.destroy()
   } catch {
     /* never throw on unmount */
@@ -549,34 +594,30 @@ onBeforeUnmount(() => {
       </span>
     </header>
 
-    <!-- 2026-06-22 — outer 4:3 box keeps the viewer's footprint stable
-         in the SPA layout; the inner aspect-preserving box matches
-         the B-scan's actual proportions so the overlay canvas and
-         the cornerstone canvas letterbox identically. Both share the
-         same parent so any per-A-scan pixel in the overlay lands on
-         the same screen pixel as the underlying B-scan pixel. -->
+    <!-- 2026-06-22 round 4 — outer 4:3 box keeps the viewer's footprint
+         stable; cornerstone fills it directly and decides where to
+         render the bscan inside (fit-inside, physical-mm aspect, etc).
+         The overlay canvas is absolutely positioned via :style at the
+         bscan's actual rendered bbox (queried from worldToCanvas),
+         so it ALWAYS aligns regardless of how cornerstone chooses to
+         scale internally. -->
     <div class="relative aspect-[4/3] w-full bg-black flex items-center justify-center overflow-hidden">
       <div
-        class="relative w-full"
-        :style="{ aspectRatio: bscanAspect, maxHeight: '100%' }"
-      >
-        <div
-          ref="containerEl"
-          data-testid="bscan-viewer-canvas"
-          class="absolute inset-0"
-          tabindex="0"
-          @keydown.left.prevent="setZ(modelValue - 1)"
-          @keydown.right.prevent="setZ(modelValue + 1)"
-          @wheel.prevent="onWheel"
-        />
-        <canvas
-          v-show="segEnvelope && status === 'ready'"
-          ref="overlayCanvasEl"
-          class="absolute inset-0 w-full h-full pointer-events-none"
-          data-testid="bscan-viewer-seg-overlay"
-          :aria-label="t('retinal.bscanViewer.segOverlayAlt', { current: modelValue + 1, total: nBscans })"
-        />
-      </div>
+        ref="containerEl"
+        data-testid="bscan-viewer-canvas"
+        class="absolute inset-0"
+        tabindex="0"
+        @keydown.left.prevent="setZ(modelValue - 1)"
+        @keydown.right.prevent="setZ(modelValue + 1)"
+        @wheel.prevent="onWheel"
+      />
+      <canvas
+        v-show="segEnvelope && status === 'ready' && overlayBbox"
+        ref="overlayCanvasEl"
+        :style="overlayBboxStyle"
+        data-testid="bscan-viewer-seg-overlay"
+        :aria-label="t('retinal.bscanViewer.segOverlayAlt', { current: modelValue + 1, total: nBscans })"
+      />
       <!-- Discoverability hint — auto-fades after the operator has
            used the scroll/scrub once (the hint is only useful for the
            first interaction; after that it's noise). -->
