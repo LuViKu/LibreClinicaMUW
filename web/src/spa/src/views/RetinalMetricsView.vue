@@ -286,18 +286,18 @@ const etdrsRows = computed<EtdrsRow[]>(() => {
   if (fluidPayload.value) {
     const m = fluidPayload.value.etdrs_mm3
     if (m == null) return []
-    // Disjoint ring contributions, derived by subtraction from the
-    // cumulative central discs the runner reports.
-    const ring13 = ringDiff(m.central_3mm, m.central_1mm)
-    const ring36 = ringDiff(m.central_6mm, m.central_3mm)
-    function row(label: string, c: { irf?: number; srf?: number; ped?: number; total?: number }): EtdrsRow {
+    const keys = ['irf', 'srf', 'ped', 'total']
+    const ring13 = ringDiff(keys, m.central_3mm as unknown as Contribution, m.central_1mm as unknown as Contribution)
+    const ring36 = ringDiff(keys, m.central_6mm as unknown as Contribution, m.central_3mm as unknown as Contribution)
+    function row(label: string, c: Contribution | { irf?: number; srf?: number; ped?: number; total?: number }): EtdrsRow {
+      const cc = c as unknown as Contribution
       return {
         label,
         values: [
-          formatNumber(c.irf),
-          formatNumber(c.srf),
-          formatNumber(c.ped),
-          formatNumber(c.total),
+          formatNumber(cc.irf),
+          formatNumber(cc.srf),
+          formatNumber(cc.ped),
+          formatNumber(cc.total),
         ],
       }
     }
@@ -312,10 +312,17 @@ const etdrsRows = computed<EtdrsRow[]>(() => {
   if (gaPayload.value) {
     const m = gaPayload.value.etdrs_mm2
     if (m == null) return []
+    // 2026-06-22 — also derive the disjoint annular rings (1–3 mm /
+    // 3–6 mm) by subtraction so GA gets the same five-row table as
+    // fluid, matching the operator's selection menu.
+    const ring13 = Math.max(0, (m.central_3mm ?? 0) - (m.central_1mm ?? 0))
+    const ring36 = Math.max(0, (m.central_6mm ?? 0) - (m.central_3mm ?? 0))
     return [
       { label: t('retinal.etdrs.ringLabel', { mm: 1 }), values: [formatNumber(m.central_1mm)] },
       { label: t('retinal.etdrs.ringLabel', { mm: 3 }), values: [formatNumber(m.central_3mm)] },
       { label: t('retinal.etdrs.ringLabel', { mm: 6 }), values: [formatNumber(m.central_6mm)] },
+      { label: t('retinal.etdrs.ringLabelRange', { from: 1, to: 3 }), values: [formatNumber(ring13)] },
+      { label: t('retinal.etdrs.ringLabelRange', { from: 3, to: 6 }), values: [formatNumber(ring36)] },
     ]
   }
   return []
@@ -344,71 +351,100 @@ const overlayTask = computed<FundusOverlayTask>(() => {
  *   <li>center   = central_1mm</li>
  *   <li>ring_1_3 = central_3mm − central_1mm</li>
  *   <li>ring_3_6 = central_6mm − central_3mm</li>
- *   <li>corners  = biomarkers (full volume) − central_6mm</li>
+ *   <li>corners  = full-volume − central_6mm</li>
  * </ul>
  *
- * Returns null when the underlying ETDRS / biomarkers payload is
- * missing — the template falls back to the standard ETDRS rows.
+ * <p>Contribution is a generic biomarker→value map so the same code
+ * path serves fluid (irf / srf / ped / total in mm³) and GA
+ * (ga_area in mm²). {@link biomarkerDefsForTask} drives the chip
+ * row + units in the selection panel.
  */
-interface RegionContribution {
-  irf: number
-  srf: number
-  ped: number
-  total: number
-}
-type RegionBreakdown = Record<EtdrsRegion, RegionContribution>
+type Contribution = Record<string, number>
+type RegionBreakdown = Record<EtdrsRegion, Contribution>
 
-function ringDiff(
-  a: { irf?: number; srf?: number; ped?: number; total?: number } | undefined,
-  b: { irf?: number; srf?: number; ped?: number; total?: number } | undefined,
-): RegionContribution {
-  return {
-    irf: Math.max(0, (a?.irf ?? 0) - (b?.irf ?? 0)),
-    srf: Math.max(0, (a?.srf ?? 0) - (b?.srf ?? 0)),
-    ped: Math.max(0, (a?.ped ?? 0) - (b?.ped ?? 0)),
-    total: Math.max(0, (a?.total ?? 0) - (b?.total ?? 0)),
+function ringDiff(keys: string[], a: Contribution | undefined, b: Contribution | undefined): Contribution {
+  const out: Contribution = {}
+  for (const k of keys) {
+    out[k] = Math.max(0, (a?.[k] ?? 0) - (b?.[k] ?? 0))
   }
+  return out
 }
+
+interface BiomarkerDef {
+  key: string
+  label: string
+  /** Tailwind text-color class for the chip label. */
+  toneClass: string
+  /** Unit string shown after the sum value. */
+  unit: 'mm³' | 'mm²'
+}
+
+const FLUID_BIOMARKER_DEFS: BiomarkerDef[] = [
+  { key: 'irf', label: 'IRF', toneClass: 'text-cyan-700', unit: 'mm³' },
+  { key: 'srf', label: 'SRF', toneClass: 'text-amber-700', unit: 'mm³' },
+  { key: 'ped', label: 'PED', toneClass: 'text-fuchsia-700', unit: 'mm³' },
+  { key: 'total', label: '∑', toneClass: 'text-slate-500', unit: 'mm³' },
+]
+
+const GA_BIOMARKER_DEFS: BiomarkerDef[] = [
+  { key: 'ga_area', label: 'GA', toneClass: 'text-fuchsia-700', unit: 'mm²' },
+]
+
+const selectionBiomarkerDefs = computed<BiomarkerDef[]>(() => {
+  if (isFluid.value) return FLUID_BIOMARKER_DEFS
+  if (isGa.value) return GA_BIOMARKER_DEFS
+  return []
+})
 
 const regionBreakdown = computed<RegionBreakdown | null>(() => {
-  const fp = fluidPayload.value
-  if (!fp || !fp.etdrs_mm3) return null
-  const e = fp.etdrs_mm3
-  const center: RegionContribution = {
-    irf: e.central_1mm?.irf ?? 0,
-    srf: e.central_1mm?.srf ?? 0,
-    ped: e.central_1mm?.ped ?? 0,
-    total: e.central_1mm?.total ?? 0,
+  if (fluidPayload.value?.etdrs_mm3) {
+    const e = fluidPayload.value.etdrs_mm3
+    const keys = ['irf', 'srf', 'ped', 'total']
+    const fullVolume: Contribution = {
+      irf: fluidPayload.value.biomarkers?.irf_mm3 ?? 0,
+      srf: fluidPayload.value.biomarkers?.srf_mm3 ?? 0,
+      ped: fluidPayload.value.biomarkers?.ped_mm3 ?? 0,
+      total: fluidPayload.value.biomarkers?.total_mm3 ?? 0,
+    }
+    return {
+      center: ringDiff(keys, e.central_1mm as unknown as Contribution, undefined),
+      ring_1_3: ringDiff(keys, e.central_3mm as unknown as Contribution, e.central_1mm as unknown as Contribution),
+      ring_3_6: ringDiff(keys, e.central_6mm as unknown as Contribution, e.central_3mm as unknown as Contribution),
+      corners: ringDiff(keys, fullVolume, e.central_6mm as unknown as Contribution),
+    }
   }
-  const ring_1_3 = ringDiff(e.central_3mm, e.central_1mm)
-  const ring_3_6 = ringDiff(e.central_6mm, e.central_3mm)
-  const fullVolume = {
-    irf: fp.biomarkers?.irf_mm3 ?? 0,
-    srf: fp.biomarkers?.srf_mm3 ?? 0,
-    ped: fp.biomarkers?.ped_mm3 ?? 0,
-    total: fp.biomarkers?.total_mm3 ?? 0,
+  if (gaPayload.value?.etdrs_mm2) {
+    // GA payload exposes scalars at each ring (not a per-biomarker
+    // object). Lift to the shared {ga_area: number} shape so the
+    // ringDiff helper + selection chips treat it uniformly.
+    const e = gaPayload.value.etdrs_mm2
+    const wrap = (v: number | undefined): Contribution => ({ ga_area: v ?? 0 })
+    const fullVolume: Contribution = { ga_area: gaPayload.value.ga_area_mm2 ?? 0 }
+    return {
+      center: ringDiff(['ga_area'], wrap(e.central_1mm), undefined),
+      ring_1_3: ringDiff(['ga_area'], wrap(e.central_3mm), wrap(e.central_1mm)),
+      ring_3_6: ringDiff(['ga_area'], wrap(e.central_6mm), wrap(e.central_3mm)),
+      corners: ringDiff(['ga_area'], fullVolume, wrap(e.central_6mm)),
+    }
   }
-  const corners = ringDiff(fullVolume, e.central_6mm)
-  return { center, ring_1_3, ring_3_6, corners }
+  return null
 })
 
 /**
- * Sum of biomarker contributions across all currently-selected regions.
- * Empty when no region is selected (the template hides the summary row
- * in that case).
+ * Sum of biomarker contributions across all currently-selected
+ * regions. Null when nothing is selected or the breakdown isn't
+ * available — the template hides the summary panel in that case.
  */
-const selectedSum = computed<RegionContribution | null>(() => {
+const selectedSum = computed<Contribution | null>(() => {
   if (selectedEtdrsRegions.value.length === 0) return null
   const bd = regionBreakdown.value
   if (!bd) return null
-  const acc: RegionContribution = { irf: 0, srf: 0, ped: 0, total: 0 }
+  const keys = selectionBiomarkerDefs.value.map((d) => d.key)
+  const acc: Contribution = Object.fromEntries(keys.map((k) => [k, 0]))
   for (const id of selectedEtdrsRegions.value) {
     const r = bd[id]
     if (!r) continue
-    acc.irf += r.irf
-    acc.srf += r.srf
-    acc.ped += r.ped
-    acc.total += r.total
+    for (const k of keys) acc[k] = (acc[k] ?? 0) + (r[k] ?? 0)
   }
   return acc
 })
@@ -815,11 +851,19 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                     {{ t('retinal.etdrs.selectionClear') }}
                   </button>
                 </div>
+                <!-- Task-aware biomarker chips. Fluid shows IRF /
+                     SRF / PED / ∑ in mm³; GA shows GA in mm². The
+                     last biomarker in the list gets pushed to the
+                     end with `ml-auto` so the sum aligns right. -->
                 <div class="flex items-center gap-x-4 gap-y-1 flex-wrap text-[12.5px] font-mono tabular-nums text-slate-700">
-                  <span><span class="text-cyan-700 font-semibold">IRF</span> {{ formatNumber(selectedSum.irf) }}</span>
-                  <span><span class="text-amber-700 font-semibold">SRF</span> {{ formatNumber(selectedSum.srf) }}</span>
-                  <span><span class="text-fuchsia-700 font-semibold">PED</span> {{ formatNumber(selectedSum.ped) }}</span>
-                  <span class="ml-auto"><span class="text-slate-500 font-semibold">∑</span> {{ formatNumber(selectedSum.total) }} mm³</span>
+                  <span
+                    v-for="(def, idx) in selectionBiomarkerDefs"
+                    :key="def.key"
+                    :class="idx === selectionBiomarkerDefs.length - 1 && selectionBiomarkerDefs.length > 1 ? 'ml-auto' : ''"
+                  >
+                    <span :class="['font-semibold', def.toneClass]">{{ def.label }}</span>
+                    {{ formatNumber(selectedSum[def.key]) }}<template v-if="idx === selectionBiomarkerDefs.length - 1"> {{ def.unit }}</template>
+                  </span>
                 </div>
               </div>
               <div

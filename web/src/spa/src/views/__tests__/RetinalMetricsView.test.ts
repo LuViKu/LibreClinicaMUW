@@ -227,14 +227,17 @@ describe('RetinalMetricsView — task surfaces', () => {
     expect(rows[4].text()).toContain('3–6 mm')
   })
 
-  it('renders 1 KPI tile + ETDRS sub-totals for the GA task', async () => {
+  it('renders 1 KPI tile + ETDRS sub-totals (3 discs + 2 rings) for the GA task', async () => {
     const w = await mountView(makeGaJob())
     const tiles = w.findAll('[data-testid="retinal-kpi-tile"]')
     expect(tiles.length).toBe(1)
     expect(tiles[0].text()).toContain('GA-Fläche')
     const etdrs = w.find('[data-testid="retinal-view-etdrs"]')
     expect(etdrs.exists()).toBe(true)
-    expect(etdrs.findAll('[data-testid="retinal-etdrs-row"]').length).toBe(3)
+    // 2026-06-22 — GA gets the same 5-row layout as fluid (1mm /
+    // 3mm / 6mm cumulative + 1–3 mm / 3–6 mm rings derived by
+    // subtraction).
+    expect(etdrs.findAll('[data-testid="retinal-etdrs-row"]').length).toBe(5)
   })
 
   it('renders 1 thickness KPI for the ONL task (per-B-scan trace dropped in design pass)', async () => {
