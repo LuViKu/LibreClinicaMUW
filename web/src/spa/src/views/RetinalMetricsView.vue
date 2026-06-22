@@ -72,19 +72,27 @@ const loadError = computed<string | null>(() => store.errors[jobId.value] ?? nul
  * Falls through to the raw value when the SPA hasn't shipped a
  * translation for the token (e.g. a new sidecar emits a new
  * task name).
+ *
+ * Computeds rather than functions called from the template — calling
+ * t() inside a function invoked per render can cause vue-i18n to
+ * re-track locale dependencies on every reactive pass, which the
+ * StatusPill upstream caught as "recursive updates" once a third
+ * StatusPill landed in the heading.
  */
-function statusLabel(status: string | null | undefined): string {
+const statusLabelText = computed<string>(() => {
+  const status = job.value?.status
   if (!status) return ''
   const key = `retinal.status.${status}`
   const translated = t(key)
   return translated === key ? status : translated
-}
-function taskLabel(task: string | null | undefined): string {
+})
+const taskLabelText = computed<string>(() => {
+  const task = job.value?.task
   if (!task) return ''
   const key = `retinal.task.${task}`
   const translated = t(key)
   return translated === key ? String(task).toUpperCase() : translated
-}
+})
 
 const hoveredBscanZ = ref<number | null>(null)
 
@@ -377,16 +385,16 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
           <h1 class="text-xl font-semibold tracking-tight flex items-center gap-3 flex-wrap" data-testid="retinal-view-heading">
             {{ t('retinal.header.title') }}
             <StatusPill variant="info">{{ String(job.laterality) }}</StatusPill>
-            <StatusPill v-if="job.task" variant="neutral">{{ taskLabel(job.task) }}</StatusPill>
+            <StatusPill v-if="job.task" variant="neutral">{{ taskLabelText }}</StatusPill>
             <StatusPill
               v-if="job.status === 'succeeded'"
               variant="success"
-            >{{ statusLabel(job.status) }}</StatusPill>
+            >{{ statusLabelText }}</StatusPill>
             <StatusPill
               v-else-if="job.status === 'failed'"
               variant="danger"
-            >{{ statusLabel(job.status) }}</StatusPill>
-            <StatusPill v-else variant="warning">{{ statusLabel(job.status) }}</StatusPill>
+            >{{ statusLabelText }}</StatusPill>
+            <StatusPill v-else variant="warning">{{ statusLabelText }}</StatusPill>
             <!-- Wave 2A — Live indicator. Visible while the SSE
                  stream is connected (i.e. the job is in flight + the
                  EventSource has at least handshaked). The animated
