@@ -29,12 +29,14 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
@@ -1657,10 +1659,51 @@ public class RetinalResultsApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
                 currentUser, currentStudy, currentRole);
-        if (!visibleStudyIds.contains(studyId)) {
-            return ResponseEntity.status(403).body(Map.of("message", denyMessage));
+        if (visibleStudyIds.contains(studyId)) {
+            return null;
         }
-        return null;
+        // 2026-06-22 user-feedback round 9 — retinal jobs surface
+        // through deep links from the upload portal / cross-study
+        // search; the job's owning study often differs from the
+        // operator's currently-active session study (e.g. an EIAMD
+        // upload routed into RIS while the user was browsing GA).
+        // Fall back to "does the user have ANY active grant on the
+        // owning study?" so the deep link works without forcing a
+        // study-switch. Sysadmins pass through their explicit
+        // admin grant; the same grant the seed + the
+        // 2026-06-22-seed-ris-amd-admin-grants changeset insert
+        // for the demo studies.
+        if (currentUser != null && currentUser.isSysAdmin()) {
+            return null;
+        }
+        if (currentUser != null && userHasActiveGrantOnStudy(currentUser, studyId)) {
+            return null;
+        }
+        return ResponseEntity.status(403).body(Map.of("message", denyMessage));
+    }
+
+    /**
+     * 2026-06-22 round 9 helper — true when {@code user} holds an
+     * AVAILABLE study_user_role on the named study. Used by the
+     * cross-study deep-link relaxation in {@link #guardStudyVisibility}.
+     */
+    private boolean userHasActiveGrantOnStudy(UserAccountBean user, Integer studyId) {
+        if (user == null || studyId == null) return false;
+        try {
+            UserAccountDAO userDao = new UserAccountDAO(dataSource);
+            List<StudyUserRoleBean> grants = userDao.findAllRolesByUserName(user.getName());
+            for (StudyUserRoleBean g : grants) {
+                if (g == null || g.getStudyId() != studyId) continue;
+                if (g.getStatus() != null
+                        && g.getStatus().getId() == Status.AVAILABLE.getId()) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("userHasActiveGrantOnStudy lookup failed for user={} study={}: {}",
+                    user.getName(), studyId, e.getMessage());
+        }
+        return false;
     }
 
     private ResponseEntity<?> guardJobVisibility(JobRow row, HttpSession session) {
