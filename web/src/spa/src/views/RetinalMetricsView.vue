@@ -94,6 +94,25 @@ const taskLabelText = computed<string>(() => {
   return translated === key ? String(task).toUpperCase() : translated
 })
 
+/**
+ * 2026-06-22 — artifacts surfaced in the Downloads section. Drops
+ * derived presentation PNGs (projection composite + per-biomarker
+ * + per-slice seg overlays) so the list is just the canonical
+ * scientific output: fluidseg.npz / fluid_labels.npy / etc. The
+ * PNGs still serve via the artifact-URL endpoint; they just don't
+ * clutter the manual-download list.
+ */
+const downloadableArtifacts = computed<string[]>(() => {
+  const names = job.value?.artifactNames ?? []
+  return names.filter((name) =>
+    !name.startsWith('projection_fluid')
+    && !name.startsWith('projection_ga')
+    && !name.startsWith('projection_onl')
+    && !name.startsWith('projection_pr')
+    && !name.startsWith('seg_bscan_'),
+  )
+})
+
 const hoveredBscanZ = ref<number | null>(null)
 
 /** Always a defined integer for the BscanViewer's v-model — falls
@@ -592,11 +611,17 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
           </DenseTable>
         </section>
 
-        <!-- Downloads -->
+        <!-- 2026-06-22 — drop derived presentation PNGs from the
+             downloads list. projection_fluid*.png + per-slice
+             seg_bscan_NNNN.png are renders of the raw fluidseg.npz
+             segmentation; the operator only needs the canonical
+             source artifact. The PNGs remain on disk for the
+             FundusOverlay + BscanViewer to fetch via the
+             artifact-URL endpoint. -->
         <RetinalArtifactList
           class="mb-5"
           :job-id="job.jobId"
-          :artifact-names="job.artifactNames"
+          :artifact-names="downloadableArtifacts"
           :companion-names="job.companionNames"
         />
 
