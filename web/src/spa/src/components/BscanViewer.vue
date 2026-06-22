@@ -112,6 +112,7 @@ const overlayCanvasEl = ref<HTMLCanvasElement | null>(null)
  * as the bscan voxel underneath.
  */
 const bscanImageDims = ref<{ rows: number; cols: number } | null>(null)
+const bscanPixelSpacing = ref<{ axialMm: number; lateralMm: number } | null>(null)
 const overlayBbox = ref<{ left: number; top: number; width: number; height: number } | null>(null)
 const overlayBboxStyle = computed<Record<string, string>>(() => {
   const b = overlayBbox.value
@@ -303,13 +304,26 @@ function recomputeOverlayBbox(): void {
     return
   }
   try {
-    // Stack viewports treat world coords as image-pixel coords. Pixel
-    // corners are at (-0.5, -0.5) and (cols-0.5, rows-0.5) under the
-    // pixel-centre convention. Some cornerstone3D builds give world =
-    // image pixel index; others give world = patient mm. We probe both
-    // and accept whichever returns finite numbers.
-    const tl = vp.worldToCanvas?.([-0.5, -0.5, 0])
-    const br = vp.worldToCanvas?.([dims.cols - 0.5, dims.rows - 0.5, 0])
+    // Cornerstone3D's worldToCanvas expects WORLD coords in MILLIMETRES,
+    // not image-pixel indices — the IJK→world transform is applied via
+    // PixelSpacing + ImageOrientationPatient at stack load. Translate
+    // pixel corners (-0.5, -0.5) and (cols-0.5, rows-0.5) to world mm.
+    // Without PixelSpacing we degrade to unit spacing (1 mm/px) — the
+    // bbox will still scale linearly, just at the wrong absolute size,
+    // and the fallback container-fill will kick in.
+    const sp = bscanPixelSpacing.value
+    const lateralMm = sp?.lateralMm ?? 1
+    const axialMm = sp?.axialMm ?? 1
+    const tl = vp.worldToCanvas?.([
+      -0.5 * lateralMm,
+      -0.5 * axialMm,
+      0,
+    ])
+    const br = vp.worldToCanvas?.([
+      (dims.cols - 0.5) * lateralMm,
+      (dims.rows - 0.5) * axialMm,
+      0,
+    ])
     const tlOk = tl && Number.isFinite(tl[0]) && Number.isFinite(tl[1])
     const brOk = br && Number.isFinite(br[0]) && Number.isFinite(br[1])
 
@@ -460,18 +474,30 @@ async function initViewer(): Promise<void> {
     // image loader as part of stack init.
     try {
       type MetaDataAccess = {
-        get: (m: string, id: string) => { rows?: number; columns?: number } | undefined
+        get: (m: string, id: string) =>
+          | { rows?: number; columns?: number; pixelSpacing?: number[] | [number, number] }
+          | undefined
       }
       const md = (cornerstoneCore as unknown as { metaData: MetaDataAccess }).metaData
       const firstImageId = imageIds[0]
       const pix = firstImageId ? md?.get('imagePixelModule', firstImageId) : undefined
+      const plane = firstImageId ? md?.get('imagePlaneModule', firstImageId) : undefined
       const rows = Number(pix?.rows ?? 0)
       const cols = Number(pix?.columns ?? 0)
       if (rows > 0 && cols > 0) {
         bscanImageDims.value = { rows, cols }
       }
+      // PixelSpacing per DICOM PS3.3 §C.7.6.2 = [row_spacing (axial mm/px),
+      // col_spacing (lateral mm/px)]. We need it to convert pixel-index
+      // corners to the world-mm coords cornerstone3D's worldToCanvas expects.
+      const ps = plane?.pixelSpacing
+      const axialMm = Array.isArray(ps) ? Number(ps[0] ?? 0) : 0
+      const lateralMm = Array.isArray(ps) ? Number(ps[1] ?? 0) : 0
+      if (axialMm > 0 && lateralMm > 0) {
+        bscanPixelSpacing.value = { axialMm, lateralMm }
+      }
     } catch {
-      /* bscanImageDims falls back to seg dims for the bbox computation */
+      /* falls back to seg dims + unit spacing for the bbox computation */
     }
 
     status.value = 'ready'
