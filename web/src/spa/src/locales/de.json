@@ -1694,6 +1694,11 @@
     "category": "Kategorie",
     "description": "Beschreibung",
     "repeatingLabel": "Wiederholbare Visite (mehrfach pro Teilnehmer/in möglich)",
+    "retinalTasks": {
+      "label": "Retinale Inferenz-Tasks",
+      "hint": "Beim OCT-Upload für diese Visite wird pro ausgewähltem Task ein Inferenz-Job angelegt. Ohne Auswahl wird Fluid-Segmentierung als Standard verwendet.",
+      "saveError": "Inferenz-Task-Auswahl konnte nicht gespeichert werden."
+    },
     "disable": "Entfernen",
     "disableConfirm": "Visite »{name}« entfernen? Bereits erfasste CRFs bleiben im Audit Trail dokumentiert, sind aber nicht mehr erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
     "restore": "Wiederherstellen",

@@ -1692,6 +1692,11 @@
     "category": "Category",
     "description": "Description",
     "repeatingLabel": "Repeating event (can occur multiple times per subject)",
+    "retinalTasks": {
+      "label": "[NEEDS_REVIEW] Retinal inference tasks",
+      "hint": "[NEEDS_REVIEW] When an OCT scan is uploaded for this visit, one inference job is enqueued per selected task. With no selection, fluid segmentation is used by default.",
+      "saveError": "[NEEDS_REVIEW] Could not save inference task selection."
+    },
     "disable": "Remove",
     "disableConfirm": "Remove event \"{name}\"? Existing CRFs scheduled against it remain in the audit trail but become inaccessible. The action is recorded in the audit trail.",
     "restore": "Restore",
