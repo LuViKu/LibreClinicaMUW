@@ -434,6 +434,27 @@ public class RetinalInferenceApiController {
             return null;
         }
 
+        // 2026-06-22 — local derivation of presentation artifacts
+        // (projection PNGs, per-slice overlays). The cluster /run
+        // intentionally ships only the raw segmentation (`fluidseg.npz`
+        // for the fluid task) so the GPU image stays minimal; the
+        // local app-VM sidecar derives the rest by reading the npz
+        // back from the persisted artifact dir. Soft-fail: the row
+        // still gets persisted + the operator can still browse the
+        // segmentation if derive fails (e.g. sidecar down). The
+        // backfill_projections.py script provides the same
+        // derivation on-demand for jobs that landed before this
+        // chain was wired.
+        if ("fluid".equals(taskClean)) {
+            try {
+                remoteClient.derive(artifactDir, taskClean);
+            } catch (Exception deriveEx) {
+                LOG.warn("Local /derive failed for job {} (task={}) — projections + per-slice PNGs"
+                                + " will not be available until backfill: {}",
+                        jobId, taskClean, deriveEx.getMessage());
+            }
+        }
+
         // Wave 3 — compute the task-specific metric off the persisted
         // artifacts. The remote envelope's primary_metric_* fields are
         // placeholder nulls for the cluster path; this is where the

@@ -97,30 +97,29 @@ def infer(req: InferRequest) -> dict:
     total = round(sum(payload.values()), 6)
     np.save(out / "fluid_labels.npy", seg.astype(np.uint8))
 
-    # 2026-06-19 — en-face biomarker projection. Pre-renders a single
-    # RGBA PNG of (n_bscans × n_ascans) projected onto the fundus plane
-    # + per-B-scan A-scan counts so the SPA's existing stripe renderer
-    # also picks up real data instead of falling back to neutral guides.
-    en_face_mask_path = None
-    per_bscan_mm2 = {"irf": [], "srf": [], "ped": []}
-    try:
-        from projection import render_fluid_projection  # vendored alongside app.py
-        proj_name, raw_counts = render_fluid_projection(seg, out)
-        en_face_mask_path = str(out / proj_name)
-        # Convert per-B-scan A-scan counts to mm² per biomarker. The
-        # area of one (axial-projected) A-scan cell is lateral × slice
-        # (the DICOM voxel_mm3 = axial × lateral × slice, so this is
-        # voxel_mm3 / axial).
-        bscan_area_mm2 = voxel_mm3 / axial if axial > 0 else voxel_mm3
-        per_bscan_mm2 = {
-            k: [round(c * bscan_area_mm2, 6) for c in v]
-            for k, v in raw_counts.items()
-        }
-    except Exception as proj_exc:  # noqa: BLE001 — projection is best-effort
-        import logging
-        logging.getLogger(__name__).warning(
-            "fluid en-face projection failed: %s", proj_exc
-        )
+    # 2026-06-22 — per-B-scan biomarker totals (mm²). The cluster
+    # runner stays presentation-free per architecture directive:
+    # projection PNGs + per-slice overlays are derived app-VM-side
+    # via the local /derive endpoint. The cheap numeric aggregate
+    # (one np.any + .sum() per biomarker per slice) stays on the
+    # runner so the wire payload still carries the data the SPA's
+    # per-B-scan trace chart consumes — no PNG cost.
+    en_face_mask_path = None  # legacy field — local /derive owns the PNG path now
+    bscan_area_mm2 = voxel_mm3 / axial if axial > 0 else voxel_mm3
+    per_bscan_mm2 = {
+        "irf": [
+            round(int(np.any(seg[z] == 1, axis=0).sum()) * bscan_area_mm2, 6)
+            for z in range(seg.shape[0])
+        ],
+        "srf": [
+            round(int(np.any(seg[z] == 2, axis=0).sum()) * bscan_area_mm2, 6)
+            for z in range(seg.shape[0])
+        ],
+        "ped": [
+            round(int(np.any(seg[z] == 3, axis=0).sum()) * bscan_area_mm2, 6)
+            for z in range(seg.shape[0])
+        ],
+    }
 
     return {
         "primary_metric_value": total,
