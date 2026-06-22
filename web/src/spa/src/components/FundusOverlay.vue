@@ -33,7 +33,6 @@ import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { GeometryJson } from '@/api/retinal'
 import { artifactUrl } from '@/api/retinal'
-import { BIOMARKER_COLORS } from './retinalPalette'
 
 const { t } = useI18n()
 
@@ -262,130 +261,6 @@ function flattenToBboxRect(
   })
 }
 
-const bscanLines = computed<BscanLine[]>(() => {
-  const raw = props.geometry.bscan_positions_fundus_px ?? []
-  const polylines = flattenToBboxRect(raw, scanBbox.value)
-  if (props.task === 'fluid') {
-    return computeFluidBscanLines(polylines, props.payload)
-  }
-  if (props.task === 'ga') {
-    return computeGaBscanLines(polylines, props.payload)
-  }
-  // onl / pr — no per-B-scan biomarker overlay; render thin neutral guides
-  // so the operator can still see scan coverage on the fundus.
-  return polylines.map((p) => ({
-    z: p.z,
-    x1: p.x1,
-    y1: p.y1,
-    x2: p.x2,
-    y2: p.y2,
-    stroke: '#94a3b8', // slate-400
-    opacity: 0.35,
-    dominantLabel: '—',
-    dominantValue: 0,
-  }))
-})
-
-function computeFluidBscanLines(
-  polylines: GeometryJson['bscan_positions_fundus_px'],
-  payload: Record<string, unknown>,
-): BscanLine[] {
-  // Defensive extraction — Wave 2 may emit empty arrays if the
-  // segmentation produced no fluid voxels at all.
-  const per = (payload['per_bscan_mm2'] ?? {}) as {
-    irf?: number[]
-    srf?: number[]
-    ped?: number[]
-  }
-  const irf = per.irf ?? []
-  const srf = per.srf ?? []
-  const ped = per.ped ?? []
-  const maxAcross = Math.max(
-    ...irf,
-    ...srf,
-    ...ped,
-    0, // guard against -Infinity when all arrays empty
-  )
-  const denom = maxAcross > 0 ? maxAcross : 1
-  // 2026-06-22 round 9 — drop lines whose biomarker presence is
-  // exactly zero across all three channels. Operator review:
-  // rendering every B-scan's polyline (97 lines per casebook,
-  // most of them transparent) still left the per-B-scan
-  // mouse-hit areas (stroke-width=8 transparent overlay) in place,
-  // and adjacent zero-value lines visually merged into a continuous
-  // block when the projection PNG was absent. Filtering them out
-  // collapses the layer to just the slices the segmenter actually
-  // fired on, which reads as discrete stripes again.
-  return polylines
-    .filter((p) => {
-      const z = p.z
-      return (irf[z] ?? 0) > 0 || (srf[z] ?? 0) > 0 || (ped[z] ?? 0) > 0
-    })
-    .map((p) => {
-      const z = p.z
-      const i = irf[z] ?? 0
-      const s = srf[z] ?? 0
-      const d = ped[z] ?? 0
-      let label = 'irf'
-      let value = i
-      let stroke: string = BIOMARKER_COLORS.irf
-      if (s > value) {
-        label = 'srf'
-        value = s
-        stroke = BIOMARKER_COLORS.srf
-      }
-      if (d > value) {
-        label = 'ped'
-        value = d
-        stroke = BIOMARKER_COLORS.ped
-      }
-      const opacity = Math.max(0, Math.min(1, value / denom))
-      return {
-        z,
-        x1: p.x1,
-        y1: p.y1,
-        x2: p.x2,
-        y2: p.y2,
-        stroke,
-        opacity,
-        dominantLabel: label.toUpperCase(),
-        dominantValue: value,
-      }
-    })
-}
-
-function computeGaBscanLines(
-  polylines: GeometryJson['bscan_positions_fundus_px'],
-  payload: Record<string, unknown>,
-): BscanLine[] {
-  const per = (payload['per_bscan_mm2'] ?? []) as number[]
-  const max = Math.max(...per, 0)
-  const denom = max > 0 ? max : 1
-  // Same drop-empty rule as the fluid path — only render the
-  // slices the segmenter actually fired on.
-  return polylines
-    .filter((p) => (per[p.z] ?? 0) > 0)
-    .map((p) => {
-      const z = p.z
-      const v = per[z] ?? 0
-      const intensity = Math.max(0, Math.min(1, v / denom))
-      // Magenta-to-amber ramp keyed off intensity. Cold areas drift
-      // toward amber (low GA); hot areas saturate toward magenta-pink.
-      const stroke = intensity > 0.5 ? '#ec4899' : '#fbbf24' // pink-500 / amber-400
-      return {
-        z,
-        x1: p.x1,
-        y1: p.y1,
-        x2: p.x2,
-        y2: p.y2,
-        stroke,
-        opacity: 0.25 + intensity * 0.75,
-        dominantLabel: 'GA',
-        dominantValue: v,
-      }
-    })
-}
-
 /* ------- Hover handling --------------------------------------------- */
 
 const internalHoverZ = ref<number | null>(null)
@@ -404,14 +279,36 @@ watch(
 // only from the per-B-scan trace chart via the hoveredBscanZ prop.
 
 /**
- * 2026-06-22 round 9 — single hovered B-scan line (only when the
- * per-B-scan trace chart's mouse hover is over a slice the
- * segmenter actually fired on). Returns null otherwise so the
- * fundus overlay stays clean by default.
+ * 2026-06-22 — current-B-scan position line tracking the BscanViewer's
+ * slider via the {@code hoveredBscanZ} prop. Drawn directly from the
+ * RAW geometry positions so every slice has a line — not filtered to
+ * slices with biomarker presence. Clipped to {@code dim_z_bscans}
+ * because Heidelberg multi-pass acquisitions can pack more entries
+ * into {@code bscan_data} than the displayed volume actually has
+ * slices; matching by z without that clip would route slider-z=N to
+ * a polyline from a *different* scan pass when N collides.
  */
-const hoveredLine = computed<BscanLine | null>(() => {
+const currentBscanLine = computed<BscanLine | null>(() => {
   if (internalHoverZ.value == null) return null
-  return bscanLines.value.find((l) => l.z === internalHoverZ.value) ?? null
+  const raw = props.geometry.bscan_positions_fundus_px ?? []
+  const maxZ = props.geometry.bscan?.dim_z_bscans ?? Infinity
+  // Filter to in-range z, then flatten to bbox horizontally + use the
+  // y midpoint so the line reads as a clean horizontal stroke.
+  const inRange = raw.filter((p) => p.z >= 0 && p.z < maxZ)
+  const flat = flattenToBboxRect(inRange, scanBbox.value)
+  const match = flat.find((p) => p.z === internalHoverZ.value)
+  if (!match) return null
+  return {
+    z: match.z,
+    x1: match.x1,
+    y1: match.y1,
+    x2: match.x2,
+    y2: match.y2,
+    stroke: '#7fd0ff',
+    opacity: 0.95,
+    dominantLabel: '',
+    dominantValue: 0,
+  }
 })
 
 /* ------- Labels ------------------------------------------------------ */
@@ -581,24 +478,21 @@ function ringLabel(diameterMm: number): string {
            line for the operator-hovered B-scan so the per-B-scan
            trace chart's hover handoff still has a visual cue on the
            fundus. -->
-      <!-- 2026-06-22 — current-B-scan position line. Always drawn
-           (on top of the projection PNG when present) using the
-           muw-sky stroke from the design, so the operator can read
-           the en-face position of the slice currently shown in the
-           BscanViewer at a glance. Hover from the (now-removed)
-           per-B-scan trace also drives this same line. -->
-      <g v-if="hoveredLine" data-testid="bscan-lines">
+      <!-- 2026-06-22 — current-B-scan position line. Drawn from the
+           RAW geometry positions (not the biomarker-filtered list), so
+           it appears for every slice the BscanViewer can show — not
+           only the slices where the segmenter found IRF/SRF/PED. -->
+      <g v-if="currentBscanLine" data-testid="bscan-lines">
         <line
-          :x1="hoveredLine.x1"
-          :y1="hoveredLine.y1"
-          :x2="hoveredLine.x2"
-          :y2="hoveredLine.y2"
+          :x1="currentBscanLine.x1"
+          :y1="currentBscanLine.y1"
+          :x2="currentBscanLine.x2"
+          :y2="currentBscanLine.y2"
           stroke="#7fd0ff"
           stroke-width="2"
           stroke-linecap="round"
           vector-effect="non-scaling-stroke"
-          :data-testid="`bscan-line-${hoveredLine.z}`"
-          :data-dominant="hoveredLine.dominantLabel"
+          :data-testid="`bscan-line-${currentBscanLine.z}`"
           pointer-events="none"
           opacity="0.95"
         />
