@@ -93,6 +93,29 @@ const jobIdRef = computed<number | null>(() => props.jobId ?? null)
 const { envelope: segEnvelope } = useSegmentationEnvelope(jobIdRef)
 const overlayCanvasEl = ref<HTMLCanvasElement | null>(null)
 
+/**
+ * 2026-06-22 — the inner aspect-preserving wrapper sizes itself to
+ * the underlying B-scan's true cols/rows. For fluid we have the
+ * dims directly on the envelope (kind=volume, shape=(z, rows, cols)).
+ * For binary_2d / surface_y the envelope carries only (z, cols)
+ * because the layer / RPEL CSVs don't include the axial row count;
+ * fall back to the Heidelberg default (~2:1 cols:rows) so the
+ * letterboxing roughly matches the cornerstone canvas. The
+ * cornerstone-side aspect is the ground truth — once we have a
+ * dim_y_rows on the geometry endpoint, thread it in.
+ */
+const bscanAspect = computed<string>(() => {
+  const env = segEnvelope.value
+  if (env?.kind === 'volume' && env.shape.length >= 3) {
+    const rows = env.shape[1] ?? 0
+    const cols = env.shape[2] ?? 0
+    if (rows > 0 && cols > 0) return `${cols} / ${rows}`
+  }
+  // Default Heidelberg Spectralis ratio (1024 wide × 496 tall) — used
+  // until a stricter geometry source threads through.
+  return '1024 / 496'
+})
+
 /** Label-colour ramp — matches FundusOverlay's BIOMARKER_COLORS. */
 const FLUID_LABEL_COLOURS: Record<number, [number, number, number]> = {
   1: [56, 189, 248],   // sky-400 — IRF
@@ -303,8 +326,17 @@ async function initViewer(): Promise<void> {
     renderingEngineRef.value = re
 
     // Build per-frame wado image IDs — one entry per B-scan.
+    //
+    // 2026-06-22 — cornerstone-dicom-image-loader's wadouri scheme
+    // uses 1-based frame numbers per the DICOM multi-frame standard
+    // (PS3.3 §C.7.6.2 — FrameNumber starts at 1). Stack-index k still
+    // corresponds to the (k+1)-th DICOM frame; the seg runner reads
+    // the same DICOM frames in storage order (slice 0 → first frame),
+    // so this aligns the cornerstone-displayed image with the seg
+    // envelope's slice index. Without the +1 every displayed B-scan
+    // was one slice behind the seg overlay.
     const imageIds = Array.from({ length: props.nBscans }, (_, frame) =>
-      `wadouri:${props.bscanDcmUrl}?frame=${frame}`,
+      `wadouri:${props.bscanDcmUrl}?frame=${frame + 1}`,
     )
 
     // Enable a stack viewport into the container element.
@@ -466,31 +498,34 @@ onBeforeUnmount(() => {
       </span>
     </header>
 
-    <!-- 2026-06-22 — wrap the canvas + the per-slice seg overlay so
-         the overlay can be absolutely positioned over the canvas
-         without competing with the cornerstone DOM. The overlay
-         <img> covers the same box as the canvas (object-fit:
-         contain matches the way cornerstone draws inside the
-         aspect-[4/3] container) so the per-A-scan biomarker mask
-         lands in-pixel. pointer-events:none so the canvas still
-         receives the keydown / wheel events. -->
-    <div class="relative aspect-[4/3] w-full bg-black">
+    <!-- 2026-06-22 — outer 4:3 box keeps the viewer's footprint stable
+         in the SPA layout; the inner aspect-preserving box matches
+         the B-scan's actual proportions so the overlay canvas and
+         the cornerstone canvas letterbox identically. Both share the
+         same parent so any per-A-scan pixel in the overlay lands on
+         the same screen pixel as the underlying B-scan pixel. -->
+    <div class="relative aspect-[4/3] w-full bg-black flex items-center justify-center overflow-hidden">
       <div
-        ref="containerEl"
-        data-testid="bscan-viewer-canvas"
-        class="absolute inset-0"
-        tabindex="0"
-        @keydown.left.prevent="setZ(modelValue - 1)"
-        @keydown.right.prevent="setZ(modelValue + 1)"
-        @wheel.prevent="onWheel"
-      />
-      <canvas
-        v-show="segEnvelope && status === 'ready'"
-        ref="overlayCanvasEl"
-        class="absolute inset-0 w-full h-full pointer-events-none"
-        data-testid="bscan-viewer-seg-overlay"
-        :aria-label="t('retinal.bscanViewer.segOverlayAlt', { current: modelValue + 1, total: nBscans })"
-      />
+        class="relative w-full"
+        :style="{ aspectRatio: bscanAspect, maxHeight: '100%' }"
+      >
+        <div
+          ref="containerEl"
+          data-testid="bscan-viewer-canvas"
+          class="absolute inset-0"
+          tabindex="0"
+          @keydown.left.prevent="setZ(modelValue - 1)"
+          @keydown.right.prevent="setZ(modelValue + 1)"
+          @wheel.prevent="onWheel"
+        />
+        <canvas
+          v-show="segEnvelope && status === 'ready'"
+          ref="overlayCanvasEl"
+          class="absolute inset-0 w-full h-full pointer-events-none"
+          data-testid="bscan-viewer-seg-overlay"
+          :aria-label="t('retinal.bscanViewer.segOverlayAlt', { current: modelValue + 1, total: nBscans })"
+        />
+      </div>
       <!-- Discoverability hint — auto-fades after the operator has
            used the scroll/scrub once (the hint is only useful for the
            first interaction; after that it's noise). -->
