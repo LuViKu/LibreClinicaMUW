@@ -106,7 +106,7 @@ This document captures the strategic decisions that frame the modernization proj
 
 **Date:** 2026-05-28
 **Status:** Accepted (pre-flight ratification for Phase B.3)
-**Companion analysis:** [docs/development/modernization/phase-b-dependency-analysis.md](phase-b-dependency-analysis.md) (Castor row); [docs/development/modernization/phase-b-execution-playbook.md § B.3](phase-b-execution-playbook.md)
+**Companion analysis:** [docs/development/modernization/archive/phase-b-dependency-analysis.md](archive/phase-b-dependency-analysis.md) (Castor row); [docs/development/modernization/archive/phase-b-execution-playbook.md § B.3](archive/phase-b-execution-playbook.md)
 
 **Context.** Castor 1.4.1 (2014) has no Jakarta-namespace variant and must be removed before Phase B can complete. The CDISC ODM 1.3 import/export paths (`ImportCRFDataServlet`, `ODMMetadataRestResource`, `MetaDataCollector`, `AdminDataCollector`, plus rule-engine XSLT executions) all currently use Castor's mapping-driven marshaller/unmarshaller and `XmlSchemaValidationHelper`. Three replacement options were considered:
 
@@ -121,7 +121,7 @@ This document captures the strategic decisions that frame the modernization proj
 **Rationale.**
 1. The `odm/` module already contains JAXB-generated classes from the ODM 1.3 XSD — half the work is done.
 2. ODM 1.3 is schema-locked; canonical, schema-validated XML output is the requirement of every downstream consumer (regulators, biostatistics pipelines, partner sites). JAXB matches that contract; Jackson XML does not.
-3. Byte-equivalence against pre-Phase-B Castor output (the [B.0 characterisation tests](phase-b-execution-playbook.md#b0--castor-characterisation-tests-pre-flight) regime) is achievable with JAXB + targeted `XmlAdapter`s where lexical formats differ.
+3. Byte-equivalence against pre-Phase-B Castor output (the [B.0 characterisation tests](archive/phase-b-execution-playbook.md#b0--castor-characterisation-tests-pre-flight) regime) is achievable with JAXB + targeted `XmlAdapter`s where lexical formats differ.
 4. Plain JAXB has the smallest dependency footprint (no MOXy install).
 
 **Consequences.**
@@ -153,7 +153,7 @@ This document captures the strategic decisions that frame the modernization proj
 
 **Consequences.**
 - No mixed-namespace state during B.3 — the whole codebase stays on `javax.*` until B.4 crosses the cliff in one move.
-- B.3's JAXB call sites (`OdmJaxbContext`, the rewritten Castor-replacing code) all import `javax.xml.bind.*`. B.4 then runs Eclipse Transformer across them as part of the same sweep that handles the other 235 javax-importing files (per [phase-b-eclipse-transformer-dry-run.md](phase-b-eclipse-transformer-dry-run.md)).
+- B.3's JAXB call sites (`OdmJaxbContext`, the rewritten Castor-replacing code) all import `javax.xml.bind.*`. B.4 then runs Eclipse Transformer across them as part of the same sweep that handles the other 235 javax-importing files (per [phase-b-eclipse-transformer-dry-run.md](archive/phase-b-eclipse-transformer-dry-run.md)).
 - The `odm/` module's `jaxb2-maven-plugin:2.5.0` stays untouched in B.3. B.4 bumps it (or swaps to `jaxb40-maven-plugin`) and re-generates the 513 classes.
 - This amendment does NOT change the engine choice (still Jakarta JAXB, not Jackson XML / MOXy) — only the namespace-introduction timing. The full Jakarta migration arrives via B.4.
 
@@ -165,7 +165,7 @@ This document captures the strategic decisions that frame the modernization proj
 
 **Date:** 2026-05-28
 **Status:** Accepted (pre-flight ratification for Phase B.11)
-**Companion analysis:** [docs/development/modernization/phase-b-execution-playbook.md § B.11](phase-b-execution-playbook.md)
+**Companion analysis:** [docs/development/modernization/archive/phase-b-execution-playbook.md § B.11](archive/phase-b-execution-playbook.md)
 
 **Context.** The heritage Java packages are `org.akaza.openclinica.*` (legacy OpenClinica) and `org.libreclinica.*` (post-2019 LibreClinica additions). Three options were considered:
 

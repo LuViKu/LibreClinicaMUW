@@ -34,7 +34,7 @@ This document is the formal entry gate to Phase E execution: until the P0 findin
 
 ### URL inventory — 216/216 servlet mappings
 
-The Phase E catalogue counted **216 servlet-mapping declarations** in `web/src/main/webapp/WEB-INF/web.xml` at commit `1090880ec`. Phase C.14 ([web-xml-inventory.md](../phase-c14-web-xml-inventory.md)) migrated 214 of those into Java configuration; the current `web.xml` contains 2 declarations (the `pages` DispatcherServlet + a default-mapping fallback), and [`LegacyServletRegistry`](../../../web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/config/LegacyServletRegistry.java) registers the remaining **216 servlets via Spring Boot `ServletRegistrationBean`** (exact 1:1 match by URL pattern, verified by `grep -c ServletRegistrationBean`). The user-facing URL space is unchanged.
+The Phase E catalogue counted **216 servlet-mapping declarations** in `web/src/main/webapp/WEB-INF/web.xml` at commit `1090880ec`. Phase C.14 ([web-xml-inventory.md](../archive/phase-c14-web-xml-inventory.md)) migrated 214 of those into Java configuration; the current `web.xml` contains 2 declarations (the `pages` DispatcherServlet + a default-mapping fallback), and [`LegacyServletRegistry`](../../../web/src/main/java/at/ac/meduniwien/ophthalmology/libreclinica/config/LegacyServletRegistry.java) registers the remaining **216 servlets via Spring Boot `ServletRegistrationBean`** (exact 1:1 match by URL pattern, verified by `grep -c ServletRegistrationBean`). The user-facing URL space is unchanged.
 
 ### Spring MVC controllers — 28 classes present
 
@@ -175,7 +175,7 @@ Once these close, the Phase E execution playbook ([phase-e-execution-playbook.md
 - [Phase E feature catalogue (README)](README.md)
 - [Phase E known issues (companion to this report)](known-issues.md)
 - [Phase D execution playbook](../phase-d-execution-playbook.md)
-- [Phase C.14 web.xml inventory](../phase-c14-web-xml-inventory.md)
+- [Phase C.14 web.xml inventory](../archive/phase-c14-web-xml-inventory.md)
 - [DR-014 — Institution-agnostic SSO via reverse-proxy pre-authentication](../decision-record.md)
 - Phase D-Sec closure tag: `phase-d-sec-closure` @ `lc-develop @ 5d4932481`
 - CI run for closure: GitHub Actions run `26684367135` (all 3 jobs ✅).
