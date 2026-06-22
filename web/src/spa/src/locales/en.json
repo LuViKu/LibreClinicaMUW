@@ -2859,6 +2859,18 @@
         "OU": "[NEEDS_REVIEW] OU · both eyes"
       }
     },
+    "status": {
+      "queued": "[NEEDS_REVIEW] Queued",
+      "remote_pending": "[NEEDS_REVIEW] Waiting for sidecar",
+      "screening": "[NEEDS_REVIEW] Screening",
+      "screened": "[NEEDS_REVIEW] Screened",
+      "preprocessing": "[NEEDS_REVIEW] Preprocessing",
+      "segmenting": "[NEEDS_REVIEW] Segmenting",
+      "succeeded": "[NEEDS_REVIEW] Done",
+      "done": "[NEEDS_REVIEW] Done",
+      "failed": "[NEEDS_REVIEW] Failed",
+      "parked": "[NEEDS_REVIEW] Parked"
+    },
     "empty": {
       "awaitingSidecar": "[NEEDS_REVIEW] Awaiting sidecar…",
       "preprocessing": "[NEEDS_REVIEW] Preprocessing the OCT volume…",

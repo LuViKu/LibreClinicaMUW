@@ -2867,9 +2867,12 @@
     "status": {
       "queued": "In Warteschlange",
       "remote_pending": "Wartet auf Sidecar",
+      "screening": "Wird geprüft",
+      "screened": "Vorprüfung abgeschlossen",
       "preprocessing": "Vorverarbeitung",
       "segmenting": "Segmentierung",
-      "succeeded": "Erfolgreich",
+      "succeeded": "Abgeschlossen",
+      "done": "Abgeschlossen",
       "failed": "Fehlgeschlagen",
       "parked": "Geparkt"
     },

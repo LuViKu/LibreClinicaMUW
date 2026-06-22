@@ -581,20 +581,26 @@ function ringLabel(diameterMm: number): string {
            line for the operator-hovered B-scan so the per-B-scan
            trace chart's hover handoff still has a visual cue on the
            fundus. -->
-      <g v-if="!projectionUrl && hoveredLine" data-testid="bscan-lines">
+      <!-- 2026-06-22 — current-B-scan position line. Always drawn
+           (on top of the projection PNG when present) using the
+           muw-sky stroke from the design, so the operator can read
+           the en-face position of the slice currently shown in the
+           BscanViewer at a glance. Hover from the (now-removed)
+           per-B-scan trace also drives this same line. -->
+      <g v-if="hoveredLine" data-testid="bscan-lines">
         <line
           :x1="hoveredLine.x1"
           :y1="hoveredLine.y1"
           :x2="hoveredLine.x2"
           :y2="hoveredLine.y2"
-          :stroke="hoveredLine.stroke"
+          stroke="#7fd0ff"
           stroke-width="2"
           stroke-linecap="round"
           vector-effect="non-scaling-stroke"
           :data-testid="`bscan-line-${hoveredLine.z}`"
           :data-dominant="hoveredLine.dominantLabel"
           pointer-events="none"
-          opacity="0.9"
+          opacity="0.95"
         />
       </g>
 
