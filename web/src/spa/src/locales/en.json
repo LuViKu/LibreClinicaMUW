@@ -1543,6 +1543,70 @@
           "vitreous": "[NEEDS_REVIEW] Vitreous (anterior)",
           "remark": "[NEEDS_REVIEW] Remark"
         }
+      },
+      "imaging": {
+        "option": {
+          "erfolgreich": "[NEEDS_REVIEW] Successful",
+          "nichtMoeglich": "[NEEDS_REVIEW] Not possible",
+          "nichtVersucht": "[NEEDS_REVIEW] Not attempted"
+        },
+        "quality": {
+          "validation": "[NEEDS_REVIEW] Quality: 1 (unusable) to 5 (excellent)."
+        },
+        "failReason": {
+          "label": "[NEEDS_REVIEW] Reason (not possible)"
+        },
+        "notes": {
+          "label": "[NEEDS_REVIEW] Notes"
+        }
+      },
+      "spectralisOct": {
+        "label": "[NEEDS_REVIEW] Spectralis SD-OCT",
+        "description": "[NEEDS_REVIEW] Heidelberg Spectralis SD-OCT — acquisition + quality per eye.",
+        "acquired": { "label": "[NEEDS_REVIEW] OCT acquired?" },
+        "quality": { "label": "[NEEDS_REVIEW] Image quality (1–5)" }
+      },
+      "spectralisFaf": {
+        "label": "[NEEDS_REVIEW] Spectralis FAF",
+        "description": "[NEEDS_REVIEW] Heidelberg Spectralis fundus autofluorescence — acquisition + quality per eye.",
+        "acquired": { "label": "[NEEDS_REVIEW] FAF acquired?" },
+        "quality": { "label": "[NEEDS_REVIEW] Image quality (1–5)" }
+      },
+      "plexEliteOcta": {
+        "label": "[NEEDS_REVIEW] ZEISS PLEX Elite OCT-A",
+        "description": "[NEEDS_REVIEW] PLEX Elite 9000 OCT angiography — acquisition + quality per eye.",
+        "acquired": { "label": "[NEEDS_REVIEW] OCT-A acquired?" },
+        "quality": { "label": "[NEEDS_REVIEW] Image quality (1–5)" }
+      },
+      "zeissClarus": {
+        "label": "[NEEDS_REVIEW] ZEISS Clarus 700",
+        "description": "[NEEDS_REVIEW] Ultra-widefield fundus photography — acquisition + quality per eye.",
+        "acquired": { "label": "[NEEDS_REVIEW] Fundus image acquired?" },
+        "quality": { "label": "[NEEDS_REVIEW] Image quality (1–5)" }
+      },
+      "topconMaestro2Oct": {
+        "label": "[NEEDS_REVIEW] Topcon Maestro2 OCT",
+        "description": "[NEEDS_REVIEW] Topcon Maestro 2 SD-OCT — acquisition + quality per eye.",
+        "acquired": { "label": "[NEEDS_REVIEW] OCT acquired?" },
+        "quality": { "label": "[NEEDS_REVIEW] Image quality (1–5)" }
+      },
+      "plBcva": {
+        "label": "[NEEDS_REVIEW] PL-BCVA (Pinhole)",
+        "description": "[NEEDS_REVIEW] Pinhole best-corrected visual acuity — letters per eye + notes.",
+        "letters": {
+          "label": "[NEEDS_REVIEW] PL-BCVA (letters)",
+          "validation": "[NEEDS_REVIEW] 0–100 letters (integer)."
+        },
+        "notes": { "label": "[NEEDS_REVIEW] Notes" }
+      },
+      "llBcva": {
+        "label": "[NEEDS_REVIEW] LL-BCVA (Low Luminance)",
+        "description": "[NEEDS_REVIEW] Low-luminance best-corrected visual acuity (2.0 ND filter) — letters per eye + notes.",
+        "letters": {
+          "label": "[NEEDS_REVIEW] LL-BCVA (letters)",
+          "validation": "[NEEDS_REVIEW] 0–100 letters (integer)."
+        },
+        "notes": { "label": "[NEEDS_REVIEW] Notes" }
       }
     }
   },

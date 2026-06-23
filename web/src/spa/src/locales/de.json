@@ -1545,6 +1545,70 @@
           "vitreous": "Glaskörper (anterior)",
           "remark": "Bemerkung"
         }
+      },
+      "imaging": {
+        "option": {
+          "erfolgreich": "Erfolgreich",
+          "nichtMoeglich": "Nicht möglich",
+          "nichtVersucht": "Nicht versucht"
+        },
+        "quality": {
+          "validation": "Qualität: 1 (unverwertbar) bis 5 (sehr gut)."
+        },
+        "failReason": {
+          "label": "Grund (nicht möglich)"
+        },
+        "notes": {
+          "label": "Bemerkung"
+        }
+      },
+      "spectralisOct": {
+        "label": "Spectralis SD-OCT",
+        "description": "Heidelberg Spectralis SD-OCT — Akquisition + Qualität pro Auge.",
+        "acquired": { "label": "OCT akquiriert?" },
+        "quality": { "label": "Bildqualität (1–5)" }
+      },
+      "spectralisFaf": {
+        "label": "Spectralis FAF",
+        "description": "Heidelberg Spectralis Fundus-Autofluoreszenz — Akquisition + Qualität pro Auge.",
+        "acquired": { "label": "FAF akquiriert?" },
+        "quality": { "label": "Bildqualität (1–5)" }
+      },
+      "plexEliteOcta": {
+        "label": "ZEISS PLEX Elite OCT-A",
+        "description": "PLEX Elite 9000 OCT-Angiographie — Akquisition + Qualität pro Auge.",
+        "acquired": { "label": "OCT-A akquiriert?" },
+        "quality": { "label": "Bildqualität (1–5)" }
+      },
+      "zeissClarus": {
+        "label": "ZEISS Clarus 700",
+        "description": "Ultra-Weitwinkel-Fundusaufnahme — Akquisition + Qualität pro Auge.",
+        "acquired": { "label": "Fundusbild akquiriert?" },
+        "quality": { "label": "Bildqualität (1–5)" }
+      },
+      "topconMaestro2Oct": {
+        "label": "Topcon Maestro2 OCT",
+        "description": "Topcon Maestro 2 SD-OCT — Akquisition + Qualität pro Auge.",
+        "acquired": { "label": "OCT akquiriert?" },
+        "quality": { "label": "Bildqualität (1–5)" }
+      },
+      "plBcva": {
+        "label": "PL-BCVA (Pinhole)",
+        "description": "Pinhole-bestkorrigierter Visus — Buchstaben pro Auge + Bemerkung.",
+        "letters": {
+          "label": "PL-BCVA (Buchstaben)",
+          "validation": "0–100 Buchstaben (ganzzahlig)."
+        },
+        "notes": { "label": "Bemerkung" }
+      },
+      "llBcva": {
+        "label": "LL-BCVA (Low Luminance)",
+        "description": "Low-Luminance bestkorrigierter Visus (2,0 ND-Filter) — Buchstaben pro Auge + Bemerkung.",
+        "letters": {
+          "label": "LL-BCVA (Buchstaben)",
+          "validation": "0–100 Buchstaben (ganzzahlig)."
+        },
+        "notes": { "label": "Bemerkung" }
       }
     }
   },
