@@ -93,10 +93,31 @@ const studyContextLabel = computed(() => {
  * The store guarantees every row has the same event labels in the same
  * order; falling back to the empty array keeps the view from crashing
  * during the first render before mock data hydrates.
+ *
+ * <p>2026-06-23 — Studies whose event-definitions all share the same
+ * label (e.g. RIS's repeating "Retinal Imaging Visit" × 7) blew up
+ * the table width with a duplicated 22-char column header, pushing
+ * the trailing "Öffnen" action off-screen. When >1 columns share a
+ * label we collapse to compact ordinal shorthand ("V1" … "VN")
+ * with the full label preserved in the `title` attribute (hover
+ * tooltip). Studies with distinct per-visit labels (typical
+ * interventional protocols) keep their original headers.
  */
-const eventColumns = computed(() =>
-  subjects.rows[0]?.events.map((e) => ({ oid: e.eventDefinitionOid, label: e.label })) ?? [],
-)
+const eventColumns = computed(() => {
+  const raw = subjects.rows[0]?.events.map((e) => ({
+    oid: e.eventDefinitionOid,
+    label: e.label,
+  })) ?? []
+  const uniqueLabels = new Set(raw.map((c) => c.label))
+  if (raw.length > 1 && uniqueLabels.size === 1) {
+    return raw.map((c, i) => ({
+      oid: c.oid,
+      label: `V${i + 1}`,
+      title: c.label,
+    }))
+  }
+  return raw.map((c) => ({ ...c, title: c.label }))
+})
 
 /* Studien-Statistik modal — opens on the SideRail link. */
 const metricsModalOpen = ref(false)
@@ -338,7 +359,8 @@ const ariaSortLabel = (subject: Subject) =>
               v-for="col in eventColumns"
               :key="col.oid"
               scope="col"
-              class="px-3 py-2 font-medium"
+              class="px-3 py-2 font-medium whitespace-nowrap"
+              :title="col.title"
             >
               {{ col.label }}
             </th>

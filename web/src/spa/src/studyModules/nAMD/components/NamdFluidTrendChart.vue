@@ -32,16 +32,19 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useI18n()
 
-// Layout — match the design's 760 × 250 viewport. The chart drawing
-// area inset leaves room for the BCVA strip below.
+// Layout — match the design's 760 × 250 viewport plus a 28-px X-axis
+// label band below the BCVA strip (2026-06-23) carrying per-visit
+// labels + dates. The fluid + BCVA drawing regions are unchanged so
+// the existing snapshots keep matching.
 const W = 760
-const H = 250
+const H = 278
 const PAD_L = 36
 const PAD_R = 12
 const PAD_T = 14
 const FLUID_H = 170
 const BCVA_TOP = PAD_T + FLUID_H + 12
 const BCVA_H = 40
+const X_AXIS_TOP = BCVA_TOP + BCVA_H + 8
 
 const hoverIdx = ref<number | null>(null)
 
@@ -103,6 +106,19 @@ const yTicks = computed(() => {
 
 function onHover(idx: number | null) {
   hoverIdx.value = idx
+}
+
+/**
+ * 2026-06-23 — compact dd.MM. label for the X-axis. The year is
+ * dropped to fit 6+ visits across 760px without overlap; the
+ * tooltip carries the full visit label + week ordinal already.
+ */
+function shortDate(iso: string): string {
+  if (!iso) return ''
+  const datePart = iso.slice(0, 10)
+  const [, m, d] = datePart.split('-')
+  if (!m || !d) return ''
+  return `${d}.${m}.`
 }
 
 const hovered = computed(() => (hoverIdx.value == null ? null : props.visits[hoverIdx.value] ?? null))
@@ -178,6 +194,28 @@ const hovered = computed(() => (hoverIdx.value == null ? null : props.visits[hov
         >BCVA · ETDRS Letters</text>
       </g>
 
+      <!-- X-axis labels — visit ordinal + clinical date. 2026-06-23.
+           Operators reading a paper report wanted the chart to carry
+           its own time scale instead of relying on the table below;
+           the visit-date is now part of the workspace data shape so
+           we can label each tick without an extra round-trip. -->
+      <g font-size="9" fill="#64748b" text-anchor="middle">
+        <text
+          v-for="(v, i) in visits"
+          :key="`xl-${v.id}`"
+          :x="xAt(i)"
+          :y="X_AXIS_TOP + 8"
+          font-weight="600"
+        >{{ v.label }}</text>
+        <text
+          v-for="(v, i) in visits"
+          :key="`xd-${v.id}`"
+          :x="xAt(i)"
+          :y="X_AXIS_TOP + 20"
+          fill="#94a3b8"
+        >{{ shortDate(v.date) }}</text>
+      </g>
+
       <!-- Hover columns + dots -->
       <g>
         <rect
@@ -187,7 +225,7 @@ const hovered = computed(() => (hoverIdx.value == null ? null : props.visits[hov
           :x="xAt(i) - 18"
           :y="PAD_T"
           width="36"
-          :height="H - PAD_T"
+          :height="X_AXIS_TOP - PAD_T"
           fill="transparent"
           @mouseenter="onHover(i)"
           @mouseleave="onHover(null)"
@@ -197,7 +235,7 @@ const hovered = computed(() => (hoverIdx.value == null ? null : props.visits[hov
           :x1="xAt(hoverIdx)"
           :x2="xAt(hoverIdx)"
           :y1="PAD_T"
-          :y2="H - 4"
+          :y2="X_AXIS_TOP - 2"
           stroke="#94a3b8"
           stroke-dasharray="3 3"
           stroke-width="1"
