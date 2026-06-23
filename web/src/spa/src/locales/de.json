@@ -2922,6 +2922,7 @@
       "colPed": "PED mm³",
       "colTotal": "Gesamt mm³",
       "colGaArea": "GA-Fläche mm²",
+      "colThicknessUm": "Mittlere Dicke µm",
       "ringLabel": "{mm} mm",
       "ringLabelRange": "{from}–{to} mm",
       "selectionHint": "Bereiche im Fundus zum Aufsummieren anklicken",

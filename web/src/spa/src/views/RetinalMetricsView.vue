@@ -35,6 +35,7 @@ import { useStudyArm } from '@/composables/useStudyArm'
 
 import { useRetinalJobStore } from '@/stores/retinalJob'
 import { useErrorsStore } from '@/stores/errors'
+import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
 import type { FluidPayload, GaPayload, ThicknessPayload, RetinalJobDetail } from '@/api/retinal'
 import { useJobStatusStream } from '@/composables/useJobStatusStream'
 
@@ -295,9 +296,94 @@ interface EtdrsRow {
   values: string[]
 }
 
+/* -------- Thickness from surface_y envelope (PR / ONL) -------------- */
+/**
+ * 2026-06-23 — Shared per-jobId fetch of the segmentation envelope.
+ * The BscanViewer + FundusOverlay already use this; the metrics view
+ * leans on the same module-level cache so reading the envelope here
+ * is free (no extra network hop).
+ *
+ * <p>Used to derive the per-ETDRS-ring mean thickness for the PR / ONL
+ * tasks. The runner only emits a global thickness_mean_um in the
+ * payload; per-ring breakdowns are computed SPA-side from the raw
+ * surface_y data + the fundus geometry, matching the
+ * raw-data-no-PNG architectural direction.
+ */
+const segEnvelope = useSegmentationEnvelope(computed(() => jobId.value)).envelope
+
+/**
+ * Pre-derived per-(z, x) thickness in µm, packed as Float32Array. Returns
+ * null when the envelope isn't a 2-surface surface_y volume or the
+ * geometry's axial spacing isn't available. Sentinel zeros indicate
+ * "no detection" at that A-scan (either surface == 0 or lower < upper).
+ */
+const thicknessGrid = computed<{ data: Float32Array; nBscans: number; cols: number } | null>(() => {
+  const env = segEnvelope.value
+  if (!env || env.kind !== 'surface_y' || env.shape.length !== 3) return null
+  const nSurfaces = env.shape[0] ?? 0
+  const nBscans = env.shape[1] ?? 0
+  const cols = env.shape[2] ?? 0
+  if (nSurfaces < 2 || nBscans <= 0 || cols <= 0) return null
+  const axialMm = geometry.value?.bscan?.pixel_axial_mm ?? 0
+  if (axialMm <= 0) return null
+  const data = env.data as Float32Array
+  const upperBase = 0
+  const lowerBase = nBscans * cols
+  const out = new Float32Array(nBscans * cols)
+  for (let z = 0; z < nBscans; z++) {
+    const rowBase = z * cols
+    for (let x = 0; x < cols; x++) {
+      const idx = rowBase + x
+      const u = data[upperBase + idx] ?? 0
+      const l = data[lowerBase + idx] ?? 0
+      out[idx] = (u > 0 && l > u) ? (l - u) * axialMm * 1000 : 0
+    }
+  }
+  return { data: out, nBscans, cols }
+})
+
+/**
+ * Aggregate thickness across all A-scans whose fundus distance to the
+ * fovea falls in {@code [rMinMm, rMaxMm)}. Returns {sum, count} so
+ * downstream code can average without losing the underlying weights.
+ */
+function thicknessRingAggregate(rMinMm: number, rMaxMm: number): { sum: number; count: number } {
+  const grid = thicknessGrid.value
+  const geo = geometry.value
+  if (!grid || !geo) return { sum: 0, count: 0 }
+  const fovea = geo.fovea_estimate_fundus_px
+  const lateralMmPerPx = geo.fundus?.lateral_mm_per_px ?? 0
+  const positions = geo.bscan_positions_fundus_px ?? []
+  if (lateralMmPerPx <= 0 || positions.length === 0 || !fovea) return { sum: 0, count: 0 }
+  const { data, nBscans, cols } = grid
+  const maxZ = Math.min(nBscans, positions.length, geo.bscan?.dim_z_bscans ?? nBscans)
+  let sum = 0
+  let count = 0
+  for (let z = 0; z < maxZ; z++) {
+    const pos = positions.find((p) => p.z === z)
+    if (!pos) continue
+    const dx = pos.x2 - pos.x1
+    const dy = pos.y2 - pos.y1
+    const rowBase = z * cols
+    for (let x = 0; x < cols; x++) {
+      const t = cols > 1 ? x / (cols - 1) : 0
+      const fx = pos.x1 + t * dx
+      const fy = pos.y1 + t * dy
+      const distMm = Math.hypot(fx - fovea.x, fy - fovea.y) * lateralMmPerPx
+      if (distMm < rMinMm || distMm >= rMaxMm) continue
+      const v = data[rowBase + x]
+      if (v <= 0) continue
+      sum += v
+      count++
+    }
+  }
+  return { sum, count }
+}
+
 const etdrsHeaders = computed<string[]>(() => {
   if (fluidPayload.value) return [t('retinal.etdrs.colRing'), t('retinal.etdrs.colIrf'), t('retinal.etdrs.colSrf'), t('retinal.etdrs.colPed'), t('retinal.etdrs.colTotal')]
   if (gaPayload.value) return [t('retinal.etdrs.colRing'), t('retinal.etdrs.colGaArea')]
+  if (isThickness.value) return [t('retinal.etdrs.colRing'), t('retinal.etdrs.colThicknessUm')]
   return []
 })
 
@@ -342,6 +428,32 @@ const etdrsRows = computed<EtdrsRow[]>(() => {
       { label: t('retinal.etdrs.ringLabel', { mm: 6 }), values: [formatNumber(m.central_6mm)] },
       { label: t('retinal.etdrs.ringLabelRange', { from: 1, to: 3 }), values: [formatNumber(ring13)] },
       { label: t('retinal.etdrs.ringLabelRange', { from: 3, to: 6 }), values: [formatNumber(ring36)] },
+    ]
+  }
+  if (isThickness.value) {
+    // 2026-06-23 — Layer-thickness ETDRS table derived in-browser from
+    // the surface_y envelope + the fundus geometry. The runner doesn't
+    // emit a per-ring thickness, but everything we need is already on
+    // hand: per-A-scan layer thickness (lower - upper) * axial_mm and
+    // each A-scan's fundus-mm position via bscan_positions_fundus_px.
+    // Each row reports the MEAN µm thickness inside the ring; the
+    // cumulative rows (1/3/6 mm) and the annular rows (1-3 / 3-6 mm)
+    // are computed independently — for thickness they're NOT additive,
+    // unlike fluid mm³ contributions.
+    const r05 = thicknessRingAggregate(0, 0.5)
+    const r15 = thicknessRingAggregate(0, 1.5)
+    const r30 = thicknessRingAggregate(0, 3.0)
+    const r0515 = thicknessRingAggregate(0.5, 1.5)
+    const r1530 = thicknessRingAggregate(1.5, 3.0)
+    function mean(a: { sum: number; count: number }): string {
+      return a.count > 0 ? formatNumber(a.sum / a.count) : '—'
+    }
+    return [
+      { label: t('retinal.etdrs.ringLabel', { mm: 1 }), values: [mean(r05)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 3 }), values: [mean(r15)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 6 }), values: [mean(r30)] },
+      { label: t('retinal.etdrs.ringLabelRange', { from: 1, to: 3 }), values: [mean(r0515)] },
+      { label: t('retinal.etdrs.ringLabelRange', { from: 3, to: 6 }), values: [mean(r1530)] },
     ]
   }
   return []
