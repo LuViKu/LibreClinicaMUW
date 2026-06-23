@@ -78,6 +78,13 @@ function namdManifest(opts: { loadI18n?: () => Promise<{ de: Record<string, unkn
   }
 }
 
+/**
+ * 2026-06-23 — activation now keys on activeStudy.enabledModules
+ * (the admin-toggled enrollment), not on study.protocol_type. The
+ * helper name + signature are retained so existing tests keep
+ * reading as "give me a user whose active study has module X
+ * enrolled"; the value is now propagated into enabledModules.
+ */
 function userWithProtocol(pt: string | null): AuthenticatedUser {
   return {
     username: 'root',
@@ -95,7 +102,16 @@ function userWithProtocol(pt: string | null): AuthenticatedUser {
     passwordChangeReason: null,
     activeStudy: pt === null
       ? null
-      : { id: 1, oid: 'S_DEFAULTS1', name: 'Default', uniqueIdentifier: 'D', isSite: false, roles: ['Investigator'], protocolType: pt },
+      : {
+          id: 1,
+          oid: 'S_DEFAULTS1',
+          name: 'Default',
+          uniqueIdentifier: 'D',
+          isSite: false,
+          roles: ['Investigator'],
+          protocolType: 'observational',
+          enabledModules: [pt],
+        } as AuthenticatedUser['activeStudy'] & { enabledModules: string[] },
   }
 }
 

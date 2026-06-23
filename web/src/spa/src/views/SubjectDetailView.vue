@@ -1121,7 +1121,10 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   <StatusPill v-if="ev.openQueries > 0" compact variant="danger">{{ ev.openQueries }}</StatusPill>
                   <span v-else class="text-slate-400">—</span>
                 </td>
-                <td class="px-5 py-2.5 text-right text-xs whitespace-nowrap sticky right-0 bg-white">
+                <td
+                  class="px-5 py-2.5 text-right text-xs whitespace-nowrap sticky right-0 bg-white"
+                  :class="openMenuEventId === ev.eventId ? 'z-20' : ''"
+                >
                   <!-- 2026-06-21 user-feedback round 6 — three inline
                        buttons (Bearbeiten / Stornieren / CRFs öffnen)
                        clipped on the "Abgeschlossen" rows. Collapsed
@@ -1132,7 +1135,16 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                        not close on outside-click and operators kept
                        leaving stale menus open. The vClickOutside
                        directive wired below closes the open menu on
-                       any pointerdown outside its wrapper. -->
+                       any pointerdown outside its wrapper.
+
+                       2026-06-23 — dynamic z-20 on the row's sticky
+                       <td> when its menu is open. Each sticky cell
+                       creates its own stacking context; without the
+                       boost, the next row's sticky <td> (later in DOM
+                       order) painted on top of the open menu, hiding
+                       the "Bearbeiten" entry behind the next row's
+                       "CRFs öffnen" button. -->
+
                   <div v-if="ev.eventId" class="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
                     <RouterLink
                       :to="`/events/${ev.eventId}`"

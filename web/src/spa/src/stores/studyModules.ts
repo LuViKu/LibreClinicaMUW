@@ -112,33 +112,37 @@ export const useStudyModuleStore = defineStore('studyModules', () => {
   const loadedModuleIds = ref<Set<string>>(new Set<string>())
 
   /**
-   * 2026-06-21 user-feedback batch — admin-controlled module enrollment.
+   * Activation discriminator.
    *
-   * <p>Activation is now an AND of two conditions:
+   * <p>2026-06-23 — decoupled from {@code study.protocol_type}. The
+   * legacy CDISC field carries the
+   * {observational, interventional} distinction and is gated by the
+   * Build-Study UI to those two values, so it can't double as a
+   * module discriminator without bypassing that validator. Activation
+   * is now driven SOLELY by {@code study.enabledModules}, which the
+   * admin toggles via the Study-Parameters → Module enrollment panel
+   * ({@code StudyModuleEnrollmentApiController}).
    *
-   * <ol>
-   *   <li>{@code study.protocol_type} matches a registered manifest's
-   *       {@code protocolType} (case-insensitive, whitespace-trimmed) —
-   *       same as before.</li>
-   *   <li>The admin has explicitly enrolled the module on this study
-   *       via the study-builder toggle, surfaced as
-   *       {@code activeStudy.enabledModules}.</li>
-   * </ol>
+   * <p>The manifest's {@code protocolType} field name is kept for
+   * back-compat — semantically it is now the "module id" used in
+   * enrollment, no longer a protocol-type discriminator.
    *
-   * <p>The {@code enabledModules} field is optional on the wire so
-   * legacy clients without the field treat every study as "no modules
-   * enrolled" and lose the workspace surface — graceful degradation.
+   * <p>If multiple modules are enrolled on the same study, the first
+   * one that resolves to a registered manifest wins. Today the SPI
+   * only supports one active module per study; multi-module support
+   * is a future change (and would route through {@code injectionsFor}
+   * to merge slot lists from each active manifest).
    */
   const activeModule = computed<StudyModuleManifest | null>(() => {
     const study = auth.user?.activeStudy
     if (!study) return null
-    const candidate = findModule(study.protocolType ?? null)
-    if (!candidate) return null
     const enrolledRaw =
       (study as unknown as { enabledModules?: string[] }).enabledModules ?? []
-    const enrolled = enrolledRaw.map((m) => m.trim().toUpperCase())
-    if (!enrolled.includes(candidate.protocolType.trim().toUpperCase())) return null
-    return candidate
+    for (const moduleId of enrolledRaw) {
+      const candidate = findModule(moduleId)
+      if (candidate) return candidate
+    }
+    return null
   })
 
   function injectionsFor<S extends InjectionSlotId>(slotId: S): InjectionEntry<S>[] {
