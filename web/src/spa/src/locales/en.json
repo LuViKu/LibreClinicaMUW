@@ -3008,6 +3008,7 @@
       "title": "[NEEDS_REVIEW] Biomarker trends",
       "chartHeader": "[NEEDS_REVIEW] Trend",
       "empty": "[NEEDS_REVIEW] No data yet",
+      "emptyEye": "[NEEDS_REVIEW] No data for {eye}",
       "loading": "[NEEDS_REVIEW] Loading trends…",
       "errorPrefix": "[NEEDS_REVIEW] Failed to load trends:",
       "xAxisLabel": "[NEEDS_REVIEW] Date",

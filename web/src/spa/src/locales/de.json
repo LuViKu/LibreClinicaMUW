@@ -3020,6 +3020,7 @@
       "title": "Biomarker-Verlauf",
       "chartHeader": "Verlauf",
       "empty": "Noch keine Daten",
+      "emptyEye": "Keine Daten für {eye}",
       "loading": "Werte werden geladen…",
       "errorPrefix": "Werte konnten nicht geladen werden:",
       "xAxisLabel": "Datum",
