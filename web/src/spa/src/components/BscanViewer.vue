@@ -233,17 +233,15 @@ function paintOverlay(): void {
       zStride = cols
     }
     if (!cols) return
-    // Discover the canvas height from the max Y across surfaces.
-    let maxY = 0
-    for (let s = 0; s < nSurfaces; s++) {
-      const surfaceOffset = s * surfaceStride
-      const sliceOffset = surfaceOffset + z * zStride
-      for (let x = 0; x < cols; x++) {
-        const yv = data[sliceOffset + x] ?? 0
-        if (yv > maxY) maxY = yv
-      }
-    }
-    const h = Math.max(16, Math.ceil(maxY) + 2)
+    // 2026-06-23 — the surface_y values are row indices in the B-scan's
+    // PIXEL frame. The canvas must therefore have the same axial extent
+    // as the underlying B-scan (n_rows = 496 for Heidelberg cubes) — NOT
+    // the max-Y of the surface data, which would compress the layers
+    // toward the bottom of the bbox once CSS-stretches the canvas to the
+    // worldToCanvas-derived overlay bbox. Prefer cornerstone's reported
+    // dims; fall back to a Heidelberg default if the metadata isn't in
+    // yet (which can happen on the very first paint).
+    const h = bscanImageDims.value?.rows ?? 496
     canvas.width = cols
     canvas.height = h
     const ctx = canvas.getContext('2d')
