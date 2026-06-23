@@ -20,6 +20,28 @@ onMounted(() => { if (!study.status) study.load(auth.user?.activeStudy?.oid) })
 const canManageStudy = computed(() => auth.user?.role === 'Administrator')
 const activeStudyOid = computed(() => auth.user?.activeStudy?.oid ?? null)
 
+/**
+ * 2026-06-23 user-feedback round — the bootstrap "root" sysadmin
+ * only ever creates studies; the other build-study tasks (CRFs,
+ * events, sites, groups, rules, users) all belong to in-study
+ * roles (DM, study manager, investigator) that do their work
+ * after the study exists. Showing root the full task list was
+ * dead UI weight + a recurring "why is this read-only?" question
+ * during demos.
+ *
+ * <p>Gate by {@code username === 'root'} since the legacy bootstrap
+ * account is the only one expected to wear this hat; other
+ * sysadmin/Administrator users keep the full list. The backend
+ * still authoritatively gates each task's actual endpoints.
+ */
+const tasksForRole = computed(() => {
+  const all = study.status?.tasks ?? []
+  if (auth.user?.username === 'root') {
+    return all.filter((t) => t.id === 'create-study')
+  }
+  return all
+})
+
 // Phase E A8.5 — status transition affordance.
 type TargetStatus = 'AVAILABLE' | 'PENDING' | 'LOCKED' | 'FROZEN'
 const statusDialog = ref<{ target: TargetStatus; reason: string; error: string | null; busy: boolean } | null>(null)
@@ -139,7 +161,17 @@ function iconFor(id: StudyBuildTaskId): string {
         </svg>
         {{ t('nav.buildStudy') }}
       </RouterLink>
-      <RouterLink to="/manage-users" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
+      <!-- 2026-06-23 user-feedback round — gate "Nutzer anlegen" on
+           the Administrator role. The /manage-users route is
+           Administrator-only (see router.meta.role); rendering the
+           sidebar entry for other roles meant a Study Manager could
+           click it just to bounce to /home. Backend authoritatively
+           re-checks; this is purely a discoverability fix. -->
+      <RouterLink
+        v-if="canManageStudy"
+        to="/manage-users"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
+      >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
         </svg>
@@ -228,7 +260,7 @@ function iconFor(id: StudyBuildTaskId): string {
         <!-- Task tracker -->
         <ol class="space-y-3" role="list" :aria-label="t('buildStudy.taskListAriaLabel')">
           <li
-            v-for="(task, idx) in study.status.tasks"
+            v-for="(task, idx) in tasksForRole"
             :key="task.id"
             class="bg-white border border-slate-200 rounded-muw p-4 flex items-center gap-4"
           >
