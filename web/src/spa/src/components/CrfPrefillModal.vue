@@ -26,6 +26,7 @@ import { useI18n } from 'vue-i18n'
 
 import Modal from './Modal.vue'
 import { apiGet, ApiError, ApiNetworkError } from '@/api/client'
+import { formatDate } from '@/lib/dateFormat'
 
 interface PreviousValue {
   itemOid: string
@@ -120,11 +121,8 @@ const hasValues = computed(() => response.value != null && response.value.values
 
 const sourceDateLabel = computed(() => {
   if (!response.value) return ''
-  // The wire format is an ISO instant or date — render the locale
-  // date-only form so the operator sees "Quelle: Visite vom 15.03.2026".
-  const d = new Date(response.value.sourceCompletedAt)
-  if (Number.isNaN(d.getTime())) return response.value.sourceCompletedAt
-  return d.toLocaleDateString()
+  // 2026-06-21 user-feedback round 4 — canonical DD.MM.YYYY everywhere.
+  return formatDate(response.value.sourceCompletedAt)
 })
 
 function onConfirm() {

@@ -11,6 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY src/ ./src/
+# 2026-06-22 — bundle the backfill script so operators can derive
+# projections for jobs that landed before the local /derive chain
+# was wired. Lives next to the runner code in the source tree;
+# imports `projection_fluid` from the same image-installed package.
+COPY runners/fluid/backfill_projections.py ./runners/fluid/
 COPY docker-entrypoint.sh ./
 RUN chmod +x ./docker-entrypoint.sh
 

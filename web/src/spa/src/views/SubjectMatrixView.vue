@@ -13,6 +13,7 @@ import { useStudyStore } from '@/stores/study'
 import { useAuthStore } from '@/stores/auth'
 import StudyMetricsModal from '@/components/StudyMetricsModal.vue'
 import type { EventStatus, Subject } from '@/types/subject'
+import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const subjects = useSubjectsStore()
@@ -92,10 +93,31 @@ const studyContextLabel = computed(() => {
  * The store guarantees every row has the same event labels in the same
  * order; falling back to the empty array keeps the view from crashing
  * during the first render before mock data hydrates.
+ *
+ * <p>2026-06-23 — Studies whose event-definitions all share the same
+ * label (e.g. RIS's repeating "Retinal Imaging Visit" × 7) blew up
+ * the table width with a duplicated 22-char column header, pushing
+ * the trailing "Öffnen" action off-screen. When >1 columns share a
+ * label we collapse to compact ordinal shorthand ("V1" … "VN")
+ * with the full label preserved in the `title` attribute (hover
+ * tooltip). Studies with distinct per-visit labels (typical
+ * interventional protocols) keep their original headers.
  */
-const eventColumns = computed(() =>
-  subjects.rows[0]?.events.map((e) => ({ oid: e.eventDefinitionOid, label: e.label })) ?? [],
-)
+const eventColumns = computed(() => {
+  const raw = subjects.rows[0]?.events.map((e) => ({
+    oid: e.eventDefinitionOid,
+    label: e.label,
+  })) ?? []
+  const uniqueLabels = new Set(raw.map((c) => c.label))
+  if (raw.length > 1 && uniqueLabels.size === 1) {
+    return raw.map((c, i) => ({
+      oid: c.oid,
+      label: `V${i + 1}`,
+      title: c.label,
+    }))
+  }
+  return raw.map((c) => ({ ...c, title: c.label }))
+})
 
 /* Studien-Statistik modal — opens on the SideRail link. */
 const metricsModalOpen = ref(false)
@@ -117,14 +139,8 @@ const statusVariant = (status: EventStatus): 'success' | 'info' | 'warning' | 'n
 
 const statusLabel = (status: EventStatus): string => t(`subjectMatrix.status.${status}`)
 
-/** ISO `YYYY-MM-DD` → `dd-MMM-yyyy` (clinical convention). */
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10))
-  const mi = (m ?? 1) - 1
-  return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[mi] ?? '???'}-${y}`
-}
+// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4).
+// The DD.MM.YYYY German short-date is the SPA-wide convention.
 
 type Filter =
   | 'all'
@@ -343,7 +359,8 @@ const ariaSortLabel = (subject: Subject) =>
               v-for="col in eventColumns"
               :key="col.oid"
               scope="col"
-              class="px-3 py-2 font-medium"
+              class="px-3 py-2 font-medium whitespace-nowrap"
+              :title="col.title"
             >
               {{ col.label }}
             </th>

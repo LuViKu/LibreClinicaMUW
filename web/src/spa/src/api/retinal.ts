@@ -99,6 +99,11 @@ export interface RetinalJobDetail {
 }
 
 /** Lean summary returned by the per-event-CRF + per-subject list endpoints. */
+/**
+ * 2026-06-23 — Per-job summary. `visitDate` (study_event.date_start)
+ * is the clinical date used by the trend chart + nAMD workspace; it
+ * is distinct from `completedAt` (the upload-pipeline timestamp).
+ */
 export interface RetinalJobSummary {
   jobId: number
   task: RetinalTask
@@ -106,6 +111,12 @@ export interface RetinalJobSummary {
   status: RetinalJobStatus
   modelVersion: string | null
   completedAt: string | null
+  /**
+   * 2026-06-23 — ISO yyyy-MM-dd; the visit date sourced from
+   * study_event.date_start. Optional because legacy clients + the
+   * per-event-crf endpoint may not surface it.
+   */
+  visitDate?: string | null
   primaryMetric: PrimaryMetric | null
 }
 
@@ -465,6 +476,35 @@ export interface RetinalJobRetryResponse {
  */
 export function retryRetinalJob(jobId: number): Promise<RetinalJobRetryResponse> {
   return apiPost<RetinalJobRetryResponse>(`${BASE}/${jobId}/retry`, {})
+}
+
+/**
+ * 2026-06-22 rerun-as — re-dispatch an existing scan slot as a DIFFERENT
+ * inference task. The backend inserts a NEW {@code retinal_inference_job}
+ * row scoped to the requested task (preserving the original's results
+ * + audit trail) and fires {@code handleRemote} async.
+ *
+ * <p>Returns 409 with {@code existingJobId} if a job already exists for
+ * the same scan + task — the SPA navigates the operator there instead
+ * of double-enqueueing. Returns 400 for invalid tasks (allow-list:
+ * fluid / ga / onl / pr) or when {@code task === sourceTask}.
+ */
+export interface RetinalJobRerunAsResponse {
+  jobId: number
+  task: string
+  status: string
+}
+
+export interface RetinalJobRerunAsConflict {
+  message: string
+  existingJobId: number
+}
+
+export function rerunRetinalJobAs(
+  jobId: number,
+  task: 'fluid' | 'ga' | 'onl' | 'pr',
+): Promise<RetinalJobRerunAsResponse> {
+  return apiPost<RetinalJobRerunAsResponse>(`${BASE}/${jobId}/rerun-as`, { task })
 }
 
 /**

@@ -250,6 +250,51 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     rows.value = []
     isLoading.value = false
     error.value = null
+    retinalTasksByDef.value = {}
+  }
+
+  /* ----------------------------------------------------------------- */
+  /* 2026-06-22 — Per-event-definition retinal-inference task config. */
+  /* ----------------------------------------------------------------- */
+
+  /**
+   * Cached task panel per event_definition id. Loaded lazily by the
+   * edit form when it opens for a given event_def; persisted via the
+   * PUT endpoint when the form saves.
+   */
+  const retinalTasksByDef = ref<Record<number, string[]>>({})
+
+  async function loadRetinalTasks(studyOid: string, sedId: number): Promise<string[]> {
+    try {
+      const resp = await apiGet<{ tasks: string[] }>(
+        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/event-definitions/${sedId}/retinal-tasks`,
+      )
+      const tasks = Array.isArray(resp?.tasks) ? resp.tasks : []
+      retinalTasksByDef.value = { ...retinalTasksByDef.value, [sedId]: tasks }
+      return tasks
+    } catch (e) {
+      handleNonValidationError(e, 'load retinal tasks')
+      return []
+    }
+  }
+
+  async function saveRetinalTasks(
+    studyOid: string,
+    sedId: number,
+    tasks: string[],
+  ): Promise<boolean> {
+    try {
+      const resp = await apiPut<{ tasks: string[] }>(
+        `/pages/api/v1/studies/${encodeURIComponent(studyOid)}/event-definitions/${sedId}/retinal-tasks`,
+        { tasks },
+      )
+      const next = Array.isArray(resp?.tasks) ? resp.tasks : tasks
+      retinalTasksByDef.value = { ...retinalTasksByDef.value, [sedId]: next }
+      return true
+    } catch (e) {
+      handleNonValidationError(e, 'save retinal tasks')
+      return false
+    }
   }
 
   return {
@@ -265,5 +310,8 @@ export const useEventDefinitionsStore = defineStore('eventDefinitions', () => {
     unlock,
     reorder,
     reset,
+    retinalTasksByDef,
+    loadRetinalTasks,
+    saveRetinalTasks,
   }
 })

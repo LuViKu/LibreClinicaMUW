@@ -75,5 +75,11 @@
   <include  file="migration/lc-muw-2026-06-20-namd-visit-ai-items.xml"/>
   <include  file="migration/lc-muw-2026-06-20-patient-table.xml"/>
   <include  file="migration/lc-muw-2026-06-20-study-subject-patient-id-nullable.xml"/>
+  <include  file="migration/lc-muw-2026-06-21-study-module-enrollment.xml"/>
+  <include  file="migration/lc-muw-2026-06-22-seed-ris-amd-admin-grants.xml"/>
+  <include  file="migration/lc-muw-2026-06-22-upgrade-root-coordinator-grants.xml"/>
+  <include  file="migration/lc-muw-2026-06-22-retinal-job-multitask-unique.xml"/>
+  <include  file="migration/lc-muw-2026-06-22-event-definition-retinal-tasks.xml"/>
+  <include  file="migration/lc-muw-2026-06-23-retinal-job-study-event-id.xml"/>
 </databaseChangeLog>
 

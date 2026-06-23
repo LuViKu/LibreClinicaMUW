@@ -18,7 +18,9 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Statement;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -29,17 +31,20 @@ import javax.sql.DataSource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.StudyUserRoleBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudySubjectBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.EventCRFBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.AuditEventDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.login.UserAccountDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.managestudy.StudySubjectDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RemoteRetinalInferenceClient;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalArtifactStorageService;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.SegmentationEnvelopeLoader;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalJobStatusBroadcaster;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectFinder;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.StudySubjectMatch;
@@ -215,6 +220,17 @@ public class RetinalResultsApiController {
             String status,
             String modelVersion,
             String completedAt,
+            /**
+             * 2026-06-23 — visit date (ISO yyyy-MM-dd) sourced from
+             * study_event.date_start. Distinct from completedAt
+             * (the upload-pipeline timestamp) — when historical scans
+             * are uploaded today the visit date is what reads
+             * clinically and what the nAMD workspace + trend charts
+             * key off. Null when the job has no study_event binding
+             * (parked / partially-bound — visible only in the
+             * cross-study parked admin view).
+             */
+            String visitDate,
             PrimaryMetric primaryMetric) { }
 
     /**
@@ -228,6 +244,15 @@ public class RetinalResultsApiController {
     public record RetinalTrendsPointDto(
             long jobId,
             String completedAt,
+            /**
+             * 2026-06-23 — clinical-relevance date for the trend X-axis.
+             * Sourced from study_event.date_start (the visit date) so a
+             * batch of historical scans uploaded today plot at their
+             * acquisition / visit dates instead of all collapsing onto
+             * the upload day. Null only when neither binding path
+             * yielded a study_event (shouldn't happen for done jobs).
+             */
+            String visitDate,
             String eyeLaterality,
             java.math.BigDecimal primaryMetricValue,
             String primaryMetricUnit,
@@ -427,15 +452,21 @@ public class RetinalResultsApiController {
         if (visGuard != null) return visGuard;
 
         List<RetinalJobSummaryDto> out = new ArrayList<>();
+        // 2026-06-23 — surfaces both CRF-bound + planned-visit-bound
+        // jobs via the COALESCE on study_event_id (see earlier
+        // changelog). Also exports visit_date (date(study_event.date_start))
+        // so the nAMD workspace + per-subject job list can show the
+        // clinical date instead of the upload timestamp.
         String sql = "SELECT j.job_id, j.task, j.eye_laterality, j.status, j.model_version, "
                 + "       j.completed_at, "
+                + "       date(se.date_start) AS visit_date, "
                 + "       r.primary_metric_value, r.primary_metric_unit "
                 + "  FROM retinal_inference_job j "
-                + "  JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "  LEFT JOIN retinal_inference_result r ON r.job_id = j.job_id "
                 + " WHERE se.study_subject_id = ? "
-                + " ORDER BY j.enqueued_at DESC";
+                + " ORDER BY visit_date ASC NULLS LAST, j.enqueued_at DESC";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, studySubjectId);
@@ -511,16 +542,27 @@ public class RetinalResultsApiController {
         if (visGuard != null) return visGuard;
 
         List<RetinalTrendsPointDto> out = new ArrayList<>();
+        // 2026-06-23 — resolve study_subject via either the event_crf
+        // chain or the direct study_event_id binding, mirroring the
+        // listSubjectJobs fix. Planned-visit-bound jobs still need to
+        // appear in the trends timeseries.
+        //
+        // visit_date = date(study_event.date_start) — the clinical
+        // date the scan was acquired, used as the chart's X axis so a
+        // batch of historical uploads doesn't collapse onto today.
+        // Orders primarily by visit date so the trend reads left→right
+        // chronologically by visit, regardless of upload order.
         String sql = "SELECT j.job_id, j.completed_at, j.eye_laterality, "
+                + "       date(se.date_start) AS visit_date, "
                 + "       r.primary_metric_value, r.primary_metric_unit, r.output_payload "
                 + "  FROM retinal_inference_job j "
                 + "  JOIN retinal_inference_result r ON r.job_id = j.job_id "
-                + "  JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + " WHERE se.study_subject_id = ? "
                 + "   AND j.task = ? "
                 + "   AND j.status = 'done' "
-                + " ORDER BY j.completed_at";
+                + " ORDER BY visit_date ASC NULLS LAST, j.completed_at ASC";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, studySubjectId);
@@ -529,12 +571,15 @@ public class RetinalResultsApiController {
                 while (rs.next()) {
                     long jobId = rs.getLong("job_id");
                     Timestamp completedAt = rs.getTimestamp("completed_at");
+                    java.sql.Date visitDate = rs.getDate("visit_date");
                     String laterality = rs.getString("eye_laterality");
                     BigDecimal value = rs.getBigDecimal("primary_metric_value");
                     String unit = rs.getString("primary_metric_unit");
                     Map<String, Object> payload = parsePayload(rs.getString("output_payload"));
                     out.add(new RetinalTrendsPointDto(
-                            jobId, toIso(completedAt), laterality,
+                            jobId, toIso(completedAt),
+                            visitDate == null ? null : visitDate.toString(),
+                            laterality,
                             value, unit, payload));
                 }
             }
@@ -648,6 +693,101 @@ public class RetinalResultsApiController {
             // Headers were already sent — best we can do is abort the body.
         }
         return null;
+    }
+
+    /* ====================================================================== */
+    /* GET /retinal-jobs/{jobId}/segmentation                                  */
+    /*                                                                        */
+    /* 2026-06-22 — task-agnostic segmentation envelope. The SPA's B-scan      */
+    /* viewer no longer consumes per-slice PNGs; it fetches this one binary    */
+    /* envelope and decodes it on a 2D canvas overlay. Shape + dtype + kind    */
+    /* + labels travel as response headers so the client doesn't need to      */
+    /* parse npy/csv per task — it just sees a typed byte array.              */
+    /*                                                                        */
+    /* Per-task kinds: fluid = "volume" uint8 (z, rows, cols); ga = binary_2d; */
+    /* onl/pr = surface_y float32 (z, cols). Only fluid is wired in this     */
+    /* push; ga/onl/pr surface 501 Not Implemented until their loaders land. */
+    /* ====================================================================== */
+    @GetMapping(path = "/retinal-jobs/{jobId:[0-9]+}/segmentation")
+    public ResponseEntity<?> streamSegmentation(@PathVariable("jobId") long jobId,
+                                                HttpSession session,
+                                                HttpServletResponse response) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        JobRow row;
+        try (Connection c = dataSource.getConnection()) {
+            row = fetchJobDetail(c, jobId);
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to fetch retinal job {}: {}", jobId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to fetch retinal job: " + sqlEx.getMessage()));
+        }
+        if (row == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal_inference_job with id " + jobId));
+        }
+        ResponseEntity<?> visGuard = guardJobVisibility(row, session);
+        if (visGuard != null) return visGuard;
+
+        if (row.bscanMasksDir == null || row.bscanMasksDir.isBlank()) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No segmentation directory for job " + jobId));
+        }
+        Path dir = Paths.get(row.bscanMasksDir).toAbsolutePath().normalize();
+
+        SegmentationEnvelopeLoader.SegmentationEnvelope env;
+        try {
+            env = SegmentationEnvelopeLoader.load(row.task, dir);
+        } catch (IOException ioEx) {
+            LOG.error("Failed to load segmentation envelope for job {} (task={}): {}",
+                    jobId, row.task, ioEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to load segmentation envelope: " + ioEx.getMessage()));
+        }
+        if (env == null) {
+            return ResponseEntity.status(501).body(Map.of(
+                    "message", "Segmentation envelope for task '" + row.task
+                            + "' is not implemented yet"));
+        }
+
+        response.setStatus(HttpServletResponse.SC_OK);
+        response.setContentType(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+        response.setHeader("X-MUW-Seg-Kind", env.kind());
+        response.setHeader("X-MUW-Seg-Dtype", env.dtype());
+        response.setHeader("X-MUW-Seg-Shape", joinInts(env.shape()));
+        response.setHeader("X-MUW-Seg-Task", env.task());
+        if (env.labels() != null && !env.labels().isEmpty()) {
+            response.setHeader("X-MUW-Seg-Labels", String.join(",", env.labels()));
+        }
+        // Expose the X-MUW-Seg-* headers to the SPA fetch — without
+        // this CORS hides them client-side (same-origin in dev /
+        // single-domain in prod, but the headers also need to be in
+        // Access-Control-Expose-Headers when the SPA reads them via
+        // fetch().headers.get(...)).
+        response.setHeader("Access-Control-Expose-Headers",
+                "X-MUW-Seg-Kind, X-MUW-Seg-Dtype, X-MUW-Seg-Shape, "
+                        + "X-MUW-Seg-Labels, X-MUW-Seg-Task");
+        response.setContentLengthLong(env.data().length);
+        response.setHeader(HttpHeaders.CACHE_CONTROL,
+                CacheControl.maxAge(Duration.ofHours(1)).cachePrivate().getHeaderValue());
+        try {
+            response.getOutputStream().write(env.data());
+            response.getOutputStream().flush();
+        } catch (IOException copyEx) {
+            LOG.error("Failed to stream segmentation envelope for job {}: {}",
+                    jobId, copyEx.getMessage());
+        }
+        return null;
+    }
+
+    private static String joinInts(int[] dims) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < dims.length; i++) {
+            if (i > 0) sb.append(',');
+            sb.append(dims[i]);
+        }
+        return sb.toString();
     }
 
     /* ====================================================================== */
@@ -1125,27 +1265,43 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No retinal_inference_job with id " + jobId));
         }
-        if (!"failed".equals(job.status)) {
+        // 2026-06-23 — retry accepts BOTH 'failed' and 'remote_pending'.
+        // The latter unsticks jobs whose initial dispatch was skipped
+        // (e.g. planned-visit binding before the dispatch gate was
+        // relaxed) — same end state regardless of which way they got
+        // there, same fix.
+        if (!"failed".equals(job.status) && !"remote_pending".equals(job.status)) {
             return ResponseEntity.status(409).body(Map.of(
-                    "message", "Job is not failed (status=" + job.status + ")"));
+                    "message", "Job is not failed or remote_pending (status=" + job.status + ")"));
         }
-        if (job.eventCrfId == null) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "Job " + jobId + " has no event_crf — use /bind instead"));
-        }
-
-        // ---- visibility check via the job's event_crf ---------------
-        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
-        EventCRFBean ecb = eventCrfDAO.findByPK(job.eventCrfId);
-        if (ecb == null || ecb.getId() == 0) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "No event_crf with id " + job.eventCrfId));
-        }
+        // ---- visibility check via the job's binding ---------------
+        // 2026-06-23 — accept either binding path. Planned-visit jobs
+        // have event_crf_id=null + a valid study_event_id; resolve the
+        // owning study_subject via whichever is set.
         StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
-        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudySubjectBean ss = null;
+        if (job.eventCrfId != null) {
+            EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+            EventCRFBean ecb = eventCrfDAO.findByPK(job.eventCrfId);
+            if (ecb == null || ecb.getId() == 0) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "No event_crf with id " + job.eventCrfId));
+            }
+            ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        } else if (job.studyEventId != null) {
+            Integer subjectId = fetchStudySubjectIdForStudyEvent(job.studyEventId);
+            if (subjectId == null) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "No study_event with id " + job.studyEventId));
+            }
+            ss = (StudySubjectBean) ssDAO.findByPK(subjectId);
+        } else {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Job " + jobId + " has no event_crf nor study_event — use /bind instead"));
+        }
         if (ss == null || ss.getStudyId() == 0) {
             return ResponseEntity.status(404).body(Map.of(
-                    "message", "event_crf " + job.eventCrfId + " has no resolvable study"));
+                    "message", "Job " + jobId + " has no resolvable study"));
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
@@ -1227,11 +1383,231 @@ public class RetinalResultsApiController {
         return ResponseEntity.accepted().body(resp);
     }
 
+    /* ====================================================================== */
+    /* POST /retinal-jobs/{jobId}/rerun-as — re-dispatch as a different task */
+    /* ====================================================================== */
+
+    /** Tasks the operator can pick from the rerun-as dropdown. Mirrors the
+     *  runner profiles + the FUNDUS overlay's recognised task discriminator. */
+    private static final java.util.Set<String> ALLOWED_RERUN_TASKS =
+            java.util.Set.of("fluid", "ga", "onl", "pr");
+
+    /**
+     * Re-dispatch the same uploaded .e2e (referenced by {@code sourceJobId})
+     * as a DIFFERENT inference task. Inserts a NEW {@code retinal_inference_job}
+     * row scoped to the new task — the original job + its results stay intact
+     * so the audit trail records each task as its own first-class run.
+     *
+     * <p>The new row reuses {@code event_crf_id}, {@code e2e_path},
+     * {@code e2e_sha256}, {@code eye_laterality}, and {@code scan_index} from
+     * the source. The unique key on
+     * {@code (e2e_sha256, scan_index, task)} (widened 2026-06-22) keeps the
+     * (scan slot × task) pair from being duplicated; if a job for the
+     * requested task already exists on the same scan, returns 409 with the
+     * existing job_id so the SPA can navigate the operator there.
+     *
+     * <p>Body: {@code {"task": "ga"}} (or fluid / onl / pr).
+     * Response: {@code {"jobId": <new>, "task": "<task>", "status": "remote_pending"}}.
+     */
+    @org.springframework.web.bind.annotation.PostMapping(
+            path = "/retinal-jobs/{jobId:[0-9]+}/rerun-as",
+            consumes = MediaType.APPLICATION_JSON_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> rerunAs(@PathVariable("jobId") long sourceJobId,
+                                     @RequestBody Map<String, String> body,
+                                     HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        String newTask = body == null ? null : body.get("task");
+        if (newTask != null) newTask = newTask.trim().toLowerCase(java.util.Locale.ROOT);
+        if (newTask == null || !ALLOWED_RERUN_TASKS.contains(newTask)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "task must be one of " + ALLOWED_RERUN_TASKS));
+        }
+
+        // ---- load the source job's immutable metadata ----------------
+        FailedJob source;
+        String sourceSha256;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT status, status_message, event_crf_id, task, "
+                             + "       e2e_path, eye_laterality, scan_index, e2e_sha256 "
+                             + "  FROM retinal_inference_job WHERE job_id = ?")) {
+            ps.setLong(1, sourceJobId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) {
+                    return ResponseEntity.status(404).body(Map.of(
+                            "message", "No retinal_inference_job with id " + sourceJobId));
+                }
+                source = new FailedJob();
+                source.status = rs.getString("status");
+                source.statusMessage = rs.getString("status_message");
+                int ecId = rs.getInt("event_crf_id");
+                source.eventCrfId = rs.wasNull() ? null : ecId;
+                source.task = rs.getString("task");
+                source.e2ePath = rs.getString("e2e_path");
+                source.eyeLaterality = rs.getString("eye_laterality");
+                source.scanIndex = rs.getInt("scan_index");
+                sourceSha256 = rs.getString("e2e_sha256");
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to fetch source retinal job {} for rerun-as: {}",
+                    sourceJobId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to fetch source job: " + sqlEx.getMessage()));
+        }
+
+        if (source.eventCrfId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Source job " + sourceJobId + " has no event_crf — "
+                            + "park it to a visit first via /bind"));
+        }
+        if (newTask.equals(source.task)) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "Source job is already task=" + newTask
+                            + "; use /retry to re-dispatch the same task"));
+        }
+        if (sourceSha256 == null || sourceSha256.isBlank()) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Source job is missing e2e_sha256 — predates the "
+                            + "dedup gate; cannot rerun-as safely"));
+        }
+
+        // ---- visibility check via the source job's event_crf --------
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = eventCrfDAO.findByPK(source.eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No event_crf with id " + source.eventCrfId));
+        }
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        if (ss == null || ss.getStudyId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "event_crf " + source.eventCrfId + " has no resolvable study"));
+        }
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visibleStudyIds.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "Source job " + sourceJobId + " belongs to a different study"));
+        }
+        if (remoteClient == null || !remoteClient.isConfigured()) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "Remote GPU sidecar not configured — rerun-as unavailable"));
+        }
+        if (inferenceController == null) {
+            return ResponseEntity.status(503).body(Map.of(
+                    "message", "Rerun-as temporarily unavailable"));
+        }
+
+        // ---- dedup gate: prefer surfacing an existing twin row over a 500 -
+        long existingTwinJobId = -1;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT job_id FROM retinal_inference_job "
+                             + "WHERE e2e_sha256 = ? AND scan_index = ? AND task = ?")) {
+            ps.setString(1, sourceSha256);
+            ps.setInt(2, source.scanIndex);
+            ps.setString(3, newTask);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) existingTwinJobId = rs.getLong(1);
+            }
+        } catch (SQLException sqlEx) {
+            // Non-fatal — fall through to the INSERT and let the unique
+            // constraint catch any race.
+            LOG.warn("rerun-as dedup probe failed for job {}: {}", sourceJobId, sqlEx.getMessage());
+        }
+        if (existingTwinJobId > 0) {
+            return ResponseEntity.status(409).body(Map.of(
+                    "message", "A job already exists for this scan + task — "
+                            + "navigate there instead",
+                    "existingJobId", existingTwinJobId));
+        }
+
+        // ---- insert the new job row ---------------------------------
+        long newJobId;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO retinal_inference_job ("
+                             + "event_crf_id, task, e2e_path, eye_laterality, status, "
+                             + "scan_index, enqueued_at, e2e_sha256"
+                             + ") VALUES (?, ?, ?, ?, 'remote_pending', ?, ?, ?)",
+                     Statement.RETURN_GENERATED_KEYS)) {
+            ps.setInt(1, source.eventCrfId);
+            ps.setString(2, newTask);
+            ps.setString(3, source.e2ePath);
+            ps.setString(4, source.eyeLaterality);
+            ps.setInt(5, source.scanIndex);
+            ps.setTimestamp(6, Timestamp.from(Instant.now()));
+            ps.setString(7, sourceSha256);
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (!keys.next()) {
+                    throw new SQLException("rerun-as INSERT returned no PK");
+                }
+                newJobId = keys.getLong(1);
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to insert rerun-as job (source={}, task={}): {}",
+                    sourceJobId, newTask, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to enqueue rerun-as job: " + sqlEx.getMessage()));
+        }
+
+        // ---- audit (reuses the RETRY type id — the action shape is
+        //      the same: operator-initiated re-dispatch of an existing
+        //      scan slot) -------------------------------------------
+        AuditEventDAO auditDAO = new AuditEventDAO(dataSource);
+        EventCrfsApiController.writeAuditEvent(
+                auditDAO, AuditTypeIds.RETINAL_JOB_RETRY,
+                currentUser, currentStudy, ss,
+                "Retinal job rerun-as " + newTask + " (source job " + sourceJobId + ")",
+                /* auditTable */ "retinal_inference_job",
+                /* entityId   */ (int) newJobId,
+                /* columnName */ "task",
+                /* oldValue   */ source.task,
+                /* newValue   */ newTask);
+
+        if (broadcaster != null) {
+            broadcaster.publish(newJobId, "remote_pending");
+        }
+
+        // ---- fire handleRemote async; SSE surfaces the final state --
+        final String taskForDispatch = newTask;
+        final Integer ecfId = source.eventCrfId;
+        final String e2ePath = source.e2ePath;
+        final String lat = source.eyeLaterality;
+        final int scanIdx = source.scanIndex;
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                inferenceController.handleRemote(
+                        newJobId, taskForDispatch, e2ePath, lat, scanIdx, ecfId);
+            } catch (Exception remoteEx) {
+                LOG.warn("Remote dispatch threw for rerun-as job {}: {}",
+                        newJobId, remoteEx.getMessage());
+            }
+        });
+
+        LOG.info("Retinal rerun-as: source={} → new job {} (task {}→{})",
+                sourceJobId, newJobId, source.task, newTask);
+        Map<String, Object> resp = new LinkedHashMap<>();
+        resp.put("jobId", newJobId);
+        resp.put("task", newTask);
+        resp.put("status", "remote_pending");
+        return ResponseEntity.accepted().body(resp);
+    }
+
     /** Slim row carrier for the failed-job retry handoff. */
     private static final class FailedJob {
         String status;
         String statusMessage;
         Integer eventCrfId;
+        Integer studyEventId;
         String task;
         String e2ePath;
         String eyeLaterality;
@@ -1246,7 +1622,7 @@ public class RetinalResultsApiController {
      */
     private FailedJob fetchFailedJob(Connection c, long jobId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT status, status_message, event_crf_id, "
+                "SELECT status, status_message, event_crf_id, study_event_id, "
                         + "       task, e2e_path, eye_laterality, scan_index "
                         + "  FROM retinal_inference_job WHERE job_id = ?")) {
             ps.setLong(1, jobId);
@@ -1257,6 +1633,8 @@ public class RetinalResultsApiController {
                 f.statusMessage = rs.getString("status_message");
                 int ecId = rs.getInt("event_crf_id");
                 f.eventCrfId = rs.wasNull() ? null : ecId;
+                int seId = rs.getInt("study_event_id");
+                f.studyEventId = rs.wasNull() ? null : seId;
                 f.task = rs.getString("task");
                 f.e2ePath = rs.getString("e2e_path");
                 f.eyeLaterality = rs.getString("eye_laterality");
@@ -1551,6 +1929,11 @@ public class RetinalResultsApiController {
     }
 
     private JobRow fetchJobDetail(Connection c, long jobId) throws SQLException {
+        // 2026-06-23 — study_event lookup now uses COALESCE on the
+        // two binding paths so planned-visit-bound jobs (no event_crf
+        // yet) still resolve a studyId. Without this the visibility
+        // guard rejects the job with "belongs to a different study"
+        // because studyId comes back null.
         String sql = "SELECT j.job_id, j.event_crf_id, j.task, j.e2e_path, "
                 + "       j.eye_laterality, j.status, j.enqueued_at, j.completed_at, j.model_version, "
                 + "       j.scan_index, "
@@ -1559,7 +1942,7 @@ public class RetinalResultsApiController {
                 + "  FROM retinal_inference_job j "
                 + "  LEFT JOIN retinal_inference_result r ON r.job_id = j.job_id "
                 + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "  LEFT JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + "  LEFT JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "  LEFT JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
                 + " WHERE j.job_id = ?";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
@@ -1606,6 +1989,29 @@ public class RetinalResultsApiController {
         }
     }
 
+    /**
+     * 2026-06-23 — resolve the owning study_subject_id for the
+     * supplied study_event. Used by the retry path when a job was
+     * bound to a planned visit (event_crf_id null) so we can run the
+     * visibility check + the audit row through the same subject
+     * lookup the event_crf path uses.
+     */
+    private Integer fetchStudySubjectIdForStudyEvent(int studyEventId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT study_subject_id FROM study_event WHERE study_event_id = ?")) {
+            ps.setInt(1, studyEventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int v = rs.getInt(1);
+                return rs.wasNull() ? null : v;
+            }
+        } catch (SQLException e) {
+            LOG.warn("fetchStudySubjectIdForStudyEvent({}) failed: {}", studyEventId, e.getMessage());
+            return null;
+        }
+    }
+
     private Integer fetchStudyIdForStudySubject(Connection c, int studySubjectId) throws SQLException {
         String sql = "SELECT study_id FROM study_subject WHERE study_subject_id = ?";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
@@ -1627,9 +2033,20 @@ public class RetinalResultsApiController {
         Timestamp completedAt = rs.getTimestamp("completed_at");
         BigDecimal pv = rs.getBigDecimal("primary_metric_value");
         String pu = rs.getString("primary_metric_unit");
+        // 2026-06-23 — visit_date is optional in the SELECT (the
+        // event_crf-scoped query at /event-crfs/{id}/retinal-jobs
+        // doesn't join study_event); ResultSetMetaData lookup avoids
+        // throwing for callers that didn't add the column.
+        String visitDate = null;
+        try {
+            java.sql.Date vd = rs.getDate("visit_date");
+            if (vd != null) visitDate = vd.toString();
+        } catch (SQLException ignoredColumnAbsent) {
+            // visit_date column not in this query — leave null.
+        }
         return new RetinalJobSummaryDto(
                 jobId, task, laterality, status, modelVersion,
-                toIso(completedAt), primaryMetric(pv, pu));
+                toIso(completedAt), visitDate, primaryMetric(pv, pu));
     }
 
     /** 401 if no authenticated user, 400 if no active study. */
@@ -1657,10 +2074,51 @@ public class RetinalResultsApiController {
         StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
         Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
                 currentUser, currentStudy, currentRole);
-        if (!visibleStudyIds.contains(studyId)) {
-            return ResponseEntity.status(403).body(Map.of("message", denyMessage));
+        if (visibleStudyIds.contains(studyId)) {
+            return null;
         }
-        return null;
+        // 2026-06-22 user-feedback round 9 — retinal jobs surface
+        // through deep links from the upload portal / cross-study
+        // search; the job's owning study often differs from the
+        // operator's currently-active session study (e.g. an EIAMD
+        // upload routed into RIS while the user was browsing GA).
+        // Fall back to "does the user have ANY active grant on the
+        // owning study?" so the deep link works without forcing a
+        // study-switch. Sysadmins pass through their explicit
+        // admin grant; the same grant the seed + the
+        // 2026-06-22-seed-ris-amd-admin-grants changeset insert
+        // for the demo studies.
+        if (currentUser != null && currentUser.isSysAdmin()) {
+            return null;
+        }
+        if (currentUser != null && userHasActiveGrantOnStudy(currentUser, studyId)) {
+            return null;
+        }
+        return ResponseEntity.status(403).body(Map.of("message", denyMessage));
+    }
+
+    /**
+     * 2026-06-22 round 9 helper — true when {@code user} holds an
+     * AVAILABLE study_user_role on the named study. Used by the
+     * cross-study deep-link relaxation in {@link #guardStudyVisibility}.
+     */
+    private boolean userHasActiveGrantOnStudy(UserAccountBean user, Integer studyId) {
+        if (user == null || studyId == null) return false;
+        try {
+            UserAccountDAO userDao = new UserAccountDAO(dataSource);
+            List<StudyUserRoleBean> grants = userDao.findAllRolesByUserName(user.getName());
+            for (StudyUserRoleBean g : grants) {
+                if (g == null || g.getStudyId() != studyId) continue;
+                if (g.getStatus() != null
+                        && g.getStatus().getId() == Status.AVAILABLE.getId()) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("userHasActiveGrantOnStudy lookup failed for user={} study={}: {}",
+                    user.getName(), studyId, e.getMessage());
+        }
+        return false;
     }
 
     private ResponseEntity<?> guardJobVisibility(JobRow row, HttpSession session) {
@@ -1837,18 +2295,21 @@ public class RetinalResultsApiController {
     }
 
     private PreviousJobView fetchPreviousJob(Connection c, long currentJobId) throws SQLException {
+        // 2026-06-23 — subject resolution via COALESCE on the two
+        // binding paths so previous-job lookup still works for
+        // planned-visit-bound jobs (no event_crf yet).
         String sql = "WITH cur AS ("
                 + "  SELECT j.job_id, j.task, j.eye_laterality, j.completed_at, "
                 + "         ev.study_subject_id "
                 + "    FROM retinal_inference_job j "
-                + "    JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "    JOIN study_event ev ON ev.study_event_id = ec.study_event_id "
+                + "    LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "    JOIN study_event ev ON ev.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "   WHERE j.job_id = ?) "
                 + "SELECT prev.job_id, prev.completed_at, prev_r.output_payload::text "
                 + "  FROM retinal_inference_job prev "
                 + "  JOIN retinal_inference_result prev_r ON prev_r.job_id = prev.job_id "
-                + "  JOIN event_crf ec2 ON ec2.event_crf_id = prev.event_crf_id "
-                + "  JOIN study_event ev2 ON ev2.study_event_id = ec2.study_event_id "
+                + "  LEFT JOIN event_crf ec2 ON ec2.event_crf_id = prev.event_crf_id "
+                + "  JOIN study_event ev2 ON ev2.study_event_id = COALESCE(ec2.study_event_id, prev.study_event_id) "
                 + "  JOIN cur ON cur.study_subject_id = ev2.study_subject_id "
                 + "   AND cur.task = prev.task "
                 + "   AND cur.eye_laterality = prev.eye_laterality "

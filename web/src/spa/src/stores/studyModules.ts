@@ -1,36 +1,11 @@
 import { defineStore, storeToRefs } from 'pinia'
-import { computed, ref, watch } from 'vue'
-import type { ComputedRef } from 'vue'
+import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import type { Component, ComputedRef } from 'vue'
 import { useAuthStore } from './auth'
 import { i18n } from '@/i18n'
 import { findModule } from '@/studyModules/registry'
 import type { InjectionEntry, InjectionSlotId, StudyModuleManifest } from '@/studyModules/types'
 
-/**
- * Active study-module store.
- *
- * <p>Tracks which {@link StudyModuleManifest} (if any) matches the
- * currently-bound study's {@code protocol_type}. The match is derived
- * from {@link useAuthStore} — switching studies via the picker (or
- * activating one for the first time) re-derives the active module
- * automatically.
- *
- * <p>Side effect: on activation, if the manifest declares a
- * {@code loadI18n()}, the store resolves it once and merges the
- * returned {@code de} / {@code en} bundles into vue-i18n via
- * {@code i18n.global.mergeLocaleMessage}. Subsequent activations of
- * the same module skip the load — deactivating does NOT unmerge the
- * messages (cheap to keep around; reactivating later costs zero).
- *
- * <p>Host views consume the store via {@link injectionsFor} — they
- * pass an {@link InjectionSlotId} and render whatever entries the
- * active module advertises for that slot. The slot id is opaque to
- * the host.
- *
- * <p>The i18n instance is dynamically imported when needed so this
- * store survives unit tests that don't boot {@code main.ts} (the
- * spec stubs the merge calls via {@code vi.mock}).
- */
 /**
  * Walk an incoming i18n bundle against the locale messages already
  * loaded into vue-i18n; emit a {@code console.warn} for every leaf key
@@ -81,19 +56,109 @@ export function detectI18nCollisions(
   }
 }
 
+/**
+ * If {@code c} is a lazy-component thunk ({@code () => import(...)})
+ * wrap it in {@code defineAsyncComponent} so {@code <component :is>}
+ * resolves it correctly. Without this wrap the thunk is rendered as
+ * the literal string "[object Promise]" (Vue treats the function as
+ * a render function, calls it, and stringifies the resulting Promise).
+ *
+ * <p>If it's already a component object (or an already-wrapped async
+ * component), pass it through untouched.
+ *
+ * <p>Cached identity-stable per thunk via a {@link WeakMap} so repeated
+ * calls (re-renders, study switches that re-derive the activeModule)
+ * don't churn through new {@code defineAsyncComponent} wrappers — Vue
+ * would otherwise see a "new" component each tick and tear-down +
+ * remount the slot, costing observable jank + breaking transitions.
+ */
+const asyncWrapCache = new WeakMap<object, Component>()
+function wrapAsync(c: Component | (() => Promise<unknown>)): Component {
+  if (typeof c !== 'function') return c as Component
+  const cached = asyncWrapCache.get(c)
+  if (cached) return cached
+  const wrapped = defineAsyncComponent(c as () => Promise<{ default: Component }>)
+  asyncWrapCache.set(c, wrapped)
+  return wrapped
+}
+
+/**
+ * Active study-module store.
+ *
+ * <p>Tracks which {@link StudyModuleManifest} (if any) matches the
+ * currently-bound study's {@code protocol_type}. The match is derived
+ * from {@link useAuthStore} — switching studies via the picker (or
+ * activating one for the first time) re-derives the active module
+ * automatically.
+ *
+ * <p>Side effect: on activation, if the manifest declares a
+ * {@code loadI18n()}, the store resolves it once and merges the
+ * returned {@code de} / {@code en} bundles into vue-i18n via
+ * {@code i18n.global.mergeLocaleMessage}. Subsequent activations of
+ * the same module skip the load — deactivating does NOT unmerge the
+ * messages (cheap to keep around; reactivating later costs zero).
+ *
+ * <p>Host views consume the store via {@link injectionsFor} — they
+ * pass an {@link InjectionSlotId} and render whatever entries the
+ * active module advertises for that slot. The slot id is opaque to
+ * the host.
+ *
+ * <p>The i18n instance is dynamically imported when needed so this
+ * store survives unit tests that don't boot {@code main.ts} (the
+ * spec stubs the merge calls via {@code vi.mock}).
+ */
 export const useStudyModuleStore = defineStore('studyModules', () => {
   const auth = useAuthStore()
   const loadedModuleIds = ref<Set<string>>(new Set<string>())
 
+  /**
+   * Activation discriminator.
+   *
+   * <p>2026-06-23 — decoupled from {@code study.protocol_type}. The
+   * legacy CDISC field carries the
+   * {observational, interventional} distinction and is gated by the
+   * Build-Study UI to those two values, so it can't double as a
+   * module discriminator without bypassing that validator. Activation
+   * is now driven SOLELY by {@code study.enabledModules}, which the
+   * admin toggles via the Study-Parameters → Module enrollment panel
+   * ({@code StudyModuleEnrollmentApiController}).
+   *
+   * <p>The manifest's {@code protocolType} field name is kept for
+   * back-compat — semantically it is now the "module id" used in
+   * enrollment, no longer a protocol-type discriminator.
+   *
+   * <p>If multiple modules are enrolled on the same study, the first
+   * one that resolves to a registered manifest wins. Today the SPI
+   * only supports one active module per study; multi-module support
+   * is a future change (and would route through {@code injectionsFor}
+   * to merge slot lists from each active manifest).
+   */
   const activeModule = computed<StudyModuleManifest | null>(() => {
-    const pt = auth.user?.activeStudy?.protocolType ?? null
-    return findModule(pt)
+    const study = auth.user?.activeStudy
+    if (!study) return null
+    const enrolledRaw =
+      (study as unknown as { enabledModules?: string[] }).enabledModules ?? []
+    for (const moduleId of enrolledRaw) {
+      const candidate = findModule(moduleId)
+      if (candidate) return candidate
+    }
+    return null
   })
 
   function injectionsFor<S extends InjectionSlotId>(slotId: S): InjectionEntry<S>[] {
     const m = activeModule.value
     if (!m) return []
-    return (m.injections?.[slotId] as InjectionEntry<S>[] | undefined) ?? []
+    const raw = (m.injections?.[slotId] as InjectionEntry<S>[] | undefined) ?? []
+    // Modules typically declare `component: () => import('./X.vue')` —
+    // a thunk returning Promise<{ default: Component }>. Vue's
+    // <component :is="..."> does NOT auto-wrap that; without
+    // defineAsyncComponent it gets stringified as "[object Promise]".
+    // Wrap here so host views can just do <component :is="entry.component" />
+    // without each module having to remember the defineAsyncComponent dance.
+    return raw.map((entry) => ({
+      ...entry,
+      component: wrapAsync(entry.component as Component | (() => Promise<unknown>)),
+    }))
   }
 
   /**

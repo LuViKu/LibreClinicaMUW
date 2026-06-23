@@ -41,6 +41,13 @@ function makeTo(opts: {
   } as unknown as RouteLocationNormalized
 }
 
+/**
+ * 2026-06-23 — the activation gate now keys on
+ * activeStudy.enabledModules (admin enrollment) instead of
+ * protocol_type. The helper name + signature are retained so the
+ * existing test assertions ("matches" / "doesn't match") still read
+ * naturally — internally the value is propagated into enabledModules.
+ */
 function userBoundTo(protocolType: string | null | undefined): AuthenticatedUser {
   return {
     username: 'root',
@@ -58,15 +65,16 @@ function userBoundTo(protocolType: string | null | undefined): AuthenticatedUser
     passwordChangeReason: null,
     activeStudy: protocolType === undefined
       ? null
-      : {
+      : ({
           id: 1,
           oid: 'S_DEFAULTS1',
           name: 'Default Study',
           uniqueIdentifier: 'D',
           isSite: false,
           roles: ['Investigator'],
-          protocolType,
-        },
+          protocolType: protocolType ?? 'observational',
+          enabledModules: protocolType ? [protocolType] : [],
+        } as AuthenticatedUser['activeStudy'] & { enabledModules: string[] }),
   }
 }
 

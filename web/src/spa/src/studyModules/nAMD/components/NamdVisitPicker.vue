@@ -2,16 +2,22 @@
 /**
  * nAMD workspace — visit picker.
  *
- * Port of {@code VisitPicker} from namd-compare.jsx. Renders a horizontal
- * strip of visit chips; the active chip drives the v-model. Used by
- * Compare tab to pick the {@code A} and {@code B} visit panes.
+ * 2026-06-21 round 7 — replaced the chip-strip with a dropdown
+ * <select> per the user's "different visits can be selected from a
+ * dropdown menu" feedback. The chip-strip didn't scale well past
+ * eight visits (chronic Treat-and-Extend casebooks can reach
+ * 20+ visits, see GA-cohort hardening 2026-05-31).
+ *
+ * Excluded visits (typically the OTHER pane's selection) render
+ * as disabled options inside the select so the operator still
+ * sees the full visit list but can't double-pick.
  */
 import type { NamdVisit } from '../types'
 
 interface Props {
   modelValue: string | null
   visits: NamdVisit[]
-  /** Disable / hide a visit id (typically the OTHER pane's selection). */
+  /** Disable a visit id in the option list (typically the OTHER pane's selection). */
   excludeId?: string | null
   /** Test-id suffix — A or B. */
   variant?: 'A' | 'B'
@@ -19,29 +25,38 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), { excludeId: null, variant: 'A' })
 const emit = defineEmits<{ 'update:modelValue': [id: string] }>()
+
+function onChange(ev: Event): void {
+  const v = (ev.target as HTMLSelectElement).value
+  if (v) emit('update:modelValue', v)
+}
 </script>
 
 <template>
-  <div
-    :data-testid="`namd-visit-picker-${props.variant}`"
-    class="flex flex-wrap gap-1.5"
-  >
-    <button
-      v-for="visit in visits"
-      :key="visit.id"
-      type="button"
-      :data-testid="`namd-visit-chip-${props.variant}-${visit.id}`"
-      :aria-pressed="modelValue === visit.id"
-      :disabled="visit.id === props.excludeId"
-      class="px-2.5 py-1 rounded-md border text-xs font-medium transition"
-      :class="
-        modelValue === visit.id
-          ? 'border-muw-blue bg-muw-blue text-white'
-          : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed'
-      "
-      @click="emit('update:modelValue', visit.id)"
+  <div :data-testid="`namd-visit-picker-${props.variant}`" class="relative">
+    <select
+      :value="modelValue ?? ''"
+      :data-testid="`namd-visit-select-${props.variant}`"
+      class="w-full appearance-none rounded-md border border-slate-300 bg-white text-sm font-medium text-slate-700 px-3 py-2 pr-9 focus:outline-none focus:border-muw-blue focus:ring-2 focus:ring-muw-blue/30 transition cursor-pointer"
+      @change="onChange"
     >
-      {{ visit.label }} · W{{ visit.week }}
-    </button>
+      <option
+        v-for="visit in visits"
+        :key="visit.id"
+        :value="visit.id"
+        :disabled="visit.id === props.excludeId"
+      >
+        {{ visit.label }} · W{{ visit.week }}
+        <template v-if="visit.date">— {{ visit.date }}</template>
+      </option>
+    </select>
+    <span
+      class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+      aria-hidden="true"
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="6 9 12 15 18 9" />
+      </svg>
+    </span>
   </div>
 </template>

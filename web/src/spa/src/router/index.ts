@@ -507,29 +507,35 @@ export function guard(
   // Pluggable study-module SPI — meta.studyModule guard.
   //
   // Routes added by a registered StudyModuleManifest are stamped with
-  // meta.studyModule = manifest.protocolType. The guard rejects
-  // navigations whose active study's protocol_type doesn't match
-  // — match is case-insensitive (the DB column is free-form text and
-  // the registry already normalises via toUpperCase()). On mismatch
-  // we redirect home with an error-toast hint so the operator sees
-  // *why* they bounced instead of staring at a silent reroute.
+  // meta.studyModule = manifest.protocolType (the module id). The
+  // guard rejects navigations whose active study has not enrolled
+  // that module — match is case-insensitive against
+  // {@code activeStudy.enabledModules}. The protocol_type column on
+  // study is no longer consulted (2026-06-23: see studyModules store
+  // for the decoupling rationale). On mismatch we redirect home with
+  // an error-toast so the operator sees *why* they bounced instead
+  // of staring at a silent reroute.
   const studyModuleMeta = to.meta.studyModule as string | undefined
   if (studyModuleMeta) {
-    const active = auth.user?.activeStudy?.protocolType ?? null
-    if (!active || active.toUpperCase() !== studyModuleMeta.toUpperCase()) {
+    const enrolled =
+      (auth.user?.activeStudy as unknown as { enabledModules?: string[] } | undefined)
+        ?.enabledModules ?? []
+    const needle = studyModuleMeta.trim().toUpperCase()
+    const isEnrolled = enrolled.some((m) => m.trim().toUpperCase() === needle)
+    if (!isEnrolled) {
       useErrorsStore().push(
-        new Error(`Module ${studyModuleMeta} requires a study of that protocol type.`),
+        new Error(`Module ${studyModuleMeta} is not enrolled on the active study.`),
         'studyModule.guard',
       )
       return { name: 'home' }
     }
 
     // PR #245 hardening — verify the URL's :studyOid matches the active
-    // study's OID. The protocolType check above only proves "the active
-    // study CAN host this module"; it doesn't prove "the URL targets the
-    // active study." Without this, a user with study A active can
-    // bookmark study B's module URL and land inside module A's workspace
-    // showing study B context (silent data-routing bug).
+    // study's OID. The enrollment check above only proves "the active
+    // study has this module enabled"; it doesn't prove "the URL
+    // targets the active study." Without this, a user with study A
+    // active can bookmark study B's module URL and land inside module
+    // A's workspace showing study B context (silent data-routing bug).
     const urlOid = (to.params.studyOid as string | undefined) ?? null
     const activeOid = auth.user?.activeStudy?.oid ?? null
     if (urlOid && activeOid && urlOid !== activeOid) {

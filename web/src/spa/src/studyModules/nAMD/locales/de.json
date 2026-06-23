@@ -4,6 +4,12 @@
       "label": "nAMD Fluid-Monitoring",
       "open": "nAMD-Workspace öffnen",
       "openHint": "OCT-Trend, Vergleich und Bericht für die exsudative AMD-Behandlung.",
+      "openFromEvent": "nAMD-Workspace zu dieser Visite öffnen",
+      "openFromEventHint": "OCT-Trend & Vergleich für {subject}.",
+      "empty": {
+        "title": "Keine OCT-Daten vorhanden",
+        "hint": "Für diesen Probanden liegen noch keine abgeschlossenen Inferenz-Jobs vor. Sobald eine OCT-Aufnahme verarbeitet wurde, erscheint hier der Flüssigkeitsverlauf inkl. Trends und Vergleich."
+      },
       "workspaceBreadcrumb": "nAMD Fluid-Monitoring",
       "loading": "Workspace-Daten werden geladen …",
       "errorPrefix": "Fehler beim Laden:",

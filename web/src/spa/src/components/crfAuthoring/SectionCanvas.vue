@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, inject, ref } from 'vue'
+import type { ComputedRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import draggable from 'vuedraggable'
+import { CrfAuthoringErrorsKey } from './errorsInjection'
 
 import {
   useCrfAuthoringStore,
@@ -44,6 +46,54 @@ import { findPreset } from './presetCatalog'
 
 const { t } = useI18n()
 const store = useCrfAuthoringStore()
+
+/**
+ * 2026-06-21 user-feedback batch — collapsed-section state. Per-section
+ * boolean tracked client-side (not persisted) so the operator can hide
+ * a tall section to glance at the form structure without scrolling.
+ * Keyed on section.uid so re-orders keep the collapse state stable.
+ */
+const collapsedSections = ref<Set<string>>(new Set())
+
+function isSectionCollapsed(sectionUid: string): boolean {
+  return collapsedSections.value.has(sectionUid)
+}
+
+function toggleSectionCollapsed(sectionUid: string): void {
+  const next = new Set(collapsedSections.value)
+  if (next.has(sectionUid)) next.delete(sectionUid)
+  else next.add(sectionUid)
+  collapsedSections.value = next
+}
+
+/**
+ * 2026-06-21 user-feedback batch — section reorder via drag handle.
+ * Forwards the new array to the store's reorderSections() which
+ * re-numbers ordinals so the persisted payload stays contiguous.
+ */
+function onSectionReorder(reordered: typeof store.draft.sections): void {
+  store.reorderSections(reordered as AuthoringSection[])
+}
+
+/**
+ * Per-field error map provided by CrfAuthoringCanvasView. Defaults to an
+ * empty computed so item rows render normally when no validation has
+ * been attempted yet.
+ */
+const fieldErrors = inject<ComputedRef<Record<string, string>>>(
+  CrfAuthoringErrorsKey,
+  computed(() => ({})),
+)
+
+/**
+ * Look up an item's error by OID. Used by the item-row v-class +
+ * inline error message under the row. Returns {@code undefined} when
+ * the item is clean (or the OID is blank — defensive).
+ */
+function errorForItem(oid: string): string | undefined {
+  if (!oid) return undefined
+  return fieldErrors.value[oid]
+}
 
 const sections = computed(() => store.draft.sections)
 
@@ -122,18 +172,21 @@ async function applyPresetById(presetId: string, sectionUid: string): Promise<vo
   const preset = findPreset(presetId)
   if (!preset) return
   const { PRESET_CATALOG } = await import('./presetCatalog')
-  const added = store.applyPreset(presetId, sectionUid, {
+  // 2026-06-21 user-feedback batch — each preset materialises as its
+  // own section, never mixed into the target section. If the target is
+  // empty (typical: dropping onto the default "Section 1"), the store
+  // transforms it in-place rather than leaving a dangling empty
+  // section above the new content.
+  const newSectionUid = store.applyPresetAsSection(presetId, sectionUid, {
     registry: PRESET_CATALOG,
     translate: t,
   })
-  if (added > 0) {
-    const section = store.draft.sections.find((s) => s.uid === sectionUid)
-    if (section) {
-      // Select the parent item (first emitted) so the operator can
-      // tweak the label / OID immediately.
-      const first = section.items[section.items.length - added]
-      if (first) store.selectItem(first.uid)
-    }
+  if (!newSectionUid) return
+  const section = store.draft.sections.find((s) => s.uid === newSectionUid)
+  if (section && section.items.length > 0) {
+    // Select the parent item (first emitted) so the operator can
+    // tweak the label / OID immediately.
+    store.selectItem(section.items[0]!.uid)
   }
 }
 
@@ -143,6 +196,44 @@ function onItemReorder(sectionIndex: number, reordered: AuthoringItem[]): void {
 
 function onAddSection(): void {
   store.addSection()
+}
+
+/**
+ * 2026-06-21 user-feedback round 4 — drop-on-new-section. The
+ * "Neue Sektion hinzufügen" footer accepts a palette drag-released
+ * payload. Primitives spin up a fresh empty section + append the item;
+ * presets re-use the empty-target-in-place branch of
+ * {@link applyPresetAsSection} so the section's title + tag come from
+ * the preset rather than the auto-numbered Sn fallback.
+ */
+const dragOverNewSection = ref(false)
+function onNewSectionDragOver(ev: DragEvent): void {
+  ev.preventDefault()
+  if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy'
+  dragOverNewSection.value = true
+}
+function onNewSectionDragLeave(_ev: DragEvent): void {
+  dragOverNewSection.value = false
+}
+function onNewSectionDrop(ev: DragEvent): void {
+  ev.preventDefault()
+  dragOverNewSection.value = false
+  const payload = readPalettePayload(ev)
+  if (!payload) return
+  const newSectionUid = store.addSection()
+  if (!newSectionUid) return
+  const newIndex = store.draft.sections.findIndex((s) => s.uid === newSectionUid)
+  if (newIndex < 0) return
+  if (payload.kind === 'primitive') {
+    store.addItem(newIndex, { dataType: payload.value as AuthoringItem['dataType'] })
+    const section = store.draft.sections[newIndex]
+    const last = section?.items[section.items.length - 1]
+    if (last) store.selectItem(last.uid)
+    return
+  }
+  if (payload.kind === 'preset') {
+    void applyPresetById(payload.value, newSectionUid)
+  }
 }
 
 function onRemoveSection(sectionIndex: number): void {
@@ -246,9 +337,18 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
     class="flex-1 min-w-0 overflow-y-auto bg-white"
     data-testid="crf-canvas-section-root"
   >
-    <div class="p-4 space-y-4">
+    <draggable
+      :model-value="sections"
+      :item-key="(s: AuthoringSection) => s.uid"
+      handle=".crf-canvas-section-drag-handle"
+      animation="120"
+      tag="div"
+      class="p-4 space-y-4"
+      data-testid="crf-canvas-sections-draggable"
+      @update:model-value="onSectionReorder"
+    >
+      <template #item="{ element: section, index: sIdx }">
       <div
-        v-for="(section, sIdx) in sections"
         :key="section.uid"
         class="rounded-lg border bg-white"
         :class="dragOverSectionUid === section.uid ? 'border-muw-blue ring-2 ring-muw-blue/30' : 'border-slate-200'"
@@ -259,6 +359,44 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
       >
         <!-- Section header -->
         <div class="flex items-center gap-2 px-3 py-2 bg-slate-50 border-b border-slate-200">
+          <!-- 2026-06-21 user-feedback batch — drag handle for section
+               reorder. Vuedraggable's handle prop limits drag to this
+               element so input clicks + bilateral toggle stay clickable. -->
+          <span
+            class="crf-canvas-section-drag-handle inline-flex items-center text-slate-400 hover:text-slate-700 cursor-grab"
+            :title="t('crfAuthoring.canvas.section.dragHandle')"
+            :aria-label="t('crfAuthoring.canvas.section.dragHandle')"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75">
+              <circle cx="9" cy="6" r="1.3" fill="currentColor" />
+              <circle cx="15" cy="6" r="1.3" fill="currentColor" />
+              <circle cx="9" cy="12" r="1.3" fill="currentColor" />
+              <circle cx="15" cy="12" r="1.3" fill="currentColor" />
+              <circle cx="9" cy="18" r="1.3" fill="currentColor" />
+              <circle cx="15" cy="18" r="1.3" fill="currentColor" />
+            </svg>
+          </span>
+          <!-- Collapse toggle. Chevron points right when collapsed,
+               down when expanded. -->
+          <button
+            type="button"
+            class="inline-flex items-center text-slate-500 hover:text-slate-800 px-1"
+            :title="isSectionCollapsed(section.uid)
+              ? t('crfAuthoring.canvas.section.expand')
+              : t('crfAuthoring.canvas.section.collapse')"
+            :aria-expanded="!isSectionCollapsed(section.uid)"
+            :data-testid="`crf-canvas-section-collapse-${sIdx}`"
+            @click="toggleSectionCollapsed(section.uid)"
+          >
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.2"
+              class="transition-transform"
+              :class="isSectionCollapsed(section.uid) ? '-rotate-90' : ''"
+            >
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
           <div class="flex-1 grid grid-cols-2 gap-2 min-w-0">
             <input
               type="text"
@@ -277,6 +415,27 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
               @input="(ev) => onSectionLabelInput(sIdx, ev)"
             />
           </div>
+          <!-- 2026-06-21 user-feedback batch — uni/bi-lateral toggle.
+               Operator can flip an existing section between bilateral
+               (OD-left / OS-right grid) and unilateral (flat list)
+               without re-adding items. Preset drops still seed this
+               from PresetDescriptor.bilateralSection. -->
+          <button
+            type="button"
+            class="text-[11px] px-2 py-0.5 rounded border transition-colors"
+            :class="section.bilateral
+              ? 'bg-muw-blue text-white border-muw-blue hover:bg-muw-blue-700'
+              : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100'"
+            :data-testid="`crf-canvas-section-bilateral-${sIdx}`"
+            :title="section.bilateral
+              ? t('crfAuthoring.canvas.section.bilateralOn')
+              : t('crfAuthoring.canvas.section.bilateralOff')"
+            @click="store.setSectionBilateralByUid(section.uid, !section.bilateral)"
+          >
+            {{ section.bilateral
+              ? t('crfAuthoring.canvas.section.bilateralOnShort')
+              : t('crfAuthoring.canvas.section.bilateralOffShort') }}
+          </button>
           <button
             v-if="sections.length > 1"
             type="button"
@@ -288,8 +447,10 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
           </button>
         </div>
 
-        <!-- Section body -->
-        <div class="p-3 space-y-2">
+        <!-- Section body — collapse-aware. v-show preserves the
+             draggable list state inside so reorders + selection
+             survive the toggle. -->
+        <div v-show="!isSectionCollapsed(section.uid)" class="p-3 space-y-2">
           <!-- Empty state -->
           <div
             v-if="section.items.length === 0"
@@ -374,8 +535,11 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
             <template #item="{ element: item, index: iIdx }">
               <div
                 :key="item.uid"
+                :data-item-uid="item.uid"
                 class="flex items-center gap-2 px-2 py-1.5 rounded border bg-white hover:border-muw-blue/50 cursor-pointer"
-                :class="store.selectedItemUid === item.uid ? 'border-muw-blue ring-1 ring-muw-blue/40' : 'border-slate-200'"
+                :class="errorForItem(item.oid)
+                  ? 'border-red-500 ring-1 ring-red-300 bg-red-50/40'
+                  : (store.selectedItemUid === item.uid ? 'border-muw-blue ring-1 ring-muw-blue/40' : 'border-slate-200')"
                 :data-testid="`crf-canvas-item-${sIdx}-${iIdx}`"
                 @click="onItemClick(item)"
               >
@@ -399,6 +563,13 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
                   <div class="text-[10px] font-mono text-slate-500 truncate">
                     {{ item.oid || '—' }} · {{ item.dataType }}
                   </div>
+                  <div
+                    v-if="errorForItem(item.oid)"
+                    class="text-[10px] text-red-700 mt-0.5"
+                    :data-testid="`crf-canvas-item-error-${sIdx}-${iIdx}`"
+                  >
+                    {{ errorForItem(item.oid) }}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -413,17 +584,31 @@ function bilateralRowsForSection(section: AuthoringSection): BilateralRow[] {
           </draggable>
         </div>
       </div>
+      </template>
+    </draggable>
 
-      <div class="text-center">
-        <button
-          type="button"
-          class="text-xs text-muw-blue hover:underline px-3 py-1.5 border border-dashed border-slate-300 rounded-md w-full"
-          data-testid="crf-canvas-add-section"
-          @click="onAddSection"
-        >
-          {{ t('crfAuthoring.canvas.section.add') }}
-        </button>
-      </div>
+    <!-- 2026-06-21 user-feedback round 4 — the "Neue Sektion hinzufügen"
+         area now accepts a drag-released primitive or preset. Dropping
+         a primitive seeds a fresh section + appends the item; dropping
+         a preset materialises the preset as a brand-new section (the
+         "transform empty target in place" path inside applyPresetAsSection
+         kicks in automatically). dragOverNewSection drives the dashed
+         border highlight so the drop target reads as "this works". -->
+    <div class="px-4 pb-4 text-center">
+      <button
+        type="button"
+        class="text-xs text-muw-blue px-3 py-1.5 border border-dashed rounded-md w-full transition"
+        :class="dragOverNewSection
+          ? 'border-muw-blue bg-muw-blue/5'
+          : 'border-slate-300 hover:underline'"
+        data-testid="crf-canvas-add-section"
+        @click="onAddSection"
+        @dragover="onNewSectionDragOver"
+        @dragleave="onNewSectionDragLeave"
+        @drop="onNewSectionDrop"
+      >
+        {{ t('crfAuthoring.canvas.section.add') }}
+      </button>
     </div>
   </section>
 </template>

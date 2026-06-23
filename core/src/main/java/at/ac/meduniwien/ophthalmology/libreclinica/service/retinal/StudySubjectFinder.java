@@ -168,36 +168,53 @@ public class StudySubjectFinder {
     }
 
     /**
-     * For one resolved study_subject, find the event_crf row whose
-     * parent study_event.date_start falls on the supplied scan date.
+     * For one resolved study_subject, find the study_event row whose
+     * {@code date_start} falls on the supplied scan date.
      *
-     * <p>The result deliberately surfaces an {@code event_crf_id} (not
-     * a study_event_id): the OCT-upload commit binds a
-     * {@code retinal_inference_job} row to an event_crf, and we want
-     * the SPA to confirm exactly that PK without a second round-trip.
+     * <p>2026-06-23 — the query now anchors on {@code study_event}
+     * (LEFT JOIN {@code event_crf}). A planned-but-not-started visit
+     * has no {@code event_crf} row yet — the operator hasn't opened
+     * the form — so the previous INNER-JOIN missed them entirely.
+     * That left subjects with planned visits looking like they had no
+     * visits at all on the scan date.
      *
-     * <p>When more than one event_crf matches on the same day the lowest
-     * event_crf_id wins (deterministic, defensible — they're typically
-     * created in chronological order, so the earliest binding maps to
-     * the operator's earliest CRF on the day).
+     * <p>The returned {@link EventCandidate} carries a non-null
+     * {@code studyEventId} (always) plus a nullable {@code eventCrfId}
+     * (only when the CRF is already in flight). The commit endpoint
+     * uses {@code studyEventId} to bind the new
+     * {@code retinal_inference_job} row; {@code eventCrfId} gets
+     * populated later when the operator opens the CRF and commits the
+     * derived metrics into item_data.
+     *
+     * <p>Removed-event filter retained: {@code subject_event_status}
+     * 5 (STOPPED) and 7 (LOCKED) are excluded — those visits are
+     * terminal and shouldn't accept new scans. The status filter now
+     * lives on {@code study_event} rather than {@code event_crf}.
+     *
+     * <p>When more than one study_event matches on the same day the
+     * lowest {@code study_event_id} wins (deterministic, defensible
+     * — events are typically created in chronological order).
      */
     public Optional<EventCandidate> findEventOnDate(int studySubjectId, LocalDate scanDate) {
         if (scanDate == null) {
             return Optional.empty();
         }
         final String sql =
-                "SELECT ec.event_crf_id, "
+                "SELECT se.study_event_id, "
+                        + "       ec.event_crf_id, "
                         + "       sed.name AS definition_name, "
                         + "       se.sample_ordinal, "
                         + "       date(se.date_start) AS event_date "
-                        + "  FROM event_crf ec "
-                        + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                        + "  FROM study_event se "
                         + "  JOIN study_event_definition sed "
                         + "    ON sed.study_event_definition_id = se.study_event_definition_id "
-                        + " WHERE ec.study_subject_id = ? "
-                        + "   AND date(se.date_start) = ? "
+                        + "  LEFT JOIN event_crf ec "
+                        + "    ON ec.study_event_id = se.study_event_id "
                         + "   AND ec.status_id NOT IN (5, 7) "
-                        + " ORDER BY ec.event_crf_id ASC "
+                        + " WHERE se.study_subject_id = ? "
+                        + "   AND date(se.date_start) = ? "
+                        + "   AND se.subject_event_status_id NOT IN (5, 7) "
+                        + " ORDER BY se.study_event_id ASC, ec.event_crf_id ASC NULLS LAST "
                         + " LIMIT 1";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
@@ -211,8 +228,11 @@ public class StudySubjectFinder {
                 int ordinal = rs.getInt("sample_ordinal");
                 String label = (ordinal > 1) ? defName + " (#" + ordinal + ")" : defName;
                 Date dStart = rs.getDate("event_date");
+                int ecf = rs.getInt("event_crf_id");
+                Integer eventCrfId = rs.wasNull() ? null : ecf;
                 return Optional.of(new EventCandidate(
-                        rs.getInt("event_crf_id"),
+                        rs.getInt("study_event_id"),
+                        eventCrfId,
                         label,
                         dStart == null ? null : dStart.toLocalDate(),
                         "same-day"

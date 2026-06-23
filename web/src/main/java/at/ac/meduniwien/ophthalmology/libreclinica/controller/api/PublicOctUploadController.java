@@ -228,6 +228,11 @@ public class PublicOctUploadController {
                                     @RequestParam("laterality") String laterality,
                                     @RequestParam(value = "scanIndex", defaultValue = "0") int scanIndex,
                                     @RequestParam(value = "eventCrfId", required = false) Integer eventCrfId,
+                                    // 2026-06-23 — studyEventId binds the job to a planned visit
+                                    // when no event_crf exists yet. Mutually exclusive with the
+                                    // other two binding modes; commit accepts exactly one of
+                                    // {eventCrfId, studyEventId, park}.
+                                    @RequestParam(value = "studyEventId", required = false) Integer studyEventId,
                                     @RequestParam(value = "park", defaultValue = "false") boolean park,
                                     // Wave 1B (2026-06-18): when the resolve response carried
                                     // state='ambiguous' AND the staff picked, the SPA sets
@@ -254,13 +259,15 @@ public class PublicOctUploadController {
             return ResponseEntity.badRequest().body(Map.of(
                     "message", "laterality must be one of " + SUPPORTED_LATERALITIES + " (got '" + laterality + "')"));
         }
-        if (!park && eventCrfId == null) {
+        // Exactly one binding mode: park | eventCrfId | studyEventId.
+        int modeCount = (park ? 1 : 0) + (eventCrfId != null ? 1 : 0) + (studyEventId != null ? 1 : 0);
+        if (modeCount == 0) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "either eventCrfId or park=true must be supplied"));
+                    "message", "exactly one of eventCrfId, studyEventId or park=true must be supplied"));
         }
-        if (park && eventCrfId != null) {
+        if (modeCount > 1) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "message", "park=true and eventCrfId are mutually exclusive"));
+                    "message", "park, eventCrfId and studyEventId are mutually exclusive"));
         }
 
         // Resolve study_subject for the audit row. When park-no-patient
@@ -268,12 +275,19 @@ public class PublicOctUploadController {
         // the audit row's entity_id still points at the new job row,
         // study_subject_id is just metadata.
         Integer auditStudySubjectId = null;
-        if (!park) {
+        if (eventCrfId != null) {
             // bound to an event_crf → derive study_subject from event_crf
             auditStudySubjectId = resolveStudySubjectFromEventCrf(eventCrfId);
             if (auditStudySubjectId == null) {
                 return ResponseEntity.status(404).body(Map.of(
                         "message", "No event_crf with id " + eventCrfId));
+            }
+        } else if (studyEventId != null) {
+            // bound to a study_event → derive study_subject from study_event
+            auditStudySubjectId = resolveStudySubjectFromStudyEvent(studyEventId);
+            if (auditStudySubjectId == null) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "No study_event with id " + studyEventId));
             }
         } else {
             // park flow — best-effort: if the label resolves to exactly
@@ -377,19 +391,46 @@ public class PublicOctUploadController {
         } else {
             status = RetinalInferenceJobStatus.QUEUED.dbValue();
         }
-        long jobId;
+        // 2026-06-22 — per-event-definition default task list. When the
+        // upload is bound to an event_crf or study_event we look up the
+        // configured panel for its event_definition and enqueue ONE
+        // retinal_inference_job per task in that set. Parked uploads
+        // and event_definitions with no config fall back to DEFAULT_TASK
+        // so pre-multi-task behaviour is preserved.
+        List<String> tasks;
+        if (eventCrfId != null) {
+            tasks = resolveDefaultRetinalTasksByEventCrf(eventCrfId);
+            if (tasks.isEmpty()) tasks = List.of(DEFAULT_TASK);
+        } else if (studyEventId != null) {
+            tasks = resolveDefaultRetinalTasksByStudyEvent(studyEventId);
+            if (tasks.isEmpty()) tasks = List.of(DEFAULT_TASK);
+        } else {
+            tasks = List.of(DEFAULT_TASK);
+        }
+
+        List<Long> jobIds = new ArrayList<>();
+        List<Map<String, Object>> jobInfos = new ArrayList<>();
         try (Connection c = dataSource.getConnection()) {
-            jobId = insertJob(c, eventCrfId, DEFAULT_TASK, absolutePath, lat, status, scanIndex, e2eSha256);
+            for (String task : tasks) {
+                long jId = insertJob(c, eventCrfId, studyEventId, task, absolutePath, lat, status, scanIndex, e2eSha256);
+                jobIds.add(jId);
+                Map<String, Object> info = new LinkedHashMap<>();
+                info.put("jobId", jId);
+                info.put("task", task);
+                info.put("status", status);
+                jobInfos.add(info);
+            }
         } catch (SQLException sqlEx) {
             // 2026-06-19 — race-safe dedup catch. If a concurrent upload
             // beat us to the unique index between the pre-check above
-            // and this INSERT, the constraint fires here. Surface as
-            // 409 with the existing job_id, same shape as the pre-check
-            // path. Postgres unique-violation SQLState = 23505.
+            // and this INSERT, the constraint fires here. Postgres
+            // unique-violation SQLState = 23505. Roll back any partial
+            // multi-task inserts before surfacing the 409.
             if ("23505".equals(sqlEx.getSQLState())) {
+                deleteJobsByIds(jobIds);
                 Long racedJobId = findJobBySha256(e2eSha256, scanIndex);
                 try { Files.deleteIfExists(savedPath); } catch (IOException ignored) { /* swallow */ }
-                LOG.info("Public OCT upload — (sha256, scanIndex) race detected for patientId={}, existing job={}",
+                LOG.info("Public OCT upload — (sha256, scanIndex, task) race detected for patientId={}, existing job={}",
                         pid, racedJobId);
                 return ResponseEntity.status(409).body(Map.of(
                         "message", "Diese .e2e-Datei wurde bereits hochgeladen.",
@@ -398,14 +439,21 @@ public class PublicOctUploadController {
             }
             LOG.error("Failed to enqueue retinal_inference_job from portal (patientId={}): {}",
                     pid, sqlEx.getMessage());
-            // Best-effort cleanup: don't leave an orphan file when the INSERT failed.
+            // Best-effort cleanup: roll back partial inserts + drop the orphan file.
+            deleteJobsByIds(jobIds);
             try { Files.deleteIfExists(savedPath); } catch (IOException ignored) { /* swallow */ }
             return ResponseEntity.internalServerError().body(Map.of(
                     "message", "Failed to enqueue job: " + sqlEx.getMessage()));
         }
 
-        // ---- audit row on enqueue -----------------------------------------
-        writePublicOctUploadAuditRow(jobId, auditStudySubjectId, pid, lat, status);
+        // Primary jobId for back-compat with API consumers that expect
+        // the legacy single-job shape; `jobs` carries the full set.
+        long jobId = jobIds.get(0);
+
+        // ---- audit row per enqueued job ------------------------------
+        for (long jid : jobIds) {
+            writePublicOctUploadAuditRow(jid, auditStudySubjectId, pid, lat, status);
+        }
 
         // ---- disambiguation marker (Wave 1B) ------------------------------
         // Emit a SECOND audit row when the SPA flagged the upload as a
@@ -417,8 +465,8 @@ public class PublicOctUploadController {
             writeAmbiguousDisambiguationAuditRow(auditStudySubjectId, candidateCount);
         }
 
-        LOG.info("Public OCT upload — job {} {} (patientId={}, lat={}, scanIndex={}, eventCrfId={}, disambiguated={})",
-                jobId, status, pid, lat, scanIndex, eventCrfId, disambiguated);
+        LOG.info("Public OCT upload — job {} {} (patientId={}, lat={}, scanIndex={}, eventCrfId={}, studyEventId={}, disambiguated={})",
+                jobId, status, pid, lat, scanIndex, eventCrfId, studyEventId, disambiguated);
 
         // 2026-06-19 — fire the preprocess + remote-inference dispatch
         // asynchronously so the commit response returns immediately and
@@ -430,7 +478,7 @@ public class PublicOctUploadController {
         // Soft-fail: any exception in the async block logs + leaves
         // the row in {@code remote_pending} or {@code queued}, which
         // the local worker still drains as the fallback path.
-        final long finalJobId = jobId;
+        final List<Map<String, Object>> finalJobInfos = jobInfos;
         final Path finalSavedPath = savedPath;
         final String finalLat = lat;
         final int finalScanIndex = scanIndex;
@@ -438,18 +486,100 @@ public class PublicOctUploadController {
         final boolean finalDispatchToRemote = dispatchToRemote;
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
-                runPostCommitPipeline(finalJobId, finalSavedPath, originalFilename,
+                runPostCommitPipelineMulti(finalJobInfos, finalSavedPath, originalFilename,
                         finalLat, finalScanIndex, finalEventCrfId, finalDispatchToRemote);
             } catch (Exception ex) {
-                LOG.warn("Post-commit async pipeline for job {} threw: {}",
-                        finalJobId, ex.getMessage());
+                LOG.warn("Post-commit async pipeline threw: {}", ex.getMessage());
             }
         });
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("jobId", jobId);
         body.put("status", status);
+        body.put("jobs", jobInfos);
         return ResponseEntity.status(201).body(body);
+    }
+
+    /**
+     * 2026-06-22 — best-effort rollback after a multi-task INSERT
+     * partially succeeded (e.g. the 2nd task hit the unique-key race).
+     * Swallows errors — we're already on a failure path and the
+     * dangling rows are harmless until the next deploy's GC.
+     */
+    private void deleteJobsByIds(List<Long> ids) {
+        if (ids == null || ids.isEmpty()) return;
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "DELETE FROM retinal_inference_job WHERE job_id = ?")) {
+            for (Long id : ids) {
+                ps.setLong(1, id);
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        } catch (SQLException sqlEx) {
+            LOG.warn("Failed to clean up partial multi-task inserts {}: {}", ids, sqlEx.getMessage());
+        }
+    }
+
+    /**
+     * 2026-06-22 — resolve the configured retinal-task panel for the
+     * event_definition that owns this event_crf. Returns the lowercase
+     * task tokens ordered as stored. Empty list when the event_def has
+     * no config (the caller falls back to DEFAULT_TASK in that case).
+     *
+     * <p>Joins event_crf → study_event → study_event_definition →
+     * event_definition_retinal_task so a single round-trip resolves
+     * the panel without surfacing the event-definition id to the
+     * caller.
+     */
+    private List<String> resolveDefaultRetinalTasksByEventCrf(int eventCrfId) {
+        List<String> out = new ArrayList<>();
+        String sql = "SELECT t.task "
+                + "  FROM event_crf ec "
+                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + "  JOIN event_definition_retinal_task t "
+                + "    ON t.study_event_definition_id = se.study_event_definition_id "
+                + " WHERE ec.event_crf_id = ? "
+                + " ORDER BY t.id";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, eventCrfId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(rs.getString(1));
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("Failed to resolve default retinal tasks for event_crf {}: {}",
+                    eventCrfId, sqlEx.getMessage());
+        }
+        return out;
+    }
+
+    /**
+     * 2026-06-23 — sibling of {@link #resolveDefaultRetinalTasksByEventCrf}
+     * for the planned-visit binding path. When the operator picks a
+     * scheduled visit (no CRF yet) the panel still comes from the
+     * event_definition; we just take the shorter join path through
+     * study_event directly.
+     */
+    private List<String> resolveDefaultRetinalTasksByStudyEvent(int studyEventId) {
+        List<String> out = new ArrayList<>();
+        String sql = "SELECT t.task "
+                + "  FROM study_event se "
+                + "  JOIN event_definition_retinal_task t "
+                + "    ON t.study_event_definition_id = se.study_event_definition_id "
+                + " WHERE se.study_event_id = ? "
+                + " ORDER BY t.id";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studyEventId);
+            try (java.sql.ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) out.add(rs.getString(1));
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("Failed to resolve default retinal tasks for study_event {}: {}",
+                    studyEventId, sqlEx.getMessage());
+        }
+        return out;
     }
 
     /**
@@ -469,48 +599,82 @@ public class PublicOctUploadController {
                                        String originalFilename, String laterality,
                                        int scanIndex, Integer eventCrfId,
                                        boolean dispatchToRemote) {
+        // Single-task convenience wrapper for callers that haven't been
+        // migrated to the multi-task shape (kept to minimise churn in
+        // any future callers; currently the legacy code path is gone).
+        Map<String, Object> info = new LinkedHashMap<>();
+        info.put("jobId", jobId);
+        info.put("task", DEFAULT_TASK);
+        runPostCommitPipelineMulti(List.of(info), savedPath, originalFilename,
+                laterality, scanIndex, eventCrfId, dispatchToRemote);
+    }
+
+    /**
+     * 2026-06-22 — multi-task post-commit pipeline. Preprocessing
+     * (e2e → bscan.dcm + fundus.png + geometry.json) is task-independent
+     * so we run it ONCE for the .e2e + then dispatch each enqueued
+     * job's task to the remote inference adapter in parallel.
+     */
+    private void runPostCommitPipelineMulti(List<Map<String, Object>> jobInfos,
+                                            Path savedPath, String originalFilename,
+                                            String laterality, int scanIndex,
+                                            Integer eventCrfId,
+                                            boolean dispatchToRemote) {
         String fileNameForLog = savedPath.getFileName().toString();
         String e2eUuid = fileNameForLog.toLowerCase(Locale.ROOT).endsWith(".e2e")
                 ? fileNameForLog.substring(0, fileNameForLog.length() - 4)
                 : fileNameForLog;
+        long primaryJobId = jobInfos.isEmpty()
+                ? -1L
+                : ((Number) jobInfos.get(0).get("jobId")).longValue();
 
-        // ---- preprocess sidecar (best-effort) ------------------------
+        // ---- preprocess sidecar (best-effort, ONCE per .e2e) --------
         if (remoteClient != null) {
             byte[] e2eBytes = null;
             try {
                 e2eBytes = Files.readAllBytes(savedPath);
             } catch (IOException ioEx) {
-                LOG.warn("Async pipeline: failed to re-read .e2e for preprocess (job {}): {}",
-                        jobId, ioEx.getMessage());
+                LOG.warn("Async pipeline: failed to re-read .e2e for preprocess (primary job {}): {}",
+                        primaryJobId, ioEx.getMessage());
             }
             if (e2eBytes != null) {
                 try {
                     RemoteRetinalInferenceClient.PreprocessResult prep =
-                            remoteClient.preprocessUpload(jobId,
+                            remoteClient.preprocessUpload(primaryJobId,
                                     originalFilename != null ? originalFilename : fileNameForLog,
                                     e2eBytes, laterality, e2eUuid, scanIndex);
                     if (prep == null) {
-                        LOG.warn("Preprocess sidecar returned null for upload e2eUuid={} (job {}); "
-                                + "fundus/bscan artifacts unavailable until manual re-run",
-                                e2eUuid, jobId);
+                        LOG.warn("Preprocess sidecar returned null for upload e2eUuid={} (primary job {})",
+                                e2eUuid, primaryJobId);
                     } else {
-                        LOG.info("Preprocess sidecar ok for upload e2eUuid={} (job {}, dcmBytes={})",
-                                e2eUuid, jobId, prep.dcmBytes() != null ? prep.dcmBytes().length : 0);
+                        LOG.info("Preprocess sidecar ok for upload e2eUuid={} (primary job {}, dcmBytes={})",
+                                e2eUuid, primaryJobId, prep.dcmBytes() != null ? prep.dcmBytes().length : 0);
                     }
                 } catch (Exception prepEx) {
-                    LOG.warn("Preprocess sidecar threw for upload (job {}): {}", jobId, prepEx.getMessage());
+                    LOG.warn("Preprocess sidecar threw for upload (primary job {}): {}",
+                            primaryJobId, prepEx.getMessage());
                 }
             }
         }
 
-        // ---- remote inference dispatch (only when configured) --------
-        if (dispatchToRemote && inferenceController != null && eventCrfId != null) {
-            try {
-                inferenceController.handleRemote(jobId, DEFAULT_TASK,
-                        savedPath.toString(), laterality, scanIndex, eventCrfId);
-            } catch (Exception remoteEx) {
-                LOG.warn("Remote dispatch threw for portal commit job {}: {}",
-                        jobId, remoteEx.getMessage());
+        // ---- remote inference dispatch — one call per task ----------
+        // 2026-06-23 — eventCrfId may be null when the job was bound
+        // to a planned visit via study_event_id only. handleRemote
+        // now accepts Integer + only uses the value for one final log
+        // line, so a null binding doesn't block the dispatch. Without
+        // this, planned-visit jobs stayed in remote_pending forever
+        // because the GPU sidecar was never asked to /run them.
+        if (dispatchToRemote && inferenceController != null) {
+            for (Map<String, Object> info : jobInfos) {
+                long jId = ((Number) info.get("jobId")).longValue();
+                String task = String.valueOf(info.get("task"));
+                try {
+                    inferenceController.handleRemote(jId, task,
+                            savedPath.toString(), laterality, scanIndex, eventCrfId);
+                } catch (Exception remoteEx) {
+                    LOG.warn("Remote dispatch threw for portal commit job {} (task {}): {}",
+                            jId, task, remoteEx.getMessage());
+                }
             }
         }
     }
@@ -770,27 +934,55 @@ public class PublicOctUploadController {
         }
     }
 
-    private long insertJob(Connection c, Integer eventCrfId, String task, String e2ePath,
-                           String lat, String status, int scanIndex, String e2eSha256) throws SQLException {
+    /**
+     * 2026-06-23 — sibling of {@link #resolveStudySubjectFromEventCrf}
+     * for the planned-visit binding path. Returns the owning
+     * study_subject_id for the supplied study_event, or null if no
+     * such row exists.
+     */
+    private Integer resolveStudySubjectFromStudyEvent(int studyEventId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT study_subject_id FROM study_event WHERE study_event_id = ?")) {
+            ps.setInt(1, studyEventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int v = rs.getInt(1);
+                return rs.wasNull() ? null : v;
+            }
+        } catch (SQLException e) {
+            LOG.warn("resolveStudySubjectFromStudyEvent({}) failed: {}", studyEventId, e.getMessage());
+            return null;
+        }
+    }
+
+    private long insertJob(Connection c, Integer eventCrfId, Integer studyEventId, String task,
+                           String e2ePath, String lat, String status, int scanIndex,
+                           String e2eSha256) throws SQLException {
         String sql = "INSERT INTO retinal_inference_job ("
-                + "event_crf_id, task, e2e_path, eye_laterality, status, scan_index, enqueued_at, e2e_sha256"
-                + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+                + "event_crf_id, study_event_id, task, e2e_path, eye_laterality, status, scan_index, enqueued_at, e2e_sha256"
+                + ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         try (PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
             if (eventCrfId == null) {
                 ps.setNull(1, java.sql.Types.INTEGER);
             } else {
                 ps.setInt(1, eventCrfId);
             }
-            ps.setString(2, task);
-            ps.setString(3, e2ePath);
-            ps.setString(4, lat);
-            ps.setString(5, status);
-            ps.setInt(6, scanIndex);
-            ps.setTimestamp(7, Timestamp.from(Instant.now()));
-            if (e2eSha256 == null || e2eSha256.isBlank()) {
-                ps.setNull(8, java.sql.Types.VARCHAR);
+            if (studyEventId == null) {
+                ps.setNull(2, java.sql.Types.INTEGER);
             } else {
-                ps.setString(8, e2eSha256);
+                ps.setInt(2, studyEventId);
+            }
+            ps.setString(3, task);
+            ps.setString(4, e2ePath);
+            ps.setString(5, lat);
+            ps.setString(6, status);
+            ps.setInt(7, scanIndex);
+            ps.setTimestamp(8, Timestamp.from(Instant.now()));
+            if (e2eSha256 == null || e2eSha256.isBlank()) {
+                ps.setNull(9, java.sql.Types.VARCHAR);
+            } else {
+                ps.setString(9, e2eSha256);
             }
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {

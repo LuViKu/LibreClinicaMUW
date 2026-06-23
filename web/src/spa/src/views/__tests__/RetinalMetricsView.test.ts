@@ -200,45 +200,54 @@ describe('RetinalMetricsView — task surfaces', () => {
     fetchGeometryMock.mockReset()
   })
 
-  it('renders 4 KPI tiles for the fluid task (IRF / SRF / PED / Total)', async () => {
+  it('renders 4 KPI tiles for the fluid task (IRF / SRF / PED / Gesamt)', async () => {
     const w = await mountView(makeFluidJob())
     const tiles = w.findAll('[data-testid="retinal-kpi-tile"]')
     expect(tiles.length).toBe(4)
-    const labels = tiles.map((t) => t.text())
-    expect(labels.join(' ')).toContain('IRF')
-    expect(labels.join(' ')).toContain('SRF')
-    expect(labels.join(' ')).toContain('PED')
-    expect(labels.join(' ')).toContain('Total')
+    const joined = tiles.map((t) => t.text()).join(' ')
+    expect(joined).toContain('IRF')
+    expect(joined).toContain('SRF')
+    expect(joined).toContain('PED')
+    // DE locale — "Gesamt" is the localised "Total" label.
+    expect(joined).toContain('Gesamt')
   })
 
-  it('renders the ETDRS sub-totals table with three rings for fluid', async () => {
+  it('renders the ETDRS sub-totals table with three full circles + two annular rings for fluid', async () => {
     const w = await mountView(makeFluidJob())
     const etdrs = w.find('[data-testid="retinal-view-etdrs"]')
     expect(etdrs.exists()).toBe(true)
     const rows = etdrs.findAll('[data-testid="retinal-etdrs-row"]')
-    expect(rows.length).toBe(3)
+    // 2026-06-22 — 3 cumulative central discs (1mm / 3mm / 6mm) +
+    // 2 disjoint annular rings (1–3 mm / 3–6 mm).
+    expect(rows.length).toBe(5)
     expect(rows[0].text()).toContain('1 mm')
     expect(rows[1].text()).toContain('3 mm')
     expect(rows[2].text()).toContain('6 mm')
+    expect(rows[3].text()).toContain('1–3 mm')
+    expect(rows[4].text()).toContain('3–6 mm')
   })
 
-  it('renders 1 KPI tile + ETDRS sub-totals for the GA task', async () => {
+  it('renders 1 KPI tile + ETDRS sub-totals (3 discs + 2 rings) for the GA task', async () => {
     const w = await mountView(makeGaJob())
     const tiles = w.findAll('[data-testid="retinal-kpi-tile"]')
     expect(tiles.length).toBe(1)
-    expect(tiles[0].text()).toContain('GA area')
+    expect(tiles[0].text()).toContain('GA-Fläche')
     const etdrs = w.find('[data-testid="retinal-view-etdrs"]')
     expect(etdrs.exists()).toBe(true)
-    expect(etdrs.findAll('[data-testid="retinal-etdrs-row"]').length).toBe(3)
+    // 2026-06-22 — GA gets the same 5-row layout as fluid (1mm /
+    // 3mm / 6mm cumulative + 1–3 mm / 3–6 mm rings derived by
+    // subtraction).
+    expect(etdrs.findAll('[data-testid="retinal-etdrs-row"]').length).toBe(5)
   })
 
-  it('renders 1 thickness KPI for the ONL task and suppresses the per-B-scan trace', async () => {
+  it('renders 1 thickness KPI for the ONL task (per-B-scan trace dropped in design pass)', async () => {
     const w = await mountView(makeOnlJob())
     const tiles = w.findAll('[data-testid="retinal-kpi-tile"]')
     expect(tiles.length).toBe(1)
-    expect(tiles[0].text()).toContain('ONL thickness')
-    // PerBscanTrace stub absent → fallback "No per-B-scan trace" message.
-    expect(w.find('[data-testid="retinal-view-trace"]').text()).toContain('No per-B-scan trace')
+    expect(tiles[0].text()).toContain('ONL-Dicke')
+    // 2026-06-22 — per-B-scan trace was removed when the view adopted
+    // the new design (footprint bands on the en-face supersede it).
+    expect(w.find('[data-testid="retinal-view-trace"]').exists()).toBe(false)
   })
 
   it('renders the inflight banner when status is queued', async () => {
@@ -247,7 +256,7 @@ describe('RetinalMetricsView — task surfaces', () => {
     )
     const banner = w.find('[data-testid="retinal-view-inflight"]')
     expect(banner.exists()).toBe(true)
-    expect(banner.text()).toContain('Awaiting sidecar')
+    expect(banner.text()).toContain('Sidecar')
   })
 
   it('renders the no-metric banner on failed jobs', async () => {
@@ -256,7 +265,7 @@ describe('RetinalMetricsView — task surfaces', () => {
     )
     const banner = w.find('[data-testid="retinal-view-inflight"]')
     expect(banner.exists()).toBe(true)
-    expect(banner.text()).toContain('Inference failed')
+    expect(banner.text()).toContain('fehlgeschlagen')
   })
 
   it('renders the no-metric banner when status is succeeded but primary metric is null', async () => {
@@ -284,13 +293,17 @@ describe('RetinalMetricsView — task surfaces', () => {
     // Banner should disappear (status now remote_pending — handled by
     // the `queued`/`remote_pending` inflight branch which surfaces a
     // different copy) OR text changes; either way the failed copy is gone.
-    expect(w.html()).not.toContain('Inference failed')
+    expect(w.html()).not.toContain('fehlgeschlagen')
   })
 
-  it('hides the retry button on non-failed jobs', async () => {
+  it('renders the retry button always (design promotes it to the header)', async () => {
+    // 2026-06-22 — the design moved the retry button from the inflight
+    // banner into the page header where it is always visible and only
+    // disabled while a retry is in flight. Verify it renders for a
+    // non-failed job too.
     const w = await mountView(
       makeFluidJob({ status: 'queued', primaryMetric: null }),
     )
-    expect(w.find('[data-testid="retinal-view-retry"]').exists()).toBe(false)
+    expect(w.find('[data-testid="retinal-view-retry"]').exists()).toBe(true)
   })
 })

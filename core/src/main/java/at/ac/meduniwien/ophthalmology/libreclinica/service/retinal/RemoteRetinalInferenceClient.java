@@ -267,6 +267,58 @@ public class RemoteRetinalInferenceClient {
     }
 
     /**
+     * 2026-06-22 — post-inference derivation. The cluster /run only ships
+     * the raw segmentation (e.g. fluidseg.npz) — projection PNGs +
+     * per-slice overlays are computed app-VM-side from the persisted
+     * npz so the cluster image stays minimal + the local artifact
+     * store is the single source of truth for what the SPA renders.
+     *
+     * <p>POSTs {@code {"job_dir": "...", "task": "..."}} to the local
+     * sidecar's {@code /derive} endpoint. The sidecar reads the npz
+     * back from the bind-mounted artifact dir + writes the derived
+     * PNGs alongside. Idempotent server-side.
+     *
+     * <p>The caller treats failures as soft — the result row still
+     * persists with just the raw segmentation, and
+     * {@code backfill_projections.py} provides the same derivation
+     * on-demand for jobs that landed before this chain was wired.
+     */
+    public void derive(Path jobDir, String task) {
+        String prepUrl = preprocessUrl();
+        if (prepUrl == null || prepUrl.isBlank()) {
+            LOG.debug("derive skipped — preprocessUrl unset (dev compose without sidecar)");
+            return;
+        }
+        String endpoint = prepUrl.trim().replaceAll("/$", "") + "/derive";
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        String token = preprocessToken();
+        if (token != null && !token.isBlank()) {
+            headers.set("X-Auth-Token", token);
+        }
+        Map<String, Object> body = new HashMap<>();
+        body.put("job_dir", jobDir.toString());
+        body.put("task", task);
+        HttpEntity<Map<String, Object>> req = new HttpEntity<>(body, headers);
+        RestTemplate rest = restTemplate(remoteTimeout().toMillis());
+        try {
+            ResponseEntity<Map> resp = rest.postForEntity(endpoint, req, Map.class);
+            if (resp.getStatusCode().is2xxSuccessful()) {
+                Map<?, ?> rb = resp.getBody();
+                Object written = rb == null ? null : rb.get("written");
+                Object skipped = rb == null ? null : rb.get("skipped");
+                LOG.info("Local /derive ok for {} (task={}) — written={}, skipped={}",
+                        jobDir, task, written, skipped);
+            } else {
+                LOG.warn("Local /derive returned non-2xx for {} (task={}): {}",
+                        jobDir, task, resp.getStatusCode());
+            }
+        } catch (Exception e) {
+            LOG.warn("Local /derive failed for {} (task={}): {}", jobDir, task, e.getMessage());
+        }
+    }
+
+    /**
      * POST the {@code .e2e} to {@code ${preprocessUrl}/preprocess} and return the
      * PHI-redacted {@code bscan.dcm} bytes + parsed pixel geometry, or {@code null}
      * on any failure (so the caller reverts + falls back rather than shipping a

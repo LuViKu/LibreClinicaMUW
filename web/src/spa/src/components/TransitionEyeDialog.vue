@@ -56,9 +56,19 @@ interface Props {
    * this is true so the operator can't double-fire the submit.
    */
   isSubmitting?: boolean
+  /**
+   * 2026-06-21 user-feedback round 4 — surface the parent's submit-
+   * error inside the modal. The previous error banner rendered on the
+   * page underneath the dialog overlay, so operators couldn't see why
+   * a transition was rejected without dismissing the dialog first.
+   */
+  errorMessage?: string | null
 }
 
-const props = withDefaults(defineProps<Props>(), { isSubmitting: false })
+const props = withDefaults(defineProps<Props>(), {
+  isSubmitting: false,
+  errorMessage: null,
+})
 
 const emit = defineEmits<{
   submit: [payload: TransitionEyeRequest]
@@ -420,6 +430,18 @@ onBeforeUnmount(() => {
           <ErrorText v-if="reasonInvalid">
             {{ t('subjectDetail.eyeTransition.error.reasonRequired') }}
           </ErrorText>
+        </div>
+
+        <!-- 2026-06-21 user-feedback round 4 — inline submit-error
+             banner. Renders inside the modal so the operator sees
+             the rejection without dismissing the dialog first. -->
+        <div
+          v-if="props.errorMessage"
+          class="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+          role="alert"
+          data-testid="transition-eye-submit-error"
+        >
+          {{ props.errorMessage }}
         </div>
 
         <div class="flex items-center justify-end gap-2 pt-1">

@@ -56,6 +56,15 @@ export interface PresetDescriptor {
    */
   bilateralSection?: boolean
   /**
+   * 2026-06-21 user-feedback round 3 — short, stable section tag the
+   * canvas surfaces next to the section title (e.g. "IOP", "EXAM").
+   * When omitted the section keeps its auto-numbered "S1"/"S2" tag.
+   * The tag also drives the rendered `section.label` on the wire so
+   * the backend's CRF JSON validator can keep its section-label
+   * uniqueness check working.
+   */
+  sectionLabel?: string
+  /**
    * Generate the preset's items. The translator is forwarded into
    * the preset generator so labels can be localised.
    */
@@ -67,7 +76,11 @@ export const PRESET_CATALOG: ReadonlyArray<PresetDescriptor> = [
     id: IOP_PRESET_ID,
     labelKey: 'crfAuthoring.presets.iop.label',
     descriptionKey: 'crfAuthoring.presets.iop.description',
-    bilateralSection: false,
+    // 2026-06-21 — eye-related presets default bilateral per user
+    // feedback. Section toggle lets the operator switch to unilateral
+    // when only one eye is monitored (e.g. monocular follow-up).
+    bilateralSection: true,
+    sectionLabel: 'IOP',
     generate: (t) => generateIopPresetItems(t),
   },
   {
@@ -75,6 +88,7 @@ export const PRESET_CATALOG: ReadonlyArray<PresetDescriptor> = [
     labelKey: 'crfAuthoring.presets.ophthExam.label',
     descriptionKey: 'crfAuthoring.presets.ophthExam.description',
     bilateralSection: true,
+    sectionLabel: 'EXAM',
     generate: (t) => generateOphthExamPresetItems(t),
   },
   {
@@ -82,6 +96,7 @@ export const PRESET_CATALOG: ReadonlyArray<PresetDescriptor> = [
     labelKey: 'crfAuthoring.presets.bcva.label',
     descriptionKey: 'crfAuthoring.presets.bcva.description',
     bilateralSection: true,
+    sectionLabel: 'BCVA',
     generate: (t) => generateBcvaPresetItems(t),
   },
   {
@@ -89,6 +104,7 @@ export const PRESET_CATALOG: ReadonlyArray<PresetDescriptor> = [
     labelKey: 'crfAuthoring.presets.rnfl.label',
     descriptionKey: 'crfAuthoring.presets.rnfl.description',
     bilateralSection: true,
+    sectionLabel: 'RNFL',
     generate: (t) => generateRnflPresetItems(t),
   },
   {
@@ -96,6 +112,7 @@ export const PRESET_CATALOG: ReadonlyArray<PresetDescriptor> = [
     labelKey: 'crfAuthoring.presets.thicknessMap.label',
     descriptionKey: 'crfAuthoring.presets.thicknessMap.description',
     bilateralSection: true,
+    sectionLabel: 'THICK',
     generate: (t) => generateThicknessMapPresetItems(t),
   },
   {
@@ -103,6 +120,7 @@ export const PRESET_CATALOG: ReadonlyArray<PresetDescriptor> = [
     labelKey: 'crfAuthoring.presets.slitLamp.label',
     descriptionKey: 'crfAuthoring.presets.slitLamp.description',
     bilateralSection: true,
+    sectionLabel: 'SLIT',
     generate: (t) => generateSlitLampPresetItems(t),
   },
 ]

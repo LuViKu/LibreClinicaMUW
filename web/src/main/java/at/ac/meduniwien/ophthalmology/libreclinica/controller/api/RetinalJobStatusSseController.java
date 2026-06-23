@@ -141,16 +141,21 @@ public class RetinalJobStatusSseController {
 
     /**
      * Same query shape as {@code RetinalResultsApiController.fetchJobDetail},
-     * trimmed to the study_id lookup. Parked jobs (event_crf_id NULL)
-     * surface a present row with NULL study_id; the controller then
-     * returns 403 — matching the read-side controller's behaviour for
-     * that branch.
+     * trimmed to the study_id lookup. Parked jobs (event_crf_id +
+     * study_event_id both NULL) surface a present row with NULL
+     * study_id; the controller then returns 403 — matching the
+     * read-side controller's behaviour for that branch.
+     *
+     * <p>2026-06-23 — resolves study_event via COALESCE on the two
+     * binding paths so planned-visit-bound jobs (no event_crf yet)
+     * still pass the visibility guard instead of failing as
+     * "different study".
      */
     private JobLookup fetchStudyIdForJob(Connection c, long jobId) throws SQLException {
         String sql = "SELECT ss.study_id "
                 + "  FROM retinal_inference_job j "
                 + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "  LEFT JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + "  LEFT JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "  LEFT JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
                 + " WHERE j.job_id = ?";
         try (PreparedStatement ps = c.prepareStatement(sql)) {

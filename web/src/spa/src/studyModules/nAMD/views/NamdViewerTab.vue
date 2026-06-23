@@ -58,10 +58,16 @@ watch(nBscans, (n) => {
           </Pill>
         </template>
         <div v-if="bscanDcmUrl" data-testid="namd-viewer-bscan-host">
+          <!-- 2026-06-23 — pass the current visit's retinal job id so
+               BscanViewer fetches its segmentation envelope and paints
+               the per-pixel IRF / SRF / PED overlay on the active
+               slice. Without job-id the viewer renders the raw B-scan
+               only, which the user observed as "no segmentation". -->
           <BscanViewer
             v-model="bscanZ"
             :bscan-dcm-url="bscanDcmUrl"
             :n-bscans="nBscans"
+            :job-id="currentJobId"
           />
         </div>
         <div

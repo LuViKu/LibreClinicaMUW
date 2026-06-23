@@ -59,15 +59,29 @@ const rows = computed(() =>
           {{ row.k }}
         </span>
       </div>
-      <div class="mt-1 flex items-baseline justify-between">
-        <span class="text-[18px] font-semibold tabular-nums text-slate-900">
-          <template v-if="row.cur != null">{{ row.cur }}</template>
-          <template v-else>—</template>
-          <span class="text-[11px] font-medium text-slate-400 ml-0.5">nL</span>
+      <!-- 2026-06-21 round 7 — the prior layout stacked the unit
+           ("nL") inline INSIDE the value span at half-height, which
+           rendered the unit dangling above the number's baseline.
+           Split into a flex baseline group: value + unit share the
+           same baseline, delta chip floats right. The number drops
+           to non-breaking-space + sup'd unit for a tighter read. -->
+      <div class="mt-1 flex items-baseline justify-between gap-2">
+        <span class="inline-flex items-baseline gap-1 tabular-nums">
+          <span class="text-[20px] font-semibold leading-none text-slate-900">
+            <template v-if="row.cur != null">{{ row.cur }}</template>
+            <template v-else>—</template>
+          </span>
+          <span class="text-[11px] font-medium text-slate-500 uppercase tracking-wider">
+            nL
+          </span>
         </span>
         <DeltaChip :value="row.delta" direction="badUp" :unit="' nL'" />
       </div>
-      <div class="mt-0.5 text-[11px] text-slate-400">
+      <!-- 2026-06-23 — break-words + leading-tight keeps the long
+           German labels (e.g. "Pigmentepithelabhebung") inside the
+           card. Without the wrap rule, the 25-char term overran the
+           card right edge on the OCT-Viewer side panel. -->
+      <div class="mt-0.5 text-[11px] text-slate-400 leading-tight break-words">
         {{ t(`studyModules.namd.fluid.${row.k}.long`) }}
       </div>
     </div>

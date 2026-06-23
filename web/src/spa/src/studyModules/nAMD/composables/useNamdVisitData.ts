@@ -103,10 +103,14 @@ function fluidJobToVisit(
   return {
     id: String(summary.jobId),
     label: fallbackLabel,
-    // Week / date / BCVA / injection / interval require eCRF-bound lookups
+    // Week / BCVA / injection / interval require eCRF-bound lookups
     // not yet wired — surface zero / empty so the tabs render gracefully.
     week: 0,
-    date: summary.completedAt ?? '',
+    // 2026-06-23 — prefer visit_date (clinically meaningful) and fall
+    // back to completed_at when the backend doesn't supply it. Was:
+    // always completed_at, so a batch of historical scans uploaded
+    // today all read as "today" across the workspace.
+    date: summary.visitDate ?? summary.completedAt ?? '',
     irf: mm3ToNl(biomarkers?.irf_mm3),
     srf: mm3ToNl(biomarkers?.srf_mm3),
     ped: mm3ToNl(biomarkers?.ped_mm3),
@@ -140,19 +144,47 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       // is opened from the SubjectDetailView which passes the OID; for
       // v1 we coerce — production wiring will route through a typed
       // {@code /api/v1/subjects/{oid}} resolver. When the oid isn't a
-      // numeric string, surface the mock fixture so the workspace stays
-      // usable.
+      // numeric string, surface an empty workspace so the view can
+      // render its empty state. 2026-06-21 round 7 — previously we
+      // fell back to buildMockData() so the workspace stayed
+      // "usable"; that surfaced fixture patient S-0042 on real
+      // operator screens whenever a non-numeric subject id was
+      // passed. The empty state is the correct signal.
       const numericId = Number.parseInt(oid, 10)
       if (Number.isNaN(numericId)) {
-        data.value = buildMockData()
+        data.value = null
         return
       }
       const summaries = await listSubjectJobs(numericId)
-      // Sort enqueued / completed ascending so the trend chart reads
-      // left-to-right (oldest → newest).
-      const fluidSummaries = summaries
-        .filter((s) => s.task === 'fluid' && s.status === 'succeeded')
-        .sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''))
+      // 2026-06-23 — accept both the DB-native 'done' and the
+      // historical/typed 'succeeded' label so jobs returned straight
+      // off retinal_inference_job.status surface here. The TS type
+      // declares 'succeeded' but the backend ships the raw column
+      // value ('done').
+      const TERMINAL_OK = new Set(['done', 'succeeded'])
+      const fluidDone = summaries.filter(
+        (s) => s.task === 'fluid' && TERMINAL_OK.has(s.status),
+      )
+      // 2026-06-23 — workspace is single-eye. Pick whichever
+      // laterality has the most done jobs (ties → OD by ophthalmology
+      // convention). Previously every eye's jobs streamed into the
+      // same visits[] array, so the comparison + trend chart silently
+      // mixed OD and OS values while the header still claimed one
+      // eye. The eye-switcher control is a follow-up; for now we
+      // emit a single coherent timeline per workspace load.
+      const odCount = fluidDone.filter((s) => s.laterality === 'OD').length
+      const osCount = fluidDone.filter((s) => s.laterality === 'OS').length
+      const laterality: Laterality = osCount > odCount ? 'OS' : 'OD'
+      // Sort by VISIT date (clinical chronology) rather than upload
+      // completion time, so a back-fill of historical scans plots in
+      // the correct visit order regardless of upload sequencing.
+      const fluidSummaries = fluidDone
+        .filter((s) => s.laterality === laterality)
+        .sort((a, b) => {
+          const ka = (a.visitDate ?? a.completedAt ?? '')
+          const kb = (b.visitDate ?? b.completedAt ?? '')
+          return ka.localeCompare(kb)
+        })
       const details = await Promise.all(
         fluidSummaries.map(async (s) => {
           try {
@@ -167,7 +199,6 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       )
       const current = visits.length > 0 ? visits[visits.length - 1]! : null
       const prev = visits.length > 1 ? visits[visits.length - 2]! : null
-      const laterality: Laterality = (summaries[0]?.laterality as Laterality) ?? 'OD'
       const patient: NamdPatient = {
         id: oid,
         eye: laterality,

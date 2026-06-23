@@ -144,7 +144,12 @@
     "search": "Suche",
     "filter": "Filter",
     "clear": "Zurücksetzen",
-    "export": "Export"
+    "dismiss": "Schließen",
+    "export": "Export",
+    "eye": {
+      "od": "rechts",
+      "os": "links"
+    }
   },
   "adminJobs": {
     "title": "Geplante Jobs",
@@ -1158,7 +1163,12 @@
       "committed": "{count} Event-Definition(en) migriert.",
       "failed": "Migration fehlgeschlagen: {message}"
     },
-    "authorManually": "Manuell anlegen",
+    "authorManually": "Neue Version anlegen",
+    "forkMenu": {
+      "label": "Aus Vorversion übernehmen",
+      "heading": "Aus Vorversion übernehmen",
+      "fromVersion": "aus „{name}\" kopieren"
+    },
     "ophthCatalog": {
       "title": "Aus Ophthalmologie-Katalog hinzufügen",
       "subtitle": "Vordefinierte Felder mit OID + Einheit + Modalitätsbindung — wählen Sie ein Feld, das in den aktuellen Abschnitt eingefügt werden soll.",
@@ -1333,11 +1343,25 @@
       "cancel": "Abbrechen",
       "save": "Speichern",
       "saving": "Wird gespeichert …",
+      "validate": "Validieren",
+      "validating": "Validiere …",
+      "validationOk": "Validierung erfolgreich — keine Fehler.",
+      "fork": {
+        "loading": "Inhalte der Vorversion werden geladen …",
+        "loaded": "Inhalte der Vorversion übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",
+        "loadedNamed": "Inhalte aus Version „{name}\" übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",
+        "failed": "Vorversion konnte nicht geladen werden — Entwurf wurde mit einer leeren Sektion gestartet."
+      },
+      "preview": "Vorschau",
+      "previewing": "Erzeuge Vorschau …",
       "versionName": "Versionsname",
       "versionDescription": "Versionsbeschreibung",
+      "versionNamePlaceholder": "z. B. v1.0",
+      "versionDescriptionPlaceholder": "Kurze Beschreibung der Änderungen in dieser Version",
       "errorTitle": "Speichern fehlgeschlagen:",
       "errors": {
-        "unknown": "Unbekannter Fehler."
+        "unknown": "Unbekannter Fehler.",
+        "validationFailed": "Die Eingaben sind unvollständig oder ungültig — bitte die unten markierten Felder prüfen."
       },
       "palette": {
         "title": "Bausteine",
@@ -1364,7 +1388,14 @@
         "add": "+ Neue Sektion hinzufügen",
         "remove": "Sektion entfernen",
         "titlePlaceholder": "Sektionstitel",
-        "labelPlaceholder": "Sektions-Label (z. B. S1)"
+        "labelPlaceholder": "Sektions-Label (z. B. S1)",
+        "bilateralOn": "Bilateral aktiv — Items werden im OD/OS-Raster angezeigt. Klicken, um auf unilateral umzuschalten.",
+        "bilateralOff": "Unilateral — Items als flache Liste. Klicken, um auf bilateral umzuschalten (OD links / OS rechts).",
+        "bilateralOnShort": "OD/OS",
+        "bilateralOffShort": "Uni",
+        "collapse": "Sektion einklappen",
+        "expand": "Sektion ausklappen",
+        "dragHandle": "Sektion ziehen, um Reihenfolge zu ändern"
       },
       "properties": {
         "title": "Eigenschaften",
@@ -1375,7 +1406,28 @@
         "oidHelper": "Wird aus dem Item-Namen vorgeschlagen; überschreibbar.",
         "descriptionField": "Beschreibungs-Label",
         "dataTypeField": "Datentyp",
+        "dataTypeHint": {
+          "ST": "Frei eingegebener Text (einzeilig oder mehrzeilig).",
+          "INT": "Ganzzahl ohne Nachkommastellen, z. B. Anzahl Buchstaben.",
+          "REAL": "Numerischer Wert mit Nachkommastellen, z. B. mmHg.",
+          "DATE": "Vollständiges Datum (TT.MM.JJJJ).",
+          "PDATE": "Partielles Datum (Jahr oder Monat/Jahr).",
+          "BL": "Ja/Nein-Wert, im Hintergrund als boolesche Spalte gespeichert.",
+          "TRISTATE_REASON": "Dreistufig: Ja / Nein / Unbekannt mit Pflicht-Begründungsfeld bei „Nein“.",
+          "FILE": "Dateianhang (z. B. PDF, Bild)."
+        },
         "responseTypeField": "Antworttyp",
+        "responseTypeHint": {
+          "text": "Einzeiliges Eingabefeld.",
+          "textarea": "Mehrzeiliges Texteingabefeld.",
+          "radio": "Einzelauswahl als Radio-Buttons (kompakt, alle Optionen sichtbar).",
+          "single-select": "Einzelauswahl als Dropdown (kompakt für viele Optionen).",
+          "multi-select": "Mehrfachauswahl als Dropdown.",
+          "checkbox": "Einzelne Checkbox (Ja/Nein) oder Liste von Checkboxen.",
+          "calculation": "Wert wird automatisch aus anderen Items berechnet.",
+          "number-stepper": "Numerische Eingabe mit Hoch/Runter-Tasten.",
+          "file": "Datei-Upload-Steuerelement."
+        },
         "unitsField": "Einheit",
         "defaultField": "Standardwert",
         "requiredField": "Pflichtfeld",
@@ -1386,6 +1438,28 @@
         "showWhenToggle": "Nur anzeigen, wenn …",
         "showWhenSourcePlaceholder": "Quell-Item auswählen …",
         "showWhenLiteralPlaceholder": "Vergleichswert"
+      },
+      "validation": {
+        "itemNameRequired": "Item-Name ist erforderlich.",
+        "descriptionRequired": "Beschreibungs-Label ist erforderlich.",
+        "dataTypeRequired": "Datentyp ist erforderlich.",
+        "responseTypeRequired": "Antworttyp ist erforderlich.",
+        "sectionTitleRequired": "Sektionstitel ist erforderlich.",
+        "sectionLabelRequired": "Sektions-Label ist erforderlich.",
+        "atLeastOneSection": "Mindestens eine Sektion ist erforderlich.",
+        "atLeastOneItem": "Die Sektion muss mindestens ein Item enthalten.",
+        "optionTextRequired": "Optionstext ist erforderlich.",
+        "optionValueRequired": "Optionswert ist erforderlich.",
+        "calculationFormulaRequired": "Berechnungsformel darf nicht leer sein.",
+        "expressionRequired": "Ausdruck darf nicht leer sein.",
+        "versionNameRequired": "Versionsname ist erforderlich.",
+        "versionNameTooLong": "Versionsname darf höchstens 255 Zeichen lang sein.",
+        "versionDescriptionRequired": "Versionsbeschreibung ist erforderlich.",
+        "fileResponseSetRequired": "Items vom Datentyp FILE benötigen ein 'file'-Antwortset.",
+        "itemNameInvalidChars": "Item-Name darf nur Buchstaben, Ziffern und Unterstriche enthalten.",
+        "dataTypeUnsupported": "Datentyp wird vom Server nicht akzeptiert.",
+        "responseTypeUnsupported": "Antworttyp wird vom Server nicht akzeptiert.",
+        "duplicateItemName": "Item-Name ist bereits in dieser Sektion vergeben."
       }
     },
     "presets": {
@@ -1595,6 +1669,11 @@
     "category": "Kategorie",
     "description": "Beschreibung",
     "repeatingLabel": "Wiederholbare Visite (mehrfach pro Teilnehmer/in möglich)",
+    "retinalTasks": {
+      "label": "Retinale Inferenz-Tasks",
+      "hint": "Beim OCT-Upload für diese Visite wird pro ausgewähltem Task ein Inferenz-Job angelegt. Ohne Auswahl wird Fluid-Segmentierung als Standard verwendet.",
+      "saveError": "Inferenz-Task-Auswahl konnte nicht gespeichert werden."
+    },
     "disable": "Entfernen",
     "disableConfirm": "Visite »{name}« entfernen? Bereits erfasste CRFs bleiben im Audit Trail dokumentiert, sind aber nicht mehr erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
     "restore": "Wiederherstellen",
@@ -2110,6 +2189,15 @@
     "binding": "Wird gebunden…",
     "signOut": "Abmelden"
   },
+  "studyModuleEnrollment": {
+    "title": "SPA-Studienmodule",
+    "hint": "Aktivieren Sie die studienspezifischen SPA-Module für diese Studie. Ein Modul erscheint nur in der Navigation, wenn es hier eingeschaltet UND der Protokolltyp der Studie zum Modul passt.",
+    "enrolled": "Aktiv",
+    "notEnrolled": "Aktivieren",
+    "noModules": "Keine SPA-Module registriert.",
+    "loadError": "Modulzuordnungen konnten nicht geladen werden.",
+    "toggleError": "Änderung der Modulzuordnung fehlgeschlagen."
+  },
   "studyParameters": {
     "title": "Studienparameter",
     "intro": "Konfigurieren Sie, wie diese Studie Probanden-IDs, Datenabweichungen, Interviewer-/Datums-Vorbelegungen und optionale Module behandelt. Änderungen werden pro Parameter auditiert.",
@@ -2181,7 +2269,7 @@
     "eventsCount": "Visiten",
     "scheduleEvent": "Visite planen",
     "openQueries": "Offene Rückfragen",
-    "openEvent": "CRFs öffnen →",
+    "openEvent": "CRFs öffnen",
     "column": {
       "event": "Visite",
       "dateStart": "Startdatum",
@@ -2213,6 +2301,8 @@
     "event": {
       "edit": "Bearbeiten",
       "cancel": "Stornieren",
+      "sign": "Visite signieren",
+      "moreActions": "Weitere Aktionen",
       "save": "Speichern",
       "location": "Ort",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
@@ -2297,6 +2387,17 @@
       "successToast": "Visite storniert."
     }
   },
+  "eventSign": {
+    "title": "Visite signieren",
+    "subtitle": "Visite {event} von {subject} elektronisch signieren.",
+    "passwordLabel": "Passwort",
+    "passwordRequired": "Bitte das Passwort eingeben.",
+    "showPassword": "Passwort anzeigen",
+    "attestation": "Ich bestätige, die Daten dieser Visite geprüft zu haben und attestiere sie hiermit elektronisch.",
+    "attestationRequired": "Die Bestätigung ist erforderlich.",
+    "cancel": "Abbrechen",
+    "confirm": "Signieren"
+  },
   "eventDetail": {
     "title": "CRFs dieser Visite",
     "subTitle": "Formulare",
@@ -2325,7 +2426,9 @@
     "action": {
       "open": "CRF öffnen →",
       "startSpa": "Datenerfassung starten →",
-      "starting": "Wird gestartet…"
+      "starting": "Wird gestartet…",
+      "markComplete": "Visite abschließen",
+      "completing": "Wird abgeschlossen…"
     },
     "error": {
       "notFound": "Visite nicht gefunden.",
@@ -2721,87 +2824,146 @@
     }
   },
   "retinal": {
-    "loading": "Loading retinal scan metrics…",
-    "failedToLoad": "Failed to load retinal job: {error}",
+    "loading": "Netzhaut-Auswertung wird geladen …",
+    "failedToLoad": "Netzhaut-Job konnte nicht geladen werden: {error}",
     "header": {
-      "eventCrfLabel": "Event-CRF #{id} · Retinal inference job #{jobId}",
-      "title": "Retinal scan metrics",
-      "modelLabel": "Model:",
-      "runLabel": "Run:",
-      "confidenceLabel": "Confidence:"
+      "eventCrfLabel": "Event-CRF #{id} · Inferenz-Job #{jobId}",
+      "title": "Netzhaut-Auswertung",
+      "modelLabel": "Modell:",
+      "runLabel": "Lauf:",
+      "confidenceLabel": "Konfidenz:",
+      "downloadAll": "Alle herunterladen",
+      "lateralityLong": {
+        "OS": "OS · linkes Auge",
+        "OD": "OD · rechtes Auge",
+        "OU": "OU · beide Augen"
+      }
+    },
+    "live": {
+      "indicator": "Live-Aktualisierung"
+    },
+    "status": {
+      "queued": "In Warteschlange",
+      "remote_pending": "Wartet auf Sidecar",
+      "screening": "Wird geprüft",
+      "screened": "Vorprüfung abgeschlossen",
+      "preprocessing": "Vorverarbeitung",
+      "segmenting": "Segmentierung",
+      "succeeded": "Abgeschlossen",
+      "done": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "parked": "Geparkt"
+    },
+    "task": {
+      "fluid": "Flüssigkeit",
+      "onl": "ONL-Dicke",
+      "pr": "PR-Dicke",
+      "ga": "GA-Fläche",
+      "bmeis": "BMEIS"
     },
     "empty": {
-      "awaitingSidecar": "Awaiting sidecar…",
-      "preprocessing": "Preprocessing the OCT volume…",
-      "segmenting": "Running segmentation — metrics will appear when the sidecar completes.",
-      "failed": "Inference failed — segmentation artifacts (if any) are still available below.",
-      "noMetric": "Metrics couldn't be computed — segmentation artifacts are still available below.",
-      "noKpi": "No KPI yet.",
-      "fundusNotAvailable": "Fundus image not yet available.",
-      "noPerBscan": "No per-B-scan trace for this task."
+      "awaitingSidecar": "Warte auf Sidecar …",
+      "preprocessing": "OCT-Volumen wird vorverarbeitet …",
+      "segmenting": "Segmentierung läuft — Metriken erscheinen, sobald der Sidecar fertig ist.",
+      "failed": "Inferenz fehlgeschlagen — Segmentierungs-Artefakte (sofern vorhanden) sind unten weiterhin verfügbar.",
+      "noMetric": "Metriken konnten nicht berechnet werden — Segmentierungs-Artefakte sind unten weiterhin verfügbar.",
+      "noKpi": "Noch keine Kennzahlen.",
+      "fundusNotAvailable": "Fundus-Bild ist noch nicht verfügbar.",
+      "noPerBscan": "Für diesen Task gibt es keine Per-B-Scan-Auswertung."
     },
     "kpi": {
       "irf": "IRF",
       "srf": "SRF",
       "ped": "PED",
-      "total": "Total",
-      "gaArea": "GA area",
-      "onlThickness": "ONL thickness",
-      "prThickness": "PR thickness",
-      "validAscans": "{valid} / {total} A-scans valid"
+      "total": "Gesamt",
+      "gaArea": "GA-Fläche",
+      "onlThickness": "ONL-Dicke",
+      "prThickness": "PR-Dicke",
+      "validAscans": "{valid} / {total} A-Scans gültig",
+      "subtitle": {
+        "notDetected": "nicht detektiert",
+        "affected": "{count} von {total} B-Scans betroffen",
+        "totalLoad": "Fluid-Last gesamt"
+      }
     },
     "etdrs": {
-      "header": "ETDRS sub-totals",
+      "header": "ETDRS-Teilsummen",
       "colRing": "Ring",
       "colIrf": "IRF mm³",
       "colSrf": "SRF mm³",
       "colPed": "PED mm³",
-      "colTotal": "Total mm³",
-      "colGaArea": "GA area mm²",
-      "ringLabel": "{mm} mm"
+      "colTotal": "Gesamt mm³",
+      "colGaArea": "GA-Fläche mm²",
+      "colThicknessUm": "Mittlere Dicke µm",
+      "sectionCircle": "Kreis",
+      "sectionRing": "Ring",
+      "ringLabel": "{mm} mm",
+      "ringLabelRange": "{from}–{to} mm",
+      "selectionHint": "Bereiche im Fundus zum Aufsummieren anklicken",
+      "selectionHeader": "Auswahl",
+      "selectionClear": "Auswahl leeren",
+      "selectionLabelThickness": "Mittlere Dicke"
     },
     "downloads": {
       "header": "Downloads",
-      "empty": "No artifacts available yet.",
-      "sectionPerScan": "Per-scan",
-      "sectionSegmentation": "Segmentation",
-      "action": "Download"
+      "empty": "Noch keine Artefakte verfügbar.",
+      "sectionPerScan": "Pro Scan",
+      "sectionSegmentation": "Segmentierung",
+      "action": "Herunterladen"
+    },
+    "fundus": {
+      "header": "En-face · ETDRS-Lokalisation",
+      "bscanPosition": "B-Scan-Position"
     },
     "jsonTree": {
-      "rawPayloadHeader": "Raw output payload"
+      "rawPayloadHeader": "Rohe Ausgabe-Daten"
     },
     "retry": {
       "cta": "Erneut versuchen",
       "inflight": "Wird neu gestartet…",
       "error": "Neustart fehlgeschlagen — bitte später erneut versuchen."
     },
+    "rerunAs": {
+      "cta": "Anderen Task ausführen",
+      "inflight": "Wird gestartet…",
+      "menuHeader": "Neuer Inferenz-Task",
+      "error": "Start mit anderem Task fehlgeschlagen.",
+      "successBanner": "Neuer {task}-Job (#{jobId}) wurde gestartet.",
+      "duplicateBanner": "Für diesen Scan existiert bereits ein {task}-Job (#{jobId}) — Sie wurden dorthin geleitet."
+    },
     "nav": {
-      "backToSubjects": "← Back to subjects",
-      "home": "Home"
+      "backToSubjects": "← Zurück zur Probandenmatrix",
+      "home": "Start"
     },
     "perBscan": {
-      "header": "Per-B-scan trace",
-      "empty": "No per-B-scan data.",
-      "xAxisLabel": "B-scan index",
+      "header": "Per-B-Scan-Verlauf",
+      "empty": "Keine Per-B-Scan-Daten.",
+      "xAxisLabel": "B-Scan-Index",
       "yAxisLabel": "mm²",
-      "tooltipPrefix": "B-scan {label}"
+      "tooltipPrefix": "B-Scan {label}"
     },
     "results": {
-      "header": "Retinal results",
-      "jobsLabel": "{n} job(s)",
-      "loading": "Loading…",
-      "empty": "No retinal inference jobs yet.",
+      "header": "Netzhaut-Auswertungen",
+      "jobsLabel": "{n} Auswertung(en)",
+      "loading": "Wird geladen …",
+      "empty": "Noch keine Netzhaut-Inferenzläufe.",
       "colTask": "Task",
-      "colEye": "Eye",
+      "colEye": "Auge",
       "colStatus": "Status",
-      "colPrimaryMetric": "Primary metric",
-      "colModel": "Model",
-      "colCompleted": "Completed",
-      "viewMetricsLink": "View metrics"
+      "colPrimaryMetric": "Hauptmetrik",
+      "colModel": "Modell",
+      "colCompleted": "Abgeschlossen",
+      "viewMetricsLink": "Metriken anzeigen"
     },
     "fundusOverlay": {
       "aria": "Fundus image with retinal overlays, {laterality}",
-      "foveaTooltip": "Fovea estimate ({source})"
+      "foveaTooltip": "Fovea estimate ({source})",
+      "region": {
+        "center": "Zentral 1 mm",
+        "ring_1_3": "Ring 1–3 mm",
+        "ring_3_6": "Ring 3–6 mm",
+        "corners": "Außerhalb 6 mm (Ecken)"
+      }
     },
     "biomarkerToggle": {
       "tooltip": "{name}-Schicht ein-/ausblenden"
@@ -2820,12 +2982,17 @@
       "header": "B-Scan-Navigator",
       "position": "Schnitt {current} / {total}",
       "loading": "Viewer wird geladen…",
-      "errorPrefix": "B-Scan-Viewer konnte nicht geladen werden:"
+      "errorPrefix": "B-Scan-Viewer konnte nicht geladen werden:",
+      "segOverlayAlt": "Segmentierungs-Overlay für Schnitt {current} von {total}",
+      "scrollHint": "Scrollen = Slice wechseln",
+      "previous": "Vorheriger Schnitt",
+      "next": "Nächster Schnitt"
     },
     "trends": {
       "title": "Biomarker-Verlauf",
       "chartHeader": "Verlauf",
       "empty": "Noch keine Daten",
+      "emptyEye": "Keine Daten für {eye}",
       "loading": "Werte werden geladen…",
       "errorPrefix": "Werte konnten nicht geladen werden:",
       "xAxisLabel": "Datum",

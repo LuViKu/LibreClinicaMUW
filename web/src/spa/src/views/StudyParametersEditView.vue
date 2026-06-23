@@ -7,6 +7,7 @@ import SideRail from '@/components/SideRail.vue'
 import SelectInput from '@/components/SelectInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
+import StudyModuleEnrollmentPanel from '@/components/study/StudyModuleEnrollmentPanel.vue'
 
 import { useStudyParametersStore } from '@/stores/studyParameters'
 import { useErrorsStore } from '@/stores/errors'
@@ -346,6 +347,12 @@ const enumLabel = (group: string, value: string) =>
           </div>
         </div>
       </section>
+
+      <!-- 2026-06-21 user-feedback batch — SPA-module enrollment.
+           Admin-managed toggles per study; the panel reads/writes via
+           the new StudyModuleEnrollmentApiController so the dispatch
+           in useStudyModuleStore activates only when the toggle is on. -->
+      <StudyModuleEnrollmentPanel :study-oid="oid" />
 
       <div class="flex items-center gap-2 pt-2">
         <button

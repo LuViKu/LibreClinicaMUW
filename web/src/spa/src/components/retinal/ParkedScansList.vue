@@ -115,14 +115,18 @@ function onBindModalClose(): void {
  *  job, then refresh the list. Handles 409 (already bound by another
  *  session) as a non-error refresh. */
 async function onEventPicked(payload: {
-  eventCrfId: number
+  studyEventId: number
+  eventCrfId: number | null
   definitionLabel: string
   dateStart: string
 }): Promise<void> {
   const jobId = bindTargetJobId.value
   bindTargetJobId.value = null
   if (jobId == null) return
-  if (payload.eventCrfId <= 0) {
+  // 2026-06-23 — parked-bind still requires an open event_crf (the
+  // bulk-bind backend writes event_crf_id). Surface the no-CRF
+  // outcome so the operator knows to start data entry first.
+  if (payload.eventCrfId == null || payload.eventCrfId <= 0) {
     errorMessage.value = t('retinal.parked.bindError')
     return
   }

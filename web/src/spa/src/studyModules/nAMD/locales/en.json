@@ -4,6 +4,12 @@
       "label": "[NEEDS_REVIEW] nAMD Fluid Monitoring",
       "open": "[NEEDS_REVIEW] Open nAMD workspace",
       "openHint": "[NEEDS_REVIEW] OCT trend, comparison and report for exudative AMD treatment.",
+      "openFromEvent": "[NEEDS_REVIEW] Open nAMD workspace for this visit",
+      "openFromEventHint": "[NEEDS_REVIEW] OCT trend & comparison for {subject}.",
+      "empty": {
+        "title": "[NEEDS_REVIEW] No OCT data yet",
+        "hint": "[NEEDS_REVIEW] No completed inference jobs for this subject. Once an OCT volume has been processed, fluid trends and comparison will appear here."
+      },
       "workspaceBreadcrumb": "[NEEDS_REVIEW] nAMD Fluid Monitoring",
       "loading": "[NEEDS_REVIEW] Loading workspace data …",
       "errorPrefix": "[NEEDS_REVIEW] Failed to load:",

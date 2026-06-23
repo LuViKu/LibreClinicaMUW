@@ -204,10 +204,14 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
 
     @Test
     void updateReturns400OnInvalidStatus() throws Exception {
-        // 'completed' is derived from CRF state; not user-editable.
+        // 2026-06-22 — 'completed' was promoted to a writeable status in
+        // the 2026-06-21 manual-visit-complete change (the operator now
+        // drives the COMPLETED transition explicitly from EventDetailView).
+        // Use a token that's truly not in the allow-list so the test
+        // still exercises the validation branch.
         mockMvcWith().perform(put("/api/v1/events/1")
                 .contentType("application/json")
-                .content("{\"status\":\"completed\"}")
+                .content("{\"status\":\"garbage\"}")
                 .session((org.springframework.mock.web.MockHttpSession)
                         authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
                                 "Default Study",
@@ -243,16 +247,20 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
     }
 
     @Test
-    void cancelReturns403WhenInvestigatorAttempts() throws Exception {
-        // Investigator can edit but not cancel — escalation to DM.
+    void cancelReturns403WhenMonitorAttempts2() throws Exception {
+        // 2026-06-22 — the previous "cancelReturns403WhenInvestigatorAttempts"
+        // test enshrined a DM-only escalation gate that the 2026-06-21
+        // user-feedback batch widened: Investigator + CRC may now cancel
+        // (audit captures the reason). The 403 contract is now pinned by
+        // the Monitor case alone (and by the role-allow-list unit test
+        // below). Kept here as a second 403 fixture for the Monitor
+        // role so the negative-path coverage isn't dropped by attrition.
         mockMvcWith().perform(delete("/api/v1/events/1")
                 .session((org.springframework.mock.web.MockHttpSession)
-                        authenticatedSessionWithRole(2, "physician", 1, "S_DEFAULTS1",
+                        authenticatedSessionWithRole(3, "monitor2", 1, "S_DEFAULTS1",
                                 "Default Study",
-                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.INVESTIGATOR, 1)))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.message")
-                        .value(containsString("does not permit cancelling")));
+                                at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role.MONITOR, 1)))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -297,27 +305,31 @@ class EventsApiControllerTest extends AbstractApiControllerTest {
 
     @Test
     void eventCancelAuth_PermittedRoles() {
-        // STUDYDIRECTOR(3), ADMIN(1)
+        // 2026-06-22 — the 2026-06-21 user-feedback batch aligned
+        // cancel with edit (Investigator + CRC may now cancel; structured
+        // reason code captures accountability). Same writer set as the
+        // edit predicate.
         org.junit.jupiter.api.Assertions.assertTrue(
-                EventEditAuthorization.roleMayCancel(3));
+                EventEditAuthorization.roleMayCancel(1)); // ADMIN
         org.junit.jupiter.api.Assertions.assertTrue(
-                EventEditAuthorization.roleMayCancel(1));
+                EventEditAuthorization.roleMayCancel(2)); // COORDINATOR
+        org.junit.jupiter.api.Assertions.assertTrue(
+                EventEditAuthorization.roleMayCancel(3)); // STUDYDIRECTOR
+        org.junit.jupiter.api.Assertions.assertTrue(
+                EventEditAuthorization.roleMayCancel(4)); // INVESTIGATOR
     }
 
     @Test
     void eventCancelAuth_ForbiddenRoles() {
-        // Investigator + CRC can edit but NOT cancel; Monitor/RA neither.
+        // 2026-06-22 — Monitor / RA / RA2 / invalid still cannot cancel
+        // (Monitor verifies, RA enters; neither corrects).
         org.junit.jupiter.api.Assertions.assertFalse(
-                EventEditAuthorization.roleMayCancel(4));
+                EventEditAuthorization.roleMayCancel(6)); // MONITOR
         org.junit.jupiter.api.Assertions.assertFalse(
-                EventEditAuthorization.roleMayCancel(2));
+                EventEditAuthorization.roleMayCancel(5)); // RA
         org.junit.jupiter.api.Assertions.assertFalse(
-                EventEditAuthorization.roleMayCancel(6));
+                EventEditAuthorization.roleMayCancel(7)); // RA2
         org.junit.jupiter.api.Assertions.assertFalse(
-                EventEditAuthorization.roleMayCancel(5));
-        org.junit.jupiter.api.Assertions.assertFalse(
-                EventEditAuthorization.roleMayCancel(7));
-        org.junit.jupiter.api.Assertions.assertFalse(
-                EventEditAuthorization.roleMayCancel(0));
+                EventEditAuthorization.roleMayCancel(0)); // INVALID
     }
 }

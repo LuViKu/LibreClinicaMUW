@@ -63,12 +63,18 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 /**
- * Picked-event emit payload. {@code eventCrfId} is the bind target;
- * the picker resolves it via the second-hop {@code GET /events/{id}}
- * call described in the module-level comment.
+ * Picked-event emit payload.
+ *
+ * 2026-06-23 — extended to carry {@code studyEventId} so the picker
+ * can bind to planned-but-not-started visits (no event_crf yet).
+ * Commit prefers {@code eventCrfId} when set and falls back to
+ * {@code studyEventId}; the store handles the dispatch. With this
+ * change, every selectable visit emits a valid binding — the legacy
+ * {@code eventCrfId: -1} "Keine Eingabemaske" sentinel goes away.
  */
 export interface PickedEvent {
-  eventCrfId: number
+  studyEventId: number
+  eventCrfId: number | null
   definitionLabel: string
   dateStart: string
 }
@@ -170,15 +176,24 @@ async function pick(evt: StudyEvent): Promise<void> {
   resolvingId.value = evt.id
   errorMessage.value = null
   try {
+    // 2026-06-23 — evt.id IS String.valueOf(study_event_id) at the
+    // backend (see PublicOctUploadController.listPatientEventsPublic).
+    // Parse once + emit on every branch so a planned visit (no
+    // event_crf) still binds via studyEventId.
+    const studyEventId = Number.parseInt(evt.id, 10)
+    if (!Number.isFinite(studyEventId)) {
+      errorMessage.value = t('octPortal.modals.visitPicker.loadError')
+      return
+    }
     if (props.publicContext) {
       // Public path: firstEventCrfId was pre-resolved server-side at
-      // load time. No second hop needed. Use -1 as the sentinel when
-      // the event has no started CRF (same contract the auth'd branch
-      // uses below) — the parent surfaces a "Keine Eingabemaske" toast.
+      // load time. null is a real value — the visit is planned but
+      // the CRF hasn't been opened yet. Commit binds the job via
+      // studyEventId instead.
       const preResolved = publicEventCrfIdByEventId.value.get(evt.id)
-      const targetEventCrfId = preResolved == null ? -1 : preResolved
       emit('event-picked', {
-        eventCrfId: targetEventCrfId,
+        studyEventId,
+        eventCrfId: preResolved ?? null,
         definitionLabel: evt.eventLabel,
         dateStart: evt.dateStarted,
       })
@@ -190,9 +205,9 @@ async function pick(evt: StudyEvent): Promise<void> {
     const firstCrf = detail.crfs.find(
       (c) => c.eventCrfId != null && c.status !== 'removed',
     )
-    const targetEventCrfId = firstCrf?.eventCrfId ?? -1
     emit('event-picked', {
-      eventCrfId: targetEventCrfId,
+      studyEventId,
+      eventCrfId: firstCrf?.eventCrfId ?? null,
       definitionLabel: evt.eventLabel,
       dateStart: evt.dateStarted,
     })

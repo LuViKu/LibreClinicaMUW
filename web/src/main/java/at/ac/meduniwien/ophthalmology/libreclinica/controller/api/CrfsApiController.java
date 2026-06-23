@@ -22,6 +22,8 @@ import java.sql.SQLException;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,8 +36,16 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Status;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.login.UserAccountBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.managestudy.StudyBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.CRFVersionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ItemFormMetadataBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseOptionBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.ResponseSetBean;
+import at.ac.meduniwien.ophthalmology.libreclinica.bean.submit.SectionBean;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.admin.CRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemFormMetadataDAO;
+import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.SectionDAO;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -203,10 +213,25 @@ public class CrfsApiController {
         toCreate.setCreatedDate(new java.util.Date());
 
         CRFBean persisted = crfDao.create(toCreate);
+        // 2026-06-21 user-feedback batch — CRFDAO.create() can return a
+        // bean with id=0 even when the row inserted successfully (the
+        // legacy DAO's getCurrentPK lookup occasionally races against
+        // sequence cache). The user-visible symptom is "Failed to
+        // persist CRF" on a CRF that DOES show up on the next page
+        // refresh. Defensively re-look-up by name before declaring a
+        // 500 — same uniqueness query the gate above used.
         if (persisted == null || persisted.getId() == 0) {
-            LOG.warn("CRFDAO.create returned no row for name={}", body.name());
-            return ResponseEntity.status(500).body(Map.of("message",
-                    "Failed to persist CRF"));
+            CRFBean reread = (CRFBean) crfDao.findByName(body.name().trim());
+            if (reread != null && reread.getId() != 0) {
+                LOG.info("CRFDAO.create returned id=0 but findByName resolved id={} for name={}",
+                        reread.getId(), body.name());
+                persisted = reread;
+            } else {
+                LOG.warn("CRFDAO.create returned no row for name={}", body.name());
+                return ResponseEntity.status(500).body(Map.of("message",
+                        "Speichern fehlgeschlagen — die CRF-Hülle konnte nicht angelegt werden. "
+                                + "Bitte die Eingaben prüfen und es erneut versuchen."));
+            }
         }
 
         LOG.info("Create CRF: oid={} name={} by user={}",
@@ -287,6 +312,199 @@ public class CrfsApiController {
             out.add(toVersionDto(v));
         }
         return ResponseEntity.ok(out);
+    }
+
+    /* ----------------------------------------------------------------- */
+    /* GET /api/v1/crfs/{crfOid}/versions/{versionOid}/contents            */
+    /* ----------------------------------------------------------------- */
+
+    /**
+     * 2026-06-21 user-feedback round 6 — fork-from-version support.
+     *
+     * <p>Reads the persisted CRF version's full structure (sections,
+     * items, item-form-metadata, response sets) and returns it as a
+     * {@link CrfVersionAuthoringRequest}-shaped JSON envelope so the
+     * SPA's CRF authoring canvas can hydrate its draft from a prior
+     * version (the operator typically wants to start v2.0 from
+     * v1.0's content and tweak a handful of items rather than
+     * re-author the entire form).
+     *
+     * <p>Per-item field mapping:
+     * <ul>
+     *   <li>{@code name} ← {@link ItemBean#getName()}</li>
+     *   <li>{@code oid} ← {@link ItemBean#getOid()}</li>
+     *   <li>{@code descriptionLabel} ← {@link ItemBean#getDescription()}</li>
+     *   <li>{@code leftItemText} / {@code rightItemText} / {@code header} /
+     *       {@code subHeader} / {@code defaultValue} ←
+     *       {@link ItemFormMetadataBean}</li>
+     *   <li>{@code units} ← {@link ItemBean#getUnits()}</li>
+     *   <li>{@code dataType} ← {@link ItemBean#getDataType()}.getCode()</li>
+     *   <li>{@code required} ← {@link ItemFormMetadataBean#isRequired()}
+     *       (the column is currently always 0 because the legacy
+     *       schema lacks the flag; we surface it for forward-compat).</li>
+     *   <li>{@code responseSet} ← {@link ResponseSetBean} (inline
+     *       branch with options materialised from
+     *       {@link ResponseOptionBean#getText()}/{@link ResponseOptionBean#getValue()}.</li>
+     *   <li>{@code validation} ← {@link ItemFormMetadataBean#getRegexp()}
+     *       + {@link ItemFormMetadataBean#getRegexpErrorMsg()}</li>
+     * </ul>
+     *
+     * <p>Out-of-scope for the v1 of fork (we surface null / empty):
+     * {@code showItem} / {@code parentItemOid} (conditional display —
+     * the SPA's authoring store loads showWhen as a JSON object
+     * separately + the fork user can re-apply the same rule),
+     * {@code pageBreak}, {@code groupLabel}, {@code catalogCode}.
+     *
+     * <p>Auth: same as the rest of the CRF-author surface —
+     * authenticated user. No write side-effect; SPA caller uses the
+     * payload to populate the authoring canvas before a normal
+     * POST /versions submit.
+     */
+    @GetMapping("/{crfOid}/versions/{versionOid}/contents")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = CrfVersionAuthoringRequest.class)))
+    public ResponseEntity<?> getVersionContents(@PathVariable("crfOid") String crfOid,
+                                                @PathVariable("versionOid") String versionOid,
+                                                HttpSession session) {
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        if (me == null || me.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+
+        CRFDAO crfDao = new CRFDAO(dataSource);
+        CRFBean crf = crfDao.findByOid(crfOid);
+        if (crf == null || crf.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No CRF with oid '" + crfOid + "'"));
+        }
+        CRFVersionDAO versionDao = new CRFVersionDAO(dataSource);
+        CRFVersionBean version = versionDao.findByOid(versionOid);
+        if (version == null || version.getId() == 0 || version.getCrfId() != crf.getId()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No version with oid '" + versionOid + "' on CRF '" + crfOid + "'"));
+        }
+
+        SectionDAO sectionDao = new SectionDAO(dataSource);
+        ItemFormMetadataDAO ifmDao = new ItemFormMetadataDAO(dataSource);
+        ItemDAO itemDao = new ItemDAO(dataSource);
+
+        List<SectionBean> sections = sectionDao.findAllByCRFVersionId(version.getId());
+        sections.sort(Comparator.comparingInt(SectionBean::getOrdinal));
+
+        List<ItemFormMetadataBean> allIfms;
+        try {
+            allIfms = ifmDao.findAllByCRFVersionId(version.getId());
+        } catch (Exception e) {
+            LOG.error("Failed to load item_form_metadata for crf_version {} on fork", version.getId(), e);
+            return ResponseEntity.internalServerError().body(Map.of("message",
+                    "Version contents load failed: " + e.getMessage()));
+        }
+        Map<Integer, ItemFormMetadataBean> ifmByItemId = new HashMap<>();
+        for (ItemFormMetadataBean ifm : allIfms) {
+            ifmByItemId.put(ifm.getItemId(), ifm);
+        }
+
+        List<CrfVersionAuthoringRequest.Section> sectionDtos = new ArrayList<>(sections.size());
+        int sectionOrdinal = 0;
+        for (SectionBean sb : sections) {
+            sectionOrdinal++;
+            List<ItemBean> items =
+                    itemDao.findAllBySectionIdOrderedByItemFormMetadataOrdinal(sb.getId());
+            List<CrfVersionAuthoringRequest.Item> itemDtos = new ArrayList<>(items.size());
+            for (ItemBean ib : items) {
+                ItemFormMetadataBean ifm = ifmByItemId.get(ib.getId());
+                itemDtos.add(buildAuthoringItemDto(ib, ifm));
+            }
+            sectionDtos.add(new CrfVersionAuthoringRequest.Section(
+                    nullToEmpty(sb.getLabel()),
+                    nullToEmpty(sb.getTitle()),
+                    nullToEmpty(sb.getInstructions()),
+                    sectionOrdinal,
+                    itemDtos));
+        }
+
+        // The "new version" flow uses fork content as a template; clear
+        // versionName so the operator types a fresh one rather than
+        // re-submitting the prior version's name and tripping the
+        // unique-version-name check.
+        CrfVersionAuthoringRequest body = new CrfVersionAuthoringRequest(
+                /* versionName        */ "",
+                /* versionDescription */ nullToEmpty(version.getDescription()),
+                /* revisionNotes      */ nullToEmpty(version.getRevisionNotes()),
+                sectionDtos);
+        return ResponseEntity.ok(body);
+    }
+
+    /**
+     * Build one {@link CrfVersionAuthoringRequest.Item} from the persisted
+     * row trio (item + item_form_metadata + response_set). Defensive
+     * against missing IFM (older drafts may have orphan items).
+     */
+    private static CrfVersionAuthoringRequest.Item buildAuthoringItemDto(
+            ItemBean ib, ItemFormMetadataBean ifm) {
+        // ItemDataType exposes a short codename via getName() (e.g.
+        // "st", "int", "real", "date", "bl"). Upper-case before
+        // surfacing so the SPA's AuthoringDataType enum match-arm
+        // ("ST" / "INT" / "REAL" / …) lands cleanly.
+        String dataType = ib.getDataType() != null && ib.getDataType().getName() != null
+                ? ib.getDataType().getName().toUpperCase() : "ST";
+        CrfVersionAuthoringRequest.ResponseSet rs = null;
+        CrfVersionAuthoringRequest.Validation val = null;
+        String leftItemText = "";
+        String rightItemText = "";
+        String defaultValue = "";
+        String header = "";
+        String subHeader = "";
+        if (ifm != null) {
+            leftItemText = nullToEmpty(ifm.getLeftItemText());
+            rightItemText = nullToEmpty(ifm.getRightItemText());
+            defaultValue = nullToEmpty(ifm.getDefaultValue());
+            header = nullToEmpty(ifm.getHeader());
+            subHeader = nullToEmpty(ifm.getSubHeader());
+            ResponseSetBean rsb = ifm.getResponseSet();
+            if (rsb != null && rsb.getResponseType() != null) {
+                List<CrfVersionAuthoringRequest.Option> options = new ArrayList<>();
+                ArrayList<ResponseOptionBean> opts = rsb.getOptions();
+                if (opts != null) {
+                    for (ResponseOptionBean o : opts) {
+                        options.add(new CrfVersionAuthoringRequest.Option(
+                                nullToEmpty(o.getText()),
+                                nullToEmpty(o.getValue())));
+                    }
+                }
+                rs = new CrfVersionAuthoringRequest.ResponseSet(
+                        rsb.getResponseType().getName(),
+                        nullToEmpty(rsb.getLabel()),
+                        options,
+                        /* ref */ null);
+            }
+            String regexp = ifm.getRegexp();
+            String regexpMsg = ifm.getRegexpErrorMsg();
+            if ((regexp != null && !regexp.isBlank())
+                    || (regexpMsg != null && !regexpMsg.isBlank())) {
+                val = new CrfVersionAuthoringRequest.Validation(
+                        nullToEmpty(regexp), nullToEmpty(regexpMsg));
+            }
+        }
+        return new CrfVersionAuthoringRequest.Item(
+                nullToEmpty(ib.getName()),
+                nullToEmpty(ib.getOid()),
+                nullToEmpty(ib.getDescription()),
+                leftItemText,
+                rightItemText,
+                nullToEmpty(ib.getUnits()),
+                dataType,
+                defaultValue,
+                /* required (legacy schema lacks this flag) */ false,
+                rs,
+                val,
+                /* showItem      */ null,
+                /* parentItemOid */ null,
+                header,
+                subHeader,
+                /* pageBreak  */ false,
+                /* groupLabel */ null,
+                /* catalogCode */ null);
     }
 
     /* ----------------------------------------------------------------- */

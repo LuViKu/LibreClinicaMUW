@@ -396,13 +396,21 @@ export const useOctPortalStore = defineStore('octPortal', () => {
   }
 
   /** Confirm a single row — calls /commit with the pre-selected event,
-   *  flips state to `committing` while in flight, then `committed`. */
+   *  flips state to `committing` while in flight, then `committed`.
+   *
+   *  2026-06-23 — prefers eventCrfId when the visit has an open CRF,
+   *  falls back to studyEventId for planned-but-not-started visits. */
   async function confirm(rowId: string): Promise<void> {
     const row = rows.value.find((r) => r.rowId === rowId)
     if (!row) return
     if (row.state !== 'suggested') return
     if (!row.selectedCandidate || !row.selectedEvent) return
-    await commitRow(row, row.selectedEvent.eventCrfId, false)
+    await commitRow(
+      row,
+      row.selectedEvent.eventCrfId,
+      row.selectedEvent.studyEventId,
+      false,
+    )
   }
 
   /** Click "Bestätigen" for every row currently in `suggested`. The
@@ -412,7 +420,12 @@ export const useOctPortalStore = defineStore('octPortal', () => {
     await Promise.all(
       targets.map((r) => {
         if (!r.selectedCandidate || !r.selectedEvent) return Promise.resolve()
-        return commitRow(r, r.selectedEvent.eventCrfId, false)
+        return commitRow(
+          r,
+          r.selectedEvent.eventCrfId,
+          r.selectedEvent.studyEventId,
+          false,
+        )
       }),
     )
   }
@@ -425,12 +438,13 @@ export const useOctPortalStore = defineStore('octPortal', () => {
     if (!row) return
     if (row.state !== 'novisit' && row.state !== 'nopatient' && row.state !== 'ambiguous')
       return
-    await commitRow(row, null, true)
+    await commitRow(row, null, null, true)
   }
 
   async function commitRow(
     row: ReviewRow,
     eventCrfId: number | null,
+    studyEventId: number | null,
     parkFlag: boolean,
   ): Promise<void> {
     if (!row.scan) return
@@ -446,6 +460,7 @@ export const useOctPortalStore = defineStore('octPortal', () => {
           laterality: row.scan.laterality,
           scanIndex: row.scan.scanIndex,
           eventCrfId,
+          studyEventId,
           park: parkFlag,
         },
         (pct) => {
@@ -666,26 +681,28 @@ export const useOctPortalStore = defineStore('octPortal', () => {
    * Wave 2B — operator picked a visit in the VisitPickerModal.
    *
    * Bypasses the auto-resolve path and binds the row to the chosen
-   * event_crf. Transitions the row to {@code suggested} so the
+   * study_event (and to its first non-removed event_crf when one
+   * exists). Transitions the row to {@code suggested} so the
    * operator's next confirm-all sweep includes it.
    *
-   * <p>If the picker emitted {@code eventCrfId: -1} (no started CRF
-   * for the picked event), surface an error on the row so the
-   * operator sees why the bind didn't take.
+   * <p>2026-06-23 — planned visits (no CRF yet) are pickable: the
+   * commit binds via {@code studyEventId} with {@code eventCrfId}
+   * null, and the picker's legacy -1 sentinel is gone.
    */
   function setManualVisit(
     rowId: string,
-    eventCrfId: number,
+    studyEventId: number,
+    eventCrfId: number | null,
     definitionLabel: string,
     dateStart: string,
   ): void {
     const idx = rows.value.findIndex((r) => r.rowId === rowId)
     if (idx === -1) return
     const current = rows.value[idx]
-    if (eventCrfId <= 0) {
+    if (studyEventId <= 0) {
       rows.value[idx] = {
         ...current,
-        error: 'Keine Eingabemaske für diese Visite — bitte zuerst Daten starten.',
+        error: 'Ungültige Visite — bitte erneut auswählen.',
       }
       return
     }
@@ -700,6 +717,7 @@ export const useOctPortalStore = defineStore('octPortal', () => {
       ...current,
       state: 'suggested',
       selectedEvent: {
+        studyEventId,
         eventCrfId,
         definitionLabel,
         dateStart,

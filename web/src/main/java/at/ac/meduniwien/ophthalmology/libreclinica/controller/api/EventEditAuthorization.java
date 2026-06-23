@@ -14,8 +14,8 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
  * Phase E A4 — role gates for the study-event edit + cancel
  * endpoints.
  *
- * <p>Two predicates because edit + cancel have different
- * permission profiles in the legacy UI:
+ * <p>Two predicates that since the 2026-06-21 user-feedback batch
+ * share the same role set:
  *
  * <ul>
  *   <li>{@link #roleMayEdit(int)} — anyone who writes clinical
@@ -23,14 +23,16 @@ import at.ac.meduniwien.ophthalmology.libreclinica.bean.core.Role;
  *       (Investigator, CRC, DM, Admin). Mirrors the legacy
  *       {@code CreateNewStudyEventServlet#mayProceed} which is
  *       also used for edits via the same form.</li>
- *   <li>{@link #roleMayCancel(int)} — soft-delete is restricted
- *       to DM / Admin. Investigators who scheduled the visit
- *       cannot cancel it without escalating to a DM. Mirrors the
- *       legacy {@code RemoveStudyEventServlet#mayProceed} which
- *       checks the same role set as Subject remove (A3).</li>
+ *   <li>{@link #roleMayCancel(int)} — same writer set as edit.
+ *       Originally restricted to DM/Admin, but the MUW workflow
+ *       (small site, paper-first DDE, physician + CRC schedule
+ *       and cancel visits routinely) made the DM-only gate read
+ *       as a process bug. The cancel still requires a structured
+ *       reason code (Wave 1A) so the audit trail captures the
+ *       same accountability the DM-escalation was meant to add.</li>
  * </ul>
  *
- * <p>Monitor / RA / RA2 cannot perform either operation
+ * <p>Monitor / RA / RA2 still cannot perform either operation
  * (Monitor verifies, RA enters; neither corrects).
  */
 final class EventEditAuthorization {
@@ -45,7 +47,6 @@ final class EventEditAuthorization {
     }
 
     static boolean roleMayCancel(int roleId) {
-        return roleId == Role.ADMIN.getId()
-                || roleId == Role.STUDYDIRECTOR.getId();
+        return roleMayEdit(roleId);
     }
 }

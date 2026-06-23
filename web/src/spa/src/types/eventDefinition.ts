@@ -11,6 +11,8 @@
 export type EventType = 'scheduled' | 'unscheduled' | 'common'
 
 export interface EventDefinition {
+  /** Numeric PK — used by sub-resource endpoints (retinal-tasks, etc.). */
+  sedId: number
   oid: string
   name: string
   description: string

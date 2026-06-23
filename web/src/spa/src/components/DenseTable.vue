@@ -92,7 +92,8 @@ withDefaults(defineProps<Props>(), {
 <style scoped>
 /* The bordered shell clips its rounded corners without becoming a
  * scrolling context — `overflow: clip` does NOT scope sticky
- * descendants the way `overflow: hidden` does. */
+ * descendants the way `overflow: hidden` does, so the sticky thead
+ * can attach to the viewport via its stickyHeaderOffset. */
 .dense-table-shell {
   overflow: clip;
 }

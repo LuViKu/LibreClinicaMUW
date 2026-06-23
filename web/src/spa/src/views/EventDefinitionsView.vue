@@ -100,23 +100,47 @@ interface EditState {
   category: string
   type: EventType
   repeating: boolean
+  /** 2026-06-22 — the int PK; needed to address the retinal-tasks sub-resource. */
+  sedId: number
+  /** 2026-06-22 — selected retinal-inference task panel. */
+  retinalTasks: string[]
 }
 const editing = ref<EditState | null>(null)
 const editErrors = ref<Record<string, string>>({})
 const editFormError = ref<string | null>(null)
 const isSavingEdit = ref(false)
 
-function openEdit(row: EventDefinition) {
+/** 2026-06-22 — allow-list of retinal-inference tasks for the multi-select. */
+const RETINAL_TASK_OPTIONS: readonly string[] = ['fluid', 'ga', 'onl', 'pr'] as const
+
+async function openEdit(row: EventDefinition) {
   editing.value = {
     oid: row.oid,
+    sedId: row.sedId,
     name: row.name,
     description: row.description,
     category: row.category,
     type: (row.type as EventType) || 'scheduled',
     repeating: row.repeating,
+    retinalTasks: [],
   }
   editErrors.value = {}
   editFormError.value = null
+  // Lazy-load the retinal-task panel for this event def.
+  if (studyOid.value && row.sedId) {
+    const tasks = await eventDefs.loadRetinalTasks(studyOid.value, row.sedId)
+    if (editing.value && editing.value.sedId === row.sedId) {
+      editing.value.retinalTasks = tasks
+    }
+  }
+}
+
+function toggleRetinalTask(task: string): void {
+  if (!editing.value) return
+  const current = editing.value.retinalTasks
+  editing.value.retinalTasks = current.includes(task)
+    ? current.filter((t) => t !== task)
+    : [...current, task]
 }
 
 async function submitEdit() {
@@ -132,12 +156,24 @@ async function submitEdit() {
       type: editing.value.type,
       repeating: editing.value.repeating,
     })
-    if (result.ok) {
-      editing.value = null
-    } else {
+    if (!result.ok) {
       editErrors.value = result.fieldErrors
       editFormError.value = result.message ?? null
+      return
     }
+    // Persist the retinal-task panel alongside the core fields. Failure
+    // here doesn't roll back the event_def update — the core write
+    // already landed; surface the secondary error inline instead.
+    if (editing.value.sedId) {
+      const ok = await eventDefs.saveRetinalTasks(
+        studyOid.value, editing.value.sedId, editing.value.retinalTasks,
+      )
+      if (!ok) {
+        editFormError.value = t('eventDefinitions.retinalTasks.saveError')
+        return
+      }
+    }
+    editing.value = null
   } finally {
     isSavingEdit.value = false
   }
@@ -417,6 +453,40 @@ function openAssignments(row: EventDefinition) {
           <div class="col-span-2 flex items-center gap-2">
             <input id="ed-edit-repeating" v-model="editing.repeating" type="checkbox" class="rounded" />
             <label for="ed-edit-repeating" class="text-xs text-slate-700">{{ t('eventDefinitions.repeatingLabel') }}</label>
+          </div>
+
+          <!-- 2026-06-22 — retinal-inference task panel. When an OCT
+               scan is committed against this visit, one inference job
+               is enqueued per selected task. An empty selection
+               falls back to "fluid" on commit so today's behaviour
+               is preserved for visits the admin hasn't configured. -->
+          <div class="col-span-2">
+            <FieldLabel for="ed-edit-retinal-tasks">{{ t('eventDefinitions.retinalTasks.label') }}</FieldLabel>
+            <div
+              id="ed-edit-retinal-tasks"
+              class="mt-1 flex flex-wrap gap-2"
+              data-testid="ed-edit-retinal-tasks"
+            >
+              <button
+                v-for="task in RETINAL_TASK_OPTIONS"
+                :key="`rt-${task}`"
+                type="button"
+                :data-testid="`ed-edit-retinal-task-${task}`"
+                :aria-pressed="editing.retinalTasks.includes(task)"
+                class="inline-flex items-center gap-1.5 rounded-full text-[11px] font-semibold px-3 py-1 border transition"
+                :class="editing.retinalTasks.includes(task)
+                  ? 'bg-muw-sky-50 border-muw-sky-300 text-muw-sky-700'
+                  : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'"
+                @click="toggleRetinalTask(task)"
+              >
+                <span class="font-mono text-[10px] uppercase">{{ task }}</span>
+                <span class="text-slate-400">·</span>
+                <span>{{ t(`retinal.task.${task}`) }}</span>
+              </button>
+            </div>
+            <p class="mt-1.5 text-[11px] text-slate-500">
+              {{ t('eventDefinitions.retinalTasks.hint') }}
+            </p>
           </div>
         </div>
         <ErrorText v-if="editFormError">{{ editFormError }}</ErrorText>

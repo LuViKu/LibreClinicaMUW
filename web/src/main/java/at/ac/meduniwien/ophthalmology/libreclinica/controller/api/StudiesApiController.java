@@ -265,13 +265,20 @@ public class StudiesApiController {
                 "Study created", "study", persisted.getId(),
                 "study_id", "", String.valueOf(persisted.getId()));
 
-        // Auto-bind the caller as COORDINATOR on the new study — they
-        // can immediately build out the study without an explicit grant.
+        // Auto-bind the caller on the new study so they can immediately
+        // build it out without an explicit grant. 2026-06-22 — sysadmin
+        // creators bind as ADMIN (matches the seeded Default Study
+        // binding); non-sysadmin paths fall through to COORDINATOR for
+        // backward-compat (the create-study endpoint itself is sysadmin-
+        // gated today, so this branch is theoretical until that gate
+        // changes — kept explicit so a future relaxation doesn't silently
+        // demote the seeded behaviour).
         try {
             UserAccountDAO userDao = new UserAccountDAO(dataSource);
+            Role grantedRole = me.isSysAdmin() ? Role.ADMIN : Role.COORDINATOR;
             StudyUserRoleBean binding = new StudyUserRoleBean();
             binding.setStudyId(persisted.getId());
-            binding.setRoleName(Role.COORDINATOR.getName());
+            binding.setRoleName(grantedRole.getName());
             binding.setStatus(Status.AVAILABLE);
             binding.setOwner(me);
             binding.setUserName(me.getName());
@@ -282,11 +289,11 @@ public class StudiesApiController {
                     AuditTypeIds.USER_ACCOUNT_ADMIN_ACTION,
                     me, persisted, null,
                     "Study role granted (initial) — user=" + me.getName()
-                            + " role=" + Role.COORDINATOR.getName(),
+                            + " role=" + grantedRole.getName(),
                     "study_user_role", 0, "role_id",
-                    "", String.valueOf(Role.COORDINATOR.getId()));
+                    "", String.valueOf(grantedRole.getId()));
         } catch (Exception e) {
-            LOG.warn("Failed to auto-bind creator as COORDINATOR on study {} (continuing): {}",
+            LOG.warn("Failed to auto-bind creator on study {} (continuing): {}",
                     persisted.getOid(), e.getMessage());
         }
 

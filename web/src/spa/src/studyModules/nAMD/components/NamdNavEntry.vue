@@ -10,8 +10,9 @@ import { useAuthStore } from '@/stores/auth'
  * <p>Injected into the {@code nav.modules} slot by the manifest. The
  * slot store ({@code useStudyModuleStore.injectionsFor('nav.modules')})
  * only returns entries from the active module, so this component
- * mounts only when {@code activeStudy.protocolType === 'NAMD'} — no
- * extra v-if needed at the host.
+ * mounts only when the active study has the nAMD module enrolled
+ * (see {@code stores/studyModules.ts.activeModule}) — no extra v-if
+ * needed at the host.
  *
  * <p>The route param {@code studyOid} comes from {@code auth.activeStudy.oid};
  * the router guard (PR #245 + hardening fix #1) verifies the URL OID

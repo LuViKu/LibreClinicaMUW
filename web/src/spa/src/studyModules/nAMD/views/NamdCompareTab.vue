@@ -61,10 +61,20 @@ const bJobId = computed(() => bVisit.value?.retinalJobId ?? null)
           :exclude-id="bId"
           variant="A"
         />
-        <div v-if="aVisit" class="mt-3 text-[13px] text-slate-700">
-          <span class="font-semibold">{{ aVisit.label }}</span>
-          · W{{ aVisit.week }}
-          <span class="ml-2 text-slate-400 tabular-nums">{{ aVisit.irf + aVisit.srf + aVisit.ped }} nL</span>
+        <div v-if="aVisit" class="mt-4 space-y-1">
+          <div class="flex items-baseline justify-between">
+            <span class="text-[13px] font-semibold text-slate-700">
+              {{ aVisit.label }}
+              <span class="text-slate-400 font-normal"> · W{{ aVisit.week }}</span>
+            </span>
+            <span class="text-[11px] uppercase tracking-wider text-slate-400">
+              {{ t('studyModules.namd.banner.totalFluid') }}
+            </span>
+          </div>
+          <div class="text-[15px] font-semibold tabular-nums text-slate-900">
+            {{ aVisit.irf + aVisit.srf + aVisit.ped }}
+            <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500 ml-1">nL</span>
+          </div>
         </div>
       </Card>
       <Card :title="t('studyModules.namd.compare.paneB')" class="col-span-12 lg:col-span-6">
@@ -74,10 +84,20 @@ const bJobId = computed(() => bVisit.value?.retinalJobId ?? null)
           :exclude-id="aId"
           variant="B"
         />
-        <div v-if="bVisit" class="mt-3 text-[13px] text-slate-700">
-          <span class="font-semibold">{{ bVisit.label }}</span>
-          · W{{ bVisit.week }}
-          <span class="ml-2 text-slate-400 tabular-nums">{{ bVisit.irf + bVisit.srf + bVisit.ped }} nL</span>
+        <div v-if="bVisit" class="mt-4 space-y-1">
+          <div class="flex items-baseline justify-between">
+            <span class="text-[13px] font-semibold text-slate-700">
+              {{ bVisit.label }}
+              <span class="text-slate-400 font-normal"> · W{{ bVisit.week }}</span>
+            </span>
+            <span class="text-[11px] uppercase tracking-wider text-slate-400">
+              {{ t('studyModules.namd.banner.totalFluid') }}
+            </span>
+          </div>
+          <div class="text-[15px] font-semibold tabular-nums text-slate-900">
+            {{ bVisit.irf + bVisit.srf + bVisit.ped }}
+            <span class="text-[11px] font-medium uppercase tracking-wider text-slate-500 ml-1">nL</span>
+          </div>
         </div>
       </Card>
     </div>

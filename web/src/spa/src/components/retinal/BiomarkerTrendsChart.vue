@@ -75,6 +75,13 @@ const Line = defineAsyncComponent(async () => {
 interface TrendsPoint {
   jobId: number
   completedAt: string | null
+  /**
+   * 2026-06-23 — visit date (ISO yyyy-MM-dd) sourced from
+   * study_event.date_start. Used as the X axis instead of
+   * completedAt so historical scans uploaded today plot at their
+   * clinical date.
+   */
+  visitDate: string | null
   eyeLaterality: string | null
   primaryMetricValue: number | string | null
   primaryMetricUnit: string | null
@@ -96,6 +103,10 @@ async function load() {
       method: 'GET',
       credentials: 'include',
       headers: { Accept: 'application/json' },
+      // 2026-06-23 — bust browser cache. The trends DTO shape
+      // changed (added visitDate) and any cached single-eye response
+      // would keep the chart showing collapsed-onto-today points.
+      cache: 'no-store',
     })
     if (!res.ok) {
       throw new Error(`HTTP ${res.status}`)
@@ -170,49 +181,108 @@ const unitLabel = computed<string>(() => {
   return ''
 })
 
-const chartData = computed<ChartData | null>(() => {
-  if (points.value.length === 0) return null
-  const labels = points.value.map((p) => formatDate(p.completedAt))
+/**
+ * 2026-06-23 — split the points by laterality so OD and OS get
+ * independent series. Combining them was clinically wrong: the two
+ * eyes can have wildly different biomarker volumes and stitching
+ * them into one line produced misleading downward "trends" that
+ * weren't actual progression.
+ *
+ * X axis is the visit date (NOT completedAt). Both eyes' points for
+ * the same visit collapse onto the same X label so the per-eye lines
+ * line up vertically at each visit column.
+ */
+function normalizeLat(raw: string | null): 'OD' | 'OS' | 'OTHER' {
+  if (!raw) return 'OTHER'
+  const t = raw.trim().toUpperCase()
+  if (t === 'OD' || t === 'R' || t === 'RIGHT') return 'OD'
+  if (t === 'OS' || t === 'L' || t === 'LEFT') return 'OS'
+  return 'OTHER'
+}
+
+function xAxisIso(p: TrendsPoint): string {
+  // Visit date is the clinically meaningful axis. Fall back to
+  // completedAt for jobs that somehow lost their study_event binding
+  // (defensive — shouldn't happen for done jobs).
+  return (p.visitDate ?? p.completedAt ?? '').slice(0, 10)
+}
+
+/**
+ * 2026-06-23 — build chart-data for one eye. The trends panel now
+ * renders TWO charts (OD, OS) side-by-side rather than overlaying
+ * both eyes on one canvas: the eyes share visit dates but their
+ * biomarker volumes can differ by 2×+, so a combined chart compresses
+ * the lower-volume eye into a near-flat line. Per-eye charts also
+ * let the operator visually compare progression without legend
+ * juggling.
+ */
+function buildChartDataForEye(lat: 'OD' | 'OS'): ChartData | null {
+  const ofThisEye = points.value.filter((p) => normalizeLat(p.eyeLaterality) === lat)
+  if (ofThisEye.length === 0) return null
+
+  // Unique sorted visit-date labels for this eye's X axis.
+  const xValues = Array.from(new Set(ofThisEye.map(xAxisIso))).filter((x) => x.length > 0)
+  xValues.sort()
+  if (xValues.length === 0) return null
+  const labels = xValues.map((x) => formatDate(x))
+  const xIndex = new Map(xValues.map((x, i) => [x, i]))
 
   if (props.task === 'fluid') {
-    const irf: Array<number | null> = []
-    const srf: Array<number | null> = []
-    const ped: Array<number | null> = []
-    const total: Array<number | null> = []
-    for (const p of points.value) {
+    const irf: Array<number | null> = nullArr(xValues.length)
+    const srf: Array<number | null> = nullArr(xValues.length)
+    const ped: Array<number | null> = nullArr(xValues.length)
+    const total: Array<number | null> = nullArr(xValues.length)
+    for (const p of ofThisEye) {
+      const idx = xIndex.get(xAxisIso(p))
+      if (idx == null) continue
       const b = (p.outputPayload?.biomarkers ?? {}) as {
-        irf_mm3?: number
-        srf_mm3?: number
-        ped_mm3?: number
-        total_mm3?: number
+        irf_mm3?: number; srf_mm3?: number; ped_mm3?: number; total_mm3?: number
       }
-      irf.push(toNumber(b.irf_mm3 ?? null))
-      srf.push(toNumber(b.srf_mm3 ?? null))
-      ped.push(toNumber(b.ped_mm3 ?? null))
-      total.push(toNumber(b.total_mm3 ?? null))
+      irf[idx]   = toNumber(b.irf_mm3 ?? null)
+      srf[idx]   = toNumber(b.srf_mm3 ?? null)
+      ped[idx]   = toNumber(b.ped_mm3 ?? null)
+      total[idx] = toNumber(b.total_mm3 ?? null)
     }
     return {
       labels,
       datasets: [
-        ds(t('retinal.kpi.irf'), irf, BIOMARKER_COLORS.irf),
-        ds(t('retinal.kpi.srf'), srf, BIOMARKER_COLORS.srf),
-        ds(t('retinal.kpi.ped'), ped, BIOMARKER_COLORS.ped),
-        // Slate-500 — keeps the total visually distinct from the three
-        // biomarker hues; matches the FundusOverlay neutral stroke.
+        ds(t('retinal.kpi.irf'),   irf,   BIOMARKER_COLORS.irf),
+        ds(t('retinal.kpi.srf'),   srf,   BIOMARKER_COLORS.srf),
+        ds(t('retinal.kpi.ped'),   ped,   BIOMARKER_COLORS.ped),
         ds(t('retinal.kpi.total'), total, '#64748b'),
       ],
     }
   }
 
-  // Single-series tasks — onl / pr / ga.
-  const values = points.value.map((p) => toNumber(p.primaryMetricValue))
-  const label = labelForSingleTask(props.task)
-  const color = colorForSingleTask(props.task)
+  // Single-series tasks (onl / pr / ga).
+  const values: Array<number | null> = nullArr(xValues.length)
+  for (const p of ofThisEye) {
+    const idx = xIndex.get(xAxisIso(p))
+    if (idx == null) continue
+    values[idx] = toNumber(p.primaryMetricValue)
+  }
   return {
     labels,
-    datasets: [ds(label, values, color)],
+    datasets: [ds(labelForSingleTask(props.task), values, colorForSingleTask(props.task))],
   }
-})
+}
+
+const chartDataOD = computed<ChartData | null>(() => buildChartDataForEye('OD'))
+const chartDataOS = computed<ChartData | null>(() => buildChartDataForEye('OS'))
+
+/**
+ * Kept for backward-compatibility with BiomarkerTrendsChart.spec.ts —
+ * returns the OD chart data (or OS when no OD data is present). The
+ * spec's only assertion against chartData is "non-null when points
+ * exist", which both eyes satisfy.
+ */
+const chartData = computed<ChartData | null>(
+  () => chartDataOD.value ?? chartDataOS.value,
+)
+
+function nullArr(n: number): Array<number | null> {
+  return Array.from({ length: n }, () => null)
+}
 
 function ds(
   label: string,
@@ -248,6 +318,11 @@ const chartOptions = computed(() => ({
   maintainAspectRatio: false,
   interaction: { mode: 'index' as const, intersect: false },
   plugins: {
+    // 2026-06-23 — legend visible for fluid (4 series — IRF/SRF/PED/Σ)
+    // and hidden for single-series tasks where the chart header
+    // already names the metric. Each chart is single-eye now so the
+    // eye discriminator is in the chart's title strip, not the
+    // legend.
     legend: {
       display: props.task === 'fluid',
       position: 'bottom' as const,
@@ -284,42 +359,94 @@ const chartOptions = computed(() => ({
   },
 }))
 
+const eyeLabelLong = computed<Record<'OD' | 'OS', string>>(() => ({
+  OD: t('retinal.header.lateralityLong.OD'),
+  OS: t('retinal.header.lateralityLong.OS'),
+}))
+
 /* Test hook: lets BiomarkerTrendsChart.spec.ts read the constructed
  * chart data without mounting the lazy Line component. <script setup>
  * exposes refs as auto-unwrapped values via the component instance
  * proxy, so {@code w.vm.chartData} on the test side already yields
  * the inner ChartData (or null) — no {@code .value} hop needed. */
-defineExpose({ points, chartData })
+defineExpose({ points, chartData, chartDataOD, chartDataOS })
 </script>
 
 <template>
-  <div data-testid="biomarker-trends-chart" class="bg-white border border-slate-200 rounded-muw p-3 h-72">
+  <div
+    data-testid="biomarker-trends-chart"
+    class="bg-white border border-slate-200 rounded-muw p-3"
+  >
     <div class="text-[10px] uppercase tracking-wider font-semibold text-slate-500 mb-2">
       {{ t('retinal.trends.chartHeader') }}
     </div>
     <div
       v-if="isLoading"
-      class="text-xs text-slate-500 italic h-full flex items-center justify-center"
+      class="text-xs text-slate-500 italic h-64 flex items-center justify-center"
       data-testid="biomarker-trends-loading"
     >
       {{ t('retinal.trends.loading') }}
     </div>
     <div
       v-else-if="loadError"
-      class="text-xs text-rose-600 italic h-full flex items-center justify-center"
+      class="text-xs text-rose-600 italic h-64 flex items-center justify-center"
       data-testid="biomarker-trends-error"
     >
       {{ t('retinal.trends.errorPrefix') }} {{ loadError }}
     </div>
     <div
-      v-else-if="!chartData"
-      class="text-xs text-slate-500 italic h-full flex items-center justify-center"
+      v-else-if="!chartDataOD && !chartDataOS"
+      class="text-xs text-slate-500 italic h-64 flex items-center justify-center"
       data-testid="biomarker-trends-empty"
     >
       {{ t('retinal.trends.empty') }}
     </div>
-    <div v-else class="h-[calc(100%-1.5rem)]">
-      <Line :data="chartData" :options="chartOptions" />
+    <!--
+      2026-06-23 — two side-by-side charts (OD left / OS right), each
+      filtered to one eye. Ophthalmology convention puts OD on the
+      LEFT column (clinician-face-to-face mirror image), matching the
+      bilateral-mask convention used elsewhere in the app. Stacks
+      vertically on narrow viewports.
+    -->
+    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+      <div
+        v-if="chartDataOD"
+        class="flex flex-col"
+        data-testid="biomarker-trends-chart-od"
+      >
+        <div class="text-[11px] font-semibold text-slate-600 mb-1">
+          {{ eyeLabelLong.OD }}
+        </div>
+        <div class="h-64">
+          <Line :data="chartDataOD" :options="chartOptions" />
+        </div>
+      </div>
+      <div
+        v-else
+        class="flex items-center justify-center text-[11px] italic text-slate-400 h-72"
+        data-testid="biomarker-trends-chart-od-empty"
+      >
+        {{ t('retinal.trends.emptyEye', { eye: eyeLabelLong.OD }) }}
+      </div>
+      <div
+        v-if="chartDataOS"
+        class="flex flex-col"
+        data-testid="biomarker-trends-chart-os"
+      >
+        <div class="text-[11px] font-semibold text-slate-600 mb-1">
+          {{ eyeLabelLong.OS }}
+        </div>
+        <div class="h-64">
+          <Line :data="chartDataOS" :options="chartOptions" />
+        </div>
+      </div>
+      <div
+        v-else
+        class="flex items-center justify-center text-[11px] italic text-slate-400 h-72"
+        data-testid="biomarker-trends-chart-os-empty"
+      >
+        {{ t('retinal.trends.emptyEye', { eye: eyeLabelLong.OS }) }}
+      </div>
     </div>
   </div>
 </template>

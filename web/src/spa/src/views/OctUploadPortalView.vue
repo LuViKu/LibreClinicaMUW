@@ -160,14 +160,21 @@ function onSubjectPicked(subject: StudySubjectSearchHit): void {
 }
 
 function onEventPicked(payload: {
-  eventCrfId: number
+  studyEventId: number
+  eventCrfId: number | null
   definitionLabel: string
   dateStart: string
 }): void {
   const rid = visitTargetRowId.value
   visitTargetRowId.value = null
   if (rid == null) return
-  store.setManualVisit(rid, payload.eventCrfId, payload.definitionLabel, payload.dateStart)
+  store.setManualVisit(
+    rid,
+    payload.studyEventId,
+    payload.eventCrfId,
+    payload.definitionLabel,
+    payload.dateStart,
+  )
 }
 
 function onPatientSearchClose(): void {

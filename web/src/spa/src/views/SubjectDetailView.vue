@@ -12,6 +12,7 @@ import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
 import ScheduleEventDialog from '@/components/ScheduleEventDialog.vue'
 import CancelEventDialog from '@/components/CancelEventDialog.vue'
+import SignEventDialog from '@/components/SignEventDialog.vue'
 import SubjectExportButton from '@/components/SubjectExportButton.vue'
 import TransitionEyeDialog from '@/components/TransitionEyeDialog.vue'
 import ModalityBaselinesPanel from '@/components/ModalityBaselinesPanel.vue'
@@ -28,6 +29,7 @@ import { canManageSubjectLifecycle, canEditSubject } from '@/types/subject'
 import { roleSatisfies, userRolesFromAuth } from '@/router'
 import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
+import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -35,6 +37,31 @@ const router = useRouter()
 const subjects = useSubjectsStore()
 const events = useEventsStore()
 const auth = useAuthStore()
+
+/**
+ * 2026-06-21 round 6 follow-up — local click-outside directive used by
+ * the kebab menu in the visit row. Keep this inline (no shared util) so
+ * the directive doesn't leak into views that don't need it. The handler
+ * runs on `pointerdown` capture so it fires before the bubbling
+ * `click` that the inner buttons listen for — that ordering matters
+ * when the trigger button toggles the menu state itself.
+ */
+const vClickOutside = {
+  mounted(el: HTMLElement & { __clickOutside?: (ev: Event) => void }, binding: { value: () => void }) {
+    el.__clickOutside = (ev: Event) => {
+      if (!el.contains(ev.target as Node)) {
+        binding.value?.()
+      }
+    }
+    document.addEventListener('pointerdown', el.__clickOutside, true)
+  },
+  unmounted(el: HTMLElement & { __clickOutside?: (ev: Event) => void }) {
+    if (el.__clickOutside) {
+      document.removeEventListener('pointerdown', el.__clickOutside, true)
+      delete el.__clickOutside
+    }
+  },
+}
 // Pluggable study-module SPI — workspace slot injection.
 // When the active study's protocol_type matches a registered module,
 // the module's 'subject-detail.workspace' entries render under the
@@ -210,6 +237,45 @@ const editEventLocked = computed(() => {
   return editEvent.value.openedFrom === 'complete' && !editEvent.value.unlocked
 })
 
+/**
+ * 2026-06-21 round 6 — proxy the edit-event dateStart input through
+ * a DD.MM.YYYY display. Backend wants ISO YYYY-MM-DD; operators want
+ * to type in the German convention. The display computed renders the
+ * model verbatim when it's already DD.MM.YYYY (mid-typing) and only
+ * formats when the model is a parseable ISO date. The input handler
+ * accepts either format and only writes back when a parse succeeds.
+ */
+const editEventDateDisplay = computed<string>(() => {
+  const raw = editEvent.value?.dateStart ?? ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [y, m, d] = raw.split('-')
+    return `${d}.${m}.${y}`
+  }
+  return raw
+})
+
+function onEditEventDateInput(next: string): void {
+  if (!editEvent.value) return
+  const trimmed = (next ?? '').trim()
+  // DD.MM.YYYY → ISO
+  const de = trimmed.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/)
+  if (de) {
+    const dd = de[1]!.padStart(2, '0')
+    const mm = de[2]!.padStart(2, '0')
+    editEvent.value.dateStart = `${de[3]}-${mm}-${dd}`
+    return
+  }
+  // YYYY-MM-DD pass-through (paste-friendly).
+  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    editEvent.value.dateStart = trimmed
+    return
+  }
+  // Partial / invalid input — store verbatim so the field keeps the
+  // operator's keystrokes; the existing dateInvalid guard surfaces
+  // the parse error when they hit Save.
+  editEvent.value.dateStart = trimmed
+}
+
 function openEditEvent(ev: {
   eventId: string
   eventDefinitionOid: string
@@ -303,6 +369,92 @@ function onCancelEvent(ev: { eventId: string; label: string }) {
   if (!ev.eventId || !subject.value) return
   cancelDialogEvent.value = ev
   cancelDialogOpen.value = true
+}
+
+/**
+ * 2026-06-21 round 6 follow-up — per-row kebab menu state. We track the
+ * single open menu by event id rather than a per-row boolean so clicking
+ * a different row's kebab implicitly closes the previously-open one. The
+ * v-click-outside directive below closes the menu on any pointerdown
+ * outside its wrapper.
+ */
+const openMenuEventId = ref<string | null>(null)
+
+function toggleEventMenu(eventId: string): void {
+  openMenuEventId.value = openMenuEventId.value === eventId ? null : eventId
+}
+
+function onMenuEdit(ev: {
+  eventId: string
+  eventDefinitionOid: string
+  dateStart: string | null
+  location: string | null
+  status: EventStatus
+}): void {
+  openMenuEventId.value = null
+  openEditEvent(ev)
+}
+
+function onMenuCancel(ev: { eventId: string; label: string }): void {
+  openMenuEventId.value = null
+  onCancelEvent(ev)
+}
+
+/**
+ * 2026-06-21 round 7 — per-visit sign action. Investigators (and any
+ * other writer role per EventEditAuthorization.roleMayEdit) can attest
+ * a single completed visit without committing the whole subject. The
+ * inline dialog collects the password + attestation; the result feeds
+ * back into the modal as an inline error on 401 / 412 (preflight).
+ */
+const signDialogEvent = ref<{ eventId: string; label: string } | null>(null)
+const signDialogSubmitting = ref(false)
+const signDialogError = ref<string | null>(null)
+
+function canSignEv(status: EventStatus): boolean {
+  // Mirror EventEditAuthorization.roleMayEdit on the client +
+  // the backend's "must be at least data-entry-started" check.
+  // Show the menu entry only for visits actually attestable.
+  const role = auth.user?.role ?? null
+  if (!role) return false
+  if (!(role === 'Investigator' || role === 'CRC' || role === 'Data Manager' || role === 'Administrator')) {
+    return false
+  }
+  return status === 'in-progress' || status === 'complete'
+}
+
+function onMenuSign(ev: { eventId: string; label: string }): void {
+  openMenuEventId.value = null
+  signDialogError.value = null
+  signDialogEvent.value = ev
+}
+
+async function onSignSubmit(payload: { password: string; attestation: boolean }): Promise<void> {
+  if (!signDialogEvent.value || !subject.value) return
+  signDialogSubmitting.value = true
+  signDialogError.value = null
+  try {
+    const result = await events.signEvent(
+      signDialogEvent.value.eventId,
+      payload.password,
+      payload.attestation,
+    )
+    if (!result.ok) {
+      signDialogError.value = result.message
+      return
+    }
+    // Refetch subject so the visit's status pill in the casebook
+    // flips to "Signiert" without a hard reload.
+    await subjects.fetchOne(subject.value.id)
+    signDialogEvent.value = null
+  } finally {
+    signDialogSubmitting.value = false
+  }
+}
+
+function onSignCancel(): void {
+  signDialogEvent.value = null
+  signDialogError.value = null
 }
 
 async function onEventCancelled() {
@@ -571,12 +723,7 @@ function statusVariant(status: EventStatus): 'success' | 'info' | 'warning' | 'n
   }
 }
 
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10))
-  return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[(m ?? 1) - 1] ?? '???'}-${y}`
-}
+// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4)
 
 function genderLabel(g: string): string {
   return t(`addSubject.gender.${g === 'F' ? 'female' : g === 'M' ? 'male' : g === 'O' ? 'other' : 'unknown'}`)
@@ -672,9 +819,23 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
         <!-- Pluggable study-module SPI — workspace slot.
              Active manifest's 'subject-detail.workspace' entries render
              here (typically a CTA card to enter the module's dedicated
-             workspace). Each entry is opaque to the host. -->
+             workspace). Each entry is opaque to the host.
+
+             2026-06-23 — bind the host's subject context to every
+             injected entry. The nAMD CTA needs both (a) the numeric
+             study_subject_id (passed via subject-oid, since its
+             composable Number.parseInt()'s it) and (b) the subject
+             label for the in-link confirmation. Without these props
+             the CTA's router.push omits the query, the workspace
+             route lands with no subject, and the data composable
+             returns null → "No OCTs available" even when the subject
+             has completed jobs. -->
         <template v-for="entry in workspaceInjections" :key="entry.key">
-          <component :is="entry.component" />
+          <component
+            :is="entry.component"
+            :subject-oid="retinalNumericId != null ? String(retinalNumericId) : null"
+            :subject-label="subject?.id ?? null"
+          />
         </template>
 
         <!-- Identity / enrolment card -->
@@ -905,7 +1066,13 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
              markComplete navigation from CrfEntryView. The natural
              first-fold of subject-detail is the demographics card,
              so the hash makes the events panel jump into view. -->
-        <section id="events" class="bg-white border border-slate-200 rounded-muw overflow-clip mb-5">
+        <!-- 2026-06-21 round 7 — the previous `overflow-clip` clipped
+             the kebab menu of any visit row near the bottom edge of
+             the card. The card still rounds correctly without the
+             clip (no children paint outside the radius normally), so
+             dropping it lets the absolute-positioned popover overflow
+             cleanly. -->
+        <section id="events" class="bg-white border border-slate-200 rounded-muw mb-5">
           <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
             <h2 class="text-xs font-semibold uppercase tracking-wider text-slate-500">
               {{ t('subjectDetail.eventsHeading') }}
@@ -929,6 +1096,14 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               </span>
             </div>
           </div>
+          <!-- 2026-06-22 round 9 — horizontal-scroll wrapper so the
+               sticky-right actions column has a scrolling context. With
+               many visits + long "Erfassung abgeschlossen" stage text
+               the table would push the CRFs-öffnen + kebab cluster
+               past the viewport edge; the wrapper now scrolls and the
+               actions <th> + <td> stay pinned to the right edge via
+               position:sticky. -->
+          <div class="overflow-x-auto">
           <DenseTable :bordered="false">
             <template #header>
               <tr class="border-b border-slate-200">
@@ -937,7 +1112,12 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                 <th scope="col" class="px-5 py-2 font-medium w-40">{{ t('subjectDetail.column.status') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-44">{{ t('subjectDetail.column.dataEntryStage') }}</th>
                 <th scope="col" class="px-5 py-2 font-medium w-24 text-right">{{ t('subjectDetail.column.openQueries') }}</th>
-                <th scope="col" class="px-5 py-2 font-medium w-28 text-right"></th>
+                <!-- 2026-06-22 round 9 — sticky-right so the action cluster
+                     stays visible when the table overflows horizontally
+                     (long Erfassungsstand strings + many visits push the
+                     actions off-screen otherwise). Pairs with the matching
+                     sticky-right class on each row's actions <td>. -->
+                <th scope="col" class="px-5 py-2 font-medium w-44 text-right whitespace-nowrap sticky right-0 bg-slate-50 z-10"></th>
               </tr>
             </template>
             <template v-for="ev in subject.events" :key="ev.eventDefinitionOid">
@@ -955,39 +1135,79 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   <StatusPill v-if="ev.openQueries > 0" compact variant="danger">{{ ev.openQueries }}</StatusPill>
                   <span v-else class="text-slate-400">—</span>
                 </td>
-                <td class="px-5 py-2.5 text-right text-xs space-x-2">
-                  <!-- Phase E A4: edit + cancel buttons. eventId is empty
-                       when no study_event row exists yet (event-definition
-                       slot is unscheduled) — hide both actions in that
-                       case; the user would use the Schedule button instead. -->
-                  <button
-                    v-if="ev.eventId && canEditEv(ev.status)"
-                    type="button"
-                    class="text-muw-blue hover:underline"
-                    data-testid="event-row-edit-button"
-                    @click="openEditEvent(ev)"
-                  >{{ t('subjectDetail.event.edit') }}</button>
-                  <button
-                    v-if="ev.eventId && canCancelEv(ev.status)"
-                    type="button"
-                    class="text-rose-700 hover:underline"
-                    @click="onCancelEvent(ev)"
-                  >{{ t('subjectDetail.event.cancel') }}</button>
-                  <!-- Phase E.6: link straight to the SPA's Event
-                       Detail view (see EventDetailView.vue) so the
-                       operator stays in-shell. v0 sent users into the
-                       legacy /pages/EnterDataForStudyEvent JSP which
-                       was jarring + often errored for non-Investigator
-                       roles. eventId is empty until the event row is
-                       actually scheduled — render nothing in that
-                       case (Schedule button covers the path). -->
-                  <RouterLink
-                    v-if="ev.eventId"
-                    :to="`/events/${ev.eventId}`"
-                    class="text-muw-blue hover:underline"
-                  >
-                    {{ t('subjectDetail.openEvent') }}
-                  </RouterLink>
+                <td
+                  class="px-5 py-2.5 text-right text-xs whitespace-nowrap sticky right-0 bg-white"
+                  :class="openMenuEventId === ev.eventId ? 'z-20' : ''"
+                >
+                  <!-- 2026-06-21 user-feedback round 6 — three inline
+                       buttons (Bearbeiten / Stornieren / CRFs öffnen)
+                       clipped on the "Abgeschlossen" rows. Collapsed
+                       the two secondary actions into a single-button
+                       overflow popover (⋮) next to the primary
+                       CRFs-öffnen link. Custom div/button + ref-based
+                       toggle (NOT <details>): the native element does
+                       not close on outside-click and operators kept
+                       leaving stale menus open. The vClickOutside
+                       directive wired below closes the open menu on
+                       any pointerdown outside its wrapper.
+
+                       2026-06-23 — dynamic z-20 on the row's sticky
+                       <td> when its menu is open. Each sticky cell
+                       creates its own stacking context; without the
+                       boost, the next row's sticky <td> (later in DOM
+                       order) painted on top of the open menu, hiding
+                       the "Bearbeiten" entry behind the next row's
+                       "CRFs öffnen" button. -->
+
+                  <div v-if="ev.eventId" class="inline-flex items-center justify-end gap-1.5 whitespace-nowrap">
+                    <RouterLink
+                      :to="`/events/${ev.eventId}`"
+                      class="px-2.5 py-1 rounded bg-muw-blue text-white hover:bg-muw-blue/90 focus:outline-none focus:ring-2 focus:ring-muw-blue/40 inline-flex items-center gap-1 whitespace-nowrap"
+                      data-testid="event-row-open-link"
+                    >
+                      <span>{{ t('subjectDetail.openEvent') }}</span>
+                    </RouterLink>
+                    <div
+                      v-if="canEditEv(ev.status) || canCancelEv(ev.status) || canSignEv(ev.status)"
+                      v-click-outside="() => (openMenuEventId === ev.eventId ? (openMenuEventId = null) : null)"
+                      class="relative"
+                      data-testid="event-row-more-menu"
+                    >
+                      <button
+                        type="button"
+                        class="cursor-pointer px-1.5 py-1 rounded border border-slate-300 text-slate-600 hover:bg-slate-100 select-none"
+                        :aria-label="t('subjectDetail.event.moreActions')"
+                        :aria-expanded="openMenuEventId === ev.eventId"
+                        @click="toggleEventMenu(ev.eventId)"
+                      >⋮</button>
+                      <div
+                        v-if="openMenuEventId === ev.eventId"
+                        class="absolute right-0 mt-1 min-w-[10rem] rounded-md border border-slate-200 bg-white shadow-lg z-50 py-1 text-left"
+                      >
+                        <button
+                          v-if="canEditEv(ev.status)"
+                          type="button"
+                          class="block w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+                          data-testid="event-row-edit-button"
+                          @click="onMenuEdit(ev)"
+                        >{{ t('subjectDetail.event.edit') }}</button>
+                        <button
+                          v-if="canSignEv(ev.status)"
+                          type="button"
+                          class="block w-full text-left px-3 py-1.5 text-xs text-muw-blue hover:bg-slate-100"
+                          data-testid="event-row-sign-button"
+                          @click="onMenuSign(ev)"
+                        >{{ t('subjectDetail.event.sign') }}</button>
+                        <button
+                          v-if="canCancelEv(ev.status)"
+                          type="button"
+                          class="block w-full text-left px-3 py-1.5 text-xs text-rose-700 hover:bg-rose-50"
+                          data-testid="event-row-cancel-button"
+                          @click="onMenuCancel(ev)"
+                        >{{ t('subjectDetail.event.cancel') }}</button>
+                      </div>
+                    </div>
+                  </div>
                 </td>
               </tr>
 
@@ -1013,11 +1233,19 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   <fieldset :disabled="editEventLocked" class="grid grid-cols-3 gap-3">
                     <div>
                       <FieldLabel for="edit-event-date">{{ t('subjectDetail.column.dateStart') }}</FieldLabel>
+                      <!-- 2026-06-21 round 6 — display DD.MM.YYYY but
+                           continue to bind the ISO YYYY-MM-DD string
+                           on the model (the backend's update endpoint
+                           requires ISO). The computed proxy parses
+                           user input on the fly; invalid drafts leave
+                           the model unchanged until a parseable date
+                           is typed. -->
                       <TextInput
                         id="edit-event-date"
-                        v-model="editEvent.dateStart"
-                        placeholder="YYYY-MM-DD"
+                        :model-value="editEventDateDisplay"
+                        placeholder="TT.MM.JJJJ"
                         :disabled="editEventLocked"
+                        @update:model-value="onEditEventDateInput"
                       />
                     </div>
                     <div>
@@ -1068,6 +1296,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               </tr>
             </template>
           </DenseTable>
+          </div>
         </section>
 
         <!-- Wave 2A — retinal-trends section. Only mounts when the
@@ -1199,6 +1428,17 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       @close="cancelDialogEvent = null"
     />
 
+    <!-- 2026-06-21 round 7 — per-visit electronic signature. -->
+    <SignEventDialog
+      :open="signDialogEvent !== null"
+      :event-label="signDialogEvent?.label ?? ''"
+      :subject-label="subject?.id ?? ''"
+      :is-submitting="signDialogSubmitting"
+      :error-message="signDialogError"
+      @submit="onSignSubmit"
+      @cancel="onSignCancel"
+    />
+
     <!-- Phase E.6 per-eye cohort transition — dialog. Sibling
          worktree owns the real component implementation; the contract
          is fixed: subject-label + eye + current study + available
@@ -1211,6 +1451,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
       :current-study-oid="auth.user?.activeStudy?.oid ?? ''"
       :available-studies="otherStudies"
       :is-submitting="transitionSubmitting"
+      :error-message="transitionError"
       @submit="onTransitionSubmit"
       @cancel="dialogState = null"
     />
