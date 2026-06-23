@@ -99,6 +99,11 @@ export interface RetinalJobDetail {
 }
 
 /** Lean summary returned by the per-event-CRF + per-subject list endpoints. */
+/**
+ * 2026-06-23 — Per-job summary. `visitDate` (study_event.date_start)
+ * is the clinical date used by the trend chart + nAMD workspace; it
+ * is distinct from `completedAt` (the upload-pipeline timestamp).
+ */
 export interface RetinalJobSummary {
   jobId: number
   task: RetinalTask
@@ -106,6 +111,12 @@ export interface RetinalJobSummary {
   status: RetinalJobStatus
   modelVersion: string | null
   completedAt: string | null
+  /**
+   * 2026-06-23 — ISO yyyy-MM-dd; the visit date sourced from
+   * study_event.date_start. Optional because legacy clients + the
+   * per-event-crf endpoint may not surface it.
+   */
+  visitDate?: string | null
   primaryMetric: PrimaryMetric | null
 }
 

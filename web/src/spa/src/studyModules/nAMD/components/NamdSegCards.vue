@@ -77,7 +77,11 @@ const rows = computed(() =>
         </span>
         <DeltaChip :value="row.delta" direction="badUp" :unit="' nL'" />
       </div>
-      <div class="mt-0.5 text-[11px] text-slate-400">
+      <!-- 2026-06-23 — break-words + leading-tight keeps the long
+           German labels (e.g. "Pigmentepithelabhebung") inside the
+           card. Without the wrap rule, the 25-char term overran the
+           card right edge on the OCT-Viewer side panel. -->
+      <div class="mt-0.5 text-[11px] text-slate-400 leading-tight break-words">
         {{ t(`studyModules.namd.fluid.${row.k}.long`) }}
       </div>
     </div>

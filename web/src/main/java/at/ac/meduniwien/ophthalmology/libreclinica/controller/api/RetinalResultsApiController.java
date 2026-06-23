@@ -220,6 +220,17 @@ public class RetinalResultsApiController {
             String status,
             String modelVersion,
             String completedAt,
+            /**
+             * 2026-06-23 — visit date (ISO yyyy-MM-dd) sourced from
+             * study_event.date_start. Distinct from completedAt
+             * (the upload-pipeline timestamp) — when historical scans
+             * are uploaded today the visit date is what reads
+             * clinically and what the nAMD workspace + trend charts
+             * key off. Null when the job has no study_event binding
+             * (parked / partially-bound — visible only in the
+             * cross-study parked admin view).
+             */
+            String visitDate,
             PrimaryMetric primaryMetric) { }
 
     /**
@@ -441,20 +452,21 @@ public class RetinalResultsApiController {
         if (visGuard != null) return visGuard;
 
         List<RetinalJobSummaryDto> out = new ArrayList<>();
-        // 2026-06-23 — was: INNER JOIN event_crf, which hid jobs bound
-        // directly to a study_event (planned-visit upload before the
-        // CRF is opened). The query now resolves the subject via
-        // EITHER the CRF chain or the direct study_event_id, surfacing
-        // both populated paths to the subject-detail view.
+        // 2026-06-23 — surfaces both CRF-bound + planned-visit-bound
+        // jobs via the COALESCE on study_event_id (see earlier
+        // changelog). Also exports visit_date (date(study_event.date_start))
+        // so the nAMD workspace + per-subject job list can show the
+        // clinical date instead of the upload timestamp.
         String sql = "SELECT j.job_id, j.task, j.eye_laterality, j.status, j.model_version, "
                 + "       j.completed_at, "
+                + "       date(se.date_start) AS visit_date, "
                 + "       r.primary_metric_value, r.primary_metric_unit "
                 + "  FROM retinal_inference_job j "
                 + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
                 + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "  LEFT JOIN retinal_inference_result r ON r.job_id = j.job_id "
                 + " WHERE se.study_subject_id = ? "
-                + " ORDER BY j.enqueued_at DESC";
+                + " ORDER BY visit_date ASC NULLS LAST, j.enqueued_at DESC";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, studySubjectId);
@@ -2021,9 +2033,20 @@ public class RetinalResultsApiController {
         Timestamp completedAt = rs.getTimestamp("completed_at");
         BigDecimal pv = rs.getBigDecimal("primary_metric_value");
         String pu = rs.getString("primary_metric_unit");
+        // 2026-06-23 — visit_date is optional in the SELECT (the
+        // event_crf-scoped query at /event-crfs/{id}/retinal-jobs
+        // doesn't join study_event); ResultSetMetaData lookup avoids
+        // throwing for callers that didn't add the column.
+        String visitDate = null;
+        try {
+            java.sql.Date vd = rs.getDate("visit_date");
+            if (vd != null) visitDate = vd.toString();
+        } catch (SQLException ignoredColumnAbsent) {
+            // visit_date column not in this query — leave null.
+        }
         return new RetinalJobSummaryDto(
                 jobId, task, laterality, status, modelVersion,
-                toIso(completedAt), primaryMetric(pv, pu));
+                toIso(completedAt), visitDate, primaryMetric(pv, pu));
     }
 
     /** 401 if no authenticated user, 400 if no active study. */
