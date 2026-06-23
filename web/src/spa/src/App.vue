@@ -8,12 +8,14 @@ import ConnectionBanner from '@/components/ConnectionBanner.vue'
 import BugReportDialog from '@/components/BugReportDialog.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useInactivityStore } from '@/stores/inactivity'
+import { useBreadcrumbStore } from '@/stores/breadcrumb'
 import type { UserRole } from '@/types/auth'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const inactivity = useInactivityStore()
+const breadcrumbs = useBreadcrumbStore()
 const { t } = useI18n()
 
 async function logout() {
@@ -84,15 +86,20 @@ onUnmounted(() => inactivity.stop())
 
 interface Crumb { label: string; to?: string }
 
+/**
+ * 2026-06-23 user-feedback round — nested breadcrumb trail.
+ *
+ * <p>The session-bound study (or study + site) is always the leading
+ * crumb. After that:
+ *   1. If the active view has published a trail via the breadcrumb
+ *      store, append it. Per-view trails carry their own parent
+ *      chain ("Subjects > EIAMD150 > V03") so the surfaced trail
+ *      mirrors the navigation path that brought the operator here.
+ *   2. Otherwise fall back to the legacy single-crumb behaviour
+ *      (route.meta.title), which still serves every view that hasn't
+ *      registered yet.
+ */
 const breadcrumb = computed<Crumb[]>(() => {
-  // Phase E.5 follow-up (2026-06-03): replace the hardcoded
-  // "LCDemo · München" leftover from the Phase E.4 mock-data era
-  // with the actual session-bound study / site.
-  //   - bound to a site (activeStudy.isSite=true)     → [study, site]
-  //     where "study" is resolved heuristically below
-  //     and "site" is the activeStudy.name
-  //   - bound to a top-level study                    → [study]
-  //   - no active study (login / first-login / picker) → []
   const crumbs: Crumb[] = []
   const active = auth.user?.activeStudy
   if (active) {
@@ -105,9 +112,22 @@ const breadcrumb = computed<Crumb[]>(() => {
       crumbs.push({ label: t('app.crumb.studyFallback') })
       crumbs.push({ label: active.name })
     } else {
-      crumbs.push({ label: active.name })
+      // Active study links back to /home (the catalogue / dashboard).
+      crumbs.push({ label: active.name, to: '/' })
     }
   }
+  // View-published trail wins when present — that's the per-route
+  // nested chain (Subjects > EIAMD150 > V03 …).
+  const viewTrail = breadcrumbs.items
+  if (viewTrail && viewTrail.length > 0) {
+    for (const item of viewTrail) {
+      crumbs.push({ label: item.label, to: item.to ?? undefined })
+    }
+    return crumbs
+  }
+  // Fallback: the route's static title for views that haven't migrated
+  // to the per-view trail yet. Drop the link so the legacy single crumb
+  // still reads as "active leaf".
   const routeTitle = route.meta?.title as string | undefined
   if (routeTitle && route.name !== 'home' && route.name !== 'login' && route.name !== 'first-login') {
     crumbs.push({ label: routeTitle })

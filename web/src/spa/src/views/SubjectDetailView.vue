@@ -30,6 +30,7 @@ import { roleSatisfies, userRolesFromAuth } from '@/router'
 import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -660,6 +661,17 @@ watch(subjectId, (next, prev) => {
 const subject = computed(() => subjects.selected)
 const isLoading = computed(() => subjects.isLoadingSelected)
 const loadError = computed(() => subjects.selectedError)
+
+// 2026-06-23 user-feedback round — nested breadcrumb trail:
+// "<study> > Studienteilnehmer > <subject.id>". The matrix link
+// lets the operator step back; the subject id is the active leaf.
+useViewBreadcrumb(computed(() => {
+  const label = subject.value?.id ?? subjectId.value
+  return [
+    { label: t('nav.subjectMatrix'), to: '/subjects' },
+    { label, to: null },
+  ]
+}))
 
 /* ------------------------------------------------------------- */
 /* Wave 2A — Retinal trends section mounting.                    */

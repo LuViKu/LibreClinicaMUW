@@ -13,6 +13,7 @@ import { useEventsStore } from '@/stores/events'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 /**
  * Phase E.6 — standalone Event Detail view (replaces the legacy
@@ -88,6 +89,18 @@ watch(eventId, (id) => {
 })
 
 const event = computed(() => store.event)
+
+// 2026-06-23 user-feedback round — nested breadcrumb trail:
+// "<study> > Studienteilnehmer > <subject> > <event>".
+useViewBreadcrumb(computed(() => {
+  const ev = event.value
+  if (!ev) return null
+  return [
+    { label: t('nav.subjectMatrix'), to: '/subjects' },
+    { label: ev.subjectLabel, to: `/subjects/${encodeURIComponent(ev.subjectLabel)}` },
+    { label: ev.eventDefinitionName, to: null },
+  ]
+}))
 
 function statusVariant(s: StudyEventStatus): 'success' | 'info' | 'warning' | 'danger' | 'neutral' {
   switch (s) {

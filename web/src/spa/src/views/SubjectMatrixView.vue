@@ -14,12 +14,19 @@ import { useAuthStore } from '@/stores/auth'
 import StudyMetricsModal from '@/components/StudyMetricsModal.vue'
 import type { EventStatus, Subject } from '@/types/subject'
 import { formatDate } from '@/lib/dateFormat'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 const { t } = useI18n()
 const subjects = useSubjectsStore()
 const study = useStudyStore()
 const auth = useAuthStore()
 const route = useRoute()
+
+// 2026-06-23 user-feedback round — nested breadcrumb trail.
+// "<study> > Studienteilnehmer". The Subject Matrix is the leaf
+// of its own flow so the inner-trail is a single non-link crumb;
+// App.vue prepends the active study.
+useViewBreadcrumb(computed(() => [{ label: t('nav.subjectMatrix'), to: null }]))
 
 /**
  * Phase E.6 — Pick-a-subject banner that previously launched on the

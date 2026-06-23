@@ -30,6 +30,7 @@ import NamdViewerTab from './NamdViewerTab.vue'
 import NamdCompareTab from './NamdCompareTab.vue'
 import NamdReportTab from './NamdReportTab.vue'
 import { useNamdVisitData } from '../composables/useNamdVisitData'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -48,6 +49,17 @@ const { data, loading, error } = useNamdVisitData({
   mock: isMock,
 })
 
+// 2026-06-23 user-feedback round — nested breadcrumb trail:
+// "<study> > Studienteilnehmer > <subject> > nAMD".
+useViewBreadcrumb(computed(() => {
+  const subjLabel = studySubjectOid.value ?? data.value?.patient.id
+  if (!subjLabel) return null
+  return [
+    { label: t('nav.subjectMatrix'), to: '/subjects' },
+    { label: subjLabel, to: `/subjects/${encodeURIComponent(subjLabel)}` },
+    { label: t('studyModules.namd.workspaceBreadcrumb'), to: null },
+  ]
+}))
 </script>
 
 <template>
