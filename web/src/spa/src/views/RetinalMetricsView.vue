@@ -1219,35 +1219,30 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                 </h3>
               </div>
               <DenseTable :bordered="false">
-                <template #header>
-                  <tr class="text-left text-slate-400 text-[11px] uppercase tracking-[0.06em]">
-                    <!-- 2026-06-23 — first column header is now blank;
-                         the Kreis/Ring section sub-headers (rendered
-                         as <tr> rows below) replace the previous
-                         single "RING" label so cumulative discs and
-                         disjoint annuli read as distinct groups. -->
-                    <th scope="col" class="px-5 py-2.5 font-semibold"></th>
-                    <th
-                      v-for="(h, idx) in etdrsHeaders.slice(1)"
-                      :key="h"
-                      scope="col"
-                      :class="['px-5 py-2.5 font-semibold', idx >= 0 ? 'text-right' : '']"
-                    >
-                      {{ h }}
-                    </th>
-                  </tr>
-                </template>
-                <template v-for="group in etdrsRowGroups" :key="group.type">
+                <template v-for="(group, gIdx) in etdrsRowGroups" :key="group.type">
+                  <!-- Section sub-header. The very first group's row
+                       carries the unit/column headers in the right-aligned
+                       cells (so the page doesn't need a dedicated
+                       column-header row above). Subsequent group headers
+                       only carry the section label. -->
                   <tr
-                    class="bg-slate-50/70 border-t border-slate-100"
+                    class="bg-slate-50/70 border-t border-slate-100 text-left text-slate-400 text-[11px] uppercase tracking-[0.06em]"
                     :data-testid="`retinal-etdrs-section-${group.type}`"
                   >
-                    <td
-                      :colspan="etdrsHeaders.length"
-                      class="px-5 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+                    <th
+                      scope="col"
+                      class="px-5 py-2 font-semibold text-slate-500 tracking-[0.08em]"
                     >
                       {{ group.type === 'circle' ? t('retinal.etdrs.sectionCircle') : t('retinal.etdrs.sectionRing') }}
-                    </td>
+                    </th>
+                    <th
+                      v-for="h in etdrsHeaders.slice(1)"
+                      :key="h"
+                      scope="col"
+                      class="px-5 py-2 font-semibold text-right"
+                    >
+                      <span v-if="gIdx === 0">{{ h }}</span>
+                    </th>
                   </tr>
                   <tr
                     v-for="row in group.rows"
