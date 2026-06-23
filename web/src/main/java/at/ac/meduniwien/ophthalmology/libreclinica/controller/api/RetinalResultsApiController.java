@@ -231,6 +231,18 @@ public class RetinalResultsApiController {
              * cross-study parked admin view).
              */
             String visitDate,
+            /**
+             * 2026-06-23 user-feedback round — OCT acquisition date
+             * (ISO yyyy-MM-dd) pulled from the .e2e header by the
+             * retinal-preprocess sidecar. This is the device's
+             * native scan-time stamp; the SPA's nAMD composable
+             * prefers this over visit_date / completed_at so a stack
+             * of historical scans uploaded today plot against the
+             * real acquisition date. Null when the original device
+             * left the field blank or the preprocess sidecar is
+             * older than this header.
+             */
+            String acquisitionDate,
             PrimaryMetric primaryMetric) { }
 
     /**
@@ -460,13 +472,14 @@ public class RetinalResultsApiController {
         String sql = "SELECT j.job_id, j.task, j.eye_laterality, j.status, j.model_version, "
                 + "       j.completed_at, "
                 + "       date(se.date_start) AS visit_date, "
+                + "       j.acquisition_date, "
                 + "       r.primary_metric_value, r.primary_metric_unit "
                 + "  FROM retinal_inference_job j "
                 + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
                 + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "  LEFT JOIN retinal_inference_result r ON r.job_id = j.job_id "
                 + " WHERE se.study_subject_id = ? "
-                + " ORDER BY visit_date ASC NULLS LAST, j.enqueued_at DESC";
+                + " ORDER BY COALESCE(j.acquisition_date, visit_date) ASC NULLS LAST, j.enqueued_at DESC";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, studySubjectId);
@@ -2044,9 +2057,19 @@ public class RetinalResultsApiController {
         } catch (SQLException ignoredColumnAbsent) {
             // visit_date column not in this query — leave null.
         }
+        // 2026-06-23 user-feedback round — acquisition_date is on
+        // every job row but the legacy event-CRF-scoped query may
+        // not project it; same defensive lookup pattern as visit_date.
+        String acquisitionDate = null;
+        try {
+            java.sql.Date ad = rs.getDate("acquisition_date");
+            if (ad != null) acquisitionDate = ad.toString();
+        } catch (SQLException ignoredColumnAbsent) {
+            // acquisition_date column not in this query — leave null.
+        }
         return new RetinalJobSummaryDto(
                 jobId, task, laterality, status, modelVersion,
-                toIso(completedAt), visitDate, primaryMetric(pv, pu));
+                toIso(completedAt), visitDate, acquisitionDate, primaryMetric(pv, pu));
     }
 
     /** 401 if no authenticated user, 400 if no active study. */

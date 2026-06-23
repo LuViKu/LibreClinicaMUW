@@ -117,6 +117,17 @@ export interface RetinalJobSummary {
    * per-event-crf endpoint may not surface it.
    */
   visitDate?: string | null
+  /**
+   * 2026-06-23 user-feedback round — ISO yyyy-MM-dd; the OCT
+   * acquisition date pulled from the .e2e header by the
+   * retinal-preprocess sidecar (X-MUW-Acquisition-Date). When
+   * present, this is the device's native scan-time stamp; the nAMD
+   * composable prefers it over visitDate / completedAt so a stack
+   * of historical scans uploaded today plots against the real
+   * acquisition date. Null when the source .e2e left the field
+   * blank or the preprocess deploy predates the header.
+   */
+  acquisitionDate?: string | null
   primaryMetric: PrimaryMetric | null
 }
 

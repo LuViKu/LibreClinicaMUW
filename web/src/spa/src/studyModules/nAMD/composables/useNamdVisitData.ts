@@ -119,7 +119,14 @@ function fluidJobToVisit(
     // back to completed_at when the backend doesn't supply it. Was:
     // always completed_at, so a batch of historical scans uploaded
     // today all read as "today" across the workspace.
-    date: summary.visitDate ?? summary.completedAt ?? '',
+    // 2026-06-23 user-feedback round — date priority:
+    //   1. acquisitionDate — pulled by retinal-preprocess from the
+    //      .e2e header; the device's native scan-time stamp.
+    //   2. visitDate — study_event.date_start, the scheduled visit
+    //      date (may match the acquisition for prospective uploads).
+    //   3. completedAt — upload-pipeline timestamp (the day the
+    //      operator clicked Hochladen). Last resort.
+    date: summary.acquisitionDate ?? summary.visitDate ?? summary.completedAt ?? '',
     irf: mm3ToNl(biomarkers?.irf_mm3),
     srf: mm3ToNl(biomarkers?.srf_mm3),
     ped: mm3ToNl(biomarkers?.ped_mm3),
@@ -190,8 +197,9 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       const fluidSummaries = fluidDone
         .filter((s) => s.laterality === laterality)
         .sort((a, b) => {
-          const ka = (a.visitDate ?? a.completedAt ?? '')
-          const kb = (b.visitDate ?? b.completedAt ?? '')
+          // 2026-06-23 — same date priority as the visit object below.
+          const ka = (a.acquisitionDate ?? a.visitDate ?? a.completedAt ?? '')
+          const kb = (b.acquisitionDate ?? b.visitDate ?? b.completedAt ?? '')
           return ka.localeCompare(kb)
         })
       const details = await Promise.all(
