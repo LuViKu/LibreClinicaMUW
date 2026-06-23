@@ -42,9 +42,29 @@ interface Props {
    * the overlay.
    */
   jobId?: number | null
+  /**
+   * 2026-06-23 — nAMD workspace KI-Maske toggle gate. When
+   * {@code false} the canvas overlay is {@code clearRect}'d and
+   * the visible legend hidden so the operator sees the raw
+   * B-scan without AI annotation. Default {@code true} keeps
+   * the existing retinal-jobs viewer behaviour.
+   */
+  showSegmentation?: boolean
+  /**
+   * 2026-06-23 — Report tab static-frame mode. Suppresses the
+   * slider, play/pause, scroll/wheel/keyboard handlers and the
+   * discoverability hint; paints the chosen slice once via
+   * {@code setImageIdIndex(modelValue)} and emits no updates.
+   * Used by {@link NamdReportScan} to render a deterministic
+   * single-slice B-scan that survives {@code Cmd-P}.
+   */
+  staticFrame?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  showSegmentation: true,
+  staticFrame: false,
+})
 const emit = defineEmits<{
   'update:modelValue': [z: number]
 }>()
@@ -142,9 +162,12 @@ function paintOverlay(): void {
   const canvas = overlayCanvasEl.value
   const env = segEnvelope.value
   if (!canvas) return
-  if (!env) {
-    // Clear any stale paint so a job-id change doesn't leave the
-    // previous job's overlay underneath.
+  if (!env || !props.showSegmentation) {
+    // Clear any stale paint so a job-id change OR a KI-Maske toggle
+    // (showSegmentation=false) doesn't leave the previous frame's
+    // overlay underneath. The watcher on segEnvelope + modelValue
+    // re-fires paintOverlay when the operator flips the toggle back
+    // on, repainting from the cached envelope.
     const ctx0 = canvas.getContext('2d')
     if (ctx0) ctx0.clearRect(0, 0, canvas.width, canvas.height)
     return
@@ -308,7 +331,7 @@ const SURFACE_PALETTE = [
   'rgba(34, 197, 94, 0.85)',   // emerald-500
 ] as const
 
-watch([segEnvelope, () => props.modelValue], () => {
+watch([segEnvelope, () => props.modelValue, () => props.showSegmentation], () => {
   paintOverlay()
 }, { flush: 'post' })
 
@@ -607,6 +630,7 @@ function schedulePendingZ(): void {
 
 function onWheel(ev: WheelEvent): void {
   if (status.value !== 'ready') return
+  if (props.staticFrame) return
   wheelAccum += ev.deltaY
   const threshold = 24 // px — calibrated for both notched mice (~100 per notch) and trackpads (~5-20 per tick)
   let next: number | null = null
@@ -624,6 +648,7 @@ function onWheel(ev: WheelEvent): void {
 }
 
 async function setZ(z: number) {
+  if (props.staticFrame) return
   const clamped = clampZ(z)
   if (clamped !== props.modelValue) emit('update:modelValue', clamped)
   if (viewport.value) {
@@ -677,7 +702,10 @@ onBeforeUnmount(() => {
     data-testid="bscan-viewer"
     class="bg-slate-900 rounded-2xl overflow-clip border border-slate-800"
   >
-    <header class="px-4 py-2.5 flex items-center justify-between gap-3 bg-slate-900 border-b border-white/10 text-white/80">
+    <header
+      v-if="!staticFrame"
+      class="px-4 py-2.5 flex items-center justify-between gap-3 bg-slate-900 border-b border-white/10 text-white/80"
+    >
       <h3 class="text-[11px] font-semibold uppercase tracking-[0.12em]">
         {{ t('retinal.bscanViewer.header') }}
       </h3>
@@ -735,7 +763,7 @@ onBeforeUnmount(() => {
            used the scroll/scrub once (the hint is only useful for the
            first interaction; after that it's noise). -->
       <div
-        v-if="status === 'ready' && !hasInteracted"
+        v-if="status === 'ready' && !hasInteracted && !staticFrame"
         class="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-slate-900/70 text-slate-200 text-[10px] uppercase tracking-wider pointer-events-none"
       >
         {{ t('retinal.bscanViewer.scrollHint') }}
@@ -757,7 +785,11 @@ onBeforeUnmount(() => {
       {{ t('retinal.bscanViewer.errorPrefix') }} {{ errorMessage }}
     </div>
 
-    <div class="px-4 py-3 flex items-center gap-3 bg-slate-900 border-t border-white/10">
+    <div
+      v-if="!staticFrame"
+      class="px-4 py-3 flex items-center gap-3 bg-slate-900 border-t border-white/10"
+      data-testid="bscan-viewer-controls"
+    >
       <button
         type="button"
         class="shrink-0 w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 text-white inline-flex items-center justify-center transition"

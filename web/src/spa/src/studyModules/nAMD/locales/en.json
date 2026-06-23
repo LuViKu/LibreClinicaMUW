@@ -43,15 +43,30 @@
       "viewer": {
         "volume": "[NEEDS_REVIEW] OCT volume · current visit",
         "aiSeg": "[NEEDS_REVIEW] AI segmentation",
-        "hint": "[NEEDS_REVIEW] Scroll through the volume (slider, heatmap or ▶ auto-play). The AI mask highlights IRF, SRF and PED in colour and toggles per scan.",
+        "hint": "[NEEDS_REVIEW] Scroll through the volume (slider, activity heatmap or ▶ auto-play). The AI mask highlights IRF, SRF and PED in colour and toggles per scan.",
         "segCardsHeader": "[NEEDS_REVIEW] Segmentation · this scan",
         "empty": "[NEEDS_REVIEW] No OCT acquisition is linked to this visit."
+      },
+      "scanFrame": {
+        "bscanCounter": "[NEEDS_REVIEW] B-scan {z}/{n}",
+        "fovea": "[NEEDS_REVIEW] Fovea",
+        "maskOn": "[NEEDS_REVIEW] AI mask on",
+        "maskOff": "[NEEDS_REVIEW] AI mask off",
+        "play": "[NEEDS_REVIEW] Play volume scroll",
+        "pause": "[NEEDS_REVIEW] Pause volume scroll",
+        "superior": "[NEEDS_REVIEW] superior",
+        "inferior": "[NEEDS_REVIEW] inferior",
+        "volumeScroll": "[NEEDS_REVIEW] Volume scroll · {n} B-scans"
       },
       "compare": {
         "delta": "[NEEDS_REVIEW] Delta between visits",
         "paneA": "[NEEDS_REVIEW] Visit A",
         "paneB": "[NEEDS_REVIEW] Visit B",
-        "bcva": "[NEEDS_REVIEW] BCVA"
+        "bcva": "[NEEDS_REVIEW] BCVA",
+        "syncedScroll": "[NEEDS_REVIEW] Synchronised scroll",
+        "syncedScrollTip": "[NEEDS_REVIEW] With synchronised scroll, both volumes move through the same B-scan plane simultaneously.",
+        "tagReference": "[NEEDS_REVIEW] Reference",
+        "tagCurrent": "[NEEDS_REVIEW] Current"
       },
       "decision": {
         "header": "[NEEDS_REVIEW] Decision",
@@ -64,7 +79,8 @@
         "aiSuggests": "[NEEDS_REVIEW] AI suggests: {rec}"
       },
       "trend": {
-        "aria": "[NEEDS_REVIEW] Trend of fluid volumes IRF, SRF and PED across the last visits."
+        "aria": "[NEEDS_REVIEW] Trend of fluid volumes IRF, SRF and PED across the last visits.",
+        "bcvaSuffix": "[NEEDS_REVIEW] letters"
       },
       "report": {
         "letterhead": "[NEEDS_REVIEW] nAMD Fluid Monitoring · Report",
@@ -78,6 +94,8 @@
         "current": "[NEEDS_REVIEW] Current status",
         "trend": "[NEEDS_REVIEW] Trend",
         "history": "[NEEDS_REVIEW] Treatment and findings history",
+        "octBaselineVsCurrent": "[NEEDS_REVIEW] OCT · Baseline vs. current visit",
+        "octCaption": "[NEEDS_REVIEW] Foveal B-scan plane · AI segmentation overlaid",
         "signaturePhysician": "[NEEDS_REVIEW] Physician signature",
         "signatureDate": "[NEEDS_REVIEW] Date"
       }

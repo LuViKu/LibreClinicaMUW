@@ -20,6 +20,7 @@ import { useI18n } from 'vue-i18n'
 import NamdSegCards from '../components/NamdSegCards.vue'
 import NamdFluidTrendChart from '../components/NamdFluidTrendChart.vue'
 import NamdActivityPill from '../components/NamdActivityPill.vue'
+import NamdReportScan from '../components/NamdReportScan.vue'
 import { activeFluid, totalFluid } from '../fluid'
 import { I } from '../icons'
 import type { NamdWorkspaceData } from '../types'
@@ -38,6 +39,14 @@ const today = computed(() => {
 const activeFluidNl = computed(() =>
   props.data.current ? Math.round(activeFluid(props.data.current)) : null,
 )
+
+/**
+ * 2026-06-23 — baseline visit for the "OCT · Baseline vs. aktueller"
+ * block. Per the design's report layout, the first visit in the
+ * workspace data (lowest week) is the baseline reference.
+ */
+const baselineVisit = computed(() => props.data.visits[0] ?? null)
+const nSlices = computed(() => props.data.nSlices ?? 49)
 
 function printReport() {
   window.print()
@@ -128,6 +137,23 @@ function printReport() {
         {{ t('studyModules.namd.report.trend') }}
       </h2>
       <NamdFluidTrendChart :visits="props.data.visits" />
+    </section>
+
+    <!-- 2026-06-23 — baseline vs current OCT block. Page-break-before
+         keeps the two scans (+ caption + activity pills) together on a
+         second sheet when printed, mirroring the design's report layout. -->
+    <section
+      v-if="baselineVisit && props.data.current && baselineVisit.id !== props.data.current.id"
+      class="mb-6 print:break-before-page"
+      data-testid="namd-report-oct-block"
+    >
+      <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 mb-3">
+        {{ t('studyModules.namd.report.octBaselineVsCurrent') }}
+      </h2>
+      <div class="grid grid-cols-2 gap-4">
+        <NamdReportScan :visit="baselineVisit" :n-slices="nSlices" />
+        <NamdReportScan :visit="props.data.current" :n-slices="nSlices" />
+      </div>
     </section>
 
     <section class="mb-6">

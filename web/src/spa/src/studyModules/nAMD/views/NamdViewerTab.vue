@@ -2,27 +2,22 @@
 /**
  * nAMD workspace — OCT Viewer tab.
  *
- * Port of {@code ViewerTab()} from namd-app.jsx. Two-column layout:
- *   - Left (col-span-8): Cornerstone-backed {@link BscanViewer} mounted
- *     against the current visit's {@code bscan.dcm}. The design's
- *     synthesized SVG OCT was replaced with the real DICOM viewer per
- *     the plan section 4 ("don't re-implement the inner SVG B-scan").
- *   - Right (col-span-4): segmentation summary cards + a CRT row +
- *     a fluid legend.
+ * Layout-only shell that delegates the whole scan presentation to
+ * {@link NamdScanFrame}. The frame owns the corner overlays, the
+ * KI-Maske toggle, the activity heatmap, the slider + en-face
+ * thumbnail; this tab only adds the right-hand segmentation
+ * summary cards.
  *
- * When the current visit has no retinal job (e.g. a baseline eye-exam
- * eCRF without an OCT acquisition) the viewer renders a polite empty
- * banner. The side cards still render — they're driven by the per-visit
- * biomarker volumes the composable surfaced.
+ * When the current visit has no retinal job the frame renders a
+ * polite empty banner (still inside the design's black scan box)
+ * so the column widths don't shift.
  */
-import { computed, defineAsyncComponent, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Card from '../components/primitives/Card.vue'
-import Pill from '../components/primitives/Pill.vue'
+import NamdScanFrame from '../components/NamdScanFrame.vue'
 import NamdSegCards from '../components/NamdSegCards.vue'
 import NamdFluidLegend from '../components/NamdFluidLegend.vue'
-import { I } from '../icons'
-import { artifactUrl } from '@/api/retinal'
 import type { NamdWorkspaceData } from '../types'
 
 interface Props {
@@ -31,45 +26,35 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useI18n()
 
-// BscanViewer pulls Cornerstone.js (~150 KB) — keep it lazy so the
-// Overview tab doesn't ship it.
-const BscanViewer = defineAsyncComponent(() => import('@/components/BscanViewer.vue'))
+const nSlices = computed(() => props.data.nSlices ?? 49)
+const slice = ref(Math.floor(nSlices.value / 2))
+const mask = ref(true)
 
-const currentJobId = computed(() => props.data.current?.retinalJobId ?? null)
-const bscanDcmUrl = computed(() =>
-  currentJobId.value != null ? artifactUrl(currentJobId.value, 'bscan.dcm') : null,
+watch(
+  () => props.data.current?.id,
+  () => {
+    // New visit selected — reset the slice to the centre so the
+    // operator lands on the foveal frame.
+    slice.value = Math.floor(nSlices.value / 2)
+  },
 )
-const nBscans = computed(() => props.data.nSlices ?? 49)
-
-const bscanZ = ref(Math.floor(nBscans.value / 2))
-watch(nBscans, (n) => {
-  bscanZ.value = Math.floor(n / 2)
-})
 </script>
 
 <template>
   <div data-testid="namd-viewer-tab" class="grid grid-cols-12 gap-5">
     <div class="col-span-12 lg:col-span-8 space-y-3">
       <Card :title="t('studyModules.namd.viewer.volume')">
-        <template #right>
-          <Pill tone="ai" :dot="false">
-            <span v-html="I.spark" />
-            <span class="ml-1">{{ t('studyModules.namd.viewer.aiSeg') }}</span>
-          </Pill>
-        </template>
-        <div v-if="bscanDcmUrl" data-testid="namd-viewer-bscan-host">
-          <!-- 2026-06-23 — pass the current visit's retinal job id so
-               BscanViewer fetches its segmentation envelope and paints
-               the per-pixel IRF / SRF / PED overlay on the active
-               slice. Without job-id the viewer renders the raw B-scan
-               only, which the user observed as "no segmentation". -->
-          <BscanViewer
-            v-model="bscanZ"
-            :bscan-dcm-url="bscanDcmUrl"
-            :n-bscans="nBscans"
-            :job-id="currentJobId"
-          />
-        </div>
+        <NamdScanFrame
+          v-if="props.data.current"
+          :visit="props.data.current"
+          :eye="props.data.patient.eye"
+          :n-slices="nSlices"
+          :slice="slice"
+          :mask="mask"
+          id-base="viewer"
+          @update:slice="(z) => (slice = z)"
+          @update:mask="(m) => (mask = m)"
+        />
         <div
           v-else
           data-testid="namd-viewer-empty"
@@ -78,7 +63,6 @@ watch(nBscans, (n) => {
           {{ t('studyModules.namd.viewer.empty') }}
         </div>
         <div class="mt-4 flex items-start gap-2 text-[12px] text-slate-500 bg-slate-50 rounded-lg px-3 py-2.5">
-          <span class="text-muw-blue-300 mt-0.5" v-html="I.alert" />
           <span>{{ t('studyModules.namd.viewer.hint') }}</span>
         </div>
       </Card>
