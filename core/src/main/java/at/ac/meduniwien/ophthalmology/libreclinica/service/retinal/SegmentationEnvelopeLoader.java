@@ -209,6 +209,19 @@ public final class SegmentationEnvelopeLoader {
                 return null;
             }
             double[][] rows = readCsvNumeric(csv);
+            // 2026-06-23 — the sese_pr / sese_onl runner emits a 3-element
+            // dimensions header as CSV row 0 ({@code cols, n_bscans, n_rows}).
+            // The remaining rows are the per-(scan, A-scan) surface Y values.
+            // If row 0 is narrower than row 1, drop it: the dims metadata is
+            // not needed downstream (the segmentation envelope already
+            // carries them) and treating it as scan 0 produced a near-flat
+            // line drawn at row=cols/2 for every B-scan, with cols silently
+            // clamped to 3 across the rest of the file.
+            if (rows.length >= 2 && rows[0].length < rows[1].length) {
+                double[][] trimmed = new double[rows.length - 1][];
+                System.arraycopy(rows, 1, trimmed, 0, rows.length - 1);
+                rows = trimmed;
+            }
             if (rows.length == 0) return null;
             int zRows = rows.length;
             int cs = rows[0].length;
