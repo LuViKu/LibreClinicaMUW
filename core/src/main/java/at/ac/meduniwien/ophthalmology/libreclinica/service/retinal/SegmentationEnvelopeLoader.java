@@ -161,15 +161,28 @@ public final class SegmentationEnvelopeLoader {
         //
         //   row 0 (header): cols, n_bscans, n_rows  (e.g. 1024, 97, 496)
         //   row 1..N (data): 2 * cols entries each, where
-        //     · cols 0       .. cols-1    are SYMBOLIC labels (e.g. 'U' for
-        //       unaffected, '1' for GA-detected)
-        //     · cols cols-1+1.. 2*cols-1  are NUMERIC classifications
-        //       (0 = none, 100 = GA detected)
+        //     · cols 0       .. cols-1    are SYMBOLIC LABELS (post-mask
+        //       classification; 'U' = unaffected/outside-mask, '1' = GA)
+        //     · cols cols-1+1.. 2*cols-1  are NUMERIC raw model output
+        //       (0 = no GA signal, 100 = GA signal — broader than the
+        //       symbolic label by ~1934 cells per per-cell cross-tab)
         //
-        // The numeric half is what we want for the per-A-scan binary mask.
-        // The symbolic half was previously being parsed via
-        // Double.parseDouble("U") → NumberFormatException → defaulted to 0
-        // → entire mask zeroed out → no overlay rendered anywhere.
+        // The SYMBOLIC LABELS in the first half are the right binary mask
+        // for clinical visualization: they're the model's GA-presence
+        // decision AFTER the runner's scan-area mask + threshold post-
+        // processing. The second half is the raw signal — broader, more
+        // permissive, and includes ~75% extra cells outside the
+        // post-processing's accepted zone.
+        //
+        // Per-cell cross-tab (97-slice volume, sample dataset):
+        //   (U, 0)    → 94891 cells   — no GA, no signal
+        //   (1, 100)  → 2503  cells   — both agree, definitive GA
+        //   (U, 100)  → 1934  cells   — second half only (clipped out)
+        //   (1, ≠100) → 0     cells   — never (1 always paired with 100)
+        //
+        // Earlier the loader fed the whole row to Double.parseDouble,
+        // which choked on every 'U' → fell back to 0 → entire mask zeroed
+        // out → no overlay rendered anywhere on B-scans or fundus.
         List<int[]> dataRows = readRpelCsv(rpel);
         if (dataRows.isEmpty()) {
             LOG.warn("ga segmentation envelope: empty RPEL CSV under {}", bscanMasksDir);
@@ -197,13 +210,16 @@ public final class SegmentationEnvelopeLoader {
     /**
      * 2026-06-23 — Parse the GA runner's RPEL CSV into per-A-scan binary
      * GA-presence rows. Header row (3 fields: cols, n_bscans, n_rows) is
-     * consumed first to learn the canonical {@code cols} count, then each
-     * data row is collapsed by taking the SECOND half (when its width is
-     * {@code 2 * cols}) so the symbolic-label half is discarded and only
-     * the numeric classifications survive. Non-numeric tokens parse as 0.
+     * consumed first to learn the canonical {@code cols} count. Each data
+     * row is then read from the FIRST half (symbolic labels): the token
+     * {@code "1"} marks GA-detected, everything else ({@code "U"},
+     * {@code "0"}, blank) is treated as no GA. The second half of each
+     * row (raw model signal) is intentionally discarded — it's broader
+     * than the post-mask label and would surface false positives outside
+     * the runner's accepted scan zone.
      *
      * <p>Returns a List<int[]> where each int[] has exactly {@code cols}
-     * entries (0 = no GA, > 0 = GA detected at that A-scan).
+     * entries (0 = no GA, 1 = GA detected at that A-scan).
      */
     private static List<int[]> readRpelCsv(Path csv) throws IOException {
         List<int[]> out = new ArrayList<>();
@@ -224,25 +240,20 @@ public final class SegmentationEnvelopeLoader {
                         try { cols = Integer.parseInt(tokens[0].trim()); } catch (NumberFormatException ignore) { /* fall through */ }
                         continue;
                     }
-                    // No header — use the row's width as cols.
+                    // No header — assume the row is symbol-only (cols wide).
                     cols = tokens.length;
                 }
                 if (cols <= 0) cols = tokens.length;
-                // Take the SECOND half when the row carries the symbolic +
-                // numeric pair; otherwise read straight from offset 0.
-                int startOffset = (tokens.length == 2 * cols) ? cols : 0;
+                // Always read the FIRST cols entries (symbolic label half).
+                // For runners that emit only labels (no numeric pair), this
+                // reads the whole row. For the 2 * cols layout it ignores
+                // the trailing raw-signal half.
                 int[] row = new int[cols];
-                for (int x = 0; x < cols; x++) {
-                    int src = startOffset + x;
-                    if (src >= tokens.length) break;
-                    String t = tokens[src].trim();
-                    if (t.isEmpty()) continue;
-                    try {
-                        row[x] = (int) Math.round(Double.parseDouble(t));
-                    } catch (NumberFormatException nfe) {
-                        // Symbolic token (e.g. 'U'); treat as no detection.
-                        row[x] = 0;
-                    }
+                for (int x = 0; x < cols && x < tokens.length; x++) {
+                    String t = tokens[x].trim();
+                    // Symbolic GA flag: "1" (or any non-blank non-"U" non-"0"
+                    // token, defensively) → 1. "U" / "0" / blank → 0.
+                    if ("1".equals(t)) row[x] = 1;
                 }
                 out.add(row);
             }
