@@ -53,6 +53,15 @@ function mm3ToNl(v: number | null | undefined): number {
   return Math.round(v * 100)
 }
 
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000
+
+/** Parse an ISO date / instant string to ms. Returns null on parse fail. */
+function parseDateMs(iso: string | null | undefined): number | null {
+  if (!iso) return null
+  const ms = Date.parse(iso)
+  return Number.isFinite(ms) ? ms : null
+}
+
 function isFluidPayload(p: unknown): p is FluidPayload {
   if (!p || typeof p !== 'object') return false
   const b = (p as { biomarkers?: unknown }).biomarkers
@@ -194,9 +203,24 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
           }
         }),
       )
-      const visits: NamdVisit[] = fluidSummaries.map((s, idx) =>
+      const rawVisits: NamdVisit[] = fluidSummaries.map((s, idx) =>
         fluidJobToVisit(s, details[idx] ?? null, `V${String(idx + 1).padStart(2, '0')}`),
       )
+      // 2026-06-23 user-feedback round — derive week-since-baseline
+      // from visit dates so the trend chart's X axis can space visits
+      // properly. Without this every visit lands at week=0, collapsing
+      // every polygon + dot + label onto the same X coordinate and the
+      // chart looks empty save for the current-visit coral label
+      // painted on top. Falls back to the visit index when no parseable
+      // date exists (preserves chronological ordering at least).
+      const baselineMs = parseDateMs(rawVisits[0]?.date)
+      const visits: NamdVisit[] = rawVisits.map((v, idx) => {
+        if (baselineMs == null) return { ...v, week: idx }
+        const vMs = parseDateMs(v.date)
+        if (vMs == null) return { ...v, week: idx }
+        const week = Math.round((vMs - baselineMs) / MS_PER_WEEK)
+        return { ...v, week: Math.max(0, week) }
+      })
       const current = visits.length > 0 ? visits[visits.length - 1]! : null
       const prev = visits.length > 1 ? visits[visits.length - 2]! : null
       const patient: NamdPatient = {

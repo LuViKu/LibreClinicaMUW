@@ -195,7 +195,9 @@ function fmtDate(iso: string): string {
       style="overflow: visible"
       data-testid="namd-fluid-trend-svg"
     >
-      <!-- Gridlines + left axis (fluid, nL) -->
+      <!-- Gridlines + left axis (fluid, nL).
+           2026-06-23 user-feedback round — dotted gridlines per the
+           design's dotted-grid aesthetic. -->
       <g>
         <line
           v-for="g in gridVals"
@@ -204,8 +206,10 @@ function fmtDate(iso: string): string {
           :x2="W - PR"
           :y1="yFluid(g)"
           :y2="yFluid(g)"
-          stroke="#eef1f6"
+          stroke="#cbd5e1"
           stroke-width="1"
+          stroke-dasharray="1 4"
+          stroke-linecap="round"
         />
         <text
           v-for="g in gridVals"
@@ -376,7 +380,9 @@ function fmtDate(iso: string): string {
           :y1="yBcva(BCVA_MIN) + 6"
           :x2="W - PR"
           :y2="yBcva(BCVA_MIN) + 6"
-          stroke="#eef1f6"
+          stroke="#cbd5e1"
+          stroke-dasharray="1 4"
+          stroke-linecap="round"
         />
         <path
           :d="bcvaPath"
