@@ -396,6 +396,10 @@ function paintThicknessHeatmap(): void {
   if (!canvas) return
   const ctx = canvas.getContext('2d')
   if (!ctx) return
+  // 2026-06-23 — keep per-A-scan blocks crisp when CSS-scaled up onto
+  // the fundus. putImageData() doesn't honour this flag, but defensive
+  // for any future composite paint paths into the same context.
+  ctx.imageSmoothingEnabled = false
 
   const env = segEnvelope.value
   if (!isLayerTask.value || !env || env.kind !== 'surface_y' || env.shape.length !== 3) {
@@ -475,6 +479,7 @@ function paintGaHeatmap(): void {
   if (!canvas) return
   const ctx = canvas.getContext('2d')
   if (!ctx) return
+  ctx.imageSmoothingEnabled = false
 
   const env = segEnvelope.value
   if (!isGaTask.value || !env || env.kind !== 'binary_2d' || env.shape.length !== 2) {
@@ -644,12 +649,11 @@ function regionFill(id: EtdrsRegion): string {
       />
 
       <!-- 1b. En-face biomarker projection (Wave 5) — stretched to bbox.
-           NB: default image-rendering (auto) lets the browser interpolate
-           smoothly between B-scan rows so the per-A-scan PED region reads
-           as a continuous blob across the slice direction. The data IS
-           per-A-scan, but B-scans are sparsely placed on the fundus
-           (~10 px apart) so without interpolation the visual gap between
-           slices dominates and the projection looks like stripes.
+           2026-06-23 — image-rendering: pixelated. Was: 'auto', which
+           let the browser interpolate between A-scans + B-scans into a
+           visibly blurry halo at the lesion edge (per-A-scan PED voxels
+           dissolved into a fade). The clinical reading expects sharp
+           per-A-scan edges since each pixel IS one A-scan's projection.
 
            Wave 5.1 (2026-06-19): when the runner has emitted per-biomarker
            PNGs (one per IRF / SRF / PED), render each as a toggleable
@@ -668,6 +672,7 @@ function regionFill(id: EtdrsRegion): string {
           :height="scanBbox.height"
           preserveAspectRatio="none"
           opacity="0.85"
+          style="image-rendering: pixelated;"
         />
       </template>
       <image
@@ -680,6 +685,7 @@ function regionFill(id: EtdrsRegion): string {
         :height="scanBbox.height"
         preserveAspectRatio="none"
         opacity="0.85"
+        style="image-rendering: pixelated;"
       />
 
       <!-- 2026-06-23 — In-canvas thickness heatmap for PR / ONL.
@@ -700,7 +706,7 @@ function regionFill(id: EtdrsRegion): string {
       >
         <canvas
           ref="thicknessCanvasEl"
-          style="width:100%;height:100%;display:block;image-rendering:auto;"
+          style="width:100%;height:100%;display:block;image-rendering:pixelated;"
         />
       </foreignObject>
 
@@ -720,7 +726,7 @@ function regionFill(id: EtdrsRegion): string {
       >
         <canvas
           ref="gaCanvasEl"
-          style="width:100%;height:100%;display:block;image-rendering:auto;"
+          style="width:100%;height:100%;display:block;image-rendering:pixelated;"
         />
       </foreignObject>
 

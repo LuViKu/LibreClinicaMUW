@@ -75,6 +75,13 @@ const Line = defineAsyncComponent(async () => {
 interface TrendsPoint {
   jobId: number
   completedAt: string | null
+  /**
+   * 2026-06-23 — visit date (ISO yyyy-MM-dd) sourced from
+   * study_event.date_start. Used as the X axis instead of
+   * completedAt so historical scans uploaded today plot at their
+   * clinical date.
+   */
+  visitDate: string | null
   eyeLaterality: string | null
   primaryMetricValue: number | string | null
   primaryMetricUnit: string | null
@@ -152,6 +159,7 @@ interface ChartDataset {
   pointRadius: number
   pointHoverRadius: number
   spanGaps: boolean
+  borderDash: number[]
 }
 
 interface ChartData {
@@ -170,54 +178,119 @@ const unitLabel = computed<string>(() => {
   return ''
 })
 
+/**
+ * 2026-06-23 — split the points by laterality so OD and OS get
+ * independent series. Combining them was clinically wrong: the two
+ * eyes can have wildly different biomarker volumes and stitching
+ * them into one line produced misleading downward "trends" that
+ * weren't actual progression.
+ *
+ * X axis is the visit date (NOT completedAt). Both eyes' points for
+ * the same visit collapse onto the same X label so the per-eye lines
+ * line up vertically at each visit column.
+ */
+function normalizeLat(raw: string | null): 'OD' | 'OS' | 'OTHER' {
+  if (!raw) return 'OTHER'
+  const t = raw.trim().toUpperCase()
+  if (t === 'OD' || t === 'R' || t === 'RIGHT') return 'OD'
+  if (t === 'OS' || t === 'L' || t === 'LEFT') return 'OS'
+  return 'OTHER'
+}
+
+function xAxisIso(p: TrendsPoint): string {
+  // Visit date is the clinically meaningful axis. Fall back to
+  // completedAt for jobs that somehow lost their study_event binding
+  // (defensive — shouldn't happen for done jobs).
+  return (p.visitDate ?? p.completedAt ?? '').slice(0, 10)
+}
+
 const chartData = computed<ChartData | null>(() => {
   if (points.value.length === 0) return null
-  const labels = points.value.map((p) => formatDate(p.completedAt))
+
+  // Unique sorted visit-date labels (X axis).
+  const xValues = Array.from(new Set(points.value.map(xAxisIso))).filter((x) => x.length > 0)
+  xValues.sort()
+  const labels = xValues.map((x) => formatDate(x))
+  const xIndex = new Map(xValues.map((x, i) => [x, i]))
+
+  // Per-eye buckets keyed by (laterality × biomarker) — populated
+  // sparsely so a visit that only scanned OD leaves OS as a gap.
+  const lats: Array<'OD' | 'OS'> = ['OD', 'OS']
 
   if (props.task === 'fluid') {
-    const irf: Array<number | null> = []
-    const srf: Array<number | null> = []
-    const ped: Array<number | null> = []
-    const total: Array<number | null> = []
+    const series: Record<'OD' | 'OS', {
+      irf: Array<number | null>
+      srf: Array<number | null>
+      ped: Array<number | null>
+      total: Array<number | null>
+    }> = {
+      OD: { irf: nullArr(xValues.length), srf: nullArr(xValues.length), ped: nullArr(xValues.length), total: nullArr(xValues.length) },
+      OS: { irf: nullArr(xValues.length), srf: nullArr(xValues.length), ped: nullArr(xValues.length), total: nullArr(xValues.length) },
+    }
     for (const p of points.value) {
+      const lat = normalizeLat(p.eyeLaterality)
+      if (lat === 'OTHER') continue
+      const idx = xIndex.get(xAxisIso(p))
+      if (idx == null) continue
       const b = (p.outputPayload?.biomarkers ?? {}) as {
-        irf_mm3?: number
-        srf_mm3?: number
-        ped_mm3?: number
-        total_mm3?: number
+        irf_mm3?: number; srf_mm3?: number; ped_mm3?: number; total_mm3?: number
       }
-      irf.push(toNumber(b.irf_mm3 ?? null))
-      srf.push(toNumber(b.srf_mm3 ?? null))
-      ped.push(toNumber(b.ped_mm3 ?? null))
-      total.push(toNumber(b.total_mm3 ?? null))
+      series[lat].irf[idx]   = toNumber(b.irf_mm3 ?? null)
+      series[lat].srf[idx]   = toNumber(b.srf_mm3 ?? null)
+      series[lat].ped[idx]   = toNumber(b.ped_mm3 ?? null)
+      series[lat].total[idx] = toNumber(b.total_mm3 ?? null)
     }
-    return {
-      labels,
-      datasets: [
-        ds(t('retinal.kpi.irf'), irf, BIOMARKER_COLORS.irf),
-        ds(t('retinal.kpi.srf'), srf, BIOMARKER_COLORS.srf),
-        ds(t('retinal.kpi.ped'), ped, BIOMARKER_COLORS.ped),
-        // Slate-500 — keeps the total visually distinct from the three
-        // biomarker hues; matches the FundusOverlay neutral stroke.
-        ds(t('retinal.kpi.total'), total, '#64748b'),
-      ],
+    const datasets: ChartDataset[] = []
+    for (const lat of lats) {
+      const s = series[lat]
+      // Skip the eye entirely when no points fell on it — keeps the
+      // legend tight for single-eye subjects.
+      const has = s.irf.some((v) => v != null) || s.srf.some((v) => v != null) || s.ped.some((v) => v != null) || s.total.some((v) => v != null)
+      if (!has) continue
+      datasets.push(ds(`${t('retinal.kpi.irf')} · ${lat}`,   s.irf,   BIOMARKER_COLORS.irf,   lat))
+      datasets.push(ds(`${t('retinal.kpi.srf')} · ${lat}`,   s.srf,   BIOMARKER_COLORS.srf,   lat))
+      datasets.push(ds(`${t('retinal.kpi.ped')} · ${lat}`,   s.ped,   BIOMARKER_COLORS.ped,   lat))
+      datasets.push(ds(`${t('retinal.kpi.total')} · ${lat}`, s.total, '#64748b',              lat))
     }
+    return { labels, datasets }
   }
 
-  // Single-series tasks — onl / pr / ga.
-  const values = points.value.map((p) => toNumber(p.primaryMetricValue))
+  // Single-series tasks (onl / pr / ga) — still split per eye.
   const label = labelForSingleTask(props.task)
   const color = colorForSingleTask(props.task)
-  return {
-    labels,
-    datasets: [ds(label, values, color)],
+  const buckets: Record<'OD' | 'OS', Array<number | null>> = {
+    OD: nullArr(xValues.length),
+    OS: nullArr(xValues.length),
   }
+  for (const p of points.value) {
+    const lat = normalizeLat(p.eyeLaterality)
+    if (lat === 'OTHER') continue
+    const idx = xIndex.get(xAxisIso(p))
+    if (idx == null) continue
+    buckets[lat][idx] = toNumber(p.primaryMetricValue)
+  }
+  const datasets: ChartDataset[] = []
+  for (const lat of lats) {
+    if (buckets[lat].every((v) => v == null)) continue
+    datasets.push(ds(`${label} · ${lat}`, buckets[lat], color, lat))
+  }
+  return { labels, datasets }
 })
+
+function nullArr(n: number): Array<number | null> {
+  return Array.from({ length: n }, () => null)
+}
 
 function ds(
   label: string,
   data: Array<number | null>,
   color: string,
+  /**
+   * 2026-06-23 — laterality discriminator; dashes the OS lines so the
+   * eye is distinguishable on grayscale prints / colour-blind users
+   * even before the legend label is read. OD keeps the solid stroke.
+   */
+  lat: 'OD' | 'OS' = 'OD',
 ): ChartDataset {
   return {
     label,
@@ -228,6 +301,7 @@ function ds(
     pointRadius: 2,
     pointHoverRadius: 5,
     spanGaps: true,
+    borderDash: lat === 'OS' ? [5, 4] : [],
   }
 }
 
@@ -249,7 +323,9 @@ const chartOptions = computed(() => ({
   interaction: { mode: 'index' as const, intersect: false },
   plugins: {
     legend: {
-      display: props.task === 'fluid',
+      // 2026-06-23 — always show; single-task charts now carry up to
+      // two series (OD + OS) so a legend is needed to disambiguate.
+      display: true,
       position: 'bottom' as const,
       labels: { boxWidth: 10, font: { size: 10 } },
     },

@@ -233,6 +233,15 @@ public class RetinalResultsApiController {
     public record RetinalTrendsPointDto(
             long jobId,
             String completedAt,
+            /**
+             * 2026-06-23 — clinical-relevance date for the trend X-axis.
+             * Sourced from study_event.date_start (the visit date) so a
+             * batch of historical scans uploaded today plot at their
+             * acquisition / visit dates instead of all collapsing onto
+             * the upload day. Null only when neither binding path
+             * yielded a study_event (shouldn't happen for done jobs).
+             */
+            String visitDate,
             String eyeLaterality,
             java.math.BigDecimal primaryMetricValue,
             String primaryMetricUnit,
@@ -525,7 +534,14 @@ public class RetinalResultsApiController {
         // chain or the direct study_event_id binding, mirroring the
         // listSubjectJobs fix. Planned-visit-bound jobs still need to
         // appear in the trends timeseries.
+        //
+        // visit_date = date(study_event.date_start) — the clinical
+        // date the scan was acquired, used as the chart's X axis so a
+        // batch of historical uploads doesn't collapse onto today.
+        // Orders primarily by visit date so the trend reads left→right
+        // chronologically by visit, regardless of upload order.
         String sql = "SELECT j.job_id, j.completed_at, j.eye_laterality, "
+                + "       date(se.date_start) AS visit_date, "
                 + "       r.primary_metric_value, r.primary_metric_unit, r.output_payload "
                 + "  FROM retinal_inference_job j "
                 + "  JOIN retinal_inference_result r ON r.job_id = j.job_id "
@@ -534,7 +550,7 @@ public class RetinalResultsApiController {
                 + " WHERE se.study_subject_id = ? "
                 + "   AND j.task = ? "
                 + "   AND j.status = 'done' "
-                + " ORDER BY j.completed_at";
+                + " ORDER BY visit_date ASC NULLS LAST, j.completed_at ASC";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, studySubjectId);
@@ -543,12 +559,15 @@ public class RetinalResultsApiController {
                 while (rs.next()) {
                     long jobId = rs.getLong("job_id");
                     Timestamp completedAt = rs.getTimestamp("completed_at");
+                    java.sql.Date visitDate = rs.getDate("visit_date");
                     String laterality = rs.getString("eye_laterality");
                     BigDecimal value = rs.getBigDecimal("primary_metric_value");
                     String unit = rs.getString("primary_metric_unit");
                     Map<String, Object> payload = parsePayload(rs.getString("output_payload"));
                     out.add(new RetinalTrendsPointDto(
-                            jobId, toIso(completedAt), laterality,
+                            jobId, toIso(completedAt),
+                            visitDate == null ? null : visitDate.toString(),
+                            laterality,
                             value, unit, payload));
                 }
             }
