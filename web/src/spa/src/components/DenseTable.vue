@@ -90,20 +90,12 @@ withDefaults(defineProps<Props>(), {
 </template>
 
 <style scoped>
-/* The bordered shell originally used `overflow: clip` to clip
- * rounded corners without becoming a scrolling context. That hid
- * any column that overflowed the right edge (the Subject Matrix
- * action column with 7+ event columns cropped its "Öffnen" link).
- *
- * 2026-06-23 — switched to `overflow-x: auto` on the shell so dense
- * tables that don't fit horizontally become scrollable. We retain
- * `overflow-y: clip` so vertical clipping for the rounded corners
- * still works, and `overflow-y: clip` (as opposed to `hidden`)
- * still does NOT scope sticky descendants — so :sticky thead with
- * top: <offset> continues to track the viewport, not the shell. */
+/* The bordered shell clips its rounded corners without becoming a
+ * scrolling context — `overflow: clip` does NOT scope sticky
+ * descendants the way `overflow: hidden` does, so the sticky thead
+ * can attach to the viewport via its stickyHeaderOffset. */
 .dense-table-shell {
-  overflow-x: auto;
-  overflow-y: clip;
+  overflow: clip;
 }
 
 /* Per-th sticky positioning + opaque background. The `<th>` cells
