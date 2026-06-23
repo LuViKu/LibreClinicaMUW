@@ -11,8 +11,7 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { I } from '../icons'
-import { activeFluid, totalFluid } from '../fluid'
-import NamdActivityPill from './NamdActivityPill.vue'
+import { totalFluid } from '../fluid'
 import type { NamdPatient, NamdVisit } from '../types'
 
 interface Props {
@@ -28,10 +27,6 @@ const eyeLabel = computed(() =>
   props.patient.eye === 'OD'
     ? t('studyModules.namd.eyeOd')
     : t('studyModules.namd.eyeOs'),
-)
-
-const activeFluidNl = computed(() =>
-  props.current ? Math.round(activeFluid(props.current)) : null,
 )
 
 const totalFluidLabel = computed(() => {
@@ -60,7 +55,6 @@ const totalFluidLabel = computed(() => {
             class="inline-flex items-center justify-center rounded-md bg-muw-teal-50 text-muw-teal-700 text-[11px] font-bold px-2 py-0.5"
             data-testid="namd-patient-eye"
           >{{ props.patient.eye }} · {{ eyeLabel }}</span>
-          <NamdActivityPill :active-fluid-nl="activeFluidNl" />
         </div>
         <div class="text-[13px] text-slate-500 mt-1.5">
           {{ props.patient.diagnosis }}

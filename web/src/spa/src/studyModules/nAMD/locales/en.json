@@ -43,7 +43,6 @@
       "viewer": {
         "volume": "[NEEDS_REVIEW] OCT volume · current visit",
         "aiSeg": "[NEEDS_REVIEW] AI segmentation",
-        "hint": "[NEEDS_REVIEW] Scroll through the volume (slider, activity heatmap or ▶ auto-play). The AI mask highlights IRF, SRF and PED in colour and toggles per scan.",
         "segCardsHeader": "[NEEDS_REVIEW] Segmentation · this scan",
         "empty": "[NEEDS_REVIEW] No OCT acquisition is linked to this visit."
       },
@@ -72,11 +71,11 @@
         "header": "[NEEDS_REVIEW] Decision",
         "treat": "[NEEDS_REVIEW] Treat",
         "observe": "[NEEDS_REVIEW] Observe",
+        "drug": "[NEEDS_REVIEW] Drug",
         "interval": "[NEEDS_REVIEW] Interval (weeks)",
         "confirm": "[NEEDS_REVIEW] Confirm decision",
         "confirmed": "[NEEDS_REVIEW] Decision documented.",
-        "back": "[NEEDS_REVIEW] Back",
-        "aiSuggests": "[NEEDS_REVIEW] AI suggests: {rec}"
+        "back": "[NEEDS_REVIEW] Back"
       },
       "trend": {
         "aria": "[NEEDS_REVIEW] Trend of fluid volumes IRF, SRF and PED across the last visits.",

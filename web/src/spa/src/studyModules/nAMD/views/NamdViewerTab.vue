@@ -62,9 +62,6 @@ watch(
         >
           {{ t('studyModules.namd.viewer.empty') }}
         </div>
-        <div class="mt-4 flex items-start gap-2 text-[12px] text-slate-500 bg-slate-50 rounded-lg px-3 py-2.5">
-          <span>{{ t('studyModules.namd.viewer.hint') }}</span>
-        </div>
       </Card>
     </div>
 

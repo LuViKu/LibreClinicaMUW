@@ -23,11 +23,10 @@
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Card from '../components/primitives/Card.vue'
-import Pill from '../components/primitives/Pill.vue'
 import NamdVisitPicker from '../components/NamdVisitPicker.vue'
 import NamdCompareDeltaBar from '../components/NamdCompareDeltaBar.vue'
 import NamdScanFrame from '../components/NamdScanFrame.vue'
-import { FLUID, activeFluid, ACTIVITY_THRESHOLD_NL } from '../fluid'
+import { FLUID } from '../fluid'
 import type { NamdVisit } from '../types'
 
 interface Props {
@@ -89,11 +88,6 @@ function rightSetSlice(z: number): void {
 
 const leftSlice = computed(() => (synced.value ? slice.value : leftSolo.value))
 const rightSlice = computed(() => (synced.value ? slice.value : rightSolo.value))
-
-function activeLabel(v: NamdVisit | null): 'active' | 'dry' {
-  if (!v) return 'dry'
-  return activeFluid(v) > ACTIVITY_THRESHOLD_NL ? 'active' : 'dry'
-}
 </script>
 
 <template>
@@ -129,27 +123,18 @@ function activeLabel(v: NamdVisit | null): 'active' | 'dry' {
         :key="i"
       >
         <!-- Per-pane header. Card has no #title slot, so we render
-             the picker + activity pill inline above the frame. -->
-        <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 whitespace-nowrap">
-              {{ side.tag }}
-            </span>
-            <NamdVisitPicker
-              :model-value="side.id"
-              :visits="props.data.visits"
-              :exclude-id="side.excludeOther"
-              :variant="side.variant"
-              @update:model-value="(v) => side.setId(v)"
-            />
-          </div>
-          <Pill :tone="activeLabel(side.visit)">
-            {{
-              activeLabel(side.visit) === 'active'
-                ? t('studyModules.namd.activityActive')
-                : t('studyModules.namd.activityDry')
-            }}
-          </Pill>
+             the tag + visit picker inline above the frame. -->
+        <div class="flex items-center mb-3 gap-2 flex-wrap">
+          <span class="text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-400 whitespace-nowrap">
+            {{ side.tag }}
+          </span>
+          <NamdVisitPicker
+            :model-value="side.id"
+            :visits="props.data.visits"
+            :exclude-id="side.excludeOther"
+            :variant="side.variant"
+            @update:model-value="(v) => side.setId(v)"
+          />
         </div>
         <NamdScanFrame
           v-if="side.visit"

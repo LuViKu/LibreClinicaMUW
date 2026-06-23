@@ -19,9 +19,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import NamdSegCards from '../components/NamdSegCards.vue'
 import NamdFluidTrendChart from '../components/NamdFluidTrendChart.vue'
-import NamdActivityPill from '../components/NamdActivityPill.vue'
 import NamdReportScan from '../components/NamdReportScan.vue'
-import { activeFluid, totalFluid } from '../fluid'
+import { totalFluid } from '../fluid'
 import { I } from '../icons'
 import type { NamdWorkspaceData } from '../types'
 
@@ -35,10 +34,6 @@ const today = computed(() => {
   const d = new Date()
   return d.toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit' })
 })
-
-const activeFluidNl = computed(() =>
-  props.data.current ? Math.round(activeFluid(props.data.current)) : null,
-)
 
 /**
  * 2026-06-23 — baseline visit for the "OCT · Baseline vs. aktueller"
@@ -106,12 +101,9 @@ function printReport() {
     </section>
 
     <section class="mb-6">
-      <div class="flex items-baseline justify-between mb-2">
-        <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
-          {{ t('studyModules.namd.report.current') }}
-        </h2>
-        <NamdActivityPill :active-fluid-nl="activeFluidNl" />
-      </div>
+      <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+        {{ t('studyModules.namd.report.current') }}
+      </h2>
       <NamdSegCards :current="props.data.current" :prev="props.data.prev" />
       <div
         v-if="props.data.current"
