@@ -432,12 +432,17 @@ public class RetinalResultsApiController {
         if (visGuard != null) return visGuard;
 
         List<RetinalJobSummaryDto> out = new ArrayList<>();
+        // 2026-06-23 — was: INNER JOIN event_crf, which hid jobs bound
+        // directly to a study_event (planned-visit upload before the
+        // CRF is opened). The query now resolves the subject via
+        // EITHER the CRF chain or the direct study_event_id, surfacing
+        // both populated paths to the subject-detail view.
         String sql = "SELECT j.job_id, j.task, j.eye_laterality, j.status, j.model_version, "
                 + "       j.completed_at, "
                 + "       r.primary_metric_value, r.primary_metric_unit "
                 + "  FROM retinal_inference_job j "
-                + "  JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "  LEFT JOIN retinal_inference_result r ON r.job_id = j.job_id "
                 + " WHERE se.study_subject_id = ? "
                 + " ORDER BY j.enqueued_at DESC";

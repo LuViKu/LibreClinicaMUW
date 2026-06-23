@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        2026-06-23 — Bind retinal_inference_job to study_event directly.
+
+        Until now an OCT scan was attachable only to an event_crf row.
+        That worked for visits whose CRF an operator had already opened,
+        but planned-but-not-started visits (subject_event_status = 1)
+        have no event_crf yet, so the public OCT-upload portal's
+        StudySubjectFinder.findEventOnDate (which INNER-JOINs event_crf)
+        returned "no visit" for them — observed for EIAMD150's
+        2025-11-19 + 2026-03-24 planned visits.
+
+        Conceptually an OCT belongs to a visit, not to a CRF form. The
+        CRF binding is the implementation detail that lets us pivot
+        item_data on event_crf_id when the operator later commits the
+        derived metrics into the form.
+
+        This changeset:
+          * adds study_event_id (nullable FK to study_event) so a job
+            can bind to a planned visit before any CRF exists;
+          * backfills it from existing event_crf rows so today's 8
+            production jobs carry both pointers;
+          * adds an index for the new lookup path in
+            findEventOnDate + listSubjectJobs.
+
+        event_crf_id stays nullable. The two columns coexist:
+          * event_crf_id IS NULL, study_event_id IS NOT NULL
+            → scan acquired against a planned visit; commit deferred
+              until the operator opens the CRF.
+          * event_crf_id IS NOT NULL
+            → scan committed; study_event_id is set too for
+              consistency, derivable from event_crf.study_event_id.
+          * both NULL → parked (no visit context yet).
+    -->
+
+    <changeSet id="2026-06-23-retinal-job-study-event-id" author="muw">
+        <addColumn tableName="retinal_inference_job">
+            <column name="study_event_id" type="INTEGER"
+                    remarks="Optional binding to study_event — set when the scan is associated with a visit but the CRF (event_crf) has not been opened yet."/>
+        </addColumn>
+
+        <!-- Backfill from event_crf: every existing job has an
+             event_crf_id (rows pre-date this migration), so its
+             study_event_id is whatever the parent CRF references. -->
+        <sql splitStatements="false"><![CDATA[
+            UPDATE retinal_inference_job j
+               SET study_event_id = ec.study_event_id
+              FROM event_crf ec
+             WHERE j.event_crf_id = ec.event_crf_id
+               AND j.study_event_id IS NULL;
+        ]]></sql>
+
+        <addForeignKeyConstraint
+                baseTableName="retinal_inference_job"
+                baseColumnNames="study_event_id"
+                constraintName="fk_retinal_inference_job_study_event"
+                referencedTableName="study_event"
+                referencedColumnNames="study_event_id"
+                onDelete="RESTRICT"
+                onUpdate="RESTRICT"/>
+
+        <createIndex tableName="retinal_inference_job"
+                     indexName="idx_retinal_inference_job_study_event">
+            <column name="study_event_id"/>
+        </createIndex>
+
+        <rollback>
+            <dropIndex tableName="retinal_inference_job"
+                       indexName="idx_retinal_inference_job_study_event"/>
+            <dropForeignKeyConstraint
+                    baseTableName="retinal_inference_job"
+                    constraintName="fk_retinal_inference_job_study_event"/>
+            <dropColumn tableName="retinal_inference_job"
+                        columnName="study_event_id"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
