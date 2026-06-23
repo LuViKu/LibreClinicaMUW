@@ -294,6 +294,10 @@ const kpiTiles = computed<KpiTile[]>(() => {
 interface EtdrsRow {
   label: string
   values: string[]
+  /** 'circle' = cumulative central disc (1/3/6 mm). 'ring' = disjoint
+   *  annulus (1-3 / 3-6 mm). Drives the Kreis/Ring section split in
+   *  the rendered table. */
+  type: 'circle' | 'ring'
 }
 
 /* -------- Thickness from surface_y envelope (PR / ONL) -------------- */
@@ -394,10 +398,15 @@ const etdrsRows = computed<EtdrsRow[]>(() => {
     const keys = ['irf', 'srf', 'ped', 'total']
     const ring13 = ringDiff(keys, m.central_3mm as unknown as Contribution, m.central_1mm as unknown as Contribution)
     const ring36 = ringDiff(keys, m.central_6mm as unknown as Contribution, m.central_3mm as unknown as Contribution)
-    function row(label: string, c: Contribution | { irf?: number; srf?: number; ped?: number; total?: number }): EtdrsRow {
+    function row(
+      label: string,
+      type: 'circle' | 'ring',
+      c: Contribution | { irf?: number; srf?: number; ped?: number; total?: number },
+    ): EtdrsRow {
       const cc = c as unknown as Contribution
       return {
         label,
+        type,
         values: [
           formatNumber(cc.irf),
           formatNumber(cc.srf),
@@ -407,11 +416,11 @@ const etdrsRows = computed<EtdrsRow[]>(() => {
       }
     }
     return [
-      row(t('retinal.etdrs.ringLabel', { mm: 1 }), m.central_1mm ?? {}),
-      row(t('retinal.etdrs.ringLabel', { mm: 3 }), m.central_3mm ?? {}),
-      row(t('retinal.etdrs.ringLabel', { mm: 6 }), m.central_6mm ?? {}),
-      row(t('retinal.etdrs.ringLabelRange', { from: 1, to: 3 }), ring13),
-      row(t('retinal.etdrs.ringLabelRange', { from: 3, to: 6 }), ring36),
+      row(t('retinal.etdrs.ringLabel', { mm: 1 }), 'circle', m.central_1mm ?? {}),
+      row(t('retinal.etdrs.ringLabel', { mm: 3 }), 'circle', m.central_3mm ?? {}),
+      row(t('retinal.etdrs.ringLabel', { mm: 6 }), 'circle', m.central_6mm ?? {}),
+      row(t('retinal.etdrs.ringLabelRange', { from: 1, to: 3 }), 'ring', ring13),
+      row(t('retinal.etdrs.ringLabelRange', { from: 3, to: 6 }), 'ring', ring36),
     ]
   }
   if (gaPayload.value) {
@@ -423,11 +432,11 @@ const etdrsRows = computed<EtdrsRow[]>(() => {
     const ring13 = Math.max(0, (m.central_3mm ?? 0) - (m.central_1mm ?? 0))
     const ring36 = Math.max(0, (m.central_6mm ?? 0) - (m.central_3mm ?? 0))
     return [
-      { label: t('retinal.etdrs.ringLabel', { mm: 1 }), values: [formatNumber(m.central_1mm)] },
-      { label: t('retinal.etdrs.ringLabel', { mm: 3 }), values: [formatNumber(m.central_3mm)] },
-      { label: t('retinal.etdrs.ringLabel', { mm: 6 }), values: [formatNumber(m.central_6mm)] },
-      { label: t('retinal.etdrs.ringLabelRange', { from: 1, to: 3 }), values: [formatNumber(ring13)] },
-      { label: t('retinal.etdrs.ringLabelRange', { from: 3, to: 6 }), values: [formatNumber(ring36)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 1 }), type: 'circle', values: [formatNumber(m.central_1mm)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 3 }), type: 'circle', values: [formatNumber(m.central_3mm)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 6 }), type: 'circle', values: [formatNumber(m.central_6mm)] },
+      { label: t('retinal.etdrs.ringLabelRange', { from: 1, to: 3 }), type: 'ring', values: [formatNumber(ring13)] },
+      { label: t('retinal.etdrs.ringLabelRange', { from: 3, to: 6 }), type: 'ring', values: [formatNumber(ring36)] },
     ]
   }
   if (isThickness.value) {
@@ -449,14 +458,24 @@ const etdrsRows = computed<EtdrsRow[]>(() => {
       return a.count > 0 ? formatNumber(a.sum / a.count) : '—'
     }
     return [
-      { label: t('retinal.etdrs.ringLabel', { mm: 1 }), values: [mean(r05)] },
-      { label: t('retinal.etdrs.ringLabel', { mm: 3 }), values: [mean(r15)] },
-      { label: t('retinal.etdrs.ringLabel', { mm: 6 }), values: [mean(r30)] },
-      { label: t('retinal.etdrs.ringLabelRange', { from: 1, to: 3 }), values: [mean(r0515)] },
-      { label: t('retinal.etdrs.ringLabelRange', { from: 3, to: 6 }), values: [mean(r1530)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 1 }), type: 'circle', values: [mean(r05)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 3 }), type: 'circle', values: [mean(r15)] },
+      { label: t('retinal.etdrs.ringLabel', { mm: 6 }), type: 'circle', values: [mean(r30)] },
+      { label: t('retinal.etdrs.ringLabelRange', { from: 1, to: 3 }), type: 'ring', values: [mean(r0515)] },
+      { label: t('retinal.etdrs.ringLabelRange', { from: 3, to: 6 }), type: 'ring', values: [mean(r1530)] },
     ]
   }
   return []
+})
+
+/** Rows grouped by Kreis (cumulative discs) vs Ring (disjoint annuli). */
+const etdrsRowGroups = computed<{ type: 'circle' | 'ring'; rows: EtdrsRow[] }[]>(() => {
+  const circles = etdrsRows.value.filter((r) => r.type === 'circle')
+  const rings = etdrsRows.value.filter((r) => r.type === 'ring')
+  const out: { type: 'circle' | 'ring'; rows: EtdrsRow[] }[] = []
+  if (circles.length) out.push({ type: 'circle', rows: circles })
+  if (rings.length) out.push({ type: 'ring', rows: rings })
+  return out
 })
 
 /* -------- FundusOverlay task discriminator -------------------------- */
@@ -1202,26 +1221,50 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
               <DenseTable :bordered="false">
                 <template #header>
                   <tr class="text-left text-slate-400 text-[11px] uppercase tracking-[0.06em]">
+                    <!-- 2026-06-23 — first column header is now blank;
+                         the Kreis/Ring section sub-headers (rendered
+                         as <tr> rows below) replace the previous
+                         single "RING" label so cumulative discs and
+                         disjoint annuli read as distinct groups. -->
+                    <th scope="col" class="px-5 py-2.5 font-semibold"></th>
                     <th
-                      v-for="(h, idx) in etdrsHeaders"
+                      v-for="(h, idx) in etdrsHeaders.slice(1)"
                       :key="h"
                       scope="col"
-                      :class="['px-5 py-2.5 font-semibold', idx > 0 ? 'text-right' : '']"
+                      :class="['px-5 py-2.5 font-semibold', idx >= 0 ? 'text-right' : '']"
                     >
                       {{ h }}
                     </th>
                   </tr>
                 </template>
-                <tr v-for="row in etdrsRows" :key="row.label" data-testid="retinal-etdrs-row" class="border-t border-slate-100">
-                  <td class="px-5 py-3 font-medium text-slate-700 text-[13px]">{{ row.label }}</td>
-                  <td
-                    v-for="(value, idx) in row.values"
-                    :key="`${row.label}-${idx}`"
-                    class="px-5 py-3 text-[12.5px] tabular-nums font-mono text-right text-slate-700"
+                <template v-for="group in etdrsRowGroups" :key="group.type">
+                  <tr
+                    class="bg-slate-50/70 border-t border-slate-100"
+                    :data-testid="`retinal-etdrs-section-${group.type}`"
                   >
-                    {{ value }}
-                  </td>
-                </tr>
+                    <td
+                      :colspan="etdrsHeaders.length"
+                      class="px-5 py-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500"
+                    >
+                      {{ group.type === 'circle' ? t('retinal.etdrs.sectionCircle') : t('retinal.etdrs.sectionRing') }}
+                    </td>
+                  </tr>
+                  <tr
+                    v-for="row in group.rows"
+                    :key="row.label"
+                    data-testid="retinal-etdrs-row"
+                    class="border-t border-slate-100"
+                  >
+                    <td class="px-5 py-3 font-medium text-slate-700 text-[13px]">{{ row.label }}</td>
+                    <td
+                      v-for="(value, idx) in row.values"
+                      :key="`${row.label}-${idx}`"
+                      class="px-5 py-3 text-[12.5px] tabular-nums font-mono text-right text-slate-700"
+                    >
+                      {{ value }}
+                    </td>
+                  </tr>
+                </template>
               </DenseTable>
             </section>
 

@@ -2911,6 +2911,8 @@
       "colTotal": "[NEEDS_REVIEW] Total mm³",
       "colGaArea": "[NEEDS_REVIEW] GA area mm²",
       "colThicknessUm": "[NEEDS_REVIEW] Mean thickness µm",
+      "sectionCircle": "[NEEDS_REVIEW] Circle",
+      "sectionRing": "[NEEDS_REVIEW] Ring",
       "ringLabel": "[NEEDS_REVIEW] {mm} mm",
       "ringLabelRange": "[NEEDS_REVIEW] {from}–{to} mm",
       "selectionHint": "[NEEDS_REVIEW] Click regions on the fundus to sum biomarkers",
