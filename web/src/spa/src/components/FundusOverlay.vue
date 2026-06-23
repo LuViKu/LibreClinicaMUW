@@ -29,10 +29,11 @@
  * the per-B-scan count for the studies we serve is in the low
  * hundreds — well below the SVG redraw budget.
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { GeometryJson } from '@/api/retinal'
 import { artifactUrl } from '@/api/retinal'
+import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
 
 const { t } = useI18n()
 
@@ -336,6 +337,125 @@ function ringLabel(diameterMm: number): string {
 }
 
 /* ════════════════════════════════════════════════════════════════════
+ * Thickness heatmap (PR / ONL), 2026-06-23.
+ *
+ * <p>Architectural directive: stop deriving projection_*.png artifacts;
+ * render the en-face heatmap directly from the raw segmentation envelope
+ * the cluster ships. For surface_y tasks (PR + ONL) the envelope packs
+ * two surfaces (upper + lower) shaped {@code (n_surfaces, n_bscans, cols)}
+ * float32. Per-A-scan layer thickness = {@code (lower - upper) * pixel_axial_mm * 1000}
+ * µm, clipped to a sensible clinical range, then mapped through a viridis
+ * approximation onto an off-DOM canvas that we draw into the SVG via
+ * {@code <foreignObject>} positioned at scan_bbox.
+ * ════════════════════════════════════════════════════════════════════ */
+
+const jobIdRef = computed<number | null>(() => props.jobId ?? null)
+const { envelope: segEnvelope } = useSegmentationEnvelope(jobIdRef)
+
+const isLayerTask = computed<boolean>(
+  () => props.task === 'pr' || props.task === 'onl',
+)
+
+const thicknessCanvasEl = ref<HTMLCanvasElement | null>(null)
+
+/** Color stops for the µm → RGBA ramp (viridis-flavoured). */
+const THICKNESS_STOPS: ReadonlyArray<readonly [number, [number, number, number]]> = [
+  [0.00, [68, 1, 84]],
+  [0.33, [59, 82, 139]],
+  [0.66, [33, 145, 140]],
+  [1.00, [253, 231, 37]],
+] as const
+
+/** Clinical range for retinal-layer thickness; values outside clamp. */
+const THICKNESS_MIN_UM = 0
+const THICKNESS_MAX_UM = 150
+
+function rampColor(t: number): [number, number, number] {
+  const x = Math.max(0, Math.min(1, t))
+  for (let i = 0; i < THICKNESS_STOPS.length - 1; i++) {
+    const lo = THICKNESS_STOPS[i]
+    const hi = THICKNESS_STOPS[i + 1]
+    if (x <= hi[0]) {
+      const span = hi[0] - lo[0]
+      const f = span > 0 ? (x - lo[0]) / span : 0
+      return [
+        Math.round(lo[1][0] + f * (hi[1][0] - lo[1][0])),
+        Math.round(lo[1][1] + f * (hi[1][1] - lo[1][1])),
+        Math.round(lo[1][2] + f * (hi[1][2] - lo[1][2])),
+      ]
+    }
+  }
+  return THICKNESS_STOPS[THICKNESS_STOPS.length - 1][1] as [number, number, number]
+}
+
+function paintThicknessHeatmap(): void {
+  const canvas = thicknessCanvasEl.value
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  const env = segEnvelope.value
+  if (!isLayerTask.value || !env || env.kind !== 'surface_y' || env.shape.length !== 3) {
+    canvas.width = 1
+    canvas.height = 1
+    ctx.clearRect(0, 0, 1, 1)
+    return
+  }
+  const nSurfaces = env.shape[0] ?? 0
+  const nBscans = env.shape[1] ?? 0
+  const cols = env.shape[2] ?? 0
+  if (nSurfaces < 2 || nBscans === 0 || cols === 0) {
+    canvas.width = 1
+    canvas.height = 1
+    ctx.clearRect(0, 0, 1, 1)
+    return
+  }
+  // Pixel-to-µm conversion via the per-A-scan axial spacing from the
+  // geometry. Falls back to a Heidelberg-typical 3.87 µm when the
+  // geometry doesn't carry the spacing (shouldn't happen in practice).
+  const axialMmPerPx = props.geometry.bscan?.pixel_axial_mm ?? 0.00387
+  const data = env.data as Float32Array
+  const sliceStride = nBscans * cols
+  const upperBase = 0
+  const lowerBase = sliceStride
+
+  canvas.width = cols
+  canvas.height = nBscans
+  const img = ctx.createImageData(cols, nBscans)
+  for (let z = 0; z < nBscans; z++) {
+    const rowOffset = z * cols
+    for (let x = 0; x < cols; x++) {
+      const upper = data[upperBase + rowOffset + x] ?? 0
+      const lower = data[lowerBase + rowOffset + x] ?? 0
+      // Sentinel value 0 in either surface means "no detection at this
+      // A-scan" — render transparent so the underlying fundus reads
+      // through.
+      const px = (z * cols + x) * 4
+      if (upper <= 0 || lower <= 0 || lower < upper) {
+        img.data[px + 3] = 0
+        continue
+      }
+      const thicknessUm = (lower - upper) * axialMmPerPx * 1000
+      const clamped = Math.max(THICKNESS_MIN_UM, Math.min(THICKNESS_MAX_UM, thicknessUm))
+      const fraction = (clamped - THICKNESS_MIN_UM) / (THICKNESS_MAX_UM - THICKNESS_MIN_UM)
+      const [r, g, b] = rampColor(fraction)
+      img.data[px] = r
+      img.data[px + 1] = g
+      img.data[px + 2] = b
+      img.data[px + 3] = 220 // ~86% opacity
+    }
+  }
+  ctx.putImageData(img, 0, 0)
+}
+
+watch(
+  [segEnvelope, isLayerTask],
+  () => { paintThicknessHeatmap() },
+  { flush: 'post' },
+)
+onMounted(paintThicknessHeatmap)
+
+/* ════════════════════════════════════════════════════════════════════
  * Interactive ETDRS region selection (2026-06-22).
  * ════════════════════════════════════════════════════════════════════ */
 
@@ -490,7 +610,7 @@ function regionFill(id: EtdrsRegion): string {
         />
       </template>
       <image
-        v-else-if="projectionUrl"
+        v-else-if="projectionUrl && !isLayerTask"
         data-testid="enface-projection"
         :href="projectionUrl"
         :x="scanBbox.x"
@@ -500,6 +620,28 @@ function regionFill(id: EtdrsRegion): string {
         preserveAspectRatio="none"
         opacity="0.85"
       />
+
+      <!-- 2026-06-23 — In-canvas thickness heatmap for PR / ONL.
+           No projection_*.png artifact is produced any more; we
+           pull the surface_y segmentation envelope directly + paint
+           a viridis-flavoured colour ramp into a canvas inside a
+           <foreignObject> aligned to scan_bbox. The canvas pixel
+           buffer is (cols, n_bscans) and CSS-stretches uniformly
+           inside the foreignObject so it covers the same scan area
+           the fluid projection used to. -->
+      <foreignObject
+        v-if="isLayerTask"
+        data-testid="enface-thickness-heatmap"
+        :x="scanBbox.x"
+        :y="scanBbox.y"
+        :width="scanBbox.width"
+        :height="scanBbox.height"
+      >
+        <canvas
+          ref="thicknessCanvasEl"
+          style="width:100%;height:100%;display:block;image-rendering:auto;"
+        />
+      </foreignObject>
 
       <!-- 2. Scan-area outline -->
       <rect
