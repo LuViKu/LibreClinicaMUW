@@ -170,9 +170,27 @@ function printReport() {
             v-for="visit in props.data.visits"
             :key="visit.id"
             class="border-b border-slate-100"
+            :class="visit.dateMismatch ? 'bg-amber-50/50' : ''"
           >
             <td class="py-1.5 px-2 font-medium text-slate-700">{{ visit.label }}</td>
-            <td class="py-1.5 px-2 text-slate-500 tabular-nums">{{ visit.date || '—' }}</td>
+            <!-- 2026-06-23 user-feedback round — flag when the planned
+                 visit date doesn't line up with the .e2e acquisition
+                 date (> DATE_MISMATCH_DAYS apart). The displayed date is
+                 the acquisition date (per the composable's priority);
+                 the tooltip surfaces both raw dates so the operator
+                 can see which one to correct. -->
+            <td
+              class="py-1.5 px-2 text-slate-500 tabular-nums"
+              :class="visit.dateMismatch ? 'text-amber-700 font-medium' : ''"
+              :title="visit.dateMismatch
+                ? t('studyModules.namd.report.dateMismatchTitle', {
+                    visit: visit.visitDate ?? '—',
+                    acquired: visit.acquisitionDate ?? '—',
+                  })
+                : ''"
+            >
+              <span v-if="visit.dateMismatch" class="inline-block mr-1" aria-hidden="true">⚠</span>{{ visit.date || '—' }}
+            </td>
             <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.irf }}</td>
             <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.srf }}</td>
             <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.ped }}</td>

@@ -469,6 +469,13 @@ public class RetinalResultsApiController {
         // changelog). Also exports visit_date (date(study_event.date_start))
         // so the nAMD workspace + per-subject job list can show the
         // clinical date instead of the upload timestamp.
+        // 2026-06-23 — ORDER BY repeats the date expression instead of
+        // referencing the `visit_date` alias inside COALESCE: Postgres
+        // resolves bare aliases in ORDER BY but NOT inside compound
+        // expressions, so `COALESCE(j.acquisition_date, visit_date)`
+        // throws `column "visit_date" does not exist`. The duplicate
+        // is the only safe way to keep both columns ordered by the
+        // effective scan-time stamp.
         String sql = "SELECT j.job_id, j.task, j.eye_laterality, j.status, j.model_version, "
                 + "       j.completed_at, "
                 + "       date(se.date_start) AS visit_date, "
@@ -479,7 +486,7 @@ public class RetinalResultsApiController {
                 + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "  LEFT JOIN retinal_inference_result r ON r.job_id = j.job_id "
                 + " WHERE se.study_subject_id = ? "
-                + " ORDER BY COALESCE(j.acquisition_date, visit_date) ASC NULLS LAST, j.enqueued_at DESC";
+                + " ORDER BY COALESCE(j.acquisition_date, date(se.date_start)) ASC NULLS LAST, j.enqueued_at DESC";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, studySubjectId);

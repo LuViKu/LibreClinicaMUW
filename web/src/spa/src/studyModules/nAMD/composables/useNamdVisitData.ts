@@ -68,6 +68,28 @@ function isFluidPayload(p: unknown): p is FluidPayload {
   return !!b && typeof (b as { irf_mm3?: unknown }).irf_mm3 === 'number'
 }
 
+/**
+ * 2026-06-23 user-feedback round — maximum tolerated drift (days)
+ * between the planned visit date and the .e2e acquisition date
+ * before the visit is flagged as mismatched. Two days handles the
+ * common case where the visit is scheduled for a Friday but the
+ * scan is taken on the following Monday morning without
+ * re-scheduling.
+ */
+export const DATE_MISMATCH_DAYS = 2
+const MS_PER_DAY = 24 * 60 * 60 * 1000
+
+function isDateMismatch(
+  visitIso: string | null | undefined,
+  acquiredIso: string | null | undefined,
+): boolean {
+  if (!visitIso || !acquiredIso) return false
+  const v = parseDateMs(visitIso)
+  const a = parseDateMs(acquiredIso)
+  if (v == null || a == null) return false
+  return Math.abs(v - a) / MS_PER_DAY > DATE_MISMATCH_DAYS
+}
+
 /** Default mock fixture — mirrors the design's 8-visit T&E example. */
 function buildMockData(): NamdWorkspaceData {
   const patient: NamdPatient = {
@@ -79,14 +101,14 @@ function buildMockData(): NamdWorkspaceData {
     regimen: 'Treat-and-Extend · Aflibercept',
   }
   const visits: NamdVisit[] = [
-    { id: 'v01', label: 'V01', week: 0, date: '2025-09-01', irf: 38, srf: 22, ped: 16, crt: 412, bcva: 62, inj: 'Aflibercept', interval: 4, retinalJobId: null },
-    { id: 'v02', label: 'V02', week: 4, date: '2025-09-29', irf: 26, srf: 14, ped: 14, crt: 372, bcva: 66, inj: 'Aflibercept', interval: 4, retinalJobId: null },
-    { id: 'v03', label: 'V03', week: 8, date: '2025-10-27', irf: 18, srf: 8, ped: 12, crt: 336, bcva: 70, inj: 'Aflibercept', interval: 6, retinalJobId: null },
-    { id: 'v04', label: 'V04', week: 14, date: '2025-12-08', irf: 12, srf: 4, ped: 10, crt: 314, bcva: 72, inj: 'Aflibercept', interval: 8, retinalJobId: null },
-    { id: 'v05', label: 'V05', week: 22, date: '2026-02-02', irf: 10, srf: 2, ped: 9, crt: 302, bcva: 74, inj: 'Aflibercept', interval: 10, retinalJobId: null },
-    { id: 'v06', label: 'V06', week: 32, date: '2026-04-13', irf: 8, srf: 1, ped: 9, crt: 296, bcva: 75, inj: '', interval: 12, retinalJobId: null },
-    { id: 'v07', label: 'V07', week: 44, date: '2026-07-06', irf: 14, srf: 7, ped: 11, crt: 322, bcva: 73, inj: 'Aflibercept', interval: 8, retinalJobId: null },
-    { id: 'v08', label: 'V08', week: 52, date: '2026-08-31', irf: 22, srf: 9, ped: 12, crt: 348, bcva: 71, inj: '', interval: null, retinalJobId: null },
+    { id: 'v01', label: 'V01', week: 0, date: '2025-09-01', irf: 38, srf: 22, ped: 16, crt: 412, bcva: 62, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v02', label: 'V02', week: 4, date: '2025-09-29', irf: 26, srf: 14, ped: 14, crt: 372, bcva: 66, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v03', label: 'V03', week: 8, date: '2025-10-27', irf: 18, srf: 8, ped: 12, crt: 336, bcva: 70, inj: 'Aflibercept', interval: 6, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v04', label: 'V04', week: 14, date: '2025-12-08', irf: 12, srf: 4, ped: 10, crt: 314, bcva: 72, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v05', label: 'V05', week: 22, date: '2026-02-02', irf: 10, srf: 2, ped: 9, crt: 302, bcva: 74, inj: 'Aflibercept', interval: 10, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v06', label: 'V06', week: 32, date: '2026-04-13', irf: 8, srf: 1, ped: 9, crt: 296, bcva: 75, inj: '', interval: 12, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v07', label: 'V07', week: 44, date: '2026-07-06', irf: 14, srf: 7, ped: 11, crt: 322, bcva: 73, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v08', label: 'V08', week: 52, date: '2026-08-31', irf: 22, srf: 9, ped: 12, crt: 348, bcva: 71, inj: '', interval: null, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
   ]
   const current = visits[visits.length - 1]!
   const prev = visits[visits.length - 2]!
@@ -127,6 +149,9 @@ function fluidJobToVisit(
     //   3. completedAt — upload-pipeline timestamp (the day the
     //      operator clicked Hochladen). Last resort.
     date: summary.acquisitionDate ?? summary.visitDate ?? summary.completedAt ?? '',
+    acquisitionDate: summary.acquisitionDate ?? null,
+    visitDate: summary.visitDate ?? null,
+    dateMismatch: isDateMismatch(summary.visitDate, summary.acquisitionDate),
     irf: mm3ToNl(biomarkers?.irf_mm3),
     srf: mm3ToNl(biomarkers?.srf_mm3),
     ped: mm3ToNl(biomarkers?.ped_mm3),

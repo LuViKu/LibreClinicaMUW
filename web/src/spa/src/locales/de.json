@@ -258,6 +258,13 @@
     "rowsPerPage": "Zeilen",
     "empty": "Keine Teilnehmer für den aktuellen Filter.",
     "openSubject": "Öffnen →",
+    "visitsTrail": "{count} Visiten",
+    "visitNav": {
+      "first": "Erste Visite",
+      "prev": "Frühere Visite",
+      "next": "Nächste Visite",
+      "jumpLatest": "Letzte Visite"
+    },
     "signed": "Signiert",
     "scheduleHint": "Bitte unten eine/n Teilnehmer/-in auswählen, um die nächste Visite zu planen.",
     "metricsLink": "Studien-Statistik Details",
@@ -1548,49 +1555,38 @@
       },
       "imaging": {
         "option": {
-          "erfolgreich": "Erfolgreich",
-          "nichtMoeglich": "Nicht möglich",
-          "nichtVersucht": "Nicht versucht"
+          "ja": "Ja",
+          "nein": "Nein",
+          "unbekannt": "Unbekannt"
         },
-        "quality": {
-          "validation": "Qualität: 1 (unverwertbar) bis 5 (sehr gut)."
-        },
-        "failReason": {
-          "label": "Grund (nicht möglich)"
-        },
-        "notes": {
-          "label": "Bemerkung"
+        "reason": {
+          "label": "Grund (nicht akquiriert)"
         }
       },
       "spectralisOct": {
         "label": "Spectralis SD-OCT",
-        "description": "Heidelberg Spectralis SD-OCT — Akquisition + Qualität pro Auge.",
-        "acquired": { "label": "OCT akquiriert?" },
-        "quality": { "label": "Bildqualität (1–5)" }
+        "description": "Heidelberg Spectralis SD-OCT — Akquisition akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "OCT akquiriert?" }
       },
       "spectralisFaf": {
         "label": "Spectralis FAF",
-        "description": "Heidelberg Spectralis Fundus-Autofluoreszenz — Akquisition + Qualität pro Auge.",
-        "acquired": { "label": "FAF akquiriert?" },
-        "quality": { "label": "Bildqualität (1–5)" }
+        "description": "Heidelberg Spectralis Fundus-Autofluoreszenz akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "FAF akquiriert?" }
       },
       "plexEliteOcta": {
         "label": "ZEISS PLEX Elite OCT-A",
-        "description": "PLEX Elite 9000 OCT-Angiographie — Akquisition + Qualität pro Auge.",
-        "acquired": { "label": "OCT-A akquiriert?" },
-        "quality": { "label": "Bildqualität (1–5)" }
+        "description": "PLEX Elite 9000 OCT-Angiographie akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "OCT-A akquiriert?" }
       },
       "zeissClarus": {
         "label": "ZEISS Clarus 700",
-        "description": "Ultra-Weitwinkel-Fundusaufnahme — Akquisition + Qualität pro Auge.",
-        "acquired": { "label": "Fundusbild akquiriert?" },
-        "quality": { "label": "Bildqualität (1–5)" }
+        "description": "Ultra-Weitwinkel-Fundusaufnahme akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "Fundusbild akquiriert?" }
       },
       "topconMaestro2Oct": {
         "label": "Topcon Maestro2 OCT",
-        "description": "Topcon Maestro 2 SD-OCT — Akquisition + Qualität pro Auge.",
-        "acquired": { "label": "OCT akquiriert?" },
-        "quality": { "label": "Bildqualität (1–5)" }
+        "description": "Topcon Maestro 2 SD-OCT akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "OCT akquiriert?" }
       },
       "plBcva": {
         "label": "PL-BCVA (Pinhole)",

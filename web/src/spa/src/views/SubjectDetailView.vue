@@ -1066,13 +1066,19 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
              (passed via subject-oid, since its composable
              Number.parseInt()'s it) and the subject label for the
              in-link confirmation. -->
-        <template v-for="entry in workspaceInjections" :key="entry.key">
-          <component
-            :is="entry.component"
-            :subject-oid="retinalNumericId != null ? String(retinalNumericId) : null"
-            :subject-label="subject?.id ?? null"
-          />
-        </template>
+        <!-- 2026-06-23 user-feedback round — `mb-5` matches the
+             vertical rhythm of the surrounding cards so the
+             workspace CTA reads as its own block and doesn't visually
+             collide with the events panel below. -->
+        <div v-if="workspaceInjections.length" class="mb-5">
+          <template v-for="entry in workspaceInjections" :key="entry.key">
+            <component
+              :is="entry.component"
+              :subject-oid="retinalNumericId != null ? String(retinalNumericId) : null"
+              :subject-label="subject?.id ?? null"
+            />
+          </template>
+        </div>
 
         <!-- Events / casebook -->
         <!-- Phase E.6 polish — `#events` anchor target for post-

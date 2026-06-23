@@ -95,6 +95,7 @@
         "history": "Behandlungs- und Befundverlauf",
         "octBaselineVsCurrent": "OCT · Baseline vs. aktueller Besuch",
         "octCaption": "Foveale B-Scan-Ebene · KI-Segmentierung eingeblendet",
+        "dateMismatchTitle": "Geplantes Visitendatum ({visit}) weicht vom OCT-Akquisitionsdatum ({acquired}) ab.",
         "signaturePhysician": "Unterschrift Arzt/Ärztin",
         "signatureDate": "Datum"
       }

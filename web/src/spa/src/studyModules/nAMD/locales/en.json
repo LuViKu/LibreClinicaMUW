@@ -95,6 +95,7 @@
         "history": "[NEEDS_REVIEW] Treatment and findings history",
         "octBaselineVsCurrent": "[NEEDS_REVIEW] OCT · Baseline vs. current visit",
         "octCaption": "[NEEDS_REVIEW] Foveal B-scan plane · AI segmentation overlaid",
+        "dateMismatchTitle": "[NEEDS_REVIEW] Planned visit date ({visit}) does not match OCT acquisition date ({acquired}).",
         "signaturePhysician": "[NEEDS_REVIEW] Physician signature",
         "signatureDate": "[NEEDS_REVIEW] Date"
       }

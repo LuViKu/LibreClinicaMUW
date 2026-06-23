@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { RouterLink, useRoute } from 'vue-router'
 
 import SideRail from '@/components/SideRail.vue'
-import DenseTable from '@/components/DenseTable.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 
@@ -192,6 +191,50 @@ adoptFilterFromQuery()
 
 const ariaSortLabel = (subject: Subject) =>
   subject.signed ? t('subjectMatrix.ariaSigned', { id: subject.id }) : t('subjectMatrix.ariaUnsigned', { id: subject.id })
+
+/**
+ * 2026-06-23 user-feedback round — Panel D of subject-matrix-visits.html.
+ *
+ * <p>The matrix table grew wider than the viewport whenever a study
+ * accrued enough visits (RIS at 7 + the GA cohort + observational
+ * arms), pushing the page into horizontal scroll and burying the
+ * "Öffnen" action off the right edge. Panel D's answer: freeze the
+ * Subject column on the left and the Öffnen column on the right while
+ * the visit columns scroll horizontally INSIDE the table. The page
+ * itself never overflows; the operator uses the chevron buttons (or
+ * scrolls the table directly) to slide through the visit timeline.
+ *
+ * <p>On first paint we scroll to the right edge so the most recent
+ * visit is in view — matches the design's "Jump to latest" default.
+ */
+const tableScrollerEl = ref<HTMLDivElement | null>(null)
+function scrollVisits(direction: -1 | 1): void {
+  const el = tableScrollerEl.value
+  if (!el) return
+  el.scrollBy({ left: direction * 320, behavior: 'smooth' })
+}
+function scrollToLatest(): void {
+  const el = tableScrollerEl.value
+  if (!el) return
+  el.scrollTo({ left: el.scrollWidth, behavior: 'smooth' })
+}
+function scrollToOldest(): void {
+  const el = tableScrollerEl.value
+  if (!el) return
+  el.scrollTo({ left: 0, behavior: 'smooth' })
+}
+
+// When the first batch of subjects loads (or the eventColumns shape
+// changes — e.g. a study switch), park the scroll at the most recent
+// visit so the operator opens the page on TODAY's column rather than
+// on the dim, far-historical baseline.
+watch(eventColumns, async (next, prev) => {
+  if (next.length === 0) return
+  if (prev && prev.length === next.length) return
+  await nextTick()
+  const el = tableScrollerEl.value
+  if (el) el.scrollLeft = el.scrollWidth
+}, { immediate: false })
 </script>
 
 <template>
@@ -252,7 +295,7 @@ const ariaSortLabel = (subject: Subject) =>
       </template>
     </SideRail>
 
-    <main class="flex-1 px-8 py-6 max-w-[1200px]">
+    <main class="flex-1 px-8 py-6 min-w-0">
       <!-- Phase E.6 — schedule-visit hint from HomeView's
            "Schedule visit" card. The actual dialog lives on
            SubjectDetailView; this banner tells the operator to drill
@@ -354,99 +397,196 @@ const ariaSortLabel = (subject: Subject) =>
         </div>
       </div>
 
-      <DenseTable :sticky-header-offset="56">
-        <template #header>
-          <tr class="border-b border-slate-200">
-            <th scope="col" class="px-3 py-2 font-medium w-24">{{ t('subjectMatrix.column.subject') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium w-20">{{ t('subjectMatrix.column.gender') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium w-16">{{ t('ophth.studyEye.column') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium w-28">{{ t('subjectMatrix.column.group') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium w-24">{{ t('subjectMatrix.column.enrolled') }}</th>
-            <th
-              v-for="col in eventColumns"
-              :key="col.oid"
-              scope="col"
-              class="px-3 py-2 font-medium whitespace-nowrap"
-              :title="col.title"
-            >
-              {{ col.label }}
-            </th>
-            <th scope="col" class="px-3 py-2 font-medium w-20">{{ t('subjectMatrix.column.signed') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium text-right w-20"></th>
-          </tr>
-        </template>
-
-        <tr v-if="subjects.isLoading">
-          <td :colspan="6 + eventColumns.length" class="px-3 py-6 text-center text-slate-500 italic">
-            {{ t('common.loading') }}
-          </td>
-        </tr>
-
-        <tr v-else-if="subjects.error">
-          <td :colspan="6 + eventColumns.length" class="px-3 py-6 text-center text-rose-700">
-            {{ subjects.error }}
-          </td>
-        </tr>
-
-        <tr v-else-if="subjects.visibleCount === 0">
-          <td :colspan="6 + eventColumns.length" class="px-3 py-6 text-center text-slate-500">
-            {{ t('subjectMatrix.empty') }}
-          </td>
-        </tr>
-
-        <tr
-          v-for="subject in subjects.filtered"
-          :key="subject.id"
-          :aria-label="ariaSortLabel(subject)"
+      <!-- 2026-06-23 user-feedback round — Panel D layout. The
+           Subject column on the left and the action column on the
+           right stay frozen via `position:sticky` while the visit
+           columns scroll horizontally inside the table's own
+           overflow-x-auto wrapper. The page itself never overflows.
+           Chevron + Jump-to-latest controls let the operator slide
+           through long visit timelines without finger-scrolling. -->
+      <div
+        class="rounded-md border border-slate-200 bg-white overflow-hidden"
+        data-testid="subject-matrix-panel"
+      >
+        <div
+          v-if="eventColumns.length > 0"
+          class="flex items-center justify-between gap-2 px-3 py-2 border-b border-slate-100 bg-slate-50/70 text-[11px] text-slate-500"
         >
-          <td class="px-3 py-2 font-medium">
-            <RouterLink :to="`/subjects/${subject.id}`" class="text-muw-blue hover:underline">
-              {{ subject.id }}
-            </RouterLink>
-            <span v-if="subject.secondaryId" class="ml-1.5 text-slate-400 text-[11px] font-normal">
-              · {{ subject.secondaryId }}
-            </span>
-          </td>
-          <td class="px-3 py-2 text-slate-600">{{ subject.gender }}</td>
-          <td class="px-3 py-2 text-slate-600 font-mono text-[11px]">
-            <span v-if="subject.studyEye" class="px-1.5 py-0.5 rounded bg-muw-blue-50 text-muw-blue border border-muw-blue-100">
-              {{ subject.studyEye }}
-            </span>
-            <span v-else class="text-slate-400">—</span>
-          </td>
-          <td class="px-3 py-2 text-slate-600">{{ subject.groupLabel ?? '—' }}</td>
-          <td class="px-3 py-2 text-slate-600 font-mono text-xs">{{ formatDate(subject.enrolledOn) }}</td>
+          <span data-testid="subject-matrix-visit-count">
+            {{ t('subjectMatrix.visitsTrail', { count: eventColumns.length }) }}
+          </span>
+          <div class="flex items-center gap-1.5">
+            <button
+              type="button"
+              class="w-6 h-6 rounded-md border border-slate-200 bg-white text-slate-500 inline-flex items-center justify-center hover:bg-slate-50"
+              :aria-label="t('subjectMatrix.visitNav.first')"
+              data-testid="subject-matrix-scroll-oldest"
+              @click="scrollToOldest"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polyline points="11 6 5 12 11 18" />
+                <polyline points="19 6 13 12 19 18" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="w-6 h-6 rounded-md border border-slate-200 bg-white text-slate-500 inline-flex items-center justify-center hover:bg-slate-50"
+              :aria-label="t('subjectMatrix.visitNav.prev')"
+              data-testid="subject-matrix-scroll-prev"
+              @click="scrollVisits(-1)"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="w-6 h-6 rounded-md border border-slate-200 bg-white text-slate-500 inline-flex items-center justify-center hover:bg-slate-50"
+              :aria-label="t('subjectMatrix.visitNav.next')"
+              data-testid="subject-matrix-scroll-next"
+              @click="scrollVisits(1)"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              class="ml-1 px-2 py-0.5 rounded-md border border-slate-200 bg-white text-[11px] font-medium text-muw-blue inline-flex items-center gap-1 hover:bg-slate-50"
+              data-testid="subject-matrix-scroll-latest"
+              @click="scrollToLatest"
+            >
+              {{ t('subjectMatrix.visitNav.jumpLatest') }}
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                <path d="M5 12h14M13 5l7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+        </div>
 
-          <td v-for="cell in subject.events" :key="cell.eventDefinitionOid" class="px-3 py-2">
-            <div class="flex items-center gap-1.5">
-              <StatusPill :variant="statusVariant(cell.status)">{{ statusLabel(cell.status) }}</StatusPill>
-              <span
-                v-if="cell.openQueries > 0"
-                class="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-1.5"
-                :title="t('subjectMatrix.openQueriesTooltip', { count: cell.openQueries })"
+        <div
+          ref="tableScrollerEl"
+          class="overflow-x-auto"
+          data-testid="subject-matrix-scroller"
+        >
+          <table
+            class="text-left border-separate text-sm"
+            style="border-spacing: 0; min-width: 100%"
+          >
+            <thead>
+              <tr class="bg-slate-50 text-slate-500 text-[11px] font-medium">
+                <th
+                  scope="col"
+                  class="sticky left-0 z-20 bg-slate-50 px-3 py-2 border-b border-slate-200 whitespace-nowrap"
+                  style="box-shadow: 1px 0 0 #e2e8f0"
+                >
+                  {{ t('subjectMatrix.column.subject') }}
+                </th>
+                <th scope="col" class="px-3 py-2 border-b border-slate-200 whitespace-nowrap">{{ t('subjectMatrix.column.gender') }}</th>
+                <th scope="col" class="px-3 py-2 border-b border-slate-200 whitespace-nowrap">{{ t('ophth.studyEye.column') }}</th>
+                <th scope="col" class="px-3 py-2 border-b border-slate-200 whitespace-nowrap">{{ t('subjectMatrix.column.group') }}</th>
+                <th scope="col" class="px-3 py-2 border-b border-slate-200 whitespace-nowrap">{{ t('subjectMatrix.column.enrolled') }}</th>
+                <th
+                  v-for="col in eventColumns"
+                  :key="col.oid"
+                  scope="col"
+                  class="px-3 py-2 border-b border-slate-200 whitespace-nowrap text-center"
+                  :title="col.title"
+                  style="min-width: 96px"
+                >
+                  {{ col.label }}
+                </th>
+                <th scope="col" class="px-3 py-2 border-b border-slate-200 whitespace-nowrap">{{ t('subjectMatrix.column.signed') }}</th>
+                <th
+                  scope="col"
+                  class="sticky right-0 z-20 bg-slate-50 px-3 py-2 border-b border-slate-200 text-right whitespace-nowrap"
+                  style="box-shadow: -1px 0 0 #e2e8f0"
+                />
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="subjects.isLoading">
+                <td :colspan="7 + eventColumns.length" class="px-3 py-6 text-center text-slate-500 italic">
+                  {{ t('common.loading') }}
+                </td>
+              </tr>
+              <tr v-else-if="subjects.error">
+                <td :colspan="7 + eventColumns.length" class="px-3 py-6 text-center text-rose-700">
+                  {{ subjects.error }}
+                </td>
+              </tr>
+              <tr v-else-if="subjects.visibleCount === 0">
+                <td :colspan="7 + eventColumns.length" class="px-3 py-6 text-center text-slate-500">
+                  {{ t('subjectMatrix.empty') }}
+                </td>
+              </tr>
+              <tr
+                v-for="subject in subjects.filtered"
+                :key="subject.id"
+                :aria-label="ariaSortLabel(subject)"
+                class="group hover:bg-slate-50/60"
               >
-                {{ cell.openQueries }}
-              </span>
-            </div>
-          </td>
+                <td
+                  class="sticky left-0 z-10 bg-white group-hover:bg-slate-50 px-3 py-2 font-medium border-t border-slate-100 whitespace-nowrap"
+                  style="box-shadow: 1px 0 0 #e2e8f0"
+                >
+                  <RouterLink :to="`/subjects/${subject.id}`" class="text-muw-blue hover:underline">
+                    {{ subject.id }}
+                  </RouterLink>
+                  <span v-if="subject.secondaryId" class="ml-1.5 text-slate-400 text-[11px] font-normal">
+                    · {{ subject.secondaryId }}
+                  </span>
+                </td>
+                <td class="px-3 py-2 text-slate-600 border-t border-slate-100 whitespace-nowrap">{{ subject.gender }}</td>
+                <td class="px-3 py-2 text-slate-600 font-mono text-[11px] border-t border-slate-100 whitespace-nowrap">
+                  <span v-if="subject.studyEye" class="px-1.5 py-0.5 rounded bg-muw-blue-50 text-muw-blue border border-muw-blue-100">
+                    {{ subject.studyEye }}
+                  </span>
+                  <span v-else class="text-slate-400">—</span>
+                </td>
+                <td class="px-3 py-2 text-slate-600 border-t border-slate-100 whitespace-nowrap">{{ subject.groupLabel ?? '—' }}</td>
+                <td class="px-3 py-2 text-slate-600 font-mono text-xs border-t border-slate-100 whitespace-nowrap">{{ formatDate(subject.enrolledOn) }}</td>
 
-          <td class="px-3 py-2">
-            <StatusPill v-if="subject.signed" variant="success">{{ t('subjectMatrix.signed') }}</StatusPill>
-            <span v-else class="text-slate-400">—</span>
-          </td>
+                <td
+                  v-for="cell in subject.events"
+                  :key="cell.eventDefinitionOid"
+                  class="px-3 py-2 border-t border-slate-100"
+                >
+                  <div class="flex items-center justify-center gap-1.5">
+                    <StatusPill :variant="statusVariant(cell.status)">{{ statusLabel(cell.status) }}</StatusPill>
+                    <span
+                      v-if="cell.openQueries > 0"
+                      class="text-[10px] font-semibold text-rose-700 bg-rose-50 border border-rose-200 rounded-full px-1.5"
+                      :title="t('subjectMatrix.openQueriesTooltip', { count: cell.openQueries })"
+                    >
+                      {{ cell.openQueries }}
+                    </span>
+                  </div>
+                </td>
 
-          <td class="px-3 py-2 text-right">
-            <RouterLink :to="`/subjects/${subject.id}`" class="text-muw-blue text-xs hover:underline">
-              {{ t('subjectMatrix.openSubject') }}
-            </RouterLink>
-          </td>
-        </tr>
+                <td class="px-3 py-2 border-t border-slate-100 whitespace-nowrap">
+                  <StatusPill v-if="subject.signed" variant="success">{{ t('subjectMatrix.signed') }}</StatusPill>
+                  <span v-else class="text-slate-400">—</span>
+                </td>
 
-        <template #statusBar>
+                <td
+                  class="sticky right-0 z-10 bg-white group-hover:bg-slate-50 px-3 py-2 text-right border-t border-slate-100 whitespace-nowrap"
+                  style="box-shadow: -1px 0 0 #e2e8f0"
+                >
+                  <RouterLink :to="`/subjects/${subject.id}`" class="text-muw-blue text-xs hover:underline">
+                    {{ t('subjectMatrix.openSubject') }}
+                  </RouterLink>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="flex items-center justify-between px-3 py-2 text-[11px] text-slate-500 bg-slate-50/40 border-t border-slate-100">
           <span>{{ t('subjectMatrix.showingCount', { visible: subjects.visibleCount, total: subjects.totalCount }) }}</span>
           <span>{{ t('subjectMatrix.rowsPerPage') }}: 25</span>
-        </template>
-      </DenseTable>
+        </div>
+      </div>
     </main>
 
     <StudyMetricsModal :open="metricsModalOpen" @close="metricsModalOpen = false" />

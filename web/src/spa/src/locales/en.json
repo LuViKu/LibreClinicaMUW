@@ -258,6 +258,13 @@
     "rowsPerPage": "Rows",
     "empty": "No subjects match the current filter.",
     "openSubject": "Open →",
+    "visitsTrail": "[NEEDS_REVIEW] {count} visits",
+    "visitNav": {
+      "first": "[NEEDS_REVIEW] First visit",
+      "prev": "[NEEDS_REVIEW] Previous visit",
+      "next": "[NEEDS_REVIEW] Next visit",
+      "jumpLatest": "[NEEDS_REVIEW] Latest visit"
+    },
     "signed": "Signed",
     "scheduleHint": "Pick a subject below to schedule the next visit.",
     "metricsLink": "Study statistics details",
@@ -1546,49 +1553,38 @@
       },
       "imaging": {
         "option": {
-          "erfolgreich": "[NEEDS_REVIEW] Successful",
-          "nichtMoeglich": "[NEEDS_REVIEW] Not possible",
-          "nichtVersucht": "[NEEDS_REVIEW] Not attempted"
+          "ja": "[NEEDS_REVIEW] Yes",
+          "nein": "[NEEDS_REVIEW] No",
+          "unbekannt": "[NEEDS_REVIEW] Unknown"
         },
-        "quality": {
-          "validation": "[NEEDS_REVIEW] Quality: 1 (unusable) to 5 (excellent)."
-        },
-        "failReason": {
-          "label": "[NEEDS_REVIEW] Reason (not possible)"
-        },
-        "notes": {
-          "label": "[NEEDS_REVIEW] Notes"
+        "reason": {
+          "label": "[NEEDS_REVIEW] Reason (not acquired)"
         }
       },
       "spectralisOct": {
         "label": "[NEEDS_REVIEW] Spectralis SD-OCT",
-        "description": "[NEEDS_REVIEW] Heidelberg Spectralis SD-OCT — acquisition + quality per eye.",
-        "acquired": { "label": "[NEEDS_REVIEW] OCT acquired?" },
-        "quality": { "label": "[NEEDS_REVIEW] Image quality (1–5)" }
+        "description": "[NEEDS_REVIEW] Heidelberg Spectralis SD-OCT acquired? (Yes/No/Unknown) per eye.",
+        "acquired": { "label": "[NEEDS_REVIEW] OCT acquired?" }
       },
       "spectralisFaf": {
         "label": "[NEEDS_REVIEW] Spectralis FAF",
-        "description": "[NEEDS_REVIEW] Heidelberg Spectralis fundus autofluorescence — acquisition + quality per eye.",
-        "acquired": { "label": "[NEEDS_REVIEW] FAF acquired?" },
-        "quality": { "label": "[NEEDS_REVIEW] Image quality (1–5)" }
+        "description": "[NEEDS_REVIEW] Heidelberg Spectralis fundus autofluorescence acquired? (Yes/No/Unknown) per eye.",
+        "acquired": { "label": "[NEEDS_REVIEW] FAF acquired?" }
       },
       "plexEliteOcta": {
         "label": "[NEEDS_REVIEW] ZEISS PLEX Elite OCT-A",
-        "description": "[NEEDS_REVIEW] PLEX Elite 9000 OCT angiography — acquisition + quality per eye.",
-        "acquired": { "label": "[NEEDS_REVIEW] OCT-A acquired?" },
-        "quality": { "label": "[NEEDS_REVIEW] Image quality (1–5)" }
+        "description": "[NEEDS_REVIEW] PLEX Elite 9000 OCT angiography acquired? (Yes/No/Unknown) per eye.",
+        "acquired": { "label": "[NEEDS_REVIEW] OCT-A acquired?" }
       },
       "zeissClarus": {
         "label": "[NEEDS_REVIEW] ZEISS Clarus 700",
-        "description": "[NEEDS_REVIEW] Ultra-widefield fundus photography — acquisition + quality per eye.",
-        "acquired": { "label": "[NEEDS_REVIEW] Fundus image acquired?" },
-        "quality": { "label": "[NEEDS_REVIEW] Image quality (1–5)" }
+        "description": "[NEEDS_REVIEW] Ultra-widefield fundus photography acquired? (Yes/No/Unknown) per eye.",
+        "acquired": { "label": "[NEEDS_REVIEW] Fundus image acquired?" }
       },
       "topconMaestro2Oct": {
         "label": "[NEEDS_REVIEW] Topcon Maestro2 OCT",
-        "description": "[NEEDS_REVIEW] Topcon Maestro 2 SD-OCT — acquisition + quality per eye.",
-        "acquired": { "label": "[NEEDS_REVIEW] OCT acquired?" },
-        "quality": { "label": "[NEEDS_REVIEW] Image quality (1–5)" }
+        "description": "[NEEDS_REVIEW] Topcon Maestro 2 SD-OCT acquired? (Yes/No/Unknown) per eye.",
+        "acquired": { "label": "[NEEDS_REVIEW] OCT acquired?" }
       },
       "plBcva": {
         "label": "[NEEDS_REVIEW] PL-BCVA (Pinhole)",
