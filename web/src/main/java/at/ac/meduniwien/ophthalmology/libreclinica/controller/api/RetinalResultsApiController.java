@@ -521,12 +521,16 @@ public class RetinalResultsApiController {
         if (visGuard != null) return visGuard;
 
         List<RetinalTrendsPointDto> out = new ArrayList<>();
+        // 2026-06-23 — resolve study_subject via either the event_crf
+        // chain or the direct study_event_id binding, mirroring the
+        // listSubjectJobs fix. Planned-visit-bound jobs still need to
+        // appear in the trends timeseries.
         String sql = "SELECT j.job_id, j.completed_at, j.eye_laterality, "
                 + "       r.primary_metric_value, r.primary_metric_unit, r.output_payload "
                 + "  FROM retinal_inference_job j "
                 + "  JOIN retinal_inference_result r ON r.job_id = j.job_id "
-                + "  JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + " WHERE se.study_subject_id = ? "
                 + "   AND j.task = ? "
                 + "   AND j.status = 'done' "
@@ -1875,6 +1879,11 @@ public class RetinalResultsApiController {
     }
 
     private JobRow fetchJobDetail(Connection c, long jobId) throws SQLException {
+        // 2026-06-23 — study_event lookup now uses COALESCE on the
+        // two binding paths so planned-visit-bound jobs (no event_crf
+        // yet) still resolve a studyId. Without this the visibility
+        // guard rejects the job with "belongs to a different study"
+        // because studyId comes back null.
         String sql = "SELECT j.job_id, j.event_crf_id, j.task, j.e2e_path, "
                 + "       j.eye_laterality, j.status, j.enqueued_at, j.completed_at, j.model_version, "
                 + "       j.scan_index, "
@@ -1883,7 +1892,7 @@ public class RetinalResultsApiController {
                 + "  FROM retinal_inference_job j "
                 + "  LEFT JOIN retinal_inference_result r ON r.job_id = j.job_id "
                 + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "  LEFT JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + "  LEFT JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "  LEFT JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
                 + " WHERE j.job_id = ?";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
@@ -2202,18 +2211,21 @@ public class RetinalResultsApiController {
     }
 
     private PreviousJobView fetchPreviousJob(Connection c, long currentJobId) throws SQLException {
+        // 2026-06-23 — subject resolution via COALESCE on the two
+        // binding paths so previous-job lookup still works for
+        // planned-visit-bound jobs (no event_crf yet).
         String sql = "WITH cur AS ("
                 + "  SELECT j.job_id, j.task, j.eye_laterality, j.completed_at, "
                 + "         ev.study_subject_id "
                 + "    FROM retinal_inference_job j "
-                + "    JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
-                + "    JOIN study_event ev ON ev.study_event_id = ec.study_event_id "
+                + "    LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "    JOIN study_event ev ON ev.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "   WHERE j.job_id = ?) "
                 + "SELECT prev.job_id, prev.completed_at, prev_r.output_payload::text "
                 + "  FROM retinal_inference_job prev "
                 + "  JOIN retinal_inference_result prev_r ON prev_r.job_id = prev.job_id "
-                + "  JOIN event_crf ec2 ON ec2.event_crf_id = prev.event_crf_id "
-                + "  JOIN study_event ev2 ON ev2.study_event_id = ec2.study_event_id "
+                + "  LEFT JOIN event_crf ec2 ON ec2.event_crf_id = prev.event_crf_id "
+                + "  JOIN study_event ev2 ON ev2.study_event_id = COALESCE(ec2.study_event_id, prev.study_event_id) "
                 + "  JOIN cur ON cur.study_subject_id = ev2.study_subject_id "
                 + "   AND cur.task = prev.task "
                 + "   AND cur.eye_laterality = prev.eye_laterality "
