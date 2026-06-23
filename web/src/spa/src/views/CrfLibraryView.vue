@@ -310,7 +310,41 @@ const visibleRows = computed(() =>
       <p v-else-if="lib.error" class="text-rose-700">{{ lib.error }}</p>
       <p v-else-if="visibleRows.length === 0" class="text-slate-500 italic">{{ t('crfLibrary.empty') }}</p>
 
-      <ul v-else class="space-y-3">
+      <!-- Create form — 2026-06-23 user-feedback round: moved from
+           below the CRF list to ABOVE so the operator can fill it
+           out without scrolling past every existing CRF to reach
+           the inputs. -->
+      <div v-if="createOpen" class="mb-4 rounded-md border border-slate-200 bg-white p-4">
+        <h2 class="text-sm font-semibold mb-3">{{ t('crfLibrary.createHeading') }}</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="col-span-2">
+            <FieldLabel for="crf-create-name" required>{{ t('crfLibrary.crfName') }}</FieldLabel>
+            <TextInput id="crf-create-name" v-model="createForm.name" />
+            <ErrorText v-if="createErrors.name">{{ createErrors.name }}</ErrorText>
+          </div>
+          <div class="col-span-2">
+            <FieldLabel for="crf-create-desc">{{ t('crfLibrary.crfDescription') }}</FieldLabel>
+            <TextInput id="crf-create-desc" v-model="createForm.description" />
+          </div>
+        </div>
+        <ErrorText v-if="createFormError">{{ createFormError }}</ErrorText>
+        <div class="mt-3 flex items-center gap-2">
+          <button
+            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+            @click="createOpen = false"
+          >{{ t('common.cancel') }}</button>
+          <button
+            class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
+            :disabled="createForm.name.trim() === '' || isCreating"
+            @click="submitCreate"
+          >{{ isCreating ? t('common.saving') : t('crfLibrary.submitCreate') }}</button>
+        </div>
+      </div>
+
+      <ul
+        v-if="!lib.isLoading && !lib.error && visibleRows.length > 0"
+        class="space-y-3"
+      >
         <li
           v-for="crf in visibleRows"
           :key="crf.oid"
@@ -437,34 +471,6 @@ const visibleRows = computed(() =>
           </div>
         </li>
       </ul>
-
-      <!-- Create form -->
-      <div v-if="createOpen" class="mt-6 rounded-md border border-slate-200 bg-white p-4">
-        <h2 class="text-sm font-semibold mb-3">{{ t('crfLibrary.createHeading') }}</h2>
-        <div class="grid grid-cols-2 gap-3">
-          <div class="col-span-2">
-            <FieldLabel for="crf-create-name" required>{{ t('crfLibrary.crfName') }}</FieldLabel>
-            <TextInput id="crf-create-name" v-model="createForm.name" />
-            <ErrorText v-if="createErrors.name">{{ createErrors.name }}</ErrorText>
-          </div>
-          <div class="col-span-2">
-            <FieldLabel for="crf-create-desc">{{ t('crfLibrary.crfDescription') }}</FieldLabel>
-            <TextInput id="crf-create-desc" v-model="createForm.description" />
-          </div>
-        </div>
-        <ErrorText v-if="createFormError">{{ createFormError }}</ErrorText>
-        <div class="mt-3 flex items-center gap-2">
-          <button
-            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
-            @click="createOpen = false"
-          >{{ t('common.cancel') }}</button>
-          <button
-            class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
-            :disabled="createForm.name.trim() === '' || isCreating"
-            @click="submitCreate"
-          >{{ isCreating ? t('common.saving') : t('crfLibrary.submitCreate') }}</button>
-        </div>
-      </div>
 
       <!-- Upload form -->
       <div v-if="uploading" class="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4">
