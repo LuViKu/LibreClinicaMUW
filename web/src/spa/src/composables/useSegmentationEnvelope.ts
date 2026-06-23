@@ -37,10 +37,18 @@ async function fetchEnvelope(jobId: number): Promise<SegmentationEnvelope | null
   // implicitly, but this composable uses raw fetch (we need the
   // ArrayBuffer body + custom response headers, neither of which
   // apiGet exposes), so prepend explicitly.
+  // 2026-06-23 — bust the browser's HTTP cache + the module-level
+  // Map cache (which we already invalidate via cache.delete() on
+  // error). When a backend rebuild changes the envelope's binary
+  // shape mid-session (e.g. the GA loader switch), reusing an
+  // HTTP-cached body would paint stale data even after a hard
+  // refresh. `cache: 'no-store'` forces the browser to fetch fresh
+  // and skip writing to the HTTP cache.
   const url = `/LibreClinica/pages/api/v1/retinal-jobs/${encodeURIComponent(String(jobId))}/segmentation`
   const resp = await fetch(url, {
     headers: { Accept: 'application/octet-stream' },
     credentials: 'same-origin',
+    cache: 'no-store',
   })
   if (resp.status === 501 || resp.status === 404) {
     // Task not yet wired or job has no seg dir — no error, just no overlay.

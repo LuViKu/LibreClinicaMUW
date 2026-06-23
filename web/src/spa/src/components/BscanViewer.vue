@@ -194,6 +194,21 @@ function paintOverlay(): void {
     if (!ctx) return
     const data = env.data as Uint8Array
     const offset = z * cols
+    // 2026-06-23 — diagnostic: per-slice non-zero count + total. Lets
+    // us see immediately whether the SPA is receiving the new GA loader
+    // output (slice 0 should be all zeros, total ~2503) vs the cached
+    // pre-fix envelope (which paints the entire bottom band).
+    let nonZeroOnThisSlice = 0
+    for (let i = 0; i < cols; i++) if ((data[offset + i] ?? 0) !== 0) nonZeroOnThisSlice++
+    let totalNonZero = 0
+    for (let i = 0; i < data.length; i++) if (data[i] !== 0) totalNonZero++
+    // eslint-disable-next-line no-console
+    console.debug('[BscanViewer] binary_2d paint:',
+      'shape=', env.shape, 'z=', z, 'cols=', cols,
+      'nonZeroOnThisSlice=', nonZeroOnThisSlice,
+      'totalNonZero=', totalNonZero,
+      'first10=', Array.from(data.slice(offset, offset + 10)),
+    )
     const img = ctx.createImageData(cols, H)
     const bandStart = Math.floor(H * 0.88) // bottom 12%
     const COLOUR = [217, 70, 239] // fuchsia-500
