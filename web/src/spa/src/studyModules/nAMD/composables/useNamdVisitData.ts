@@ -152,10 +152,16 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
         return
       }
       const summaries = await listSubjectJobs(numericId)
-      // Sort enqueued / completed ascending so the trend chart reads
-      // left-to-right (oldest → newest).
+      // 2026-06-23 — accept both the DB-native 'done' and the
+      // historical/typed 'succeeded' label so jobs returned straight
+      // off retinal_inference_job.status surface here. The TS type
+      // declares 'succeeded' but the backend ships the raw column
+      // value ('done'); filtering on the typed name alone yielded
+      // an empty workspace ('No OCTs available') even for subjects
+      // with completed jobs.
+      const TERMINAL_OK = new Set(['done', 'succeeded'])
       const fluidSummaries = summaries
-        .filter((s) => s.task === 'fluid' && s.status === 'succeeded')
+        .filter((s) => s.task === 'fluid' && TERMINAL_OK.has(s.status))
         .sort((a, b) => (a.completedAt ?? '').localeCompare(b.completedAt ?? ''))
       const details = await Promise.all(
         fluidSummaries.map(async (s) => {

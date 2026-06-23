@@ -819,9 +819,23 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
         <!-- Pluggable study-module SPI — workspace slot.
              Active manifest's 'subject-detail.workspace' entries render
              here (typically a CTA card to enter the module's dedicated
-             workspace). Each entry is opaque to the host. -->
+             workspace). Each entry is opaque to the host.
+
+             2026-06-23 — bind the host's subject context to every
+             injected entry. The nAMD CTA needs both (a) the numeric
+             study_subject_id (passed via subject-oid, since its
+             composable Number.parseInt()'s it) and (b) the subject
+             label for the in-link confirmation. Without these props
+             the CTA's router.push omits the query, the workspace
+             route lands with no subject, and the data composable
+             returns null → "No OCTs available" even when the subject
+             has completed jobs. -->
         <template v-for="entry in workspaceInjections" :key="entry.key">
-          <component :is="entry.component" />
+          <component
+            :is="entry.component"
+            :subject-oid="retinalNumericId != null ? String(retinalNumericId) : null"
+            :subject-label="subject?.id ?? null"
+          />
         </template>
 
         <!-- Identity / enrolment card -->
