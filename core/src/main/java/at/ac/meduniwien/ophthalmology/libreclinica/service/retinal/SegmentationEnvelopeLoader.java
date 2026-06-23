@@ -202,12 +202,10 @@ public final class SegmentationEnvelopeLoader {
         int z = -1;
         int cols = -1;
         for (int i = 0; i < globs.length; i++) {
-            String token = globs[i].replace("*", "").replace("?", "")
-                    .replace(".csv", "");
-            Path csv = findFirst(bscanMasksDir, token, ".csv");
+            Path csv = findFirstByGlob(bscanMasksDir, globs[i]);
             if (csv == null) {
-                LOG.warn("{} segmentation envelope: no {} CSV under {}",
-                        task, labels[i], bscanMasksDir);
+                LOG.warn("{} segmentation envelope: no {} CSV under {} (glob {})",
+                        task, labels[i], bscanMasksDir, globs[i]);
                 return null;
             }
             double[][] rows = readCsvNumeric(csv);
@@ -254,6 +252,49 @@ public final class SegmentationEnvelopeLoader {
                 task,
                 bb.array()
         );
+    }
+
+    /**
+     * 2026-06-23 — Glob-based lookup for the surface-pair task. The
+     * previous "strip {@code *} and {@code ?}, then substring-match"
+     * approach broke for {@code *OB?OPR*.csv} because the literal
+     * file names embed an underscore ({@code OB_OPR}) that the
+     * stripped token {@code OBOPR} doesn't contain.
+     *
+     * <p>Translates the supplied glob into a case-insensitive regex
+     * (preserving the {@code *} → any-run and {@code ?} → single-char
+     * semantics) and returns the lexicographically-first match in
+     * the directory. Other glob metacharacters ({@code [},
+     * {@code ]}, {@code {}, {@code \}) are escaped — we don't use
+     * them in the runner conventions.
+     */
+    private static Path findFirstByGlob(Path dir, String glob) throws IOException {
+        if (!Files.isDirectory(dir) || glob == null || glob.isEmpty()) return null;
+        StringBuilder pattern = new StringBuilder("(?i)");
+        for (int i = 0; i < glob.length(); i++) {
+            char c = glob.charAt(i);
+            switch (c) {
+                case '*' -> pattern.append(".*");
+                case '?' -> pattern.append('.');
+                // Regex metacharacters that may appear literally in the
+                // file name — quote them.
+                case '.', '\\', '(', ')', '[', ']', '{', '}', '+',
+                     '|', '^', '$' -> pattern.append('\\').append(c);
+                default -> pattern.append(c);
+            }
+        }
+        java.util.regex.Pattern re = java.util.regex.Pattern.compile(pattern.toString());
+        List<Path> matches = new ArrayList<>();
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(dir)) {
+            for (Path p : ds) {
+                if (!Files.isRegularFile(p)) continue;
+                if (re.matcher(p.getFileName().toString()).matches()) {
+                    matches.add(p);
+                }
+            }
+        }
+        Collections.sort(matches, Comparator.comparing(p -> p.getFileName().toString()));
+        return matches.isEmpty() ? null : matches.get(0);
     }
 
     /**
