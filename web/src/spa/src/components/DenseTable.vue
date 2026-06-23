@@ -42,12 +42,22 @@ interface Props {
   hoverable?: boolean
   /** Optional bordered-shell vs flush-on-page. Default true (bordered). */
   bordered?: boolean
+  /**
+   * 2026-06-23 — opt-in horizontal-scroll wrapper. When true, the
+   * <table> is wrapped in a div with overflow-x: auto and the table
+   * uses min-w-max instead of w-full, so the consumer can lay out
+   * sticky-left + sticky-right columns with a scrolling middle. The
+   * default (false) preserves the original w-full + clip-only
+   * behaviour for the dense tables that don't need horizontal scroll.
+   */
+  scrollableX?: boolean
 }
 
 withDefaults(defineProps<Props>(), {
   stickyHeaderOffset: undefined,
   hoverable: true,
   bordered: true,
+  scrollableX: false,
 })
 </script>
 
@@ -59,26 +69,42 @@ withDefaults(defineProps<Props>(), {
         : 'bg-white',
     ]"
   >
-    <table class="w-full text-left text-[13px]">
-      <thead
-        v-if="$slots.header"
-        class="text-xs text-slate-600"
+    <!--
+      2026-06-23 — when scrollableX is true, wrap the table in a
+      horizontal-scroll container so the consumer can mix sticky-left
+      / sticky-right columns with a horizontally-scrolling middle
+      (e.g. Subject Matrix's visit columns). The wrapper is the scroll
+      ancestor for any inner position:sticky cells. Sticky thead still
+      tracks the viewport via the page's vertical scroll — that one is
+      orthogonal to this X-scroll wrapper.
+    -->
+    <div :class="scrollableX ? 'dense-table-xscroll' : ''">
+      <table
         :class="[
-          stickyHeaderOffset !== undefined ? 'dense-thead-sticky' : 'bg-slate-50',
+          'text-left text-[13px]',
+          scrollableX ? 'min-w-full' : 'w-full',
         ]"
-        :style="stickyHeaderOffset !== undefined ? { '--dense-sticky-top': `${stickyHeaderOffset}px` } : undefined"
       >
-        <slot name="header" />
-      </thead>
+        <thead
+          v-if="$slots.header"
+          class="text-xs text-slate-600"
+          :class="[
+            stickyHeaderOffset !== undefined ? 'dense-thead-sticky' : 'bg-slate-50',
+          ]"
+          :style="stickyHeaderOffset !== undefined ? { '--dense-sticky-top': `${stickyHeaderOffset}px` } : undefined"
+        >
+          <slot name="header" />
+        </thead>
 
-      <tbody class="divide-y divide-slate-100" :class="[hoverable ? '[&_tr]:hover:bg-slate-50' : '']">
-        <slot />
-      </tbody>
+        <tbody class="divide-y divide-slate-100" :class="[hoverable ? '[&_tr]:hover:bg-slate-50' : '']">
+          <slot />
+        </tbody>
 
-      <tfoot v-if="$slots.footer">
-        <slot name="footer" />
-      </tfoot>
-    </table>
+        <tfoot v-if="$slots.footer">
+          <slot name="footer" />
+        </tfoot>
+      </table>
+    </div>
 
     <div
       v-if="$slots.statusBar"
@@ -106,5 +132,13 @@ withDefaults(defineProps<Props>(), {
   top: var(--dense-sticky-top, 0);
   background-color: rgb(248 250 252); /* slate-50 — #f8fafc */
   z-index: 10;
+}
+
+/* 2026-06-23 — opt-in horizontal-scroll wrapper. The inner table
+ * uses min-w-max so columns size to their content (rather than
+ * compressing to fit the wrapper), and the wrapper scrolls when the
+ * total width exceeds the shell. */
+.dense-table-xscroll {
+  overflow-x: auto;
 }
 </style>
