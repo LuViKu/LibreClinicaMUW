@@ -35,10 +35,17 @@ export interface ResolveScanRequest {
   laterality: 'OD' | 'OS'
 }
 
-/** One scheduled event_crf that matches the scan date. Mirrors
- *  {@code at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate}. */
+/** One scheduled study_event that matches the scan date. Mirrors
+ *  {@code at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.EventCandidate}.
+ *
+ *  2026-06-23 — the candidate now anchors on study_event (was
+ *  event_crf). A planned-but-not-started visit always has
+ *  studyEventId; eventCrfId is null until the operator opens the CRF.
+ *  Commit accepts either binding; the SPA prefers eventCrfId when set
+ *  and falls back to studyEventId for planned visits. */
 export interface EventCandidate {
-  eventCrfId: number
+  studyEventId: number
+  eventCrfId: number | null
   definitionLabel: string
   /** ISO yyyy-MM-dd. */
   dateStart: string
@@ -79,8 +86,13 @@ export interface CommitResponse {
   status: string
 }
 
-/** Multipart commit input. `eventCrfId` and `park` are mutually
- *  exclusive — the controller rejects sets of both with HTTP 400. */
+/** Multipart commit input. Exactly one of {eventCrfId, studyEventId,
+ *  park} must be set — the controller rejects other combinations with
+ *  HTTP 400.
+ *
+ *  2026-06-23 — studyEventId binds the job to a planned visit when no
+ *  event_crf exists yet. The bound event_crf gets attached later when
+ *  the operator opens the CRF and imports the OCT-derived metrics. */
 export interface CommitScanRequest {
   file: File
   patientId: string
@@ -90,8 +102,11 @@ export interface CommitScanRequest {
   scanDate: string | null
   laterality: 'OD' | 'OS'
   scanIndex: number
-  /** Bound when the operator picked a visit; null when park=true. */
+  /** Bound when the operator picked an open CRF for the visit. */
   eventCrfId: number | null
+  /** Bound when the operator picked a planned visit without an open
+   *  CRF (post-2026-06-23). Mutually exclusive with eventCrfId + park. */
+  studyEventId: number | null
   park: boolean
 }
 
@@ -285,12 +300,17 @@ export async function commitScan(
   req: CommitScanRequest,
   onProgress?: (pct: number) => void,
 ): Promise<CommitResponse> {
-  if (req.park === (req.eventCrfId !== null)) {
-    // Mirror the controller's mutual-exclusion guard at the SPA edge
-    // so the store / UI never has to deal with a 400 round-trip.
+  // 2026-06-23 — exactly one of {park, eventCrfId, studyEventId} must
+  // be supplied. Mirror the controller's mutual-exclusion guard at
+  // the SPA edge so the store / UI never has to handle a 400 round-trip.
+  const modeCount =
+    (req.park ? 1 : 0) +
+    (req.eventCrfId !== null ? 1 : 0) +
+    (req.studyEventId !== null ? 1 : 0)
+  if (modeCount !== 1) {
     throw new OctPortalError(
       400,
-      'park=true and eventCrfId are mutually exclusive — exactly one must be supplied',
+      'exactly one of park, eventCrfId or studyEventId must be supplied',
     )
   }
   const form = new FormData()
@@ -303,6 +323,9 @@ export async function commitScan(
   form.append('scanIndex', String(req.scanIndex))
   if (req.eventCrfId !== null) {
     form.append('eventCrfId', String(req.eventCrfId))
+  }
+  if (req.studyEventId !== null) {
+    form.append('studyEventId', String(req.studyEventId))
   }
   form.append('park', String(req.park))
 

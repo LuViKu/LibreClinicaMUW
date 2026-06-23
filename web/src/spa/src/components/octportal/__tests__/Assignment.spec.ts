@@ -58,6 +58,7 @@ const CANDIDATE: ResolveCandidate = {
 }
 
 const EVENT: EventCandidate = {
+  studyEventId: 5678,
   eventCrfId: 1234,
   definitionLabel: 'V1 · Follow-up',
   dateStart: '2026-06-17',

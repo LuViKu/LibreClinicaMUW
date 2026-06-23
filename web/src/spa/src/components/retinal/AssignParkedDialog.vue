@@ -116,14 +116,18 @@ function onSubjectPicked(subject: StudySubjectSearchHit): void {
 }
 
 function onEventPicked(payload: {
-  eventCrfId: number
+  studyEventId: number
+  eventCrfId: number | null
   definitionLabel: string
   dateStart: string
 }): void {
-  if (payload.eventCrfId <= 0) {
-    // The visit picker emits -1 when no started CRF exists for the
-    // picked event. Surface the failure so the operator knows why the
-    // bind didn't take — silent close was the 2026-06-18 smoke bug.
+  // 2026-06-23 — assign-parked still requires a real event_crf (the
+  // bulk-bind backend writes to event_crf_id; planned-visit binding
+  // for the parked-recovery path is a separate future change). When
+  // the picker emits a planned visit (eventCrfId === null), surface
+  // the no-CRF outcome so the operator knows to start data entry on
+  // that visit first.
+  if (payload.eventCrfId == null || payload.eventCrfId <= 0) {
     emit('no-event-crf')
     return
   }

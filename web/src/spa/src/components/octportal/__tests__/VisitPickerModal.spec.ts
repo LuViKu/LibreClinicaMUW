@@ -155,6 +155,7 @@ describe('VisitPickerModal', () => {
     const emitted = w.emitted('event-picked')
     expect(emitted).toBeTruthy()
     expect(emitted![0]).toEqual([{
+      studyEventId: 1234,
       eventCrfId: 8888,
       definitionLabel: 'V1 · Follow-up',
       dateStart: '2026-06-17',
