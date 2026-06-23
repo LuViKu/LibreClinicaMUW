@@ -1,26 +1,23 @@
 <script setup lang="ts">
 /**
- * nAMD workspace — fluid trend chart.
+ * nAMD workspace — fluid-over-time chart.
  *
- * Hand-rolled SVG (760 × 250) showing per-visit fluid biomarker volumes
- * as three stacked polygon traces (IRF / SRF / PED) plus a thin BCVA
- * strip below. Mirrors the design's {@code FluidTrendChart} from
- * namd-overview.jsx — DOM structure preserved 1:1 so the design's
- * CSS hooks keep working.
+ * Pure-SVG port of {@code FluidTrendChart} from namd-overview.jsx —
+ * 760 × (250 + 70) drawing, no Chart.js. Three stacked polygons
+ * (PED bottom → SRF → IRF top) on a left fluid axis [0..560 nL],
+ * a CRT polyline on the right axis [250..500 µm], teal injection
+ * markers along the baseline, and a sky-blue BCVA strip below.
  *
- * <p>Interaction: hovering a column highlights its index + shows a
- * tooltip with the four metrics (IRF / SRF / PED / CRT / BCVA). Hover
- * is purely client-side, no router / store interaction.
+ * Hover anywhere over a visit's column reveals a tooltip with the
+ * five metrics (IRF / SRF / PED / CRT / BCVA) and the formatted
+ * visit date. The current visit's X label is rendered in coral.
  *
- * <p>Chosen over vue-chartjs because:
- *   1. The design's polygon shapes are bespoke (filled area, not
- *      stacked bar) and don't map onto a Chart.js dataset cleanly.
- *   2. Avoids adding a per-tab Chart.js dependency footprint when the
- *      Compare tab + ETDRS sub-tables already pull it in.
- *   3. Vitest can assert against the rendered {@code <polygon>}/{@code <rect>}
- *      directly without a JSDOM canvas shim.
+ * On first paint the stacked-area + CRT + BCVA layers are revealed
+ * by a clip-path width transition (~1.1s); a {@code prefers-reduced-motion}
+ * media query skips the animation. Per the design's "no .png for
+ * plotting" rule this draws every pixel inline.
  */
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { FLUID } from '../fluid'
 import type { NamdVisit } from '../types'
@@ -32,96 +29,157 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useI18n()
 
-// Layout — match the design's 760 × 250 viewport plus a 28-px X-axis
-// label band below the BCVA strip (2026-06-23) carrying per-visit
-// labels + dates. The fluid + BCVA drawing regions are unchanged so
-// the existing snapshots keep matching.
 const W = 760
-const H = 278
-const PAD_L = 36
-const PAD_R = 12
-const PAD_T = 14
-const FLUID_H = 170
-const BCVA_TOP = PAD_T + FLUID_H + 12
-const BCVA_H = 40
-const X_AXIS_TOP = BCVA_TOP + BCVA_H + 8
+const H = 250
+const PL = 46
+const PR = 44
+const PT = 16
+const PB = 28
+const BH = 70 // BCVA strip height
+const BPT = 8 // BCVA strip top padding
 
 const hoverIdx = ref<number | null>(null)
+const mounted = ref(false)
 
-const maxFluid = computed(() => {
-  let m = 0
-  for (const v of props.visits) m = Math.max(m, v.irf + v.srf + v.ped, 50)
-  return Math.ceil(m / 10) * 10
+onMounted(() => {
+  // Mirror the design's 60ms-then-reveal pattern. A reduced-motion
+  // preference skips the transition by jumping straight to mounted.
+  const reduce = typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  if (reduce) {
+    mounted.value = true
+    return
+  }
+  const t = setTimeout(() => { mounted.value = true }, 60)
+  return () => clearTimeout(t)
 })
 
-const maxBcva = computed(() => {
-  let m = 0
-  for (const v of props.visits) m = Math.max(m, v.bcva)
-  return Math.max(60, Math.ceil(m / 5) * 5)
+const maxWeek = computed(() => {
+  if (props.visits.length === 0) return 1
+  return Math.max(1, props.visits[props.visits.length - 1]!.week)
 })
 
-function xAt(i: number): number {
-  const n = props.visits.length
-  if (n <= 1) return PAD_L
-  const inner = W - PAD_L - PAD_R
-  return PAD_L + (i / (n - 1)) * inner
+function xAt(week: number): number {
+  return PL + (week / maxWeek.value) * (W - PL - PR)
 }
 
-function fluidY(value: number): number {
-  return PAD_T + FLUID_H - (value / maxFluid.value) * FLUID_H
+const FLUID_MAX = 560
+function yFluid(value: number): number {
+  return PT + (1 - value / FLUID_MAX) * (H - PT - PB)
 }
 
-function bcvaY(value: number): number {
-  return BCVA_TOP + BCVA_H - (value / maxBcva.value) * BCVA_H
+const CRT_MIN = 250
+const CRT_MAX = 500
+function yCrt(value: number): number {
+  return PT + (1 - (value - CRT_MIN) / (CRT_MAX - CRT_MIN)) * (H - PT - PB)
 }
 
-interface Series {
+const BCVA_MIN = 58
+const BCVA_MAX = 84
+function yBcva(value: number): number {
+  return H + BPT + (1 - (value - BCVA_MIN) / (BCVA_MAX - BCVA_MIN)) * (BH - BPT - 14)
+}
+
+interface Layer {
   key: 'IRF' | 'SRF' | 'PED'
-  poly: string
   color: string
+  points: string
 }
 
-const series = computed<Series[]>(() => {
-  const xs = props.visits.map((_, i) => xAt(i))
-  const baseY = PAD_T + FLUID_H
-  return (['IRF', 'SRF', 'PED'] as const).map((k) => {
-    const ys = props.visits.map((v) =>
-      fluidY(k === 'IRF' ? v.irf : k === 'SRF' ? v.srf : v.ped),
+const gridVals = [0, 140, 280, 420, 560]
+const crtTicks = [250, 375, 500]
+
+const layers = computed<Layer[]>(() => {
+  // Build stacked polygons: PED bottom → SRF → IRF top so an
+  // increase in subretinal fluid pushes the IRF cap upward
+  // visibly.
+  let baseline = props.visits.map(() => 0)
+  const order: Array<{ key: Layer['key']; field: 'irf' | 'srf' | 'ped' }> = [
+    { key: 'PED', field: 'ped' },
+    { key: 'SRF', field: 'srf' },
+    { key: 'IRF', field: 'irf' },
+  ]
+  return order.map(({ key, field }) => {
+    const lower = baseline.slice()
+    const upper = props.visits.map((v, i) => lower[i]! + v[field])
+    baseline = upper
+    const top = props.visits.map(
+      (v, i) => `${xAt(v.week).toFixed(1)},${yFluid(upper[i]!).toFixed(1)}`,
     )
-    const top = xs.map((x, i) => `${x},${ys[i]}`).join(' ')
-    const bot = `${xs[xs.length - 1]},${baseY} ${xs[0]},${baseY}`
-    return { key: k, poly: `${top} ${bot}`, color: FLUID[k].color }
+    const bot = props.visits
+      .map((v, i) => `${xAt(v.week).toFixed(1)},${yFluid(lower[i]!).toFixed(1)}`)
+      .reverse()
+    return { key, color: FLUID[key].color, points: [...top, ...bot].join(' ') }
   })
 })
 
-const bcvaPoly = computed(() => {
+const crtPath = computed(() => {
   if (props.visits.length === 0) return ''
-  return props.visits.map((v, i) => `${xAt(i)},${bcvaY(v.bcva)}`).join(' ')
+  return props.visits
+    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${xAt(v.week).toFixed(1)} ${yCrt(v.crt).toFixed(1)}`)
+    .join(' ')
 })
 
-const yTicks = computed(() => {
-  const m = maxFluid.value
-  return [0, m / 2, m].map((value) => ({ value, y: fluidY(value) }))
+const bcvaPath = computed(() => {
+  if (props.visits.length === 0) return ''
+  return props.visits
+    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${xAt(v.week).toFixed(1)} ${yBcva(v.bcva).toFixed(1)}`)
+    .join(' ')
 })
 
-function onHover(idx: number | null) {
-  hoverIdx.value = idx
+const lastBcva = computed(() => {
+  if (props.visits.length === 0) return null
+  return props.visits[props.visits.length - 1]!.bcva
+})
+
+const currentIdx = computed(() => props.visits.length - 1)
+
+const injectionVisits = computed(() =>
+  props.visits
+    .map((v, i) => ({ v, i }))
+    .filter(({ v }) => v.inj && v.inj.length > 0),
+)
+
+const revealWidth = computed(() =>
+  mounted.value ? W - PL - PR : 0,
+)
+
+const hovered = computed(() =>
+  hoverIdx.value == null ? null : (props.visits[hoverIdx.value] ?? null),
+)
+
+const hoveredXPct = computed(() => {
+  if (hovered.value == null) return 0
+  return (xAt(hovered.value.week) / W) * 100
+})
+
+const reduceMotion = computed(() =>
+  typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+)
+
+function onHover(i: number | null): void {
+  hoverIdx.value = i
 }
 
-/**
- * 2026-06-23 — compact dd.MM. label for the X-axis. The year is
- * dropped to fit 6+ visits across 760px without overlap; the
- * tooltip carries the full visit label + week ordinal already.
- */
-function shortDate(iso: string): string {
+const dateFormatter = computed(() => {
+  if (typeof Intl === 'undefined') return null
+  try {
+    return new Intl.DateTimeFormat('de-AT', { day: '2-digit', month: 'short', year: 'numeric' })
+  } catch {
+    return null
+  }
+})
+
+function fmtDate(iso: string): string {
   if (!iso) return ''
-  const datePart = iso.slice(0, 10)
-  const [, m, d] = datePart.split('-')
-  if (!m || !d) return ''
-  return `${d}.${m}.`
+  if (!dateFormatter.value) return iso
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return iso
+  return dateFormatter.value.format(d)
 }
-
-const hovered = computed(() => (hoverIdx.value == null ? null : props.visits[hoverIdx.value] ?? null))
 </script>
 
 <template>
@@ -132,130 +190,251 @@ const hovered = computed(() => (hoverIdx.value == null ? null : props.visits[hov
     :aria-label="t('studyModules.namd.trend.aria')"
   >
     <svg
-      :viewBox="`0 0 ${W} ${H}`"
-      class="w-full h-auto block"
+      :viewBox="`0 0 ${W} ${H + BH + 6}`"
+      width="100%"
+      style="overflow: visible"
       data-testid="namd-fluid-trend-svg"
-      preserveAspectRatio="none"
     >
-      <!-- y-axis grid + labels -->
-      <g class="text-slate-400" font-size="10">
-        <line
-          v-for="tick in yTicks"
-          :key="`gy-${tick.value}`"
-          :x1="PAD_L"
-          :x2="W - PAD_R"
-          :y1="tick.y"
-          :y2="tick.y"
-          stroke="#e2e8f0"
-        />
-        <text
-          v-for="tick in yTicks"
-          :key="`yl-${tick.value}`"
-          :x="PAD_L - 6"
-          :y="tick.y + 3"
-          text-anchor="end"
-          fill="#94a3b8"
-        >{{ Math.round(tick.value) }}</text>
-      </g>
-
-      <!-- Stacked fluid polygons -->
-      <polygon
-        v-for="s in series"
-        :key="s.key"
-        :data-testid="`namd-trend-poly-${s.key}`"
-        :points="s.poly"
-        :fill="s.color"
-        fill-opacity="0.18"
-        :stroke="s.color"
-        stroke-width="1.5"
-      />
-
-      <!-- BCVA strip -->
+      <!-- Gridlines + left axis (fluid, nL) -->
       <g>
-        <rect
-          :x="PAD_L"
-          :y="BCVA_TOP"
-          :width="W - PAD_L - PAD_R"
-          :height="BCVA_H"
-          fill="#f8fafc"
-        />
-        <polyline
-          data-testid="namd-trend-bcva"
-          :points="bcvaPoly"
-          fill="none"
-          stroke="#0f766e"
-          stroke-width="1.5"
+        <line
+          v-for="g in gridVals"
+          :key="`gy-${g}`"
+          :x1="PL"
+          :x2="W - PR"
+          :y1="yFluid(g)"
+          :y2="yFluid(g)"
+          stroke="#eef1f6"
+          stroke-width="1"
         />
         <text
-          :x="PAD_L"
-          :y="BCVA_TOP - 4"
-          font-size="10"
-          fill="#64748b"
-        >BCVA · ETDRS Letters</text>
+          v-for="g in gridVals"
+          :key="`gl-${g}`"
+          :x="PL - 8"
+          :y="yFluid(g) + 3"
+          text-anchor="end"
+          font-size="9.5"
+          fill="#aab2c2"
+        >{{ g }}</text>
+        <text
+          :x="PL - 8"
+          :y="yFluid(560) - 8"
+          text-anchor="end"
+          font-size="9"
+          fill="#8b94a7"
+          font-weight="600"
+        >nL</text>
       </g>
 
-      <!-- X-axis labels — visit ordinal + clinical date. 2026-06-23.
-           Operators reading a paper report wanted the chart to carry
-           its own time scale instead of relying on the table below;
-           the visit-date is now part of the workspace data shape so
-           we can label each tick without an extra round-trip. -->
-      <g font-size="9" fill="#64748b" text-anchor="middle">
+      <!-- Right axis (CRT, µm) -->
+      <g>
+        <text
+          v-for="c in crtTicks"
+          :key="`cl-${c}`"
+          :x="W - PR + 8"
+          :y="yCrt(c) + 3"
+          text-anchor="start"
+          font-size="9.5"
+          fill="#aab2c2"
+        >{{ c }}</text>
+        <text
+          :x="W - PR + 8"
+          :y="yCrt(500) - 8"
+          text-anchor="start"
+          font-size="9"
+          fill="#8b94a7"
+          font-weight="600"
+        >µm</text>
+      </g>
+
+      <!-- Reveal clip — the stacked fluid + CRT + BCVA layers
+           grow from the left over 1.1s on first mount. The
+           clip is at the SVG element level so the polygons,
+           CRT line, CRT dots, and BCVA strip all reveal in
+           lockstep. -->
+      <clipPath id="namd-trend-reveal">
+        <rect
+          :x="PL"
+          y="0"
+          :width="revealWidth"
+          :height="H + BH"
+          :style="reduceMotion ? '' : 'transition: width 1.1s cubic-bezier(.22,1,.36,1)'"
+        />
+      </clipPath>
+
+      <g clip-path="url(#namd-trend-reveal)">
+        <polygon
+          v-for="l in layers"
+          :key="`poly-${l.key}`"
+          :data-testid="`namd-trend-poly-${l.key}`"
+          :points="l.points"
+          :fill="l.color"
+          fill-opacity="0.82"
+        />
+        <path
+          :d="crtPath"
+          fill="none"
+          stroke="#111d4e"
+          stroke-width="2"
+          data-testid="namd-trend-crt"
+        />
+        <circle
+          v-for="(v, i) in visits"
+          :key="`crt-dot-${i}`"
+          :cx="xAt(v.week)"
+          :cy="yCrt(v.crt)"
+          r="2.6"
+          fill="#fff"
+          stroke="#111d4e"
+          stroke-width="1.6"
+        />
+      </g>
+
+      <!-- Injection markers — teal droplet + dashed guide. -->
+      <g>
+        <g
+          v-for="({ v, i }) in injectionVisits"
+          :key="`inj-${i}`"
+          :transform="`translate(${xAt(v.week)}, ${H - PB + 14})`"
+          data-testid="namd-trend-injection"
+        >
+          <line
+            x1="0"
+            :y1="-(H - PB + 14 - PT)"
+            x2="0"
+            y2="0"
+            stroke="#cdd4e0"
+            stroke-width="1"
+            stroke-dasharray="2 3"
+            :opacity="mounted ? 0.7 : 0"
+            :style="reduceMotion ? '' : 'transition: opacity .6s ease .5s'"
+          />
+          <circle cx="0" cy="0" r="6.5" fill="#e4f2ef" stroke="#2f8e91" stroke-width="1" />
+          <path
+            d="M0 -3.2 C 2.4 -0.6 2.6 1 0 2.6 C -2.6 1 -2.4 -0.6 0 -3.2 Z"
+            fill="#2f8e91"
+          />
+        </g>
+      </g>
+
+      <!-- X labels — visit id under each tick. Trailing/current
+           visit takes the design's coral accent + bold weight. -->
+      <g>
         <text
           v-for="(v, i) in visits"
           :key="`xl-${v.id}`"
-          :x="xAt(i)"
-          :y="X_AXIS_TOP + 8"
-          font-weight="600"
+          :x="xAt(v.week)"
+          :y="H - 2"
+          text-anchor="middle"
+          font-size="9.5"
+          :fill="i === currentIdx ? '#b04a30' : '#8b94a7'"
+          :font-weight="i === currentIdx ? 700 : 400"
         >{{ v.label }}</text>
-        <text
-          v-for="(v, i) in visits"
-          :key="`xd-${v.id}`"
-          :x="xAt(i)"
-          :y="X_AXIS_TOP + 20"
-          fill="#94a3b8"
-        >{{ shortDate(v.date) }}</text>
       </g>
 
-      <!-- Hover columns + dots -->
+      <!-- Hover columns — generous 28px width per visit, so the
+           operator can land on a tick without precise aim. -->
       <g>
         <rect
           v-for="(v, i) in visits"
           :key="`hover-${v.id}`"
           :data-testid="`namd-trend-col-${i}`"
-          :x="xAt(i) - 18"
-          :y="PAD_T"
-          width="36"
-          :height="X_AXIS_TOP - PAD_T"
+          :x="xAt(v.week) - 14"
+          :y="PT"
+          width="28"
+          :height="H - PT - PB"
           fill="transparent"
+          style="cursor: pointer"
           @mouseenter="onHover(i)"
           @mouseleave="onHover(null)"
         />
         <line
           v-if="hoverIdx != null"
-          :x1="xAt(hoverIdx)"
-          :x2="xAt(hoverIdx)"
-          :y1="PAD_T"
-          :y2="X_AXIS_TOP - 2"
-          stroke="#94a3b8"
-          stroke-dasharray="3 3"
+          :x1="xAt(visits[hoverIdx]!.week)"
+          :y1="PT"
+          :x2="xAt(visits[hoverIdx]!.week)"
+          :y2="H - PB"
+          stroke="#111d4e"
           stroke-width="1"
+          opacity="0.25"
         />
+      </g>
+
+      <!-- BCVA strip — sky-blue polyline + dots, axis title left,
+           trailing-value annotation right. -->
+      <g>
+        <text
+          :x="PL - 8"
+          :y="yBcva(82) - 4"
+          text-anchor="end"
+          font-size="9"
+          fill="#8b94a7"
+          font-weight="600"
+        >BCVA</text>
+        <line
+          :x1="PL"
+          :y1="yBcva(BCVA_MIN) + 6"
+          :x2="W - PR"
+          :y2="yBcva(BCVA_MIN) + 6"
+          stroke="#eef1f6"
+        />
+        <path
+          :d="bcvaPath"
+          fill="none"
+          stroke="#5fb4e5"
+          stroke-width="2"
+          clip-path="url(#namd-trend-reveal)"
+          data-testid="namd-trend-bcva"
+        />
+        <circle
+          v-for="(v, i) in visits"
+          :key="`bcva-dot-${i}`"
+          :cx="xAt(v.week)"
+          :cy="yBcva(v.bcva)"
+          r="2.4"
+          fill="#5fb4e5"
+          clip-path="url(#namd-trend-reveal)"
+        />
+        <text
+          v-if="lastBcva != null"
+          :x="W - PR"
+          :y="yBcva(lastBcva) - 7"
+          text-anchor="end"
+          font-size="9.5"
+          fill="#1d6c98"
+          font-weight="600"
+        >{{ lastBcva }} {{ t('studyModules.namd.trend.bcvaSuffix') }}</text>
       </g>
     </svg>
 
-    <!-- Tooltip — absolutely positioned over the chart -->
+    <!-- Hover tooltip — anchored to the column's X with all five
+         metrics + the formatted visit date. -->
     <div
       v-if="hovered"
       data-testid="namd-trend-tooltip"
-      class="absolute top-2 left-1/2 -translate-x-1/2 rounded-md bg-slate-900 text-white text-[11px] px-3 py-2 shadow-md pointer-events-none"
+      class="absolute -top-1 bg-white rounded-lg shadow-lg ring-1 ring-slate-200 px-3 py-2 text-[11px] pointer-events-none z-10"
+      :style="`left: ${hoveredXPct}%; transform: translate(-50%,-100%)`"
     >
-      <div class="font-semibold mb-1">{{ hovered.label }} · W{{ hovered.week }}</div>
+      <div class="font-semibold text-slate-800 mb-1 whitespace-nowrap">
+        {{ hovered.label }} · {{ fmtDate(hovered.date) }}
+      </div>
       <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 tabular-nums">
-        <span class="text-cyan-300">IRF</span><span>{{ hovered.irf }} nL</span>
-        <span class="text-amber-300">SRF</span><span>{{ hovered.srf }} nL</span>
-        <span class="text-purple-300">PED</span><span>{{ hovered.ped }} nL</span>
-        <span class="text-emerald-300">CRT</span><span>{{ hovered.crt }} µm</span>
-        <span class="text-teal-300">BCVA</span><span>{{ hovered.bcva }} L</span>
+        <span class="inline-flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full" :style="`background:${FLUID.IRF.color}`" />IRF
+        </span>
+        <span class="text-right font-medium">{{ hovered.irf }} nL</span>
+        <span class="inline-flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full" :style="`background:${FLUID.SRF.color}`" />SRF
+        </span>
+        <span class="text-right font-medium">{{ hovered.srf }} nL</span>
+        <span class="inline-flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full" :style="`background:${FLUID.PED.color}`" />PED
+        </span>
+        <span class="text-right font-medium">{{ hovered.ped }} nL</span>
+        <span class="text-slate-500">CRT</span>
+        <span class="text-right font-medium">{{ hovered.crt }} µm</span>
+        <span class="text-slate-500">BCVA</span>
+        <span class="text-right font-medium">{{ hovered.bcva }}</span>
       </div>
     </div>
   </figure>
