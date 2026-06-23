@@ -356,7 +356,10 @@ const isLayerTask = computed<boolean>(
   () => props.task === 'pr' || props.task === 'onl',
 )
 
+const isGaTask = computed<boolean>(() => props.task === 'ga')
+
 const thicknessCanvasEl = ref<HTMLCanvasElement | null>(null)
+const gaCanvasEl = ref<HTMLCanvasElement | null>(null)
 
 /** Color stops for the µm → RGBA ramp (viridis-flavoured). */
 const THICKNESS_STOPS: ReadonlyArray<readonly [number, [number, number, number]]> = [
@@ -454,6 +457,64 @@ watch(
   { flush: 'post' },
 )
 onMounted(paintThicknessHeatmap)
+
+/**
+ * 2026-06-23 — En-face GA presence heatmap, derived directly from the
+ * binary_2d segmentation envelope the cluster ships (no PNG artifact).
+ * For each (z, x) A-scan with envelope[z][x] != 0, paint a single
+ * fuchsia-tinted pixel into a (cols × n_bscans) canvas; transparent
+ * elsewhere. The canvas is positioned at scan_bbox via the
+ * <foreignObject> below so the per-A-scan projection collapses onto
+ * the fundus plane the same way the projection_ga.png did, minus the
+ * intermediate PNG artifact.
+ */
+const GA_FILL: readonly [number, number, number] = [217, 70, 239] as const // fuchsia-500
+
+function paintGaHeatmap(): void {
+  const canvas = gaCanvasEl.value
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
+  const env = segEnvelope.value
+  if (!isGaTask.value || !env || env.kind !== 'binary_2d' || env.shape.length !== 2) {
+    canvas.width = 1
+    canvas.height = 1
+    ctx.clearRect(0, 0, 1, 1)
+    return
+  }
+  const nBscans = env.shape[0] ?? 0
+  const cols = env.shape[1] ?? 0
+  if (nBscans === 0 || cols === 0) {
+    canvas.width = 1
+    canvas.height = 1
+    ctx.clearRect(0, 0, 1, 1)
+    return
+  }
+  const data = env.data as Uint8Array
+  canvas.width = cols
+  canvas.height = nBscans
+  const img = ctx.createImageData(cols, nBscans)
+  for (let z = 0; z < nBscans; z++) {
+    const rowBase = z * cols
+    for (let x = 0; x < cols; x++) {
+      if ((data[rowBase + x] ?? 0) === 0) continue
+      const px = (z * cols + x) * 4
+      img.data[px] = GA_FILL[0]
+      img.data[px + 1] = GA_FILL[1]
+      img.data[px + 2] = GA_FILL[2]
+      img.data[px + 3] = 220
+    }
+  }
+  ctx.putImageData(img, 0, 0)
+}
+
+watch(
+  [segEnvelope, isGaTask],
+  () => { paintGaHeatmap() },
+  { flush: 'post' },
+)
+onMounted(paintGaHeatmap)
 
 /* ════════════════════════════════════════════════════════════════════
  * Interactive ETDRS region selection (2026-06-22).
@@ -610,7 +671,7 @@ function regionFill(id: EtdrsRegion): string {
         />
       </template>
       <image
-        v-else-if="projectionUrl && !isLayerTask"
+        v-else-if="projectionUrl && !isLayerTask && !isGaTask"
         data-testid="enface-projection"
         :href="projectionUrl"
         :x="scanBbox.x"
@@ -639,6 +700,26 @@ function regionFill(id: EtdrsRegion): string {
       >
         <canvas
           ref="thicknessCanvasEl"
+          style="width:100%;height:100%;display:block;image-rendering:auto;"
+        />
+      </foreignObject>
+
+      <!-- 2026-06-23 — En-face GA heatmap. Sibling foreignObject to
+           the thickness one above; only one renders at a time since
+           isLayerTask + isGaTask are mutually exclusive. Same
+           positioning + sizing convention so the per-A-scan binary
+           mask collapses onto the scan_bbox identically to how the
+           projection_ga.png used to. -->
+      <foreignObject
+        v-if="isGaTask"
+        data-testid="enface-ga-heatmap"
+        :x="scanBbox.x"
+        :y="scanBbox.y"
+        :width="scanBbox.width"
+        :height="scanBbox.height"
+      >
+        <canvas
+          ref="gaCanvasEl"
           style="width:100%;height:100%;display:block;image-rendering:auto;"
         />
       </foreignObject>
