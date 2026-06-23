@@ -247,6 +247,13 @@ function paintOverlay(): void {
     const ctx = canvas.getContext('2d')
     if (!ctx) return
     ctx.clearRect(0, 0, cols, h)
+    // eslint-disable-next-line no-console
+    console.debug('[BscanViewer] surface_y paint:',
+      'shape=', env.shape, 'nSurfaces=', nSurfaces, 'cols=', cols,
+      'z=', z, 'canvas=', canvas.width, 'x', canvas.height,
+      'firstUpper5=', Array.from({ length: 5 }, (_, i) => data[(0 * surfaceStride) + z * zStride + i]),
+      'lastUpper5=', Array.from({ length: 5 }, (_, i) => data[(0 * surfaceStride) + z * zStride + (cols - 5 + i)]),
+    )
     const palette = SURFACE_PALETTE
     for (let s = 0; s < nSurfaces; s++) {
       ctx.strokeStyle = palette[s % palette.length] ?? palette[0]!
