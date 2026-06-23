@@ -326,34 +326,24 @@ const ariaSortLabel = (subject: Subject) =>
         </div>
       </div>
 
-      <!--
-        2026-06-23 — Subject Matrix with column-stickiness pattern.
-        Identity columns (Teilnehmer, Geschl., Auge, Gruppe, Aufnahme)
-        stick to the LEFT; status + action (Signiert, Öffnen) stick to
-        the RIGHT. The visit columns in the middle scroll horizontally
-        when the study has many event-definitions, so the page itself
-        never needs a horizontal scrollbar. Cumulative left offsets
-        match the explicit column widths in the markup; right offsets
-        match the trailing columns' widths.
-      -->
-      <DenseTable :sticky-header-offset="56" scrollable-x>
+      <DenseTable :sticky-header-offset="56">
         <template #header>
           <tr class="border-b border-slate-200">
-            <th scope="col" class="px-3 py-2 font-medium w-24 sm-sticky-left" style="left: 0">{{ t('subjectMatrix.column.subject') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium w-20 sm-sticky-left" style="left: 6rem">{{ t('subjectMatrix.column.gender') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium w-16 sm-sticky-left" style="left: 11rem">{{ t('ophth.studyEye.column') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium w-28 sm-sticky-left" style="left: 15rem">{{ t('subjectMatrix.column.group') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium w-24 sm-sticky-left sm-sticky-left-last" style="left: 22rem">{{ t('subjectMatrix.column.enrolled') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-24">{{ t('subjectMatrix.column.subject') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-20">{{ t('subjectMatrix.column.gender') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-16">{{ t('ophth.studyEye.column') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-28">{{ t('subjectMatrix.column.group') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium w-24">{{ t('subjectMatrix.column.enrolled') }}</th>
             <th
               v-for="col in eventColumns"
               :key="col.oid"
               scope="col"
-              class="px-3 py-2 font-medium min-w-[8rem]"
+              class="px-3 py-2 font-medium"
             >
               {{ col.label }}
             </th>
-            <th scope="col" class="px-3 py-2 font-medium w-20 sm-sticky-right sm-sticky-right-first" style="right: 5rem">{{ t('subjectMatrix.column.signed') }}</th>
-            <th scope="col" class="px-3 py-2 font-medium text-right w-20 sm-sticky-right" style="right: 0"></th>
+            <th scope="col" class="px-3 py-2 font-medium w-20">{{ t('subjectMatrix.column.signed') }}</th>
+            <th scope="col" class="px-3 py-2 font-medium text-right w-20"></th>
           </tr>
         </template>
 
@@ -379,9 +369,8 @@ const ariaSortLabel = (subject: Subject) =>
           v-for="subject in subjects.filtered"
           :key="subject.id"
           :aria-label="ariaSortLabel(subject)"
-          class="sm-row"
         >
-          <td class="px-3 py-2 font-medium sm-sticky-left" style="left: 0">
+          <td class="px-3 py-2 font-medium">
             <RouterLink :to="`/subjects/${subject.id}`" class="text-muw-blue hover:underline">
               {{ subject.id }}
             </RouterLink>
@@ -389,17 +378,17 @@ const ariaSortLabel = (subject: Subject) =>
               · {{ subject.secondaryId }}
             </span>
           </td>
-          <td class="px-3 py-2 text-slate-600 sm-sticky-left" style="left: 6rem">{{ subject.gender }}</td>
-          <td class="px-3 py-2 text-slate-600 font-mono text-[11px] sm-sticky-left" style="left: 11rem">
+          <td class="px-3 py-2 text-slate-600">{{ subject.gender }}</td>
+          <td class="px-3 py-2 text-slate-600 font-mono text-[11px]">
             <span v-if="subject.studyEye" class="px-1.5 py-0.5 rounded bg-muw-blue-50 text-muw-blue border border-muw-blue-100">
               {{ subject.studyEye }}
             </span>
             <span v-else class="text-slate-400">—</span>
           </td>
-          <td class="px-3 py-2 text-slate-600 sm-sticky-left" style="left: 15rem">{{ subject.groupLabel ?? '—' }}</td>
-          <td class="px-3 py-2 text-slate-600 font-mono text-xs sm-sticky-left sm-sticky-left-last" style="left: 22rem">{{ formatDate(subject.enrolledOn) }}</td>
+          <td class="px-3 py-2 text-slate-600">{{ subject.groupLabel ?? '—' }}</td>
+          <td class="px-3 py-2 text-slate-600 font-mono text-xs">{{ formatDate(subject.enrolledOn) }}</td>
 
-          <td v-for="cell in subject.events" :key="cell.eventDefinitionOid" class="px-3 py-2 min-w-[8rem]">
+          <td v-for="cell in subject.events" :key="cell.eventDefinitionOid" class="px-3 py-2">
             <div class="flex items-center gap-1.5">
               <StatusPill :variant="statusVariant(cell.status)">{{ statusLabel(cell.status) }}</StatusPill>
               <span
@@ -412,12 +401,12 @@ const ariaSortLabel = (subject: Subject) =>
             </div>
           </td>
 
-          <td class="px-3 py-2 sm-sticky-right sm-sticky-right-first" style="right: 5rem">
+          <td class="px-3 py-2">
             <StatusPill v-if="subject.signed" variant="success">{{ t('subjectMatrix.signed') }}</StatusPill>
             <span v-else class="text-slate-400">—</span>
           </td>
 
-          <td class="px-3 py-2 text-right sm-sticky-right" style="right: 0">
+          <td class="px-3 py-2 text-right">
             <RouterLink :to="`/subjects/${subject.id}`" class="text-muw-blue text-xs hover:underline">
               {{ t('subjectMatrix.openSubject') }}
             </RouterLink>
@@ -434,57 +423,3 @@ const ariaSortLabel = (subject: Subject) =>
     <StudyMetricsModal :open="metricsModalOpen" @close="metricsModalOpen = false" />
   </div>
 </template>
-
-<style scoped>
-/* 2026-06-23 — sticky-column layout for the Subject Matrix. The
- * identity columns (Teilnehmer, Geschl., Auge, Gruppe, Aufnahme)
- * stick to the LEFT; status + action (Signiert, Öffnen) stick to
- * the RIGHT. Only the visit columns in the middle scroll
- * horizontally inside the DenseTable's xscroll wrapper. The page
- * itself never needs a horizontal scrollbar.
- *
- * Per-cell offsets are set via inline `style="left: …"` /
- * `style="right: …"` on each <th>/<td> matching the column's
- * cumulative width. Backgrounds are forced opaque on the sticky
- * cells so they cover the scrolling content underneath; sticky
- * thead cells override via the slate-50 background that the
- * DenseTable shell already paints there.
- *
- * z-index layering — sticky thead is z-10 (already set by
- * DenseTable). Sticky body cells get z-5 to ride above scrolling
- * body content but below the header. The trailing edge of the
- * left-sticky group + the leading edge of the right-sticky group
- * carry a subtle box-shadow so the operator can tell where the
- * scrolling middle starts/ends.
- */
-.sm-sticky-left,
-.sm-sticky-right {
-  position: sticky;
-  background-color: white;
-  z-index: 5;
-}
-/* The dense-thead-sticky in DenseTable paints slate-50; mirror it
- * here so the sticky-left/right header cells don't fall back to
- * the white background of the body version. */
-:deep(thead) .sm-sticky-left,
-:deep(thead) .sm-sticky-right {
-  background-color: rgb(248 250 252); /* slate-50 — matches DenseTable */
-  z-index: 15; /* above body sticky cells + thead's existing z-10 */
-}
-/* Subtle shadow on the LAST sticky-left and FIRST sticky-right
- * column to mark the boundary with the scrolling middle. Pure CSS,
- * no JS. */
-.sm-sticky-left-last {
-  box-shadow: 4px 0 4px -4px rgba(15, 23, 42, 0.12);
-}
-.sm-sticky-right-first {
-  box-shadow: -4px 0 4px -4px rgba(15, 23, 42, 0.12);
-}
-/* Row-hover surface must reach the sticky cells too — DenseTable's
- * hover paints `bg-slate-50` on the <tr>, but our sticky cells'
- * `background-color: white` overrides it. Re-apply on hover. */
-.sm-row:hover .sm-sticky-left,
-.sm-row:hover .sm-sticky-right {
-  background-color: rgb(248 250 252); /* slate-50 */
-}
-</style>
