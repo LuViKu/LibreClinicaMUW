@@ -526,7 +526,15 @@ interface BiomarkerDef {
   /** Tailwind text-color class for the chip label. */
   toneClass: string
   /** Unit string shown after the sum value. */
-  unit: 'mm³' | 'mm²'
+  unit: 'mm³' | 'mm²' | 'µm'
+  /**
+   * Optional mean-of-pair aggregation. When set, the chip value is
+   * computed as (Σ contributions[sumKey]) / (Σ contributions[countKey])
+   * across selected regions, rather than the default sum-across-regions.
+   * Used for thickness where ring concatenation must average — not add —
+   * per-A-scan thickness.
+   */
+  meanOf?: { sumKey: string; countKey: string }
 }
 
 const FLUID_BIOMARKER_DEFS: BiomarkerDef[] = [
@@ -540,9 +548,20 @@ const GA_BIOMARKER_DEFS: BiomarkerDef[] = [
   { key: 'ga_area', label: 'GA', toneClass: 'text-fuchsia-700', unit: 'mm²' },
 ]
 
+const THICKNESS_BIOMARKER_DEFS = computed<BiomarkerDef[]>(() => [
+  {
+    key: 'thickness',
+    label: t('retinal.etdrs.selectionLabelThickness'),
+    toneClass: 'text-sky-700',
+    unit: 'µm',
+    meanOf: { sumKey: 'thickness_sum', countKey: 'thickness_count' },
+  },
+])
+
 const selectionBiomarkerDefs = computed<BiomarkerDef[]>(() => {
   if (isFluid.value) return FLUID_BIOMARKER_DEFS
   if (isGa.value) return GA_BIOMARKER_DEFS
+  if (isThickness.value) return THICKNESS_BIOMARKER_DEFS.value
   return []
 })
 
@@ -577,26 +596,62 @@ const regionBreakdown = computed<RegionBreakdown | null>(() => {
       corners: ringDiff(['ga_area'], fullVolume, wrap(e.central_6mm)),
     }
   }
+  if (isThickness.value && thicknessGrid.value) {
+    // For thickness (ONL/PR) we aggregate per-A-scan layer thickness
+    // across the four disjoint ETDRS regions. The contribution stores
+    // a {sum, count} pair so the cross-region rollup in selectedSum
+    // can re-divide to produce a true mean — straight summation would
+    // bias toward whichever region holds the largest A-scan count.
+    // Corners (everything outside the 6 mm disc) uses Infinity as
+    // the outer bound so the bbox edges are included.
+    const wrap = (a: { sum: number; count: number }): Contribution =>
+      ({ thickness_sum: a.sum, thickness_count: a.count })
+    return {
+      center:   wrap(thicknessRingAggregate(0,   0.5)),
+      ring_1_3: wrap(thicknessRingAggregate(0.5, 1.5)),
+      ring_3_6: wrap(thicknessRingAggregate(1.5, 3.0)),
+      corners:  wrap(thicknessRingAggregate(3.0, Infinity)),
+    }
+  }
   return null
 })
 
 /**
- * Sum of biomarker contributions across all currently-selected
- * regions. Null when nothing is selected or the breakdown isn't
- * available — the template hides the summary panel in that case.
+ * Display-ready biomarker values across all currently-selected
+ * regions. For sum-aggregation defs (fluid, GA) the value is the
+ * straight sum of contributions; for mean-aggregation defs (thickness)
+ * it is (Σ sumKey)/(Σ countKey), which preserves correct averaging
+ * across regions of unequal A-scan counts. Null when nothing is
+ * selected or the breakdown isn't available — the template hides
+ * the summary panel in that case.
  */
 const selectedSum = computed<Contribution | null>(() => {
   if (selectedEtdrsRegions.value.length === 0) return null
   const bd = regionBreakdown.value
   if (!bd) return null
-  const keys = selectionBiomarkerDefs.value.map((d) => d.key)
-  const acc: Contribution = Object.fromEntries(keys.map((k) => [k, 0]))
+  const contributions: Contribution[] = []
   for (const id of selectedEtdrsRegions.value) {
     const r = bd[id]
-    if (!r) continue
-    for (const k of keys) acc[k] = (acc[k] ?? 0) + (r[k] ?? 0)
+    if (r) contributions.push(r)
   }
-  return acc
+  if (contributions.length === 0) return null
+  const out: Contribution = {}
+  for (const def of selectionBiomarkerDefs.value) {
+    if (def.meanOf) {
+      let s = 0
+      let n = 0
+      for (const c of contributions) {
+        s += c[def.meanOf.sumKey] ?? 0
+        n += c[def.meanOf.countKey] ?? 0
+      }
+      out[def.key] = n > 0 ? s / n : 0
+    } else {
+      let s = 0
+      for (const c of contributions) s += c[def.key] ?? 0
+      out[def.key] = s
+    }
+  }
+  return out
 })
 
 /** Localised label for an ETDRS region — used in the selection chip row. */

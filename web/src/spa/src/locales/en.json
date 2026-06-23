@@ -2917,7 +2917,8 @@
       "ringLabelRange": "[NEEDS_REVIEW] {from}–{to} mm",
       "selectionHint": "[NEEDS_REVIEW] Click regions on the fundus to sum biomarkers",
       "selectionHeader": "[NEEDS_REVIEW] Selection",
-      "selectionClear": "[NEEDS_REVIEW] Clear selection"
+      "selectionClear": "[NEEDS_REVIEW] Clear selection",
+      "selectionLabelThickness": "[NEEDS_REVIEW] Mean thickness"
     },
     "downloads": {
       "header": "[NEEDS_REVIEW] Downloads",

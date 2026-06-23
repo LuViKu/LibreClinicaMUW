@@ -2929,7 +2929,8 @@
       "ringLabelRange": "{from}–{to} mm",
       "selectionHint": "Bereiche im Fundus zum Aufsummieren anklicken",
       "selectionHeader": "Auswahl",
-      "selectionClear": "Auswahl leeren"
+      "selectionClear": "Auswahl leeren",
+      "selectionLabelThickness": "Mittlere Dicke"
     },
     "downloads": {
       "header": "Downloads",
