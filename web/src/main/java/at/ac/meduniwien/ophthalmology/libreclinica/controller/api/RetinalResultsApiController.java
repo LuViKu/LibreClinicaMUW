@@ -1234,27 +1234,43 @@ public class RetinalResultsApiController {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "No retinal_inference_job with id " + jobId));
         }
-        if (!"failed".equals(job.status)) {
+        // 2026-06-23 — retry accepts BOTH 'failed' and 'remote_pending'.
+        // The latter unsticks jobs whose initial dispatch was skipped
+        // (e.g. planned-visit binding before the dispatch gate was
+        // relaxed) — same end state regardless of which way they got
+        // there, same fix.
+        if (!"failed".equals(job.status) && !"remote_pending".equals(job.status)) {
             return ResponseEntity.status(409).body(Map.of(
-                    "message", "Job is not failed (status=" + job.status + ")"));
+                    "message", "Job is not failed or remote_pending (status=" + job.status + ")"));
         }
-        if (job.eventCrfId == null) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "Job " + jobId + " has no event_crf — use /bind instead"));
-        }
-
-        // ---- visibility check via the job's event_crf ---------------
-        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
-        EventCRFBean ecb = eventCrfDAO.findByPK(job.eventCrfId);
-        if (ecb == null || ecb.getId() == 0) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "No event_crf with id " + job.eventCrfId));
-        }
+        // ---- visibility check via the job's binding ---------------
+        // 2026-06-23 — accept either binding path. Planned-visit jobs
+        // have event_crf_id=null + a valid study_event_id; resolve the
+        // owning study_subject via whichever is set.
         StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
-        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        StudySubjectBean ss = null;
+        if (job.eventCrfId != null) {
+            EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+            EventCRFBean ecb = eventCrfDAO.findByPK(job.eventCrfId);
+            if (ecb == null || ecb.getId() == 0) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "No event_crf with id " + job.eventCrfId));
+            }
+            ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+        } else if (job.studyEventId != null) {
+            Integer subjectId = fetchStudySubjectIdForStudyEvent(job.studyEventId);
+            if (subjectId == null) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "No study_event with id " + job.studyEventId));
+            }
+            ss = (StudySubjectBean) ssDAO.findByPK(subjectId);
+        } else {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "Job " + jobId + " has no event_crf nor study_event — use /bind instead"));
+        }
         if (ss == null || ss.getStudyId() == 0) {
             return ResponseEntity.status(404).body(Map.of(
-                    "message", "event_crf " + job.eventCrfId + " has no resolvable study"));
+                    "message", "Job " + jobId + " has no resolvable study"));
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
@@ -1560,6 +1576,7 @@ public class RetinalResultsApiController {
         String status;
         String statusMessage;
         Integer eventCrfId;
+        Integer studyEventId;
         String task;
         String e2ePath;
         String eyeLaterality;
@@ -1574,7 +1591,7 @@ public class RetinalResultsApiController {
      */
     private FailedJob fetchFailedJob(Connection c, long jobId) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT status, status_message, event_crf_id, "
+                "SELECT status, status_message, event_crf_id, study_event_id, "
                         + "       task, e2e_path, eye_laterality, scan_index "
                         + "  FROM retinal_inference_job WHERE job_id = ?")) {
             ps.setLong(1, jobId);
@@ -1585,6 +1602,8 @@ public class RetinalResultsApiController {
                 f.statusMessage = rs.getString("status_message");
                 int ecId = rs.getInt("event_crf_id");
                 f.eventCrfId = rs.wasNull() ? null : ecId;
+                int seId = rs.getInt("study_event_id");
+                f.studyEventId = rs.wasNull() ? null : seId;
                 f.task = rs.getString("task");
                 f.e2ePath = rs.getString("e2e_path");
                 f.eyeLaterality = rs.getString("eye_laterality");
@@ -1936,6 +1955,29 @@ public class RetinalResultsApiController {
                 int sid = rs.getInt("study_id");
                 return rs.wasNull() ? null : sid;
             }
+        }
+    }
+
+    /**
+     * 2026-06-23 — resolve the owning study_subject_id for the
+     * supplied study_event. Used by the retry path when a job was
+     * bound to a planned visit (event_crf_id null) so we can run the
+     * visibility check + the audit row through the same subject
+     * lookup the event_crf path uses.
+     */
+    private Integer fetchStudySubjectIdForStudyEvent(int studyEventId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT study_subject_id FROM study_event WHERE study_event_id = ?")) {
+            ps.setInt(1, studyEventId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int v = rs.getInt(1);
+                return rs.wasNull() ? null : v;
+            }
+        } catch (SQLException e) {
+            LOG.warn("fetchStudySubjectIdForStudyEvent({}) failed: {}", studyEventId, e.getMessage());
+            return null;
         }
     }
 

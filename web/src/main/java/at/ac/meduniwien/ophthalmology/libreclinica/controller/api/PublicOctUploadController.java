@@ -658,7 +658,13 @@ public class PublicOctUploadController {
         }
 
         // ---- remote inference dispatch — one call per task ----------
-        if (dispatchToRemote && inferenceController != null && eventCrfId != null) {
+        // 2026-06-23 — eventCrfId may be null when the job was bound
+        // to a planned visit via study_event_id only. handleRemote
+        // now accepts Integer + only uses the value for one final log
+        // line, so a null binding doesn't block the dispatch. Without
+        // this, planned-visit jobs stayed in remote_pending forever
+        // because the GPU sidecar was never asked to /run them.
+        if (dispatchToRemote && inferenceController != null) {
             for (Map<String, Object> info : jobInfos) {
                 long jId = ((Number) info.get("jobId")).longValue();
                 String task = String.valueOf(info.get("task"));

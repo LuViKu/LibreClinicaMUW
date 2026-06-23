@@ -377,7 +377,7 @@ public class RetinalInferenceApiController {
                                    String absolutePath,
                                    String lat,
                                    int scanIndex,
-                                   int eventCrfId) {
+                                   Integer eventCrfId) {
         try (Connection c = dataSource.getConnection()) {
             updateStatus(c, jobId, "segmenting", false, null);
         } catch (SQLException sqlEx) {
@@ -506,7 +506,7 @@ public class RetinalInferenceApiController {
         body.put("artifactCount", remote.artifacts().size());
 
         LOG.info("Retinal inference (remote): event_crf {} → job {} done (task={}, model={}, metric={}{})",
-                eventCrfId, jobId, taskClean,
+                eventCrfId == null ? "<unbound>" : eventCrfId, jobId, taskClean,
                 remote.modelVersion(), respValue, respUnit);
         return ResponseEntity.ok(body);
     }
