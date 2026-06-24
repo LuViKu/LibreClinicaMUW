@@ -286,31 +286,53 @@ class ApptainerAdapter(RetinalInferenceAdapter):
                 f"{s.ga_iowa_ld_library_path}:{existing}"
                 if existing else s.ga_iowa_ld_library_path
             )
-        layerseg = work / "layerseg"
-        layerseg.mkdir(parents=True, exist_ok=True)
-        # 2026-06-24 — IOWA OCTLayerSeg 3.6 segfaults on DCMs whose
-        # bytes were laid down via Python's write_bytes / pydicom
-        # save_as / shutil.copy — anything routed through Python's
-        # buffered IO. The same content rendered by the SHELL `cp`
-        # binary (or `cat`) is accepted by IOWA. The discriminator
-        # is some XFS-allocator-state attribute we could not isolate
-        # without IOWA source. Verified on cn5: the shutil.copy
-        # variant also crashed; only invoking /bin/cp produced an
-        # IOWA-acceptable file. Use subprocess to call the real cp.
-        import subprocess as _sp
-        dcm_for_iowa = work / "bscan.iowa.dcm"
-        _sp.run(["cp", str(dcm), str(dcm_for_iowa)], check=True)
-        # OCTLayerSeg3.6 (licensed host binary) -> lres.xml.
-        _exec([s.ga_iowa_binary or "OCTLayerSeg3.6", "-oM", str(dcm_for_iowa),
-               str(layerseg / "lres.xml"), str(layerseg / "t1.xml"),
-               str(layerseg / "t2.tif"), str(layerseg / "t3.xml")], env or None)
-        # Convert lres.xml -> 11 layer CSVs. Flags confirmed on cn5; the converter
-        # REFUSES a pre-existing --out dir, so don't create it and pass --rmdir_out 1.
-        layers_csv = work / "layers_csv"
-        _exec([s.ga_iowa_converter or "local_IOWA_LayerSegV3_to_CSV",
-               "--in", str(layerseg / "lres.xml"), "--intype", "iowaxml_ls",
-               "--out", str(layers_csv), "--outtype", "csv", "--rmdir_out", "1"],
-              env or None)
+        # 2026-06-24 — IOWA OCTLayerSeg 3.6 SIGSEGVs unconditionally on
+        # files staged on cn5's /scratch volume (dev 0x44 — XFS, likely
+        # BeeGFS or Lustre underneath given the suspiciously-low device
+        # number). Every copy method we tried that lands the file back
+        # on /scratch crashes IOWA (cp, dd, cat, Python write_bytes,
+        # shutil.copy — all -11). The same content on /tmp (ext4 /
+        # tmpfs, dev 0xfd00) IOWA accepts without issue. We could not
+        # identify the exact filesystem property that triggers the
+        # crash; the empirical fix is to stage IOWA's input + output
+        # to /tmp, then copy the result CSVs back to ``work`` (which
+        # lives on /scratch and is the persistent artifact path).
+        #
+        # See PR #255 for the full diagnostic trail.
+        import shutil as _shutil
+        import tempfile as _tempfile
+        with _tempfile.TemporaryDirectory(prefix="iowa_", dir="/tmp") as _tmp:
+            iowa_root = Path(_tmp)
+            iowa_dcm = iowa_root / "bscan.dcm"
+            iowa_layerseg = iowa_root / "layerseg"
+            iowa_layerseg.mkdir()
+            # Stage the DICOM onto /tmp so IOWA accepts it.
+            iowa_dcm.write_bytes(dcm.read_bytes())
+            # OCTLayerSeg3.6 (licensed host binary) -> lres.xml on /tmp.
+            _exec([s.ga_iowa_binary or "OCTLayerSeg3.6", "-oM", str(iowa_dcm),
+                   str(iowa_layerseg / "lres.xml"), str(iowa_layerseg / "t1.xml"),
+                   str(iowa_layerseg / "t2.tif"), str(iowa_layerseg / "t3.xml")],
+                  env or None)
+            # Convert lres.xml -> 11 layer CSVs on /tmp too. The converter
+            # REFUSES a pre-existing --out dir so don't create it; pass
+            # --rmdir_out 1 to allow it to manage its own directory.
+            iowa_layers_csv = iowa_root / "layers_csv"
+            _exec([s.ga_iowa_converter or "local_IOWA_LayerSegV3_to_CSV",
+                   "--in", str(iowa_layerseg / "lres.xml"), "--intype", "iowaxml_ls",
+                   "--out", str(iowa_layers_csv), "--outtype", "csv",
+                   "--rmdir_out", "1"], env or None)
+            # Copy results back to the persistent ``work`` dir on /scratch.
+            layers_csv = work / "layers_csv"
+            if layers_csv.exists():
+                _shutil.rmtree(str(layers_csv))
+            _shutil.copytree(str(iowa_layers_csv), str(layers_csv))
+            # Also persist the IOWA intermediates so downstream model
+            # runs (ga consumes lres.xml as --LayerSegPath) can reach
+            # them via the existing ``work / 'layerseg'`` path.
+            layerseg = work / "layerseg"
+            if layerseg.exists():
+                _shutil.rmtree(str(layerseg))
+            _shutil.copytree(str(iowa_layerseg), str(layerseg))
         return layers_csv
 
     def _run_bm(self, dcm: Path, out: Path) -> Path:
