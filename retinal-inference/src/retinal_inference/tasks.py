@@ -22,14 +22,15 @@ from typing import Any, Literal
 #   fluid — IRF + SRF + PED fluid segmentation              (sese_retinsight_fluid)
 #   onl   — outer nuclear layer segmentation (OPL-HFL/BMEIS)(sese_onl)
 #   pr    — photoreceptor layer segmentation (BMEIS/OB-OPR) (sese_pr)
-TaskName = Literal["ga", "fluid", "onl", "pr"]
+#   bm    — Bruch's membrane layer segmentation             (sese_bm; host venv, GPU)
+TaskName = Literal["ga", "fluid", "onl", "pr", "bm"]
 
 # All tasks the platform knows about (and that the PlaceholderAdapter can mock).
 # Whether a task can actually run in a given deployment is decided by the active
 # adapter: the OptimaAdapter only ``supports()`` a task that has a configured,
 # enabled model-runner — that is the gate that keeps ``ga`` off until the IOWA
 # layer segmenter + a GPU host are available (see the project plan).
-SUPPORTED_TASKS: set[TaskName] = {"ga", "fluid", "onl", "pr"}
+SUPPORTED_TASKS: set[TaskName] = {"ga", "fluid", "onl", "pr", "bm"}
 
 # The server emits only raw artifacts; ``primary_metric`` is None for every task
 # because the Java backend computes the clinical metric from those artifacts.
@@ -57,5 +58,11 @@ TASK_METADATA: dict[TaskName, dict[str, Any]] = {
         "output_kind": "layer",
         "reference_modality": "oct",
         "primary_metric": None,  # Java computes the PR depth (µm) from the surface CSVs
+    },
+    "bm": {
+        "display_name": "Bruch's membrane layer segmentation",
+        "output_kind": "layer",
+        "reference_modality": "oct",
+        "primary_metric": None,  # Java derives any BM metric from the surface CSV
     },
 }

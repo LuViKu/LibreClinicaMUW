@@ -104,7 +104,7 @@ def _post_run(
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--task", required=True, choices=["fluid", "onl", "pr", "ga"])
+    p.add_argument("--task", required=True, choices=["fluid", "onl", "pr", "ga", "bm"])
     p.add_argument("--base-url", default="http://localhost:8000", help="sidecar base URL")
     p.add_argument(
         "--token",

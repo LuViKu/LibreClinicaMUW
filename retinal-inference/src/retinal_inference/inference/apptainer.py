@@ -101,7 +101,13 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         return self._model_version
 
     def supports(self, task: TaskName) -> bool:
-        return task in SUPPORTED_TASKS and bool(self._sif.get(task))
+        if task not in SUPPORTED_TASKS:
+            return False
+        # BM is host-native (venv, no .sif) — gate it on its code/python instead.
+        if task == "bm":
+            s = _config.settings
+            return bool(s.bm_code or s.bm_python)
+        return bool(self._sif.get(task))
 
     def fast_screen(
         self, task: TaskName, e2e_path: Path, laterality: Literal["OD", "OS"]
@@ -315,6 +321,40 @@ class ApptainerAdapter(RetinalInferenceAdapter):
                 "output_payload": {"rpel_csv": Path(rpel[0]).name},
                 "pixel_scale_mm": lateral}
 
+    def _bm(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
+        import glob
+
+        s = _config.settings
+        out = work / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        dcm = dcm_dir / "bscan.dcm"
+        code = Path(s.bm_code or "/opt/sese_bm/code")
+        python = s.bm_python or "python3"
+        # BM is host-native (cluster venv + LMOD modules), NOT a .sif: exec the
+        # venv python on application.py with the module lib dirs on
+        # LD_LIBRARY_PATH (Python 3.8 + CUDA 11.1 + cuDNN — without it the venv
+        # python can't even find libpython3.8). GPU-required: application.py
+        # forces torch.cuda + pins device 0, so make the chosen GPU visible as 0.
+        # Weights are hardcoded in application.py to the cluster path (in place).
+        env: dict[str, str] = {}
+        if s.bm_ld_library_path:
+            existing = os.environ.get("LD_LIBRARY_PATH", "")
+            env["LD_LIBRARY_PATH"] = (
+                f"{s.bm_ld_library_path}:{existing}" if existing else s.bm_ld_library_path
+            )
+        dev = s.bm_gpu_device if s.bm_gpu_device is not None else s.apptainer_gpu_device
+        if dev is not None:
+            env["CUDA_VISIBLE_DEVICES"] = dev
+        _exec([python, str(code / "application.py"), str(dcm), str(out)], env or None)
+        # application.py writes "001-Bruch's membrane (BM).csv" into the out dir.
+        bm = sorted(glob.glob(str(out / "*BM*.csv"))) or sorted(glob.glob(str(out / "*Bruch*.csv")))
+        if not bm:
+            raise RuntimeError(f"sese_bm produced no BM CSV in {out}")
+        axial = _spacing_mm(dcm)[0]
+        return {"primary_metric_value": None, "primary_metric_unit": None,
+                "output_payload": {"surface_csvs": [Path(bm[0]).name]},
+                "pixel_scale_mm": axial}
+
     def full_volume(
         self,
         task: TaskName,
@@ -338,7 +378,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         dcm_dir, _dcm = _resolve_dcm(src)
 
         handler = {"fluid": self._fluid, "onl": self._onl,
-                   "pr": self._pr, "ga": self._ga}[task]
+                   "pr": self._pr, "ga": self._ga, "bm": self._bm}[task]
 
         if out_dir_override is not None:
             work = Path(out_dir_override)

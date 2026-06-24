@@ -130,6 +130,20 @@ class Settings(BaseSettings):
     ga_iowa_ld_library_path: str | None = None
     ga_threshold: str = "0.5"
 
+    # --- BM (Bruch's membrane) — host-native venv task (DR-022) ----------------
+    # Unlike the other models, BM has no .sif: on the cluster it runs from a plain
+    # venv + LMOD modules. The adapter execs ``bm_python`` on
+    # ``bm_code/application.py <bscan.dcm> <out>`` with ``bm_ld_library_path``
+    # (the Python-3.8 + CUDA-11.1 + cuDNN module lib dirs) prepended to
+    # LD_LIBRARY_PATH. GPU-required (application.py forces torch.cuda); the model
+    # weights are hardcoded in application.py to the cluster path, so referenced
+    # in place — nothing to copy or rebake. A task is supported when bm_code (or
+    # bm_python) is configured.
+    bm_python: str | None = None  # venv interpreter, e.g. <bm>/venv/bin/python3
+    bm_code: Path | None = None  # dir with application.py (+ models/, tpstorch.py)
+    bm_ld_library_path: str | None = None  # colon-joined LMOD module lib dirs
+    bm_gpu_device: str | None = None  # CUDA_VISIBLE_DEVICES (app pins device 0)
+
 
 settings = Settings()
 

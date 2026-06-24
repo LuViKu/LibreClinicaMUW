@@ -139,6 +139,20 @@ RETINAL_INFERENCE_PR_WEIGHTS=/home/optima/octreader/Processor_Implementations/se
   ```
 - These `$PI` paths must be visible from the GPU compute node (they are — same NFS
   as `/scratch`); the adapter bind-mounts the code/weights dirs into the `.sif`.
+- `bm` (Bruch's membrane) is **host-native, not a `.sif`** — it runs the cluster
+  venv python on `application.py` (the model already has torch/lightning/monai/
+  **mish_cuda** built in that venv, so nothing to rebuild). GPU-required; the
+  weights are hardcoded in `application.py` to the `$PI` path (referenced in
+  place). `BM_LD_LIBRARY_PATH` is the LMOD module lib dirs — capture it once via
+  `module load Python/3.8.2-foss-2019a CUDA/11.1.1-GCCcore-8.2.0
+  cuDNN/8.2.1.32-CUDA-11.1.1 && echo $LD_LIBRARY_PATH` (without it the venv python
+  can't find `libpython3.8.so`). To enable, add:
+  ```
+  RETINAL_INFERENCE_BM_PYTHON=/home/optima/octreader/Processor_Implementations/sese_bm_final/venv/bin/python3
+  RETINAL_INFERENCE_BM_CODE=/home/optima/octreader/Processor_Implementations/sese_bm_final/code
+  RETINAL_INFERENCE_BM_GPU_DEVICE=0
+  RETINAL_INFERENCE_BM_LD_LIBRARY_PATH=<the captured module LD_LIBRARY_PATH>
+  ```
 - PR extra dep: sese_pr imports `scikit-learn`, baked into `pr.sif` via the
   `.def`. To avoid rebaking the `.sif` you can instead bind a `pip --target` dir:
   ```sh
