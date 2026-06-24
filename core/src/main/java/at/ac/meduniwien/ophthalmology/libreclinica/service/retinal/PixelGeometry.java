@@ -36,6 +36,12 @@ public record PixelGeometry(double axialMm,
     public static final String HEADER_DIM_Y = "X-MUW-Bscan-Dim-Y";
     public static final String HEADER_DIM_X = "X-MUW-Bscan-Dim-X";
     public static final String HEADER_E2E_UUID = "X-MUW-E2E-Uuid";
+    /**
+     * 2026-06-23 — original OCT acquisition date pulled from the .e2e
+     * header by the retinal-preprocess sidecar. ISO {@code YYYY-MM-DD}.
+     * Optional: not every .e2e device populates the field.
+     */
+    public static final String HEADER_ACQUISITION_DATE = "X-MUW-Acquisition-Date";
 
     public static PixelGeometry from(HttpHeaders headers) {
         if (headers == null) {

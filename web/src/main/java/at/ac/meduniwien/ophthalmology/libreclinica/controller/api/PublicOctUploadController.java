@@ -522,6 +522,47 @@ public class PublicOctUploadController {
     }
 
     /**
+     * 2026-06-23 user-feedback round — persist the .e2e acquisition
+     * date on every job sharing this upload's {@code e2e_uuid}.
+     *
+     * <p>The post-commit pipeline calls {@code /preprocess} once per
+     * upload (one e2e file → one bscan.dcm + one acquisition date)
+     * but each upload can fan out into multiple jobs (one per task in
+     * the event_definition's retinal panel). The same date applies
+     * to all of them, so the {@code WHERE e2e_uuid = ?} update
+     * touches every fan-out row in a single round-trip.
+     *
+     * <p>Soft-fails on DB errors: missing the date doesn't break the
+     * pipeline, and the SPA's existing fallback chain still surfaces
+     * a date (visit_date / completed_at) when the column is null.
+     */
+    private void persistAcquisitionDate(String e2eUuid, String iso) {
+        if (e2eUuid == null || e2eUuid.isBlank() || iso == null || iso.isBlank()) return;
+        java.sql.Date date;
+        try {
+            date = java.sql.Date.valueOf(iso);
+        } catch (IllegalArgumentException badDate) {
+            LOG.warn("Preprocess returned an unparseable X-MUW-Acquisition-Date '{}' for e2eUuid={}; skipping update",
+                    iso, e2eUuid);
+            return;
+        }
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "UPDATE retinal_inference_job SET acquisition_date = ? "
+                             + "WHERE e2e_uuid = ? AND acquisition_date IS DISTINCT FROM ?")) {
+            ps.setDate(1, date);
+            ps.setString(2, e2eUuid);
+            ps.setDate(3, date);
+            int updated = ps.executeUpdate();
+            LOG.info("Persisted acquisition_date={} on {} job(s) sharing e2e_uuid={}",
+                    iso, updated, e2eUuid);
+        } catch (SQLException sqlEx) {
+            LOG.warn("Failed to persist acquisition_date={} for e2eUuid={}: {}",
+                    iso, e2eUuid, sqlEx.getMessage());
+        }
+    }
+
+    /**
      * 2026-06-22 — resolve the configured retinal-task panel for the
      * event_definition that owns this event_crf. Returns the lowercase
      * task tokens ordered as stored. Empty list when the event_def has
@@ -649,6 +690,17 @@ public class PublicOctUploadController {
                     } else {
                         LOG.info("Preprocess sidecar ok for upload e2eUuid={} (primary job {}, dcmBytes={})",
                                 e2eUuid, primaryJobId, prep.dcmBytes() != null ? prep.dcmBytes().length : 0);
+                        // 2026-06-23 user-feedback round — persist the
+                        // .e2e acquisition date on every job sharing
+                        // this upload's e2eUuid so the nAMD trend
+                        // chart plots against the real scan date, not
+                        // the upload timestamp. Soft-fail: an older
+                        // sidecar simply leaves the column NULL and
+                        // the SPA's date chain falls back to
+                        // visit_date / completed_at as before.
+                        if (prep.acquisitionDate() != null && !prep.acquisitionDate().isBlank()) {
+                            persistAcquisitionDate(e2eUuid, prep.acquisitionDate());
+                        }
                     }
                 } catch (Exception prepEx) {
                     LOG.warn("Preprocess sidecar threw for upload (primary job {}): {}",

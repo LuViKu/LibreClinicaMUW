@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd">
+
+    <!--
+      2026-06-23 — OCT acquisition date on retinal_inference_job.
+
+      User-feedback round: the nAMD trend chart and report dated every
+      visit by the upload's `completed_at`. When the operator backfills
+      a stack of historical scans the chart collapses the whole
+      timeline onto the upload day. The Heidelberg .e2e header carries
+      the original acquisition date; the retinal-preprocess sidecar
+      now exposes it as the `X-MUW-Acquisition-Date` response header
+      and the Java client persists it on the job row at preprocess
+      time. The SPA's nAMD composable prefers this over visit_date /
+      completed_at so backfills plot on the correct day.
+
+      Nullable: jobs created before this migration + jobs whose source
+      .e2e left the date field blank both surface NULL. The SPA falls
+      back to the existing visit_date / completed_at chain in that
+      case.
+    -->
+    <changeSet id="2026-06-23-retinal-job-acquisition-date" author="muw">
+        <addColumn tableName="retinal_inference_job">
+            <column name="acquisition_date" type="DATE"
+                    remarks="Original OCT acquisition date pulled from the .e2e header. Falls back to visit_date / completed_at when null."/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

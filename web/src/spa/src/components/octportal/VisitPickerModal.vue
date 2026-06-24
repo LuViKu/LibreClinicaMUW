@@ -29,6 +29,7 @@ import { useI18n } from 'vue-i18n'
 
 import Modal from '@/components/Modal.vue'
 import { ApiError, ApiNetworkError, apiGet } from '@/api/client'
+import { formatDate } from '@/lib/dateFormat'
 import type { StudyEvent } from '@/types/event'
 import type { EventDetailDto } from '@/types/event'
 import {
@@ -299,7 +300,7 @@ const labelledById = 'oct-portal-visit-picker-heading'
               >{{ evt.status }}</span>
             </div>
             <div class="text-[11.5px] text-slate-500 mt-0.5">
-              {{ evt.dateStarted }}
+              {{ formatDate(evt.dateStarted) }}
               <span v-if="resolvingId === evt.id" class="ml-1 italic text-slate-400">…</span>
             </div>
           </button>

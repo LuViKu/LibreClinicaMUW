@@ -25,6 +25,7 @@ import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue
 import { useI18n } from 'vue-i18n'
 import { artifactUrl } from '@/api/retinal'
 import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
+import { formatDate } from '@/lib/dateFormat'
 import NamdEnFaceLocator from './NamdEnFaceLocator.vue'
 import type { NamdVisit, Laterality } from '../types'
 
@@ -113,26 +114,31 @@ const atFovea = computed(() =>
   Math.abs(props.slice - Math.floor(props.nSlices / 2)) <= 1,
 )
 
-const dateFormatter = computed(() => {
-  if (typeof Intl === 'undefined') return null
-  try {
-    return new Intl.DateTimeFormat('de-AT', { day: '2-digit', month: 'short', year: 'numeric' })
-  } catch {
-    return null
-  }
-})
-
-function fmtDate(iso: string): string {
-  if (!iso) return ''
-  if (!dateFormatter.value) return iso
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return dateFormatter.value.format(d)
-}
-
 function setSlice(z: number): void {
   const clamped = Math.max(0, Math.min(props.nSlices - 1, z))
   emit('update:slice', clamped)
+}
+
+/**
+ * 2026-06-23 user-feedback round — wheel scroll on the scan box
+ * scrubs through B-scans. BscanViewer's own wheel handler is
+ * gated by {@code staticFrame=true}, so we duplicate the accumulator
+ * pattern here and drive slice changes via the parent's emit.
+ * Threshold matches BscanViewer (24px) so trackpad + mouse-wheel
+ * feel identical between the two callers.
+ */
+let wheelAccum = 0
+function onWheel(ev: WheelEvent): void {
+  ev.preventDefault()
+  wheelAccum += ev.deltaY
+  const threshold = 24
+  if (wheelAccum >= threshold) {
+    wheelAccum = 0
+    setSlice(props.slice + 1)
+  } else if (wheelAccum <= -threshold) {
+    wheelAccum = 0
+    setSlice(props.slice - 1)
+  }
 }
 
 function toggleMask(): void {
@@ -202,14 +208,25 @@ const eyeLabel = computed(() => (props.eye === 'OD' ? 'OD' : 'OS'))
   >
     <!-- Scan frame: black background, rounded corners, the
          BscanViewer fills the entire aspect-[16/9] box and the
-         corner overlays sit absolutely on top. -->
+         corner overlays sit absolutely on top. Hover + scroll
+         scrubs through the B-scans via the wheel handler. -->
     <div
       class="relative rounded-xl overflow-hidden bg-black ring-1 ring-black/40"
       style="box-shadow: 0 8px 20px -8px rgba(0,0,0,0.45)"
+      @wheel.prevent="onWheel"
     >
       <div class="aspect-[16/9]">
         <div v-if="bscanDcmUrl" class="w-full h-full">
+          <!-- 2026-06-24 user-feedback round — `:key` forces a fresh
+               BscanViewer mount whenever the bound DICOM URL changes
+               (e.g. the Compare tab swaps the left or right visit).
+               Without it, BscanViewer's cornerstone initViewer() only
+               runs onMounted; the segmentation overlay was updating
+               correctly (the envelope composable watches jobId) but
+               the cornerstone stack stayed on the FIRST visit's
+               bscan.dcm. -->
           <BscanViewer
+            :key="bscanDcmUrl"
             :bscan-dcm-url="bscanDcmUrl"
             :n-bscans="nSlices"
             :model-value="slice"
@@ -239,7 +256,7 @@ const eyeLabel = computed(() => (props.eye === 'OD' ? 'OD' : 'OS'))
           {{ eyeLabel }} · {{ visit.label }}
         </span>
         <span class="rounded-md bg-black/55 backdrop-blur-sm text-white/70 text-[11px] px-2 py-1 font-mono">
-          {{ fmtDate(visit.date) }}
+          {{ formatDate(visit.date) }}
         </span>
       </div>
 

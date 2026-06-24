@@ -11,28 +11,52 @@
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { I } from '../icons'
-import { activeFluid, totalFluid } from '../fluid'
-import NamdActivityPill from './NamdActivityPill.vue'
-import type { NamdPatient, NamdVisit } from '../types'
+import { totalFluid } from '../fluid'
+import type { Laterality, NamdPatient, NamdVisit } from '../types'
 
 interface Props {
   patient: NamdPatient
   current: NamdVisit | null
   prev: NamdVisit | null
+  /**
+   * 2026-06-24 user-feedback round — eyes the subject has at least
+   * one done fluid job for. When both OD + OS are present the banner
+   * renders one pill per eye; the active one (matching patient.eye)
+   * is highlighted, the other is faded and clickable to switch.
+   * Single-eye subjects continue to show one pill.
+   */
+  availableEyes?: Laterality[]
+  /** Active eye — drives the highlight + reflects {@code patient.eye}. */
+  selectedEye?: Laterality
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  availableEyes: () => [],
+  selectedEye: undefined,
+})
+const emit = defineEmits<{
+  'switch-eye': [eye: Laterality]
+}>()
 const { t } = useI18n()
 
-const eyeLabel = computed(() =>
-  props.patient.eye === 'OD'
-    ? t('studyModules.namd.eyeOd')
-    : t('studyModules.namd.eyeOs'),
-)
+const eyeLabelFor = (eye: Laterality) =>
+  eye === 'OD' ? t('studyModules.namd.eyeOd') : t('studyModules.namd.eyeOs')
 
-const activeFluidNl = computed(() =>
-  props.current ? Math.round(activeFluid(props.current)) : null,
-)
+const activeEye = computed<Laterality>(() => props.selectedEye ?? props.patient.eye)
+
+/**
+ * The pills to render. When the composable didn't surface
+ * availableEyes (legacy callers, mock fixtures), fall back to the
+ * patient.eye single-pill shape so the banner stays well-formed.
+ */
+// Defensive ??[] so the computed never trips on an HMR'd parent that
+// hasn't re-bound the new optional prop yet — the user hit this once
+// after a partial reload (2026-06-24).
+const pillEyes = computed<Laterality[]>(() => {
+  const eyes = props.availableEyes ?? []
+  if (eyes.length > 0) return eyes
+  return [props.patient.eye]
+})
 
 const totalFluidLabel = computed(() => {
   if (!props.current) return '—'
@@ -56,11 +80,31 @@ const totalFluidLabel = computed(() => {
           <h1 class="font-serif text-[22px] font-semibold text-slate-900 leading-none">
             {{ t('studyModules.namd.patientPrefix') }} {{ props.patient.id }}
           </h1>
-          <span
-            class="inline-flex items-center justify-center rounded-md bg-muw-teal-50 text-muw-teal-700 text-[11px] font-bold px-2 py-0.5"
-            data-testid="namd-patient-eye"
-          >{{ props.patient.eye }} · {{ eyeLabel }}</span>
-          <NamdActivityPill :active-fluid-nl="activeFluidNl" />
+          <!-- 2026-06-24 user-feedback round — eye-switcher pill row.
+               Renders one pill per eye the subject has done fluid jobs
+               for. Active pill stays full-color (teal); the OTHER eye
+               (when both are enrolled) renders muted + clickable;
+               clicking emits {@code switch-eye} which the workspace
+               composable picks up. Monocular subjects continue to
+               show a single non-interactive pill. -->
+          <div class="inline-flex items-center gap-1" data-testid="namd-patient-eye-row">
+            <button
+              v-for="eye in pillEyes"
+              :key="eye"
+              type="button"
+              :data-testid="`namd-patient-eye-${eye}`"
+              :aria-pressed="eye === activeEye"
+              :class="[
+                'inline-flex items-center justify-center rounded-md text-[11px] font-bold px-2 py-0.5 transition-colors',
+                eye === activeEye
+                  ? 'bg-muw-teal-50 text-muw-teal-700'
+                  : 'bg-slate-50 text-slate-400 hover:bg-slate-100 hover:text-slate-600 cursor-pointer',
+                pillEyes.length === 1 ? 'cursor-default' : '',
+              ]"
+              :disabled="pillEyes.length === 1"
+              @click="pillEyes.length > 1 && eye !== activeEye && emit('switch-eye', eye)"
+            >{{ eye }} · {{ eyeLabelFor(eye) }}</button>
+          </div>
         </div>
         <div class="text-[13px] text-slate-500 mt-1.5">
           {{ props.patient.diagnosis }}

@@ -12,6 +12,7 @@
  * as disabled options inside the select so the operator still
  * sees the full visit list but can't double-pick.
  */
+import { formatDate } from '@/lib/dateFormat'
 import type { NamdVisit } from '../types'
 
 interface Props {
@@ -47,7 +48,7 @@ function onChange(ev: Event): void {
         :disabled="visit.id === props.excludeId"
       >
         {{ visit.label }} · W{{ visit.week }}
-        <template v-if="visit.date">— {{ visit.date }}</template>
+        <template v-if="visit.date">— {{ formatDate(visit.date) }}</template>
       </option>
     </select>
     <span

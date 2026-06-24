@@ -371,7 +371,12 @@ public class RemoteRetinalInferenceClient {
             // computer also degrades gracefully when geometry is null.
             LOG.info("Reusing on-disk preprocess DICOM for job {} from {} ({} bytes)",
                     jobId, dcmPath, dcmBytes.length);
-            return new PreprocessResult(dcmBytes, null, e2eUuid);
+            // Disk-reuse path — no fresh /preprocess call, so no
+            // acquisition_date header to capture. The first preprocess
+            // already persisted it on the job row via the live header
+            // path; later jobs sharing the same e2eUuid inherit the
+            // date via the same update.
+            return new PreprocessResult(dcmBytes, null, e2eUuid, null);
         }
         return null;
     }
@@ -429,7 +434,9 @@ public class RemoteRetinalInferenceClient {
             }
             String echoedUuid = resp.getHeaders().getFirst(PixelGeometry.HEADER_E2E_UUID);
             String resolvedUuid = (echoedUuid == null || echoedUuid.isBlank()) ? e2eUuid : echoedUuid;
-            return new PreprocessResult(resp.getBody(), geom, resolvedUuid);
+            String acquisitionDate = resp.getHeaders().getFirst(PixelGeometry.HEADER_ACQUISITION_DATE);
+            return new PreprocessResult(resp.getBody(), geom, resolvedUuid,
+                    acquisitionDate != null && !acquisitionDate.isBlank() ? acquisitionDate : null);
         } catch (Exception e) {
             LOG.warn("Preprocess /preprocess failed for job {} at {}: {}",
                     jobId, endpoint, e.getMessage());
@@ -437,8 +444,16 @@ public class RemoteRetinalInferenceClient {
         }
     }
 
-    /** DR-022 carrier — bscan.dcm bytes + geometry parsed off the response headers. */
-    public record PreprocessResult(byte[] dcmBytes, PixelGeometry geometry, String e2eUuid) { }
+    /**
+     * DR-022 carrier — bscan.dcm bytes + geometry parsed off the response headers.
+     *
+     * <p>{@code acquisitionDate} is the optional ISO {@code YYYY-MM-DD}
+     * stamp pulled out of the .e2e header by the preprocess sidecar
+     * (2026-06-23 user-feedback round). Null when the device left the
+     * field blank or the preprocess deploy is older than this header.
+     */
+    public record PreprocessResult(byte[] dcmBytes, PixelGeometry geometry,
+                                   String e2eUuid, String acquisitionDate) { }
 
     @SuppressWarnings("unchecked")
     private static RemoteRunResult parseEnvelope(Map<String, Object> b) {

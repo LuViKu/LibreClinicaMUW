@@ -55,7 +55,8 @@ router = APIRouter()
 
 _EXPOSED_HEADERS = (
     "X-MUW-Pixel-Axial-Mm, X-MUW-Pixel-Lateral-Mm, X-MUW-Pixel-Slice-Mm, "
-    "X-MUW-Bscan-Dim-Z, X-MUW-Bscan-Dim-Y, X-MUW-Bscan-Dim-X, X-MUW-E2E-Uuid"
+    "X-MUW-Bscan-Dim-Z, X-MUW-Bscan-Dim-Y, X-MUW-Bscan-Dim-X, X-MUW-E2E-Uuid, "
+    "X-MUW-Acquisition-Date"
 )
 
 
@@ -273,6 +274,13 @@ async def preprocess(
                 "X-MUW-Bscan-Dim-Y": str(int(bv.rows)),
                 "X-MUW-Bscan-Dim-X": str(int(bv.cols)),
             }
+            # 2026-06-23 user-feedback round — surface the .e2e
+            # acquisition date so the Java client can persist it on
+            # the retinal_inference_job row and the nAMD workspace
+            # can plot the trend chart against the real scan date
+            # rather than the upload completion time.
+            if bv.acquisition_date:
+                geom_headers["X-MUW-Acquisition-Date"] = bv.acquisition_date
         del ds
         del bv
         gc.collect()

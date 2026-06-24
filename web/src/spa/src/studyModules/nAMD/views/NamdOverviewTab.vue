@@ -49,7 +49,7 @@ const { t } = useI18n()
     </div>
 
     <div class="col-span-12 lg:col-span-4 space-y-5">
-      <NamdDecisionPanel :ai="props.data.ai" />
+      <NamdDecisionPanel />
       <Card :title="t('studyModules.namd.overview.legend')">
         <NamdFluidLegend />
       </Card>

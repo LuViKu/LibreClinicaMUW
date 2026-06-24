@@ -88,6 +88,14 @@ class BscanVolume:
     n_bscans: int
     rows: int
     cols: int
+    # 2026-06-23 user-feedback round — OCT acquisition date pulled
+    # straight from the .e2e header. ISO YYYY-MM-DD when populated,
+    # ``None`` when the original device did not stamp the field. The
+    # nAMD workspace uses this in preference to the upload's
+    # ``completed_at`` so historical backfills plot against the
+    # real scan date rather than the day the operator clicked
+    # "Hochladen".
+    acquisition_date: str | None = None
 
 
 def _derive_spacing_mm(bscan_data: list[dict], n_bscans: int) -> tuple[float, float, float]:
@@ -185,6 +193,17 @@ def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
     lat = str(getattr(vol_meta, "laterality", "") or "").upper()
     laterality = "OD" if lat.startswith("R") else "OS" if lat.startswith("L") else "OD"
 
+    # 2026-06-23 — oct-converter parses the .e2e exam header into
+    # ``acquisition_date`` (a ``datetime.date`` or ``None`` when the
+    # device left the field blank). Normalise to ISO ``YYYY-MM-DD``.
+    acq_raw = getattr(vol_meta, "acquisition_date", None)
+    acq_iso: str | None = None
+    if acq_raw is not None:
+        try:
+            acq_iso = acq_raw.strftime("%Y-%m-%d") if hasattr(acq_raw, "strftime") else str(acq_raw)[:10]
+        except Exception:  # pylint: disable=broad-except
+            acq_iso = None
+
     return BscanVolume(
         volume_u8=vol_u8,
         axial_mm=axial,
@@ -194,6 +213,7 @@ def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
         n_bscans=n,
         rows=rows,
         cols=cols,
+        acquisition_date=acq_iso,
     )
 
 

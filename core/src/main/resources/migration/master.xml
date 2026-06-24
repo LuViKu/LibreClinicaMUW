@@ -81,5 +81,7 @@
   <include  file="migration/lc-muw-2026-06-22-retinal-job-multitask-unique.xml"/>
   <include  file="migration/lc-muw-2026-06-22-event-definition-retinal-tasks.xml"/>
   <include  file="migration/lc-muw-2026-06-23-retinal-job-study-event-id.xml"/>
+  <include  file="migration/lc-muw-2026-06-23-retinal-job-acquisition-date.xml"/>
+  <include  file="migration/lc-muw-2026-06-24-audit-event-type-bcva-entry-public.xml"/>
 </databaseChangeLog>
 

@@ -19,9 +19,8 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import NamdSegCards from '../components/NamdSegCards.vue'
 import NamdFluidTrendChart from '../components/NamdFluidTrendChart.vue'
-import NamdActivityPill from '../components/NamdActivityPill.vue'
 import NamdReportScan from '../components/NamdReportScan.vue'
-import { activeFluid, totalFluid } from '../fluid'
+import { totalFluid } from '../fluid'
 import { I } from '../icons'
 import type { NamdWorkspaceData } from '../types'
 
@@ -35,10 +34,6 @@ const today = computed(() => {
   const d = new Date()
   return d.toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit' })
 })
-
-const activeFluidNl = computed(() =>
-  props.data.current ? Math.round(activeFluid(props.data.current)) : null,
-)
 
 /**
  * 2026-06-23 — baseline visit for the "OCT · Baseline vs. aktueller"
@@ -106,12 +101,9 @@ function printReport() {
     </section>
 
     <section class="mb-6">
-      <div class="flex items-baseline justify-between mb-2">
-        <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500">
-          {{ t('studyModules.namd.report.current') }}
-        </h2>
-        <NamdActivityPill :active-fluid-nl="activeFluidNl" />
-      </div>
+      <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 mb-2">
+        {{ t('studyModules.namd.report.current') }}
+      </h2>
       <NamdSegCards :current="props.data.current" :prev="props.data.prev" />
       <div
         v-if="props.data.current"
@@ -124,6 +116,10 @@ function printReport() {
         <div>
           <span class="text-slate-500">BCVA:</span>
           <span class="ml-1 font-semibold tabular-nums">{{ props.data.current.bcva }} L</span>
+          <span
+            v-if="props.data.current.bcvaRaw"
+            class="ml-1 text-slate-400 text-xs"
+          >· {{ props.data.current.bcvaRaw }}</span>
         </div>
         <div>
           <span class="text-slate-500">Total:</span>
@@ -178,14 +174,37 @@ function printReport() {
             v-for="visit in props.data.visits"
             :key="visit.id"
             class="border-b border-slate-100"
+            :class="visit.dateMismatch ? 'bg-amber-50/50' : ''"
           >
             <td class="py-1.5 px-2 font-medium text-slate-700">{{ visit.label }}</td>
-            <td class="py-1.5 px-2 text-slate-500 tabular-nums">{{ visit.date || '—' }}</td>
+            <!-- 2026-06-23 user-feedback round — flag when the planned
+                 visit date doesn't line up with the .e2e acquisition
+                 date (> DATE_MISMATCH_DAYS apart). The displayed date is
+                 the acquisition date (per the composable's priority);
+                 the tooltip surfaces both raw dates so the operator
+                 can see which one to correct. -->
+            <td
+              class="py-1.5 px-2 text-slate-500 tabular-nums"
+              :class="visit.dateMismatch ? 'text-amber-700 font-medium' : ''"
+              :title="visit.dateMismatch
+                ? t('studyModules.namd.report.dateMismatchTitle', {
+                    visit: visit.visitDate ?? '—',
+                    acquired: visit.acquisitionDate ?? '—',
+                  })
+                : ''"
+            >
+              <span v-if="visit.dateMismatch" class="inline-block mr-1" aria-hidden="true">⚠</span>{{ visit.date || '—' }}
+            </td>
             <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.irf }}</td>
             <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.srf }}</td>
             <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.ped }}</td>
             <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.crt || '—' }}</td>
-            <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.bcva || '—' }}</td>
+            <td class="py-1.5 px-2 text-right tabular-nums">
+              <span>{{ visit.bcva || '—' }}</span>
+              <span v-if="visit.bcvaRaw" class="block text-[10px] text-slate-400">
+                {{ visit.bcvaRaw }}
+              </span>
+            </td>
             <td class="py-1.5 px-2 text-slate-500">{{ visit.inj || '—' }}</td>
           </tr>
         </tbody>

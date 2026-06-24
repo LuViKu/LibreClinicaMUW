@@ -30,6 +30,7 @@ import { roleSatisfies, userRolesFromAuth } from '@/router'
 import type { StudyEventStatus } from '@/types/event'
 import { canEditEvent, canCancelEvent } from '@/types/event'
 import { formatDate } from '@/lib/dateFormat'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 const { t } = useI18n()
 const route = useRoute()
@@ -661,6 +662,17 @@ const subject = computed(() => subjects.selected)
 const isLoading = computed(() => subjects.isLoadingSelected)
 const loadError = computed(() => subjects.selectedError)
 
+// 2026-06-23 user-feedback round — nested breadcrumb trail:
+// "<study> > Studienteilnehmer > <subject.id>". The matrix link
+// lets the operator step back; the subject id is the active leaf.
+useViewBreadcrumb(computed(() => {
+  const label = subject.value?.id ?? subjectId.value
+  return [
+    { label: t('nav.subjectMatrix'), to: '/subjects' },
+    { label, to: null },
+  ]
+}))
+
 /* ------------------------------------------------------------- */
 /* Wave 2A — Retinal trends section mounting.                    */
 /*                                                               */
@@ -815,28 +827,6 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
             <StatusPill v-if="subject.locked" variant="warning">{{ t('subjectDetail.locked') }}</StatusPill>
           </h1>
         </div>
-
-        <!-- Pluggable study-module SPI — workspace slot.
-             Active manifest's 'subject-detail.workspace' entries render
-             here (typically a CTA card to enter the module's dedicated
-             workspace). Each entry is opaque to the host.
-
-             2026-06-23 — bind the host's subject context to every
-             injected entry. The nAMD CTA needs both (a) the numeric
-             study_subject_id (passed via subject-oid, since its
-             composable Number.parseInt()'s it) and (b) the subject
-             label for the in-link confirmation. Without these props
-             the CTA's router.push omits the query, the workspace
-             route lands with no subject, and the data composable
-             returns null → "No OCTs available" even when the subject
-             has completed jobs. -->
-        <template v-for="entry in workspaceInjections" :key="entry.key">
-          <component
-            :is="entry.component"
-            :subject-oid="retinalNumericId != null ? String(retinalNumericId) : null"
-            :subject-label="subject?.id ?? null"
-          />
-        </template>
 
         <!-- Identity / enrolment card -->
         <section class="bg-white border border-slate-200 rounded-muw p-5 mb-5">
@@ -1061,6 +1051,35 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
           {{ transitionError }}
         </div>
 
+        <!-- Pluggable study-module SPI — workspace slot.
+             2026-06-23 user-feedback round — moved from above the
+             Identity card to BETWEEN patient details and planned
+             visits. The CTA card is study-module context (entering
+             the nAMD workspace), which logically sits closer to the
+             casebook than to the demographic identifiers above.
+
+             Active manifest's 'subject-detail.workspace' entries render
+             here (typically a CTA card to enter the module's dedicated
+             workspace). Each entry is opaque to the host.
+
+             The nAMD CTA needs both the numeric study_subject_id
+             (passed via subject-oid, since its composable
+             Number.parseInt()'s it) and the subject label for the
+             in-link confirmation. -->
+        <!-- 2026-06-23 user-feedback round — `mb-5` matches the
+             vertical rhythm of the surrounding cards so the
+             workspace CTA reads as its own block and doesn't visually
+             collide with the events panel below. -->
+        <div v-if="workspaceInjections.length" class="mb-5">
+          <template v-for="entry in workspaceInjections" :key="entry.key">
+            <component
+              :is="entry.component"
+              :subject-oid="retinalNumericId != null ? String(retinalNumericId) : null"
+              :subject-label="subject?.id ?? null"
+            />
+          </template>
+        </div>
+
         <!-- Events / casebook -->
         <!-- Phase E.6 polish — `#events` anchor target for post-
              markComplete navigation from CrfEntryView. The natural
@@ -1121,7 +1140,13 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
               </tr>
             </template>
             <template v-for="ev in subject.events" :key="ev.eventDefinitionOid">
-              <tr>
+              <!-- 2026-06-23 user-feedback round — `group` lets the
+                   sticky action <td> sync its background to the row's
+                   hover state via `group-hover`. Without it the
+                   sticky cell's solid `bg-white` painted over the
+                   tbody-level hover, breaking the row hover at the
+                   CRF / kebab area on every visit row. -->
+              <tr class="group">
                 <td class="px-5 py-2.5 font-medium">
                   <div>{{ ev.label }}</div>
                   <div v-if="ev.location" class="text-xs text-slate-500 mt-0.5">{{ ev.location }}</div>
@@ -1136,7 +1161,7 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                   <span v-else class="text-slate-400">—</span>
                 </td>
                 <td
-                  class="px-5 py-2.5 text-right text-xs whitespace-nowrap sticky right-0 bg-white"
+                  class="px-5 py-2.5 text-right text-xs whitespace-nowrap sticky right-0 bg-white group-hover:bg-slate-50"
                   :class="openMenuEventId === ev.eventId ? 'z-20' : ''"
                 >
                   <!-- 2026-06-21 user-feedback round 6 — three inline

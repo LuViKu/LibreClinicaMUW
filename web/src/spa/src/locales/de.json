@@ -258,6 +258,13 @@
     "rowsPerPage": "Zeilen",
     "empty": "Keine Teilnehmer für den aktuellen Filter.",
     "openSubject": "Öffnen →",
+    "visitsTrail": "{count} Visiten",
+    "visitNav": {
+      "first": "Erste Visite",
+      "prev": "Frühere Visite",
+      "next": "Nächste Visite",
+      "jumpLatest": "Letzte Visite"
+    },
     "signed": "Signiert",
     "scheduleHint": "Bitte unten eine/n Teilnehmer/-in auswählen, um die nächste Visite zu planen.",
     "metricsLink": "Studien-Statistik Details",
@@ -1499,6 +1506,21 @@
           "axisValidation": "Ganzzahl 0–180 erwartet."
         }
       },
+      "bcvaDecimal": {
+        "label": "BCVA (Dezimal + Refraktion)",
+        "description": "Bestkorrigierter Visus dezimal (autorefraktometer-Output) mit signiertem Teilzeilen-Offset (p-N / +N) plus Refraktion pro Auge. Backt das öffentliche BCVA-Eingabeportal.",
+        "items": {
+          "decimal": "Visus (Dezimal)",
+          "decimalValidation": "Dezimalwert 0,01–2,0 erwartet (z. B. 1,0 oder 0,8).",
+          "partial": "Teilzeile (signiert −4…+4)",
+          "partialValidation": "Ganzzahl −4 bis +4 erwartet (−N = N Optotypen verfehlt, +N = N zusätzlich gelesen).",
+          "sphere": "Refraktion — Sphäre",
+          "cylinder": "Refraktion — Zylinder",
+          "axis": "Refraktion — Achse",
+          "refractionValidation": "Bitte einen numerischen Wert eingeben (z. B. -1,75).",
+          "axisValidation": "Ganzzahl 0–180 erwartet."
+        }
+      },
       "rnfl": {
         "label": "RNFL (peripapillär, Heidelberg HRA / Spectralis ONH)",
         "description": "Peripapilläre Nervenfaserschicht — globaler Mittelwert + Quadranten (S/T/I/N) + Signalqualität pro Auge.",
@@ -1545,6 +1567,59 @@
           "vitreous": "Glaskörper (anterior)",
           "remark": "Bemerkung"
         }
+      },
+      "imaging": {
+        "option": {
+          "ja": "Ja",
+          "nein": "Nein",
+          "unbekannt": "Unbekannt"
+        },
+        "reason": {
+          "label": "Grund (nicht akquiriert)"
+        }
+      },
+      "spectralisOct": {
+        "label": "Spectralis SD-OCT",
+        "description": "Heidelberg Spectralis SD-OCT — Akquisition akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "OCT akquiriert?" }
+      },
+      "spectralisFaf": {
+        "label": "Spectralis FAF",
+        "description": "Heidelberg Spectralis Fundus-Autofluoreszenz akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "FAF akquiriert?" }
+      },
+      "plexEliteOcta": {
+        "label": "ZEISS PLEX Elite OCT-A",
+        "description": "PLEX Elite 9000 OCT-Angiographie akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "OCT-A akquiriert?" }
+      },
+      "zeissClarus": {
+        "label": "ZEISS Clarus 700",
+        "description": "Ultra-Weitwinkel-Fundusaufnahme akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "Fundusbild akquiriert?" }
+      },
+      "topconMaestro2Oct": {
+        "label": "Topcon Maestro2 OCT",
+        "description": "Topcon Maestro 2 SD-OCT akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "OCT akquiriert?" }
+      },
+      "plBcva": {
+        "label": "PL-BCVA (Pinhole)",
+        "description": "Pinhole-bestkorrigierter Visus — Buchstaben pro Auge + Bemerkung.",
+        "letters": {
+          "label": "PL-BCVA (Buchstaben)",
+          "validation": "0–100 Buchstaben (ganzzahlig)."
+        },
+        "notes": { "label": "Bemerkung" }
+      },
+      "llBcva": {
+        "label": "LL-BCVA (Low Luminance)",
+        "description": "Low-Luminance bestkorrigierter Visus (2,0 ND-Filter) — Buchstaben pro Auge + Bemerkung.",
+        "letters": {
+          "label": "LL-BCVA (Buchstaben)",
+          "validation": "0–100 Buchstaben (ganzzahlig)."
+        },
+        "notes": { "label": "Bemerkung" }
       }
     }
   },
@@ -2694,6 +2769,25 @@
       "heading": "Bestätigen",
       "placeholder": "Bestätigungsoberfläche folgt mit Phase 2."
     }
+  },
+  "bcvaPortal": {
+    "title": "BCVA-Eingabeportal",
+    "studyOid": "Studie · {oid}",
+    "date": "Datum der Visite",
+    "enteredBy": "Eingegeben von",
+    "enteredByPlaceholder": "Vor- und Nachname",
+    "enteredByRequired": "Bitte zuerst den Namen eintragen.",
+    "loading": "Lade Visiten …",
+    "empty": "Für dieses Datum sind keine Visiten geplant.",
+    "alreadyEntered": "BCVA bereits erfasst",
+    "committed": "Gespeichert ✓",
+    "reopen": "Erneut bearbeiten",
+    "bcva": "Visus",
+    "bcvaPlaceholder": "z. B. 1,0 oder 1,0p-2 oder 0,8+2",
+    "bcvaInvalid": "Format: 1,0  ·  1,0p-2  ·  0,8+2",
+    "noBcvaProvided": "Bitte mindestens einen Visus-Wert eingeben (OD oder OS).",
+    "submit": "Speichern",
+    "submitting": "Speichere …"
   },
   "octPortal": {
     "topbar": {

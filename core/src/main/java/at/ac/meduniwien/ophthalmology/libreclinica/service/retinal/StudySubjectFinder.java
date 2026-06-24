@@ -234,7 +234,10 @@ public class StudySubjectFinder {
                         rs.getInt("study_event_id"),
                         eventCrfId,
                         label,
-                        dStart == null ? null : dStart.toLocalDate(),
+                        // 2026-06-24 — pre-format as ISO yyyy-MM-dd so
+                        // the SPA renders "2025-11-19" verbatim, not
+                        // Jackson's "[ 2025, 11, 19 ]" LocalDate array.
+                        dStart == null ? null : dStart.toLocalDate().toString(),
                         "same-day"
                 ));
             }

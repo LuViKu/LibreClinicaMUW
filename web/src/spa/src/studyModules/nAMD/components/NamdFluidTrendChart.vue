@@ -64,9 +64,47 @@ function xAt(week: number): number {
   return PL + (week / maxWeek.value) * (W - PL - PR)
 }
 
-const FLUID_MAX = 560
+/**
+ * 2026-06-24 user-feedback round — fluid Y-axis is dynamic.
+ *
+ * <p>The hardcoded 560 nL ceiling was a leftover from the design
+ * mock (which uses an exsudative-AMD timeline that fits the
+ * 0..560 band). Real datasets sit much lower — a "Trocken" patient
+ * may never exceed 30 nL, and the chart collapsed to a sliver near
+ * y=0 with most of the canvas empty. Compute the ceiling per
+ * dataset:
+ *
+ * <ul>
+ *   <li>Cap = max stack height (irf + srf + ped) across visits</li>
+ *   <li>Rounded UP to a "nice" tick step — 10, 25, 50, 100, 200,
+ *       500, 1000 — whichever lands the ceiling at exactly four
+ *       evenly-spaced grid lines.</li>
+ *   <li>Minimum 40 so a 0-fluid timeline still has a readable
+ *       axis (otherwise the polygons collapse onto y=baseline).</li>
+ * </ul>
+ *
+ * <p>The downstream {@code gridVals} computed re-derives the four
+ * tick labels (0, ¼, ½, ¾, max) off the same ceiling.
+ */
+const fluidMax = computed(() => {
+  let peak = 0
+  for (const v of props.visits) {
+    const stack = (v.irf ?? 0) + (v.srf ?? 0) + (v.ped ?? 0)
+    if (stack > peak) peak = stack
+  }
+  if (peak <= 40) return 40
+  // Pick a "nice" step so the ceiling lands on a round number with
+  // four evenly-spaced gridlines below it.
+  const candidates = [50, 100, 200, 400, 500, 1000, 2000, 5000]
+  for (const step of candidates) {
+    if (peak <= step * 4) return step * 4
+  }
+  // Beyond 20 000 nL — uncommon; round to the next 5 000.
+  return Math.ceil(peak / 5000) * 5000
+})
+
 function yFluid(value: number): number {
-  return PT + (1 - value / FLUID_MAX) * (H - PT - PB)
+  return PT + (1 - value / fluidMax.value) * (H - PT - PB)
 }
 
 const CRT_MIN = 250
@@ -87,7 +125,16 @@ interface Layer {
   points: string
 }
 
-const gridVals = [0, 140, 280, 420, 560]
+/**
+ * 2026-06-24 — five evenly-spaced gridline values derived from the
+ * dynamic {@link fluidMax}. Replaces the static
+ * {@code [0, 140, 280, 420, 560]} ladder so the chart adapts to the
+ * dataset's actual scale.
+ */
+const gridVals = computed<number[]>(() => {
+  const m = fluidMax.value
+  return [0, m * 0.25, m * 0.5, m * 0.75, m]
+})
 const crtTicks = [250, 375, 500]
 
 const layers = computed<Layer[]>(() => {
@@ -195,7 +242,12 @@ function fmtDate(iso: string): string {
       style="overflow: visible"
       data-testid="namd-fluid-trend-svg"
     >
-      <!-- Gridlines + left axis (fluid, nL) -->
+      <!-- Gridlines + left axis (fluid, nL).
+           2026-06-24 user-feedback round — horizontal gridlines are
+           SOLID (continuous) so the eye can read the fluid value
+           horizontally across the chart; vertical guides at each
+           visit's X tick are dotted (rendered below alongside the
+           visit X labels) so the visit-time axis stays subordinate. -->
       <g>
         <line
           v-for="g in gridVals"
@@ -204,7 +256,7 @@ function fmtDate(iso: string): string {
           :x2="W - PR"
           :y1="yFluid(g)"
           :y2="yFluid(g)"
-          stroke="#eef1f6"
+          stroke="#e2e8f0"
           stroke-width="1"
         />
         <text
@@ -215,15 +267,36 @@ function fmtDate(iso: string): string {
           text-anchor="end"
           font-size="9.5"
           fill="#aab2c2"
-        >{{ g }}</text>
+        >{{ Math.round(g) }}</text>
         <text
           :x="PL - 8"
-          :y="yFluid(560) - 8"
+          :y="yFluid(fluidMax) - 8"
           text-anchor="end"
           font-size="9"
           fill="#8b94a7"
           font-weight="600"
         >nL</text>
+      </g>
+
+      <!-- 2026-06-24 user-feedback round — dotted vertical guides at
+           each visit's X tick. Drawn BEFORE the stacked polygons +
+           CRT line + BCVA strip so the data layers paint over them.
+           Span from the top of the fluid panel through the bottom of
+           the BCVA strip so the operator can read across the whole
+           chart for any visit. -->
+      <g>
+        <line
+          v-for="v in visits"
+          :key="`gx-${v.id}`"
+          :x1="xAt(v.week)"
+          :x2="xAt(v.week)"
+          :y1="PT"
+          :y2="H + BH"
+          stroke="#cbd5e1"
+          stroke-width="1"
+          stroke-dasharray="1 4"
+          stroke-linecap="round"
+        />
       </g>
 
       <!-- Right axis (CRT, µm) -->
@@ -376,7 +449,7 @@ function fmtDate(iso: string): string {
           :y1="yBcva(BCVA_MIN) + 6"
           :x2="W - PR"
           :y2="yBcva(BCVA_MIN) + 6"
-          stroke="#eef1f6"
+          stroke="#e2e8f0"
         />
         <path
           :d="bcvaPath"
@@ -434,7 +507,12 @@ function fmtDate(iso: string): string {
         <span class="text-slate-500">CRT</span>
         <span class="text-right font-medium">{{ hovered.crt }} µm</span>
         <span class="text-slate-500">BCVA</span>
-        <span class="text-right font-medium">{{ hovered.bcva }}</span>
+        <span class="text-right font-medium">
+          {{ hovered.bcva }} L<span
+            v-if="hovered.bcvaRaw"
+            class="text-slate-400 text-[10px] ml-1"
+          >· {{ hovered.bcvaRaw }}</span>
+        </span>
       </div>
     </div>
   </figure>

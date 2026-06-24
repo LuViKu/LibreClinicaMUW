@@ -231,6 +231,28 @@ public class RetinalResultsApiController {
              * cross-study parked admin view).
              */
             String visitDate,
+            /**
+             * 2026-06-23 user-feedback round — OCT acquisition date
+             * (ISO yyyy-MM-dd) pulled from the .e2e header by the
+             * retinal-preprocess sidecar. This is the device's
+             * native scan-time stamp; the SPA's nAMD composable
+             * prefers this over visit_date / completed_at so a stack
+             * of historical scans uploaded today plot against the
+             * real acquisition date. Null when the original device
+             * left the field blank or the preprocess sidecar is
+             * older than this header.
+             */
+            String acquisitionDate,
+            /**
+             * 2026-06-24 user-feedback round — the study_event the
+             * job's event_crf is attached to. Surfaces here so the
+             * SPA can look up the BCVA timeline row keyed by event
+             * (per-visit BCVA values write into a sibling event_crf
+             * on the same event). Null when the job is parked
+             * (event_crf_id NULL); the BCVA lookup short-circuits
+             * to "no BCVA known" for those.
+             */
+            Integer studyEventId,
             PrimaryMetric primaryMetric) { }
 
     /**
@@ -457,16 +479,29 @@ public class RetinalResultsApiController {
         // changelog). Also exports visit_date (date(study_event.date_start))
         // so the nAMD workspace + per-subject job list can show the
         // clinical date instead of the upload timestamp.
+        // 2026-06-23 — ORDER BY repeats the date expression instead of
+        // referencing the `visit_date` alias inside COALESCE: Postgres
+        // resolves bare aliases in ORDER BY but NOT inside compound
+        // expressions, so `COALESCE(j.acquisition_date, visit_date)`
+        // throws `column "visit_date" does not exist`. The duplicate
+        // is the only safe way to keep both columns ordered by the
+        // effective scan-time stamp.
         String sql = "SELECT j.job_id, j.task, j.eye_laterality, j.status, j.model_version, "
                 + "       j.completed_at, "
                 + "       date(se.date_start) AS visit_date, "
+                + "       j.acquisition_date, "
+                // 2026-06-24 user-feedback round — surface study_event_id so
+                // the SPA can join into the BCVA timeline by event (the
+                // BCVA values live on a sibling event_crf on the same
+                // event).
+                + "       se.study_event_id, "
                 + "       r.primary_metric_value, r.primary_metric_unit "
                 + "  FROM retinal_inference_job j "
                 + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
                 + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "  LEFT JOIN retinal_inference_result r ON r.job_id = j.job_id "
                 + " WHERE se.study_subject_id = ? "
-                + " ORDER BY visit_date ASC NULLS LAST, j.enqueued_at DESC";
+                + " ORDER BY COALESCE(j.acquisition_date, date(se.date_start)) ASC NULLS LAST, j.enqueued_at DESC";
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, studySubjectId);
@@ -482,6 +517,151 @@ public class RetinalResultsApiController {
                     "message", "Failed to list retinal jobs: " + sqlEx.getMessage()));
         }
         return ResponseEntity.ok(out);
+    }
+
+    /* ====================================================================== */
+    /* GET /study-subjects/{studySubjectId}/bcva-timeline                      */
+    /* 2026-06-24 user-feedback round — BCVA values per visit                 */
+    /* ====================================================================== */
+
+    /**
+     * Per-subject BCVA timeline. Returns one row per study_event for
+     * which the subject has at least one populated BCVA item. Each
+     * row carries the per-eye trio {@code (decimal, partial, letters)};
+     * which subset is populated depends on which BCVA preset the
+     * study used (decimal preset → decimal + partial; legacy letters
+     * preset → letters).
+     *
+     * <p>Backs the nAMD module's trend chart + Bericht history table:
+     * the SPA converts decimal+partial → letters via the shared
+     * {@code bcvaConversion.ts} utility when the row carries the
+     * decimal-flavoured fields; the letters field is consumed
+     * directly for legacy studies. The raw form (canonical
+     * {@code 1,0p-2} / {@code 0,8+2}) is reconstructed SPA-side
+     * for tooltip / audit display.
+     */
+    @GetMapping(path = "/study-subjects/{studySubjectId:[0-9]+}/bcva-timeline",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listBcvaTimeline(@PathVariable("studySubjectId") int studySubjectId,
+                                              HttpSession session) {
+        ResponseEntity<?> denied = guardSession(session);
+        if (denied != null) return denied;
+        Integer subjectStudyId;
+        try (Connection c = dataSource.getConnection()) {
+            subjectStudyId = fetchStudyIdForStudySubject(c, studySubjectId);
+        } catch (SQLException sqlEx) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to resolve study for subject: " + sqlEx.getMessage()));
+        }
+        if (subjectStudyId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "study_subject " + studySubjectId + " not found"));
+        }
+        ResponseEntity<?> visGuard = guardStudyVisibility(subjectStudyId, session,
+                "study_subject " + studySubjectId + " is outside your site visibility");
+        if (visGuard != null) return visGuard;
+
+        // Pivot in Java — one SELECT, group by study_event_id, fold
+        // each (eye, oid) row into the per-eye trio.
+        // 2026-06-24 — covers both OID families: SPA-side BCVA preset
+        // (OD_BCVA_*, OS_BCVA_*) AND institutional Ophthalmology Visit
+        // CRF (VA_O*_ETDRS / VA_O*_LOGMAR). A row may come from either
+        // (or both, if a multi-section CRF has all of them).
+        String sql = "SELECT se.study_event_id, "
+                + "       date(se.date_start) AS event_date, "
+                + "       i.name AS oid, "
+                + "       idata.value AS value "
+                + "  FROM item_data idata "
+                + "  JOIN event_crf ec ON ec.event_crf_id = idata.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = ec.study_event_id "
+                + "  JOIN item i ON i.item_id = idata.item_id "
+                + " WHERE ec.study_subject_id = ? "
+                + "   AND COALESCE(idata.deleted, false) = false "
+                + "   AND idata.value IS NOT NULL AND idata.value <> '' "
+                + "   AND i.name IN ('OD_BCVA_DECIMAL','OS_BCVA_DECIMAL', "
+                + "                   'OD_BCVA_PARTIAL','OS_BCVA_PARTIAL', "
+                + "                   'OD_BCVA_LETTERS','OS_BCVA_LETTERS', "
+                + "                   'VA_OD_ETDRS','VA_OS_ETDRS', "
+                + "                   'VA_OD_LOGMAR','VA_OS_LOGMAR') "
+                + " ORDER BY se.date_start ASC, se.study_event_id ASC";
+        // Per-event accumulator: { studyEventId → { eventDate, od:{}, os:{} } }
+        Map<Integer, Map<String, Object>> byEvent = new LinkedHashMap<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int sev = rs.getInt("study_event_id");
+                    Map<String, Object> row = byEvent.computeIfAbsent(sev, k -> {
+                        Map<String, Object> m = new LinkedHashMap<>();
+                        m.put("studyEventId", k);
+                        try {
+                            java.sql.Date ed = rs.getDate("event_date");
+                            m.put("eventDate", ed == null ? null : ed.toString());
+                        } catch (SQLException ignored) {
+                            m.put("eventDate", null);
+                        }
+                        Map<String, Object> od = new LinkedHashMap<>();
+                        od.put("decimal", null); od.put("partial", null); od.put("letters", null);
+                        Map<String, Object> os = new LinkedHashMap<>();
+                        os.put("decimal", null); os.put("partial", null); os.put("letters", null);
+                        m.put("od", od);
+                        m.put("os", os);
+                        return m;
+                    });
+                    String oid = rs.getString("oid");
+                    String value = rs.getString("value");
+                    // 2026-06-24 — both OID conventions encode the eye
+                    // in a prefix: SPA-side uses `OD_*` / `OS_*`,
+                    // institutional uses `VA_OD_*` / `VA_OS_*` (and
+                    // `REFRACT_OD_*` / `REFRACT_OS_*`). Eye detection
+                    // tolerates both.
+                    String eyeKey = (oid.startsWith("OD_") || oid.contains("_OD_") || oid.startsWith("VA_OD") )
+                            ? "od" : "os";
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> eyeRow = (Map<String, Object>) row.get(eyeKey);
+                    if (oid.endsWith("_DECIMAL")) {
+                        eyeRow.put("decimal", parseDoubleOrNull(value));
+                    } else if (oid.endsWith("_PARTIAL")) {
+                        eyeRow.put("partial", parseIntOrNull(value));
+                    } else if (oid.endsWith("_LETTERS") || oid.endsWith("_ETDRS")) {
+                        eyeRow.put("letters", parseIntOrNull(value));
+                    } else if (oid.endsWith("_LOGMAR")) {
+                        // logMAR → decimal: decimal = 10^(-logMAR).
+                        // Surfaces in the response only when there's no
+                        // direct decimal write (a CRF-Decimal entry
+                        // wins because it lands earlier in the loop).
+                        Double logmar = parseDoubleOrNull(value);
+                        if (logmar != null && eyeRow.get("decimal") == null) {
+                            eyeRow.put("decimal", Math.pow(10.0, -logmar));
+                        }
+                    }
+                }
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to list BCVA timeline for study_subject {}: {}",
+                    studySubjectId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to list BCVA timeline: " + sqlEx.getMessage()));
+        }
+        return ResponseEntity.ok(new ArrayList<>(byEvent.values()));
+    }
+
+    private static Double parseDoubleOrNull(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return Double.parseDouble(s.trim().replace(',', '.')); }
+        catch (NumberFormatException e) { return null; }
+    }
+
+    private static Integer parseIntOrNull(String s) {
+        if (s == null || s.isBlank()) return null;
+        try { return Integer.parseInt(s.trim()); }
+        catch (NumberFormatException e) {
+            // Some legacy rows might store as a real; try a tolerant
+            // path before giving up.
+            Double d = parseDoubleOrNull(s);
+            return d == null ? null : (int) Math.round(d);
+        }
     }
 
     /* ====================================================================== */
@@ -2044,9 +2224,30 @@ public class RetinalResultsApiController {
         } catch (SQLException ignoredColumnAbsent) {
             // visit_date column not in this query — leave null.
         }
+        // 2026-06-23 user-feedback round — acquisition_date is on
+        // every job row but the legacy event-CRF-scoped query may
+        // not project it; same defensive lookup pattern as visit_date.
+        String acquisitionDate = null;
+        try {
+            java.sql.Date ad = rs.getDate("acquisition_date");
+            if (ad != null) acquisitionDate = ad.toString();
+        } catch (SQLException ignoredColumnAbsent) {
+            // acquisition_date column not in this query — leave null.
+        }
+        // 2026-06-24 user-feedback round — study_event_id surfaces
+        // alongside visit_date so the SPA can key into the BCVA
+        // timeline by event. Defensive: legacy callers may not
+        // project the column.
+        Integer studyEventId = null;
+        try {
+            int sev = rs.getInt("study_event_id");
+            if (!rs.wasNull()) studyEventId = sev;
+        } catch (SQLException ignoredColumnAbsent) {
+            // study_event_id column not in this query — leave null.
+        }
         return new RetinalJobSummaryDto(
                 jobId, task, laterality, status, modelVersion,
-                toIso(completedAt), visitDate, primaryMetric(pv, pu));
+                toIso(completedAt), visitDate, acquisitionDate, studyEventId, primaryMetric(pv, pu));
     }
 
     /** 401 if no authenticated user, 400 if no active study. */

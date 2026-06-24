@@ -43,7 +43,6 @@
       "viewer": {
         "volume": "OCT-Volumen · aktueller Besuch",
         "aiSeg": "KI-Segmentierung",
-        "hint": "Durch das Volumen scrollen (Slider, Aktivitäts-Heatmap oder ▶ Auto-Play). Die KI-Maske hebt IRF, SRF und PED farbcodiert hervor und lässt sich pro Scan ein-/ausblenden.",
         "segCardsHeader": "Segmentierung · dieser Scan",
         "empty": "Für diese Visite ist keine OCT-Aufnahme verknüpft."
       },
@@ -72,11 +71,11 @@
         "header": "Entscheidung",
         "treat": "Behandeln",
         "observe": "Beobachten",
+        "drug": "Wirkstoff",
         "interval": "Intervall (Wochen)",
         "confirm": "Entscheidung bestätigen",
         "confirmed": "Entscheidung dokumentiert.",
-        "back": "Zurück",
-        "aiSuggests": "KI-Vorschlag: {rec}"
+        "back": "Zurück"
       },
       "trend": {
         "aria": "Verlauf der Flüssigkeitsvolumina IRF, SRF und PED über die letzten Visiten.",
@@ -96,6 +95,7 @@
         "history": "Behandlungs- und Befundverlauf",
         "octBaselineVsCurrent": "OCT · Baseline vs. aktueller Besuch",
         "octCaption": "Foveale B-Scan-Ebene · KI-Segmentierung eingeblendet",
+        "dateMismatchTitle": "Geplantes Visitendatum ({visit}) weicht vom OCT-Akquisitionsdatum ({acquired}) ab.",
         "signaturePhysician": "Unterschrift Arzt/Ärztin",
         "signatureDate": "Datum"
       }

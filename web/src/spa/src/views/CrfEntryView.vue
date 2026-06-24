@@ -35,6 +35,7 @@ import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
 import { useStudyModuleStore } from '@/stores/studyModules'
 import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
 import type { NoteType, DiscrepancyNote } from '@/types/note'
@@ -44,6 +45,23 @@ const route = useRoute()
 const router = useRouter()
 const store = useCrfEntryStore()
 const advanced = useCrfEntryAdvancedStore()
+
+// 2026-06-23 user-feedback round — nested breadcrumb trail:
+// "<study> > Studienteilnehmer > <subject> > <event> > <crf>".
+useViewBreadcrumb(computed(() => {
+  const entry = store.entry
+  if (!entry) return null
+  const crfLabel = store.schema?.name ?? entry.eventLabel
+  const eventLink = entry.studyEventId != null
+    ? `/events/${entry.studyEventId}`
+    : null
+  return [
+    { label: t('nav.subjectMatrix'), to: '/subjects' },
+    { label: entry.subjectId, to: `/subjects/${encodeURIComponent(entry.subjectId)}` },
+    { label: entry.eventLabel, to: eventLink },
+    { label: crfLabel, to: null },
+  ]
+}))
 const auth = useAuthStore()
 // Pluggable study-module SPI — top-of-form banner slot. Modules use
 // this for AI-auto-populate hints, regimen-specific reminders, etc.

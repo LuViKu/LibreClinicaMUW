@@ -17,9 +17,8 @@
  */
 import { computed, defineAsyncComponent } from 'vue'
 import { useI18n } from 'vue-i18n'
-import Pill from './primitives/Pill.vue'
 import { artifactUrl } from '@/api/retinal'
-import { activeFluid, ACTIVITY_THRESHOLD_NL } from '../fluid'
+import { formatDate } from '@/lib/dateFormat'
 import type { NamdVisit } from '../types'
 
 interface Props {
@@ -36,39 +35,23 @@ const bscanDcmUrl = computed(() =>
 )
 
 const fovealSlice = computed(() => Math.floor(props.nSlices / 2))
-const activeTone = computed(() =>
-  activeFluid(props.visit) > ACTIVITY_THRESHOLD_NL ? 'active' : 'dry',
-)
-
-const dateFormatter =
-  typeof Intl !== 'undefined'
-    ? new Intl.DateTimeFormat('de-AT', { day: '2-digit', month: 'short', year: 'numeric' })
-    : null
-function fmtDate(iso: string): string {
-  if (!iso || !dateFormatter) return iso
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return dateFormatter.format(d)
-}
 </script>
 
 <template>
   <div data-testid="namd-report-scan" class="break-inside-avoid">
-    <div class="flex items-center justify-between mb-1.5 gap-2">
+    <div class="mb-1.5">
       <span class="text-[12px] font-semibold text-slate-700">
-        {{ visit.label }} · {{ fmtDate(visit.date) }}
+        {{ visit.label }} · {{ formatDate(visit.date) }}
       </span>
-      <Pill :tone="activeTone" :dot="false">
-        {{
-          activeTone === 'active'
-            ? t('studyModules.namd.activityActive')
-            : t('studyModules.namd.activityDry')
-        }}
-      </Pill>
     </div>
     <div class="rounded-lg overflow-hidden bg-black ring-1 ring-slate-300">
       <div v-if="bscanDcmUrl" class="aspect-[16/9]">
+        <!-- 2026-06-24 — `:key` so a parent that swaps the visit
+             prop forces a fresh cornerstone init; without it the
+             report's baseline / current blocks would render the same
+             DICOM if the BscanViewer instance is reused. -->
         <BscanViewer
+          :key="bscanDcmUrl"
           :bscan-dcm-url="bscanDcmUrl"
           :n-bscans="nSlices"
           :model-value="fovealSlice"

@@ -36,8 +36,34 @@ export interface NamdVisit {
   label: string
   /** Week since baseline. */
   week: number
-  /** ISO date string. */
+  /**
+   * ISO date string used as the visit's displayed date — already
+   * resolved against the {@code acquisitionDate → visitDate →
+   * completedAt} priority chain by the composable. The two raw
+   * inputs stay on the visit so the report tab can flag a mismatch
+   * (e.g. the planned-visit date doesn't line up with the .e2e
+   * acquisition stamp).
+   */
   date: string
+  /**
+   * 2026-06-23 user-feedback round — raw OCT acquisition date pulled
+   * from the .e2e header (or null when the device left it blank /
+   * the preprocess sidecar is older than the header).
+   */
+  acquisitionDate: string | null
+  /**
+   * 2026-06-23 — raw study_event.date_start (planned visit date).
+   * Null only when the job has no event binding.
+   */
+  visitDate: string | null
+  /**
+   * 2026-06-23 — true when the acquisition date and the planned
+   * visit date diverge by more than {@code DATE_MISMATCH_DAYS}. Used
+   * by the report tab to surface a warning so the operator can
+   * decide whether to re-schedule the visit or accept the
+   * discrepancy.
+   */
+  dateMismatch: boolean
   /** Intraretinal fluid volume (nL). */
   irf: number
   /** Subretinal fluid volume (nL). */
@@ -48,6 +74,15 @@ export interface NamdVisit {
   crt: number
   /** Best-corrected visual acuity (ETDRS letters). */
   bcva: number
+  /**
+   * 2026-06-24 user-feedback round — canonical raw BCVA form for
+   * tooltip + audit display. For decimal-flavoured studies (post-
+   * BCVA-portal) this is the `1,0p-2` / `0,8+2` form; for legacy
+   * letters-flavoured studies the field stays null (the letter
+   * count IS the raw form). Null also when no BCVA row exists for
+   * the visit at all (the chart falls back to {@link bcva} = 0).
+   */
+  bcvaRaw: string | null
   /** Injection agent, or empty string when no injection administered. */
   inj: string
   /** Interval to next visit in weeks, when scheduled. */

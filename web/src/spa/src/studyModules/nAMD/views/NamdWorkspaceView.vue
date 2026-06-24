@@ -30,6 +30,7 @@ import NamdViewerTab from './NamdViewerTab.vue'
 import NamdCompareTab from './NamdCompareTab.vue'
 import NamdReportTab from './NamdReportTab.vue'
 import { useNamdVisitData } from '../composables/useNamdVisitData'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 const route = useRoute()
 const { t } = useI18n()
@@ -41,13 +42,38 @@ const studySubjectOid = computed(() => {
   return typeof v === 'string' && v.length > 0 ? v : null
 })
 
+/**
+ * 2026-06-24 user-feedback round — subjectLabel is the site-scoped
+ * patient ID (e.g. "EIAMD150"). The CTA on SubjectDetail forwards it
+ * via the route query alongside the numeric subjectOid; without it
+ * the workspace banner reads "Patient 106" because the composable
+ * falls back to the numeric oid for display. Empty / missing label
+ * → the composable's existing fallback kicks in.
+ */
+const studySubjectLabel = computed(() => {
+  const v = route.query.subjectLabel
+  return typeof v === 'string' && v.length > 0 ? v : null
+})
+
 const isMock = computed(() => route.query.mock === '1')
 
-const { data, loading, error } = useNamdVisitData({
+const { data, loading, error, availableEyes, selectedEye, setEye } = useNamdVisitData({
   studySubjectOid,
+  studySubjectLabel,
   mock: isMock,
 })
 
+// 2026-06-23 user-feedback round — nested breadcrumb trail:
+// "<study> > Studienteilnehmer > <subject> > nAMD".
+useViewBreadcrumb(computed(() => {
+  const subjLabel = studySubjectLabel.value ?? data.value?.patient.id ?? studySubjectOid.value
+  if (!subjLabel) return null
+  return [
+    { label: t('nav.subjectMatrix'), to: '/subjects' },
+    { label: subjLabel, to: `/subjects/${encodeURIComponent(subjLabel)}` },
+    { label: t('studyModules.namd.workspaceBreadcrumb'), to: null },
+  ]
+}))
 </script>
 
 <template>
@@ -59,6 +85,9 @@ const { data, loading, error } = useNamdVisitData({
       :patient="data.patient"
       :current="data.current"
       :prev="data.prev"
+      :available-eyes="availableEyes"
+      :selected-eye="selectedEye"
+      @switch-eye="setEye"
     />
 
     <NamdTabs v-model="tab" />
