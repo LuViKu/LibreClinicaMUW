@@ -306,12 +306,24 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
 
   // Reactive AI derivation — keeps the workspace's recommendation
   // up-to-date if the data ref is later swapped (e.g. via {@code refresh()}).
+  //
+  // 2026-06-24 user-feedback round — previously this re-assigned
+  // {@code data.value = { ...data.value, ai }} which spawned a new
+  // outer object identity on every aiRef tick. Vue's reactivity
+  // re-tracked the new proxy, App.vue's breadcrumb-consuming
+  // template re-ran, and (combined with the per-render array-literal
+  // identity from useViewBreadcrumb's source computed) tripped the
+  // "Maximum recursive updates exceeded" guard. Mutate the EXISTING
+  // {@code data.value.ai} field in place instead — same reactive
+  // outer object, only the nested property changes, so the
+  // breadcrumb computed isn't invalidated and the render loop stays
+  // bounded.
   const currentRef = computed(() => data.value?.current ?? null)
   const prevRef = computed(() => data.value?.prev ?? null)
   const aiRef = useNamdAiRecommendation({ current: currentRef, prev: prevRef })
   watch(aiRef, (ai) => {
-    if (data.value) {
-      data.value = { ...data.value, ai }
+    if (data.value && data.value.ai !== ai) {
+      data.value.ai = ai
     }
   })
 

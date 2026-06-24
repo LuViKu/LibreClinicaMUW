@@ -224,16 +224,19 @@ function scrollToOldest(): void {
   el.scrollTo({ left: 0, behavior: 'smooth' })
 }
 
-// When the first batch of subjects loads (or the eventColumns shape
-// changes — e.g. a study switch), park the scroll at the most recent
-// visit so the operator opens the page on TODAY's column rather than
-// on the dim, far-historical baseline.
+// 2026-06-24 user-feedback round — open the matrix scrolled to the
+// LEFT so the operator sees Subject / Gender / Eye / Group /
+// Enrolled identity columns first. The visitor uses the chevron /
+// Jump-to-latest buttons (or two-finger scrolls inside the table)
+// to slide forward to the recent visits. Was previously
+// `el.scrollLeft = el.scrollWidth` (open on latest) — the user's
+// mental model is patient-identity-first, then visits.
 watch(eventColumns, async (next, prev) => {
   if (next.length === 0) return
   if (prev && prev.length === next.length) return
   await nextTick()
   const el = tableScrollerEl.value
-  if (el) el.scrollLeft = el.scrollWidth
+  if (el) el.scrollLeft = 0
 }, { immediate: false })
 </script>
 

@@ -8,8 +8,6 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
-import java.time.LocalDate;
-
 /**
  * One scheduled (or in-progress) study_event row that matches the
  * scan date for a candidate study_subject. Sibling to
@@ -26,6 +24,15 @@ import java.time.LocalDate;
  * {@code studyEventId} alone and leaves {@code event_crf_id} NULL
  * until the operator opens the CRF.
  *
+ * <p>2026-06-24 user-feedback round — {@code dateStart} was
+ * previously typed as {@link java.time.LocalDate}. Jackson's default
+ * JSR-310 serializer emits LocalDate as a {@code [year, month, day]}
+ * array unless WRITE_DATES_AS_TIMESTAMPS is disabled at the
+ * ObjectMapper level; the SPA's uploader was rendering "[ 2025, 11,
+ * 19 ]" verbatim because of that. Switching the record component to
+ * a pre-formatted ISO {@code yyyy-MM-dd} string sidesteps the
+ * ObjectMapper config dependency.
+ *
  * @param studyEventId    study_event.study_event_id — always present
  *                        for a valid candidate; the visit the scan is
  *                        for
@@ -34,14 +41,14 @@ import java.time.LocalDate;
  *                        {@code null} for a scheduled visit
  * @param definitionLabel study_event_definition.name + sample_ordinal
  *                        (e.g. "V1 Inclusion")
- * @param dateStart       study_event.date_start (date portion)
+ * @param dateStart       study_event.date_start as ISO {@code yyyy-MM-dd}
  * @param matchPolicy     descriptor for how the date match was scored
  */
 public record EventCandidate(
         int studyEventId,
         Integer eventCrfId,
         String definitionLabel,
-        LocalDate dateStart,
+        String dateStart,
         String matchPolicy
 ) {
 }

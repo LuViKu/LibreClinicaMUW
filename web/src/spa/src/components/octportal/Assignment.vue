@@ -33,6 +33,7 @@ import EyeBadge from './EyeBadge.vue'
 import PortalStatusPill from './PortalStatusPill.vue'
 import StudyChip from './StudyChip.vue'
 import { useOctPortalStore, type ReviewRow } from '@/stores/octPortal'
+import { formatDate } from '@/lib/dateFormat'
 
 const store = useOctPortalStore()
 
@@ -59,8 +60,11 @@ const subjectLabel = computed(() => candidate.value?.subjectLabel ?? props.row.s
 const eventLabel = computed(() => props.row.selectedEvent?.definitionLabel ?? '')
 
 /** Format the matching event's date — "heute" when the scan was
- *  acquired today; otherwise the ISO date. Mirrors the mockup's
- *  "heute geplant" / "heute" wording. */
+ *  acquired today; otherwise DD.MM.YYYY per the institution-wide
+ *  German short-date convention. 2026-06-24 user-feedback round —
+ *  the operator wanted the dropdown to read "19.11.2025" instead of
+ *  the raw ISO (or, when the backend mis-serialised LocalDate, the
+ *  array form "[ 2025, 11, 19 ]"). */
 const eventWhen = computed(() => {
   const ev = props.row.selectedEvent
   if (!ev) return ''
@@ -68,7 +72,7 @@ const eventWhen = computed(() => {
   const today = new Date()
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
   if (dateStart === todayIso) return t('octPortal.assignment.todayScheduled')
-  return dateStart
+  return formatDate(dateStart)
 })
 
 const scanDateLabel = computed(() => {
