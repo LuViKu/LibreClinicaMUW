@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        2026-06-24 — extends the F_NAMD_VISIT CRF's AI-fluid section
+        (section_id=11, seeded by lc-muw-2026-06-20-namd-visit-ai-items)
+        with two CRT items:
+
+            OD_CRT_CENTRAL_1MM_UM  - CRT (central 1mm), right eye, µm
+            OS_CRT_CENTRAL_1MM_UM  - CRT (central 1mm), left eye,  µm
+
+        These values are auto-populated by
+        RetinalResultItemDataPopulator from the paired GA + BM
+        retinal_inference_job rows on the same study_event via
+        CrtComputeService (see PR #254 for the math).
+
+        Numeric assignment continues the existing run:
+            section_id            = 11   (shared)
+            item_id               = 60, 61
+            item_form_metadata_id = 37, 38
+            ordinal               = 9, 10   (after the existing 1..8)
+
+        The companion audit_log_event_type row (id 122,
+        RETINAL_CRT_AUTOPOPULATE) is seeded in a sibling changeSet.
+
+        See /Users/lukas/.claude/plans/robust-jumping-eich.md for the
+        CRF/audit-extension scope.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-24-namd-visit-crt-items" context="demo">
+        <comment>OD/OS CRT (central 1mm) items on the F_NAMD_VISIT AI section.</comment>
+
+        <!-- =================================================================
+             Items
+             ================================================================= -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="60"/>
+            <column name="name" value="OD_CRT_CENTRAL_1MM_UM"/>
+            <column name="description" value="Central retinal thickness (central 1mm), right eye (OD), µm — average distance between the ILM and BM surfaces over a 0.5 mm radius disk at the scan center, derived from the paired GA (ILM) + BM jobs."/>
+            <column name="units" value="µm"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-24"/>
+            <column name="oc_oid" value="I_OD_CRT_CENTRAL_1MM_UM"/>
+        </insert>
+
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="61"/>
+            <column name="name" value="OS_CRT_CENTRAL_1MM_UM"/>
+            <column name="description" value="Central retinal thickness (central 1mm), left eye (OS), µm — average distance between the ILM and BM surfaces over a 0.5 mm radius disk at the scan center, derived from the paired GA (ILM) + BM jobs."/>
+            <column name="units" value="µm"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-24"/>
+            <column name="oc_oid" value="I_OS_CRT_CENTRAL_1MM_UM"/>
+        </insert>
+
+        <!-- =================================================================
+             item_form_metadata — render-time wiring on section 11.
+             response_set_id = 14 is the open numeric response set already
+             attached to the sibling I_NAMD_*_MM3 items; we reuse it so
+             the renderer doesn't trip on a missing response set.
+             ================================================================= -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="37"/>
+            <column name="item_id" valueNumeric="60"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="11"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Right eye (OD) — CRT (central 1mm)"/>
+            <column name="right_item_text" value="µm"/>
+            <column name="width_decimal" value="(6,2)"/>
+            <column name="ordinal" valueNumeric="9"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="38"/>
+            <column name="item_id" valueNumeric="61"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="11"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Left eye (OS) — CRT (central 1mm)"/>
+            <column name="right_item_text" value="µm"/>
+            <column name="width_decimal" value="(6,2)"/>
+            <column name="ordinal" valueNumeric="10"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="item_form_metadata">
+                <where>item_form_metadata_id IN (37, 38)</where>
+            </delete>
+            <delete tableName="item">
+                <where>item_id IN (60, 61)</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+    <!--
+        Audit-event-type seed: RETINAL_CRT_AUTOPOPULATE = 122. Mirrors
+        the seed pattern of lc-muw-2026-06-18-retinal-job-parked-status
+        (OCT_UPLOAD_PUBLIC=115) and lc-muw-2026-06-24-audit-event-type-
+        bcva-entry-public (BCVA_ENTRY_PUBLIC=121).
+
+        Used by RetinalResultItemDataPopulator when a CRT µm value is
+        derived + written into the per-eye CRT item_data row. Each
+        audit row records the source ga_job_id + bm_job_id pair so
+        the timeline can deep-link both upstream artifacts.
+    -->
+    <changeSet author="muw-ophthalmology" id="2026-06-24-audit-event-type-retinal-crt-autopopulate" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 122;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="122"/>
+            <column name="name" value="retinal_crt_autopopulate"/>
+            <column name="display_name" value="CRT (central 1mm) auto-populated"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 122</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

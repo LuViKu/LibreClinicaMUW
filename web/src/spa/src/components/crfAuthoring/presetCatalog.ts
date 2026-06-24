@@ -27,6 +27,7 @@ import {
 } from './presets/ophthExamPreset'
 import { BCVA_PRESET_ID, generateBcvaPresetItems } from './presets/bcvaPreset'
 import { BCVA_DECIMAL_PRESET_ID, generateBcvaDecimalPresetItems } from './presets/bcvaDecimalPreset'
+import { CRT_PRESET_ID, generateCrtPresetItems } from './presets/crtPreset'
 import { RNFL_PRESET_ID, generateRnflPresetItems } from './presets/rnflPreset'
 import {
   THICKNESS_MAP_PRESET_ID,
@@ -137,6 +138,17 @@ export const PRESET_CATALOG: ReadonlyArray<PresetDescriptor> = [
     bilateralSection: true,
     sectionLabel: 'BCVA_DEC',
     generate: (t) => generateBcvaDecimalPresetItems(t),
+  },
+  {
+    // 2026-06-24 — CRT (central 1 mm) auto-populated by the GA + BM
+    // job pair. Operators can override; the audit trail records the
+    // source ga_job_id + bm_job_id.
+    id: CRT_PRESET_ID,
+    labelKey: 'crfAuthoring.presets.crt.label',
+    descriptionKey: 'crfAuthoring.presets.crt.description',
+    bilateralSection: true,
+    sectionLabel: 'CRT',
+    generate: (t) => generateCrtPresetItems(t),
   },
   {
     id: RNFL_PRESET_ID,

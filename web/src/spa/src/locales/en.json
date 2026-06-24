@@ -1519,6 +1519,14 @@
           "axisValidation": "[NEEDS_REVIEW] Integer 0–180 expected."
         }
       },
+      "crt": {
+        "label": "[NEEDS_REVIEW] CRT (central 1 mm, µm)",
+        "description": "[NEEDS_REVIEW] Central retinal thickness — mean ILM↔BM distance over the central 1 mm disk. Auto-populated per eye from the GA (ILM) + BM jobs on the same visit; operator overrides win.",
+        "items": {
+          "crtMicrons": "[NEEDS_REVIEW] CRT (central 1 mm)",
+          "crtValidation": "[NEEDS_REVIEW] Integer or decimal 0–1500 µm expected."
+        }
+      },
       "rnfl": {
         "label": "[NEEDS_REVIEW] RNFL (peripapillary, Heidelberg HRA / Spectralis ONH)",
         "description": "[NEEDS_REVIEW] Peripapillary nerve fiber layer — global mean + quadrants (S/T/I/N) + signal quality per eye.",

@@ -23,7 +23,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+
+import at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService;
 
 /**
  * nAMD treat-and-extend Slice 3 (2026-06-20) — copy AI fluid
@@ -74,8 +77,23 @@ public class RetinalResultItemDataPopulator {
 
     private final DataSource dataSource;
 
+    /**
+     * 2026-06-24 — CRT compute service. Optional so the existing
+     * single-arg ctor used by sliced ITs stays valid. When wired,
+     * the populator additionally derives + writes per-eye CRT
+     * (central 1mm) into {@code OD/OS_CRT_CENTRAL_1MM_UM} items
+     * after the fluid items land. When null, the CRT pass is
+     * skipped silently.
+     */
+    private CrtComputeService crtComputeService;
+
     public RetinalResultItemDataPopulator(DataSource dataSource) {
         this.dataSource = dataSource;
+    }
+
+    @Autowired(required = false)
+    public void setCrtComputeService(CrtComputeService crtComputeService) {
+        this.crtComputeService = crtComputeService;
     }
 
     /**
@@ -128,9 +146,103 @@ public class RetinalResultItemDataPopulator {
                 }
             }
         }
+        // 2026-06-24 — CRT (central 1 mm) pass. Runs only when the
+        // service is wired AND the event_crf resolves to a study_event
+        // (which it always does for real visits — guarded for safety).
+        // Per-eye CRT is derived from the paired GA + BM done jobs on
+        // the same study_event; only events with BOTH present yield a
+        // value (the user-stated contract). All-or-nothing failure here
+        // doesn't abort the fluid writes that already succeeded.
+        if (crtComputeService != null) {
+            try {
+                Integer studyEventId = resolveStudyEventId(eventCrfId);
+                if (studyEventId != null) {
+                    Map<CrtComputeService.Eye, CrtComputeService.Result> perEye =
+                            crtComputeService.computeForStudyEvent(studyEventId);
+                    for (Map.Entry<CrtComputeService.Eye, CrtComputeService.Result> entry : perEye.entrySet()) {
+                        CrtComputeService.Eye eye = entry.getKey();
+                        CrtComputeService.Result r = entry.getValue();
+                        String oid = eye == CrtComputeService.Eye.OD
+                                ? "I_OD_CRT_CENTRAL_1MM_UM"
+                                : "I_OS_CRT_CENTRAL_1MM_UM";
+                        try {
+                            writeItemData(eventCrfId, oid, r.crtMicrons(),
+                                    r.gaJobId(), operatorUserId);
+                            rowsWritten++;
+                            writeCrtAuditRow(eventCrfId, eye, r, operatorUserId);
+                        } catch (SQLException sqlEx) {
+                            warnings.add("Failed to write " + oid + " from GA job " + r.gaJobId()
+                                    + " + BM job " + r.bmJobId() + ": " + sqlEx.getMessage());
+                            LOG.warn("CRT write failed for ecrf={} eye={} ga={} bm={}: {}",
+                                    eventCrfId, eye, r.gaJobId(), r.bmJobId(), sqlEx.getMessage());
+                        }
+                    }
+                }
+            } catch (RuntimeException crtEx) {
+                // CrtComputeService swallows MetricComputationException
+                // internally + returns empty results — anything raised
+                // here is a genuine infrastructure failure.
+                warnings.add("CRT compute failed for ecrf=" + eventCrfId + ": " + crtEx.getMessage());
+                LOG.warn("CRT compute failed for ecrf={}: {}", eventCrfId, crtEx.getMessage(), crtEx);
+            }
+        }
+
         LOG.info("RetinalResultItemDataPopulator: ecrf={} jobs={} rows_written={}",
                 eventCrfId, jobs.size(), rowsWritten);
         return new PopulateResult(eventCrfId, jobs.size(), rowsWritten, List.copyOf(warnings));
+    }
+
+    /**
+     * Resolve the study_event_id of the event_crf so the CRT compute
+     * can look up sibling jobs on the same visit. Returns null if the
+     * event_crf is somehow detached (defensive — shouldn't happen for
+     * real visits).
+     */
+    private Integer resolveStudyEventId(int eventCrfId) {
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT study_event_id FROM event_crf WHERE event_crf_id = ?")) {
+            ps.setInt(1, eventCrfId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                int v = rs.getInt(1);
+                return rs.wasNull() ? null : v;
+            }
+        } catch (SQLException sqlEx) {
+            LOG.warn("resolveStudyEventId failed for ecrf={}: {}", eventCrfId, sqlEx.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Write the {@code RETINAL_CRT_AUTOPOPULATE} audit_log_event row.
+     * Best-effort — a write failure here doesn't roll back the
+     * item_data row (the source_retinal_job_id column already
+     * provides the value's primary lineage; the audit row is an
+     * audit-timeline convenience). Audit type id 122 is seeded by
+     * {@code lc-muw-2026-06-24-namd-visit-crt-items.xml}.
+     */
+    private void writeCrtAuditRow(int eventCrfId, CrtComputeService.Eye eye,
+                                  CrtComputeService.Result r, int operatorUserId) {
+        String oldValue = "eye=" + eye + ";ga_job_id=" + r.gaJobId() + ";bm_job_id=" + r.bmJobId();
+        String newValue = "value_um=" + formatValue(r.crtMicrons())
+                + ";pixels_in_disk=" + r.pixelsInDisk();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "INSERT INTO audit_log_event (audit_log_event_type_id, audit_date, "
+                             + "  user_id, audit_table, entity_id, entity_name, old_value, new_value) "
+                             + "VALUES (122, NOW(), ?, 'event_crf', ?, ?, ?, ?)")) {
+            ps.setInt(1, operatorUserId);
+            ps.setInt(2, eventCrfId);
+            ps.setString(3, eye == CrtComputeService.Eye.OD
+                    ? "OD_CRT_CENTRAL_1MM_UM" : "OS_CRT_CENTRAL_1MM_UM");
+            ps.setString(4, oldValue);
+            ps.setString(5, newValue);
+            ps.executeUpdate();
+        } catch (SQLException sqlEx) {
+            LOG.warn("RETINAL_CRT_AUTOPOPULATE audit-write failed for ecrf={} eye={}: {}",
+                    eventCrfId, eye, sqlEx.getMessage());
+        }
     }
 
     private List<JobMetrics> loadCompletedJobs(int eventCrfId) {
