@@ -185,6 +185,34 @@ for (const mod of STUDY_MODULES) {
   }
 }
 
+// 2026-06-24 user-feedback round — eager-load every registered
+// study module's i18n bundle at boot. The studyModules store
+// previously deferred this to {@code watch(activeModule, ..., {immediate: true})},
+// but that activation watcher only fires once a component invokes
+// {@code useStudyModuleStore()}, AND the {@code await loadI18n()}
+// settles asynchronously — a workspace render that landed before
+// the merge surfaced raw {@code studyModules.namd.tab.viewer}-style
+// keys (the user's 2026-06-24 console trace). Loading at boot
+// guarantees the bundle is present before any view templates run.
+// Bundle size cost is bounded — five module locales today, each
+// well under 30 kB JSON. Merge failures are non-fatal (the keys
+// fall back to the literal at runtime, with the missing-key warning
+// already in place).
+for (const mod of STUDY_MODULES) {
+  if (!mod.loadI18n) continue
+  void (async () => {
+    try {
+      const payload = await mod.loadI18n!()
+      i18n.global.mergeLocaleMessage('de', payload.de)
+      i18n.global.mergeLocaleMessage('de-AT', payload.de)
+      i18n.global.mergeLocaleMessage('en', payload.en)
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[studyModules] eager loadI18n failed for', mod.protocolType, e)
+    }
+  })()
+}
+
 useAuthStore(pinia).bootstrap().finally(() => {
   app.use(router)
   app.mount('#app')
