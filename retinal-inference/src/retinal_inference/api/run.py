@@ -222,6 +222,27 @@ async def _run_locked(
                 status_code=502,
                 detail=f"runner returned {e.code}: {e.reason}",
             ) from e
+        except Exception as e:
+            # 2026-06-24 — anything else (subprocess failures, missing
+            # binaries, OOM kills, …) was previously escaping to
+            # Starlette's default 500 handler which returns the bare
+            # "Internal Server Error" body — useless for debugging. Log
+            # the full traceback locally for the operator-with-shell
+            # path, but ALSO surface the class + message in the HTTP
+            # response so the Java side's RemoteRetinalInferenceClient
+            # body capture (commit 0755bbc66) lands something actionable
+            # in the application log.
+            import logging
+            import traceback as _tb
+            logging.getLogger(__name__).exception(
+                "/run unhandled exception for task=%s scan_index=%s",
+                task, scan_index,
+            )
+            tb_short = _tb.format_exc(limit=4)
+            raise HTTPException(
+                status_code=500,
+                detail=f"{type(e).__name__}: {e}\n--- traceback (most-recent 4 frames) ---\n{tb_short}",
+            ) from e
 
         # When the adapter declared an explicit returned-artifact list, collect
         # only those (e.g. GA returns RPEL but not the IOWA layers it consumed);
