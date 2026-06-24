@@ -42,17 +42,31 @@ const studySubjectOid = computed(() => {
   return typeof v === 'string' && v.length > 0 ? v : null
 })
 
+/**
+ * 2026-06-24 user-feedback round — subjectLabel is the site-scoped
+ * patient ID (e.g. "EIAMD150"). The CTA on SubjectDetail forwards it
+ * via the route query alongside the numeric subjectOid; without it
+ * the workspace banner reads "Patient 106" because the composable
+ * falls back to the numeric oid for display. Empty / missing label
+ * → the composable's existing fallback kicks in.
+ */
+const studySubjectLabel = computed(() => {
+  const v = route.query.subjectLabel
+  return typeof v === 'string' && v.length > 0 ? v : null
+})
+
 const isMock = computed(() => route.query.mock === '1')
 
 const { data, loading, error } = useNamdVisitData({
   studySubjectOid,
+  studySubjectLabel,
   mock: isMock,
 })
 
 // 2026-06-23 user-feedback round — nested breadcrumb trail:
 // "<study> > Studienteilnehmer > <subject> > nAMD".
 useViewBreadcrumb(computed(() => {
-  const subjLabel = studySubjectOid.value ?? data.value?.patient.id
+  const subjLabel = studySubjectLabel.value ?? data.value?.patient.id ?? studySubjectOid.value
   if (!subjLabel) return null
   return [
     { label: t('nav.subjectMatrix'), to: '/subjects' },

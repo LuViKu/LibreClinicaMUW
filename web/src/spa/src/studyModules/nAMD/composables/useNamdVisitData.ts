@@ -33,6 +33,14 @@ import { useNamdAiRecommendation } from './useNamdAiRecommendation'
 export interface UseNamdVisitDataArgs {
   /** OID / id of the study-subject — reactive (route query). */
   studySubjectOid: ComputedRef<string | null>
+  /**
+   * 2026-06-24 user-feedback round — site-scoped subject label (e.g.
+   * "EIAMD150"). When present the workspace banner + breadcrumbs use
+   * this for display instead of the numeric study_subject_id. Falls
+   * back to the oid when blank — preserves the legacy behaviour for
+   * direct deep-links that omit the label.
+   */
+  studySubjectLabel?: ComputedRef<string | null>
   /** When true, return the static design fixture instead of hitting the API. */
   mock: ComputedRef<boolean>
 }
@@ -257,7 +265,11 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       const current = visits.length > 0 ? visits[visits.length - 1]! : null
       const prev = visits.length > 1 ? visits[visits.length - 2]! : null
       const patient: NamdPatient = {
-        id: oid,
+        // 2026-06-24 — prefer the site-scoped subject label (e.g.
+        // "EIAMD150") for display; the numeric oid stays as the
+        // fallback so a deep-link without ?subjectLabel= still
+        // surfaces *something* identifying the subject.
+        id: args.studySubjectLabel?.value || oid,
         eye: laterality,
         diagnosis: 'Exsudative AMD',
         age: null,
@@ -280,8 +292,12 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
     }
   }
 
+  // 2026-06-24 — re-fetch when the label changes too. This is mostly
+  // a no-op (the API call keys off the oid), but it ensures the
+  // patient.id reactive ref picks up a late-arriving subjectLabel
+  // query param.
   watch(
-    [args.studySubjectOid, args.mock],
+    [args.studySubjectOid, args.mock, args.studySubjectLabel ?? (() => null)],
     () => {
       void refresh()
     },
