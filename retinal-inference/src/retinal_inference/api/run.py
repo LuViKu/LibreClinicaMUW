@@ -177,11 +177,18 @@ async def _run_locked(
     if not body:
         raise HTTPException(status_code=400, detail="file part is empty")
 
-    # tempfile.TemporaryDirectory cleans up on context exit — including if the
-    # adapter raises. The `dir=shared_tmpdir` argument keeps the tempdir on the
-    # shared host-bind so the runner sees the same path inside its own
-    # container (DR-022 § GPU-host topology).
-    with tempfile.TemporaryDirectory(prefix="run_", dir=str(shared_tmpdir)) as td:
+    # 2026-06-24 — preserve the tempdir on FAILURE so post-mortem can run
+    # the (host-native) IOWA binary by hand against the prepared bscan.dcm.
+    # On success the tempdir is removed as before. Manual mkdtemp + try/
+    # except replaces the TemporaryDirectory context manager which would
+    # auto-clean even on exception.
+    #
+    # Periodically prune stale failed-job dirs:
+    #   find /scratch/$USER/retinal-inference/tmp -maxdepth 1 -type d \
+    #        -name 'run_*' -mtime +1 -exec rm -rf {} +
+    td = tempfile.mkdtemp(prefix="run_", dir=str(shared_tmpdir))
+    _cleanup_on_success = True
+    try:
         tempdir = Path(td)
         # DICOM -> bscan.dcm (cluster ApptainerAdapter); .e2e -> input.e2e (dev
         # OptimaAdapter). The adapter resolves the path from its name.
@@ -239,9 +246,17 @@ async def _run_locked(
                 task, scan_index,
             )
             tb_short = _tb.format_exc(limit=4)
+            # 2026-06-24 — also keep the tempdir on disk so the operator
+            # can rerun the binary by hand against the same bscan.dcm
+            # (no race to grab artifacts before cleanup).
+            _cleanup_on_success = False
             raise HTTPException(
                 status_code=500,
-                detail=f"{type(e).__name__}: {e}\n--- traceback (most-recent 4 frames) ---\n{tb_short}",
+                detail=(
+                    f"{type(e).__name__}: {e}\n"
+                    f"--- traceback (most-recent 4 frames) ---\n{tb_short}"
+                    f"--- preserved tempdir ---\n{tempdir}\n"
+                ),
             ) from e
 
         # When the adapter declared an explicit returned-artifact list, collect
@@ -275,3 +290,10 @@ async def _run_locked(
             envelope.primary_metric_unit or "",
         )
         return envelope
+    finally:
+        if _cleanup_on_success:
+            import shutil as _shutil
+            try:
+                _shutil.rmtree(td, ignore_errors=True)
+            except Exception:
+                pass
