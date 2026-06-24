@@ -76,7 +76,7 @@ import org.springframework.web.bind.annotation.RestController;
  * {@code bcvaPreset}) on a CRF first.
  */
 @RestController
-@RequestMapping("/pages/api/v1/public/bcva-entry")
+@RequestMapping("/api/v1/public/bcva-entry")
 public class PublicBcvaEntryController {
 
     private static final Logger LOG = LoggerFactory.getLogger(PublicBcvaEntryController.class);
