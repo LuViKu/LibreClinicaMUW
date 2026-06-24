@@ -1506,6 +1506,21 @@
           "axisValidation": "Ganzzahl 0–180 erwartet."
         }
       },
+      "bcvaDecimal": {
+        "label": "BCVA (Dezimal + Refraktion)",
+        "description": "Bestkorrigierter Visus dezimal (autorefraktometer-Output) mit signiertem Teilzeilen-Offset (p-N / +N) plus Refraktion pro Auge. Backt das öffentliche BCVA-Eingabeportal.",
+        "items": {
+          "decimal": "Visus (Dezimal)",
+          "decimalValidation": "Dezimalwert 0,01–2,0 erwartet (z. B. 1,0 oder 0,8).",
+          "partial": "Teilzeile (signiert −4…+4)",
+          "partialValidation": "Ganzzahl −4 bis +4 erwartet (−N = N Optotypen verfehlt, +N = N zusätzlich gelesen).",
+          "sphere": "Refraktion — Sphäre",
+          "cylinder": "Refraktion — Zylinder",
+          "axis": "Refraktion — Achse",
+          "refractionValidation": "Bitte einen numerischen Wert eingeben (z. B. -1,75).",
+          "axisValidation": "Ganzzahl 0–180 erwartet."
+        }
+      },
       "rnfl": {
         "label": "RNFL (peripapillär, Heidelberg HRA / Spectralis ONH)",
         "description": "Peripapilläre Nervenfaserschicht — globaler Mittelwert + Quadranten (S/T/I/N) + Signalqualität pro Auge.",
@@ -2754,6 +2769,11 @@
       "heading": "Bestätigen",
       "placeholder": "Bestätigungsoberfläche folgt mit Phase 2."
     }
+  },
+  "bcvaPortal": {
+    "title": "BCVA-Eingabeportal",
+    "studyOid": "Studie · {oid}",
+    "stubBody": "Das Eingabeformular wird in einem Folge-Commit implementiert. Diese Route lädt korrekt, das Backend-Whitelisting für /pages/api/v1/public/bcva-entry/** ist aktiv."
   },
   "octPortal": {
     "topbar": {

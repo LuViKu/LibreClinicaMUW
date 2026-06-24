@@ -159,6 +159,11 @@ public class SecurityConfig {
                         // above), so no separate ignoringRequestMatchers entry
                         // is needed.
                         "/pages/api/v1/public/oct-upload/**",
+                        // 2026-06-24 user-feedback round — public BCVA-entry
+                        // portal (mirrors OCT-upload posture). Same
+                        // trust-the-reverse-proxy gate; nurses don't have
+                        // accounts. See PublicBcvaEntryController.
+                        "/pages/api/v1/public/bcva-entry/**",
                         "/pages/api/v1/editform/**",
                         "/pages/auth/api/v1/discrepancynote/**",
                         "/pages/auth/api/v1/forms/migrate/**",

@@ -26,6 +26,7 @@ import {
   generateOphthExamPresetItems,
 } from './presets/ophthExamPreset'
 import { BCVA_PRESET_ID, generateBcvaPresetItems } from './presets/bcvaPreset'
+import { BCVA_DECIMAL_PRESET_ID, generateBcvaDecimalPresetItems } from './presets/bcvaDecimalPreset'
 import { RNFL_PRESET_ID, generateRnflPresetItems } from './presets/rnflPreset'
 import {
   THICKNESS_MAP_PRESET_ID,
@@ -124,6 +125,18 @@ export const PRESET_CATALOG: ReadonlyArray<PresetDescriptor> = [
     bilateralSection: true,
     sectionLabel: 'BCVA',
     generate: (t) => generateBcvaPresetItems(t),
+  },
+  {
+    // 2026-06-24 user-feedback round — decimal-flavoured BCVA preset
+    // backing the public BCVA-entry portal. Captures the
+    // autorefractometer's native decimal + signed partial offset
+    // rather than ETDRS letters.
+    id: BCVA_DECIMAL_PRESET_ID,
+    labelKey: 'crfAuthoring.presets.bcvaDecimal.label',
+    descriptionKey: 'crfAuthoring.presets.bcvaDecimal.description',
+    bilateralSection: true,
+    sectionLabel: 'BCVA_DEC',
+    generate: (t) => generateBcvaDecimalPresetItems(t),
   },
   {
     id: RNFL_PRESET_ID,

@@ -1504,6 +1504,21 @@
           "axisValidation": "[NEEDS_REVIEW] Integer 0–180 expected."
         }
       },
+      "bcvaDecimal": {
+        "label": "[NEEDS_REVIEW] BCVA (decimal + refraction)",
+        "description": "[NEEDS_REVIEW] Best-corrected visual acuity decimal (autorefractometer output) with signed partial-line offset (p-N / +N) plus refraction per eye. Backs the public BCVA-entry portal.",
+        "items": {
+          "decimal": "[NEEDS_REVIEW] Visus (decimal)",
+          "decimalValidation": "[NEEDS_REVIEW] Decimal 0.01–2.0 expected (e.g. 1.0 or 0.8).",
+          "partial": "[NEEDS_REVIEW] Partial line (signed −4…+4)",
+          "partialValidation": "[NEEDS_REVIEW] Integer −4 to +4 expected (−N = N optotypes missed, +N = N additional letters read).",
+          "sphere": "[NEEDS_REVIEW] Refraction — sphere",
+          "cylinder": "[NEEDS_REVIEW] Refraction — cylinder",
+          "axis": "[NEEDS_REVIEW] Refraction — axis",
+          "refractionValidation": "[NEEDS_REVIEW] Enter a numeric value (e.g. -1.75).",
+          "axisValidation": "[NEEDS_REVIEW] Integer 0–180 expected."
+        }
+      },
       "rnfl": {
         "label": "[NEEDS_REVIEW] RNFL (peripapillary, Heidelberg HRA / Spectralis ONH)",
         "description": "[NEEDS_REVIEW] Peripapillary nerve fiber layer — global mean + quadrants (S/T/I/N) + signal quality per eye.",
@@ -2752,6 +2767,11 @@
       "heading": "Confirm",
       "placeholder": "Confirmation surface lands with Phase 2."
     }
+  },
+  "bcvaPortal": {
+    "title": "[NEEDS_REVIEW] BCVA-Entry Portal",
+    "studyOid": "[NEEDS_REVIEW] Study · {oid}",
+    "stubBody": "[NEEDS_REVIEW] The entry form lands in a follow-up commit. The route loads, the backend whitelist for /pages/api/v1/public/bcva-entry/** is active."
   },
   "octPortal": {
     "topbar": {

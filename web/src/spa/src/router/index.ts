@@ -359,6 +359,21 @@ const router = createRouter({
       meta: { public: true, title: 'OCT-Upload-Portal' },
     },
     /**
+     * 2026-06-24 user-feedback round — public BCVA-entry portal.
+     * Same posture as the OCT-upload portal (DR-022 sibling): the
+     * institutional reverse proxy is the only access gate; the
+     * backend whitelists /pages/api/v1/public/bcva-entry/** under
+     * permitAll(). Study nurses bookmark
+     * /app/bcva-entry/<studyOid> and enter today's BCVA readings
+     * for the visits scheduled on that date.
+     */
+    {
+      path: '/bcva-entry/:studyOid',
+      name: 'bcva-portal',
+      component: () => import('@/views/BcvaPortalView.vue'),
+      meta: { public: true, title: 'BCVA-Eingabeportal' },
+    },
+    /**
      * Phase E hardening — A5 (2026-06-10): catch-all "Seite nicht
      * gefunden" route. Must remain the LAST entry — vue-router
      * matches top-to-bottom and any subsequent named route would be
