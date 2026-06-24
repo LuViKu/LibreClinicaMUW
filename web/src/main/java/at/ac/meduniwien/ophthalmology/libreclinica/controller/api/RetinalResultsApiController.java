@@ -146,6 +146,14 @@ public class RetinalResultsApiController {
      */
     private final RetinalInferenceApiController inferenceController;
 
+    /**
+     * 2026-06-24 — CRT (Central Retinal Thickness, central 1 mm)
+     * compute service. Nullable so the IT-friendly back-compat
+     * constructor stays valid; the new endpoint guards on null.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService crtComputeService;
+
     @Autowired
     public RetinalResultsApiController(@Qualifier("dataSource") DataSource dataSource,
                                        SiteVisibilityFilter siteVisibilityFilter,
@@ -662,6 +670,122 @@ public class RetinalResultsApiController {
             Double d = parseDoubleOrNull(s);
             return d == null ? null : (int) Math.round(d);
         }
+    }
+
+    /* ====================================================================== */
+    /* GET /study-subjects/{studySubjectId}/crt-timeline                       */
+    /* 2026-06-24 user-feedback round — central 1 mm retinal thickness        */
+    /* ====================================================================== */
+
+    /**
+     * Per-subject CRT timeline. Returns one row per study_event for
+     * which the GA + BM jobs are both {@code done} for at least one
+     * eye. Each row carries per-eye {@code crt_um} plus the source
+     * job ids so the SPA can deep-link the operator to either of the
+     * two artifacts.
+     *
+     * <p>Same auth posture as {@link #listBcvaTimeline}: session +
+     * site-visibility filter on the subject's study. Soft-fails — a
+     * missing GA or BM on one eye returns null for that eye rather
+     * than erroring out the whole timeline.
+     */
+    @GetMapping(path = "/study-subjects/{studySubjectId:[0-9]+}/crt-timeline",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listCrtTimeline(@PathVariable("studySubjectId") int studySubjectId,
+                                             HttpSession session) {
+        ResponseEntity<?> denied = guardSession(session);
+        if (denied != null) return denied;
+        if (crtComputeService == null) {
+            // Test-only ctor path with a null CRT service. Be explicit
+            // rather than 500ing on NPE.
+            return ResponseEntity.status(501).body(Map.of(
+                    "message", "CRT compute service is not wired in this context"));
+        }
+        Integer subjectStudyId;
+        try (Connection c = dataSource.getConnection()) {
+            subjectStudyId = fetchStudyIdForStudySubject(c, studySubjectId);
+        } catch (SQLException sqlEx) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to resolve study for subject: " + sqlEx.getMessage()));
+        }
+        if (subjectStudyId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "study_subject " + studySubjectId + " not found"));
+        }
+        ResponseEntity<?> visGuard = guardStudyVisibility(subjectStudyId, session,
+                "study_subject " + studySubjectId + " is outside your site visibility");
+        if (visGuard != null) return visGuard;
+
+        // Pull every study_event the subject has where at least one GA
+        // OR BM done job exists. We compute per-eye in the service —
+        // pairing happens there.
+        String sql = "SELECT DISTINCT se.study_event_id, "
+                + "       date(se.date_start) AS event_date "
+                + "  FROM retinal_inference_job j "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
+                + " WHERE se.study_subject_id = ? "
+                + "   AND j.task IN ('ga','bm') "
+                + "   AND j.status IN ('done','succeeded') "
+                + " ORDER BY event_date ASC, study_event_id ASC";
+
+        List<Map<String, Object>> out = new ArrayList<>();
+        List<int[]> events = new ArrayList<>(); // [eventId, dateMillis-ish ordinal]
+        Map<Integer, String> eventDateByEventId = new LinkedHashMap<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int sev = rs.getInt("study_event_id");
+                    java.sql.Date ed = rs.getDate("event_date");
+                    eventDateByEventId.put(sev, ed == null ? null : ed.toString());
+                    events.add(new int[]{sev});
+                }
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to list CRT-eligible events for study_subject {}: {}",
+                    studySubjectId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to list CRT timeline: " + sqlEx.getMessage()));
+        }
+        // Per-event per-eye computation. Each event is independent; one
+        // failing event doesn't abort the rest.
+        for (Map.Entry<Integer, String> e : eventDateByEventId.entrySet()) {
+            int eventId = e.getKey();
+            Map<at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Eye,
+                    at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Result>
+                    perEye = crtComputeService.computeForStudyEvent(eventId);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("studyEventId", eventId);
+            row.put("eventDate", e.getValue());
+            row.put("od", crtRowOrNull(perEye, at.ac.meduniwien.ophthalmology.libreclinica
+                    .service.retinal.metrics.CrtComputeService.Eye.OD));
+            row.put("os", crtRowOrNull(perEye, at.ac.meduniwien.ophthalmology.libreclinica
+                    .service.retinal.metrics.CrtComputeService.Eye.OS));
+            // Only surface events that produced AT LEAST one eye —
+            // events where both GA + BM exist but neither paired (e.g.
+            // GA done for OD, BM done for OS only) would otherwise
+            // surface as a useless empty row.
+            if (row.get("od") != null || row.get("os") != null) {
+                out.add(row);
+            }
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    private static Map<String, Object> crtRowOrNull(
+            Map<at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Eye,
+                    at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Result> perEye,
+            at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Eye eye) {
+        var r = perEye.get(eye);
+        if (r == null) return null;
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("crtMicrons", Math.round(r.crtMicrons() * 100.0) / 100.0); // 2 decimals
+        out.put("pixelsInDisk", r.pixelsInDisk());
+        out.put("gaJobId", r.gaJobId());
+        out.put("bmJobId", r.bmJobId());
+        return out;
     }
 
     /* ====================================================================== */

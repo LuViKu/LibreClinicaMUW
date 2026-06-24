@@ -26,7 +26,7 @@
  */
 
 import { computed, ref, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
-import { listSubjectJobs, listSubjectBcvaTimeline, getJob, type RetinalJobSummary, type RetinalJobDetail, type FluidPayload, type BcvaTimelineRow } from '@/api/retinal'
+import { listSubjectJobs, listSubjectBcvaTimeline, listSubjectCrtTimeline, getJob, type RetinalJobSummary, type RetinalJobDetail, type FluidPayload, type BcvaTimelineRow, type CrtTimelineRow } from '@/api/retinal'
 import { decimalToLetters, formatBcva } from '@/lib/bcvaConversion'
 import type { Laterality, NamdAiRecommendation, NamdPatient, NamdVisit, NamdWorkspaceData } from '../types'
 import { useNamdAiRecommendation } from './useNamdAiRecommendation'
@@ -155,9 +155,18 @@ function fluidJobToVisit(
   detail: RetinalJobDetail | null,
   fallbackLabel: string,
   bcvaRow: BcvaTimelineRow | null,
+  crtRow: CrtTimelineRow | null,
 ): NamdVisit {
   const payload = detail?.outputPayload
   const biomarkers = isFluidPayload(payload) ? payload.biomarkers : null
+  // 2026-06-24 — pick the central-1mm CRT for the visit's eye. Each
+  // eye's value is null until both the GA + BM jobs for that
+  // (visit, eye) reach `done`; the chart renders 0 in that case.
+  let crtMicrons = 0
+  if (crtRow) {
+    const eye = summary.laterality === 'OS' ? crtRow.os : crtRow.od
+    if (eye != null) crtMicrons = Math.round(eye.crtMicrons)
+  }
   // 2026-06-24 user-feedback round — derive BCVA letters + canonical
   // raw form from the timeline row matching this job's study_event.
   // Picks the eye that matches the summary's laterality.
@@ -201,7 +210,7 @@ function fluidJobToVisit(
     irf: mm3ToNl(biomarkers?.irf_mm3),
     srf: mm3ToNl(biomarkers?.srf_mm3),
     ped: mm3ToNl(biomarkers?.ped_mm3),
-    crt: 0,
+    crt: crtMicrons,
     bcva: bcvaLetters,
     bcvaRaw,
     inj: '',
@@ -239,6 +248,10 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
   // visits. Null when the subject has no BCVA writes yet — the
   // composable falls back to `bcva = 0` in that case.
   const bcvaByEventId = new Map<number, BcvaTimelineRow>()
+  // 2026-06-24 — per-event CRT timeline (central 1 mm, paired GA + BM).
+  // Same lookup pattern as the BCVA cache; soft-fails to `visit.crt = 0`
+  // when the event has no paired done jobs.
+  const crtByEventId = new Map<number, CrtTimelineRow>()
 
   /**
    * Build the visit timeline + patient banner from the cached
@@ -261,11 +274,13 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
     const rawVisits: NamdVisit[] = fluidSummaries.map((s, idx) => {
       const eventId = s.studyEventId ?? null
       const bcvaRow = eventId != null ? (bcvaByEventId.get(eventId) ?? null) : null
+      const crtRow = eventId != null ? (crtByEventId.get(eventId) ?? null) : null
       return fluidJobToVisit(
         s,
         fluidDetailsCache.get(s.jobId) ?? null,
         `V${String(idx + 1).padStart(2, '0')}`,
         bcvaRow,
+        crtRow,
       )
     })
     const baselineMs = parseDateMs(rawVisits[0]?.date)
@@ -325,13 +340,18 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
       // network error so legacy studies without any BCVA writes (or
       // pre-portal deploys) keep rendering the nAMD module without
       // BCVA values rather than failing the whole load.
-      const [summaries, bcvaTimeline] = await Promise.all([
+      const [summaries, bcvaTimeline, crtTimeline] = await Promise.all([
         listSubjectJobs(numericId),
         listSubjectBcvaTimeline(numericId).catch(() => [] as BcvaTimelineRow[]),
+        listSubjectCrtTimeline(numericId).catch(() => [] as CrtTimelineRow[]),
       ])
       bcvaByEventId.clear()
       for (const row of bcvaTimeline) {
         bcvaByEventId.set(row.studyEventId, row)
+      }
+      crtByEventId.clear()
+      for (const row of crtTimeline) {
+        crtByEventId.set(row.studyEventId, row)
       }
       // 2026-06-23 — accept both the DB-native 'done' and the
       // historical/typed 'succeeded' label so jobs returned straight

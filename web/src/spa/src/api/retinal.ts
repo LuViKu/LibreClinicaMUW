@@ -393,6 +393,41 @@ export function listSubjectBcvaTimeline(studySubjectId: number): Promise<BcvaTim
 }
 
 /**
+ * 2026-06-24 — per-eye CRT (Central Retinal Thickness, central 1 mm in
+ * µm) derived from the paired GA + BM jobs on a single visit. Each
+ * eye is null when one of the two source jobs is missing or not yet
+ * {@code done}; both null on the same event means the event won't
+ * appear in the response at all.
+ */
+export interface CrtTimelineEye {
+  crtMicrons: number
+  pixelsInDisk: number
+  gaJobId: number
+  bmJobId: number
+}
+
+/** One CRT timeline row — same shape as {@link BcvaTimelineRow}. */
+export interface CrtTimelineRow {
+  studyEventId: number
+  /** ISO yyyy-MM-dd. */
+  eventDate: string | null
+  od: CrtTimelineEye | null
+  os: CrtTimelineEye | null
+}
+
+/**
+ * 2026-06-24 — fetch the subject's CRT history. Backs the nAMD
+ * module's CRT strip + report-tab column; soft-fails to `[]` when
+ * the backend service isn't wired (legacy compose deployments
+ * before CRT shipped).
+ */
+export function listSubjectCrtTimeline(studySubjectId: number): Promise<CrtTimelineRow[]> {
+  return apiGet<CrtTimelineRow[]>(
+    `/pages/api/v1/study-subjects/${studySubjectId}/crt-timeline`,
+  )
+}
+
+/**
  * Build the absolute URL for a single artifact / companion file. Used
  * as the {@code src} of {@code <img>} for {@code fundus.png}, the
  * {@code href} of download anchors, and as the fetch target for
