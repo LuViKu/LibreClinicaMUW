@@ -46,7 +46,12 @@ const fovealSlice = computed(() => Math.floor(props.nSlices / 2))
     </div>
     <div class="rounded-lg overflow-hidden bg-black ring-1 ring-slate-300">
       <div v-if="bscanDcmUrl" class="aspect-[16/9]">
+        <!-- 2026-06-24 — `:key` so a parent that swaps the visit
+             prop forces a fresh cornerstone init; without it the
+             report's baseline / current blocks would render the same
+             DICOM if the BscanViewer instance is reused. -->
         <BscanViewer
+          :key="bscanDcmUrl"
           :bscan-dcm-url="bscanDcmUrl"
           :n-bscans="nSlices"
           :model-value="fovealSlice"

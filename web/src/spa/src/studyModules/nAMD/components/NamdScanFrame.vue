@@ -217,7 +217,16 @@ const eyeLabel = computed(() => (props.eye === 'OD' ? 'OD' : 'OS'))
     >
       <div class="aspect-[16/9]">
         <div v-if="bscanDcmUrl" class="w-full h-full">
+          <!-- 2026-06-24 user-feedback round — `:key` forces a fresh
+               BscanViewer mount whenever the bound DICOM URL changes
+               (e.g. the Compare tab swaps the left or right visit).
+               Without it, BscanViewer's cornerstone initViewer() only
+               runs onMounted; the segmentation overlay was updating
+               correctly (the envelope composable watches jobId) but
+               the cornerstone stack stayed on the FIRST visit's
+               bscan.dcm. -->
           <BscanViewer
+            :key="bscanDcmUrl"
             :bscan-dcm-url="bscanDcmUrl"
             :n-bscans="nSlices"
             :model-value="slice"
