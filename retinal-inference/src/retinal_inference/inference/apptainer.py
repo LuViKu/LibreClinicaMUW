@@ -290,18 +290,16 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         layerseg.mkdir(parents=True, exist_ok=True)
         # 2026-06-24 — IOWA OCTLayerSeg 3.6 segfaults on DCMs whose
         # bytes were laid down via Python's write_bytes / pydicom
-        # save_as (including the cluster sidecar's own
-        # api.run._materialize_input), even when the resulting file
-        # is byte-identical (md5, size, blocks, extents, SELinux
-        # context, ACLs all matching) to a copy that IOWA accepts.
-        # The discriminator is some XFS-allocator-state property we
-        # could not isolate without IOWA source. ``shutil.copy`` to a
-        # sibling + atomic rename resets that state. The new file is
-        # byte-identical to the input (verified locally; md5 unchanged).
-        # See PR #255 for the full diagnostic trail.
-        import shutil
+        # save_as / shutil.copy — anything routed through Python's
+        # buffered IO. The same content rendered by the SHELL `cp`
+        # binary (or `cat`) is accepted by IOWA. The discriminator
+        # is some XFS-allocator-state attribute we could not isolate
+        # without IOWA source. Verified on cn5: the shutil.copy
+        # variant also crashed; only invoking /bin/cp produced an
+        # IOWA-acceptable file. Use subprocess to call the real cp.
+        import subprocess as _sp
         dcm_for_iowa = work / "bscan.iowa.dcm"
-        shutil.copy(str(dcm), str(dcm_for_iowa))
+        _sp.run(["cp", str(dcm), str(dcm_for_iowa)], check=True)
         # OCTLayerSeg3.6 (licensed host binary) -> lres.xml.
         _exec([s.ga_iowa_binary or "OCTLayerSeg3.6", "-oM", str(dcm_for_iowa),
                str(layerseg / "lres.xml"), str(layerseg / "t1.xml"),
