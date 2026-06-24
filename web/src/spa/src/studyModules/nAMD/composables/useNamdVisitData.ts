@@ -25,7 +25,7 @@
  * consumer shape.
  */
 
-import { computed, ref, watch, type ComputedRef, type Ref } from 'vue'
+import { computed, ref, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
 import { listSubjectJobs, getJob, type RetinalJobSummary, type RetinalJobDetail, type FluidPayload } from '@/api/retinal'
 import type { Laterality, NamdAiRecommendation, NamdPatient, NamdVisit, NamdWorkspaceData } from '../types'
 import { useNamdAiRecommendation } from './useNamdAiRecommendation'
@@ -50,6 +50,23 @@ export interface UseNamdVisitDataResult {
   loading: Ref<boolean>
   error: Ref<string | null>
   refresh: () => Promise<void>
+  /**
+   * 2026-06-24 user-feedback round — eyes the subject has at least
+   * one completed fluid job for. Empty if no jobs exist; one entry
+   * for monocular follow-up; both ('OD' and 'OS') when both eyes
+   * are enrolled. Drives the eye-switcher pill row on the nAMD
+   * patient banner.
+   */
+  availableEyes: Ref<Laterality[]>
+  /**
+   * Currently active eye. The patient banner highlights the matching
+   * pill; the rest of the workspace (trend chart, viewer, compare,
+   * report) keys off the {@link data} ref which the composable
+   * rebuilds whenever this ref changes.
+   */
+  selectedEye: Ref<Laterality>
+  /** Switch the active eye. No-op when called with the current value. */
+  setEye: (eye: Laterality) => void
 }
 
 /** mm³ → nL (1 mm³ = 1 µL = 1000 nL — but the design's "nL" scale fits
@@ -176,120 +193,165 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
   const loading = ref(false)
   const error = ref<string | null>(null)
 
+  /**
+   * 2026-06-24 user-feedback round — eye-switcher support.
+   *
+   * <p>The workspace is single-eye at render time, but a subject may
+   * have done fluid jobs for both OD and OS. {@link availableEyes}
+   * holds the set of eyes the subject has jobs for; the banner
+   * renders one pill per entry. {@link selectedEye} drives the
+   * filter applied to {@link allFluidDone} when assembling the
+   * visit timeline. {@link setEye} switches the active eye locally
+   * (no HTTP round-trip — we cached the summaries + details below).
+   */
+  const availableEyes = ref<Laterality[]>([])
+  const selectedEye = ref<Laterality>('OD')
+  // Per-fetch caches: the per-eye filtering + rebuild is all local
+  // so an eye switch is instantaneous (no second listSubjectJobs +
+  // bulk getJob round-trip).
+  const allFluidDone = shallowRef<RetinalJobSummary[]>([])
+  const fluidDetailsCache = new Map<number, RetinalJobDetail | null>()
+
+  /**
+   * Build the visit timeline + patient banner from the cached
+   * summaries+details, filtered to {@link selectedEye}. Called from
+   * {@link refresh} (after fetching) and from {@link setEye} (after
+   * the operator picks the other eye).
+   */
+  function rebuildData(oid: string): void {
+    if (allFluidDone.value.length === 0) {
+      data.value = null
+      return
+    }
+    const fluidSummaries = allFluidDone.value
+      .filter((s) => s.laterality === selectedEye.value)
+      .sort((a, b) => {
+        const ka = (a.acquisitionDate ?? a.visitDate ?? a.completedAt ?? '')
+        const kb = (b.acquisitionDate ?? b.visitDate ?? b.completedAt ?? '')
+        return ka.localeCompare(kb)
+      })
+    const rawVisits: NamdVisit[] = fluidSummaries.map((s, idx) =>
+      fluidJobToVisit(
+        s,
+        fluidDetailsCache.get(s.jobId) ?? null,
+        `V${String(idx + 1).padStart(2, '0')}`,
+      ),
+    )
+    const baselineMs = parseDateMs(rawVisits[0]?.date)
+    const visits: NamdVisit[] = rawVisits.map((v, idx) => {
+      if (baselineMs == null) return { ...v, week: idx }
+      const vMs = parseDateMs(v.date)
+      if (vMs == null) return { ...v, week: idx }
+      const week = Math.round((vMs - baselineMs) / MS_PER_WEEK)
+      return { ...v, week: Math.max(0, week) }
+    })
+    const current = visits.length > 0 ? visits[visits.length - 1]! : null
+    const prev = visits.length > 1 ? visits[visits.length - 2]! : null
+    const patient: NamdPatient = {
+      id: args.studySubjectLabel?.value || oid,
+      eye: selectedEye.value,
+      diagnosis: 'Exsudative AMD',
+      age: null,
+      study: '',
+      regimen: 'Treat-and-Extend',
+    }
+    data.value = {
+      patient,
+      visits,
+      current,
+      prev,
+      ai: null, // derived reactively below
+      nSlices: null,
+    }
+  }
+
   async function refresh(): Promise<void> {
     error.value = null
     if (args.mock.value) {
       data.value = buildMockData()
+      // Mock fixture is OD-only; expose that so the banner shows a
+      // single (active) OD pill.
+      availableEyes.value = ['OD']
+      selectedEye.value = 'OD'
       return
     }
     const oid = args.studySubjectOid.value
     if (!oid) {
       data.value = null
+      availableEyes.value = []
       return
     }
     loading.value = true
     try {
-      // The endpoint takes the numeric studySubjectId, but the workspace
-      // is opened from the SubjectDetailView which passes the OID; for
-      // v1 we coerce — production wiring will route through a typed
-      // {@code /api/v1/subjects/{oid}} resolver. When the oid isn't a
-      // numeric string, surface an empty workspace so the view can
-      // render its empty state. 2026-06-21 round 7 — previously we
-      // fell back to buildMockData() so the workspace stayed
-      // "usable"; that surfaced fixture patient S-0042 on real
-      // operator screens whenever a non-numeric subject id was
-      // passed. The empty state is the correct signal.
       const numericId = Number.parseInt(oid, 10)
       if (Number.isNaN(numericId)) {
         data.value = null
+        availableEyes.value = []
         return
       }
       const summaries = await listSubjectJobs(numericId)
       // 2026-06-23 — accept both the DB-native 'done' and the
       // historical/typed 'succeeded' label so jobs returned straight
-      // off retinal_inference_job.status surface here. The TS type
-      // declares 'succeeded' but the backend ships the raw column
-      // value ('done').
+      // off retinal_inference_job.status surface here.
       const TERMINAL_OK = new Set(['done', 'succeeded'])
       const fluidDone = summaries.filter(
         (s) => s.task === 'fluid' && TERMINAL_OK.has(s.status),
       )
-      // 2026-06-23 — workspace is single-eye. Pick whichever
-      // laterality has the most done jobs (ties → OD by ophthalmology
-      // convention). Previously every eye's jobs streamed into the
-      // same visits[] array, so the comparison + trend chart silently
-      // mixed OD and OS values while the header still claimed one
-      // eye. The eye-switcher control is a follow-up; for now we
-      // emit a single coherent timeline per workspace load.
-      const odCount = fluidDone.filter((s) => s.laterality === 'OD').length
-      const osCount = fluidDone.filter((s) => s.laterality === 'OS').length
-      const laterality: Laterality = osCount > odCount ? 'OS' : 'OD'
-      // Sort by VISIT date (clinical chronology) rather than upload
-      // completion time, so a back-fill of historical scans plots in
-      // the correct visit order regardless of upload sequencing.
-      const fluidSummaries = fluidDone
-        .filter((s) => s.laterality === laterality)
-        .sort((a, b) => {
-          // 2026-06-23 — same date priority as the visit object below.
-          const ka = (a.acquisitionDate ?? a.visitDate ?? a.completedAt ?? '')
-          const kb = (b.acquisitionDate ?? b.visitDate ?? b.completedAt ?? '')
-          return ka.localeCompare(kb)
-        })
+      // Eye discovery: which lateralities have at least one done
+      // fluid job? Drives the banner's pill row.
+      const eyes = new Set<Laterality>()
+      for (const s of fluidDone) {
+        if (s.laterality === 'OD') eyes.add('OD')
+        else if (s.laterality === 'OS') eyes.add('OS')
+      }
+      const sortedEyes: Laterality[] = (['OD', 'OS'] as const).filter((e) => eyes.has(e))
+      availableEyes.value = sortedEyes
+      // Default: whichever eye has the most jobs (ties → OD per the
+      // ophthalmology face-to-face convention). Only updated when the
+      // current selection is no longer available — preserves the
+      // operator's manual pick across re-fetches.
+      if (!sortedEyes.includes(selectedEye.value) && sortedEyes.length > 0) {
+        const odCount = fluidDone.filter((s) => s.laterality === 'OD').length
+        const osCount = fluidDone.filter((s) => s.laterality === 'OS').length
+        selectedEye.value = osCount > odCount ? 'OS' : 'OD'
+      }
+      // Pre-fetch every detail so the eye-switcher is local (no HTTP
+      // round-trip on toggle). The bulk hit was already happening
+      // for the selected eye; now it covers both.
+      fluidDetailsCache.clear()
       const details = await Promise.all(
-        fluidSummaries.map(async (s) => {
+        fluidDone.map(async (s) => {
           try {
-            return await getJob(s.jobId)
+            return [s.jobId, await getJob(s.jobId)] as const
           } catch {
-            return null
+            return [s.jobId, null] as const
           }
         }),
       )
-      const rawVisits: NamdVisit[] = fluidSummaries.map((s, idx) =>
-        fluidJobToVisit(s, details[idx] ?? null, `V${String(idx + 1).padStart(2, '0')}`),
-      )
-      // 2026-06-23 user-feedback round — derive week-since-baseline
-      // from visit dates so the trend chart's X axis can space visits
-      // properly. Without this every visit lands at week=0, collapsing
-      // every polygon + dot + label onto the same X coordinate and the
-      // chart looks empty save for the current-visit coral label
-      // painted on top. Falls back to the visit index when no parseable
-      // date exists (preserves chronological ordering at least).
-      const baselineMs = parseDateMs(rawVisits[0]?.date)
-      const visits: NamdVisit[] = rawVisits.map((v, idx) => {
-        if (baselineMs == null) return { ...v, week: idx }
-        const vMs = parseDateMs(v.date)
-        if (vMs == null) return { ...v, week: idx }
-        const week = Math.round((vMs - baselineMs) / MS_PER_WEEK)
-        return { ...v, week: Math.max(0, week) }
-      })
-      const current = visits.length > 0 ? visits[visits.length - 1]! : null
-      const prev = visits.length > 1 ? visits[visits.length - 2]! : null
-      const patient: NamdPatient = {
-        // 2026-06-24 — prefer the site-scoped subject label (e.g.
-        // "EIAMD150") for display; the numeric oid stays as the
-        // fallback so a deep-link without ?subjectLabel= still
-        // surfaces *something* identifying the subject.
-        id: args.studySubjectLabel?.value || oid,
-        eye: laterality,
-        diagnosis: 'Exsudative AMD',
-        age: null,
-        study: '',
-        regimen: 'Treat-and-Extend',
+      for (const [jobId, detail] of details) {
+        fluidDetailsCache.set(jobId, detail)
       }
-      data.value = {
-        patient,
-        visits,
-        current,
-        prev,
-        ai: null, // derived reactively below
-        nSlices: null,
-      }
+      allFluidDone.value = fluidDone
+      rebuildData(oid)
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to load workspace data'
       data.value = null
+      availableEyes.value = []
     } finally {
       loading.value = false
     }
+  }
+
+  /**
+   * Switch the active eye. Same patient, same subject — just re-pivot
+   * the cached summaries+details and rebuild data.value.
+   */
+  function setEye(eye: Laterality): void {
+    if (eye === selectedEye.value) return
+    if (!availableEyes.value.includes(eye)) return
+    selectedEye.value = eye
+    const oid = args.studySubjectOid.value
+    if (oid) rebuildData(oid)
   }
 
   // 2026-06-24 — re-fetch when the label changes too. This is mostly
@@ -327,5 +389,5 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
     }
   })
 
-  return { data, loading, error, refresh }
+  return { data, loading, error, refresh, availableEyes, selectedEye, setEye }
 }

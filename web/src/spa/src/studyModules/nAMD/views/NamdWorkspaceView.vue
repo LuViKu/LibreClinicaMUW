@@ -57,7 +57,7 @@ const studySubjectLabel = computed(() => {
 
 const isMock = computed(() => route.query.mock === '1')
 
-const { data, loading, error } = useNamdVisitData({
+const { data, loading, error, availableEyes, selectedEye, setEye } = useNamdVisitData({
   studySubjectOid,
   studySubjectLabel,
   mock: isMock,
@@ -85,6 +85,9 @@ useViewBreadcrumb(computed(() => {
       :patient="data.patient"
       :current="data.current"
       :prev="data.prev"
+      :available-eyes="availableEyes"
+      :selected-eye="selectedEye"
+      @switch-eye="setEye"
     />
 
     <NamdTabs v-model="tab" />
