@@ -89,3 +89,21 @@ def test_skip_unknown_extensions(tmp_path: Path) -> None:
     (tmp_path / "001-OPL-HFL.csv").write_text("size\n1,2\n")
     artifacts = collect_artifacts(tmp_path)
     assert filenames(artifacts) == ["001-OPL-HFL.csv"]
+
+
+def test_only_collects_declared_names(tmp_path: Path) -> None:
+    # GA-style: the handler ran the IOWA layers + EZL/ELM into the tempdir but
+    # declares only RPEL — collect_artifacts(only=...) returns just that.
+    (tmp_path / "layers_csv").mkdir()
+    for i in range(1, 12):
+        (tmp_path / "layers_csv" / f"{i:03d}-iowa.csv").write_text("x\n")
+    out = tmp_path / "out"
+    out.mkdir()
+    (out / "001-RPEL.csv").write_text("r\n")
+    (out / "002-EZL.csv").write_text("e\n")
+    (out / "003-ELM.csv").write_text("l\n")
+
+    artifacts = collect_artifacts(tmp_path, only=["001-RPEL.csv"])
+    assert filenames(artifacts) == ["001-RPEL.csv"]
+    # Sanity: the unscoped walk would have returned everything (11 + 3).
+    assert len(collect_artifacts(tmp_path)) == 14

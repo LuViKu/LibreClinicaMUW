@@ -23,14 +23,15 @@ from typing import Any, Literal
 #   onl   — outer nuclear layer segmentation (OPL-HFL/BMEIS)(sese_onl)
 #   pr    — photoreceptor layer segmentation (BMEIS/OB-OPR) (sese_pr)
 #   bm    — Bruch's membrane layer segmentation             (sese_bm; host venv, GPU)
-TaskName = Literal["ga", "fluid", "onl", "pr", "bm"]
+#   layers— full layer stack: 11 IOWA reference layers + BM (IOWA binary + sese_bm)
+TaskName = Literal["ga", "fluid", "onl", "pr", "bm", "layers"]
 
 # All tasks the platform knows about (and that the PlaceholderAdapter can mock).
 # Whether a task can actually run in a given deployment is decided by the active
 # adapter: the OptimaAdapter only ``supports()`` a task that has a configured,
 # enabled model-runner — that is the gate that keeps ``ga`` off until the IOWA
 # layer segmenter + a GPU host are available (see the project plan).
-SUPPORTED_TASKS: set[TaskName] = {"ga", "fluid", "onl", "pr", "bm"}
+SUPPORTED_TASKS: set[TaskName] = {"ga", "fluid", "onl", "pr", "bm", "layers"}
 
 # The server emits only raw artifacts; ``primary_metric`` is None for every task
 # because the Java backend computes the clinical metric from those artifacts.
@@ -64,5 +65,11 @@ TASK_METADATA: dict[TaskName, dict[str, Any]] = {
         "output_kind": "layer",
         "reference_modality": "oct",
         "primary_metric": None,  # Java derives any BM metric from the surface CSV
+    },
+    "layers": {
+        "display_name": "Full layer stack (11 IOWA reference layers + Bruch's membrane)",
+        "output_kind": "layer",
+        "reference_modality": "oct",
+        "primary_metric": None,  # Java derives any per-layer metric from the CSVs
     },
 }

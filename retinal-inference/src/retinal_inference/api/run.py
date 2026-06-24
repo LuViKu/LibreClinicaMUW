@@ -207,7 +207,10 @@ async def _run_locked(
                 detail=f"runner returned {e.code}: {e.reason}",
             ) from e
 
-        artifacts = collect_artifacts(tempdir)
+        # When the adapter declared an explicit returned-artifact list, collect
+        # only those (e.g. GA returns RPEL but not the IOWA layers it consumed);
+        # otherwise fall back to the permissive allowlist walk (dev OptimaAdapter).
+        artifacts = collect_artifacts(tempdir, only=result.artifact_names)
         rewritten_payload = rewrite_payload_paths(
             dict(result.output_payload), tempdir
         )
