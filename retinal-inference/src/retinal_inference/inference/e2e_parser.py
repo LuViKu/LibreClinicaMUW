@@ -490,6 +490,19 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
         anat_item.CodeMeaning = "Retina"
         ds.AnatomicRegionSequence = Sequence([anat_item])
 
+    # 2026-06-24 — PerformedProtocolCodeSequence (0040,0260) is Type 2C
+    # in the OPT IOD (PS3.3 C.7.3.2). TestCase1's sese_ga reference
+    # fixture carries it; ours did not, and IOWA's binary may validate
+    # its presence even if the values are placeholders. Use the SNOMED
+    # OCT-Macula coding (T-D6710) so downstream readers see a sensible
+    # protocol name — closest SRT code for "macular OCT scan".
+    proto_item = Dataset()
+    proto_item.CodeValue = "T-D6710"
+    proto_item.CodingSchemeDesignator = "SRT"
+    proto_item.CodingSchemeVersion = "1.0"
+    proto_item.CodeMeaning = "Optical coherence tomography of macula"
+    ds.PerformedProtocolCodeSequence = Sequence([proto_item])
+
     # Reference Coordinates Sequence — one item per B-scan, each
     # carrying (0022,0032) as a 4-float [x_start, x_end, y_pos, y_pos]
     # in mm. IOWA reads this sequence to dimension the graph
@@ -499,13 +512,25 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     # Spectralis case), use them verbatim — IOWA gets the same scan
     # geometry the test fixtures carry. Else fall back to a
     # synthesised grid from spacing.
+    # 2026-06-24 — ReferenceCoordinates is (x1, y1, x2, y2) per DICOM
+    # PS3.3 C.8.17.7 — the start point's xy followed by the end point's
+    # xy. The original code emitted (x1, x2, y1, y2), which IOWA
+    # reads as start=(x1, x2), end=(y1, y2) and uses the resulting
+    # synthetic B-scan length to dimension the max-flow cost volume.
+    # For a real 5.71-mm horizontal scan, the bug emitted a 4.36-mm
+    # diagonal — IOWA undersized its allocator by ~24%, walked past
+    # the buffer in optnet_ia_maxflow_3d::maxflow_init, and SIGSEGV'd
+    # at 0x483c91. TestCase1's own (1.45, 7.27, 1.45, 1.45) decodes
+    # as start=(1.45, 7.27), end=(1.45, 1.45) — a vertical scan with
+    # x1==x2, which is consistent with (x1, y1, x2, y2) and would
+    # decode as a degenerate diagonal under the bug.
     ref_items = []
     if bv.bscan_positions_mm and len(bv.bscan_positions_mm) >= bv.n_bscans:
         for i in range(bv.n_bscans):
             x1, y1, x2, y2 = bv.bscan_positions_mm[i]
             ref_item = Dataset()
             ref_item.ReferenceCoordinates = [
-                round(x1, 6), round(x2, 6), round(y1, 6), round(y2, 6),
+                round(x1, 6), round(y1, 6), round(x2, 6), round(y2, 6),
             ]
             ref_items.append(ref_item)
     else:
@@ -515,7 +540,7 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
             y_mm = round(i * bv.slice_mm, 6)
             ref_item = Dataset()
             ref_item.ReferenceCoordinates = [
-                x_start_mm, x_end_mm, y_mm, y_mm,
+                x_start_mm, y_mm, x_end_mm, y_mm,
             ]
             ref_items.append(ref_item)
     # Tag (0022,0031) is "OphthalmicAxialMeasurementsLeftEyeSequence"
