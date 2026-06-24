@@ -2962,7 +2962,8 @@
       "pr": "PR-Dicke",
       "ga": "GA-Fläche",
       "bmeis": "BMEIS",
-      "layers": "Schichten (IOWA + BM)"
+      "layers": "Schichtsegmentierung (IOWA + BM)",
+      "bm": "Bruch-Membran"
     },
     "empty": {
       "awaitingSidecar": "Warte auf Sidecar …",

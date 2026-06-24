@@ -2951,6 +2951,15 @@
       "failed": "[NEEDS_REVIEW] Failed",
       "parked": "[NEEDS_REVIEW] Parked"
     },
+    "task": {
+      "fluid": "[NEEDS_REVIEW] Fluid",
+      "onl": "[NEEDS_REVIEW] ONL thickness",
+      "pr": "[NEEDS_REVIEW] PR thickness",
+      "ga": "[NEEDS_REVIEW] GA area",
+      "bmeis": "[NEEDS_REVIEW] BMEIS",
+      "layers": "[NEEDS_REVIEW] Layer segmentation (IOWA + BM)",
+      "bm": "[NEEDS_REVIEW] Bruch's membrane"
+    },
     "empty": {
       "awaitingSidecar": "[NEEDS_REVIEW] Awaiting sidecar…",
       "preprocessing": "[NEEDS_REVIEW] Preprocessing the OCT volume…",
