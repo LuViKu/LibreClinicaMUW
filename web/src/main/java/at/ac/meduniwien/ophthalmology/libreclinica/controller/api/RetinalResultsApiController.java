@@ -563,6 +563,10 @@ public class RetinalResultsApiController {
 
         // Pivot in Java — one SELECT, group by study_event_id, fold
         // each (eye, oid) row into the per-eye trio.
+        // 2026-06-24 — covers both OID families: SPA-side BCVA preset
+        // (OD_BCVA_*, OS_BCVA_*) AND institutional Ophthalmology Visit
+        // CRF (VA_O*_ETDRS / VA_O*_LOGMAR). A row may come from either
+        // (or both, if a multi-section CRF has all of them).
         String sql = "SELECT se.study_event_id, "
                 + "       date(se.date_start) AS event_date, "
                 + "       i.name AS oid, "
@@ -576,7 +580,9 @@ public class RetinalResultsApiController {
                 + "   AND idata.value IS NOT NULL AND idata.value <> '' "
                 + "   AND i.name IN ('OD_BCVA_DECIMAL','OS_BCVA_DECIMAL', "
                 + "                   'OD_BCVA_PARTIAL','OS_BCVA_PARTIAL', "
-                + "                   'OD_BCVA_LETTERS','OS_BCVA_LETTERS') "
+                + "                   'OD_BCVA_LETTERS','OS_BCVA_LETTERS', "
+                + "                   'VA_OD_ETDRS','VA_OS_ETDRS', "
+                + "                   'VA_OD_LOGMAR','VA_OS_LOGMAR') "
                 + " ORDER BY se.date_start ASC, se.study_event_id ASC";
         // Per-event accumulator: { studyEventId → { eventDate, od:{}, os:{} } }
         Map<Integer, Map<String, Object>> byEvent = new LinkedHashMap<>();
@@ -605,14 +611,30 @@ public class RetinalResultsApiController {
                     });
                     String oid = rs.getString("oid");
                     String value = rs.getString("value");
+                    // 2026-06-24 — both OID conventions encode the eye
+                    // in a prefix: SPA-side uses `OD_*` / `OS_*`,
+                    // institutional uses `VA_OD_*` / `VA_OS_*` (and
+                    // `REFRACT_OD_*` / `REFRACT_OS_*`). Eye detection
+                    // tolerates both.
+                    String eyeKey = (oid.startsWith("OD_") || oid.contains("_OD_") || oid.startsWith("VA_OD") )
+                            ? "od" : "os";
                     @SuppressWarnings("unchecked")
-                    Map<String, Object> eyeRow = (Map<String, Object>) row.get(oid.startsWith("OD_") ? "od" : "os");
+                    Map<String, Object> eyeRow = (Map<String, Object>) row.get(eyeKey);
                     if (oid.endsWith("_DECIMAL")) {
                         eyeRow.put("decimal", parseDoubleOrNull(value));
                     } else if (oid.endsWith("_PARTIAL")) {
                         eyeRow.put("partial", parseIntOrNull(value));
-                    } else if (oid.endsWith("_LETTERS")) {
+                    } else if (oid.endsWith("_LETTERS") || oid.endsWith("_ETDRS")) {
                         eyeRow.put("letters", parseIntOrNull(value));
+                    } else if (oid.endsWith("_LOGMAR")) {
+                        // logMAR → decimal: decimal = 10^(-logMAR).
+                        // Surfaces in the response only when there's no
+                        // direct decimal write (a CRF-Decimal entry
+                        // wins because it lands earlier in the loop).
+                        Double logmar = parseDoubleOrNull(value);
+                        if (logmar != null && eyeRow.get("decimal") == null) {
+                            eyeRow.put("decimal", Math.pow(10.0, -logmar));
+                        }
                     }
                 }
             }

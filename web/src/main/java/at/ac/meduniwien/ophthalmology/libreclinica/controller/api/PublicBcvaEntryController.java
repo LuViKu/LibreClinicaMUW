@@ -81,7 +81,11 @@ public class PublicBcvaEntryController {
 
     private static final Logger LOG = LoggerFactory.getLogger(PublicBcvaEntryController.class);
 
-    /** Canonical BCVA item OIDs the portal probes + writes. */
+    /**
+     * Item OIDs the portal payload may carry. SPA-side OID convention —
+     * the server maps each into the institutional OIDs the target CRF
+     * actually exposes via {@link #OID_BY_FIELD} (see below).
+     */
     private static final Set<String> BCVA_ITEM_OIDS = Set.of(
             "OD_BCVA_DECIMAL", "OS_BCVA_DECIMAL",
             "OD_BCVA_PARTIAL", "OS_BCVA_PARTIAL",
@@ -92,15 +96,70 @@ public class PublicBcvaEntryController {
     );
 
     /**
-     * Subset of {@link #BCVA_ITEM_OIDS} used to PROBE whether a CRF
-     * version exposes BCVA capture. The four decimal-letters
-     * variants are enough to identify a BCVA-flavoured CRF —
-     * refraction items live on the same CRF by convention.
+     * 2026-06-24 — every item OID the resolver recognises as "this CRF
+     * captures BCVA". Covers both the OPHTH-Visit institutional schema
+     * (seeded in lc-muw-2026-06-05-ophth-visit-crf-seed.xml — {@code
+     * VA_OD_ETDRS} / {@code VA_OS_ETDRS} / {@code VA_OD_LOGMAR} /
+     * {@code VA_OS_LOGMAR}) AND the SPA-side BCVA preset (decimal /
+     * letters per eye). The CRF only needs ONE of these for the
+     * portal to write into it.
      */
     private static final Set<String> BCVA_PROBE_OIDS = Set.of(
             "OD_BCVA_DECIMAL", "OS_BCVA_DECIMAL",
-            "OD_BCVA_LETTERS", "OS_BCVA_LETTERS"
+            "OD_BCVA_LETTERS", "OS_BCVA_LETTERS",
+            "VA_OD_ETDRS",     "VA_OS_ETDRS",
+            "VA_OD_LOGMAR",    "VA_OS_LOGMAR"
     );
+
+    /**
+     * 2026-06-24 — semantic field model. Each enum value identifies
+     * one (eye, attribute) pair the portal captures. The controller
+     * materialises a per-submission {@code Map<Field, Double>} from
+     * the SPA payload and then writes into the target CRF's item rows
+     * via {@link #OID_BY_FIELD} (one OID family per Field).
+     */
+    private enum Field {
+        OD_DECIMAL, OS_DECIMAL,
+        OD_PARTIAL, OS_PARTIAL,
+        OD_LETTERS, OS_LETTERS,
+        OD_LOGMAR,  OS_LOGMAR,
+        OD_SPHERE,  OS_SPHERE,
+        OD_CYLINDER, OS_CYLINDER,
+        OD_AXIS,    OS_AXIS
+    }
+
+    /**
+     * Synonym table — each semantic field maps to the set of item
+     * OIDs that could carry the value. Multiple OIDs per field cover
+     * (a) the SPA-side BCVA-Decimal preset OIDs and (b) the
+     * institutional Ophthalmology Visit OIDs. The controller writes
+     * to EVERY OID in the set that the target CRF version actually
+     * exposes — multi-preset CRFs land the value redundantly so
+     * downstream consumers (the timeline endpoint, the OPHTH-Visit
+     * mark-complete flow, the modality config) all see the same
+     * value.
+     */
+    private static final Map<Field, Set<String>> OID_BY_FIELD = Map.ofEntries(
+            Map.entry(Field.OD_DECIMAL,  Set.of("OD_BCVA_DECIMAL")),
+            Map.entry(Field.OS_DECIMAL,  Set.of("OS_BCVA_DECIMAL")),
+            Map.entry(Field.OD_PARTIAL,  Set.of("OD_BCVA_PARTIAL")),
+            Map.entry(Field.OS_PARTIAL,  Set.of("OS_BCVA_PARTIAL")),
+            Map.entry(Field.OD_LETTERS,  Set.of("OD_BCVA_LETTERS", "VA_OD_ETDRS")),
+            Map.entry(Field.OS_LETTERS,  Set.of("OS_BCVA_LETTERS", "VA_OS_ETDRS")),
+            Map.entry(Field.OD_LOGMAR,   Set.of("VA_OD_LOGMAR")),
+            Map.entry(Field.OS_LOGMAR,   Set.of("VA_OS_LOGMAR")),
+            Map.entry(Field.OD_SPHERE,   Set.of("OD_BCVA_REFRACTION_SPHERE",   "REFRACT_OD_SPH")),
+            Map.entry(Field.OS_SPHERE,   Set.of("OS_BCVA_REFRACTION_SPHERE",   "REFRACT_OS_SPH")),
+            Map.entry(Field.OD_CYLINDER, Set.of("OD_BCVA_REFRACTION_CYLINDER", "REFRACT_OD_CYL")),
+            Map.entry(Field.OS_CYLINDER, Set.of("OS_BCVA_REFRACTION_CYLINDER", "REFRACT_OS_CYL")),
+            Map.entry(Field.OD_AXIS,     Set.of("OD_BCVA_REFRACTION_AXIS",     "REFRACT_OD_AXIS")),
+            Map.entry(Field.OS_AXIS,     Set.of("OS_BCVA_REFRACTION_AXIS",     "REFRACT_OS_AXIS"))
+    );
+
+    /** Inverse lookup: every OID the controller knows about, flat. */
+    private static final Set<String> ALL_KNOWN_OIDS = OID_BY_FIELD.values().stream()
+            .flatMap(Set::stream)
+            .collect(Collectors.toUnmodifiableSet());
 
     private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
 
@@ -159,6 +218,13 @@ public class PublicBcvaEntryController {
         // on the event and (b) whether any BCVA item_data already
         // holds a value. The probes are correlated subqueries — one
         // round-trip total.
+        // Build the IN-list of every OID that identifies a BCVA-flavoured
+        // CRF version. Quoted single-quote SQL literal because the
+        // outer string is mechanically composed; the values come from
+        // a compile-time-constant Set, never user input.
+        String probeInList = BCVA_PROBE_OIDS.stream()
+                .map(o -> "'" + o + "'")
+                .collect(Collectors.joining(","));
         String sql = "SELECT "
                 + "  se.study_event_id, "
                 + "  se.study_subject_id, "
@@ -171,14 +237,14 @@ public class PublicBcvaEntryController {
                 + "      JOIN item i ON i.item_id = ifm.item_id "
                 + "     WHERE ec.study_event_id = se.study_event_id "
                 + "       AND COALESCE(ec.status_id, 0) NOT IN (5, 7) "
-                + "       AND i.name IN ('OD_BCVA_DECIMAL','OS_BCVA_DECIMAL','OD_BCVA_LETTERS','OS_BCVA_LETTERS') "
+                + "       AND i.name IN (" + probeInList + ") "
                 + "     ORDER BY ec.event_crf_id ASC LIMIT 1 ) AS event_crf_id, "
                 + "  EXISTS ( "
                 + "     SELECT 1 FROM item_data idata "
                 + "       JOIN event_crf ec ON ec.event_crf_id = idata.event_crf_id "
                 + "       JOIN item i ON i.item_id = idata.item_id "
                 + "      WHERE ec.study_event_id = se.study_event_id "
-                + "        AND i.name IN ('OD_BCVA_DECIMAL','OS_BCVA_DECIMAL','OD_BCVA_LETTERS','OS_BCVA_LETTERS') "
+                + "        AND i.name IN (" + probeInList + ") "
                 + "        AND COALESCE(idata.deleted, false) = false "
                 + "        AND idata.value IS NOT NULL AND idata.value <> '' "
                 + "  ) AS bcva_already_entered "
@@ -290,29 +356,44 @@ public class PublicBcvaEntryController {
                 //    with a stable event_crf_id.
                 int eventCrfId = findOrCreateEventCrf(c, body.studyEventId, target);
 
-                // 3. Resolve item_id for each (oid → id). Only the
-                //    OIDs that exist on this CRF version write — the
-                //    portal payload may include items the CRF doesn't
-                //    declare (e.g. PARTIAL when the study uses the
-                //    legacy letters-only preset); those are skipped.
-                Map<String, Integer> itemIdByOid = resolveItemIds(
-                        c, target.crfVersionId, body.values.keySet());
+                // 3. Project the SPA payload into the semantic field
+                //    model (decimal/partial/letters/logMAR/refraction
+                //    per eye), deriving letters + logMAR from the
+                //    decimal+partial pair so they're available for
+                //    institutional-schema CRFs that don't capture
+                //    decimal directly.
+                Map<Field, String> valueByField = projectPayloadToFields(body.values);
 
-                // 4. Upsert each value + collect the item_data ids so
+                // 4. Resolve item_id for every OID the CRF version
+                //    actually exposes (across both SPA + institutional
+                //    families). Anything the payload would write into
+                //    an OID the CRF doesn't expose is simply skipped.
+                Set<String> wantedOids = new HashSet<>();
+                for (Map.Entry<Field, String> e : valueByField.entrySet()) {
+                    if (e.getValue() == null) continue;
+                    wantedOids.addAll(OID_BY_FIELD.getOrDefault(e.getKey(), Set.of()));
+                }
+                Map<String, Integer> itemIdByOid = resolveItemIds(
+                        c, target.crfVersionId, wantedOids);
+
+                // 5. Upsert each value into every CRF-exposed OID for
+                //    its semantic field + collect the item_data ids so
                 //    the audit row can surface them.
                 List<Integer> writtenItemDataIds = new ArrayList<>();
-                for (Map.Entry<String, Object> e : body.values.entrySet()) {
-                    Integer itemId = itemIdByOid.get(e.getKey());
-                    if (itemId == null) continue; // CRF doesn't expose this OID — skip
-                    String value = renderValue(e.getValue());
+                for (Map.Entry<Field, String> e : valueByField.entrySet()) {
+                    String value = e.getValue();
                     if (value == null || value.isBlank()) continue;
-                    int itemDataId = upsertItemData(c, eventCrfId, itemId, value);
-                    writtenItemDataIds.add(itemDataId);
+                    for (String oid : OID_BY_FIELD.getOrDefault(e.getKey(), Set.of())) {
+                        Integer itemId = itemIdByOid.get(oid);
+                        if (itemId == null) continue;
+                        int itemDataId = upsertItemData(c, eventCrfId, itemId, value);
+                        writtenItemDataIds.add(itemDataId);
+                    }
                 }
                 if (writtenItemDataIds.isEmpty()) {
                     c.rollback();
                     return ResponseEntity.badRequest().body(Map.of(
-                            "message", "No supplied OID matched the target CRF — nothing written"));
+                            "message", "No supplied field matched any item the target CRF exposes — nothing written"));
                 }
 
                 // 5. Audit row. user_id NULL (trust-the-reverse-proxy).
@@ -380,6 +461,9 @@ public class PublicBcvaEntryController {
      * BCVA CRF on this event_definition).
      */
     private BcvaCrfTarget resolveBcvaCrfTarget(Connection c, int studyEventId) throws SQLException {
+        String probeInList = BCVA_PROBE_OIDS.stream()
+                .map(o -> "'" + o + "'")
+                .collect(Collectors.joining(","));
         String sql = "SELECT edc.study_event_definition_id, "
                 + "       cv.crf_id, cv.crf_version_id "
                 + "  FROM study_event se "
@@ -391,7 +475,7 @@ public class PublicBcvaEntryController {
                 + "        SELECT 1 FROM item_form_metadata ifm "
                 + "          JOIN item i ON i.item_id = ifm.item_id "
                 + "         WHERE ifm.crf_version_id = cv.crf_version_id "
-                + "           AND i.name IN ('OD_BCVA_DECIMAL','OS_BCVA_DECIMAL','OD_BCVA_LETTERS','OS_BCVA_LETTERS') "
+                + "           AND i.name IN (" + probeInList + ") "
                 + "   ) "
                 + " ORDER BY cv.crf_version_id DESC "
                 + " LIMIT 1";
@@ -435,6 +519,14 @@ public class PublicBcvaEntryController {
                 studySubjectId = rs.getInt(1);
             }
         }
+        // owner_id resolves to the lowest-id active root account (typically
+        // user_id=1, 'root'). event_crf has a FK constraint into
+        // user_account, so a sentinel like 0 fails the insert.
+        // Production deployments should swap this for a dedicated
+        // portal-service account once one exists; the audit row already
+        // carries the operator-supplied "entered by" name so the
+        // human-attribution is preserved either way.
+        int portalOwnerId = resolvePortalOwnerId(c);
         try (PreparedStatement ps = c.prepareStatement(
                 "INSERT INTO event_crf ("
                         + "  study_event_id, crf_version_id, "
@@ -444,16 +536,36 @@ public class PublicBcvaEntryController {
                         + "  interviewer_name, date_interviewed, "
                         + "  electronic_signature_status, sdv_status, "
                         + "  old_status_id, sdv_update_id) "
-                        + "VALUES (?, ?, 1, 1, 0, now(), ?, '', NULL, false, false, 1, 0) "
+                        + "VALUES (?, ?, 1, 1, ?, now(), ?, '', NULL, false, false, 1, 0) "
                         + "RETURNING event_crf_id")) {
             ps.setInt(1, studyEventId);
             ps.setInt(2, target.crfVersionId);
-            ps.setInt(3, studySubjectId);
+            ps.setInt(3, portalOwnerId);
+            ps.setInt(4, studySubjectId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) throw new SQLException("INSERT event_crf returned no id");
                 return rs.getInt(1);
             }
         }
+    }
+
+    /**
+     * Resolve the lowest-id active user_account row — the root /
+     * institutional admin in the seeded data. Used as a sentinel
+     * owner for event_crf rows created by the portal so the FK
+     * constraint passes. The audit row written alongside still
+     * captures the operator's free-text name; the user_account
+     * link here is structural only.
+     */
+    private int resolvePortalOwnerId(Connection c) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement(
+                "SELECT user_id FROM user_account "
+                        + " WHERE status_id = 1 ORDER BY user_id ASC LIMIT 1")) {
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) return rs.getInt(1);
+            }
+        }
+        throw new SQLException("no active user_account row available to own portal event_crf");
     }
 
     /**
@@ -518,15 +630,17 @@ public class PublicBcvaEntryController {
                 }
             }
         }
+        int portalOwnerId = resolvePortalOwnerId(c);
         try (PreparedStatement ps = c.prepareStatement(
                 "INSERT INTO item_data ("
                         + "  item_id, event_crf_id, status_id, value, "
                         + "  date_created, owner_id, ordinal, deleted, source_kind) "
-                        + "VALUES (?, ?, 1, ?, now(), 0, 1, false, 'bcva_portal') "
+                        + "VALUES (?, ?, 1, ?, now(), ?, 1, false, 'bcva_portal') "
                         + "RETURNING item_data_id")) {
             ps.setInt(1, itemId);
             ps.setInt(2, eventCrfId);
             ps.setString(3, value);
+            ps.setInt(4, portalOwnerId);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) throw new SQLException("INSERT item_data returned no id");
                 return rs.getInt(1);
@@ -582,6 +696,114 @@ public class PublicBcvaEntryController {
             return n.toString();
         }
         return String.valueOf(v).trim();
+    }
+
+    /**
+     * 2026-06-24 — project the SPA payload (keyed by SPA-side OIDs)
+     * into the semantic {@link Field} model. For each eye that
+     * supplies a decimal + (optional) partial, derive the
+     * letters + logMAR values so institutional-schema CRFs that
+     * only capture {@code VA_*_ETDRS} / {@code VA_*_LOGMAR} can be
+     * written. Sphere / cylinder / axis pass through unchanged.
+     *
+     * <p>Letters formula: Bailey-Lovie / Holladay
+     *   letters = round(85 + 50 · log10(decimal)) + partial,
+     *   clamped to [0, 100].
+     * LogMAR formula (clinical convention):
+     *   logMAR = (100 − letters) / 50.
+     */
+    private static Map<Field, String> projectPayloadToFields(Map<String, Object> raw) {
+        Map<Field, String> out = new LinkedHashMap<>();
+        // Decimal + partial per eye.
+        Double odDecimal = readDouble(raw.get("OD_BCVA_DECIMAL"));
+        Double osDecimal = readDouble(raw.get("OS_BCVA_DECIMAL"));
+        Integer odPartial = readInteger(raw.get("OD_BCVA_PARTIAL"));
+        Integer osPartial = readInteger(raw.get("OS_BCVA_PARTIAL"));
+        if (odDecimal != null) {
+            out.put(Field.OD_DECIMAL, formatDecimal(odDecimal));
+            int partial = odPartial == null ? 0 : odPartial;
+            if (partial != 0) out.put(Field.OD_PARTIAL, Integer.toString(partial));
+            int letters = decimalToLetters(odDecimal, partial);
+            out.put(Field.OD_LETTERS, Integer.toString(letters));
+            out.put(Field.OD_LOGMAR, formatLogMar(lettersToLogMar(letters)));
+        }
+        if (osDecimal != null) {
+            out.put(Field.OS_DECIMAL, formatDecimal(osDecimal));
+            int partial = osPartial == null ? 0 : osPartial;
+            if (partial != 0) out.put(Field.OS_PARTIAL, Integer.toString(partial));
+            int letters = decimalToLetters(osDecimal, partial);
+            out.put(Field.OS_LETTERS, Integer.toString(letters));
+            out.put(Field.OS_LOGMAR, formatLogMar(lettersToLogMar(letters)));
+        }
+        // Refraction: literal pass-through.
+        putIfPresent(out, Field.OD_SPHERE,   raw.get("OD_BCVA_REFRACTION_SPHERE"));
+        putIfPresent(out, Field.OS_SPHERE,   raw.get("OS_BCVA_REFRACTION_SPHERE"));
+        putIfPresent(out, Field.OD_CYLINDER, raw.get("OD_BCVA_REFRACTION_CYLINDER"));
+        putIfPresent(out, Field.OS_CYLINDER, raw.get("OS_BCVA_REFRACTION_CYLINDER"));
+        putIfPresent(out, Field.OD_AXIS,     raw.get("OD_BCVA_REFRACTION_AXIS"));
+        putIfPresent(out, Field.OS_AXIS,     raw.get("OS_BCVA_REFRACTION_AXIS"));
+        return out;
+    }
+
+    private static void putIfPresent(Map<Field, String> out, Field f, Object v) {
+        String rendered = renderValue(v);
+        if (rendered != null) out.put(f, rendered);
+    }
+
+    private static Double readDouble(Object v) {
+        if (v == null) return null;
+        if (v instanceof Number n) return n.doubleValue();
+        if (v instanceof String s) {
+            String trimmed = s.trim().replace(',', '.');
+            if (trimmed.isEmpty()) return null;
+            try { return Double.parseDouble(trimmed); }
+            catch (NumberFormatException e) { return null; }
+        }
+        return null;
+    }
+
+    private static Integer readInteger(Object v) {
+        if (v == null) return null;
+        if (v instanceof Number n) return n.intValue();
+        if (v instanceof String s) {
+            String trimmed = s.trim();
+            if (trimmed.isEmpty()) return null;
+            try { return Integer.parseInt(trimmed); }
+            catch (NumberFormatException e) {
+                Double d = readDouble(s);
+                return d == null ? null : (int) Math.round(d);
+            }
+        }
+        return null;
+    }
+
+    /** Bailey-Lovie / Holladay decimal → ETDRS letters with signed partial. */
+    static int decimalToLetters(double decimal, int partial) {
+        if (decimal <= 0) return 0;
+        int base = (int) Math.round(85.0 + 50.0 * Math.log10(decimal));
+        return Math.max(0, Math.min(100, base + partial));
+    }
+
+    /** Clinical convention: logMAR = (100 − letters) / 50. */
+    static double lettersToLogMar(int letters) {
+        return (100.0 - letters) / 50.0;
+    }
+
+    /** Render a decimal value preserving up to two clinically meaningful
+     *  decimal places (so the legacy CRF view's string-equality
+     *  comparison still matches). */
+    private static String formatDecimal(double v) {
+        if (v == Math.rint(v) && !Double.isInfinite(v)) {
+            return String.format(java.util.Locale.ROOT, "%.1f", v);
+        }
+        return java.math.BigDecimal.valueOf(v)
+                .stripTrailingZeros()
+                .toPlainString();
+    }
+
+    /** LogMAR rendered to two decimals — the clinical convention. */
+    private static String formatLogMar(double v) {
+        return String.format(java.util.Locale.ROOT, "%.2f", v);
     }
 
     /* ====================================================================== */
