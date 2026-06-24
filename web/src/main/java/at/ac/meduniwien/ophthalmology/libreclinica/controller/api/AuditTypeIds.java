@@ -275,4 +275,18 @@ public final class AuditTypeIds {
      * new_value packs {@code "job:<jobId>,item:<item_oid>,value:<v>"}.
      */
     public static final int RETINAL_INFERENCE_AUTOPOPULATE  = 120;
+
+    /**
+     * 2026-06-24 user-feedback round — BCVA values entered via the
+     * public BCVA-entry portal. {@link PublicBcvaEntryController}
+     * writes one row per submission with {@code user_id = NULL}
+     * (the portal is unauthenticated, trust-the-reverse-proxy);
+     * the operator-supplied "entered by" name is packed into
+     * {@code old_value}. {@code audit_table = "event_crf"},
+     * {@code entity_id} = the target event_crf_id,
+     * {@code new_value} = comma-separated item_data ids the
+     * submission wrote (so the matching undo path can locate
+     * them).
+     */
+    public static final int BCVA_ENTRY_PUBLIC               = 121;
 }

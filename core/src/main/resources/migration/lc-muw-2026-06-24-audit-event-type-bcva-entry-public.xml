@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        2026-06-24 user-feedback round — seed the BCVA_ENTRY_PUBLIC
+        (id 121) audit_log_event_type row that PublicBcvaEntryController.commit
+        emits via direct INSERT into audit_log_event when an
+        unauthenticated portal entry succeeds.
+
+        Auditable so the study timeline shows "BCVA values entered
+        by <nurse> on <date>" even though user_id is NULL on the row
+        (same trust-the-reverse-proxy posture as OCT_UPLOAD_PUBLIC,
+        id 115). is_user_visible=true because the entry is a
+        material clinical-data event (a BCVA CRF row now has
+        operator-supplied values).
+
+        See /Users/lukas/.claude/plans/robust-jumping-eich.md.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-24-audit-event-type-bcva-entry-public" dbms="postgresql">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM audit_log_event_type
+                WHERE audit_log_event_type_id = 121;
+            </sqlCheck>
+        </preConditions>
+        <insert tableName="audit_log_event_type">
+            <column name="audit_log_event_type_id" valueNumeric="121"/>
+            <column name="name" value="bcva_entry_public"/>
+            <column name="display_name" value="BCVA entry (public portal)"/>
+            <column name="is_user_visible" valueBoolean="true"/>
+        </insert>
+        <rollback>
+            <delete tableName="audit_log_event_type">
+                <where>audit_log_event_type_id = 121</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
