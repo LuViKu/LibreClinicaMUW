@@ -110,8 +110,12 @@ const editErrors = ref<Record<string, string>>({})
 const editFormError = ref<string | null>(null)
 const isSavingEdit = ref(false)
 
-/** 2026-06-22 — allow-list of retinal-inference tasks for the multi-select. */
-const RETINAL_TASK_OPTIONS: readonly string[] = ['fluid', 'ga', 'onl', 'pr'] as const
+/** Allow-list of retinal-inference tasks for the multi-select.
+ *  2026-06-24: extended with `layers` (returns the IOWA stack + BM
+ *  in one job — what RIS uploads should default to alongside fluid
+ *  for CRT computation). `bm` is intentionally not here; `layers`
+ *  covers it. */
+const RETINAL_TASK_OPTIONS: readonly string[] = ['fluid', 'ga', 'onl', 'pr', 'layers'] as const
 
 async function openEdit(row: EventDefinition) {
   editing.value = {

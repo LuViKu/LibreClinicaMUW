@@ -783,8 +783,7 @@ public class RetinalResultsApiController {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("crtMicrons", Math.round(r.crtMicrons() * 100.0) / 100.0); // 2 decimals
         out.put("pixelsInDisk", r.pixelsInDisk());
-        out.put("gaJobId", r.gaJobId());
-        out.put("bmJobId", r.bmJobId());
+        out.put("layersJobId", r.layersJobId());
         return out;
     }
 
@@ -1693,8 +1692,9 @@ public class RetinalResultsApiController {
 
     /** Tasks the operator can pick from the rerun-as dropdown. Mirrors the
      *  runner profiles + the FUNDUS overlay's recognised task discriminator.
-     *  2026-06-25: `layers` added — returns the IOWA 11-surface stack +
-     *  BM in one job. `bm` deliberately omitted (layers already covers it).
+     *  2026-06-25: `layers` added — returns the full IOWA 11-surface stack
+     *  + BM in one job (feeds the BscanViewer overlay + CRT compute).
+     *  `bm` is intentionally absent — `layers` already covers it.
      *  Mirrors {@code RERUN_TASKS} in RetinalMetricsView.vue. */
     private static final java.util.Set<String> ALLOWED_RERUN_TASKS =
             java.util.Set.of("fluid", "ga", "onl", "pr", "layers");

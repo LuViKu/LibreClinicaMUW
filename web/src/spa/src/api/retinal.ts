@@ -395,15 +395,18 @@ export function listSubjectBcvaTimeline(studySubjectId: number): Promise<BcvaTim
 /**
  * 2026-06-24 — per-eye CRT (Central Retinal Thickness, central 1 mm in
  * µm) derived from the paired GA + BM jobs on a single visit. Each
- * eye is null when one of the two source jobs is missing or not yet
+ * eye is null when the source layers job is missing or not yet
  * {@code done}; both null on the same event means the event won't
  * appear in the response at all.
+ *
+ * <p>2026-06-24: was previously sourced from a GA + BM pair; the
+ * upstream runner change consolidated ILM + BM into a single
+ * {@code layers} job, so the timeline now points at one source id.
  */
 export interface CrtTimelineEye {
   crtMicrons: number
   pixelsInDisk: number
-  gaJobId: number
-  bmJobId: number
+  layersJobId: number
 }
 
 /** One CRT timeline row — same shape as {@link BcvaTimelineRow}. */

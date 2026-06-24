@@ -84,5 +84,6 @@
   <include  file="migration/lc-muw-2026-06-23-retinal-job-acquisition-date.xml"/>
   <include  file="migration/lc-muw-2026-06-24-audit-event-type-bcva-entry-public.xml"/>
   <include  file="migration/lc-muw-2026-06-24-namd-visit-crt-items.xml"/>
+  <include  file="migration/lc-muw-2026-06-24-event-def-retinal-tasks-layers.xml"/>
 </databaseChangeLog>
 

@@ -105,10 +105,19 @@ public class CrtComputeService {
         this.crtComputer = crtComputer;
     }
 
-    /** Per-eye computation result. The pixel count is surfaced so the
-     *  SPA tooltip / report can say "average over N pixels in the
-     *  central 1 mm". */
-    public record Result(double crtMicrons, int pixelsInDisk, long gaJobId, long bmJobId) {}
+    /**
+     * Per-eye computation result. The pixel count is surfaced so the
+     * SPA tooltip / report can say "average over N pixels in the
+     * central 1 mm". {@code layersJobId} points at the single
+     * source job (task = {@code layers}) carrying both ILM + BM
+     * artifacts in one bscan_masks_dir.
+     *
+     * <p>2026-06-24: was previously a pair (gaJobId, bmJobId) — the
+     * upstream runner changed so GA only emits RPEL now and the new
+     * {@code layers} task delivers ILM + BM together. Single source
+     * job, single id.
+     */
+    public record Result(double crtMicrons, int pixelsInDisk, long layersJobId) {}
 
     /** Eye laterality the BCVA + retinal job rows use. */
     public enum Eye { OD, OS }
@@ -145,31 +154,34 @@ public class CrtComputeService {
     }
 
     private Optional<Result> doCompute(int studyEventId, Eye eye) {
-        JobRef ga;
-        JobRef bm;
+        // 2026-06-24 — switched from GA+BM pair to a single `layers`
+        // job. The upstream runner change (sidecar PR #255) has
+        // `layers` return the full IOWA reference stack including
+        // ILM + BM in one bscan_masks_dir, while GA returns only RPEL.
+        JobRef layers;
         try (Connection c = dataSource.getConnection()) {
-            ga = findJob(c, studyEventId, eye, "ga");
-            bm = findJob(c, studyEventId, eye, "bm");
+            layers = findJob(c, studyEventId, eye, "layers");
         } catch (SQLException sqlEx) {
             throw new MetricComputationException(
                     "Database lookup failed for (event=" + studyEventId + ", eye=" + eye + "): "
                             + sqlEx.getMessage(), sqlEx);
         }
-        if (ga == null || bm == null) {
-            // Not an error — the typical case is "GA hasn't been run for
-            // this event yet". Caller surfaces this as a missing entry.
+        if (layers == null) {
+            // Not an error — the typical case is "the layers task
+            // hasn't completed for this event yet". Caller surfaces
+            // this as a missing entry on the timeline.
             return Optional.empty();
         }
 
-        Path ilmCsv = locateSurfaceCsv(ga.bscanMasksDir, ILM_FILENAME_NEEDLE)
+        Path ilmCsv = locateSurfaceCsv(layers.bscanMasksDir, ILM_FILENAME_NEEDLE)
                 .orElseThrow(() -> new MetricComputationException(
-                        "GA job " + ga.jobId + " has no ILM CSV in " + ga.bscanMasksDir));
-        Path bmCsv = locateSurfaceCsv(bm.bscanMasksDir, BM_FILENAME_NEEDLE)
+                        "layers job " + layers.jobId + " has no ILM CSV in " + layers.bscanMasksDir));
+        Path bmCsv = locateSurfaceCsv(layers.bscanMasksDir, BM_FILENAME_NEEDLE)
                 .orElseThrow(() -> new MetricComputationException(
-                        "BM job " + bm.jobId + " has no BM CSV in " + bm.bscanMasksDir));
-        PixelGeometry geom = loadGeometry(ga);
+                        "layers job " + layers.jobId + " has no BM CSV in " + layers.bscanMasksDir));
+        PixelGeometry geom = loadGeometry(layers);
         CrtComputer.Result r = crtComputer.computeCrtMicrons(ilmCsv, bmCsv, geom);
-        return Optional.of(new Result(r.crtMicrons(), r.pixelsInDisk(), ga.jobId, bm.jobId));
+        return Optional.of(new Result(r.crtMicrons(), r.pixelsInDisk(), layers.jobId));
     }
 
     /* ====================================================================== */

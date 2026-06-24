@@ -167,14 +167,14 @@ public class RetinalResultItemDataPopulator {
                                 : "I_OS_CRT_CENTRAL_1MM_UM";
                         try {
                             writeItemData(eventCrfId, oid, r.crtMicrons(),
-                                    r.gaJobId(), operatorUserId);
+                                    r.layersJobId(), operatorUserId);
                             rowsWritten++;
                             writeCrtAuditRow(eventCrfId, eye, r, operatorUserId);
                         } catch (SQLException sqlEx) {
-                            warnings.add("Failed to write " + oid + " from GA job " + r.gaJobId()
-                                    + " + BM job " + r.bmJobId() + ": " + sqlEx.getMessage());
-                            LOG.warn("CRT write failed for ecrf={} eye={} ga={} bm={}: {}",
-                                    eventCrfId, eye, r.gaJobId(), r.bmJobId(), sqlEx.getMessage());
+                            warnings.add("Failed to write " + oid + " from layers job "
+                                    + r.layersJobId() + ": " + sqlEx.getMessage());
+                            LOG.warn("CRT write failed for ecrf={} eye={} layers_job={}: {}",
+                                    eventCrfId, eye, r.layersJobId(), sqlEx.getMessage());
                         }
                     }
                 }
@@ -224,7 +224,7 @@ public class RetinalResultItemDataPopulator {
      */
     private void writeCrtAuditRow(int eventCrfId, CrtComputeService.Eye eye,
                                   CrtComputeService.Result r, int operatorUserId) {
-        String oldValue = "eye=" + eye + ";ga_job_id=" + r.gaJobId() + ";bm_job_id=" + r.bmJobId();
+        String oldValue = "eye=" + eye + ";layers_job_id=" + r.layersJobId();
         String newValue = "value_um=" + formatValue(r.crtMicrons())
                 + ";pixels_in_disk=" + r.pixelsInDisk();
         try (Connection c = dataSource.getConnection();
