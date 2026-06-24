@@ -403,15 +403,21 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     # ('Heidelberg Retina Angiograph' / 'HRA'); fall back to the
     # canonical company name.
     ds.Manufacturer = bv.manufacturer or "Heidelberg Engineering"
-    # 2026-06-24 — ManufacturerModelName + ImageLaterality both
-    # segfault the IOWA OCTLayerSeg 3.6 binary. Empirically isolated:
-    # individually adding either tag back to a known-good stripped DCM
-    # (TestCase1's writes-cleanly form) drops IOWA's rc to -11 at
-    # maxflow_init. The 2015 binary has a hardcoded DICOM tag whitelist
-    # — any tag outside it either misaligns its parser's offset
-    # arithmetic or trips a tag-table lookup into uninitialized
-    # memory. We retain `Laterality` (which IOWA accepts) and skip
-    # ManufacturerModelName entirely.
+    # 2026-06-24 (revisited) — earlier-in-session we stripped
+    # ManufacturerModelName + ImageLaterality + AcquisitionTime +
+    # SeriesDescription + SamplesPerPixel because a metadata bisect
+    # said they crashed IOWA. That bisect was a red herring: the
+    # actual IOWA crash trigger turned out to be the /scratch
+    # filesystem (commit 34afc2fa8 stages IOWA to /tmp). Restoring
+    # these tags so the SPA's Cornerstone.js viewer (which strictly
+    # requires SamplesPerPixel) + downstream DICOM-conformance
+    # readers see a well-formed DICOM.
+    if bv.manufacturer_model:
+        ds.ManufacturerModelName = bv.manufacturer_model
+    # Image-module ImageLaterality (0020,0062) — Cornerstone-style
+    # web viewers + most strict OPT-IOD validators read this twin
+    # of the Series-module Laterality (0020,0060). Keep both.
+    ds.ImageLaterality = "R" if bv.laterality == "OD" else "L"
     ds.Laterality = "OD" if bv.laterality == "OD" else "OS"
 
     # IOD-required image-type discriminator. The IOWA binary requires
@@ -444,29 +450,28 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
         ds.StudyDate = "00000000"
         ds.SeriesDate = "00000000"
         ds.AcquisitionDate = "00000000"
-    # 2026-06-24 — IOWA accepts StudyTime + SeriesTime but
-    # segfaults on AcquisitionTime. Per the empirical bisect (see
-    # the comment above the Manufacturer block), we keep the two
-    # tolerated time fields and skip AcquisitionTime.
+    # 2026-06-24 (revisited per the metadata-bisect red-herring note
+    # above) — restore AcquisitionTime + SeriesDescription so the SPA
+    # viewer + strict-DICOM readers see well-formed time + descriptive
+    # fields. Earlier strip was misattributed; the actual IOWA crash
+    # trigger was the /scratch filesystem (commit 34afc2fa8).
     if bv.acquisition_time:
         ds.StudyTime = bv.acquisition_time
         ds.SeriesTime = bv.acquisition_time
+        ds.AcquisitionTime = bv.acquisition_time
     ds.StudyID = "0"
     ds.SeriesNumber = "0"
     ds.AcquisitionNumber = "0"
-    # SeriesDescription is also on IOWA's no-fly list — same bisect.
-    # The scan pattern still surfaces via the .e2e metadata bound on
-    # BscanVolume.scan_pattern; downstream consumers that want it
-    # read the .e2e companion JSON instead of the DICOM tag.
+    if bv.scan_pattern:
+        # "OCT ART Volume" — surfaces in the optima framework's
+        # SeriesDescription column and IOWA's QC log header.
+        ds.SeriesDescription = str(bv.scan_pattern)
 
     # SamplesPerPixel is mandatory per DICOM PS3.3 Image Pixel module
-    # (Type 1), but the IOWA OCTLayerSeg 3.6 binary segfaults when it
-    # is present (the sese_ga TestCase1 fixture omits it too — the
-    # 2015 build of OCTLayerSeg expects MONOCHROME2 single-sample
-    # data implicitly and crashes if the explicit tag is encountered).
-    # We deliberately violate DICOM conformance here in exchange for
-    # IOWA acceptance; if a strict reader rejects the .dcm, that's a
-    # known trade-off scoped to the cluster inference path.
+    # (Type 1) — Cornerstone.js + strict DICOM readers reject DCMs
+    # that omit it. Restore (see the metadata-bisect red-herring
+    # note above the Manufacturer block).
+    ds.SamplesPerPixel = 1
     ds.PhotometricInterpretation = "MONOCHROME2"
     ds.NumberOfFrames = str(bv.n_bscans)
     ds.Rows = bv.rows
@@ -584,34 +589,17 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
         ds.StudyDate = acq_dicom
         ds.SeriesDate = acq_dicom
         ds.AcquisitionDate = acq_dicom
-    # 2026-06-24 — see bisect comment above the laterality block:
-    # IOWA segfaults on AcquisitionTime; StudyTime + SeriesTime are
-    # accepted. Restore only the two safe ones.
+    # 2026-06-24 (revisited) — restore AcquisitionTime too; the
+    # earlier bisect-driven omission was attributable to the
+    # /scratch filesystem (see commit 34afc2fa8), not the tag.
     if bv.acquisition_time:
         ds.StudyTime = bv.acquisition_time
         ds.SeriesTime = bv.acquisition_time
+        ds.AcquisitionTime = bv.acquisition_time
 
     out_dir.mkdir(parents=True, exist_ok=True)
     dcm_path = out_dir / "bscan.dcm"
     pydicom.dcmwrite(str(dcm_path), ds, enforce_file_format=True)
-
-    # 2026-06-24 — IOWA OCTLayerSeg 3.6 binary segfaults on
-    # pydicom-written DCMs even when their bytes (md5), size,
-    # blocks, extent layout, SELinux context, and permissions are
-    # IDENTICAL to a byte-by-byte copy that IOWA accepts. The
-    # discriminator is some filesystem-allocation property we
-    # could not isolate (XFS-specific allocator state, speculative
-    # preallocation flag, or a CoW marker invisible to filefrag /
-    # stat / lsattr). Empirically, round-tripping the bytes through
-    # ``shutil.copy`` + atomic rename produces a file IOWA accepts.
-    # The new bytes are byte-identical (md5 unchanged) — only the
-    # allocator-level metadata is reset. See PR #255 for the
-    # diagnostic trail.
-    import shutil
-    tmp_path = dcm_path.with_suffix(".dcm.densify")
-    shutil.copy(str(dcm_path), str(tmp_path))
-    tmp_path.replace(dcm_path)
-
     return out_dir
 
 
