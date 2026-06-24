@@ -128,6 +128,14 @@ export interface RetinalJobSummary {
    * blank or the preprocess deploy predates the header.
    */
   acquisitionDate?: string | null
+  /**
+   * 2026-06-24 user-feedback round — the study_event the job's
+   * event_crf is attached to. Surfaces here so the nAMD composable
+   * can join the BCVA timeline by event_id (BCVA values live on a
+   * sibling event_crf on the same study_event). Optional + nullable
+   * because parked jobs (event_crf_id NULL) have no event binding.
+   */
+  studyEventId?: number | null
   primaryMetric: PrimaryMetric | null
 }
 
@@ -342,6 +350,45 @@ export function listEventCrfJobs(eventCrfId: number): Promise<RetinalJobSummary[
 export function listSubjectJobs(studySubjectId: number): Promise<RetinalJobSummary[]> {
   return apiGet<RetinalJobSummary[]>(
     `/pages/api/v1/study-subjects/${studySubjectId}/retinal-jobs`,
+  )
+}
+
+/**
+ * 2026-06-24 user-feedback round — per-eye BCVA reading for one
+ * study_event in the timeline endpoint's response. Decimal-flavoured
+ * studies (post-BCVA-portal) populate `{decimal, partial}`; legacy
+ * letters-flavoured studies populate `{letters}` directly. All three
+ * fields may be null when the matching item_data row isn't present.
+ */
+export interface BcvaTimelineEye {
+  decimal: number | null
+  partial: number | null
+  letters: number | null
+}
+
+/**
+ * One row in {@link listSubjectBcvaTimeline}'s response — BCVA values
+ * captured on a single study_event for one subject. The nAMD
+ * composable indexes by {@link studyEventId} + picks the active eye
+ * via the eye-switcher.
+ */
+export interface BcvaTimelineRow {
+  studyEventId: number
+  /** ISO yyyy-MM-dd. */
+  eventDate: string | null
+  od: BcvaTimelineEye
+  os: BcvaTimelineEye
+}
+
+/**
+ * 2026-06-24 user-feedback round — fetch the subject's BCVA history
+ * across every visit that has at least one populated BCVA item.
+ * Backs the nAMD module's letters-rendered trend chart + the
+ * Bericht's history table.
+ */
+export function listSubjectBcvaTimeline(studySubjectId: number): Promise<BcvaTimelineRow[]> {
+  return apiGet<BcvaTimelineRow[]>(
+    `/pages/api/v1/study-subjects/${studySubjectId}/bcva-timeline`,
   )
 }
 

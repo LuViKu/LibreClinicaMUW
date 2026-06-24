@@ -507,7 +507,12 @@ function fmtDate(iso: string): string {
         <span class="text-slate-500">CRT</span>
         <span class="text-right font-medium">{{ hovered.crt }} µm</span>
         <span class="text-slate-500">BCVA</span>
-        <span class="text-right font-medium">{{ hovered.bcva }}</span>
+        <span class="text-right font-medium">
+          {{ hovered.bcva }} L<span
+            v-if="hovered.bcvaRaw"
+            class="text-slate-400 text-[10px] ml-1"
+          >· {{ hovered.bcvaRaw }}</span>
+        </span>
       </div>
     </div>
   </figure>

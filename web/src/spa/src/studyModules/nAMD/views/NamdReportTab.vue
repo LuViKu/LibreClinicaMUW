@@ -116,6 +116,10 @@ function printReport() {
         <div>
           <span class="text-slate-500">BCVA:</span>
           <span class="ml-1 font-semibold tabular-nums">{{ props.data.current.bcva }} L</span>
+          <span
+            v-if="props.data.current.bcvaRaw"
+            class="ml-1 text-slate-400 text-xs"
+          >· {{ props.data.current.bcvaRaw }}</span>
         </div>
         <div>
           <span class="text-slate-500">Total:</span>
@@ -195,7 +199,12 @@ function printReport() {
             <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.srf }}</td>
             <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.ped }}</td>
             <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.crt || '—' }}</td>
-            <td class="py-1.5 px-2 text-right tabular-nums">{{ visit.bcva || '—' }}</td>
+            <td class="py-1.5 px-2 text-right tabular-nums">
+              <span>{{ visit.bcva || '—' }}</span>
+              <span v-if="visit.bcvaRaw" class="block text-[10px] text-slate-400">
+                {{ visit.bcvaRaw }}
+              </span>
+            </td>
             <td class="py-1.5 px-2 text-slate-500">{{ visit.inj || '—' }}</td>
           </tr>
         </tbody>

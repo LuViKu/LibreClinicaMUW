@@ -26,7 +26,8 @@
  */
 
 import { computed, ref, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
-import { listSubjectJobs, getJob, type RetinalJobSummary, type RetinalJobDetail, type FluidPayload } from '@/api/retinal'
+import { listSubjectJobs, listSubjectBcvaTimeline, getJob, type RetinalJobSummary, type RetinalJobDetail, type FluidPayload, type BcvaTimelineRow } from '@/api/retinal'
+import { decimalToLetters, formatBcva } from '@/lib/bcvaConversion'
 import type { Laterality, NamdAiRecommendation, NamdPatient, NamdVisit, NamdWorkspaceData } from '../types'
 import { useNamdAiRecommendation } from './useNamdAiRecommendation'
 
@@ -126,14 +127,14 @@ function buildMockData(): NamdWorkspaceData {
     regimen: 'Treat-and-Extend · Aflibercept',
   }
   const visits: NamdVisit[] = [
-    { id: 'v01', label: 'V01', week: 0, date: '2025-09-01', irf: 38, srf: 22, ped: 16, crt: 412, bcva: 62, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v02', label: 'V02', week: 4, date: '2025-09-29', irf: 26, srf: 14, ped: 14, crt: 372, bcva: 66, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v03', label: 'V03', week: 8, date: '2025-10-27', irf: 18, srf: 8, ped: 12, crt: 336, bcva: 70, inj: 'Aflibercept', interval: 6, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v04', label: 'V04', week: 14, date: '2025-12-08', irf: 12, srf: 4, ped: 10, crt: 314, bcva: 72, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v05', label: 'V05', week: 22, date: '2026-02-02', irf: 10, srf: 2, ped: 9, crt: 302, bcva: 74, inj: 'Aflibercept', interval: 10, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v06', label: 'V06', week: 32, date: '2026-04-13', irf: 8, srf: 1, ped: 9, crt: 296, bcva: 75, inj: '', interval: 12, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v07', label: 'V07', week: 44, date: '2026-07-06', irf: 14, srf: 7, ped: 11, crt: 322, bcva: 73, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
-    { id: 'v08', label: 'V08', week: 52, date: '2026-08-31', irf: 22, srf: 9, ped: 12, crt: 348, bcva: 71, inj: '', interval: null, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v01', label: 'V01', week: 0, date: '2025-09-01', irf: 38, srf: 22, ped: 16, crt: 412, bcva: 62, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v02', label: 'V02', week: 4, date: '2025-09-29', irf: 26, srf: 14, ped: 14, crt: 372, bcva: 66, bcvaRaw: null, inj: 'Aflibercept', interval: 4, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v03', label: 'V03', week: 8, date: '2025-10-27', irf: 18, srf: 8, ped: 12, crt: 336, bcva: 70, bcvaRaw: null, inj: 'Aflibercept', interval: 6, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v04', label: 'V04', week: 14, date: '2025-12-08', irf: 12, srf: 4, ped: 10, crt: 314, bcva: 72, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v05', label: 'V05', week: 22, date: '2026-02-02', irf: 10, srf: 2, ped: 9, crt: 302, bcva: 74, bcvaRaw: null, inj: 'Aflibercept', interval: 10, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v06', label: 'V06', week: 32, date: '2026-04-13', irf: 8, srf: 1, ped: 9, crt: 296, bcva: 75, bcvaRaw: null, inj: '', interval: 12, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v07', label: 'V07', week: 44, date: '2026-07-06', irf: 14, srf: 7, ped: 11, crt: 322, bcva: 73, bcvaRaw: null, inj: 'Aflibercept', interval: 8, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
+    { id: 'v08', label: 'V08', week: 52, date: '2026-08-31', irf: 22, srf: 9, ped: 12, crt: 348, bcva: 71, bcvaRaw: null, inj: '', interval: null, retinalJobId: null, acquisitionDate: null, visitDate: null, dateMismatch: false },
   ]
   const current = visits[visits.length - 1]!
   const prev = visits[visits.length - 2]!
@@ -153,14 +154,34 @@ function fluidJobToVisit(
   summary: RetinalJobSummary,
   detail: RetinalJobDetail | null,
   fallbackLabel: string,
+  bcvaRow: BcvaTimelineRow | null,
 ): NamdVisit {
   const payload = detail?.outputPayload
   const biomarkers = isFluidPayload(payload) ? payload.biomarkers : null
+  // 2026-06-24 user-feedback round — derive BCVA letters + canonical
+  // raw form from the timeline row matching this job's study_event.
+  // Picks the eye that matches the summary's laterality.
+  let bcvaLetters = 0
+  let bcvaRaw: string | null = null
+  if (bcvaRow) {
+    const eye = summary.laterality === 'OS' ? bcvaRow.os : bcvaRow.od
+    if (eye.letters != null) {
+      // Legacy letters-flavoured study — the letter count IS the raw
+      // form; no canonicalisation possible because we don't know
+      // which decimal line was attempted.
+      bcvaLetters = eye.letters
+      bcvaRaw = null
+    } else if (eye.decimal != null) {
+      const partial = eye.partial ?? 0
+      bcvaLetters = decimalToLetters(eye.decimal, partial)
+      bcvaRaw = formatBcva(eye.decimal, partial)
+    }
+  }
   return {
     id: String(summary.jobId),
     label: fallbackLabel,
-    // Week / BCVA / injection / interval require eCRF-bound lookups
-    // not yet wired — surface zero / empty so the tabs render gracefully.
+    // Week / injection / interval require eCRF-bound lookups not
+    // yet wired — surface zero / empty so the tabs render gracefully.
     week: 0,
     // 2026-06-23 — prefer visit_date (clinically meaningful) and fall
     // back to completed_at when the backend doesn't supply it. Was:
@@ -181,7 +202,8 @@ function fluidJobToVisit(
     srf: mm3ToNl(biomarkers?.srf_mm3),
     ped: mm3ToNl(biomarkers?.ped_mm3),
     crt: 0,
-    bcva: 0,
+    bcva: bcvaLetters,
+    bcvaRaw,
     inj: '',
     interval: null,
     retinalJobId: summary.jobId,
@@ -211,6 +233,12 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
   // bulk getJob round-trip).
   const allFluidDone = shallowRef<RetinalJobSummary[]>([])
   const fluidDetailsCache = new Map<number, RetinalJobDetail | null>()
+  // 2026-06-24 user-feedback round — BCVA timeline indexed by
+  // studyEventId. Populated alongside the fluid jobs in {@link refresh}
+  // and consumed in {@link rebuildData} when mapping summaries to
+  // visits. Null when the subject has no BCVA writes yet — the
+  // composable falls back to `bcva = 0` in that case.
+  const bcvaByEventId = new Map<number, BcvaTimelineRow>()
 
   /**
    * Build the visit timeline + patient banner from the cached
@@ -230,13 +258,16 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
         const kb = (b.acquisitionDate ?? b.visitDate ?? b.completedAt ?? '')
         return ka.localeCompare(kb)
       })
-    const rawVisits: NamdVisit[] = fluidSummaries.map((s, idx) =>
-      fluidJobToVisit(
+    const rawVisits: NamdVisit[] = fluidSummaries.map((s, idx) => {
+      const eventId = s.studyEventId ?? null
+      const bcvaRow = eventId != null ? (bcvaByEventId.get(eventId) ?? null) : null
+      return fluidJobToVisit(
         s,
         fluidDetailsCache.get(s.jobId) ?? null,
         `V${String(idx + 1).padStart(2, '0')}`,
-      ),
-    )
+        bcvaRow,
+      )
+    })
     const baselineMs = parseDateMs(rawVisits[0]?.date)
     const visits: NamdVisit[] = rawVisits.map((v, idx) => {
       if (baselineMs == null) return { ...v, week: idx }
@@ -289,7 +320,19 @@ export function useNamdVisitData(args: UseNamdVisitDataArgs): UseNamdVisitDataRe
         availableEyes.value = []
         return
       }
-      const summaries = await listSubjectJobs(numericId)
+      // 2026-06-24 user-feedback round — fetch the BCVA timeline in
+      // parallel with the per-subject job list. Soft-fail on a 4xx /
+      // network error so legacy studies without any BCVA writes (or
+      // pre-portal deploys) keep rendering the nAMD module without
+      // BCVA values rather than failing the whole load.
+      const [summaries, bcvaTimeline] = await Promise.all([
+        listSubjectJobs(numericId),
+        listSubjectBcvaTimeline(numericId).catch(() => [] as BcvaTimelineRow[]),
+      ])
+      bcvaByEventId.clear()
+      for (const row of bcvaTimeline) {
+        bcvaByEventId.set(row.studyEventId, row)
+      }
       // 2026-06-23 — accept both the DB-native 'done' and the
       // historical/typed 'succeeded' label so jobs returned straight
       // off retinal_inference_job.status surface here.

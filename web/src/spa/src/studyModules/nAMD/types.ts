@@ -74,6 +74,15 @@ export interface NamdVisit {
   crt: number
   /** Best-corrected visual acuity (ETDRS letters). */
   bcva: number
+  /**
+   * 2026-06-24 user-feedback round — canonical raw BCVA form for
+   * tooltip + audit display. For decimal-flavoured studies (post-
+   * BCVA-portal) this is the `1,0p-2` / `0,8+2` form; for legacy
+   * letters-flavoured studies the field stays null (the letter
+   * count IS the raw form). Null also when no BCVA row exists for
+   * the visit at all (the chart falls back to {@link bcva} = 0).
+   */
+  bcvaRaw: string | null
   /** Injection agent, or empty string when no injection administered. */
   inj: string
   /** Interval to next visit in weeks, when scheduled. */
