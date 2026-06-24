@@ -594,6 +594,24 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     out_dir.mkdir(parents=True, exist_ok=True)
     dcm_path = out_dir / "bscan.dcm"
     pydicom.dcmwrite(str(dcm_path), ds, enforce_file_format=True)
+
+    # 2026-06-24 — IOWA OCTLayerSeg 3.6 binary segfaults on
+    # pydicom-written DCMs even when their bytes (md5), size,
+    # blocks, extent layout, SELinux context, and permissions are
+    # IDENTICAL to a byte-by-byte copy that IOWA accepts. The
+    # discriminator is some filesystem-allocation property we
+    # could not isolate (XFS-specific allocator state, speculative
+    # preallocation flag, or a CoW marker invisible to filefrag /
+    # stat / lsattr). Empirically, round-tripping the bytes through
+    # ``shutil.copy`` + atomic rename produces a file IOWA accepts.
+    # The new bytes are byte-identical (md5 unchanged) — only the
+    # allocator-level metadata is reset. See PR #255 for the
+    # diagnostic trail.
+    import shutil
+    tmp_path = dcm_path.with_suffix(".dcm.densify")
+    shutil.copy(str(dcm_path), str(tmp_path))
+    tmp_path.replace(dcm_path)
+
     return out_dir
 
 
