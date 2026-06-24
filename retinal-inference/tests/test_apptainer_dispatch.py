@@ -238,6 +238,46 @@ def test_ga_iowa_chain_libs_and_rmdir(monkeypatch, tmp_path) -> None:
     assert conv[1] and "LD_LIBRARY_PATH" in conv[1]
 
 
+def test_bm_host_native_dispatch(monkeypatch, tmp_path) -> None:
+    # BM has no .sif — supported via bm_code; runs the venv python on
+    # application.py with bm_ld_library_path on LD_LIBRARY_PATH + CUDA dev.
+    monkeypatch.setattr(_config.settings, "bm_python", "/bm/venv/bin/python3", raising=False)
+    monkeypatch.setattr(_config.settings, "bm_code", "/bm/code", raising=False)
+    monkeypatch.setattr(_config.settings, "bm_ld_library_path", "/mods/cuda/lib:/mods/py38/lib", raising=False)
+    monkeypatch.setattr(_config.settings, "bm_gpu_device", "0", raising=False)
+    monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
+
+    adapter = ap.ApptainerAdapter()
+    assert adapter.supports("bm") is True
+
+    captured: dict = {}
+
+    def fake_exec(cmd, env=None):
+        captured["cmd"] = cmd
+        captured["env"] = env
+        out = tmp_path / "work" / "out"
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "001-Bruch's membrane (BM).csv").write_text("size\n1\n2\n")
+        return ""
+
+    monkeypatch.setattr(ap, "_exec", fake_exec)
+
+    dcm_dir = tmp_path / "in"
+    dcm_dir.mkdir()
+    res = adapter.full_volume("bm", dcm_dir, "OD", out_dir_override=tmp_path / "work")
+
+    assert res.task == "bm"
+    assert res.primary_metric_value is None
+    assert res.output_payload["surface_csvs"][0].endswith("(BM).csv")
+    cmd = captured["cmd"]
+    assert cmd[0] == "/bm/venv/bin/python3"
+    assert any(c.endswith("application.py") for c in cmd)
+    # host-native: no apptainer/singularity, no srun wrapping
+    assert "singularity" not in cmd and "apptainer" not in cmd and cmd[0] != "srun"
+    assert captured["env"]["LD_LIBRARY_PATH"].startswith("/mods/cuda/lib")
+    assert captured["env"]["CUDA_VISIBLE_DEVICES"] == "0"
+
+
 def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:
     _set_sifs(monkeypatch, fluid="/sif/fluid_segmentation.sif")
     monkeypatch.setattr(_config.settings, "apptainer_use_slurm", True, raising=False)
