@@ -243,8 +243,11 @@ function fmtDate(iso: string): string {
       data-testid="namd-fluid-trend-svg"
     >
       <!-- Gridlines + left axis (fluid, nL).
-           2026-06-23 user-feedback round — dotted gridlines per the
-           design's dotted-grid aesthetic. -->
+           2026-06-24 user-feedback round — horizontal gridlines are
+           SOLID (continuous) so the eye can read the fluid value
+           horizontally across the chart; vertical guides at each
+           visit's X tick are dotted (rendered below alongside the
+           visit X labels) so the visit-time axis stays subordinate. -->
       <g>
         <line
           v-for="g in gridVals"
@@ -253,10 +256,8 @@ function fmtDate(iso: string): string {
           :x2="W - PR"
           :y1="yFluid(g)"
           :y2="yFluid(g)"
-          stroke="#cbd5e1"
+          stroke="#e2e8f0"
           stroke-width="1"
-          stroke-dasharray="1 4"
-          stroke-linecap="round"
         />
         <text
           v-for="g in gridVals"
@@ -275,6 +276,27 @@ function fmtDate(iso: string): string {
           fill="#8b94a7"
           font-weight="600"
         >nL</text>
+      </g>
+
+      <!-- 2026-06-24 user-feedback round — dotted vertical guides at
+           each visit's X tick. Drawn BEFORE the stacked polygons +
+           CRT line + BCVA strip so the data layers paint over them.
+           Span from the top of the fluid panel through the bottom of
+           the BCVA strip so the operator can read across the whole
+           chart for any visit. -->
+      <g>
+        <line
+          v-for="v in visits"
+          :key="`gx-${v.id}`"
+          :x1="xAt(v.week)"
+          :x2="xAt(v.week)"
+          :y1="PT"
+          :y2="H + BH"
+          stroke="#cbd5e1"
+          stroke-width="1"
+          stroke-dasharray="1 4"
+          stroke-linecap="round"
+        />
       </g>
 
       <!-- Right axis (CRT, µm) -->
@@ -427,9 +449,7 @@ function fmtDate(iso: string): string {
           :y1="yBcva(BCVA_MIN) + 6"
           :x2="W - PR"
           :y2="yBcva(BCVA_MIN) + 6"
-          stroke="#cbd5e1"
-          stroke-dasharray="1 4"
-          stroke-linecap="round"
+          stroke="#e2e8f0"
         />
         <path
           :d="bcvaPath"
