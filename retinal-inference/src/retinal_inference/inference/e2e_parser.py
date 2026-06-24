@@ -80,7 +80,10 @@ def parse_e2e_metadata(e2e_path: Path) -> E2EMetadata:
 class BscanVolume:
     """Decoded OCT volume + geometry, ready to write as a DICOM."""
 
-    volume_u8: Any  # np.ndarray (n_bscans, rows, cols), uint8
+    # 2026-06-24 — renamed conceptually to volume_u16; the field name
+    # stays for backward compatibility with downstream test fixtures
+    # (test_preprocess._FakeBscanVolume) but the dtype is now uint16.
+    volume_u8: Any  # np.ndarray (n_bscans, rows, cols), uint16
     axial_mm: float  # row spacing (depth)
     lateral_mm: float  # column spacing
     slice_mm: float  # spacing between B-scans
@@ -177,25 +180,31 @@ def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
         vol_meta.volume = None  # type: ignore[assignment]
     except Exception:  # pylint: disable=broad-except
         pass
-    # oct-converter normalises to [0, 1]; map to 8-bit. The models min/max- and
-    # per-image-normalise downstream, so absolute scaling is not critical.
+    # 2026-06-24 — IOWA OCTLayerSeg + the sese_ga TestCase1 fixture
+    # both use 16-bit Spectralis OCT pixel data. With our previous
+    # 8-bit quantisation the binary's cost-volume strider walked
+    # twice as fast through memory as our actual row pitch, then
+    # over-ran into NULL/garbage and SIGSEGV'd inside
+    # optnet_ia_maxflow_3d::maxflow_init (faulting address 0x21,
+    # the sentinel from `nodes_array[oob]`). Switching to 16-bit
+    # matches what IOWA expects + restores the full Heidelberg
+    # acquisition dynamic range (12-bit data sitting in the
+    # 16-bit container) instead of throwing 8 bits away in the
+    # uint8 cast.
     finite_max = float(np.nanmax(arr)) if arr.size else 1.0
-    scale = 255.0 / finite_max if finite_max > 0 else 255.0
-    # 2026-06-19 — in-place float64 ops. The original chain
-    # `np.clip(np.nan_to_num(arr) * scale, 0, 255).astype(np.uint8)`
-    # allocates THREE transient float64 copies of the volume (one per
-    # operation), each ~192 MB for a typical 97×496×512 scan, peaking
-    # at ~770 MB of float64 heap before the uint8 cast. The in-place
-    # path keeps only the source `arr` and the final uint8 copy
-    # (~240 MB combined), then drops `arr` before downstream
-    # allocates.
+    scale = 65535.0 / finite_max if finite_max > 0 else 65535.0
+    # In-place float64 ops keep heap usage at one volume copy + the
+    # final uint16. For a 97×496×512 scan that's ~192 MB float64 +
+    # ~24 MB uint16 — well below the ~770 MB the naive
+    # `np.clip(np.nan_to_num(arr) * scale, 0, 65535).astype(...)`
+    # chain would have allocated.
     np.nan_to_num(arr, copy=False)
     arr *= scale
-    np.clip(arr, 0, 255, out=arr)
-    vol_u8 = arr.astype(np.uint8)
+    np.clip(arr, 0, 65535, out=arr)
+    vol_u16 = arr.astype(np.uint16)
     del arr
 
-    n, rows, cols = vol_u8.shape
+    n, rows, cols = vol_u16.shape
     bscan_data = (vol_meta.metadata or {}).get("bscan_data", []) if hasattr(vol_meta, "metadata") else []
     if bscan_data:
         axial, lateral, slice_mm = _derive_spacing_mm(bscan_data, n)
@@ -314,7 +323,7 @@ def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
             bscan_positions_mm = None
 
     return BscanVolume(
-        volume_u8=vol_u8,
+        volume_u8=vol_u16,
         axial_mm=axial,
         lateral_mm=lateral,
         slice_mm=slice_mm,
@@ -449,9 +458,11 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     ds.NumberOfFrames = str(bv.n_bscans)
     ds.Rows = bv.rows
     ds.Columns = bv.cols
-    ds.BitsAllocated = 8
-    ds.BitsStored = 8
-    ds.HighBit = 7
+    # 2026-06-24 — IOWA + TestCase1 use 16-bit Spectralis pixel data.
+    # Matches the volume dtype set in read_e2e_volume.
+    ds.BitsAllocated = 16
+    ds.BitsStored = 16
+    ds.HighBit = 15
     ds.PixelRepresentation = 0
     # PixelSpacing = [row spacing (axial), col spacing (lateral)]; slice spacing
     # in SpacingBetweenSlices — what the optima/retinsight code reads for mm³.
