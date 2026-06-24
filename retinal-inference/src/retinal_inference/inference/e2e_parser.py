@@ -218,15 +218,36 @@ def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
 
 
 def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
-    """Write ``bv`` as a multi-frame Spectralis-flavoured DICOM at out_dir/bscan.dcm."""
+    """Write ``bv`` as a multi-frame Spectralis-flavoured DICOM at out_dir/bscan.dcm.
+
+    2026-06-24 — switched the SOPClassUID from Multi-frame Grayscale Byte
+    Secondary Capture (1.2.840.10008.5.1.4.1.1.7.2) to **Ophthalmic
+    Tomography Image Storage** (1.2.840.10008.5.1.4.1.1.77.1.5.4) plus
+    every IOD-mandatory tag that comes with it. The IOWA OCTLayerSeg
+    binary branches on SOPClassUID; the Secondary Capture path doesn't
+    set up the per-frame ophthalmic functional-group geometry the
+    binary's max-flow graph initialiser expects, so it then NULL-derefs
+    while sizing the graph (`optnet_ia_maxflow_3d::maxflow_init`
+    SIGSEGV reproduced on cn5 with TestCase1 working + ours crashing).
+
+    The new fields are mostly placeholder strings ("00000000",
+    "0", "U", "000Y") because they're required by the IOD but carry no
+    clinical information for our synthesised volume — the upstream
+    .e2e doesn't carry a study identifier, the operator's PHI has
+    already been redacted, and the dummy values are exactly what the
+    sese_ga test fixture ships. The one substantive new field is
+    ``ReferenceCoordinates (0022,0031)`` — IOWA reads it to dimension
+    the graph topology; computed from spacing + n_bscans below.
+    """
     import numpy as np  # noqa: F401  (bv.volume_u8 is already an ndarray)
     import pydicom
     from pydicom.dataset import Dataset, FileMetaDataset
+    from pydicom.sequence import Sequence
     from pydicom.uid import ExplicitVRLittleEndian, generate_uid
 
-    # Multi-frame Grayscale Byte Secondary Capture — SimpleITK/pydicom read it
-    # back as a 3-D volume, and it carries every tag the runners inspect.
-    sop_class = "1.2.840.10008.5.1.4.1.1.7.2"
+    # Ophthalmic Tomography Image Storage — what IOWA + the optima
+    # framework's downstream consumers expect for an OCT volume.
+    sop_class = "1.2.840.10008.5.1.4.1.1.77.1.5.4"
 
     fm = FileMetaDataset()
     fm.MediaStorageSOPClassUID = sop_class
@@ -244,8 +265,39 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     ds.SeriesInstanceUID = generate_uid()
     ds.Modality = "OPT"  # Ophthalmic Tomography
     ds.Manufacturer = "Heidelberg Engineering"
+    # Ophthalmic-IOD laterality codes are "OS" / "OD" — NOT the
+    # generic "R" / "L" the Secondary Capture IOD used. IOWA reads
+    # this tag and branches; "R" was being treated as "unknown".
     ds.ImageLaterality = "R" if bv.laterality == "OD" else "L"
-    ds.Laterality = ds.ImageLaterality
+    ds.Laterality = "OD" if bv.laterality == "OD" else "OS"
+
+    # IOD-required image-type discriminator. The IOWA binary requires
+    # the first value "DERIVED" / "ORIGINAL" to be present.
+    ds.ImageType = ["DERIVED", "PRIMARY"]
+    ds.DerivationDescription = ""
+
+    # Placeholder patient + study identifiers required by the
+    # Ophthalmic Tomography IOD's Patient + Study + Series modules.
+    # The actual operator PHI was already redacted by phi.redact_dicom
+    # (kept below as a defense-in-depth pass over whatever oct-converter
+    # may have propagated through). These dummy values match the
+    # sese_ga TestCase1 fixture so IOWA sees field-shapes it has
+    # seen before in QA.
+    ds.PatientName = "00000000"
+    ds.PatientID = "00000000"
+    ds.PatientBirthDate = "00000000"
+    ds.PatientSex = "U"
+    ds.PatientAge = "000Y"
+    ds.StudyDate = "00000000"
+    ds.SeriesDate = "00000000"
+    if bv.acquisition_date:
+        # ISO YYYY-MM-DD → DICOM DA YYYYMMDD (no separators)
+        ds.AcquisitionDate = bv.acquisition_date.replace("-", "")
+    else:
+        ds.AcquisitionDate = "00000000"
+    ds.StudyID = "0"
+    ds.SeriesNumber = "0"
+    ds.AcquisitionNumber = "0"
 
     ds.SamplesPerPixel = 1
     ds.PhotometricInterpretation = "MONOCHROME2"
@@ -261,6 +313,39 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     ds.PixelSpacing = [round(bv.axial_mm, 8), round(bv.lateral_mm, 8)]
     ds.SpacingBetweenSlices = round(bv.slice_mm, 8)
     ds.PixelData = bv.volume_u8.tobytes()
+
+    # Acquisition Device Type Code Sequence — describes the OCT scanner.
+    # SNOMED code A-00FBE = "Optical Coherence Tomography Scanner" per
+    # the TestCase1 fixture.
+    acq_device_item = Dataset()
+    acq_device_item.CodeValue = "A-00FBE"
+    acq_device_item.CodingSchemeDesignator = "SRT"
+    acq_device_item.CodeMeaning = "Optical Coherence Tomography Scanner"
+    ds.AcquisitionDeviceTypeCodeSequence = Sequence([acq_device_item])
+
+    # Reference Coordinates Sequence — one item per B-scan, each
+    # carrying (0022,0032) as a 4-float [x_start, x_end, y_pos, y_pos]
+    # in mm. IOWA reads this sequence to dimension the graph
+    # topology; without it, max-flow init reads NULL and segfaults.
+    # Coordinates are computed from spacing — exact fundus offset
+    # doesn't matter (the SLO image isn't shipped), only the
+    # per-B-scan stride.
+    x_start_mm = 0.0
+    x_end_mm = round(bv.cols * bv.lateral_mm, 6)
+    ref_items = []
+    for i in range(bv.n_bscans):
+        y_mm = round(i * bv.slice_mm, 6)
+        ref_item = Dataset()
+        ref_item.ReferenceCoordinates = [
+            x_start_mm, x_end_mm, y_mm, y_mm,
+        ]
+        ref_items.append(ref_item)
+    # Tag (0022,0031) is "OphthalmicAxialMeasurementsLeftEyeSequence"
+    # in DICOM 2024, but in OCTLayerSeg's older dictionary it's read
+    # as a private alias for the per-B-scan reference. Assigning by
+    # tag rather than keyword avoids a pydicom keyword mismatch on
+    # the 2015-vintage data dictionary.
+    ds.add_new(0x00220031, "SQ", Sequence(ref_items))
 
     # PHI redaction (DR-022) — strip patient identifiers from the synthesised
     # bscan before write. E2E headers may carry PatientID/Name/DOB; we don't
