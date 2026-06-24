@@ -2771,7 +2771,21 @@
   "bcvaPortal": {
     "title": "[NEEDS_REVIEW] BCVA-Entry Portal",
     "studyOid": "[NEEDS_REVIEW] Study · {oid}",
-    "stubBody": "[NEEDS_REVIEW] The entry form lands in a follow-up commit. The route loads, the backend whitelist for /pages/api/v1/public/bcva-entry/** is active."
+    "date": "[NEEDS_REVIEW] Visit date",
+    "enteredBy": "[NEEDS_REVIEW] Entered by",
+    "enteredByPlaceholder": "[NEEDS_REVIEW] First + last name",
+    "enteredByRequired": "[NEEDS_REVIEW] Please enter your name first.",
+    "loading": "[NEEDS_REVIEW] Loading visits …",
+    "empty": "[NEEDS_REVIEW] No visits scheduled on this date.",
+    "alreadyEntered": "[NEEDS_REVIEW] BCVA already entered",
+    "committed": "[NEEDS_REVIEW] Saved ✓",
+    "reopen": "[NEEDS_REVIEW] Re-open",
+    "bcva": "[NEEDS_REVIEW] BCVA",
+    "bcvaPlaceholder": "[NEEDS_REVIEW] e.g. 1,0 or 1,0p-2 or 0,8+2",
+    "bcvaInvalid": "[NEEDS_REVIEW] Format: 1,0  ·  1,0p-2  ·  0,8+2",
+    "noBcvaProvided": "[NEEDS_REVIEW] Enter at least one BCVA value (OD or OS).",
+    "submit": "[NEEDS_REVIEW] Save",
+    "submitting": "[NEEDS_REVIEW] Saving …"
   },
   "octPortal": {
     "topbar": {
