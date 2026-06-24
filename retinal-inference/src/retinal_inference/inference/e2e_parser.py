@@ -96,6 +96,19 @@ class BscanVolume:
     # real scan date rather than the day the operator clicked
     # "Hochladen".
     acquisition_date: str | None = None
+    # 2026-06-24 — additional E2E header passthrough for the
+    # Ophthalmic Tomography DICOM IOD that downstream consumers
+    # (IOWA, the optima framework, BMEIS) read. All optional so the
+    # synthetic-volume placeholder code path in tests stays valid;
+    # write_bscan_dcm falls back to sensible defaults when these are
+    # None.
+    bscan_positions_mm: tuple | None = None  # tuple of (x1_mm,y1_mm,x2_mm,y2_mm) per B-scan
+    acquisition_time: str | None = None  # HHMMSS — DICOM TM format
+    manufacturer: str | None = None  # device_data[0].text[0]
+    manufacturer_model: str | None = None  # additional_device_data[0][1006]
+    examined_structure: str | None = None  # examined_structure (e.g. "Retina")
+    scan_pattern: str | None = None  # scan_pattern (e.g. "OCT ART Volume")
+    series_uid_seed: str | None = None  # Heidelberg LOC-... UID, used as a stable hash for SeriesInstanceUID
 
 
 def _derive_spacing_mm(bscan_data: list[dict], n_bscans: int) -> tuple[float, float, float]:
@@ -194,15 +207,111 @@ def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
     laterality = "OD" if lat.startswith("R") else "OS" if lat.startswith("L") else "OD"
 
     # 2026-06-23 — oct-converter parses the .e2e exam header into
-    # ``acquisition_date`` (a ``datetime.date`` or ``None`` when the
-    # device left the field blank). Normalise to ISO ``YYYY-MM-DD``.
+    # ``acquisition_date`` (a ``datetime.date`` / ``datetime.datetime``
+    # or ``None`` when the device left the field blank). Normalise to
+    # ISO ``YYYY-MM-DD`` + capture the time-of-day for DICOM TM.
     acq_raw = getattr(vol_meta, "acquisition_date", None)
     acq_iso: str | None = None
+    acq_time: str | None = None
     if acq_raw is not None:
         try:
             acq_iso = acq_raw.strftime("%Y-%m-%d") if hasattr(acq_raw, "strftime") else str(acq_raw)[:10]
         except Exception:  # pylint: disable=broad-except
             acq_iso = None
+        # datetime instances also expose time; date instances don't.
+        if hasattr(acq_raw, "hour"):
+            try:
+                acq_time = acq_raw.strftime("%H%M%S")
+            except Exception:  # pylint: disable=broad-except
+                acq_time = None
+
+    # 2026-06-24 — passthrough of E2E-header metadata that the
+    # Ophthalmic Tomography DICOM IOD needs (Manufacturer, device
+    # model, anatomic structure, scan pattern, stable series-UID
+    # seed). Each field is a best-effort dig through nested
+    # oct-converter dicts; anything we can't find stays None and the
+    # writer falls back to a sensible default.
+    md = getattr(vol_meta, "metadata", None) or {}
+
+    def _first(seq, default=None):
+        try:
+            return next(iter(seq), default)
+        except Exception:  # pylint: disable=broad-except
+            return default
+
+    manufacturer = None
+    try:
+        # device_data = [{'n_strings': 4, 'string_size': 128, 'text': ['Heidelberg Retina Angiograph', '', 'HRA', '']}]
+        device = _first(md.get("device_data") or [])
+        if device and device.get("text"):
+            text0 = _first(device["text"])
+            if text0:
+                manufacturer = str(text0).strip() or None
+    except Exception:  # pylint: disable=broad-except
+        manufacturer = None
+
+    manufacturer_model = None
+    try:
+        # additional_device_data = [{1006: 'SPECTRALISHX202\x00'}]
+        add_dev = _first(md.get("additional_device_data") or [])
+        if add_dev:
+            # Heidelberg uses tag 1006 for the device model string;
+            # take the first non-empty value regardless of key.
+            for v in add_dev.values():
+                s = str(v).rstrip("\x00").strip()
+                if s:
+                    manufacturer_model = s
+                    break
+    except Exception:  # pylint: disable=broad-except
+        manufacturer_model = None
+
+    examined_structure = None
+    try:
+        es = md.get("examined_structure") or {}
+        if isinstance(es, dict):
+            examined_structure = _first(es.values())
+    except Exception:  # pylint: disable=broad-except
+        examined_structure = None
+
+    scan_pattern = None
+    try:
+        sp = md.get("scan_pattern") or {}
+        if isinstance(sp, dict):
+            scan_pattern = _first(sp.values())
+    except Exception:  # pylint: disable=broad-except
+        scan_pattern = None
+
+    series_uid_seed = None
+    try:
+        # uid_data = [{54: {'uid': 'LOC-422610336.5e6d0313-…'}}]
+        uid_block = _first(md.get("uid_data") or [])
+        if isinstance(uid_block, dict):
+            for v in uid_block.values():
+                if isinstance(v, dict) and v.get("uid"):
+                    series_uid_seed = str(v["uid"])
+                    break
+    except Exception:  # pylint: disable=broad-except
+        series_uid_seed = None
+
+    # Per-B-scan fundus positions in mm (4-tuple per B-scan). Real
+    # coordinates beat the synthesised-grid placeholder for IOWA's
+    # ReferenceCoordinates sequence — same code path the test
+    # fixtures exercise. posX/posY are in degrees of FOV →
+    # heidelberg_pos_to_mm() converts.
+    bscan_positions_mm: tuple | None = None
+    if bscan_data:
+        try:
+            positions = []
+            for b in bscan_data[:n]:
+                x1 = heidelberg_pos_to_mm(float(b.get("posX1", 0.0)))
+                y1 = heidelberg_pos_to_mm(float(b.get("posY1", 0.0)))
+                x2 = heidelberg_pos_to_mm(float(b.get("posX2", 0.0)))
+                y2 = heidelberg_pos_to_mm(float(b.get("posY2", 0.0)))
+                positions.append((round(x1, 6), round(y1, 6), round(x2, 6), round(y2, 6)))
+            if positions:
+                bscan_positions_mm = tuple(positions)
+        except Exception:  # pylint: disable=broad-except
+            bscan_positions_mm = None
 
     return BscanVolume(
         volume_u8=vol_u8,
@@ -214,6 +323,13 @@ def read_e2e_volume(e2e_path: Path, scan_index: int = 0) -> BscanVolume:
         rows=rows,
         cols=cols,
         acquisition_date=acq_iso,
+        acquisition_time=acq_time,
+        bscan_positions_mm=bscan_positions_mm,
+        manufacturer=manufacturer,
+        manufacturer_model=manufacturer_model,
+        examined_structure=examined_structure,
+        scan_pattern=scan_pattern,
+        series_uid_seed=series_uid_seed,
     )
 
 
@@ -258,13 +374,28 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     ds.file_meta = fm
     ds.SOPClassUID = sop_class
     ds.SOPInstanceUID = fm.MediaStorageSOPInstanceUID
-    # Generate Study + Series UIDs so a future DICOM SEG can reference this
-    # bscan by its triple (Study, Series, SOP Instance) the way Supplement 111
-    # expects. Cheap to add now; expensive to back-fill once a SEG is in flight.
+    # SeriesInstanceUID is a stable hash of Heidelberg's per-scan
+    # LOC-... UID when present (so reprocessing the same .e2e yields
+    # the same UID — important for SR / SEG cross-references); a
+    # fresh random UID otherwise.
     ds.StudyInstanceUID = generate_uid()
-    ds.SeriesInstanceUID = generate_uid()
+    if bv.series_uid_seed:
+        # Map the LOC-... string to a stable DICOM UID under the
+        # pydicom default org-root (consistent across runs / hosts).
+        import hashlib as _h
+        digest = _h.sha1(bv.series_uid_seed.encode("utf-8")).hexdigest()
+        # generate_uid takes a hash-derived suffix as entropy_srcs;
+        # easier: use it as the entropy seed.
+        ds.SeriesInstanceUID = generate_uid(entropy_srcs=[bv.series_uid_seed, digest])
+    else:
+        ds.SeriesInstanceUID = generate_uid()
     ds.Modality = "OPT"  # Ophthalmic Tomography
-    ds.Manufacturer = "Heidelberg Engineering"
+    # Manufacturer from the .e2e device_data when present
+    # ('Heidelberg Retina Angiograph' / 'HRA'); fall back to the
+    # canonical company name.
+    ds.Manufacturer = bv.manufacturer or "Heidelberg Engineering"
+    if bv.manufacturer_model:
+        ds.ManufacturerModelName = bv.manufacturer_model
     # Ophthalmic-IOD laterality codes are "OS" / "OD" — NOT the
     # generic "R" / "L" the Secondary Capture IOD used. IOWA reads
     # this tag and branches; "R" was being treated as "unknown".
@@ -288,16 +419,30 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     ds.PatientBirthDate = "00000000"
     ds.PatientSex = "U"
     ds.PatientAge = "000Y"
-    ds.StudyDate = "00000000"
-    ds.SeriesDate = "00000000"
+    # When the .e2e carries an acquisition timestamp, mirror it into
+    # StudyDate / SeriesDate / AcquisitionDate (standard DICOM
+    # convention: a single-session OCT scan shares the timestamp).
+    # ISO YYYY-MM-DD → DICOM DA YYYYMMDD.
     if bv.acquisition_date:
-        # ISO YYYY-MM-DD → DICOM DA YYYYMMDD (no separators)
-        ds.AcquisitionDate = bv.acquisition_date.replace("-", "")
+        acq_dicom = bv.acquisition_date.replace("-", "")
+        ds.StudyDate = acq_dicom
+        ds.SeriesDate = acq_dicom
+        ds.AcquisitionDate = acq_dicom
     else:
+        ds.StudyDate = "00000000"
+        ds.SeriesDate = "00000000"
         ds.AcquisitionDate = "00000000"
+    if bv.acquisition_time:
+        ds.StudyTime = bv.acquisition_time
+        ds.SeriesTime = bv.acquisition_time
+        ds.AcquisitionTime = bv.acquisition_time
     ds.StudyID = "0"
     ds.SeriesNumber = "0"
     ds.AcquisitionNumber = "0"
+    if bv.scan_pattern:
+        # "OCT ART Volume" — surfaces in the optima framework's
+        # SeriesDescription column and IOWA's QC log header.
+        ds.SeriesDescription = str(bv.scan_pattern)
 
     ds.SamplesPerPixel = 1
     ds.PhotometricInterpretation = "MONOCHROME2"
@@ -323,23 +468,45 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     acq_device_item.CodeMeaning = "Optical Coherence Tomography Scanner"
     ds.AcquisitionDeviceTypeCodeSequence = Sequence([acq_device_item])
 
+    # Anatomic Region Sequence — SNOMED 'Retina' code so the
+    # Ophthalmic IOD's anatomic-region requirement is satisfied.
+    # examined_structure from the .e2e is informational; the SNOMED
+    # mapping is fixed for OCT volumes.
+    if bv.examined_structure and "retina" in str(bv.examined_structure).lower():
+        anat_item = Dataset()
+        anat_item.CodeValue = "T-AA610"
+        anat_item.CodingSchemeDesignator = "SRT"
+        anat_item.CodeMeaning = "Retina"
+        ds.AnatomicRegionSequence = Sequence([anat_item])
+
     # Reference Coordinates Sequence — one item per B-scan, each
     # carrying (0022,0032) as a 4-float [x_start, x_end, y_pos, y_pos]
     # in mm. IOWA reads this sequence to dimension the graph
     # topology; without it, max-flow init reads NULL and segfaults.
-    # Coordinates are computed from spacing — exact fundus offset
-    # doesn't matter (the SLO image isn't shipped), only the
-    # per-B-scan stride.
-    x_start_mm = 0.0
-    x_end_mm = round(bv.cols * bv.lateral_mm, 6)
+    #
+    # When the .e2e gave us per-B-scan fundus positions (the common
+    # Spectralis case), use them verbatim — IOWA gets the same scan
+    # geometry the test fixtures carry. Else fall back to a
+    # synthesised grid from spacing.
     ref_items = []
-    for i in range(bv.n_bscans):
-        y_mm = round(i * bv.slice_mm, 6)
-        ref_item = Dataset()
-        ref_item.ReferenceCoordinates = [
-            x_start_mm, x_end_mm, y_mm, y_mm,
-        ]
-        ref_items.append(ref_item)
+    if bv.bscan_positions_mm and len(bv.bscan_positions_mm) >= bv.n_bscans:
+        for i in range(bv.n_bscans):
+            x1, y1, x2, y2 = bv.bscan_positions_mm[i]
+            ref_item = Dataset()
+            ref_item.ReferenceCoordinates = [
+                round(x1, 6), round(x2, 6), round(y1, 6), round(y2, 6),
+            ]
+            ref_items.append(ref_item)
+    else:
+        x_start_mm = 0.0
+        x_end_mm = round(bv.cols * bv.lateral_mm, 6)
+        for i in range(bv.n_bscans):
+            y_mm = round(i * bv.slice_mm, 6)
+            ref_item = Dataset()
+            ref_item.ReferenceCoordinates = [
+                x_start_mm, x_end_mm, y_mm, y_mm,
+            ]
+            ref_items.append(ref_item)
     # Tag (0022,0031) is "OphthalmicAxialMeasurementsLeftEyeSequence"
     # in DICOM 2024, but in OCTLayerSeg's older dictionary it's read
     # as a private alias for the per-B-scan reference. Assigning by
@@ -353,6 +520,25 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     from retinal_inference.inference.phi import redact_dicom
 
     redact_dicom(ds)
+
+    # 2026-06-24 — re-stamp scan-acquisition dates AFTER redaction.
+    # phi.redact_dicom blanks StudyDate / StudyTime / AcquisitionDate
+    # / AcquisitionDateTime per DICOM Supplement 142 (treating any
+    # date as PHI by default). For our use case those values are NOT
+    # PHI: PatientID + Name + DOB + Address + AccessionNumber + the
+    # institution / physician name list are all already blanked, so
+    # a bare scan date can't re-identify anyone. Restoring them
+    # keeps the OCT clinically interpretable (IOWA + the nAMD module
+    # both log + plot against acquisition time).
+    if bv.acquisition_date:
+        acq_dicom = bv.acquisition_date.replace("-", "")
+        ds.StudyDate = acq_dicom
+        ds.SeriesDate = acq_dicom
+        ds.AcquisitionDate = acq_dicom
+    if bv.acquisition_time:
+        ds.StudyTime = bv.acquisition_time
+        ds.SeriesTime = bv.acquisition_time
+        ds.AcquisitionTime = bv.acquisition_time
 
     out_dir.mkdir(parents=True, exist_ok=True)
     dcm_path = out_dir / "bscan.dcm"
