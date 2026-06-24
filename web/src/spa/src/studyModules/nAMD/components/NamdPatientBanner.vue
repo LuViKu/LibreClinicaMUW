@@ -49,8 +49,12 @@ const activeEye = computed<Laterality>(() => props.selectedEye ?? props.patient.
  * availableEyes (legacy callers, mock fixtures), fall back to the
  * patient.eye single-pill shape so the banner stays well-formed.
  */
+// Defensive ??[] so the computed never trips on an HMR'd parent that
+// hasn't re-bound the new optional prop yet — the user hit this once
+// after a partial reload (2026-06-24).
 const pillEyes = computed<Laterality[]>(() => {
-  if (props.availableEyes.length > 0) return props.availableEyes
+  const eyes = props.availableEyes ?? []
+  if (eyes.length > 0) return eyes
   return [props.patient.eye]
 })
 
