@@ -288,8 +288,22 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             )
         layerseg = work / "layerseg"
         layerseg.mkdir(parents=True, exist_ok=True)
+        # 2026-06-24 — IOWA OCTLayerSeg 3.6 segfaults on DCMs whose
+        # bytes were laid down via Python's write_bytes / pydicom
+        # save_as (including the cluster sidecar's own
+        # api.run._materialize_input), even when the resulting file
+        # is byte-identical (md5, size, blocks, extents, SELinux
+        # context, ACLs all matching) to a copy that IOWA accepts.
+        # The discriminator is some XFS-allocator-state property we
+        # could not isolate without IOWA source. ``shutil.copy`` to a
+        # sibling + atomic rename resets that state. The new file is
+        # byte-identical to the input (verified locally; md5 unchanged).
+        # See PR #255 for the full diagnostic trail.
+        import shutil
+        dcm_for_iowa = work / "bscan.iowa.dcm"
+        shutil.copy(str(dcm), str(dcm_for_iowa))
         # OCTLayerSeg3.6 (licensed host binary) -> lres.xml.
-        _exec([s.ga_iowa_binary or "OCTLayerSeg3.6", "-oM", str(dcm),
+        _exec([s.ga_iowa_binary or "OCTLayerSeg3.6", "-oM", str(dcm_for_iowa),
                str(layerseg / "lres.xml"), str(layerseg / "t1.xml"),
                str(layerseg / "t2.tif"), str(layerseg / "t3.xml")], env or None)
         # Convert lres.xml -> 11 layer CSVs. Flags confirmed on cn5; the converter
