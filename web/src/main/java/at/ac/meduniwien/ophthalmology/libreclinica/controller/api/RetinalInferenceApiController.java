@@ -110,7 +110,7 @@ public class RetinalInferenceApiController {
      * gated at the sidecar adapter (no runner) until the IOWA layer segmenter +
      * a GPU host exist.
      */
-    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr", "bm");
+    private static final Set<String> SUPPORTED_TASKS = Set.of("ga", "fluid", "onl", "pr", "bm", "layers");
 
     /** Laterality must be one of the OD/OS pair (no OU for the placeholder GA path). */
     private static final Set<String> SUPPORTED_LATERALITIES = Set.of("OD", "OS");

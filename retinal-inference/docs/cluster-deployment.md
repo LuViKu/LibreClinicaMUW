@@ -153,6 +153,13 @@ RETINAL_INFERENCE_PR_WEIGHTS=/home/optima/octreader/Processor_Implementations/se
   RETINAL_INFERENCE_BM_GPU_DEVICE=0
   RETINAL_INFERENCE_BM_LD_LIBRARY_PATH=<the captured module LD_LIBRARY_PATH>
   ```
+- `layers` (full layer stack) returns the **11 IOWA reference layers + the BM
+  layer**. It reuses the GA IOWA env (`GA_IOWA_BINARY` / `GA_IOWA_CONVERTER` /
+  `GA_IOWA_LD_LIBRARY_PATH`) **and** the BM env (`BM_*`) — no new vars. It's
+  auto-supported once both of those groups are set, so it comes for free with GA +
+  BM enabled. (Note: `ga` itself now returns **only the RPEL** surface — the IOWA
+  layers it consumes and the EZL/ELM it also produces are no longer shipped; use
+  `layers` if you want the full IOWA stack.)
 - PR extra dep: sese_pr imports `scikit-learn`, baked into `pr.sif` via the
   `.def`. To avoid rebaking the `.sif` you can instead bind a `pip --target` dir:
   ```sh

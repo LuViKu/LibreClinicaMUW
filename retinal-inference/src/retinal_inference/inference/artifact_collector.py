@@ -40,15 +40,24 @@ _SKIP_NAMES: frozenset[str] = frozenset({"bscan.dcm"})
 _SKIP_DIRS: frozenset[str] = frozenset({"mhd_in"})
 
 
-def collect_artifacts(tempdir: Path) -> list[Artifact]:
-    """Walk ``tempdir`` and return inline-encoded artifacts the runner wrote."""
+def collect_artifacts(tempdir: Path, only: Iterable[str] | None = None) -> list[Artifact]:
+    """Walk ``tempdir`` and return inline-encoded artifacts the runner wrote.
+
+    When ``only`` is given, collect ONLY files whose basename is in that set
+    (anywhere under ``tempdir``) — the handler's explicit returned-artifact list.
+    When ``only`` is None, fall back to the permissive allowlist walk.
+    """
+    only_set = set(only) if only is not None else None
     out: list[Artifact] = []
     for path in sorted(tempdir.rglob("*")):
         if not path.is_file():
             continue
         if path.name in _SKIP_NAMES:
             continue
-        if any(part in _SKIP_DIRS for part in path.relative_to(tempdir).parts[:-1]):
+        if only_set is not None:
+            if path.name not in only_set:
+                continue
+        elif any(part in _SKIP_DIRS for part in path.relative_to(tempdir).parts[:-1]):
             continue
         media_type = _MEDIA_TYPES.get(path.suffix.lower())
         if media_type is None:
