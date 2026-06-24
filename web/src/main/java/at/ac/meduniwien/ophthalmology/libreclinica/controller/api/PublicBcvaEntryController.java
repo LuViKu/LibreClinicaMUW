@@ -163,12 +163,18 @@ public class PublicBcvaEntryController {
 
     private static final DateTimeFormatter ISO_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
 
-    /** Schedule / data-entry-started / signed-completed — the only
-     *  states a visit can be in for the BCVA portal to accept entry.
-     *  Removed (5), Stopped (5 too in some encodings) and skipped
-     *  are excluded so the operator doesn't accidentally land BCVA
-     *  on a withdrawn / cancelled visit. */
-    private static final Set<Integer> ENTRY_OK_STATUS_IDS = Set.of(1, 2, 4, 8);
+    /**
+     * Subject-event statuses for which the BCVA portal will list a
+     * visit. Per {@code SubjectEventStatus}:
+     *   1 = SCHEDULED, 3 = DATA_ENTRY_STARTED, 4 = COMPLETED, 8 = SIGNED.
+     * Excluded: 2 (NOT_SCHEDULED), 5 (STOPPED), 6 (SKIPPED), 7 (LOCKED)
+     * — none of those should accept new BCVA data.
+     *
+     * <p>2026-06-24: was {@code (1, 2, 4, 8)}, which dropped the very
+     * common DATA_ENTRY_STARTED state (the typical state after an
+     * operator opens any CRF on the visit). Fixed in this commit.
+     */
+    private static final Set<Integer> ENTRY_OK_STATUS_IDS = Set.of(1, 3, 4, 8);
 
     private final DataSource dataSource;
 
@@ -253,7 +259,9 @@ public class PublicBcvaEntryController {
                 + "JOIN study_event_definition sed ON sed.study_event_definition_id = se.study_event_definition_id "
                 + "WHERE ss.study_id = ? "
                 + "  AND date(se.date_start) = ? "
-                + "  AND se.subject_event_status_id IN (1, 2, 4, 8) "
+                + "  AND se.subject_event_status_id IN ("
+                + ENTRY_OK_STATUS_IDS.stream().sorted().map(String::valueOf).collect(Collectors.joining(","))
+                + ") "
                 + "ORDER BY se.date_start ASC, ss.label ASC";
 
         List<Map<String, Object>> visits = new ArrayList<>();
