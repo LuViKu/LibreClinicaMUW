@@ -32,14 +32,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.RestController;
 
 /**
  * 2026-06-24 user-feedback round — public BCVA-entry portal backend.
@@ -76,7 +75,7 @@ import org.springframework.web.bind.annotation.ResponseBody;
  * must drop the {@code bcvaDecimalPreset} (or the legacy
  * {@code bcvaPreset}) on a CRF first.
  */
-@Controller
+@RestController
 @RequestMapping("/pages/api/v1/public/bcva-entry")
 public class PublicBcvaEntryController {
 
@@ -134,7 +133,6 @@ public class PublicBcvaEntryController {
      *                 server's local zone.
      */
     @GetMapping(path = "/{studyOid}/visits", produces = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseBody
     public ResponseEntity<?> listVisits(@PathVariable("studyOid") String studyOid,
                                         @RequestParam(value = "date", required = false) String dateRaw) {
         LocalDate date;
@@ -252,7 +250,6 @@ public class PublicBcvaEntryController {
      */
     @PostMapping(path = "/commit", consumes = MediaType.APPLICATION_JSON_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
-    @ResponseBody
     public ResponseEntity<?> commit(@RequestBody CommitRequest body) {
         if (body == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "Request body required"));
