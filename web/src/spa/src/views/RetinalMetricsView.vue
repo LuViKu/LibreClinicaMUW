@@ -890,15 +890,33 @@ const streamJobId = computed<number | null>(() =>
 
 const { connected: liveConnected } = useJobStatusStream(streamJobId, {
   enabled: streamEnabled,
-  onStatus: (e) => {
-    // The store's DTO carries the authoritative payload (e.g.
-    // metrics, artifacts). The SSE event just tells us "something
-    // changed" — re-fetch when the status hits a terminal state.
-    if (e.status === 'done' || e.status === 'failed') {
-      void store.loadJob(jobId.value, true)
-    }
+  onStatus: () => {
+    // Any status push means the DTO (status, companion URLs, metrics) may
+    // have changed — re-fetch the job AND geometry via load() so the status
+    // pill, SLO/fundus, B-scan, and segmentation overlays render as each
+    // stage completes, with no manual refresh. (A bare loadJob() did not
+    // reload geometry, so the overlays could stay blank on `done` when the
+    // geometry wasn't available at initial mount — that was the refresh bug.)
+    void load()
   },
 })
+
+// 2026-06-25 — belt-and-suspenders live refresh while in-flight. The SSE
+// stream only pushes on actual status transitions, and the backend flips to
+// 'segmenting' BEFORE /preprocess writes the SLO/B-scan companions — so a job
+// can sit in 'segmenting' with freshly-available imagery the view hasn't
+// re-fetched. A slow poll while in-flight picks those up so the SLO/OCT/
+// segmentation appear when ready without a manual refresh; it stops the moment
+// the job reaches a terminal state (streamEnabled flips false) or unmount.
+let inflightPoll: ReturnType<typeof setInterval> | undefined
+function stopInflightPoll(): void {
+  if (inflightPoll) { clearInterval(inflightPoll); inflightPoll = undefined }
+}
+watch(streamEnabled, (active) => {
+  stopInflightPoll()
+  if (active) inflightPoll = setInterval(() => { void load() }, 12000)
+}, { immediate: true })
+onBeforeUnmount(stopInflightPoll)
 </script>
 
 <template>
