@@ -216,7 +216,6 @@ import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleAssign
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleSetAuditServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.submit.ViewRuleSetServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.control.techadmin.TechAdminServlet;
-import at.ac.meduniwien.ophthalmology.libreclinica.control.techadmin.ViewSchedulerServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.view.form.FormServlet;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.SQLInitServlet;
 
@@ -847,8 +846,10 @@ public class LegacyServletRegistry {
             ServletRegistration.Dynamic reg197 = ctx.addServlet("ViewRuleSetServlet", ViewRuleSetServlet.class);
             reg197.addMapping("/ViewRuleSet");
 
-            ServletRegistration.Dynamic reg198 = ctx.addServlet("ViewSchedulerServlet", ViewSchedulerServlet.class);
-            reg198.addMapping("/ViewScheduler");
+            // /ViewScheduler (legacy ViewSchedulerServlet) retired 2026-06-22:
+            // the legacy servlet's processRequest() was a 2005-era empty
+            // commented-out stub. Real scheduler administration now lives
+            // at /app/admin/jobs (JobsAdminApiController, Phase E.8 L5).
 
             ServletRegistration.Dynamic reg199 = ctx.addServlet("ViewSectionDataEntryByIdServlet", ViewSectionDataEntryByIdServlet.class);
             reg199.addMapping("/ViewSectionDataEntryById");

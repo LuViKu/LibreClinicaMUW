@@ -60,11 +60,12 @@ def process_one_job(
         mark_done(conn, job, result.model_version)
         audit_inference_done(conn, job, result)
         log.info(
-            "job %d (task=%s) done — total=%s %s",
+            "job %d (task=%s) done — %s=%s %s",
             job.job_id,
             job.task,
-            result.total_area_mm2,
-            "mm²",
+            "primary_metric",
+            result.primary_metric_value,
+            result.primary_metric_unit,
         )
     except UnsupportedTaskError as e:
         mark_failed(conn, job, f"unsupported task: {e}")

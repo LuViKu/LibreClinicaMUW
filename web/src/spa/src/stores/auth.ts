@@ -77,11 +77,16 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref<string | null>(null)
   const availableStudies = ref<StudyOption[]>([])
 
+  // 2026-06-21 user-feedback round 6 — institutional Shibboleth SSO is
+  // no longer available to the deployment. The login page falls back
+  // to the local-credentials form only; flipping this back to enabled
+  // (with a real entryUrl) is the one-line escape hatch when SSO is
+  // re-instated.
   const ssoConfig = ref<SsoConfig>({
-    enabled: true,
+    enabled: false,
     buttonLabel: 'Sign in with MedUni Wien',
-    entryUrl: 'http://localhost:8080/LibreClinica/saml2/authenticate/meduniwien',
-    providerHint: 'You will be redirected to login.meduniwien.ac.at for single sign-on.',
+    entryUrl: '',
+    providerHint: '',
   })
 
   const isAuthenticated = computed(() => state.value === 'authenticated')
@@ -371,6 +376,57 @@ export const useAuthStore = defineStore('auth', () => {
     availableStudies.value = []
   }
 
+  /**
+   * 2026-06-25 — global handler for API responses that come back with
+   * HTTP 401. Triggered from the api/client.ts request() pipeline so a
+   * mid-session expiry doesn't leave the SPA in a state where the
+   * router still believes the user is authenticated (so navigation
+   * works) but every data call silently returns 401. Resets local
+   * auth state to anonymous + forces a router-level redirect to /login
+   * carrying the current path as {@code returnTo} so the operator
+   * lands back where they were after re-authenticating.
+   *
+   * <p>Guarded by {@link state} === 'anonymous': repeated 401s on the
+   * same request burst (eg. the SPA fires several parallel data calls
+   * during a route change) only triggers one router push.
+   *
+   * <p>Idempotent for the {@code login} route — if the operator is
+   * already on /login, we don't re-push (which would clear
+   * {@code returnTo}). The /me bootstrap path also calls this on 401
+   * without an explicit returnTo, in which case we don't carry one.
+   */
+  function clearForUnauthorized(returnTo?: string | null): void {
+    if (state.value === 'anonymous') {
+      // Already routed to login; no further action — the guard will
+      // keep things consistent.
+      return
+    }
+    user.value = null
+    state.value = 'anonymous'
+    availableStudies.value = []
+    // Lazy router import to avoid a stores/router circular dep — the
+    // router itself imports the auth store for guard checks.
+    void import('@/router')
+      .then(({ default: router }) => {
+        const current = router.currentRoute.value
+        if (current.name === 'login') return
+        const target = returnTo
+          ?? (current.fullPath && current.fullPath !== '/' && !current.fullPath.startsWith('/login')
+            ? current.fullPath
+            : null)
+        if (target) {
+          router.push({ name: 'login', query: { returnTo: target } })
+        } else {
+          router.push({ name: 'login' })
+        }
+      })
+      .catch(() => {
+        // Router not registered yet (e.g. test that exercises the store
+        // before main.ts mounted). Local state already cleared so the
+        // next navigation triggers the guard normally.
+      })
+  }
+
   return {
     user,
     state,
@@ -392,5 +448,6 @@ export const useAuthStore = defineStore('auth', () => {
     changePassword,
     hasRole,
     logout,
+    clearForUnauthorized,
   }
 })

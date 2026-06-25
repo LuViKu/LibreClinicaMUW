@@ -940,6 +940,20 @@ public class CrfJsonToWorkbookAdapter {
         m.put("FILE", "FILE");
         m.put("BL", "BL");
         m.put("BOOLEAN", "BL");
+        // 2026-06-23 user-feedback round — TRISTATE_REASON is the SPA
+        // authoring marker for the Ja / Nein / Unbekannt parent + its
+        // conditional reason child (see iopPreset / imagingAcquisitionPreset).
+        // The legacy SpreadSheetTableRepeating validator only knows the
+        // historical eleven ITEM_DATA_TYPE codes; writing
+        // "TRISTATE_REASON" verbatim into column 19 fails the parser's
+        // `ItemDataType.findByName(...)` lookup. Map it to ST on the
+        // wire — the runtime widget keys the segmented yes/no/unknown
+        // rendering off the response-set label + options, not the
+        // dataType, so the ST projection is lossless for the runtime
+        // path. The CrfJsonValidator already accepts TRISTATE_REASON as
+        // an authoring-level dataType; this just smooths over the
+        // legacy schema's vocabulary.
+        m.put("TRISTATE_REASON", "ST");
         DATA_TYPE_CANONICAL = java.util.Collections.unmodifiableMap(m);
     }
 

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd">
+
+    <!--
+      2026-06-22 — Per-event-definition retinal-inference task config.
+
+      The OCT upload portal currently hardcodes task='fluid' for every
+      enqueued retinal_inference_job. To let study admins configure
+      which biomarker pipelines run automatically per visit (study
+      event definition), we introduce a join table mapping
+      study_event_definition → {task}. The /commit upload flow reads
+      this table to fan the e2e out to one job per configured task,
+      replacing the single-task default.
+
+      Allowed values: 'fluid' (IRF/SRF/PED), 'ga' (geographic
+      atrophy), 'onl' (outer-nuclear-layer thickness), 'pr'
+      (photoreceptor thickness). Mirrors the runner profiles +
+      ALLOWED_RERUN_TASKS in RetinalResultsApiController.
+
+      Backfill: every existing study_event_definition gets one row
+      with task='fluid' so today's behaviour is preserved on first
+      deploy. Admins explicitly add ga / onl / pr to expand the
+      panel per visit.
+    -->
+    <changeSet id="2026-06-22-event-definition-retinal-tasks-table" author="muw">
+        <createTable tableName="event_definition_retinal_task">
+            <column name="id" type="BIGSERIAL">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="study_event_definition_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="task" type="VARCHAR(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_by_user_id" type="INT">
+                <constraints nullable="true"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            constraintName="fk_event_def_retinal_task_event_def"
+            baseTableName="event_definition_retinal_task"
+            baseColumnNames="study_event_definition_id"
+            referencedTableName="study_event_definition"
+            referencedColumnNames="study_event_definition_id"
+            onDelete="CASCADE"
+            onUpdate="RESTRICT"/>
+
+        <addForeignKeyConstraint
+            constraintName="fk_event_def_retinal_task_user"
+            baseTableName="event_definition_retinal_task"
+            baseColumnNames="created_by_user_id"
+            referencedTableName="user_account"
+            referencedColumnNames="user_id"
+            onDelete="RESTRICT"
+            onUpdate="RESTRICT"/>
+
+        <addUniqueConstraint
+            constraintName="ux_event_def_retinal_task"
+            tableName="event_definition_retinal_task"
+            columnNames="study_event_definition_id,task"/>
+
+        <createIndex
+            tableName="event_definition_retinal_task"
+            indexName="idx_event_def_retinal_task_def">
+            <column name="study_event_definition_id"/>
+        </createIndex>
+
+        <sql>
+            ALTER TABLE event_definition_retinal_task
+            ADD CONSTRAINT ck_event_def_retinal_task_allowed
+            CHECK (task IN ('fluid','ga','onl','pr'));
+        </sql>
+    </changeSet>
+
+    <changeSet id="2026-06-22-event-definition-retinal-tasks-backfill" author="muw">
+        <!--
+          Seed every existing study_event_definition with task='fluid' so
+          the SPA's commit flow keeps enqueueing exactly one fluid job
+          per upload until an admin explicitly broadens the panel.
+        -->
+        <sql>
+            INSERT INTO event_definition_retinal_task (study_event_definition_id, task, created_by_user_id)
+            SELECT sed.study_event_definition_id, 'fluid', NULL
+              FROM study_event_definition sed
+             WHERE NOT EXISTS (
+                SELECT 1 FROM event_definition_retinal_task t
+                 WHERE t.study_event_definition_id = sed.study_event_definition_id
+                   AND t.task = 'fluid'
+             );
+        </sql>
+    </changeSet>
+
+</databaseChangeLog>

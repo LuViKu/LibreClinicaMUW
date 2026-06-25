@@ -1,0 +1,37 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "muw-e2e-converter"
+version = "0.1.0"
+description = "Heidelberg .e2e -> bscan.dcm + SLO companion conversion. DR-024 single ingestion seam."
+requires-python = ">=3.11"
+authors = [
+    { name = "MUW Ophthalmology" },
+]
+# All conversion runtime deps live here so the retinal-inference cluster
+# deployment can install retinal-inference WITHOUT this package and skip
+# them entirely. See DR-024.
+dependencies = [
+    "oct-converter==0.7.0",
+    "pydicom==3.0.2",
+    "numpy>=1.26",
+    "pillow==11.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3",
+    "ruff>=0.7",
+    "mypy>=1.13",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

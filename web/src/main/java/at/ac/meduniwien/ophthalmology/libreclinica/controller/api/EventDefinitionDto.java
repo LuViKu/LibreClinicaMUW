@@ -24,6 +24,9 @@ import io.swagger.v3.oas.annotations.media.Schema;
  */
 @Schema(name = "EventDefinitionDto")
 public record EventDefinitionDto(
+        /** Numeric PK — needed by the SPA to address sub-resources
+         *  (e.g. {@code /event-definitions/{sedId}/retinal-tasks}). */
+        int sedId,
         String oid,
         String name,
         String description,

@@ -114,7 +114,7 @@ The strategic decision (2026-05-28) is to do this as a **hard fork** with a **fu
 
   **Counts:** unit suite 33 → 39 (+4 password + 2 framework); integration suite 67 → 74 (+3 audit-user-login extensions; the +4 from ConfigurationDaoTest were counted in the earlier 63 → 67).
 
-  **What's NOT done (still in the 20-test backlog):** items 1–2, 4–20 inclusive. The Castor characterisation IT subclasses (one per ODM code path: `ODMMetadataRestResource`, `ImportCRFDataServlet`, `MetaDataCollector`, `AdminDataCollector`, rule XSLT) are scaffold-ready: pick a code path, subclass `CastorCharacterisationIT`, capture a golden on first run, commit. The [Phase B execution playbook §B.0](docs/development/modernization/phase-b-execution-playbook.md#b0--castor-characterisation-tests-pre-flight) lists the five canonical code paths.
+  **What's NOT done (still in the 20-test backlog):** items 1–2, 4–20 inclusive. The Castor characterisation IT subclasses (one per ODM code path: `ODMMetadataRestResource`, `ImportCRFDataServlet`, `MetaDataCollector`, `AdminDataCollector`, rule XSLT) are scaffold-ready: pick a code path, subclass `CastorCharacterisationIT`, capture a golden on first run, commit. The [Phase B execution playbook §B.0](docs/development/modernization/archive/phase-b-execution-playbook.md#b0--castor-characterisation-tests-pre-flight) lists the five canonical code paths.
 
 #### Integration-test authoring pattern (post Phase 0.3)
 
@@ -234,9 +234,9 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 **Timeline:** 3–6 months
 **Risk:** high
 
-**Detailed execution plan:** see [docs/development/modernization/phase-b-execution-playbook.md](docs/development/modernization/phase-b-execution-playbook.md) for the pre-flight checklist, per-sub-phase ordering, per-step verification gates, Castor characterisation strategy, and per-sub-phase risk register.
+**Detailed execution plan:** see [docs/development/modernization/archive/phase-b-execution-playbook.md](docs/development/modernization/archive/phase-b-execution-playbook.md) for the pre-flight checklist, per-sub-phase ordering, per-step verification gates, Castor characterisation strategy, and per-sub-phase risk register.
 
-**Companion: per-dependency mapping:** [docs/development/modernization/phase-b-dependency-analysis.md](docs/development/modernization/phase-b-dependency-analysis.md).
+**Companion: per-dependency mapping:** [docs/development/modernization/archive/phase-b-dependency-analysis.md](docs/development/modernization/archive/phase-b-dependency-analysis.md).
 
 ### Sequencing
 
@@ -312,7 +312,7 @@ Dependency bumps (all stay on `javax.*` namespace — final 5.x line):
 
 ### D-Sec — authentication modernization (primary, sequential)
 
-Production-deployment-blocking. Full plan: [phase-d-execution-playbook.md](docs/development/modernization/phase-d-execution-playbook.md). Pre-flight inventory: [phase-d-pre-flight-inventory.md](docs/development/modernization/phase-d-pre-flight-inventory.md).
+Production-deployment-blocking. Full plan: [phase-d-execution-playbook.md](docs/development/modernization/phase-d-execution-playbook.md). Pre-flight inventory: [phase-d-pre-flight-inventory.md](docs/development/modernization/archive/phase-d-pre-flight-inventory.md).
 
 | Sub-phase | What | Risk |
 |-----------|------|------|

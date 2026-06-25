@@ -41,7 +41,8 @@ class EventCrfStartApiControllerTest extends AbstractApiControllerTest {
 
     private MockMvc mockMvcWith() {
         return mockMvcFor(new EventsApiController(mockDataSource(),
-                Mockito.mock(SiteVisibilityFilter.class)));
+                Mockito.mock(SiteVisibilityFilter.class),
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator.class)));
     }
 
     @Test

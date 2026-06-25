@@ -59,5 +59,31 @@
   <include  file="migration/lc-muw-2026-06-11-ophth-field-catalog.xml"/>
   <include  file="migration/lc-muw-2026-06-12-ophth-v2-catalog-alignment.xml"/>
   <include  file="migration/lc-muw-2026-06-12-modality-oid-aliases.xml"/>
+  <include  file="migration/lc-muw-2026-06-18-retinal-job-event-crf-nullable.xml"/>
+  <include  file="migration/lc-muw-2026-06-18-retinal-job-parked-status.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-retinal-job-remote-pending-status.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-audit-types-retinal-followups.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-seed-oct-portal-fixture.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-retinal-job-e2e-sha256.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-retinal-job-sha256-scan-index-unique.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-audit-type-retinal-retry.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-event-cancel-reasons.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-study-subject-patient-uuid.xml"/>
+  <include  file="migration/lc-muw-2026-06-19-event-scheduled-interval.xml"/>
+  <include  file="migration/lc-muw-2026-06-20-namd-visit-crf-seed.xml"/>
+  <include  file="migration/lc-muw-2026-06-20-item-data-source-retinal-job.xml"/>
+  <include  file="migration/lc-muw-2026-06-20-namd-visit-ai-items.xml"/>
+  <include  file="migration/lc-muw-2026-06-20-patient-table.xml"/>
+  <include  file="migration/lc-muw-2026-06-20-study-subject-patient-id-nullable.xml"/>
+  <include  file="migration/lc-muw-2026-06-21-study-module-enrollment.xml"/>
+  <include  file="migration/lc-muw-2026-06-22-seed-ris-amd-admin-grants.xml"/>
+  <include  file="migration/lc-muw-2026-06-22-upgrade-root-coordinator-grants.xml"/>
+  <include  file="migration/lc-muw-2026-06-22-retinal-job-multitask-unique.xml"/>
+  <include  file="migration/lc-muw-2026-06-22-event-definition-retinal-tasks.xml"/>
+  <include  file="migration/lc-muw-2026-06-23-retinal-job-study-event-id.xml"/>
+  <include  file="migration/lc-muw-2026-06-23-retinal-job-acquisition-date.xml"/>
+  <include  file="migration/lc-muw-2026-06-24-audit-event-type-bcva-entry-public.xml"/>
+  <include  file="migration/lc-muw-2026-06-24-namd-visit-crt-items.xml"/>
+  <include  file="migration/lc-muw-2026-06-24-event-def-retinal-tasks-layers.xml"/>
 </databaseChangeLog>
 

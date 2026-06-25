@@ -55,7 +55,14 @@ public class CrfJsonValidator {
      * {@link CrfJsonToWorkbookAdapter}.
      */
     private static final Set<String> ALLOWED_DATA_TYPES = Set.of(
-            "ST", "INTEGER", "INT", "REAL", "DATE", "PDATE", "FILE", "BL", "BOOLEAN");
+            "ST", "INTEGER", "INT", "REAL", "DATE", "PDATE", "FILE", "BL", "BOOLEAN",
+            // 2026-06-21 user-feedback batch — TRISTATE_REASON is a
+            // first-class SPA-canvas data type (Ja/Nein/Unbekannt +
+            // bedingtes Begründungsfeld). The IOP preset emits it; the
+            // validator was rejecting every preset save. Accept here
+            // so the adapter's mapping (single-select with three
+            // canonical options) can land downstream.
+            "TRISTATE_REASON");
 
     /** Data types that <em>are</em> numeric (regex sanity allows numerics). */
     private static final Set<String> NUMERIC_TYPES = Set.of(
@@ -181,7 +188,7 @@ public class CrfJsonValidator {
             out.add(fe(iPrefix + ".dataType", "Data type is required"));
         } else if (!ALLOWED_DATA_TYPES.contains(dataType)) {
             out.add(fe(iPrefix + ".dataType",
-                    "Data type must be one of ST, INTEGER/INT, REAL, DATE, PDATE, FILE, BL"));
+                    "Data type must be one of ST, INTEGER/INT, REAL, DATE, PDATE, FILE, BL, TRISTATE_REASON"));
         }
         if (item == null) return;
         // ---- response set ----

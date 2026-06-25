@@ -1,0 +1,139 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        Wave 1A — app-feedback batch. Institution-wide cancel-reason
+        catalog the SPA renders when the operator soft-cancels a
+        scheduled visit. Replaces the native browser confirm() with a
+        modal that requires picking a reason; the "Other" row reveals
+        a free-text field.
+
+        Schema choices.
+          - code VARCHAR(64) PK — stable handle the controller validates
+            JSON bodies against. Codes are screamed-snake (e.g.
+            PATIENT_NO_SHOW) to match the existing audit_log_event_type
+            naming convention.
+          - label_de / label_en NOT NULL — clinical strings cannot be
+            blank. DE wins at MUW; EN ships with [NEEDS_REVIEW] markers
+            via the SPA-side i18n until a translator sweeps them.
+          - sort_order in 10s so future inserts can land between
+            existing rows without resorting.
+          - is_other BOOLEAN — marks the row that requires a non-blank
+            cancel_reason_text on the wire (only one row carries this).
+
+        New columns on study_event:
+          - cancel_reason_code — FK to study_event_cancel_reason.code,
+            nullable for back-compat with historical cancellations that
+            predate this catalog.
+          - cancel_reason_text — TEXT NULL, populated when is_other=TRUE.
+
+        Seed rows cover the explicit clinical use case ("Intervall
+        geändert 3→6 Monate") plus the obvious cancellation reasons
+        the head of clinic surfaced. The OTHER row gates free-text on
+        the controller side.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-19-event-cancel-reason-table">
+        <preConditions onFail="MARK_RAN">
+            <not><tableExists tableName="study_event_cancel_reason"/></not>
+        </preConditions>
+        <createTable tableName="study_event_cancel_reason">
+            <column name="code" type="VARCHAR(64)">
+                <constraints nullable="false" primaryKey="true"
+                             primaryKeyName="pk_study_event_cancel_reason"/>
+            </column>
+            <column name="label_de" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="label_en" type="VARCHAR(200)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sort_order" type="INT" defaultValueNumeric="100">
+                <constraints nullable="false"/>
+            </column>
+            <column name="is_other" type="BOOLEAN" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="now()">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-06-19-event-cancel-reason-seed">
+        <preConditions onFail="MARK_RAN">
+            <sqlCheck expectedResult="0">
+                SELECT COUNT(*) FROM study_event_cancel_reason;
+            </sqlCheck>
+        </preConditions>
+        <comment>Seed the six institution-wide cancel reasons.</comment>
+        <insert tableName="study_event_cancel_reason">
+            <column name="code" value="PATIENT_NO_SHOW"/>
+            <column name="label_de" value="Patient nicht erschienen"/>
+            <column name="label_en" value="Patient did not attend"/>
+            <column name="sort_order" valueNumeric="10"/>
+            <column name="is_other" valueBoolean="false"/>
+        </insert>
+        <insert tableName="study_event_cancel_reason">
+            <column name="code" value="INTERVAL_CHANGE_3_TO_6M"/>
+            <column name="label_de" value="Intervall geändert (3→6 Monate)"/>
+            <column name="label_en" value="Schedule changed (3→6 months)"/>
+            <column name="sort_order" valueNumeric="20"/>
+            <column name="is_other" valueBoolean="false"/>
+        </insert>
+        <insert tableName="study_event_cancel_reason">
+            <column name="code" value="STUDY_WITHDRAWAL"/>
+            <column name="label_de" value="Studienabbruch"/>
+            <column name="label_en" value="Study withdrawal"/>
+            <column name="sort_order" valueNumeric="30"/>
+            <column name="is_other" valueBoolean="false"/>
+        </insert>
+        <insert tableName="study_event_cancel_reason">
+            <column name="code" value="DEVICE_UNAVAILABLE"/>
+            <column name="label_de" value="Gerät nicht verfügbar"/>
+            <column name="label_en" value="Device unavailable"/>
+            <column name="sort_order" valueNumeric="40"/>
+            <column name="is_other" valueBoolean="false"/>
+        </insert>
+        <insert tableName="study_event_cancel_reason">
+            <column name="code" value="RESCHEDULED"/>
+            <column name="label_de" value="Verschoben"/>
+            <column name="label_en" value="Rescheduled"/>
+            <column name="sort_order" valueNumeric="50"/>
+            <column name="is_other" valueBoolean="false"/>
+        </insert>
+        <insert tableName="study_event_cancel_reason">
+            <column name="code" value="OTHER"/>
+            <column name="label_de" value="Sonstiges (Freitext)"/>
+            <column name="label_en" value="Other (free text)"/>
+            <column name="sort_order" valueNumeric="90"/>
+            <column name="is_other" valueBoolean="true"/>
+        </insert>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-06-19-study-event-cancel-reason-columns">
+        <preConditions onFail="MARK_RAN">
+            <and>
+                <tableExists tableName="study_event"/>
+                <not><columnExists tableName="study_event" columnName="cancel_reason_code"/></not>
+            </and>
+        </preConditions>
+        <addColumn tableName="study_event">
+            <column name="cancel_reason_code" type="VARCHAR(64)"/>
+            <column name="cancel_reason_text" type="TEXT"/>
+        </addColumn>
+        <addForeignKeyConstraint
+            baseTableName="study_event"
+            baseColumnNames="cancel_reason_code"
+            constraintName="fk_study_event_cancel_reason"
+            referencedTableName="study_event_cancel_reason"
+            referencedColumnNames="code"
+            onDelete="SET NULL"
+            onUpdate="CASCADE"/>
+    </changeSet>
+
+</databaseChangeLog>

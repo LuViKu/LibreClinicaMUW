@@ -429,8 +429,16 @@ public class EyeCohortTransitionsApiController {
             // the same 500 envelope existing callers expect.
             LOG.error("Eye cohort transition failed for source_ss={} eye={} target_study={}: {}",
                     sourceSs.getId(), eye, targetStudy.getOid(), e.getMessage(), e);
-            return ResponseEntity.status(500).body(Map.of(
-                    "message", "Failed to commit eye cohort transition — see server log."));
+            // 2026-06-21 user-feedback round 4 — the bare "see server log"
+            // message stranded operators without a usable hint. Surface the
+            // exception message verbatim when it's short + non-sensitive; a
+            // stack-trace string would leak SQL internals so we cap length
+            // and strip everything past the first newline.
+            String hint = sanitizeFailureHint(e);
+            String message = hint != null && !hint.isBlank()
+                    ? "Augenübergang konnte nicht festgeschrieben werden: " + hint
+                    : "Augenübergang konnte nicht festgeschrieben werden (siehe Server-Protokoll).";
+            return ResponseEntity.status(500).body(Map.of("message", message));
         }
 
         // doTransitionPersist returns either a ResponseEntity (early
@@ -1129,6 +1137,27 @@ public class EyeCohortTransitionsApiController {
     }
 
     private static String nz(String s) { return s == null ? "" : s; }
+
+    /**
+     * 2026-06-21 user-feedback round 4 — produce a short, single-line
+     * hint string from a server-side exception so the operator-facing
+     * 500 envelope explains the why without leaking a stack trace.
+     * Returns {@code null} when the exception carries no useful message.
+     */
+    private static String sanitizeFailureHint(Throwable e) {
+        Throwable cause = e;
+        while (cause != null) {
+            String msg = cause.getMessage();
+            if (msg != null && !msg.isBlank()) {
+                String firstLine = msg.split("\\R", 2)[0].trim();
+                if (firstLine.length() > 240) firstLine = firstLine.substring(0, 240) + "…";
+                return firstLine;
+            }
+            if (cause.getCause() == cause) break;
+            cause = cause.getCause();
+        }
+        return null;
+    }
 
     private static String truncate(String s, int max) {
         if (s == null) return "";

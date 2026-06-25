@@ -16,10 +16,35 @@ dependencies = [
     "pydantic==2.10.4",
     "pydantic-settings==2.7.0",
     "psycopg2-binary==2.9.10",
-    "pillow==11.0.0",
+    "pydicom==3.0.2",
+    # numpy>=2.1 dropped glibc-2.17 (manylinux2014) wheels, which the CentOS 7
+    # GPU cluster needs. A floor keeps modern deploys current; pin numpy<2.1 at
+    # install time on the cluster (see docs/cluster-deployment.md §2).
+    "numpy>=1.26",
+    # FastAPI multipart parsing for POST /run (DR-022). UploadFile+Form rely on
+    # python-multipart at request time even though it's not a direct fastapi
+    # dependency.
+    "python-multipart==0.0.20",
 ]
 
 [project.optional-dependencies]
+# DR-024 — the .e2e -> bscan.dcm ingestion seam moved out into the
+# `muw-e2e-converter` package (sibling directory in this repo). The
+# LOCAL `retinal-preprocess` docker service installs it via the
+# Dockerfile (which pip-installs ../muw-e2e-converter explicitly); the
+# cluster's bare-metal cn5 deployment deliberately does NOT install it
+# (the cluster's ApptainerAdapter rejects .e2e). The cluster's
+# /preprocess endpoint, if mistakenly enabled, returns HTTP 503 with
+# a clear pointer to DR-024.
+#
+# This `[converter]` extra is documentation: it lists the sibling
+# package as a dependency for editor / IDE / local-pip workflows. The
+# Docker build install path uses pip install -e ../muw-e2e-converter
+# directly rather than this extra (path-style URLs in PEP 508 extras
+# have spotty resolver support across pip versions).
+converter = [
+    "muw-e2e-converter",
+]
 dev = [
     "pytest>=8.3",
     "httpx>=0.27",

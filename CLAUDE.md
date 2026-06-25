@@ -20,7 +20,7 @@ Quick orientation for AI assistants working in this repo. Human contributors: se
 | Namespace | `jakarta.*` | (achieved) |
 | Java packages | `at.ac.meduniwien.ophthalmology.libreclinica.*` | (achieved — DR-010) |
 | Build group | `at.ac.meduniwien.ophthalmology.libreclinica` | (unchanged) |
-| Version | `1.4.0rc1-muw` | continues with `-muw` suffix |
+| Version | `1.5.0-beta.2-muw` | continues with `-muw` suffix |
 
 ## Build & run
 
@@ -81,6 +81,7 @@ Dependabot updates weekly (`.github/dependabot.yml`), grouped by ecosystem (Spri
 | [`odm/`](odm/) | CDISC ODM 1.3 JAXB bindings |
 | [`docs/`](docs/) | Jekyll-style static documentation |
 | [`docs/development/modernization/`](docs/development/modernization/) | Decision records, modernization-specific docs |
+| [`docs/development/study-modules/`](docs/development/study-modules/) | SPA study-module SPI — start with [authoring.md](docs/development/study-modules/authoring.md) when writing a new module |
 | [`docker/`](docker/) | Runtime config (`datainfo.properties`, logback.xml) |
 
 Java packages live under `at.ac.meduniwien.ophthalmology.libreclinica.*` since Phase B.11 (2026-05-29). The heritage `org.akaza.openclinica.*` namespace was renamed in commit `4f531f9f7` per DR-010. Liquibase changelogs under `core/src/main/resources/migration/` keep historical `org.akaza.openclinica` references in column-comment strings — those are historical data, not class refs, and changing them would break checksum validation.
@@ -96,6 +97,7 @@ git-flow: `master` (production), `lc-develop` (integration), short-lived `featur
 - **Hard fork from upstream** — for context on why and how cherry-picks work, see [decision record DR-003](docs/development/modernization/decision-record.md#dr-003--hard-fork-from-upstream-reliateclibreclinica).
 - **Clinical-data system** — don't ship unverified changes. Bump dependency versions one batch at a time, verify with `mvn compile` (or `mvn test` post Phase 0).
 - **`docs/manuals/`** is for end-user documentation; **`docs/development/`** is for developers; **`MIGRATION.md`** is the modernization spine.
+- **Retinal-inference can run remotely on a GPU host** — see [DR-022](docs/development/modernization/decision-record.md#dr-022--remote-stateless-gpu-sidecar-for-retinal-inference) + the [runbook](docs/development/modernization/retinal-inference-remote-deployment.md). Single-host dev compose keeps working when `core.retinalInference.remotePushUrl` is blank.
 
 ## When making suggestions
 

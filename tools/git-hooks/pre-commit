@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Pre-commit hook — warn about OpenAPI / api.ts drift.
+#
+# When any web API controller is staged, but the SPA's generated
+# OpenAPI types file isn't, the committer is almost certainly about
+# to push a change that fails CI's `Fail on api.ts drift` step.
+# This hook surfaces that risk at commit time instead of after the
+# next push round-trip.
+#
+# Install:
+#
+#   tools/git-hooks/install.sh
+#
+# This hook only warns — it never blocks the commit. Pass --no-verify
+# if you want git to skip it entirely. The check is intentionally
+# permissive: it does not run codegen itself (that would require a
+# live compose stack which is the wrong cost for every commit).
+
+set -u
+
+# ANSI helpers — only enabled on a TTY.
+if [[ -t 2 ]]; then
+  YELLOW=$'\033[33m'
+  CYAN=$'\033[36m'
+  RESET=$'\033[0m'
+else
+  YELLOW=""
+  CYAN=""
+  RESET=""
+fi
+
+# List the files staged for THIS commit. --diff-filter=ACMR includes
+# adds, copies, modifications, renames — anything that ends up in the
+# tree. We don't care about deletes.
+STAGED=$(git diff --name-only --cached --diff-filter=ACMR)
+
+# Any backend API controller in this commit?
+CONTROLLER_HITS=$(printf '%s\n' "$STAGED" \
+  | grep -E '^web/src/main/java/.*/controller/api/.*ApiController\.java$' \
+  || true)
+
+# Is the generated SPA types file ALSO staged?
+API_TS_STAGED=$(printf '%s\n' "$STAGED" \
+  | grep -E '^web/src/spa/src/types/api\.ts$' \
+  || true)
+
+if [[ -n "$CONTROLLER_HITS" && -z "$API_TS_STAGED" ]]; then
+  echo >&2
+  echo "${YELLOW}⚠  OpenAPI drift risk${RESET} — the following API controllers are staged:" >&2
+  while IFS= read -r f; do
+    echo "    ${CYAN}$f${RESET}" >&2
+  done <<<"$CONTROLLER_HITS"
+  echo >&2
+  echo "    ...but ${CYAN}web/src/spa/src/types/api.ts${RESET} is not." >&2
+  echo >&2
+  echo "    If your change altered any request/response shape or added/removed an endpoint, CI's" >&2
+  echo "    ${CYAN}Fail on api.ts drift${RESET} step will fail this commit on the next push." >&2
+  echo >&2
+  echo "    Regen locally against a running compose stack and commit the result:" >&2
+  echo >&2
+  echo "        docker compose up -d --build libreclinica db smtp" >&2
+  echo "        cd web/src/spa && pnpm run codegen:openapi" >&2
+  echo "        git add web/src/spa/src/types/api.ts && git commit --amend --no-edit" >&2
+  echo >&2
+  echo "    (This hook never blocks. Pass --no-verify to silence it.)" >&2
+  echo >&2
+fi
+
+exit 0

@@ -64,6 +64,14 @@ public record CrfEntryDto(
         String eventCrfOid,
         String subjectId,
         String eventLabel,
+        /**
+         * 2026-06-21 user-feedback round 5 — parent study_event.id so
+         * the SPA's CrfEntryView can return the operator to the matching
+         * EventDetailView after Mark complete. Nullable for forward-
+         * compat (older responses won't carry the field; the SPA falls
+         * back to subject-detail navigation).
+         */
+        Integer studyEventId,
         CrfSchemaDto schema,
         Map<String, Object> values,
         List<CrfItemGroupDto> groups,

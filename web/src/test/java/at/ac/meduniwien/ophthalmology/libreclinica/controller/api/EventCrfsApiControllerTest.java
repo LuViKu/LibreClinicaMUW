@@ -43,7 +43,8 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
         return mockMvcFor(new EventCrfsApiController(mockDataSource(),
                 Mockito.mock(SiteVisibilityFilter.class),
                 Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.crf.CrfFileStorageService.class),
-                new EventCrfPresenceRegistry()));
+                new EventCrfPresenceRegistry(),
+                Mockito.mock(at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator.class)));
     }
 
     /* ---------------------------------------------------------------------- */
@@ -600,5 +601,39 @@ class EventCrfsApiControllerTest extends AbstractApiControllerTest {
         String json = "{\"sourceItemOid\":\"I_X\",\"comparator\":\"==\",\"literal\":\"say \\\"hi\\\"\"}";
         org.junit.jupiter.api.Assertions.assertEquals(
                 "say \"hi\"", EventCrfsApiController.extractJsonField(json, "literal"));
+    }
+
+    /* ---------------------------------------------------------------------- */
+    /* App-feedback Wave 1D (2026-06-19) — GET previous-values guard contract */
+    /* ---------------------------------------------------------------------- */
+
+    @Test
+    void previousValuesReturns401WhenAnonymous() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/previous-values")
+                .session((org.springframework.mock.web.MockHttpSession) emptySession()))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void previousValuesReturns400WhenNoActiveStudy() throws Exception {
+        mockMvcWith().perform(get("/api/v1/eventCrfs/1/previous-values")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSessionWithoutStudy(1, "root")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message")
+                        .value(containsString("No active study")));
+    }
+
+    @Test
+    void previousValuesPastGuardsBubblesNpeFromMockDao() throws Exception {
+        // The mock DataSource throws on getConnection() (see
+        // saveItemsReturns500OnInvalidJson pattern above) so this 500
+        // documents that the endpoint passes auth + active-study guards
+        // and reaches the DAO. The happy-path 404 / 200 semantics are
+        // exercised by EventCrfsApiControllerPreviousValuesIT.
+        mockMvcWith().perform(get("/api/v1/eventCrfs/9999/previous-values")
+                .session((org.springframework.mock.web.MockHttpSession)
+                        authenticatedSession(1, "root", 1, "S_DEFAULTS1", "Default Study")))
+                .andExpect(status().isInternalServerError());
     }
 }

@@ -22,7 +22,7 @@
  * BL is explicitly "Nein"). Wire contract: `'1'` = Yes, `'0'` = No,
  * empty / null / undefined = unanswered (neither radio selected).
  */
-import { computed } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import FieldLabel from './FieldLabel.vue'
@@ -99,6 +99,16 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'update:modelValue': [value: unknown]
+  /**
+   * App-feedback Wave 1D (2026-06-19) — emitted by the TRISTATE_REASON
+   * widget when the operator types into the conditional reason
+   * textarea. The parent ({@link CrfEntryView}) routes the text into
+   * the sibling reason item (resolved via the show-when discovery on
+   * the schema side). Separate from {@code update:modelValue} because
+   * the parent radio's wire value (Ja / Nein / Unbekannt token) is
+   * persisted to a different item_data row than the reason text.
+   */
+  'update:tristate-reason': [value: string]
   'upload-file': [file: File]
   'clear-file': []
   'report-validation': [payload: { itemOid: string; errorMessage: string }]
@@ -189,7 +199,22 @@ const isYesNoNo = computed(() => {
  * </ul>
  */
 type OphthPresentation = {
-  widget: 'standard' | 'number-stepper' | 'snellen' | 'segmented-yesno' | 'conditional-reason'
+  widget:
+    | 'standard'
+    | 'number-stepper'
+    | 'snellen'
+    | 'segmented-yesno'
+    | 'conditional-reason'
+    /**
+     * App-feedback Wave 1D (2026-06-19) — tri-state radio chip set
+     * (Ja / Nein / Unbekannt) backing the {@code TRISTATE_REASON}
+     * authoring type. Detected via the OID-suffix heuristic
+     * ({@code *_TRISTATE}) so a non-catalogued spreadsheet-uploaded
+     * CRF can opt in without a catalog row. Wire format on the parent
+     * item: select-one with three options (codes {@code ja} / {@code nein}
+     * / {@code unbekannt} OR canonical {@code 1} / {@code 0} / {@code 2}).
+     */
+    | 'tristate-radio'
   unit?: string
 }
 const ophthPresentation = computed<OphthPresentation>(() => {
@@ -237,6 +262,25 @@ const ophthPresentation = computed<OphthPresentation>(() => {
   }
   if (tail.endsWith('_DONE_REASON')) {
     return { widget: 'conditional-reason' }
+  }
+  // App-feedback Wave 1D (2026-06-19) — TRISTATE_REASON parent items
+  // detected via the {@code *_TRISTATE} OID suffix OR by carrying
+  // exactly three options with one matching the "unbekannt" / "unknown"
+  // token. Backed by the same select-one wire shape as segmented-yesno
+  // so legacy XLS uploads stay compatible.
+  if (tail.endsWith('_TRISTATE')) {
+    return { widget: 'tristate-radio' }
+  }
+  if (
+    props.item.dataType === 'select-one' &&
+    props.item.options &&
+    props.item.options.length === 3 &&
+    props.item.options.some((o) => {
+      const c = String(o.code).toLowerCase()
+      return c === 'unbekannt' || c === 'unknown' || c === '2'
+    })
+  ) {
+    return { widget: 'tristate-radio' }
   }
   if (tail.endsWith('_DONE') || tail.endsWith('_DURCHGEFUEHRT')) {
     return { widget: 'segmented-yesno' }
@@ -314,6 +358,159 @@ const conditionalActivationLabel = computed<string>(() => {
 })
 
 /**
+ * App-feedback Wave 1D (2026-06-19) — TRISTATE_REASON widget. Three
+ * radio chips with wire tokens {@code 1} / {@code 0} / {@code 2}
+ * (matching the canonical BL contract for Ja / Nein, plus an
+ * Unbekannt sentinel that the runtime treats as "answered but no
+ * follow-up needed"). Falls back to operator-authored option codes
+ * when the item carries explicit {@code item.options} so a legacy
+ * XLS-uploaded CRF with German-coded options ({@code ja|Ja,nein|Nein,
+ * unbekannt|Unbekannt}) round-trips cleanly.
+ */
+const tristateYesToken = computed<string>(() => {
+  const opts = props.item.options
+  if (opts && opts.length >= 1) return opts[0].code
+  return '1'
+})
+const tristateNoToken = computed<string>(() => {
+  const opts = props.item.options
+  if (opts && opts.length >= 2) return opts[1].code
+  return '0'
+})
+const tristateUnknownToken = computed<string>(() => {
+  const opts = props.item.options
+  if (opts && opts.length >= 3) return opts[2].code
+  return '2'
+})
+const isTristateYes = computed(() => {
+  if (props.modelValue == null || props.modelValue === '') return false
+  return String(props.modelValue) === tristateYesToken.value
+})
+const isTristateNo = computed(() => {
+  if (props.modelValue == null || props.modelValue === '') return false
+  return String(props.modelValue) === tristateNoToken.value
+})
+const isTristateUnknown = computed(() => {
+  if (props.modelValue == null || props.modelValue === '') return false
+  return String(props.modelValue) === tristateUnknownToken.value
+})
+const tristateRadioName = computed(() => `tristate-radio-${props.item.oid}`)
+
+/**
+ * App-feedback Wave 1D (2026-06-19) — synthetic child-reason value
+ * for the TRISTATE_REASON parent. The reason text lives on a SEPARATE
+ * item_data row (the sibling reason item authored alongside the
+ * parent — see the {@code AuthoringDataType.TRISTATE_REASON} contract).
+ * For the runtime renderer we store the reason in the parent widget
+ * state via a ref so the caller's modelValue stays the canonical
+ * Ja/Nein/Unbekannt token; the parent emits an additional
+ * {@code update:tristate-reason} event whenever the reason text
+ * changes so the entry view can persist it on the sibling item.
+ *
+ * <p>When the parent is NOT 'Nein', the reason field is hidden and
+ * its text is preserved in-memory (matches the {@code hiddenValues}
+ * spec — the show-when machinery already guards persistence).
+ */
+const tristateReason = ref<string>('')
+
+/** Tracks the reveal so we can autofocus the textarea exactly once. */
+const tristateReasonInput = ref<HTMLTextAreaElement | null>(null)
+watch(isTristateNo, async (now, prev) => {
+  if (now && !prev) {
+    await nextTick()
+    tristateReasonInput.value?.focus()
+  }
+})
+
+function onTristateSelect(token: string): void {
+  emit('update:modelValue', token)
+}
+
+function onTristateReasonInput(event: Event): void {
+  const v = (event.target as HTMLTextAreaElement).value
+  tristateReason.value = v
+  // The parent emits the same {@code update:modelValue} event with a
+  // composite payload when the reason changes so the entry store can
+  // route the text into the sibling reason item via the show-when
+  // discovery on the schema side. The caller passes a sibling-OID
+  // resolver into the widget so the dispatch lands on the right item.
+  emit('update:tristate-reason', v)
+}
+
+/**
+ * App-feedback Wave 1D (2026-06-19) — the conditional-field
+ * interactivity bug fix. Resolve a parent value for the
+ * conditional-reason widget that does NOT depend on a catalog entry.
+ *
+ * <p><b>Root cause:</b> previously the widget required a non-blank
+ * {@code catalogEntry.conditionalShowWhenValue} before the textarea
+ * would enable itself (see {@link conditionalReasonState} above).
+ * For items routed into the conditional-reason branch via the
+ * OID-suffix heuristic ({@code *_DONE_REASON}), no catalog entry
+ * exists — so the textarea stayed permanently disabled even after
+ * the parent flipped to "Nein".
+ *
+ * <p>The fix: derive the show-when literal + parent value from
+ * (a) the catalog when available, (b) the item's {@code showWhen}
+ * rule when present, OR (c) the caller-supplied {@code parentValue}
+ * prop as a last resort. Whichever source produces a non-null
+ * literal + the parent matches it, the textarea activates.
+ */
+const conditionalReasonStateFallback = computed<ConditionalReasonState>(() => {
+  if (ophthPresentation.value.widget !== 'conditional-reason') return 'inactive'
+  // Catalog path already handled by conditionalReasonState above; this
+  // fallback only fires when the catalog returns null but the item
+  // still routes into the conditional-reason widget via the OID
+  // heuristic.
+  if (catalogEntry.value != null) return conditionalReasonState.value
+  // Heuristic-only branch: the parent's value is provided via the
+  // parentValue prop (CrfEntryView's parentValueFor helper now
+  // resolves it from the item's show-when rule). If no parent value is
+  // supplied OR the value is blank, treat as inactive.
+  const parent = props.parentValue
+  if (parent == null || String(parent).trim() === '') return 'inactive'
+  // Without a catalog entry we don't know which literal value should
+  // unlock the textarea. The simplest robust contract: any non-blank
+  // parent value unlocks editing (the show-when machinery already
+  // guards the widget's visibility — if the operator can see the
+  // reason field, they should be able to type into it).
+  const own = props.modelValue
+  const ownIsEmpty = own == null || String(own).trim() === ''
+  return ownIsEmpty ? 'active-empty' : 'active-filled'
+})
+
+/**
+ * The effective conditional-reason state used by the template. Falls
+ * back to {@link conditionalReasonStateFallback} when the catalog
+ * resolver returns 'inactive' so heuristic-only items still activate.
+ */
+const conditionalReasonStateEffective = computed<ConditionalReasonState>(() => {
+  const catalogState = conditionalReasonState.value
+  if (catalogState !== 'inactive') return catalogState
+  return conditionalReasonStateFallback.value
+})
+
+/**
+ * App-feedback Wave 1D (2026-06-19) — autofocus the conditional
+ * reason input on first reveal. Mirrors the tri-state reason
+ * textarea behaviour so the operator's cursor lands directly in the
+ * field that just appeared (no second click required).
+ */
+const conditionalReasonInputRef = ref<HTMLInputElement | null>(null)
+watch(
+  () => conditionalReasonStateEffective.value,
+  async (now, prev) => {
+    if (
+      (now === 'active-empty' || now === 'active-filled') &&
+      (prev === 'inactive' || prev === undefined)
+    ) {
+      await nextTick()
+      conditionalReasonInputRef.value?.focus()
+    }
+  },
+)
+
+/**
  * Snellen widget state — model-value is stored as `"20/40"`. Two
  * controlled mini-inputs read the numerator/denominator halves and
  * re-join on every edit. Empty halves serialise as `null` so the
@@ -357,6 +554,107 @@ function fileRef(): { filename: string; bytes: number } | null {
       <slot name="label-extras" />
     </FieldLabel>
 
+    <!-- App-feedback Wave 1D (2026-06-19) — TRISTATE_REASON parent
+         widget. Three radio chips (Ja / Nein / Unbekannt) plus an
+         inline reason textarea that reveals when the operator picks
+         "Nein". Detected via the OID-suffix {@code *_TRISTATE} OR an
+         explicit three-option select-one item carrying an "unbekannt"
+         token (see {@link ophthPresentation} above). Goes BEFORE the
+         segmented-yesno branch so a {@code *_TRISTATE_DONE} suffix
+         wins over the generic {@code *_DONE} heuristic. -->
+    <template v-if="ophthPresentation.widget === 'tristate-radio'">
+      <div
+        role="radiogroup"
+        :aria-invalid="hasError || undefined"
+        :aria-labelledby="suppressLabel ? undefined : `${inputId}-label`"
+        class="inline-flex gap-1 p-1 bg-slate-100 border border-slate-200 rounded-[13px]"
+        :class="{ 'opacity-60': disabled }"
+        data-testid="tristate-radiogroup"
+      >
+        <button
+          :id="`${inputId}-ja`"
+          type="button"
+          :name="tristateRadioName"
+          :disabled="disabled"
+          class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[9px] text-[14px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-muw-blue-500"
+          :class="isTristateYes
+            ? 'bg-white text-muw-teal-700 shadow-[0_1px_2px_rgba(17,29,78,0.14),0_0_0_1px_rgba(17,29,78,0.03)]'
+            : 'text-slate-600 hover:text-slate-900'"
+          :data-testid="`tristate-radio-Ja`"
+          @click="onTristateSelect(tristateYesToken)"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-muw-teal-700 transition-opacity"
+            :class="isTristateYes ? 'opacity-100' : 'opacity-0'"
+          ></span>
+          {{ t('crfItem.tristate.tristateYes') }}
+        </button>
+        <button
+          :id="`${inputId}-nein`"
+          type="button"
+          :name="tristateRadioName"
+          :disabled="disabled"
+          class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[9px] text-[14px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-muw-blue-500"
+          :class="isTristateNo
+            ? 'bg-white text-muw-coral-700 shadow-[0_1px_2px_rgba(17,29,78,0.14),0_0_0_1px_rgba(17,29,78,0.03)]'
+            : 'text-slate-600 hover:text-slate-900'"
+          :data-testid="`tristate-radio-Nein`"
+          @click="onTristateSelect(tristateNoToken)"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-muw-coral-700 transition-opacity"
+            :class="isTristateNo ? 'opacity-100' : 'opacity-0'"
+          ></span>
+          {{ t('crfItem.tristate.tristateNo') }}
+        </button>
+        <button
+          :id="`${inputId}-unbekannt`"
+          type="button"
+          :name="tristateRadioName"
+          :disabled="disabled"
+          class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-[9px] text-[14px] font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-muw-blue-500"
+          :class="isTristateUnknown
+            ? 'bg-white text-slate-700 shadow-[0_1px_2px_rgba(17,29,78,0.14),0_0_0_1px_rgba(17,29,78,0.03)]'
+            : 'text-slate-600 hover:text-slate-900'"
+          :data-testid="`tristate-radio-Unbekannt`"
+          @click="onTristateSelect(tristateUnknownToken)"
+        >
+          <span
+            class="w-1.5 h-1.5 rounded-full bg-slate-500 transition-opacity"
+            :class="isTristateUnknown ? 'opacity-100' : 'opacity-0'"
+          ></span>
+          {{ t('crfItem.tristate.tristateUnknown') }}
+        </button>
+      </div>
+      <!-- Conditional reason textarea — appears only when the operator
+           picks "Nein". The textarea auto-focuses on first reveal so
+           the cursor lands in the field. Wire contract: parent's
+           {@code update:modelValue} carries the tri-state token; the
+           sibling reason text is emitted via
+           {@code update:tristate-reason} for the entry view to route
+           into the matching reason item_data row. -->
+      <div v-if="isTristateNo" class="mt-2">
+        <label
+          :for="`${inputId}-reason`"
+          class="block text-[12px] font-medium text-slate-600 mb-1"
+        >
+          {{ t('crfItem.tristate.reasonLabel') }}
+        </label>
+        <textarea
+          :id="`${inputId}-reason`"
+          ref="tristateReasonInput"
+          :value="tristateReason"
+          :disabled="disabled"
+          :placeholder="t('crfItem.tristate.reasonPlaceholder')"
+          rows="2"
+          autofocus
+          class="w-full px-3 py-2 text-[14px] text-slate-900 bg-white border border-slate-300 rounded-md outline-none transition-colors muw-focus hover:border-slate-400 focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-500 focus:shadow-[0_0_0_3px_rgba(17,29,78,0.13)]"
+          data-testid="tristate-reason-textarea"
+          @input="onTristateReasonInput"
+        ></textarea>
+      </div>
+    </template>
+
     <!-- Phase E.6 ophth-bilateral-design (2026-06-11): ophthalmology
          specialist branches go FIRST so the heuristic detector wins
          even when the underlying dataType would otherwise route to
@@ -364,7 +662,7 @@ function fileRef(): { filename: string; bytes: number } | null {
          is authored in v2.0 as select-one + ja/nein options, but the
          OID's _DONE suffix should still produce the segmented Ja/Nein
          pill — clinician-facing convention. -->
-    <template v-if="ophthPresentation.widget === 'segmented-yesno' && item.dataType !== 'boolean'">
+    <template v-else-if="ophthPresentation.widget === 'segmented-yesno' && item.dataType !== 'boolean'">
       <!-- MUW segmented Ja/Nein. Wire contract: value-of-Ja-option
            token = 'ja' (or '1' if the item is canonical boolean,
            handled by the dataType==='boolean' branch below). Reads
@@ -532,25 +830,36 @@ function fileRef(): { filename: string; bytes: number } | null {
            model-value is plain string — the input is disabled in the
            inactive state, so the empty value naturally stays empty.
            Caller (CrfEntryView) is responsible for clearing the
-           value when the parent flips from active → inactive. -->
+           value when the parent flips from active → inactive.
+
+           App-feedback Wave 1D (2026-06-19) — bug fix: previously
+           the input stayed disabled when the item routed into this
+           branch via the {@code *_DONE_REASON} OID heuristic (no
+           catalog entry). The {@link conditionalReasonStateEffective}
+           computed falls back to the show-when rule's parent value so
+           the textarea unlocks when the parent flips. {@code ref}
+           binds the input so the watch above can autofocus it on
+           first reveal. -->
       <div data-conditional-reason-state="state">
         <input
           :id="inputId"
+          ref="conditionalReasonInputRef"
           :value="(modelValue == null ? '' : String(modelValue))"
-          :aria-invalid="hasError || conditionalReasonState === 'active-empty' || undefined"
+          :aria-invalid="hasError || conditionalReasonStateEffective === 'active-empty' || undefined"
           type="text"
           :placeholder="t('crfEntry.conditionalReason.placeholder')"
-          :disabled="disabled || conditionalReasonState === 'inactive'"
+          :disabled="disabled || conditionalReasonStateEffective === 'inactive'"
           class="w-full h-[46px] px-3.5 text-[15px] text-slate-900 border rounded-xl outline-none transition-colors muw-focus"
-          :class="conditionalReasonState === 'active-empty'
-            ? 'border-muw-coral-600 bg-[#fffdfc] focus:border-muw-coral-600 focus:shadow-[0_0_0_3px_rgba(217,104,73,0.16)]'
-            : conditionalReasonState === 'active-filled'
-              ? 'border-slate-300 hover:border-slate-400 bg-white focus:border-muw-blue focus:shadow-[0_0_0_3px_rgba(17,29,78,0.13)]'
+          :class="conditionalReasonStateEffective === 'active-empty'
+            ? 'border-muw-coral-600 bg-[#fffdfc] focus:border-muw-coral-600 focus:ring-2 focus:ring-muw-blue-500 focus:shadow-[0_0_0_3px_rgba(217,104,73,0.16)]'
+            : conditionalReasonStateEffective === 'active-filled'
+              ? 'border-slate-300 hover:border-slate-400 bg-white focus:border-muw-blue focus:ring-2 focus:ring-muw-blue-500 focus:shadow-[0_0_0_3px_rgba(17,29,78,0.13)]'
               : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'"
+          data-testid="conditional-reason-input"
           @input="(e) => emit('update:modelValue', (e.target as HTMLInputElement).value)"
         />
         <div
-          v-if="conditionalReasonState === 'active-empty'"
+          v-if="conditionalReasonStateEffective === 'active-empty'"
           class="inline-flex items-center gap-1.5 mt-1.5 text-[11.5px] font-medium text-muw-coral-700"
           data-testid="conditional-reason-required-tag"
         >
@@ -558,7 +867,7 @@ function fileRef(): { filename: string; bytes: number } | null {
           {{ t('crfEntry.conditionalReason.requiredTag') }}
         </div>
         <div
-          v-else-if="conditionalReasonState === 'inactive'"
+          v-else-if="conditionalReasonStateEffective === 'inactive' && conditionalActivationLabel"
           class="mt-1.5 text-[11.5px] text-slate-400"
           data-testid="conditional-reason-inactive-hint"
         >

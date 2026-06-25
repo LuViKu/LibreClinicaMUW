@@ -106,7 +106,7 @@ This document captures the strategic decisions that frame the modernization proj
 
 **Date:** 2026-05-28
 **Status:** Accepted (pre-flight ratification for Phase B.3)
-**Companion analysis:** [docs/development/modernization/phase-b-dependency-analysis.md](phase-b-dependency-analysis.md) (Castor row); [docs/development/modernization/phase-b-execution-playbook.md § B.3](phase-b-execution-playbook.md)
+**Companion analysis:** [docs/development/modernization/archive/phase-b-dependency-analysis.md](archive/phase-b-dependency-analysis.md) (Castor row); [docs/development/modernization/archive/phase-b-execution-playbook.md § B.3](archive/phase-b-execution-playbook.md)
 
 **Context.** Castor 1.4.1 (2014) has no Jakarta-namespace variant and must be removed before Phase B can complete. The CDISC ODM 1.3 import/export paths (`ImportCRFDataServlet`, `ODMMetadataRestResource`, `MetaDataCollector`, `AdminDataCollector`, plus rule-engine XSLT executions) all currently use Castor's mapping-driven marshaller/unmarshaller and `XmlSchemaValidationHelper`. Three replacement options were considered:
 
@@ -121,7 +121,7 @@ This document captures the strategic decisions that frame the modernization proj
 **Rationale.**
 1. The `odm/` module already contains JAXB-generated classes from the ODM 1.3 XSD — half the work is done.
 2. ODM 1.3 is schema-locked; canonical, schema-validated XML output is the requirement of every downstream consumer (regulators, biostatistics pipelines, partner sites). JAXB matches that contract; Jackson XML does not.
-3. Byte-equivalence against pre-Phase-B Castor output (the [B.0 characterisation tests](phase-b-execution-playbook.md#b0--castor-characterisation-tests-pre-flight) regime) is achievable with JAXB + targeted `XmlAdapter`s where lexical formats differ.
+3. Byte-equivalence against pre-Phase-B Castor output (the [B.0 characterisation tests](archive/phase-b-execution-playbook.md#b0--castor-characterisation-tests-pre-flight) regime) is achievable with JAXB + targeted `XmlAdapter`s where lexical formats differ.
 4. Plain JAXB has the smallest dependency footprint (no MOXy install).
 
 **Consequences.**
@@ -153,7 +153,7 @@ This document captures the strategic decisions that frame the modernization proj
 
 **Consequences.**
 - No mixed-namespace state during B.3 — the whole codebase stays on `javax.*` until B.4 crosses the cliff in one move.
-- B.3's JAXB call sites (`OdmJaxbContext`, the rewritten Castor-replacing code) all import `javax.xml.bind.*`. B.4 then runs Eclipse Transformer across them as part of the same sweep that handles the other 235 javax-importing files (per [phase-b-eclipse-transformer-dry-run.md](phase-b-eclipse-transformer-dry-run.md)).
+- B.3's JAXB call sites (`OdmJaxbContext`, the rewritten Castor-replacing code) all import `javax.xml.bind.*`. B.4 then runs Eclipse Transformer across them as part of the same sweep that handles the other 235 javax-importing files (per [phase-b-eclipse-transformer-dry-run.md](archive/phase-b-eclipse-transformer-dry-run.md)).
 - The `odm/` module's `jaxb2-maven-plugin:2.5.0` stays untouched in B.3. B.4 bumps it (or swaps to `jaxb40-maven-plugin`) and re-generates the 513 classes.
 - This amendment does NOT change the engine choice (still Jakarta JAXB, not Jackson XML / MOXy) — only the namespace-introduction timing. The full Jakarta migration arrives via B.4.
 
@@ -165,7 +165,7 @@ This document captures the strategic decisions that frame the modernization proj
 
 **Date:** 2026-05-28
 **Status:** Accepted (pre-flight ratification for Phase B.11)
-**Companion analysis:** [docs/development/modernization/phase-b-execution-playbook.md § B.11](phase-b-execution-playbook.md)
+**Companion analysis:** [docs/development/modernization/archive/phase-b-execution-playbook.md § B.11](archive/phase-b-execution-playbook.md)
 
 **Context.** The heritage Java packages are `org.akaza.openclinica.*` (legacy OpenClinica) and `org.libreclinica.*` (post-2019 LibreClinica additions). Three options were considered:
 
@@ -484,6 +484,99 @@ Option 3. The catalog is read-only at the database level; "create" is a UX affor
 - Per-study scoping of catalog entries (deferred — current scope returns all entries, with an `inActiveStudy` boolean for UX hinting).
 - Ownership / authorship metadata on entries (the underlying `response_set` table has no owner column).
 - Template deletion (catalog tuples disappear when no CRF version references them anymore; explicit deletion would require either a real table or a CRF-version cleanup pass).
+
+---
+
+## DR-022 — Remote stateless GPU sidecar for retinal inference
+
+**Date:** 2026-06-16
+**Status:** Accepted
+**Owner:** Lead Developer (Lukas Kuchernig)
+
+**Context.** Retinal inference (fluid / onl / bmeis / ga task families) is GPU-bound — ONL's 5-fold ensemble takes 25+ minutes per scan under linux/amd64 emulation on Apple Silicon. The institution has a Linux VM with NVIDIA TITAN + RTX 2080 GPUs that can host the sidecar + per-task runners. The main Tomcat continues to run on the institutional Tomcat host; sidecar / runners colocate on the GPU VM, both inside the same institutional network.
+
+**Decision.** Add a stateless `POST /run` endpoint to the sidecar (`retinal-inference/src/retinal_inference/api/run.py`) that accepts a Heidelberg `.e2e` inline, runs the existing OptimaAdapter against it inside a per-request `TemporaryDirectory`, returns a JSON envelope containing the runner-produced CSV/NPY/PNG outputs as base64-encoded `artifacts`, and deletes the tempdir before the response completes. The institutional Tomcat reaches it via a new `RemoteRetinalInferenceClient` (`core/src/main/java/.../service/retinal/`) using `RestTemplate` multipart POST with an `X-MUW-Inference-Token` header + an `Idempotency-Key` header. The local `/screen` + DB-poll worker stay as the fallback path; setting `core.retinalInference.remotePushUrl` opts in to the remote branch.
+
+**Trade-offs considered.**
+
+| Axis | Choice | Rejected alternative |
+|---|---|---|
+| Transport | Plain sync POST with 60-min timeout | Async + callback URL (rejected — would need an inbound port on the institutional host) |
+| Runner I/O | Sidecar + runners share `/var/lib/retinal-inference/tmp` host-bind so the runner sees the sidecar's `TemporaryDirectory` natively | Sidecar serves files to runners via HTTP (future-proofs horizontal scaling — deferred) |
+| Result encoding | JSON envelope with base64 artifact bytes | `multipart/mixed` response (rejected — Java client complexity for 33% wire savings) |
+| Streaming | None (single sync response) | `ndjson` heartbeats (rejected — same institutional network, no egress proxy buffering) |
+| Scope | CSV outputs for every task — sidecar mirrors what the DB-poll worker already emits | DICOM SEG creation in v1 (deferred to a follow-up DR; sidecar generates `StudyInstanceUID` + `SeriesInstanceUID` on the bscan now so the SEG work is cheap when it lands) |
+
+**Consequences.**
+
+- The GPU VM never persists scan data past the request lifetime. The tempdir is created with `TemporaryDirectory(dir=RETINAL_INFERENCE_SHARED_TMPDIR)` and deleted via `with`-block exit; PHI redaction (`inference/phi.py`) blanks `PatientName`/`PatientID`/`PatientBirthDate`/etc. on the synthesised bscan before anything else reads the file (DICOM SUP 142 attestation).
+- The institutional artifact store at `core.retinalInference.artifactStorePath` (default `/var/lib/libreclinica/retinal-artifacts`) keeps the CSV/NPY outputs the SPA's modality-results panel reads. Result rows are written exactly like the DB-poll path; only the **source** differs.
+- Opt-in via four `datainfo.properties` keys: `remotePushUrl`, `remotePushToken`, `remotePushTimeoutSecs`, `artifactStorePath`. Local dev compose with all four unset behaves identically to before.
+- Auth is a shared-secret header; production should source `remotePushToken` from `/etc/libreclinica/env` at Tomcat startup rather than committing it into the properties file.
+
+**Reversible** — disabling the remote branch is a single-line config change (blank `remotePushUrl`); the sidecar's `/run` endpoint is itself opt-in via `RETINAL_INFERENCE_RUN_ENDPOINT_ENABLED=true`. The DB-poll worker stays untouched, so reverting is a no-op.
+
+**Out of scope (for this DR).**
+
+- DICOM SEG creation — separate phase. Will add `dcm4che-core 5.x`, a `DicomSegService`, and `bscan_dcm_path`/`seg_dcm_path` columns when the downstream PACS viewer + ophthalmic workflow nail down their SEG SOP-class requirements.
+- HTTP file-serving between sidecar + runners (deferred until horizontal runner scaling is real).
+- ndjson heartbeats / streaming (revisit if MUW network policy ever places an egress proxy between the institutional Tomcat and the GPU host).
+- Java-side PHI assertion on returned bscan bytes (deferred until dcm4che lands).
+
+---
+
+## DR-024 — Single bscan.dcm ingestion seam
+
+**Status:** Accepted (2026-06-25)
+
+**Context.** DR-022 introduced the remote GPU sidecar pattern with two deployment postures sharing a single `retinal-inference` Python codebase:
+
+1. **App-VM `retinal-preprocess` container** (local docker compose) — receives uploaded `.e2e` files, converts to `bscan.dcm`, strips PHI, persists SPA-viewer companions (`fundus.png`, `geometry.json`). Serves `/preprocess`.
+2. **Cluster inference sidecar on cn5** (bare-metal uvicorn under `~/start_sidecar.sh`) — receives a pre-converted `bscan.dcm` over HTTPS from the institutional Tomcat, dispatches inference via the host-native `OCTLayerSeg` binary + Apptainer/.sif containers. Serves `/run` only.
+
+The cluster's `ApptainerAdapter.full_volume` explicitly rejects `.e2e` inputs (raises `ValueError`) — production conversion ALWAYS happens app-side in posture (1) before the bytes leave the institutional VM. The cluster never sees raw `.e2e` content. PHI redaction therefore happens on the app VM, not on the GPU host.
+
+**Problem.** Because both deployments share the same git tree, the `e2e_parser.py` module physically existed on cn5's disk even though it's never executed there. On 2026-06-24 a 6-hour debug session of an IOWA SIGSEGV cost ~4 hours fixing `e2e_parser.py` on the cluster, with the changes never taking effect — `git pull` + uvicorn restart applied the new code to the file, but `ApptainerAdapter` never imports it. The duplication was invisible to anyone tailing logs or reading the diff.
+
+**Decision.** Move the `.e2e` → `bscan.dcm` + SLO companion code into a **separate Python package** at `muw-e2e-converter/` (sibling of `retinal-inference/`). The cluster's bare-metal deployment runbook installs `retinal-inference` WITHOUT this package; the LOCAL `retinal-preprocess` Docker image installs both via the Dockerfile's `pip install -e /app/muw-e2e-converter` step.
+
+The new package contains:
+
+| Module | Purpose |
+|---|---|
+| `e2e_parser.py` | Heidelberg .e2e → multi-frame `bscan.dcm` (oct-converter + pydicom). Produces `BscanVolume` with real-mm geometry from the .e2e header. |
+| `fundus_extract.py` | SLO en-face PNG + `geometry.json` build (per-B-scan-to-fundus registration metadata). |
+| `phi.py` | DICOM Supplement 142 blanking helper. Only ever runs against synthesised bscan.dcm bytes, so it belongs with the synthesiser. |
+
+`retinal-inference` imports the converter via a guarded `try/except ModuleNotFoundError` block:
+
+- `api/preprocess.py` — when the converter is absent, `/preprocess` returns HTTP 503 with `detail` pointing at DR-024.
+- `inference/optima.py` — when the converter is absent, `OptimaAdapter.__init__` raises `ModuleNotFoundError` immediately. (Cluster operators who mistakenly set `RETINAL_INFERENCE_ADAPTER=optima` see the failure at adapter-selection time, not mid-request.)
+
+The cluster posture is verified by the runbook's smoke step: after starting uvicorn, `curl /preprocess` must return 503 (anything else means the converter was mistakenly installed; remove it).
+
+**Alternatives considered.**
+
+| Option | Why not |
+|---|---|
+| Documentation-only (docstring + DR) | Doesn't prevent the next operator from hot-fixing the cluster's `e2e_parser.py`. Visibility doesn't equal enforcement. |
+| Runtime startup banner | Same as above — operators tailing the launch logs would see "code path inactive" but the file is still right there to edit. |
+| Single git repo for the converter | Overkill for a one-institution fork; an extra repo to manage with no clear ownership boundary. |
+
+**Consequences.**
+
+- **Iteration loop tightens.** When a future bug touches `prepare_bscan_dcm`, the only deployment that can show it is the local `retinal-preprocess` container — one `docker compose build retinal-preprocess` away. No cluster redeploy, no uvicorn env-var dance.
+- **Cluster image surface shrinks.** `oct-converter`, `pillow`, and the SLO geometry build no longer ship to cn5. Smaller install footprint + fewer dependencies that could conflict with cluster-side Python pins.
+- **Test split.** `test_fundus_extract.py` and `test_phi_strip.py` move to `muw-e2e-converter/tests/`. `test_preprocess.py` and `test_optima_dispatch.py` stay in `retinal-inference/tests/` (they exercise the consumer behavior). A new `test_preprocess_without_converter.py` simulates the cluster posture by monkeypatching `_CONVERTER_AVAILABLE = False`.
+- **Compose build context broadens.** The retinal-inference Docker build context becomes the repo root (was `./retinal-inference`) so the Dockerfile can COPY both packages. The `retinal-preprocess` service reuses the same image and gets the converter for free.
+
+**Reversible** — undoing the split is a `git mv` of the three modules + a Dockerfile diff. The two-package state isn't load-bearing for any downstream Java/SPA consumer (they only ever see the HTTP surface).
+
+**Out of scope (for this DR).**
+
+- Removing `OptimaAdapter` (kept as the dev-compose multi-runner path).
+- A startup banner reflecting the active adapter + endpoint set (could be a future DR-024.5 if cluster operators want it).
+- CI workflow that runs both pytest suites — current CI runs `retinal-inference/tests/` only; the new `muw-e2e-converter/tests/` add to that loop in a follow-up.
 
 ---
 

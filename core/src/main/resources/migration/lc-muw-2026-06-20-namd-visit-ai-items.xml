@@ -1,0 +1,271 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        nAMD treat-and-extend Slice 3 (2026-06-20) — AI-fluid items
+        on the NAMD_VISIT CRF.
+
+        Adds a fifth section to NAMD_VISIT (Slice 2 / PR #227) with
+        per-eye numeric items for the AI fluid quantification. These
+        items are designed to be AUTO-POPULATED by the new
+        `RetinalResultItemDataPopulator` service from the linked
+        `retinal_inference_result.output_payload` JSONB — physicians
+        don't type these numbers in.
+
+        ID allocation continuing from Slice 2:
+          - section_id            = 11  (Slice 2 used 7..10)
+          - item_id               = 52..59
+          - item_form_metadata_id = 29..36
+
+        Naming convention matches the laterality-prefixed pattern
+        already established for OPHTH_VISIT (e.g. VA_OD_LOGMAR):
+        `NAMD_<EYE>_<METRIC>_MM3` so the populator + SAS exports can
+        pattern-match per-eye columns. Re-uses the existing
+        `freetext_namd` response set (rs_id=14) since these are
+        REAL items typed via the freetext gate.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-20-namd-visit-ai-items" context="demo">
+        <comment>NAMD_VISIT AI fluid section — 1 section + 8 items + 8 item_form_metadata.</comment>
+
+        <!-- ============================================================
+             Section 5 — AI fluid quantification
+             ============================================================ -->
+        <insert tableName="section">
+            <column name="section_id" valueNumeric="11"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="label" value="S_NAMD_AI_FLUID"/>
+            <column name="title" value="AI fluid quantification (auto-populated)"/>
+            <column name="instructions" value="Per-eye fluid volumes from the AI segmentation of today's OCT. Auto-populated from the linked retinal_inference_result when a fluid job completes; physicians may override but the audit trail records the source job. Blank entries mean no scan was uploaded for that eye at this visit. Arm B subjects: these items remain hidden in the UI but are still populated server-side for analysis."/>
+            <column name="ordinal" valueNumeric="5"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="owner_id" valueNumeric="1"/>
+        </insert>
+
+        <!-- ============================================================
+             Items — 8 (OD + OS × IRF/SRF/PED/TOTAL)
+             ============================================================ -->
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="52"/>
+            <column name="name" value="NAMD_OD_IRF_MM3"/>
+            <column name="description" value="AI-quantified intraretinal fluid volume, right eye (OD), mm³"/>
+            <column name="units" value="mm³"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/> <!-- REAL -->
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_OD_IRF_MM3"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="53"/>
+            <column name="name" value="NAMD_OD_SRF_MM3"/>
+            <column name="description" value="AI-quantified subretinal fluid volume, right eye (OD), mm³"/>
+            <column name="units" value="mm³"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_OD_SRF_MM3"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="54"/>
+            <column name="name" value="NAMD_OD_PED_MM3"/>
+            <column name="description" value="AI-quantified pigment epithelial detachment volume, right eye (OD), mm³"/>
+            <column name="units" value="mm³"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_OD_PED_MM3"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="55"/>
+            <column name="name" value="NAMD_OD_TOTAL_FLUID_MM3"/>
+            <column name="description" value="AI-quantified total fluid volume (IRF+SRF+PED), right eye (OD), mm³"/>
+            <column name="units" value="mm³"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_OD_TOTAL_FLUID_MM3"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="56"/>
+            <column name="name" value="NAMD_OS_IRF_MM3"/>
+            <column name="description" value="AI-quantified intraretinal fluid volume, left eye (OS), mm³"/>
+            <column name="units" value="mm³"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_OS_IRF_MM3"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="57"/>
+            <column name="name" value="NAMD_OS_SRF_MM3"/>
+            <column name="description" value="AI-quantified subretinal fluid volume, left eye (OS), mm³"/>
+            <column name="units" value="mm³"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_OS_SRF_MM3"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="58"/>
+            <column name="name" value="NAMD_OS_PED_MM3"/>
+            <column name="description" value="AI-quantified pigment epithelial detachment volume, left eye (OS), mm³"/>
+            <column name="units" value="mm³"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_OS_PED_MM3"/>
+        </insert>
+        <insert tableName="item">
+            <column name="item_id" valueNumeric="59"/>
+            <column name="name" value="NAMD_OS_TOTAL_FLUID_MM3"/>
+            <column name="description" value="AI-quantified total fluid volume (IRF+SRF+PED), left eye (OS), mm³"/>
+            <column name="units" value="mm³"/>
+            <column name="phi_status" valueBoolean="false"/>
+            <column name="item_data_type_id" valueNumeric="7"/>
+            <column name="status_id" valueNumeric="1"/>
+            <column name="owner_id" valueNumeric="1"/>
+            <column name="date_created" valueDate="2026-06-20"/>
+            <column name="oc_oid" value="I_NAMD_OS_TOTAL_FLUID_MM3"/>
+        </insert>
+
+        <!-- ============================================================
+             item_form_metadata — render-time wiring for each item.
+             ============================================================ -->
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="29"/>
+            <column name="item_id" valueNumeric="52"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="11"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Right eye (OD) — IRF"/>
+            <column name="right_item_text" value="mm³"/>
+            <column name="width_decimal" value="(6,4)"/>
+            <column name="ordinal" valueNumeric="1"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="30"/>
+            <column name="item_id" valueNumeric="53"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="11"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Right eye (OD) — SRF"/>
+            <column name="right_item_text" value="mm³"/>
+            <column name="width_decimal" value="(6,4)"/>
+            <column name="ordinal" valueNumeric="2"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="31"/>
+            <column name="item_id" valueNumeric="54"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="11"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Right eye (OD) — PED"/>
+            <column name="right_item_text" value="mm³"/>
+            <column name="width_decimal" value="(6,4)"/>
+            <column name="ordinal" valueNumeric="3"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="32"/>
+            <column name="item_id" valueNumeric="55"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="11"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Right eye (OD) — Total fluid"/>
+            <column name="right_item_text" value="mm³"/>
+            <column name="width_decimal" value="(6,4)"/>
+            <column name="ordinal" valueNumeric="4"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="33"/>
+            <column name="item_id" valueNumeric="56"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="11"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Left eye (OS) — IRF"/>
+            <column name="right_item_text" value="mm³"/>
+            <column name="width_decimal" value="(6,4)"/>
+            <column name="ordinal" valueNumeric="5"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="34"/>
+            <column name="item_id" valueNumeric="57"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="11"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Left eye (OS) — SRF"/>
+            <column name="right_item_text" value="mm³"/>
+            <column name="width_decimal" value="(6,4)"/>
+            <column name="ordinal" valueNumeric="6"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="35"/>
+            <column name="item_id" valueNumeric="58"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="11"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Left eye (OS) — PED"/>
+            <column name="right_item_text" value="mm³"/>
+            <column name="width_decimal" value="(6,4)"/>
+            <column name="ordinal" valueNumeric="7"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+        <insert tableName="item_form_metadata">
+            <column name="item_form_metadata_id" valueNumeric="36"/>
+            <column name="item_id" valueNumeric="59"/>
+            <column name="crf_version_id" valueNumeric="21"/>
+            <column name="section_id" valueNumeric="11"/>
+            <column name="response_set_id" valueNumeric="14"/>
+            <column name="left_item_text" value="Left eye (OS) — Total fluid"/>
+            <column name="right_item_text" value="mm³"/>
+            <column name="width_decimal" value="(6,4)"/>
+            <column name="ordinal" valueNumeric="8"/>
+            <column name="required" valueBoolean="false"/>
+            <column name="show_item" valueBoolean="true"/>
+        </insert>
+
+        <rollback>
+            <delete tableName="item_form_metadata">
+                <where>item_form_metadata_id BETWEEN 29 AND 36</where>
+            </delete>
+            <delete tableName="item">
+                <where>item_id BETWEEN 52 AND 59</where>
+            </delete>
+            <delete tableName="section">
+                <where>section_id = 11</where>
+            </delete>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

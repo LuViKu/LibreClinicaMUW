@@ -3,7 +3,7 @@
 **Date:** 2026-05-30
 **Status:** Draft. Approves entry once the [post-Phase-D UI validation](phase-e/post-phase-d-ui-validation.md)'s Phase E entry checklist closes.
 **Owner:** Lead Developer (Lukas Kuchernig)
-**Sibling playbooks:** [phase-b](phase-b-execution-playbook.md) · [phase-c](phase-c-execution-playbook.md) · [phase-d](phase-d-execution-playbook.md)
+**Sibling playbooks:** [phase-b](archive/phase-b-execution-playbook.md) · [phase-c](archive/phase-c-execution-playbook.md) · [phase-d](phase-d-execution-playbook.md)
 
 The Phase E SPA rewrite replaces the JSP + jQuery 1.9 + Prototype.js + GWT-compiled chrome with a modern single-page application built on the [MUW design system](phase-e/design-system/) and bound to the existing legacy servlet + Spring MVC controller surface (preserved verbatim by Phase C.11/14's `LegacyServletRegistry` and Phase D.6's `WebMvcConfig`). This playbook breaks the work into 12 sub-phases (E.0–E.11) with explicit verification gates per sub-phase.
 

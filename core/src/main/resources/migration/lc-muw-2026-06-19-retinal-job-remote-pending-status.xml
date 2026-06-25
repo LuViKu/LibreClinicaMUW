@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        DR-022 worker-race kill — register the new 'remote_pending' status
+        + add a scan_index column to retinal_inference_job.
+
+        Background
+        ==========
+        Before this changeset, when core.retinalInference.remotePushUrl was
+        set RetinalInferenceApiController.handleRemote inserted the job at
+        status='queued' and immediately flipped it to 'segmenting'. In the
+        worst-case race window (the Tomcat process delays between INSERT
+        and UPDATE) the Python DB-poll worker could claim the row via
+        FOR UPDATE SKIP LOCKED and start its own local /screen pass, ending
+        up with two concurrent inference runs for the same scan.
+
+        Fix: the controller now inserts as 'remote_pending'. The worker's
+        WHERE clause is `status IN ('queued','screened')`, so the row is
+        invisible to it. On remote success the chain is
+        remote_pending → segmenting → done; on remote failure the row
+        flips back to 'queued' so the worker drains the fallback.
+
+        Status column is VARCHAR(20) with no CHECK constraint, so the new
+        string needs no DDL — this changeset is a no-op comment for
+        history + audit purposes only.
+
+        scan_index column
+        =================
+        Public OCT-upload portal already accepts a scanIndex form field
+        on /commit (default 0). With the remote-sidecar flow the value
+        must travel through the job row so the RemoteRetinalInferenceClient
+        can forward it on the /preprocess + /run multipart POSTs.
+        Existing rows backfill to 0 (single-volume .e2e was the only
+        shipping shape before the multi-scan portal).
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-19-retinal-job-remote-pending-status-comment" dbms="postgresql">
+        <comment>
+            DR-022 — register 'remote_pending' as a permitted value for
+            retinal_inference_job.status. No DDL: the column is VARCHAR(20),
+            no CHECK constraint. See RetinalInferenceJobStatus.REMOTE_PENDING
+            for the canonical enum + transition semantics.
+        </comment>
+        <sql>SELECT 1</sql>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-06-19-retinal-job-scan-index-column" dbms="postgresql">
+        <preConditions onFail="MARK_RAN" onFailMessage="scan_index column already present">
+            <not>
+                <columnExists tableName="retinal_inference_job" columnName="scan_index"/>
+            </not>
+        </preConditions>
+        <addColumn tableName="retinal_inference_job">
+            <column name="scan_index" type="INT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </addColumn>
+        <rollback>
+            <dropColumn tableName="retinal_inference_job" columnName="scan_index"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

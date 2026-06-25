@@ -21,6 +21,7 @@ import SideRail from '@/components/SideRail.vue'
 import { useAuthStore } from '@/stores/auth'
 import { useDatasetsStore } from '@/stores/datasets'
 import type { ExportFormat } from '@/types/export'
+import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const auth = useAuthStore()
@@ -175,12 +176,7 @@ async function runQuickOdm() {
 
 /* ----------------------------- Helpers ----------------------------- */
 
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.valueOf())) return '—'
-  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: '2-digit' })
-}
+// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4).
 
 function formatBytes(n: number): string {
   if (!n || n < 0) return '—'
@@ -203,7 +199,15 @@ const legacyCreateLink = '/LibreClinica/CreateDataset'
         </svg>
         {{ t('nav.buildStudy') }}
       </RouterLink>
-      <RouterLink to="/manage-users" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
+      <!-- 2026-06-23 user-feedback round — gate on Administrator;
+           /manage-users is Administrator-only per router meta, so
+           rendering this for other roles meant a one-click bounce
+           to /home. -->
+      <RouterLink
+        v-if="auth.user?.role === 'Administrator'"
+        to="/manage-users"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
+      >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
         </svg>

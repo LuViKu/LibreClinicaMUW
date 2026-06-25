@@ -165,16 +165,21 @@ public class EventCrfsApiController {
     private final SiteVisibilityFilter siteVisibilityFilter;
     private final CrfFileStorageService fileStorageService;
     private final EventCrfPresenceRegistry presenceRegistry;
+    private final at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator
+            retinalAutoPopulator;
 
     @Autowired
     public EventCrfsApiController(@Qualifier("dataSource") DataSource dataSource,
                                   SiteVisibilityFilter siteVisibilityFilter,
                                   CrfFileStorageService fileStorageService,
-                                  EventCrfPresenceRegistry presenceRegistry) {
+                                  EventCrfPresenceRegistry presenceRegistry,
+                                  at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator
+                                          retinalAutoPopulator) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
         this.fileStorageService = fileStorageService;
         this.presenceRegistry = presenceRegistry;
+        this.retinalAutoPopulator = retinalAutoPopulator;
     }
 
     @GetMapping("/{id:[0-9]+}")
@@ -418,6 +423,9 @@ public class EventCrfsApiController {
                 String.valueOf(ecb.getId()),
                 ss.getLabel(),
                 eventLabel,
+                // 2026-06-21 user-feedback round 5 — surfaced so the SPA
+                // can deep-link back to the parent visit on completion.
+                se != null && se.getId() != 0 ? se.getId() : null,
                 schema,
                 // Server-side blinding: pass-2 callers see an empty
                 // values map so they cannot copy the IDE entry.
@@ -817,7 +825,16 @@ public class EventCrfsApiController {
                                     /* new */ Instant.now().toString());
                         }
 
-                        cascadeEventStatusIfAllCrfsComplete(ecbRef.getStudyEventId(), userRef);
+                        // 2026-06-21 user-feedback round 5 — the
+                        // auto-cascade-to-COMPLETED was removed.
+                        // Operators told us the visit-completion
+                        // decision is theirs; the manual "Visite
+                        // abschließen" action on EventDetailView
+                        // (POST /api/v1/events/{id}/complete) now
+                        // owns that transition. The cascade helper
+                        // is kept (private, unused) in case a future
+                        // workflow needs to opt back in per study.
+                        // cascadeEventStatusIfAllCrfsComplete(ecbRef.getStudyEventId(), userRef);
 
                         EventCRFBean refreshed = eventCrfDAORef.findByPK(ecbRef.getId());
 
@@ -949,6 +966,169 @@ public class EventCrfsApiController {
 
         LOG.info("CRF markIncomplete: event_crf {} reopened by user {} (role {}); study {}",
                 refreshed.getId(), currentUser.getName(), roleId, currentStudy.getOid());
+
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * App-feedback Wave 1D (2026-06-19) — "Vom letzten Besuch
+     * übernehmen". Resolves the most recent COMPLETED event_crf for
+     * the same study_subject + same crf_version (i.e. same CRF
+     * definition) and returns its persisted item values so the SPA's
+     * prefill modal can offer them to the operator for the current
+     * entry.
+     *
+     * <p>Match rules:
+     * <ol>
+     *   <li>Same {@code study_subject_id} (resolved via the current
+     *       event_crf's {@code study_event});</li>
+     *   <li>Same {@code crf_version_id} (so the schema matches —
+     *       upgrades to a newer CRF version legitimately reset the
+     *       prefill chain);</li>
+     *   <li>{@code date_completed IS NOT NULL} (only completed CRFs
+     *       are trusted as prefill sources — in-progress drafts can
+     *       contain partial / placeholder data);</li>
+     *   <li>{@code event_crf_id != current} (defensive — operators
+     *       shouldn't be able to pre-fill from themselves).</li>
+     * </ol>
+     *
+     * <p>Pick the row with the latest {@code date_completed} (then by
+     * descending {@code event_crf_id} as a stable tiebreaker), then
+     * fetch its {@code item_data} rows and join against
+     * {@code item_form_metadata} for the display label.
+     *
+     * <p>Guards (order matters):
+     * <ol>
+     *   <li>{@code 401} — no authenticated user.</li>
+     *   <li>{@code 400} — no active study bound.</li>
+     *   <li>{@code 404} — no event_crf with that id.</li>
+     *   <li>{@code 403} — event_crf belongs to a study the caller's
+     *       site-visibility set excludes.</li>
+     *   <li>{@code 404} — no prior completed CRF of the same
+     *       definition exists (SPA renders the "Keine vorherige
+     *       Visite gefunden" empty state).</li>
+     * </ol>
+     */
+    @GetMapping("/{id:[0-9]+}/previous-values")
+    public ResponseEntity<?> previousValues(@PathVariable("id") int currentEventCrfId,
+                                            HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "message", "No active study bound to the session."
+            ));
+        }
+
+        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+        EventCRFBean currentEcb = eventCrfDAO.findByPK(currentEventCrfId);
+        if (currentEcb == null || currentEcb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_crf with id " + currentEventCrfId));
+        }
+
+        // Visibility guard — verify the current event_crf belongs to a
+        // study the caller is allowed to see.
+        StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(currentEcb.getStudySubjectId());
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        Set<Integer> visibleStudyIds = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (ss == null || !visibleStudyIds.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "event_crf " + currentEventCrfId + " belongs to a different study"));
+        }
+
+        // Look up the prior completed CRF of the same definition for
+        // the same subject. The query walks back through study_event so
+        // we land the right study_subject + scope to the matching
+        // crf_version_id.
+        Integer sourceEventCrfId = null;
+        Date sourceCompletedAt = null;
+        final String sql =
+                "SELECT ec.event_crf_id, ec.date_completed " +
+                "  FROM event_crf ec " +
+                "  JOIN study_event se ON se.study_event_id = ec.study_event_id " +
+                " WHERE se.study_subject_id = (SELECT se2.study_subject_id " +
+                "                                FROM event_crf ec2 " +
+                "                                JOIN study_event se2 ON se2.study_event_id = ec2.study_event_id " +
+                "                               WHERE ec2.event_crf_id = ?) " +
+                "   AND ec.crf_version_id = (SELECT crf_version_id FROM event_crf WHERE event_crf_id = ?) " +
+                "   AND ec.date_completed IS NOT NULL " +
+                "   AND ec.event_crf_id <> ? " +
+                " ORDER BY ec.date_completed DESC, ec.event_crf_id DESC " +
+                " LIMIT 1";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, currentEventCrfId);
+            ps.setInt(2, currentEventCrfId);
+            ps.setInt(3, currentEventCrfId);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (rs.next()) {
+                    sourceEventCrfId = rs.getInt(1);
+                    java.sql.Timestamp ts = rs.getTimestamp(2);
+                    sourceCompletedAt = ts == null ? null : new Date(ts.getTime());
+                }
+            }
+        } catch (SQLException ex) {
+            LOG.error("previousValues: lookup failed for event_crf {} ({})",
+                    currentEventCrfId, ex.getMessage(), ex);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Previous-values lookup failed."));
+        }
+
+        if (sourceEventCrfId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No prior completed CRF of the same definition for this subject."));
+        }
+
+        // Load the source CRF's item_data + materialise the wire DTO.
+        ItemDataDAO idDAO = new ItemDataDAO(dataSource);
+        ItemDAO itemDAO = new ItemDAO(dataSource);
+        ItemFormMetadataDAO ifmDAO = new ItemFormMetadataDAO(dataSource);
+        ArrayList<ItemDataBean> rows = idDAO.findAllByEventCRFId(sourceEventCrfId);
+        // Map item_id → ItemFormMetadataBean for label lookup.
+        Map<Integer, ItemFormMetadataBean> ifmByItemId = new HashMap<>();
+        try {
+            List<ItemFormMetadataBean> allIfms = ifmDAO.findAllByCRFVersionId(currentEcb.getCRFVersionId());
+            for (ItemFormMetadataBean ifm : allIfms) {
+                ifmByItemId.put(ifm.getItemId(), ifm);
+            }
+        } catch (Exception ignored) {
+            // Best-effort label lookup — falls back to the item OID.
+        }
+
+        List<Map<String, Object>> values = new ArrayList<>(rows.size());
+        for (ItemDataBean idb : rows) {
+            if (idb == null || idb.getValue() == null) continue;
+            // Skip rows belonging to soft-deleted item_data — operators
+            // shouldn't be carrying-forward administratively-removed
+            // measurements.
+            if (idb.isDeleted()) continue;
+            ItemBean item = (ItemBean) itemDAO.findByPK(idb.getItemId());
+            if (item == null || item.getOid() == null) continue;
+            ItemFormMetadataBean ifm = ifmByItemId.get(item.getId());
+            String label = (ifm != null) ? firstNonBlank(
+                    ifm.getLeftItemText(), ifm.getRightItemText(), item.getName()) : item.getName();
+            if (label == null || label.isBlank()) label = item.getOid();
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("itemOid", item.getOid());
+            row.put("value", idb.getValue());
+            row.put("itemLabel", label);
+            values.add(row);
+        }
+
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("sourceEventCrfId", sourceEventCrfId);
+        out.put("sourceCompletedAt", formatIsoInstant(sourceCompletedAt));
+        out.put("values", values);
+
+        LOG.info("previousValues: served {} item(s) from event_crf {} as prefill source for {} (user {} / study {})",
+                values.size(), sourceEventCrfId, currentEventCrfId,
+                currentUser.getName(), currentStudy.getOid());
 
         return ResponseEntity.ok(out);
     }
@@ -2153,6 +2333,7 @@ public class EventCrfsApiController {
     /* SIGNED / LOCKED visits are terminal — left alone in both helpers. */
     /* ------------------------------------------------------------------ */
 
+    @SuppressWarnings("unused")
     private void cascadeEventStatusIfAllCrfsComplete(int studyEventId, UserAccountBean actor) {
         try {
             StudyEventDAO seDAO = new StudyEventDAO(dataSource);
@@ -2878,4 +3059,95 @@ public class EventCrfsApiController {
         int id = role.getRole().getId();
         return id == 1 || id == 3 || id == 4;
     }
+
+    /* ====================================================================== */
+    /* POST /event-crfs/{id}:autoPopulateRetinal — nAMD Slice 3              */
+    /* ====================================================================== */
+
+    /**
+     * Copy AI fluid metrics from every completed
+     * {@code retinal_inference_result} linked to {@code eventCrfId}
+     * into the matching CRF item_data rows. Idempotent — re-running
+     * updates rows from the same source job; operator-entered rows
+     * are never overwritten.
+     *
+     * <p>Response body carries {@link RetinalAutoPopulateResponse}
+     * with the per-run counts so the SPA can render a toast
+     * ("Populated 4 items from 1 job").
+     *
+     * <p>401 when not authenticated, 404 when the event_crf is
+     * outside the caller's visibility, 200 on success (including
+     * the "no jobs to populate" case — the SPA renders that as
+     * "Nothing to populate yet" rather than as an error).
+     */
+    @org.springframework.web.bind.annotation.PostMapping(path = "/{id:[0-9]+}:autoPopulateRetinal",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> autoPopulateRetinal(@PathVariable("id") int eventCrfId,
+                                                 HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        // Reuse the existing visibility check from this controller's
+        // getEventCrf — if the user can't see the row, the populate
+        // call must 404 too.
+        ResponseEntity<?> visibility = guardEventCrfVisibility(eventCrfId, currentUser, session);
+        if (visibility != null) return visibility;
+
+        at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.RetinalResultItemDataPopulator.PopulateResult result;
+        try {
+            result = retinalAutoPopulator.populateForEventCrf(eventCrfId, currentUser.getId());
+        } catch (IllegalStateException isEx) {
+            LOG.error("autoPopulateRetinal failed for ecrf={}: {}", eventCrfId, isEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to populate retinal values: " + isEx.getMessage()));
+        }
+        return ResponseEntity.ok(new RetinalAutoPopulateResponse(
+                result.eventCrfId(),
+                result.jobsProcessed(),
+                result.rowsWritten(),
+                result.warnings()));
+    }
+
+    /**
+     * Reuse the visibility logic from {@code getEventCrf} for the
+     * auto-populate endpoint without duplicating ~50 LOC of session
+     * + DAO walks. Returns null when the caller can see the row,
+     * or a ready-to-return ResponseEntity (401 / 404) otherwise.
+     */
+    private ResponseEntity<?> guardEventCrfVisibility(int eventCrfId,
+                                                     UserAccountBean currentUser,
+                                                     HttpSession session) {
+        EventCRFDAO ecDao = new EventCRFDAO(dataSource);
+        EventCRFBean ecb = ecDao.findByPK(eventCrfId);
+        if (ecb == null || ecb.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No event_crf with id " + eventCrfId));
+        }
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ecb.getStudySubjectId());
+        if (ss == null || ss.getStudyId() == 0) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "event_crf " + eventCrfId + " has no resolvable study"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        java.util.Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (!visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "message", "event_crf " + eventCrfId + " belongs to a study outside your scope"));
+        }
+        return null;
+    }
+
+    /**
+     * Response body of {@code POST /event-crfs/{id}:autoPopulateRetinal}.
+     */
+    @io.swagger.v3.oas.annotations.media.Schema(name = "RetinalAutoPopulateResponse")
+    public record RetinalAutoPopulateResponse(
+            int eventCrfId,
+            int jobsProcessed,
+            int rowsWritten,
+            java.util.List<String> warnings) {}
 }

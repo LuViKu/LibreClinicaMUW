@@ -92,6 +92,14 @@ function makeRouter(eventCrfOid = 'EC_TEST'): Router {
         name: 'dde-reconcile',
         component: { template: '<div />' },
       },
+      {
+        // Phase E.8 Slice L4 — required by the Print button in
+        // CrfEntryView's header; tests don't mount the printable
+        // view itself, just need the named route to resolve.
+        path: '/event-crfs/:eventCrfOid/print',
+        name: 'printable-crf',
+        component: { template: '<div />' },
+      },
     ],
   })
 }

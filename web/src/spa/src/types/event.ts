@@ -44,7 +44,16 @@ type GeneratedScheduleEventRequest =
   components['schemas']['ScheduleEventRequest']
 export type ScheduleEventRequest =
   Required<Pick<GeneratedScheduleEventRequest, 'subjectId' | 'eventDefinitionOid' | 'dateStarted'>> &
-  Pick<GeneratedScheduleEventRequest, 'location'>
+  Pick<GeneratedScheduleEventRequest, 'location'> & {
+    /**
+     * nAMD treat-and-extend (2026-06-19) — optional next-visit interval
+     * (in days). When set, the backend computes
+     * {@code scheduled_for = dateStarted + scheduledIntervalDays} and
+     * the response carries both back so the SPA can show "Next visit
+     * due on YYYY-MM-DD" immediately after the dialog confirms.
+     */
+    scheduledIntervalDays?: number | null
+  }
 
 /* ------------------------------------------------------------------ */
 /* Phase E A4 — event edit / cancel role helpers.                     */
@@ -72,7 +81,12 @@ export function canEditEvent(role: UserRole, status: StudyEventStatus): boolean 
 
 export function canCancelEvent(role: UserRole, status: StudyEventStatus): boolean {
   if (status === 'signed' || status === 'locked') return false
-  return role === 'Data Manager' || role === 'Administrator'
+  // 2026-06-21 user-feedback round 4 — MUW workflow expects the
+  // same writer set that may edit a visit to also be able to cancel
+  // it. The structured cancel-reason capture (Wave 1A) still gates
+  // the cancel call so the audit trail keeps the accountability
+  // intent of the original DM-only restriction.
+  return canEditEvent(role, status)
 }
 
 /** Phase E A4 — body of PUT /api/v1/events/{id}. */

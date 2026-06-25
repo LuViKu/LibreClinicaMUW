@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        retinal_inference_job.event_crf_id was originally NOT NULL because every
+        upload went through the authenticated POST /event-crfs/{id}/oct-upload
+        endpoint, which binds the job to an event_crf at insert time.
+
+        The forthcoming public OCT upload portal (planned per the
+        oct-upload-portal design) allows a "parked" state where the file is
+        accepted before an event_crf can be resolved — for that the FK must
+        accept NULL. The portal will add a 'parked' status; until it lands the
+        column simply becomes optional with no behaviour change for the
+        existing authenticated path.
+
+        Side benefit: the RetinalResultsApiControllerDatabaseIT 403-visibility
+        test can now insert a job with NULL event_crf_id to exercise the "no
+        study chain" controller branch without depending on a dangling FK.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-18-retinal-job-event-crf-nullable">
+        <dropNotNullConstraint tableName="retinal_inference_job" columnName="event_crf_id"/>
+        <rollback>
+            <addNotNullConstraint tableName="retinal_inference_job" columnName="event_crf_id"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

@@ -1,6 +1,5 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { createI18n } from 'vue-i18n'
 
 import App from './App.vue'
 import router from './router'
@@ -8,28 +7,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useErrorsStore } from '@/stores/errors'
 import { useConnectionStore } from '@/stores/connection'
 import { useClientLogsStore } from '@/stores/clientLogs'
-import deMessages from './locales/de.json'
-import enMessages from './locales/en.json'
+// Phase E.X studyModules (2026-06-20): i18n instance lifted to its own
+// module so the study-module store can call
+// {@code i18n.global.mergeLocaleMessage} on activation without
+// re-entering main.ts (which would create an import cycle).
+import { i18n } from '@/i18n'
 
 import './style.css'
-
-const i18n = createI18n({
-  legacy: false,
-  locale: 'de-AT',
-  fallbackLocale: 'en',
-  // Phase E hardening — A5 (2026-06-10): silence i18n warning spam in
-  // production builds. Vue-i18n logs both "missing key" and "fallback"
-  // warnings to the console by default; in dev those are signal (a
-  // typo'd key shows up immediately), but in prod they're noise that
-  // crowds out genuine errors. Mirror the Vue-i18n recommendation:
-  // gate both on `!import.meta.env.PROD`.
-  missingWarn: !import.meta.env.PROD,
-  fallbackWarn: !import.meta.env.PROD,
-  messages: {
-    'de-AT': deMessages,
-    en: enMessages,
-  },
-})
 
 const app = createApp(App)
 const pinia = createPinia()
@@ -174,6 +158,61 @@ if (typeof window !== 'undefined') {
  * The fix: install pinia + i18n first, run bootstrap, then install
  * the router so its first navigation sees the resolved state.
  */
+/**
+ * Pluggable study-module SPI — route registration.
+ *
+ * Every manifest's routes are prefixed with
+ * {@code /studies/:studyOid/modules/<protocolType-lowercased>} so the
+ * URL space is namespaced by-study and-by-module. The {@code
+ * meta.studyModule} stamp lets the router guard reject navigations
+ * whose target study doesn't match the active study's protocol_type
+ * (e.g. deep-linking into /studies/.../modules/namd while bound to a
+ * GA study would 403 in the UI before the component imports any
+ * code).
+ *
+ * Runs before {@code app.use(router)} so the initial navigation can
+ * resolve module routes — useful for refresh on a deep link into the
+ * workspace.
+ */
+import { STUDY_MODULES } from '@/studyModules/registry'
+for (const mod of STUDY_MODULES) {
+  for (const route of mod.routes) {
+    router.addRoute({
+      ...route,
+      path: `/studies/:studyOid/modules/${mod.protocolType.toLowerCase()}${route.path}`,
+      meta: { ...(route.meta ?? {}), studyModule: mod.protocolType },
+    })
+  }
+}
+
+// 2026-06-24 user-feedback round — eager-load every registered
+// study module's i18n bundle at boot. The studyModules store
+// previously deferred this to {@code watch(activeModule, ..., {immediate: true})},
+// but that activation watcher only fires once a component invokes
+// {@code useStudyModuleStore()}, AND the {@code await loadI18n()}
+// settles asynchronously — a workspace render that landed before
+// the merge surfaced raw {@code studyModules.namd.tab.viewer}-style
+// keys (the user's 2026-06-24 console trace). Loading at boot
+// guarantees the bundle is present before any view templates run.
+// Bundle size cost is bounded — five module locales today, each
+// well under 30 kB JSON. Merge failures are non-fatal (the keys
+// fall back to the literal at runtime, with the missing-key warning
+// already in place).
+for (const mod of STUDY_MODULES) {
+  if (!mod.loadI18n) continue
+  void (async () => {
+    try {
+      const payload = await mod.loadI18n!()
+      i18n.global.mergeLocaleMessage('de', payload.de)
+      i18n.global.mergeLocaleMessage('de-AT', payload.de)
+      i18n.global.mergeLocaleMessage('en', payload.en)
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[studyModules] eager loadI18n failed for', mod.protocolType, e)
+    }
+  })()
+}
+
 useAuthStore(pinia).bootstrap().finally(() => {
   app.use(router)
   app.mount('#app')

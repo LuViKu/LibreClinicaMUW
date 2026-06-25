@@ -148,6 +148,12 @@ export function draftToPreviewSchema(draft: AuthoringDraft): CrfSchema {
 function authoringItemToRuntime(item: AuthoringItem): CrfItem {
   const dataType = authoringDataTypeToRuntime(item.dataType, item.responseType)
   const options = extractOptions(item.responseSet)
+  // 2026-06-21 user-feedback round 3 — carry the authoring show-when rule
+  // through to the preview's runtime schema. The runtime CrfItem.showWhen
+  // is a string (legacy + JSON shapes share that wire field); parseShowWhen
+  // accepts the JSON literal directly, so serialising here is the simplest
+  // path to consistent hide/show behaviour between authoring and preview.
+  const showWhen = serialiseAuthoringShowWhen(item)
   return {
     oid: item.oid?.trim() || item.uid,
     label: item.descriptionLabel?.trim() || item.name?.trim() || item.uid,
@@ -162,7 +168,26 @@ function authoringItemToRuntime(item: AuthoringItem): CrfItem {
     // validator still flags it via computeItemErrors.
     min: undefined,
     max: undefined,
+    showWhen,
   } as CrfItem
+}
+
+/**
+ * Serialise an authoring item's {@code showWhen} to the JSON literal the
+ * runtime {@link parseShowWhen} accepts. Returns {@code null} when the
+ * authoring item carries no rule (or the rule is incomplete, e.g. blank
+ * source OID).
+ */
+function serialiseAuthoringShowWhen(item: AuthoringItem): string | null {
+  const rule = item.showWhen
+  if (!rule) return null
+  const sourceItemOid = rule.sourceItemOid?.trim()
+  if (!sourceItemOid) return null
+  return JSON.stringify({
+    sourceItemOid,
+    comparator: rule.comparator,
+    literal: rule.literal,
+  })
 }
 
 export const useCrfPreviewStore = defineStore('crfPreview', () => {

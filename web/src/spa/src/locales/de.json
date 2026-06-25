@@ -35,9 +35,16 @@
     "error": {
       "title": "Ein Fehler ist aufgetreten",
       "dismiss": "Fehlermeldung schließen",
-      "reqIdLabel": "Fehler-ID"
+      "reqIdLabel": "Fehler-ID",
+      "detailsToggle": "Details anzeigen",
+      "detailsHide": "Details ausblenden",
+      "serverMessageLabel": "Server-Meldung",
+      "urlLabel": "URL",
+      "moreErrors": "{n} weitere Fehler",
+      "queuedListTitle": "Weitere Fehler"
     },
-    "systemAuditLog": "System-Audit"
+    "systemAuditLog": "System-Audit",
+    "retinalParked": "Geparkte Scans"
   },
   "network": {
     "offline": {
@@ -118,7 +125,8 @@
       "sitesDesc": "Standortidentität + Aktivierung + Nutzerrollen je Standort.",
       "auditLogDesc": "Plattform-Audit-Trail mit Diff-Karten bei jeder Änderung.",
       "dataExportTitle": "Datenexport",
-      "dataExportDesc": "Gespeicherte Datensätze der aktiven Studie — Exporte starten und generierte Dateien herunterladen."
+      "dataExportDesc": "Gespeicherte Datensätze der aktiven Studie — Exporte starten und generierte Dateien herunterladen.",
+      "modalitiesDesc": "Untersuchungsmodalitäten + zugehörige eye-spezifische Item-OIDs verwalten."
     },
     "switchStudySectionLabel": "Aktive Studie wechseln",
     "switchStudyTitle": "Aktive Studie wechseln",
@@ -136,7 +144,110 @@
     "search": "Suche",
     "filter": "Filter",
     "clear": "Zurücksetzen",
-    "export": "Export"
+    "dismiss": "Schließen",
+    "export": "Export",
+    "eye": {
+      "od": "rechts",
+      "os": "links"
+    }
+  },
+  "adminJobs": {
+    "title": "Geplante Jobs",
+    "subtitle": "Schreibgeschützte Übersicht aller Quartz-Trigger, die am gemeinsamen Anwendungs-Scheduler registriert sind.",
+    "refresh": "Aktualisieren",
+    "refreshedAt": "Aktualisiert um {ts}",
+    "loadFailed": "Job-Liste konnte nicht geladen werden.",
+    "scheduler": "Scheduler",
+    "started": "gestartet",
+    "notStarted": "nicht gestartet",
+    "standby": "Standby",
+    "name": "Name",
+    "group": "Gruppe",
+    "state": "Status",
+    "prevFire": "Letzter Lauf",
+    "nextFire": "Nächster Lauf",
+    "description": "Beschreibung",
+    "noJobs": "Keine geplanten Jobs."
+  },
+  "printableCrf": {
+    "title": "Druckvorschau",
+    "printAgain": "Erneut drucken",
+    "back": "Zurück",
+    "eventCrfId": "Event-CRF",
+    "status": "Status",
+    "lastSaved": "Zuletzt gespeichert",
+    "noRows": "Keine Datensätze vorhanden.",
+    "footerBrand": "LibreClinicaMUW — druckbare CRF-Ansicht",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "contact": {
+    "brandLine": "Universitätsklinik für Augenheilkunde und Optometrie, Medizinische Universität Wien",
+    "title": "Administrator kontaktieren",
+    "subtitle": "Nachricht an den LibreClinicaMUW-Administrator senden. Bitte ausreichend Details angeben, damit wir rasch helfen können.",
+    "name": "Ihr Name",
+    "email": "Ihre E-Mail-Adresse",
+    "subject": "Betreff",
+    "message": "Nachricht",
+    "send": "Nachricht senden",
+    "sending": "Wird gesendet…",
+    "successTitle": "Ihre Nachricht wurde gesendet.",
+    "successBody": "Der Administrator wurde benachrichtigt. Eine Antwort erfolgt gegebenenfalls an die angegebene E-Mail-Adresse.",
+    "sendAnother": "Weitere Nachricht senden",
+    "backToLogin": "Zurück zur Anmeldung",
+    "privacyNote": "Ihre Nachricht wird als unverschlüsselte E-Mail an den Administrator zugestellt. Bitte keine patientenidentifizierenden Daten angeben.",
+    "errorValidation": "Bitte korrigieren Sie die markierten Felder.",
+    "errorUnavailable": "Das Kontaktformular nimmt derzeit keine Nachrichten an. Bitte wenden Sie sich direkt an den Systemadministrator.",
+    "errorGeneric": "Senden der Nachricht fehlgeschlagen. Bitte später erneut versuchen.",
+    "errorNetwork": "Netzwerkfehler — bitte Verbindung prüfen und erneut versuchen."
+  },
+  "adminSystemStatus": {
+    "title": "Systemstatus",
+    "refresh": "Aktualisieren",
+    "refreshedAt": "Aktualisiert um {ts}",
+    "loadFailed": "Systemstatus konnte nicht geladen werden.",
+    "jvmHeading": "JVM",
+    "dbHeading": "Datenbank",
+    "appHeading": "Anwendung",
+    "reachable": "Erreichbar",
+    "dbProduct": "Engine",
+    "changelogCount": "Liquibase-Changesets",
+    "appStatus": "Status",
+    "uptime": "Laufzeit",
+    "yes": "Ja",
+    "no": "Nein"
+  },
+  "adminPasswordPolicy": {
+    "title": "Passwort-Richtlinie",
+    "subtitle": "Gilt für alle lokalen Konten. SSO-Konten erben die Richtlinie vom institutionellen IdP.",
+    "loadFailed": "Passwort-Richtlinie konnte nicht geladen werden.",
+    "saveFailed": "Speichern der Passwort-Richtlinie fehlgeschlagen.",
+    "saved": "Passwort-Richtlinie gespeichert.",
+    "classes": "Erforderliche Zeichenklassen",
+    "requireLower": "Kleinbuchstaben erforderlich",
+    "requireUpper": "Großbuchstaben erforderlich",
+    "requireDigits": "Ziffern erforderlich",
+    "requireSpecials": "Sonderzeichen erforderlich",
+    "minLength": "Mindestlänge",
+    "maxLength": "Maximallänge",
+    "expirationDays": "Ablauf (Tage)",
+    "zeroDaysNote": "0 = läuft nie ab",
+    "changeRequiredOnFirstLogin": "Passwort-Änderung bei erster Anmeldung erzwingen",
+    "discard": "Neu laden"
+  },
+  "adminConfig": {
+    "title": "Anwendungskonfiguration",
+    "subtitle": "Nur lesend — am MUW über Umgebungsvariablen gesetzt. Diese Ansicht zeigt, was die laufende JVM tatsächlich sieht.",
+    "refresh": "Aktualisieren",
+    "loadFailed": "Konfiguration konnte nicht geladen werden.",
+    "defaultTimezone": "Standardzeitzone",
+    "userLanguage": "Benutzersprache",
+    "userCountry": "Benutzerland",
+    "fileEncoding": "Dateikodierung",
+    "osName": "OS",
+    "javaOpts": "JAVA_OPTS",
+    "retinalPushUrl": "Retinal-Inference Push-URL",
+    "ssoEnabled": "SSO aktiviert"
   },
   "subjectMatrix": {
     "title": "Studienteilnehmer-Übersicht",
@@ -147,6 +258,13 @@
     "rowsPerPage": "Zeilen",
     "empty": "Keine Teilnehmer für den aktuellen Filter.",
     "openSubject": "Öffnen →",
+    "visitsTrail": "{count} Visiten",
+    "visitNav": {
+      "first": "Erste Visite",
+      "prev": "Frühere Visite",
+      "next": "Nächste Visite",
+      "jumpLatest": "Letzte Visite"
+    },
     "signed": "Signiert",
     "scheduleHint": "Bitte unten eine/n Teilnehmer/-in auswählen, um die nächste Visite zu planen.",
     "metricsLink": "Studien-Statistik Details",
@@ -230,37 +348,16 @@
       "enrolledOn": "Aufnahmedatum",
       "gender": "Geschlecht",
       "yearOfBirth": "Geburtsjahr",
-      "groupLabel": "Gruppenzuordnung",
-      "firstName": "Vorname",
-      "lastName": "Nachname",
-      "dateOfBirth": "Geburtsdatum"
+      "groupLabel": "Gruppenzuordnung"
     },
     "placeholder": {
       "subjectId": "z. B. M-042",
       "secondaryId": "Optional",
-      "yearOfBirth": "JJJJ",
-      "firstName": "z. B. Maria",
-      "lastName": "z. B. Müller"
+      "yearOfBirth": "JJJJ"
     },
     "helper": {
       "subjectId": "Die in den Quelldokumenten verwendete Kennung. Nach dem Speichern nicht mehr änderbar.",
-      "yearOfBirth": "Optional — abhängig von der Studienkonfiguration.",
-      "dateOfBirth": "Vollständiges Geburtsdatum (TT.MM.JJJJ). Wird zur studienübergreifenden Dublettenprüfung verwendet."
-    },
-    "matchDialog": {
-      "title": "Patient ggf. bereits erfasst ({n})",
-      "description": "Diese Person ist bereits im System unter dem angegebenen Geburtsdatum/Namen vorhanden. Bestehende Erfassung übernehmen oder als neue Person fortfahren.",
-      "actionLink": "Diesen Patienten verwenden",
-      "actionCreateNew": "Andere Person — trotzdem neu anlegen",
-      "actionCancel": "Eingabe ändern",
-      "noStudies": "Keine aktive Erfassung",
-      "studiesVisible": "Aktiv in: {list}",
-      "studiesHiddenOnly": "Bekannt in {n} weiteren Studien (kein Zugriff)",
-      "studiesMixed": "Aktiv in: {list} (+ {n} weitere ohne Zugriff)",
-      "studyEnrolment": "{study} ({label})",
-      "nameLine": "{lastName}, {firstName}",
-      "nameLineUnknown": "Name unbekannt",
-      "unnamedSubject": "— ohne Studien-ID —"
+      "yearOfBirth": "Optional — abhängig von der Studienkonfiguration."
     },
     "phiWarning": "Niemals Name, Krankenhaus-ID, Sozialversicherungsnummer oder andere identifizierende Daten verwenden.",
     "gender": {
@@ -485,6 +582,7 @@
   },
   "crfEntry": {
     "title": "CRF-Datenerfassung",
+    "printButton": "Drucken",
     "railHeading": "Abschnitte",
     "readOnlyTell": "Schreibgeschützt · Monitor-Ansicht",
     "lockedTell": "Gesperrt · Teilnehmer signiert",
@@ -620,6 +718,29 @@
       "placeholder": "Grund angeben…",
       "requiredTag": "Grund erforderlich",
       "inactiveHint": "Aktiv, sobald „{value}\" gewählt ist"
+    },
+    "prefill": {
+      "button": "Vom letzten Besuch übernehmen",
+      "modalTitle": "Werte vom letzten Besuch übernehmen",
+      "sourceLabel": "Quelle: Visite vom {date}",
+      "colItem": "Item",
+      "colValue": "Wert",
+      "colApply": "Übernehmen",
+      "confirm": "Übernehmen",
+      "cancel": "Abbrechen",
+      "empty": "Keine vorherige Visite gefunden",
+      "errorFetch": "Vorherige Werte konnten nicht geladen werden.",
+      "checkAll": "Alle auswählen",
+      "uncheckAll": "Keine auswählen"
+    }
+  },
+  "crfItem": {
+    "tristate": {
+      "tristateYes": "Ja",
+      "tristateNo": "Nein",
+      "tristateUnknown": "Unbekannt",
+      "reasonLabel": "Grund",
+      "reasonPlaceholder": "Grund angeben…"
     }
   },
   "dde": {
@@ -1049,7 +1170,12 @@
       "committed": "{count} Event-Definition(en) migriert.",
       "failed": "Migration fehlgeschlagen: {message}"
     },
-    "authorManually": "Manuell anlegen",
+    "authorManually": "Neue Version anlegen",
+    "forkMenu": {
+      "label": "Aus Vorversion übernehmen",
+      "heading": "Aus Vorversion übernehmen",
+      "fromVersion": "aus „{name}\" kopieren"
+    },
     "ophthCatalog": {
       "title": "Aus Ophthalmologie-Katalog hinzufügen",
       "subtitle": "Vordefinierte Felder mit OID + Einheit + Modalitätsbindung — wählen Sie ein Feld, das in den aktuellen Abschnitt eingefügt werden soll.",
@@ -1215,6 +1341,294 @@
       "button": "Validieren (Vorschau)",
       "success": "Sieht gut aus — {sections} Sektion(en), {items} Item(s).",
       "errorsTitle": "Die Vorschau hat den Entwurf abgelehnt:"
+    },
+    "canvas": {
+      "heading": "CRF-Builder",
+      "subheading": "Definition für {name}",
+      "subheadingGeneric": "CRF-Definition aufbauen",
+      "useLegacy": "Klassischen Wizard verwenden",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "saving": "Wird gespeichert …",
+      "validate": "Validieren",
+      "validating": "Validiere …",
+      "validationOk": "Validierung erfolgreich — keine Fehler.",
+      "fork": {
+        "loading": "Inhalte der Vorversion werden geladen …",
+        "loaded": "Inhalte der Vorversion übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",
+        "loadedNamed": "Inhalte aus Version „{name}\" übernommen — Sektionen und Items wurden in den Entwurf eingefügt.",
+        "failed": "Vorversion konnte nicht geladen werden — Entwurf wurde mit einer leeren Sektion gestartet."
+      },
+      "preview": "Vorschau",
+      "previewing": "Erzeuge Vorschau …",
+      "versionName": "Versionsname",
+      "versionDescription": "Versionsbeschreibung",
+      "versionNamePlaceholder": "z. B. v1.0",
+      "versionDescriptionPlaceholder": "Kurze Beschreibung der Änderungen in dieser Version",
+      "errorTitle": "Speichern fehlgeschlagen:",
+      "errors": {
+        "unknown": "Unbekannter Fehler.",
+        "validationFailed": "Die Eingaben sind unvollständig oder ungültig — bitte die unten markierten Felder prüfen."
+      },
+      "palette": {
+        "title": "Bausteine",
+        "primitives": "Primitive Items",
+        "presets": "Presets",
+        "prim": {
+          "ST": { "label": "Text", "description": "Einzeiliger oder mehrzeiliger Text." },
+          "INT": { "label": "Ganzzahl", "description": "Integer-Wert ohne Nachkommastellen." },
+          "REAL": { "label": "Reelle Zahl", "description": "Numerischer Wert mit Nachkommastellen." },
+          "DATE": { "label": "Datum", "description": "Vollständiges Datum (TT.MM.JJJJ)." },
+          "BL": { "label": "Boolean", "description": "Ja / Nein als einzelne Checkbox." },
+          "TRISTATE_REASON": { "label": "Ja / Nein / Unbekannt + Grund", "description": "Dreistufige Auswahl mit bedingtem Begründungsfeld." },
+          "FILE": { "label": "Dateianhang", "description": "Datei-Upload." }
+        }
+      },
+      "canvas": {
+        "dropHere": "Bausteine oder Presets aus dem linken Bereich hierher ziehen.",
+        "emptySection": "Diese Sektion enthält noch keine Items.",
+        "untitled": "(unbenannt)",
+        "removeItem": "Entfernen",
+        "dragItem": "Item neu anordnen"
+      },
+      "section": {
+        "add": "+ Neue Sektion hinzufügen",
+        "remove": "Sektion entfernen",
+        "titlePlaceholder": "Sektionstitel",
+        "labelPlaceholder": "Sektions-Label (z. B. S1)",
+        "bilateralOn": "Bilateral aktiv — Items werden im OD/OS-Raster angezeigt. Klicken, um auf unilateral umzuschalten.",
+        "bilateralOff": "Unilateral — Items als flache Liste. Klicken, um auf bilateral umzuschalten (OD links / OS rechts).",
+        "bilateralOnShort": "OD/OS",
+        "bilateralOffShort": "Uni",
+        "collapse": "Sektion einklappen",
+        "expand": "Sektion ausklappen",
+        "dragHandle": "Sektion ziehen, um Reihenfolge zu ändern"
+      },
+      "properties": {
+        "title": "Eigenschaften",
+        "clear": "Auswahl aufheben",
+        "noSelection": "Wählen Sie ein Item im Canvas, um seine Eigenschaften zu bearbeiten.",
+        "labelField": "Item-Name",
+        "oidField": "Item-OID",
+        "oidHelper": "Wird aus dem Item-Namen vorgeschlagen; überschreibbar.",
+        "descriptionField": "Beschreibungs-Label",
+        "dataTypeField": "Datentyp",
+        "dataTypeHint": {
+          "ST": "Frei eingegebener Text (einzeilig oder mehrzeilig).",
+          "INT": "Ganzzahl ohne Nachkommastellen, z. B. Anzahl Buchstaben.",
+          "REAL": "Numerischer Wert mit Nachkommastellen, z. B. mmHg.",
+          "DATE": "Vollständiges Datum (TT.MM.JJJJ).",
+          "PDATE": "Partielles Datum (Jahr oder Monat/Jahr).",
+          "BL": "Ja/Nein-Wert, im Hintergrund als boolesche Spalte gespeichert.",
+          "TRISTATE_REASON": "Dreistufig: Ja / Nein / Unbekannt mit Pflicht-Begründungsfeld bei „Nein“.",
+          "FILE": "Dateianhang (z. B. PDF, Bild)."
+        },
+        "responseTypeField": "Antworttyp",
+        "responseTypeHint": {
+          "text": "Einzeiliges Eingabefeld.",
+          "textarea": "Mehrzeiliges Texteingabefeld.",
+          "radio": "Einzelauswahl als Radio-Buttons (kompakt, alle Optionen sichtbar).",
+          "single-select": "Einzelauswahl als Dropdown (kompakt für viele Optionen).",
+          "multi-select": "Mehrfachauswahl als Dropdown.",
+          "checkbox": "Einzelne Checkbox (Ja/Nein) oder Liste von Checkboxen.",
+          "calculation": "Wert wird automatisch aus anderen Items berechnet.",
+          "number-stepper": "Numerische Eingabe mit Hoch/Runter-Tasten.",
+          "file": "Datei-Upload-Steuerelement."
+        },
+        "unitsField": "Einheit",
+        "defaultField": "Standardwert",
+        "requiredField": "Pflichtfeld",
+        "validationSection": "Validierung",
+        "validationRegex": "Regex (z. B. ^-?\\d+$)",
+        "validationMessage": "Fehlermeldung",
+        "showWhenSection": "Bedingte Anzeige",
+        "showWhenToggle": "Nur anzeigen, wenn …",
+        "showWhenSourcePlaceholder": "Quell-Item auswählen …",
+        "showWhenLiteralPlaceholder": "Vergleichswert"
+      },
+      "validation": {
+        "itemNameRequired": "Item-Name ist erforderlich.",
+        "descriptionRequired": "Beschreibungs-Label ist erforderlich.",
+        "dataTypeRequired": "Datentyp ist erforderlich.",
+        "responseTypeRequired": "Antworttyp ist erforderlich.",
+        "sectionTitleRequired": "Sektionstitel ist erforderlich.",
+        "sectionLabelRequired": "Sektions-Label ist erforderlich.",
+        "atLeastOneSection": "Mindestens eine Sektion ist erforderlich.",
+        "atLeastOneItem": "Die Sektion muss mindestens ein Item enthalten.",
+        "optionTextRequired": "Optionstext ist erforderlich.",
+        "optionValueRequired": "Optionswert ist erforderlich.",
+        "calculationFormulaRequired": "Berechnungsformel darf nicht leer sein.",
+        "expressionRequired": "Ausdruck darf nicht leer sein.",
+        "versionNameRequired": "Versionsname ist erforderlich.",
+        "versionNameTooLong": "Versionsname darf höchstens 255 Zeichen lang sein.",
+        "versionDescriptionRequired": "Versionsbeschreibung ist erforderlich.",
+        "fileResponseSetRequired": "Items vom Datentyp FILE benötigen ein 'file'-Antwortset.",
+        "itemNameInvalidChars": "Item-Name darf nur Buchstaben, Ziffern und Unterstriche enthalten.",
+        "dataTypeUnsupported": "Datentyp wird vom Server nicht akzeptiert.",
+        "responseTypeUnsupported": "Antworttyp wird vom Server nicht akzeptiert.",
+        "duplicateItemName": "Item-Name ist bereits in dieser Sektion vergeben."
+      }
+    },
+    "presets": {
+      "iop": {
+        "label": "IOP-Messung",
+        "description": "Tonometrie mit Ja/Nein/Unbekannt + bedingtem IOP-Wert oder Grund.",
+        "parent": {
+          "label": "IOP gemessen?"
+        },
+        "option": {
+          "ja": "Ja",
+          "nein": "Nein",
+          "unbekannt": "Unbekannt"
+        },
+        "value": {
+          "label": "IOP-Wert (mmHg)",
+          "validation": "Bitte einen numerischen Wert eingeben (z. B. 14,5)."
+        },
+        "reason": {
+          "label": "Grund, warum IOP nicht gemessen wurde"
+        }
+      },
+      "ophthExam": {
+        "label": "Ophthalmologische bilaterale Untersuchung",
+        "description": "OD/OS-Paare für Standardmessungen (BCVA, IOP, CCT, CRT)."
+      },
+      "bcva": {
+        "label": "BCVA (ETDRS-Buchstaben)",
+        "description": "Bestkorrigierter Visus nach ETDRS — Buchstaben pro Auge plus optionale Refraktion (Sphäre / Zylinder / Achse).",
+        "items": {
+          "letters": "BCVA — Buchstaben",
+          "lettersValidation": "Ganzzahl 0–100 erwartet.",
+          "sphere": "Refraktion — Sphäre",
+          "cylinder": "Refraktion — Zylinder",
+          "axis": "Refraktion — Achse",
+          "refractionValidation": "Bitte einen numerischen Wert eingeben (z. B. -1,75).",
+          "axisValidation": "Ganzzahl 0–180 erwartet."
+        }
+      },
+      "bcvaDecimal": {
+        "label": "BCVA (Dezimal + Refraktion)",
+        "description": "Bestkorrigierter Visus dezimal (autorefraktometer-Output) mit signiertem Teilzeilen-Offset (p-N / +N) plus Refraktion pro Auge. Backt das öffentliche BCVA-Eingabeportal.",
+        "items": {
+          "decimal": "Visus (Dezimal)",
+          "decimalValidation": "Dezimalwert 0,01–2,0 erwartet (z. B. 1,0 oder 0,8).",
+          "partial": "Teilzeile (signiert −4…+4)",
+          "partialValidation": "Ganzzahl −4 bis +4 erwartet (−N = N Optotypen verfehlt, +N = N zusätzlich gelesen).",
+          "sphere": "Refraktion — Sphäre",
+          "cylinder": "Refraktion — Zylinder",
+          "axis": "Refraktion — Achse",
+          "refractionValidation": "Bitte einen numerischen Wert eingeben (z. B. -1,75).",
+          "axisValidation": "Ganzzahl 0–180 erwartet."
+        }
+      },
+      "crt": {
+        "label": "CRT (zentrale 1 mm, µm)",
+        "description": "Zentrale Netzhautdicke — gemittelter ILM↔BM-Abstand über die zentrale 1-mm-Scheibe. Wird automatisch aus dem GA-Job (ILM) und dem BM-Job derselben Visite pro Auge berechnet; manuelle Korrekturen überschreiben den AI-Wert.",
+        "items": {
+          "crtMicrons": "CRT (zentrale 1 mm)",
+          "crtValidation": "Ganzzahl oder Dezimal 0–1500 µm erwartet."
+        }
+      },
+      "rnfl": {
+        "label": "RNFL (peripapillär, Heidelberg HRA / Spectralis ONH)",
+        "description": "Peripapilläre Nervenfaserschicht — globaler Mittelwert + Quadranten (S/T/I/N) + Signalqualität pro Auge.",
+        "items": {
+          "global": "RNFL — globaler Mittelwert",
+          "superior": "RNFL — superior (S)",
+          "temporal": "RNFL — temporal (T)",
+          "inferior": "RNFL — inferior (I)",
+          "nasal": "RNFL — nasal (N)",
+          "signalQuality": "Signalqualität (0–10)",
+          "umValidation": "Ganzzahl 0–999 µm erwartet.",
+          "signalValidation": "Ganzzahl 0–10 erwartet."
+        }
+      },
+      "thicknessMap": {
+        "label": "Makuladickenkarte (ETDRS 9-Felder)",
+        "description": "ETDRS-Makulagitter mit 9 Subfeldern pro Auge plus Geräte-Kennung (Spectralis / Cirrus / Topcon).",
+        "items": {
+          "central": "Zentrales Subfeld (1 mm)",
+          "innerSuperior": "Inner — superior (1–3 mm)",
+          "innerTemporal": "Inner — temporal (1–3 mm)",
+          "innerInferior": "Inner — inferior (1–3 mm)",
+          "innerNasal": "Inner — nasal (1–3 mm)",
+          "outerSuperior": "Outer — superior (3–6 mm)",
+          "outerTemporal": "Outer — temporal (3–6 mm)",
+          "outerInferior": "Outer — inferior (3–6 mm)",
+          "outerNasal": "Outer — nasal (3–6 mm)",
+          "modality": "Gerätemodalität",
+          "modalitySpectralis": "Spectralis",
+          "modalityCirrus": "Cirrus",
+          "modalityTopcon": "Topcon",
+          "modalityOther": "Andere",
+          "umValidation": "Ganzzahl 0–999 µm erwartet."
+        }
+      },
+      "slitLamp": {
+        "label": "Spaltlampe — Vorderabschnitt",
+        "description": "Hornhaut / Vorderkammer / Iris / Linse / Glaskörper pro Auge + Bemerkung.",
+        "items": {
+          "cornea": "Hornhaut",
+          "ac": "Vorderkammer",
+          "iris": "Iris",
+          "lens": "Linse",
+          "vitreous": "Glaskörper (anterior)",
+          "remark": "Bemerkung"
+        }
+      },
+      "imaging": {
+        "option": {
+          "ja": "Ja",
+          "nein": "Nein",
+          "unbekannt": "Unbekannt"
+        },
+        "reason": {
+          "label": "Grund (nicht akquiriert)"
+        }
+      },
+      "spectralisOct": {
+        "label": "Spectralis SD-OCT",
+        "description": "Heidelberg Spectralis SD-OCT — Akquisition akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "OCT akquiriert?" }
+      },
+      "spectralisFaf": {
+        "label": "Spectralis FAF",
+        "description": "Heidelberg Spectralis Fundus-Autofluoreszenz akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "FAF akquiriert?" }
+      },
+      "plexEliteOcta": {
+        "label": "ZEISS PLEX Elite OCT-A",
+        "description": "PLEX Elite 9000 OCT-Angiographie akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "OCT-A akquiriert?" }
+      },
+      "zeissClarus": {
+        "label": "ZEISS Clarus 700",
+        "description": "Ultra-Weitwinkel-Fundusaufnahme akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "Fundusbild akquiriert?" }
+      },
+      "topconMaestro2Oct": {
+        "label": "Topcon Maestro2 OCT",
+        "description": "Topcon Maestro 2 SD-OCT akquiriert? (Ja/Nein/Unbekannt) pro Auge.",
+        "acquired": { "label": "OCT akquiriert?" }
+      },
+      "plBcva": {
+        "label": "PL-BCVA (Pinhole)",
+        "description": "Pinhole-bestkorrigierter Visus — Buchstaben pro Auge + Bemerkung.",
+        "letters": {
+          "label": "PL-BCVA (Buchstaben)",
+          "validation": "0–100 Buchstaben (ganzzahlig)."
+        },
+        "notes": { "label": "Bemerkung" }
+      },
+      "llBcva": {
+        "label": "LL-BCVA (Low Luminance)",
+        "description": "Low-Luminance bestkorrigierter Visus (2,0 ND-Filter) — Buchstaben pro Auge + Bemerkung.",
+        "letters": {
+          "label": "LL-BCVA (Buchstaben)",
+          "validation": "0–100 Buchstaben (ganzzahlig)."
+        },
+        "notes": { "label": "Bemerkung" }
+      }
     }
   },
   "ophthPreset": {
@@ -1338,6 +1752,11 @@
     "category": "Kategorie",
     "description": "Beschreibung",
     "repeatingLabel": "Wiederholbare Visite (mehrfach pro Teilnehmer/in möglich)",
+    "retinalTasks": {
+      "label": "Retinale Inferenz-Tasks",
+      "hint": "Beim OCT-Upload für diese Visite wird pro ausgewähltem Task ein Inferenz-Job angelegt. Ohne Auswahl wird Fluid-Segmentierung als Standard verwendet.",
+      "saveError": "Inferenz-Task-Auswahl konnte nicht gespeichert werden."
+    },
     "disable": "Entfernen",
     "disableConfirm": "Visite »{name}« entfernen? Bereits erfasste CRFs bleiben im Audit Trail dokumentiert, sind aber nicht mehr erreichbar. Die Aktion wird im Audit Trail dokumentiert.",
     "restore": "Wiederherstellen",
@@ -1511,6 +1930,42 @@
       "saveError": "Speichern der Rollen fehlgeschlagen. Bitte erneut versuchen.",
       "savedToast": "Rollen aktualisiert.",
       "auditNote": "Alle Vergaben, Rollenwechsel und Entzüge werden im Audit Trail dokumentiert."
+    }
+  },
+  "retinalParked": {
+    "title": "Geparkte Scans",
+    "subtitle": "Cross-Studie Übersicht: Retinale Inferenz-Jobs, die ohne Visite hochgeladen wurden und auf eine Zuordnung warten. Sysadmin-only.",
+    "empty": "Keine geparkten Scans.",
+    "unknownPatient": "Unbekannte PatientId",
+    "columns": {
+      "jobId": "Job",
+      "patientId": "PatientId",
+      "eye": "Auge",
+      "task": "Task",
+      "uploadedAt": "Hochgeladen",
+      "actions": "Aktion"
+    },
+    "action": {
+      "assign": "Zuordnen",
+      "refresh": "Neu laden"
+    },
+    "toast": {
+      "bindOk": "Scan erfolgreich zugeordnet.",
+      "bindRaced": "Wurde inzwischen von jemand anderem zugeordnet — Liste aktualisiert.",
+      "noEventCrf": "Keine Eingabemaske für diese Visite — bitte den Studienteilnehmer zuerst über die Visite öffnen, damit die CRF angelegt wird. Anschließend erneut zuordnen."
+    },
+    "bulkBind": {
+      "selectedCount": "{count} von {total} ausgewählt",
+      "selectionClear": "Auswahl aufheben",
+      "selectAllAria": "Alle Scans auswählen",
+      "selectRowAria": "Scan #{jobId} auswählen",
+      "bulkAction": "Markierte zuweisen …",
+      "bulkConfirm": "Sie weisen {count} Scans dem nächsten Besuch zu.",
+      "bulkSummaryBound": "{count} zugewiesen",
+      "bulkSummaryAlreadyBound": "{count} bereits gebunden",
+      "bulkSummaryForbidden": "{count} nicht erlaubt",
+      "bulkSummaryInvalidState": "{count} ungültiger Status",
+      "bulkErrorPartial": "Mehrfachzuordnung fehlgeschlagen — bitte erneut versuchen."
     }
   },
   "modalities": {
@@ -1817,6 +2272,15 @@
     "binding": "Wird gebunden…",
     "signOut": "Abmelden"
   },
+  "studyModuleEnrollment": {
+    "title": "SPA-Studienmodule",
+    "hint": "Aktivieren Sie die studienspezifischen SPA-Module für diese Studie. Ein Modul erscheint nur in der Navigation, wenn es hier eingeschaltet UND der Protokolltyp der Studie zum Modul passt.",
+    "enrolled": "Aktiv",
+    "notEnrolled": "Aktivieren",
+    "noModules": "Keine SPA-Module registriert.",
+    "loadError": "Modulzuordnungen konnten nicht geladen werden.",
+    "toggleError": "Änderung der Modulzuordnung fehlgeschlagen."
+  },
   "studyParameters": {
     "title": "Studienparameter",
     "intro": "Konfigurieren Sie, wie diese Studie Probanden-IDs, Datenabweichungen, Interviewer-/Datums-Vorbelegungen und optionale Module behandelt. Änderungen werden pro Parameter auditiert.",
@@ -1888,7 +2352,7 @@
     "eventsCount": "Visiten",
     "scheduleEvent": "Visite planen",
     "openQueries": "Offene Rückfragen",
-    "openEvent": "CRFs öffnen →",
+    "openEvent": "CRFs öffnen",
     "column": {
       "event": "Visite",
       "dateStart": "Startdatum",
@@ -1920,6 +2384,8 @@
     "event": {
       "edit": "Bearbeiten",
       "cancel": "Stornieren",
+      "sign": "Visite signieren",
+      "moreActions": "Weitere Aktionen",
       "save": "Speichern",
       "location": "Ort",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
@@ -1938,8 +2404,7 @@
       "field": {
         "targetStudy": "Zielstudie",
         "targetLabel": "Teilnehmer-ID in Zielstudie (optional)",
-        "reason": "Begründung",
-        "transitionedAt": "Datum der Verlagerung"
+        "reason": "Begründung"
       },
       "action": {
         "transition": "In andere Studie verlagern",
@@ -1951,8 +2416,7 @@
         "reasonRequired": "Eine Begründung ist erforderlich.",
         "eyeAlreadyTracked": "Das Auge wird in der Zielstudie bereits geführt.",
         "unknownStudy": "Zielstudie nicht gefunden.",
-        "network": "Verlagerung konnte nicht gespeichert werden — bitte erneut versuchen.",
-        "transitionedAtFuture": "Datum darf nicht in der Zukunft liegen."
+        "network": "Verlagerung konnte nicht gespeichert werden — bitte erneut versuchen."
       },
       "banner": {
         "source": "{eye} am {date} in {study} ({label}) verlagert",
@@ -1989,6 +2453,34 @@
     },
     "locked": "Gesperrt"
   },
+  "events": {
+    "cancel": {
+      "title": "Visite stornieren",
+      "subtitle": "Visite »{label}«",
+      "reasonLabel": "Grund",
+      "reasonPlaceholder": "Bitte Grund auswählen…",
+      "reasonRequired": "Bitte einen Grund auswählen.",
+      "otherTextLabel": "Freitext-Begründung",
+      "otherTextRequired": "Bitte eine Begründung eingeben.",
+      "otherPlaceholder": "Begründung erfassen…",
+      "confirm": "Visite stornieren",
+      "cancel": "Abbrechen",
+      "errorLoadReasons": "Stornierungsgründe konnten nicht geladen werden — bitte später erneut versuchen.",
+      "errorSubmit": "Stornierung fehlgeschlagen — bitte später erneut versuchen.",
+      "successToast": "Visite storniert."
+    }
+  },
+  "eventSign": {
+    "title": "Visite signieren",
+    "subtitle": "Visite {event} von {subject} elektronisch signieren.",
+    "passwordLabel": "Passwort",
+    "passwordRequired": "Bitte das Passwort eingeben.",
+    "showPassword": "Passwort anzeigen",
+    "attestation": "Ich bestätige, die Daten dieser Visite geprüft zu haben und attestiere sie hiermit elektronisch.",
+    "attestationRequired": "Die Bestätigung ist erforderlich.",
+    "cancel": "Abbrechen",
+    "confirm": "Signieren"
+  },
   "eventDetail": {
     "title": "CRFs dieser Visite",
     "subTitle": "Formulare",
@@ -2017,7 +2509,9 @@
     "action": {
       "open": "CRF öffnen →",
       "startSpa": "Datenerfassung starten →",
-      "starting": "Wird gestartet…"
+      "starting": "Wird gestartet…",
+      "markComplete": "Visite abschließen",
+      "completing": "Wird abgeschlossen…"
     },
     "error": {
       "notFound": "Visite nicht gefunden.",
@@ -2044,11 +2538,16 @@
     "field": {
       "eventDefinition": "Visite",
       "dateStarted": "Startdatum",
-      "location": "Ort"
+      "location": "Ort",
+      "intervalWeeks": "Nächstes Intervall (Wochen)"
     },
     "placeholder": {
       "eventDefinition": "Visite auswählen…",
-      "location": "Optional"
+      "location": "Optional",
+      "intervalWeeks": "z. B. 8"
+    },
+    "help": {
+      "intervalWeeks": "Optional — für Treat-and-Extend-Protokolle. Das nächste Visiten-Soll-Datum wird automatisch errechnet."
     },
     "submit": "Planen",
     "empty": "Für diese Studie sind keine Visiten verfügbar.",
@@ -2056,6 +2555,7 @@
       "eventDefinitionRequired": "Bitte eine Visite auswählen.",
       "dateRequired": "Startdatum ist erforderlich.",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
+      "intervalInvalid": "Intervall muss eine ganze Zahl ≥ 0 sein.",
       "generic": "Visite konnte nicht geplant werden. Bitte erneut versuchen."
     }
   },
@@ -2276,6 +2776,377 @@
     "confirm": {
       "heading": "Bestätigen",
       "placeholder": "Bestätigungsoberfläche folgt mit Phase 2."
+    }
+  },
+  "bcvaPortal": {
+    "title": "BCVA-Eingabeportal",
+    "studyOid": "Studie · {oid}",
+    "date": "Datum der Visite",
+    "enteredBy": "Eingegeben von",
+    "enteredByPlaceholder": "Vor- und Nachname",
+    "enteredByRequired": "Bitte zuerst den Namen eintragen.",
+    "loading": "Lade Visiten …",
+    "empty": "Für dieses Datum sind keine Visiten geplant.",
+    "alreadyEntered": "BCVA bereits erfasst",
+    "committed": "Gespeichert ✓",
+    "reopen": "Erneut bearbeiten",
+    "bcva": "Visus",
+    "bcvaPlaceholder": "z. B. 1,0 oder 1,0p-2 oder 0,8+2",
+    "bcvaInvalid": "Format: 1,0  ·  1,0p-2  ·  0,8+2",
+    "noBcvaProvided": "Bitte mindestens einen Visus-Wert eingeben (OD oder OS).",
+    "submit": "Speichern",
+    "submitting": "Speichere …"
+  },
+  "octPortal": {
+    "topbar": {
+      "brandSuffix": "MUW",
+      "portalLabel": "OCT-Upload-Portal",
+      "noLoginRequired": "Kein Login erforderlich"
+    },
+    "footer": {
+      "formatNote": "Heidelberg Spectralis OCT",
+      "versionLine": "LibreClinica MUW · Version {version}",
+      "buildLine": "Build {date} · {hash}"
+    },
+    "head": {
+      "eyebrow": "OCT-Bildgebung · Upload-Portal",
+      "title": "OCT-Scans hochladen",
+      "leadIntro": "Studienübergreifend — die passende",
+      "leadAnd": "und",
+      "leadDetermine": "werden automatisch anhand von",
+      "leadFromHeader": "aus dem Datei-Header bestimmt.",
+      "studyWord": "Studie",
+      "visitWord": "Visite",
+      "patientIdWord": "PatientId",
+      "scanDateWord": "Scan-Datum",
+      "parsingStatus": "Header werden gelesen…"
+    },
+    "hero": {
+      "noLoginPrefix": "Es ist kein Login nötig. Der Browser liest den",
+      "noLoginHeader": "-Header lokal aus, ermittelt",
+      "noLoginEye": "Auge",
+      "noLoginSuffix": "und schlägt anschließend die passende Studie und Visite zur Bestätigung vor."
+    },
+    "dropzone": {
+      "slimDropMorePrefix": "Weitere",
+      "slimDropMoreSuffix": "-Dateien hierher ziehen",
+      "browse": "Durchsuchen",
+      "heroTitle": "OCT-Scans hierher ziehen",
+      "heroBrowsePrefix": "oder",
+      "heroBrowse": "Dateien durchsuchen",
+      "heroNote": "mehrere Dateien gleichzeitig möglich · Auslesen erfolgt lokal im Browser"
+    },
+    "parseQueue": {
+      "headerLabel": "Verarbeitung · {done} von {total} Dateien gelesen",
+      "headerHint": ".e2e-Header → PatientId · Datum · Auge → Studie/Visite"
+    },
+    "parseRow": {
+      "studyVisitDetermining": "Studie & Visite werden ermittelt…",
+      "headerReading": "Header wird gelesen…"
+    },
+    "reviewQueue": {
+      "colFile": "Datei",
+      "colPatientId": "PatientId",
+      "colScanDate": "Scan-Datum",
+      "colEye": "Auge",
+      "colStudyVisit": "Studie · Visite"
+    },
+    "assignment": {
+      "patientFound": "Patient gefunden",
+      "patientNotFound": "Patient nicht gefunden",
+      "alreadyUploaded": "Bereits hochgeladen",
+      "alreadyUploadedDetail": "Identische .e2e-Datei existiert bereits als Job",
+      "multipleStudies": "Mehrere Studien",
+      "patientIdMissingPrefix": "PatientId",
+      "patientIdMissingSuffix": "existiert in keiner Studie.",
+      "patientIdAmbiguous": "PatientId existiert in mehreren Studien — Zuordnung erforderlich.",
+      "noEventForDate": "Kein Termin für den {date} geplant.",
+      "assigned": "Zugeordnet",
+      "parked": "Geparkt",
+      "today": "heute",
+      "todayScheduled": "heute geplant",
+      "processError": "Fehler beim Verarbeiten",
+      "uploading": "Wird hochgeladen…",
+      "change": "ändern",
+      "dismissAria": "Verwerfen"
+    },
+    "actions": {
+      "confirm": "Bestätigen",
+      "undo": "Rückgängig",
+      "pickVisit": "Visite wählen",
+      "parkLater": "Später zuordnen",
+      "searchPatient": "Patient suchen",
+      "park": "Parken",
+      "pickStudy": "Studie wählen"
+    },
+    "summary": {
+      "fileSingular": "Datei",
+      "filePlural": "Dateien",
+      "recognised": "erkannt",
+      "studySingular": "Studie",
+      "studyPlural": "Studien",
+      "suggestionSingular": "Vorschlag",
+      "suggestionPlural": "Vorschläge",
+      "confirmedSuffix": "bestätigt",
+      "noVisitSuffix": "ohne Termin",
+      "noPatientSuffix": "ohne Patient",
+      "ambiguousSuffix": "mehrdeutig",
+      "problemSingular": "Problem",
+      "problemPlural": "Probleme",
+      "confirmAllSuffix": "bestätigen"
+    },
+    "modals": {
+      "patientSearch": {
+        "title": "Patient suchen",
+        "placeholder": "Studien-ID oder Subject-Label eingeben…",
+        "tooShort": "Mindestens 2 Zeichen eingeben.",
+        "empty": "Keine passenden Studienteilnehmer gefunden.",
+        "searching": "Wird gesucht…",
+        "cancel": "Abbrechen",
+        "siteLabel": "Standort",
+        "studyLabel": "Studie",
+        "loadError": "Suche fehlgeschlagen."
+      },
+      "visitPicker": {
+        "title": "Visite wählen",
+        "empty": "Keine Visiten für diesen Teilnehmer.",
+        "loading": "Visiten werden geladen…",
+        "cancel": "Abbrechen",
+        "loadError": "Visiten konnten nicht geladen werden."
+      },
+      "studyPicker": {
+        "title": "Studie wählen",
+        "subtitle": "PatientId existiert in mehreren Studien — bitte die Zuordnung wählen für",
+        "subjectLabelPrefix": "Teilnehmer-ID:",
+        "siteLabelPrefix": "Standort:",
+        "visitFound": "Visite gefunden",
+        "noVisit": "Keine Visite am Scan-Datum",
+        "cancel": "Abbrechen"
+      }
+    }
+  },
+  "retinal": {
+    "loading": "Netzhaut-Auswertung wird geladen …",
+    "failedToLoad": "Netzhaut-Job konnte nicht geladen werden: {error}",
+    "header": {
+      "eventCrfLabel": "Event-CRF #{id} · Inferenz-Job #{jobId}",
+      "title": "Netzhaut-Auswertung",
+      "modelLabel": "Modell:",
+      "runLabel": "Lauf:",
+      "confidenceLabel": "Konfidenz:",
+      "downloadAll": "Alle herunterladen",
+      "lateralityLong": {
+        "OS": "OS · linkes Auge",
+        "OD": "OD · rechtes Auge",
+        "OU": "OU · beide Augen"
+      }
+    },
+    "live": {
+      "indicator": "Live-Aktualisierung"
+    },
+    "status": {
+      "queued": "In Warteschlange",
+      "remote_pending": "Wartet auf Sidecar",
+      "screening": "Wird geprüft",
+      "screened": "Vorprüfung abgeschlossen",
+      "preprocessing": "Vorverarbeitung",
+      "segmenting": "Segmentierung",
+      "succeeded": "Abgeschlossen",
+      "done": "Abgeschlossen",
+      "failed": "Fehlgeschlagen",
+      "parked": "Geparkt"
+    },
+    "task": {
+      "fluid": "Flüssigkeit",
+      "onl": "ONL-Dicke",
+      "pr": "PR-Dicke",
+      "ga": "GA-Fläche",
+      "bmeis": "BMEIS",
+      "layers": "Schichtsegmentierung (IOWA + BM)",
+      "bm": "Bruch-Membran"
+    },
+    "empty": {
+      "awaitingSidecar": "Warte auf Sidecar …",
+      "preprocessing": "OCT-Volumen wird vorverarbeitet …",
+      "segmenting": "Segmentierung läuft — Metriken erscheinen, sobald der Sidecar fertig ist.",
+      "failed": "Inferenz fehlgeschlagen — Segmentierungs-Artefakte (sofern vorhanden) sind unten weiterhin verfügbar.",
+      "noMetric": "Metriken konnten nicht berechnet werden — Segmentierungs-Artefakte sind unten weiterhin verfügbar.",
+      "noKpi": "Noch keine Kennzahlen.",
+      "fundusNotAvailable": "Fundus-Bild ist noch nicht verfügbar.",
+      "noPerBscan": "Für diesen Task gibt es keine Per-B-Scan-Auswertung."
+    },
+    "kpi": {
+      "irf": "IRF",
+      "srf": "SRF",
+      "ped": "PED",
+      "total": "Gesamt",
+      "gaArea": "GA-Fläche",
+      "onlThickness": "ONL-Dicke",
+      "prThickness": "PR-Dicke",
+      "validAscans": "{valid} / {total} A-Scans gültig",
+      "subtitle": {
+        "notDetected": "nicht detektiert",
+        "affected": "{count} von {total} B-Scans betroffen",
+        "totalLoad": "Fluid-Last gesamt"
+      }
+    },
+    "etdrs": {
+      "header": "ETDRS-Teilsummen",
+      "colRing": "Ring",
+      "colIrf": "IRF mm³",
+      "colSrf": "SRF mm³",
+      "colPed": "PED mm³",
+      "colTotal": "Gesamt mm³",
+      "colGaArea": "GA-Fläche mm²",
+      "colThicknessUm": "Mittlere Dicke µm",
+      "sectionCircle": "Kreis",
+      "sectionRing": "Ring",
+      "ringLabel": "{mm} mm",
+      "ringLabelRange": "{from}–{to} mm",
+      "selectionHint": "Bereiche im Fundus zum Aufsummieren anklicken",
+      "selectionHeader": "Auswahl",
+      "selectionClear": "Auswahl leeren",
+      "selectionLabelThickness": "Mittlere Dicke"
+    },
+    "downloads": {
+      "header": "Downloads",
+      "empty": "Noch keine Artefakte verfügbar.",
+      "sectionPerScan": "Pro Scan",
+      "sectionSegmentation": "Segmentierung",
+      "action": "Herunterladen"
+    },
+    "fundus": {
+      "header": "En-face · ETDRS-Lokalisation",
+      "bscanPosition": "B-Scan-Position"
+    },
+    "jsonTree": {
+      "rawPayloadHeader": "Rohe Ausgabe-Daten"
+    },
+    "retry": {
+      "cta": "Erneut versuchen",
+      "inflight": "Wird neu gestartet…",
+      "error": "Neustart fehlgeschlagen — bitte später erneut versuchen."
+    },
+    "rerunAs": {
+      "cta": "Anderen Task ausführen",
+      "inflight": "Wird gestartet…",
+      "menuHeader": "Neuer Inferenz-Task",
+      "error": "Start mit anderem Task fehlgeschlagen.",
+      "successBanner": "Neuer {task}-Job (#{jobId}) wurde gestartet.",
+      "duplicateBanner": "Für diesen Scan existiert bereits ein {task}-Job (#{jobId}) — Sie wurden dorthin geleitet."
+    },
+    "nav": {
+      "backToSubjects": "← Zurück zur Probandenmatrix",
+      "home": "Start"
+    },
+    "perBscan": {
+      "header": "Per-B-Scan-Verlauf",
+      "empty": "Keine Per-B-Scan-Daten.",
+      "xAxisLabel": "B-Scan-Index",
+      "yAxisLabel": "mm²",
+      "tooltipPrefix": "B-Scan {label}"
+    },
+    "results": {
+      "header": "Netzhaut-Auswertungen",
+      "jobsLabel": "{n} Auswertung(en)",
+      "loading": "Wird geladen …",
+      "empty": "Noch keine Netzhaut-Inferenzläufe.",
+      "colTask": "Task",
+      "colEye": "Auge",
+      "colStatus": "Status",
+      "colPrimaryMetric": "Hauptmetrik",
+      "colModel": "Modell",
+      "colCompleted": "Abgeschlossen",
+      "viewMetricsLink": "Metriken anzeigen"
+    },
+    "fundusOverlay": {
+      "aria": "Fundus image with retinal overlays, {laterality}",
+      "foveaTooltip": "Fovea estimate ({source})",
+      "region": {
+        "center": "Zentral 1 mm",
+        "ring_1_3": "Ring 1–3 mm",
+        "ring_3_6": "Ring 3–6 mm",
+        "corners": "Außerhalb 6 mm (Ecken)"
+      }
+    },
+    "biomarkerToggle": {
+      "tooltip": "{name}-Schicht ein-/ausblenden"
+    },
+    "compare": {
+      "header": "Vergleich zum vorherigen Besuch",
+      "daysAgo": "Vor {days} Tagen",
+      "loading": "Vergleich wird geladen…",
+      "errorPrefix": "Vergleich konnte nicht geladen werden:"
+    },
+    "arm": {
+      "blindedLabel": "KI-Daten ausgeblendet (Studien-Arm)",
+      "blindedExplain": "Diese Visite ist einem Studien-Arm zugeordnet, in dem die KI-Quantifizierung nicht angezeigt wird. Die Werte werden weiterhin im Hintergrund berechnet und für die Endpunktanalyse gespeichert."
+    },
+    "bscanViewer": {
+      "header": "B-Scan-Navigator",
+      "position": "Schnitt {current} / {total}",
+      "loading": "Viewer wird geladen…",
+      "errorPrefix": "B-Scan-Viewer konnte nicht geladen werden:",
+      "segOverlayAlt": "Segmentierungs-Overlay für Schnitt {current} von {total}",
+      "scrollHint": "Scrollen = Slice wechseln",
+      "previous": "Vorheriger Schnitt",
+      "next": "Nächster Schnitt"
+    },
+    "layers": {
+      "legendTitle": "Netzhautschichten",
+      "allOn": "Alle ein",
+      "allOff": "Alle aus"
+    },
+    "trends": {
+      "title": "Biomarker-Verlauf",
+      "chartHeader": "Verlauf",
+      "empty": "Noch keine Daten",
+      "emptyEye": "Keine Daten für {eye}",
+      "loading": "Werte werden geladen…",
+      "errorPrefix": "Werte konnten nicht geladen werden:",
+      "xAxisLabel": "Datum",
+      "yAxisLabel": "Wert ({unit})",
+      "yAxisLabelBlank": "Wert",
+      "taskLabel": "Aufgabe",
+      "taskLabels": {
+        "fluid": "Flüssigkeit (IRF / SRF / PED)",
+        "onl": "ONL-Dicke",
+        "pr": "PR-Dicke",
+        "ga": "GA-Fläche"
+      },
+      "historyHeader": "Bisherige Auswertungen",
+      "history": {
+        "colJob": "Job",
+        "colCompleted": "Abgeschlossen",
+        "colTask": "Aufgabe",
+        "colEye": "Auge",
+        "colStatus": "Status",
+        "colPrimaryMetric": "Primärwert",
+        "viewLink": "Anzeigen",
+        "empty": "Noch keine Auswertungen vorhanden."
+      }
+    },
+    "subject": {
+      "sectionTitle": "Retinal-Verlauf",
+      "sectionSubtitle": "Längsschnitt-Auswertungen der OCT-Inferenz für diese/n Teilnehmer/in."
+    },
+    "live": {
+      "indicator": "Live"
+    },
+    "parked": {
+      "title": "Parkende Scans",
+      "subtitle": "Hochgeladene Scans ohne zugewiesene Visite — bitte einer Visite zuordnen.",
+      "empty": "Keine parkenden Scans.",
+      "loading": "Wird geladen…",
+      "loadError": "Parkende Scans konnten nicht geladen werden.",
+      "colTask": "Aufgabe",
+      "colEye": "Auge",
+      "colEnqueued": "Eingegangen",
+      "colAction": "Aktion",
+      "bindAction": "Visite zuweisen",
+      "bindSuccess": "Scan einer Visite zugewiesen.",
+      "bindConflict": "Scan wurde bereits durch eine andere Sitzung zugewiesen.",
+      "bindError": "Zuweisung fehlgeschlagen."
     }
   },
   "bugReport": {

@@ -6,7 +6,7 @@
 - **D-Sec (primary, ~1.5–2 weeks):** auth/security work. Production-deployment-blocking. This playbook focuses here.
 - **D-Libs (parallel, ~2–3 months):** library long-tail (iText, POI, FOP, Quartz, GWT, Prototype.js, EhCache, log4jdbc). Independent of D-Sec; can run alongside without coupling. Documented in [§ D-Libs](#d-libs--library-long-tail) for tracking only.
 
-**Pre-flight reference:** [phase-d-pre-flight-inventory.md](phase-d-pre-flight-inventory.md) — current-state inventory of the security stack and library versions.
+**Pre-flight reference:** [phase-d-pre-flight-inventory.md](archive/phase-d-pre-flight-inventory.md) — current-state inventory of the security stack and library versions.
 
 **Lead-in:** Phase C closed 2026-05-30 (`lc-develop @ 646209e36`). Spring Security 6.4.4 + Spring Boot 3.5 + Hibernate 6.4.10 + Java 21 + jakarta. Phase D builds on `SecurityConfig` (the Java `SecurityFilterChain @Bean` from C.14) and adds: a new pre-auth filter, a new `UserDetailsService` path, a Liquibase changeset, an Apache-mod_shib compose sidecar (reference deployment), an updated login JSP affordance, and a password encoder swap.
 
@@ -510,6 +510,6 @@ Independent of D-Sec; can be picked up in any order by any contributor without c
 - [MIGRATION.md § Phase D](../../../MIGRATION.md#phase-d--remaining-library-replacement) — original strategic plan (now refined: Sec primary, Libs parallel)
 - [DR-014 — Institution-agnostic SSO via reverse-proxy pre-authentication](decision-record.md#dr-014--institution-agnostic-sso-via-reverse-proxy-pre-authentication)
 - [DR-015 — Password encoder migration: MD5/SHA-1 → bcrypt via DelegatingPasswordEncoder](decision-record.md#dr-015--password-encoder-migration-md5sha-1--bcrypt-via-delegatingpasswordencoder)
-- [phase-d-pre-flight-inventory.md](phase-d-pre-flight-inventory.md) — current security-stack inventory
-- [phase-c-execution-playbook.md](phase-c-execution-playbook.md) — playbook template
+- [phase-d-pre-flight-inventory.md](archive/phase-d-pre-flight-inventory.md) — current security-stack inventory
+- [phase-c-execution-playbook.md](archive/phase-c-execution-playbook.md) — playbook template
 - `lc-develop @ 646209e36` — Phase C closure baseline this playbook builds on

@@ -14,6 +14,7 @@ import UserRolesDialog from '@/components/UserRolesDialog.vue'
 import { useUsersStore } from '@/stores/users'
 import { useAuthStore } from '@/stores/auth'
 import type { StudyUser, UserAuth, UserRole } from '@/types/user'
+import { formatDate } from '@/lib/dateFormat'
 
 const { t } = useI18n()
 const users = useUsersStore()
@@ -140,12 +141,7 @@ const authOptions: { v: 'all' | UserAuth; l: () => string }[] = [
   { v: 'pending-invite',   l: () => t('manageUsers.auth.pending-invite') },
 ]
 
-const MONTH_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-function formatDate(iso: string | null): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return `${String(d.getDate()).padStart(2, '0')}-${MONTH_ABBR[d.getMonth()] ?? '???'}-${d.getFullYear()}`
-}
+// formatDate moved to @/lib/dateFormat (2026-06-21 user-feedback round 4)
 </script>
 
 <template>

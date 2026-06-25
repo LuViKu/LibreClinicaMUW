@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd">
+
+    <!--
+      2026-06-22 — Extend the retinal-job dedup key to include `task`.
+
+      Previous {@code ux_retinal_inference_job_e2e_sha256_scan_idx}
+      was {@code (e2e_sha256, scan_index)} — fine for the single-task
+      world we shipped first, but it blocks two legitimate flows
+      we are about to enable:
+
+      1. Operator re-runs an existing scan as a DIFFERENT task from
+         the metrics view (e.g. a job that landed as `fluid` now
+         being re-dispatched as `ga` for the same e2e + scan slot).
+      2. Per-event-definition default-task config that fans the
+         /commit upload out to multiple inference jobs (one per
+         configured task) sharing the same e2e bytes + scan slot.
+
+      The widened key {@code (e2e_sha256, scan_index, task)} preserves
+      the original intent (block byte-identical re-uploads of the
+      same volume-slot+task pair) while letting different tasks
+      coexist for the same scan.
+    -->
+    <changeSet id="2026-06-22-retinal-job-multitask-unique" author="muw">
+        <dropIndex tableName="retinal_inference_job"
+                   indexName="ux_retinal_inference_job_e2e_sha256_scan_idx"/>
+        <createIndex tableName="retinal_inference_job"
+                     indexName="ux_retinal_inference_job_e2e_sha256_scan_task_idx"
+                     unique="true">
+            <column name="e2e_sha256"/>
+            <column name="scan_index"/>
+            <column name="task"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

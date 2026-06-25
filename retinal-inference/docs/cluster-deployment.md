@@ -1,0 +1,252 @@
+# Retinal-inference on the OPTIMA GPU cluster (DR-022)
+
+Runbook for running the inference server on the OPTIMA Apptainer/SLURM cluster
+(`cn5.cir.meduniwien.ac.at`), reached from the LibreClinica app VM over the
+internal MUW network.
+
+## Topology
+
+```
+LibreClinica (app VM, 149.148.170.183) — converts .e2e → bscan.dcm (PHI-redacted) app-side
+   │  POST /run   (multipart bscan.dcm + task + laterality, header X-MUW-Inference-Token)
+   ▼
+inference server  (bare venv Python 3.11 on the cluster; ADAPTER=apptainer; DICOM-only)
+   │  per scan: write bscan.dcm into a tempdir on /scratch, run the model's .sif
+   ▼
+   singularity exec --nv <model>.sif …   (direct now; srun-per-scan once a SLURM account exists)
+   → parse output → JSON envelope → tempdir deleted (stateless)
+```
+
+Confirmed cluster facts (June 2026): same internal network (cn5↔app VM route, HTTP
+302); `/scratch` is shared NFS (3.4 T free); SLURM caps every partition at 2 days;
+**the user has no SLURM association yet** (so `srun` is blocked — direct mode until
+an admin grants an account, likely `optima`); the container runtime is
+**`singularity 3.8.7` at `/usr/bin/singularity`** (no `apptainer`, no module).
+
+## 0. Container runtime
+Confirmed: `singularity 3.8.7-1.el7` on PATH. Set:
+```
+RETINAL_INFERENCE_APPTAINER_BIN=singularity
+```
+Singularity 3.8 supports every flag the adapter emits (`exec`/`run`/`--nv`/
+`--bind`/`--no-home`/`-e`), so no code change vs Apptainer.
+
+## 1. Provision images + code + weights (shared path, not git)
+The assets already live on shared storage under
+`$PI = /home/optima/octreader/Processor_Implementations` (confirmed June 2026 by a
+full recursive listing). The `.sif`s are large (fluid 2.9 G, onl 6.0 G, ga 10.1 G);
+**bind them in place — no copy needed.** Only the PR `.sif` must be built (none
+ships for `sese_pr`). Resolved canonical paths:
+
+| Task | .sif | code dir | weights |
+|---|---|---|---|
+| fluid | `$PI/sese_retinsight_fluid/code/v2.5.0/fluid_segmentation.sif` | — (baked) | — (baked) |
+| onl | `$PI/sese_onl/singularity/sese_onl.sif` | `$PI/sese_onl/code/outernuclearlayer-segmentation` | `$PI/sese_onl/weights/cross_val_ga` (5-fold ensemble; single-model alt `…/weights/onl_seg_vanilla_unet.pth`) |
+| pr | **build** from `runners/pr/apptainer.def` → `/scratch/$USER/ri/pr.sif` | `$PI/sese_pr/code/photoreceptors-segmentation` | `$PI/sese_pr/weights/u2net-cross-entropy` |
+| ga (gated) | `$PI/sese_ga/pytorch_optima_dl.v4.sif` | `$PI/sese_ga/code` (`common/`+`prepare_data/` are empty on disk — the real ones live inside the `.sif`) | `$PI/sese_ga/weights/filly_checkpoints` (5× `w.ckpt`) |
+
+> **GA's IOWA step (binary located).** GA needs an 11-layer IOWA segmentation as
+> `--LayerSegPath` input — a *folder of 11 layer CSVs* (not raw XML; see
+> `infer_sample_filly.py:84,105`). The chain the adapter's `_ga` runs:
+> 1. `OCTLayerSeg3.6 -oM bscan.dcm lres.xml …` — the licensed IOWA native binary
+>    (host, **not** a `.sif`) at `/home/optima/octreader/OCTLayerSeg3.6` → `GA_IOWA_BINARY`.
+> 2. `local_IOWA_LayerSegV3_to_CSV --in lres.xml --intype iowaxml_ls --out <dir>
+>    --outtype csv` at `/home/optima/octreader/optima-framework/deployment/prod/local_IOWA_LayerSegV3_to_CSV`
+>    → `GA_IOWA_CONVERTER`. (XML→CSV flags reconstructed from the vendor's csv→vrcbin
+>    usage — **validate on the first GA run.**)
+> 3. `infer_sample_filly.py` in the GA `.sif` consumes those CSVs → RPEL.
+>
+> GA also rejects non-Spectralis scans and expects 49 or 97 B-scans. fluid/onl/pr
+> do not depend on any of this.
+
+```sh
+singularity build --fakeroot /scratch/$USER/ri/pr.sif \
+  <repo>/retinal-inference/runners/pr/apptainer.def
+```
+If `--fakeroot` isn't enabled for your user (common on shared clusters), build
+the `.sif` on a box where you have sudo/root and copy it over, or use a remote
+builder — the `.def` itself is unchanged.
+
+> ⚠️ **`/scratch` is purged after 30 days.** Keep every persistent asset under
+> `/home/optima/$USER/` — the conda env (`ri-env`, `miniconda3`), the built
+> `pr.sif`, the readable GA code copy (`sese_ga_code`), the owned IOWA binary copy,
+> and the git clone. Only `SHARED_TMPDIR` (per-request scratch) stays on `/scratch`.
+> The paths below use `/home/optima/$USER`; adjust `$USER` to your account.
+
+## 2. The server (bare Python, NOT in a container — it launches the .sif's)
+CentOS 7 caveats: the module system tops out at Python 3.9 (we need ≥3.11), so use
+a Miniconda env, and a pre-2024 installer (the latest needs glibc ≥2.28; cn7 has
+2.17). Install it under your **home** (persistent), not /scratch:
+```sh
+H=/home/optima/$USER
+cd "$H"
+wget -q https://repo.anaconda.com/miniconda/Miniconda3-py311_23.11.0-2-Linux-x86_64.sh
+bash Miniconda3-py311_23.11.0-2-Linux-x86_64.sh -b -p "$H/miniconda3"
+"$H/miniconda3/bin/conda" create -y -p "$H/ri-env" python=3.11
+source "$H/miniconda3/bin/activate" "$H/ri-env"
+```
+Clone the repo under home too (`git clone … $H/libreclinicamuw`). Install the
+**run-only** server. DR-024: do NOT install the sibling `muw-e2e-converter`
+package — the cluster's `ApptainerAdapter` rejects .e2e inputs, conversion
+happens app-side. Installing it on cn5 would be a deployment bug. Pin
+`numpy<2.1` so pip uses a glibc-2.17 wheel instead of building numpy ≥2.1
+from source (cn7's GCC 4.8.5 is too old):
+```sh
+cd "$H/libreclinicamuw/retinal-inference"
+pip install -e . "numpy<2.1"
+# Confirm the converter package is NOT installed (this is the load-bearing
+# invariant — see DR-024 in decision-record.md):
+python -c "import muw_e2e_converter" 2>&1 | grep -q "ModuleNotFoundError" \
+  && echo "OK: muw-e2e-converter absent (DR-024 invariant holds)" \
+  || echo "WARN: muw-e2e-converter is installed — this is the cluster posture, it should NOT be"
+mkdir -p /scratch/$USER/retinal-inference/tmp   # SHARED_TMPDIR — transient, stays on scratch
+```
+(The app-VM preprocess sidecar — §5b — pip-installs `muw-e2e-converter`
+explicitly to pull `oct-converter` + the converter modules; on a modern-glibc
+app VM no numpy pin is needed.)
+
+## 3. Run — direct mode (works now, no SLURM account needed)
+```sh
+RETINAL_INFERENCE_INFERENCE_ADAPTER=apptainer \
+RETINAL_INFERENCE_RUN_ENDPOINT_ENABLED=true \
+RETINAL_INFERENCE_WORKER_ENABLED=false \
+RETINAL_INFERENCE_AUTH_TOKEN=<shared-secret> \
+RETINAL_INFERENCE_SHARED_TMPDIR=/scratch/$USER/retinal-inference/tmp \
+RETINAL_INFERENCE_APPTAINER_BIN=singularity \
+RETINAL_INFERENCE_APPTAINER_USE_SLURM=false \
+RETINAL_INFERENCE_APPTAINER_GPU_DEVICE=0 \
+RETINAL_INFERENCE_FLUID_SIF=/home/optima/octreader/Processor_Implementations/sese_retinsight_fluid/code/v2.5.0/fluid_segmentation.sif \
+RETINAL_INFERENCE_ONL_SIF=/home/optima/octreader/Processor_Implementations/sese_onl/singularity/sese_onl.sif \
+RETINAL_INFERENCE_ONL_CODE=/home/optima/octreader/Processor_Implementations/sese_onl/code/outernuclearlayer-segmentation \
+RETINAL_INFERENCE_ONL_WEIGHTS=/home/optima/octreader/Processor_Implementations/sese_onl/weights/cross_val_ga \
+RETINAL_INFERENCE_PR_SIF=/home/optima/$USER/ri/pr.sif \
+RETINAL_INFERENCE_PR_CODE=/home/optima/octreader/Processor_Implementations/sese_pr/code/photoreceptors-segmentation \
+RETINAL_INFERENCE_PR_WEIGHTS=/home/optima/octreader/Processor_Implementations/sese_pr/weights/u2net-cross-entropy \
+  nohup uvicorn retinal_inference.main:app --host 0.0.0.0 --port 8000 \
+  > /scratch/$USER/retinal-inference/server.log 2>&1 &
+```
+- `GPU_DEVICE=0` — an idle card (GPU 3 was busy). For the pr task the CUDA-10 `.sif`
+  runs on any of the 6, so no Turing pin needed.
+- `ga` is omitted above (host-native IOWA chain). To enable it add the block below.
+  The IOWA `OCTLayerSeg3.6` binary is `rwx------ octreader` (only that account can
+  run it) — run a copy you own. Both host binaries are CentOS-6-era builds: the IOWA
+  binary needs a modern `libstdc++` (GLIBCXX_3.4.20 — the conda env `lib`), and the
+  converter `dlopen`s `libcppxmlxercesadapter.so.1` which lives in
+  `drlresults/releasegcc4` (NOT in `prod/lib`, which only has the unversioned `.so`).
+  `GA_IOWA_LD_LIBRARY_PATH` must list all three dirs:
+  Also: `sese_ga/code/common/` + `prepare_data/` are octreader-locked, so `GA_CODE`
+  must point at a **readable copy** of `sese_ga/code` you make (the `.sif` only bakes
+  `optima`, not `common`/`prepare_data`); weights are readable at the original path.
+  ```
+  RETINAL_INFERENCE_GA_SIF=/home/optima/octreader/Processor_Implementations/sese_ga/pytorch_optima_dl.v4.sif
+  RETINAL_INFERENCE_GA_CODE=/home/optima/$USER/ri/sese_ga_code   # readable copy (incl. common/ + prepare_data/)
+  RETINAL_INFERENCE_GA_WEIGHTS=/home/optima/octreader/Processor_Implementations/sese_ga/weights/filly_checkpoints
+  RETINAL_INFERENCE_GA_IOWA_BINARY=/home/optima/$USER/ri/OCTLayerSeg3.6_owned   # owned, executable copy
+  RETINAL_INFERENCE_GA_IOWA_CONVERTER=/home/optima/octreader/optima-framework/deployment/prod/local_IOWA_LayerSegV3_to_CSV
+  RETINAL_INFERENCE_GA_IOWA_LD_LIBRARY_PATH=/home/optima/$USER/ri-env/lib:/home/optima/octreader/optima-framework/deployment/prod/lib:/home/optima/octreader/optima/drlresults/releasegcc4
+  ```
+- These `$PI` paths must be visible from the GPU compute node (they are — same NFS
+  as `/scratch`); the adapter bind-mounts the code/weights dirs into the `.sif`.
+- `bm` (Bruch's membrane) is **host-native, not a `.sif`** — it runs the cluster
+  venv python on `application.py` (the model already has torch/lightning/monai/
+  **mish_cuda** built in that venv, so nothing to rebuild). GPU-required; the
+  weights are hardcoded in `application.py` to the `$PI` path (referenced in
+  place). `BM_LD_LIBRARY_PATH` is the LMOD module lib dirs — capture it once via
+  `module load Python/3.8.2-foss-2019a CUDA/11.1.1-GCCcore-8.2.0
+  cuDNN/8.2.1.32-CUDA-11.1.1 && echo $LD_LIBRARY_PATH` (without it the venv python
+  can't find `libpython3.8.so`). To enable, add:
+  ```
+  RETINAL_INFERENCE_BM_PYTHON=/home/optima/octreader/Processor_Implementations/sese_bm_final/venv/bin/python3
+  RETINAL_INFERENCE_BM_CODE=/home/optima/octreader/Processor_Implementations/sese_bm_final/code
+  RETINAL_INFERENCE_BM_GPU_DEVICE=0
+  RETINAL_INFERENCE_BM_LD_LIBRARY_PATH=<the captured module LD_LIBRARY_PATH>
+  ```
+- `layers` (full layer stack) returns the **11 IOWA reference layers + the BM
+  layer**. It reuses the GA IOWA env (`GA_IOWA_BINARY` / `GA_IOWA_CONVERTER` /
+  `GA_IOWA_LD_LIBRARY_PATH`) **and** the BM env (`BM_*`) — no new vars. It's
+  auto-supported once both of those groups are set, so it comes for free with GA +
+  BM enabled. (Note: `ga` itself now returns **only the RPEL** surface — the IOWA
+  layers it consumes and the EZL/ELM it also produces are no longer shipped; use
+  `layers` if you want the full IOWA stack.)
+- PR extra dep: sese_pr imports `scikit-learn`, baked into `pr.sif` via the
+  `.def`. To avoid rebaking the `.sif` you can instead bind a `pip --target` dir:
+  ```sh
+  mkdir -p /scratch/$USER/ri/pyextra
+  singularity exec --bind /scratch/$USER/ri/pyextra:/scratch/$USER/ri/pyextra \
+    /scratch/$USER/ri/pr.sif pip install --no-cache-dir --no-deps \
+    --target=/scratch/$USER/ri/pyextra scikit-learn==0.24.2 joblib threadpoolctl
+  ```
+  then set `RETINAL_INFERENCE_PR_PYEXTRA=/scratch/$USER/ri/pyextra` (use
+  `--no-deps` so it holds only sklearn, not a numpy that would shadow the `.sif`'s).
+- Persistence: `nohup`/`tmux` to start; a `systemd --user` unit if your admin
+  permits a long-lived service on the node.
+
+## 4. Flip to SLURM (production, after an account is granted)
+```sh
+RETINAL_INFERENCE_APPTAINER_USE_SLURM=true \
+RETINAL_INFERENCE_APPTAINER_SLURM_PARTITION=full_optima \
+RETINAL_INFERENCE_APPTAINER_SLURM_ACCOUNT=<account> \
+RETINAL_INFERENCE_APPTAINER_SLURM_TIME=01:00:00 \
+RETINAL_INFERENCE_APPTAINER_SLURM_GRES=gpu:1
+```
+Each scan then runs as one blocking `srun … apptainer exec --nv …` job (no GPU
+pin — SLURM assigns it). `shared_tmpdir` MUST stay on the shared FS so the
+compute node sees the `bscan.dcm`.
+
+## 5. Wire the app VM
+Set `core.retinalInference.remotePushUrl=http://149.148.108.173:8000/run` and the
+matching token on the Java side. Reachability test from the app VM:
+```sh
+curl -sS -m5 -o /dev/null -w "%{http_code}\n" http://149.148.108.173:8000/health
+```
+
+### 5b. App-VM preprocess sidecar (DICOM-only cluster)
+The cluster `ApptainerAdapter` rejects `.e2e` — the `.e2e → bscan.dcm` conversion
+(PHI redaction included) happens **app-side** so the PHI-bearing E2E never leaves
+the app VM. Run a tiny preprocess-only sidecar next to Tomcat (no GPU, no models).
+Install both packages: `retinal-inference` for the FastAPI app + endpoint, and
+the sibling `muw-e2e-converter` package (DR-024) for the actual conversion
+modules:
+```sh
+pip install -e .                          # retinal-inference
+pip install -e ../muw-e2e-converter       # the converter (oct-converter, pillow, etc.)
+# Sanity check — the converter MUST be importable here (opposite of the cn5
+# posture, where it must NOT be):
+python -c "import muw_e2e_converter; print('OK:', muw_e2e_converter.__file__)"
+```
+```sh
+RETINAL_INFERENCE_PREPROCESS_ENDPOINT_ENABLED=true \
+RETINAL_INFERENCE_AUTH_TOKEN=<app-vm secret> \
+RETINAL_INFERENCE_SHARED_TMPDIR=/var/lib/retinal-inference/tmp \
+  uvicorn retinal_inference.main:app --host 127.0.0.1 --port 8001
+```
+Then point the Java client at it:
+```
+core.retinalInference.preprocessUrl=http://127.0.0.1:8001
+core.retinalInference.preprocessToken=<app-vm secret>   # falls back to remotePushToken if unset
+```
+With `preprocessUrl` set, `RemoteRetinalInferenceClient` POSTs the `.e2e` to
+`/preprocess`, gets the redacted `bscan.dcm` back, and forwards only that to the
+cluster `/run`. Leave `preprocessUrl` **blank** for single-host dev — there the
+`OptimaAdapter` ingests the `.e2e` itself. (The cluster `/run` accepts either a
+DICOM or an `.e2e`, auto-detected, so a misconfig degrades rather than corrupts.)
+
+## 6. Per-model validation (first real run)
+For each task: POST a real `.e2e`, confirm the model **accepts the synthesized
+`bscan.dcm`** and the expected output artifacts are produced (`fluidseg.npz`
+labels; ONL OPL-HFL + BMEIS surface CSVs; PR BMEIS + OB-OPR surface CSVs; GA
+RPEL CSV). The server returns these artifacts only — the Java backend computes
+the clinical metric — so there is no server-side metric to eyeball. See each
+`runners/<task>/README.md` "confirm on first run" list.
+
+## Open decisions
+- **Payload (RESOLVED → DICOM, implemented):** the backend converts
+  `.e2e → bscan.dcm` (PHI-redacted) **app-side** via the `/preprocess` sidecar
+  (§5b), the Java client forwards only the DICOM when `preprocessUrl` is set, and
+  the cluster `/run` + `ApptainerAdapter` are DICOM-first (auto-detect; the adapter
+  rejects raw `.e2e`). `prepare_bscan_dcm` now runs on the app-VM preprocess sidecar.
+- **ONL/PR clinical metric**: the server returns the raw surface CSVs only; the
+  Java backend computes the ONL thickness / PR depth (µm). Confirm the exact
+  clinical definition Java-side.
+- **Dispatcher host / persistence policy**: confirm a long-lived service is
+  allowed on a node, else submit from the app VM over SSH.

@@ -46,8 +46,20 @@ import type { CrfVersion } from '@/types/crfLibrary'
  * response-set picker for BL and the runtime renders it as a checkbox.
  * The backend adapter accepts BL via the same code path used by the
  * XLS uploader.
+ *
+ * <p>App-feedback Wave 1D (2026-06-19) — {@code TRISTATE_REASON} is the
+ * MUW-clinical-feedback shorthand for "Ja / Nein / Unbekannt" with a
+ * conditional reason textarea that appears only when the operator
+ * picks "Nein". It is NOT a new wire-level data type — at persistence
+ * time it materialises as TWO {@code item_data} rows: a parent (BL-like
+ * select-one with three options) plus a child string item driven by
+ * the existing show-when machinery (parent == "Nein"). The CRF builder
+ * (Wave 2) explodes the single drop into the pair; this Wave 1D ships
+ * only the RENDER side so an authored CRF that already contains the
+ * pair can opt the parent into the three-pill widget by setting its
+ * authoring dataType to TRISTATE_REASON.
  */
-export type AuthoringDataType = 'ST' | 'INT' | 'REAL' | 'DATE' | 'PDATE' | 'FILE' | 'BL'
+export type AuthoringDataType = 'ST' | 'INT' | 'REAL' | 'DATE' | 'PDATE' | 'FILE' | 'BL' | 'TRISTATE_REASON'
 
 /**
  * Authoring response type — canonical names per the backend
@@ -243,6 +255,48 @@ export type AuthoringSubmitResult =
   | { ok: true; version: CrfVersion }
   | { ok: false; fieldErrors: Record<string, string>; parseErrors: string[]; message?: string }
 
+/**
+ * 2026-06-21 user-feedback round 6 — wire shape for the fork-from-version
+ * endpoint ({@code GET /pages/api/v1/crfs/{oid}/versions/{vid}/contents}).
+ * Mirrors {@code CrfVersionAuthoringRequest} on the backend; only the
+ * fields the SPA hydrates are typed (extra fields are ignored).
+ */
+export interface ForkContentsWire {
+  versionName?: string
+  versionDescription?: string
+  revisionNotes?: string
+  sections?: ForkSectionWire[]
+}
+
+interface ForkSectionWire {
+  label?: string
+  title?: string
+  instructions?: string
+  ordinal?: number
+  items?: ForkItemWire[]
+}
+
+interface ForkItemWire {
+  name?: string
+  oid?: string
+  descriptionLabel?: string
+  leftItemText?: string
+  rightItemText?: string
+  units?: string
+  dataType?: string
+  defaultValue?: string
+  required?: boolean
+  responseSet?: ForkResponseSetWire | null
+  validation?: { regexp?: string; errorMessage?: string } | null
+}
+
+interface ForkResponseSetWire {
+  type?: string
+  label?: string
+  options?: Array<{ text?: string; value?: string }>
+  ref?: { label?: string } | null
+}
+
 export interface AuthoringPreviewSuccess {
   crfOid: string
   versionName: string
@@ -326,6 +380,15 @@ export function allowedResponseTypesForDataType(
       // BL is hardwired to a fixed Yes/No single-select; the wizard
       // disables the dropdown but the allowed set is still {single-select}.
       return ['single-select']
+    case 'TRISTATE_REASON':
+      // App-feedback Wave 1D — Ja/Nein/Unbekannt + conditional reason.
+      // The parent item is rendered as a custom three-pill segmented
+      // control; the synthesised wire payload at materialisation time
+      // (Wave 2 builder) uses a single-select response set with the
+      // three canonical options. Locked to single-select here so the
+      // wizard dropdown stays consistent if the operator drops the
+      // primitive directly.
+      return ['single-select']
   }
 }
 
@@ -346,6 +409,117 @@ let uidCounter = 0
 function nextUid(prefix: string): string {
   uidCounter += 1
   return `${prefix}-${uidCounter}`
+}
+
+/**
+ * 2026-06-21 user-feedback round 6 — convert the wire payload from the
+ * fork-from-version endpoint into an {@link AuthoringDraft}. Defensive
+ * against any missing/null field so a partially-populated legacy
+ * version still produces a usable draft.
+ *
+ * <p>{@code versionName} is intentionally blanked: the operator types a
+ * fresh name for the forked version and the backend's unique-name
+ * check would otherwise reject the submit with the prior version's name.
+ */
+function forkContentsToDraft(wire: ForkContentsWire): AuthoringDraft {
+  const sections = (wire.sections ?? []).map((s, idx) => forkSection(s, idx + 1))
+  if (sections.length === 0) {
+    sections.push({
+      uid: nextUid('sec'),
+      label: 'S1',
+      title: 'Section 1',
+      instructions: '',
+      ordinal: 1,
+      items: [],
+    })
+  }
+  return {
+    versionName: '',
+    versionDescription: wire.versionDescription ?? '',
+    revisionNotes: wire.revisionNotes ?? '',
+    sections,
+  }
+}
+
+function forkSection(wire: ForkSectionWire, fallbackOrdinal: number): AuthoringSection {
+  return {
+    uid: nextUid('sec'),
+    label: wire.label?.trim() || `S${fallbackOrdinal}`,
+    title: wire.title?.trim() || `Section ${fallbackOrdinal}`,
+    instructions: wire.instructions ?? '',
+    ordinal: wire.ordinal ?? fallbackOrdinal,
+    items: (wire.items ?? []).map(forkItem),
+  }
+}
+
+function forkItem(wire: ForkItemWire): AuthoringItem {
+  const responseType: AuthoringResponseType =
+    wire.responseSet?.type && isAuthoringResponseType(wire.responseSet.type)
+      ? wire.responseSet.type
+      : 'text'
+  return {
+    uid: nextUid('item'),
+    name: wire.name ?? '',
+    oid: wire.oid ?? '',
+    descriptionLabel: wire.descriptionLabel ?? '',
+    leftItemText: wire.leftItemText ?? '',
+    rightItemText: wire.rightItemText ?? '',
+    units: wire.units ?? '',
+    dataType: normaliseDataType(wire.dataType),
+    responseType,
+    defaultValue: wire.defaultValue ?? '',
+    required: wire.required ?? false,
+    responseSet: forkResponseSet(wire.responseSet ?? null),
+    validation: {
+      regexp: wire.validation?.regexp ?? '',
+      errorMessage: wire.validation?.errorMessage ?? '',
+    },
+  }
+}
+
+function forkResponseSet(wire: ForkResponseSetWire | null): AuthoringResponseSet {
+  if (!wire) return null
+  if (wire.ref?.label) {
+    return { ref: { label: wire.ref.label } }
+  }
+  const type = wire.type && isAuthoringResponseType(wire.type) ? wire.type : 'text'
+  const opts = (wire.options ?? [])
+    .map((o) => ({ text: o.text ?? '', value: o.value ?? '' }))
+    .filter((o) => o.text !== '' || o.value !== '')
+  // Only emit an InlineResponseSet when the type implies options; the
+  // open-text branches stay null so the canvas's empty-picker state
+  // shows up as expected.
+  if (opts.length === 0 && !OPTION_RESPONSE_TYPES.has(type)) return null
+  return { type, label: wire.label ?? '', options: opts }
+}
+
+function normaliseDataType(raw: string | undefined): AuthoringDataType {
+  switch ((raw ?? '').toUpperCase()) {
+    case 'INT':
+    case 'INTEGER':
+      return 'INT'
+    case 'REAL':
+      return 'REAL'
+    case 'DATE':
+      return 'DATE'
+    case 'PDATE':
+      return 'PDATE'
+    case 'FILE':
+      return 'FILE'
+    case 'BL':
+      return 'BL'
+    case 'TRISTATE_REASON':
+      return 'TRISTATE_REASON'
+    case 'ST':
+    default:
+      return 'ST'
+  }
+}
+
+function isAuthoringResponseType(s: string): s is AuthoringResponseType {
+  return s === 'text' || s === 'textarea' || s === 'radio'
+    || s === 'single-select' || s === 'multi-select'
+    || s === 'checkbox' || s === 'file'
 }
 
 function emptyDraft(): AuthoringDraft {
@@ -394,11 +568,70 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
   const responseSetCatalog = ref<ResponseSetCatalogEntry[]>([])
   const isLoadingCatalog = ref(false)
 
+  /**
+   * App-feedback Wave 2 (2026-06-19) — canvas selection model.
+   *
+   * <p>The canvas editor highlights a single item at a time; clicking
+   * an item fills the right rail's properties panel. The selection is
+   * keyed on the {@link AuthoringItem.uid} so it survives reorder.
+   * Clearing the selection ({@code null}) makes the properties rail
+   * show its empty state.
+   */
+  const selectedItemUid = ref<string | null>(null)
+
+  function selectItem(uid: string | null): void {
+    selectedItemUid.value = uid
+  }
+
   function reset(): void {
     draft.value = emptyDraft()
     error.value = null
     isSubmitting.value = false
     isPreviewing.value = false
+    selectedItemUid.value = null
+  }
+
+  /**
+   * 2026-06-21 user-feedback round 6 — fork-from-version. The CRF
+   * library's "Neue Version anlegen" flow can pre-seed the canvas with
+   * the contents of a prior version so the operator only has to tweak
+   * what changed instead of re-authoring the entire form.
+   *
+   * <p>The backend's {@code GET /pages/api/v1/crfs/{oid}/versions/{vid}/contents}
+   * returns the wire-shaped {@code CrfVersionAuthoringRequest}; this
+   * action shape-converts it into an {@link AuthoringDraft} and
+   * replaces {@link draft} verbatim. {@code versionName} is intentionally
+   * blanked so the operator types a fresh name and the unique-name
+   * check doesn't trip on the prior version's name.
+   *
+   * <p>Returns {@code true} on success; on failure the draft stays
+   * untouched and {@link error} is populated so the canvas can surface
+   * a banner. Network + 404 + 401 all surface as a single error
+   * string — the caller will route the operator back to the library.
+   */
+  async function loadFromVersion(
+    crfOid: string,
+    versionOid: string,
+  ): Promise<boolean> {
+    try {
+      const body = await apiGet<ForkContentsWire>(
+        `/pages/api/v1/crfs/${encodeURIComponent(crfOid)}/versions/${encodeURIComponent(versionOid)}/contents`,
+      )
+      draft.value = forkContentsToDraft(body)
+      selectedItemUid.value = null
+      return true
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const errBody = e.body as { message?: string } | null
+        error.value = errBody?.message
+          ?? `Vorversion konnte nicht geladen werden (HTTP ${e.status}).`
+      } else if (e instanceof ApiNetworkError) {
+        error.value = 'Backend nicht erreichbar — Vorversion konnte nicht geladen werden.'
+      } else {
+        error.value = e instanceof Error ? e.message : 'Vorversion konnte nicht geladen werden.'
+      }
+      return false
+    }
   }
 
   function setMetadata(patch: Partial<Pick<AuthoringDraft, 'versionName' | 'versionDescription' | 'revisionNotes'>>): void {
@@ -415,10 +648,11 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     draft.value.versionDescription = versionDescription
   }
 
-  function addSection(seed?: Partial<AuthoringSection>): void {
+  function addSection(seed?: Partial<AuthoringSection>): string {
     const next = draft.value.sections.length + 1
+    const uid = seed?.uid ?? nextUid('sec')
     draft.value.sections.push({
-      uid: seed?.uid ?? nextUid('sec'),
+      uid,
       label: seed?.label ?? `S${next}`,
       title: seed?.title ?? `Section ${next}`,
       instructions: seed?.instructions ?? '',
@@ -426,6 +660,7 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
       items: seed?.items ?? [],
       bilateral: seed?.bilateral ?? false,
     })
+    return uid
   }
 
   /**
@@ -591,12 +826,12 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     /**
      * When set, REPLACE the section at this index (keeping the
      * existing {@code uid} + {@code ordinal}) instead of appending a
-     * new section. Used by the magic-label hotkey path
-     * (CrfAuthoringWizard.vue keydown handler): operators type
-     * {@code OPHTHA_EXAM} as a section label and press Shift+Enter,
-     * which opens the picker; on confirm the picker overwrites the
-     * trigger section in place so the operator doesn't end up with a
-     * leftover empty trigger row.
+     * new section. Used by the magic-label hotkey path on the canvas
+     * surface: operators type {@code OPHTHA_EXAM} as a section label
+     * and press Shift+Enter, which opens the picker; on confirm the
+     * picker overwrites the trigger section in place so the operator
+     * doesn't end up with a leftover empty trigger row. (Originated
+     * in the now-removed legacy CrfAuthoringWizard keydown handler.)
      */
     replaceAtIndex?: number
   }): void {
@@ -652,6 +887,248 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     const section = draft.value.sections[sectionIndex]
     if (!section) return
     section.items = reordered
+  }
+
+  /**
+   * App-feedback Wave 2 (2026-06-19) — apply a canvas preset to a target
+   * section.
+   *
+   * <p>Resolves the {@code presetId} against the lazily-imported registry
+   * ({@link './components/crfAuthoring/presetCatalog'}), invokes the
+   * generator with the supplied translator, and pushes the materialised
+   * items into the section identified by {@code targetSectionUid}. When
+   * the preset declares {@code bilateralSection}, the section's
+   * bilateral flag is set so the canvas renders the OD-left / OS-right
+   * grid layout for the new items.
+   *
+   * <p>Returns the count of items appended, or {@code 0} when the preset
+   * id is unknown or the target section can't be found (defensive).
+   *
+   * <p>The signature accepts the preset registry + translator as
+   * parameters so the store stays decoupled from the i18n + the catalog
+   * import graph (avoids a circular import: store → presetCatalog → store).
+   */
+  function applyPreset(
+    presetId: string,
+    targetSectionUid: string,
+    opts: {
+      registry: ReadonlyArray<{
+        id: string
+        bilateralSection?: boolean
+        generate: (translate: (k: string) => string) => Array<Omit<AuthoringItem, 'uid'>>
+      }>
+      translate: (key: string) => string
+    },
+  ): number {
+    const preset = opts.registry.find((p) => p.id === presetId)
+    if (!preset) return 0
+    const section = draft.value.sections.find((s) => s.uid === targetSectionUid)
+    if (!section) return 0
+    const items = preset.generate(opts.translate)
+    const seeded: AuthoringItem[] = items.map((item) => ({
+      ...item,
+      uid: nextUid('item'),
+    }))
+    section.items.push(...seeded)
+    if (preset.bilateralSection) {
+      section.bilateral = true
+    }
+    return seeded.length
+  }
+
+  /**
+   * 2026-06-21 user-feedback batch — each preset corresponds to a whole
+   * section, not items inside an existing section. The earlier
+   * {@link applyPreset} mixed presets together inside the target
+   * section, which produced a confused bilateral grid when (for example)
+   * an unbilateral IOP and a bilateral BCVA landed in the same section.
+   *
+   * <p>Semantics:
+   *
+   * <ul>
+   *   <li>If the target section is empty (no items), transform it in
+   *       place — re-title it, set the bilateral flag from the preset
+   *       catalog, and fill it with the preset's items.</li>
+   *   <li>Otherwise create a NEW section immediately after the target,
+   *       carry the same conventions, and select the parent item so the
+   *       properties rail focuses on the freshly-materialised preset.</li>
+   * </ul>
+   *
+   * <p>Returns the new section's uid so the caller can drive selection
+   * / animation, or {@code null} when the preset id is unknown.
+   */
+  function applyPresetAsSection(
+    presetId: string,
+    targetSectionUid: string,
+    opts: {
+      registry: ReadonlyArray<{
+        id: string
+        labelKey: string
+        bilateralSection?: boolean
+        sectionLabel?: string
+        generate: (translate: (k: string) => string) => Array<Omit<AuthoringItem, 'uid'>>
+      }>
+      translate: (key: string) => string
+    },
+  ): string | null {
+    const preset = opts.registry.find((p) => p.id === presetId)
+    if (!preset) return null
+
+    const items = preset.generate(opts.translate)
+    const bilateral = preset.bilateralSection ?? false
+    const presetTitle = opts.translate(preset.labelKey)
+    // 2026-06-21 round 3 — preset overrides the section tag in addition to
+    // the title. Uniqueness across siblings is enforced by appending a
+    // numeric suffix when the bare tag already exists (e.g. dropping IOP
+    // twice produces IOP + IOP_2).
+    const presetTag = preset.sectionLabel?.trim() ?? ''
+
+    const target = draft.value.sections.find((s) => s.uid === targetSectionUid)
+    // Transform an empty target section in place rather than leaving a
+    // dangling empty Section 1 above the new content — common case
+    // when the operator drops the very first preset onto a fresh draft.
+    if (target && target.items.length === 0) {
+      const resolvedLabel = presetTag ? uniqueSectionLabel(presetTag, target.uid) : null
+      // 2026-06-21 round 6 — when the resolved section tag collides
+      // with a sibling and gets the `_N` suffix, the items inside
+      // would still collide on OID/name (e.g. dropping IOP twice
+      // gave two OD_IOP_GEMESSEN items). Apply the same suffix to
+      // the items so the CRF JSON validator's uniqueness check
+      // passes without operator-side renaming.
+      const suffix = resolvedLabel ? extractCollisionSuffix(presetTag, resolvedLabel) : ''
+      target.title = presetTitle
+      target.bilateral = bilateral
+      target.items = seedPresetItems(items, suffix)
+      if (resolvedLabel) target.label = resolvedLabel
+      return target.uid
+    }
+
+    const nextOrdinal = draft.value.sections.length + 1
+    const fallbackLabel = `S${nextOrdinal}`
+    const resolvedLabel = presetTag ? uniqueSectionLabel(presetTag, null) : fallbackLabel
+    const suffix = presetTag ? extractCollisionSuffix(presetTag, resolvedLabel) : ''
+    const newSection: AuthoringSection = {
+      uid: nextUid('sec'),
+      label: resolvedLabel,
+      title: presetTitle,
+      instructions: '',
+      ordinal: nextOrdinal,
+      items: seedPresetItems(items, suffix),
+      bilateral,
+    }
+    // Insert immediately after the drop target if found; otherwise
+    // append.
+    const idx = target
+      ? draft.value.sections.findIndex((s) => s.uid === target.uid)
+      : -1
+    if (idx >= 0) {
+      draft.value.sections.splice(idx + 1, 0, newSection)
+    } else {
+      draft.value.sections.push(newSection)
+    }
+    // Re-number ordinals so the persisted payload stays contiguous.
+    draft.value.sections.forEach((s, i) => {
+      s.ordinal = i + 1
+    })
+    return newSection.uid
+  }
+
+  /**
+   * 2026-06-21 round 6 — derive the {@code _N} collision suffix from a
+   * resolved section label vs its bare preset tag. Returns the empty
+   * string when no collision happened (resolved equals base).
+   *
+   * <p>Examples:
+   * <ul>
+   *   <li>{@code base="IOP"}, {@code resolved="IOP"} → {@code ""}</li>
+   *   <li>{@code base="IOP"}, {@code resolved="IOP_2"} → {@code "_2"}</li>
+   *   <li>{@code base="IOP"}, {@code resolved="IOP_3"} → {@code "_3"}</li>
+   * </ul>
+   *
+   * <p>The caller appends this suffix to the per-item OID + name + the
+   * children's show-when source OID so a second drop of the same preset
+   * produces items that don't collide with the first drop.
+   */
+  function extractCollisionSuffix(base: string, resolved: string): string {
+    const trimmedBase = base.trim().toUpperCase()
+    const trimmedResolved = resolved.trim().toUpperCase()
+    if (trimmedBase === trimmedResolved) return ''
+    if (trimmedResolved.startsWith(trimmedBase + '_')) {
+      return trimmedResolved.slice(trimmedBase.length)
+    }
+    return ''
+  }
+
+  /**
+   * 2026-06-21 round 6 — materialise preset items with an optional
+   * collision suffix. When {@code suffix} is empty the items are seeded
+   * verbatim (just with fresh uids). When set (e.g. {@code "_2"}) every
+   * item's {@code name} + {@code oid} get the suffix appended AND every
+   * child's {@code showWhen.sourceItemOid} is rewritten through the
+   * same rename map so the conditional show-when references still point
+   * at the (now renamed) parent.
+   */
+  function seedPresetItems(
+    items: Array<Omit<AuthoringItem, 'uid'>>,
+    suffix: string,
+  ): AuthoringItem[] {
+    const seeded: AuthoringItem[] = items.map((item) => ({
+      ...item,
+      uid: nextUid('item'),
+    }))
+    if (!suffix) return seeded
+    // Build the OID rename map from the (now seeded but not yet
+    // suffixed) items so the showWhen rewrites can hit any sibling
+    // reference, not just the parent-with-children pair.
+    const renameMap = new Map<string, string>()
+    for (const it of seeded) {
+      if (it.oid) renameMap.set(it.oid, it.oid + suffix)
+    }
+    for (const it of seeded) {
+      if (it.name) it.name = it.name + suffix
+      if (it.oid) it.oid = it.oid + suffix
+      if (it.showWhen?.sourceItemOid) {
+        const renamed = renameMap.get(it.showWhen.sourceItemOid)
+        if (renamed) it.showWhen = { ...it.showWhen, sourceItemOid: renamed }
+      }
+    }
+    return seeded
+  }
+
+  /**
+   * 2026-06-21 round 3 — return {@code base} if no other section is
+   * using that exact label, otherwise append {@code _2}, {@code _3}, …
+   * until a free slot is found. {@code excludeUid} skips the named
+   * section's own label (used when transforming an empty section
+   * in-place, where the section being renamed must not collide with
+   * itself).
+   */
+  function uniqueSectionLabel(base: string, excludeUid: string | null): string {
+    const taken = new Set(
+      draft.value.sections
+        .filter((s) => s.uid !== excludeUid)
+        .map((s) => s.label.trim().toUpperCase()),
+    )
+    const seed = base.trim().toUpperCase()
+    if (!taken.has(seed)) return seed
+    for (let i = 2; i < 1000; i++) {
+      const candidate = `${seed}_${i}`
+      if (!taken.has(candidate)) return candidate
+    }
+    return seed
+  }
+
+  /**
+   * Flip a section's bilateral flag by uid (the SectionCanvas toggle
+   * does NOT have the array index to hand). Mirrors {@link
+   * setSectionBilateral} but keyed on the uid rather than the
+   * positional index, which is the right primitive for the canvas
+   * because the user can reorder sections.
+   */
+  function setSectionBilateralByUid(sectionUid: string, value: boolean): void {
+    const section = draft.value.sections.find((s) => s.uid === sectionUid)
+    if (!section) return
+    section.bilateral = value
   }
 
   /**
@@ -970,7 +1447,10 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     error,
     responseSetCatalog,
     isLoadingCatalog,
+    selectedItemUid,
+    selectItem,
     reset,
+    loadFromVersion,
     setMetadata,
     setVersionName,
     setVersionDescription,
@@ -982,6 +1462,9 @@ export const useCrfAuthoringStore = defineStore('crfAuthoring', () => {
     addBilateralPair,
     addCatalogItem,
     addOphthPresetSection,
+    applyPreset,
+    applyPresetAsSection,
+    setSectionBilateralByUid,
     setItemField,
     removeItem,
     reorderItems,

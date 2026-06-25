@@ -143,6 +143,12 @@ export function stripEyeMarker(label: string): string {
     )
     // Leading "OD ", "OD: ", "OD — ", "OD - ", "OD_"
     .replace(/^\s*(OD|OS|OU)\s*[—\-:_]?\s+/i, '')
+    // Trailing parenthesised German per-eye markers — the IOP / OPHTH
+    // presets append " (rechts)", " (links)", " (beidseitig)" to the
+    // descriptionLabel so the SectionCanvas unilateral-fallback list
+    // disambiguates the pair; the bilateral grid's row collapses them
+    // by stripping the marker before label comparison.
+    .replace(/\s*[(\[](rechts|links|beidseitig|beide)[)\]]\s*$/i, '')
     // Trailing " (OD)", " — OD", " - OS", " OS"
     .replace(/\s*[—\-:(]?\s*(OD|OS|OU)\s*\)?\s*$/i, '')
     .trim()

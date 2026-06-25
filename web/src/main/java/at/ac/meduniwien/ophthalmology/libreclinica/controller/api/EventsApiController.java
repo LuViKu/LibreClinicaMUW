@@ -8,6 +8,10 @@
  */
 package at.ac.meduniwien.ophthalmology.libreclinica.controller.api;
 
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -45,6 +49,7 @@ import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.CRFVersionDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.EventCRFDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.dao.submit.ItemDataDAO;
 import at.ac.meduniwien.ophthalmology.libreclinica.service.auth.SiteVisibilityFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.service.scheduling.VisitIntervalCalculator;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,6 +57,9 @@ import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -113,12 +121,32 @@ public class EventsApiController {
 
     private final DataSource dataSource;
     private final SiteVisibilityFilter siteVisibilityFilter;
+    private final VisitIntervalCalculator visitIntervalCalculator;
+    private final at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager securityManager;
 
     @Autowired
     public EventsApiController(@Qualifier("dataSource") DataSource dataSource,
-                               SiteVisibilityFilter siteVisibilityFilter) {
+                               SiteVisibilityFilter siteVisibilityFilter,
+                               VisitIntervalCalculator visitIntervalCalculator,
+                               @Qualifier("securityManager")
+                               at.ac.meduniwien.ophthalmology.libreclinica.core.SecurityManager securityManager) {
         this.dataSource = dataSource;
         this.siteVisibilityFilter = siteVisibilityFilter;
+        this.visitIntervalCalculator = visitIntervalCalculator;
+        this.securityManager = securityManager;
+    }
+
+    /**
+     * 2026-06-21 round 7 — backwards-compatible 3-arg constructor used
+     * by the existing MockMvc test suites. The sign endpoint is the
+     * only path that touches {@link #securityManager}; tests that
+     * never exercise sign can safely pass null. Production wiring
+     * always goes through the 4-arg constructor above.
+     */
+    public EventsApiController(DataSource dataSource,
+                               SiteVisibilityFilter siteVisibilityFilter,
+                               VisitIntervalCalculator visitIntervalCalculator) {
+        this(dataSource, siteVisibilityFilter, visitIntervalCalculator, null);
     }
 
     /**
@@ -590,7 +618,9 @@ public class EventsApiController {
                         ev.getDateEnded() == null ? null : ISO_DATE.format(ev.getDateEnded()),
                         blankToNull(ev.getLocation()),
                         status,
-                        def.isRepeating()));
+                        def.isRepeating(),
+                        /* scheduledFor */ null,
+                        /* scheduledIntervalDays */ null));
             }
         }
 
@@ -734,6 +764,26 @@ public class EventsApiController {
                                 created.getId(), bodyRef.subjectId(), defRef.getOid(),
                                 nextOrdinalRef, bodyRef.dateStarted(), ubRef.getName());
 
+                        // nAMD T-and-E (2026-06-19) — when the caller
+                        // supplied an interval, write the new
+                        // scheduled_for + scheduled_interval_days
+                        // columns via the dedicated service. Returns
+                        // the derived `scheduled_for` date for the
+                        // SPA to display ("Next visit due on YYYY-MM-
+                        // DD") right after the schedule succeeds.
+                        java.time.LocalDate scheduledForDate = null;
+                        if (bodyRef.scheduledIntervalDays() != null) {
+                            try {
+                                scheduledForDate = visitIntervalCalculator.applyInterval(
+                                        created.getId(),
+                                        startDateRef,
+                                        bodyRef.scheduledIntervalDays());
+                            } catch (IllegalArgumentException iae) {
+                                throw new IllegalStateException(
+                                        "Invalid scheduledIntervalDays: " + iae.getMessage(), iae);
+                            }
+                        }
+
                         StudyEventDto dto = new StudyEventDto(
                                 String.valueOf(created.getId()),
                                 ssRef.getLabel(),
@@ -744,7 +794,9 @@ public class EventsApiController {
                                 null,
                                 blankToNull(created.getLocation()),
                                 "scheduled",
-                                defRef.isRepeating());
+                                defRef.isRepeating(),
+                                scheduledForDate == null ? null : scheduledForDate.toString(),
+                                bodyRef.scheduledIntervalDays());
 
                         return ResponseEntity.status(201).body(dto);
                     });
@@ -810,10 +862,15 @@ public class EventsApiController {
                 case "scheduled": newStatusId = SubjectEventStatus.SCHEDULED.getId(); break;
                 case "stopped":   newStatusId = SubjectEventStatus.STOPPED.getId();   break;
                 case "skipped":   newStatusId = SubjectEventStatus.SKIPPED.getId();   break;
+                // 2026-06-21 user-feedback round 5 — manual visit
+                // completion. The auto-cascade in EventCrfsApiController
+                // is disabled; the operator now drives the COMPLETED
+                // transition explicitly from EventDetailView.
+                case "completed": newStatusId = SubjectEventStatus.COMPLETED.getId(); break;
                 default:
                     return ResponseEntity.badRequest().body(Map.of("message",
-                            "'status' must be one of: scheduled | stopped | skipped "
-                                    + "(derived statuses are not user-editable)"));
+                            "'status' must be one of: scheduled | stopped | skipped | completed "
+                                    + "(signed / locked require their own endpoint)"));
             }
         }
         // Date validation — pre-parse so we can write back with the
@@ -976,7 +1033,9 @@ public class EventsApiController {
                                 refreshed.getDateEnded() == null ? null : ISO_DATE.format(refreshed.getDateEnded()),
                                 blankToNull(refreshed.getLocation()),
                                 statusForSubjectEventStatus(refreshed.getSubjectEventStatus()),
-                                def != null && def.isRepeating());
+                                def != null && def.isRepeating(),
+                                /* scheduledFor */ null,
+                                /* scheduledIntervalDays */ null);
                         return ResponseEntity.ok(dto);
                     });
         } catch (Exception e) {
@@ -993,7 +1052,15 @@ public class EventsApiController {
      * {@link Status#DELETED}; nested {@code event_crf} → {@code item_data}
      * rows cascade to {@link Status#AUTO_DELETED}.
      *
-     * <p>Guards: 401 / 400 (no study) / 403 (DM/Admin only) / 404
+     * <p>Wave 1A (app-feedback, 2026-06-19) — the cancel request now
+     * carries a JSON body capturing why the visit was cancelled. The
+     * reason code is validated against {@code study_event_cancel_reason}
+     * and persisted on {@code study_event.cancel_reason_code} /
+     * {@code .cancel_reason_text} BEFORE the soft-delete cascade so a
+     * mid-flight failure leaves no orphan reason metadata.
+     *
+     * <p>Guards: 401 / 400 (no study OR missing body OR unknown reason
+     * code OR is_other=TRUE with blank text) / 403 (DM/Admin only) / 404
      * (visibility) / 409 (event already DELETED, or SubjectEventStatus
      * is SIGNED/LOCKED — terminal).
      *
@@ -1002,6 +1069,7 @@ public class EventsApiController {
      */
     @DeleteMapping("/{id:[0-9]+}")
     public ResponseEntity<?> cancel(@PathVariable("id") int eventId,
+                                    @RequestBody(required = false) CancelEventRequest body,
                                     HttpSession session) {
         UserAccountBean ub = (UserAccountBean) session.getAttribute("userBean");
         if (ub == null || ub.getId() == 0) {
@@ -1051,6 +1119,36 @@ public class EventsApiController {
                             + " — un-sign / unlock before cancelling"));
         }
 
+        // Wave 1A — institutional cancel-reason validation. The DELETE
+        // body shape is `{ "reasonCode": "...", "reasonText": "..." }`.
+        // A missing body, a missing/unknown reasonCode, or an is_other
+        // reason without text all surface as 400 so the SPA can render
+        // a useful inline error. The lookup hits study_event_cancel_reason
+        // (6 rows seeded) — single query, no caching needed.
+        if (body == null || body.reasonCode == null || body.reasonCode.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "reasonCode is required — POST { \"reasonCode\": \"...\", \"reasonText\": \"...\" }"));
+        }
+        final String reasonCode = body.reasonCode.trim();
+        final String reasonText = body.reasonText == null ? "" : body.reasonText.trim();
+        final boolean isOther;
+        try {
+            Boolean lookup = loadCancelReasonIsOther(reasonCode);
+            if (lookup == null) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Unknown cancel reasonCode: " + reasonCode));
+            }
+            isOther = lookup;
+        } catch (SQLException sql) {
+            LOG.error("study_event cancel: reason lookup failed code={}", reasonCode, sql);
+            return ResponseEntity.internalServerError().body(Map.of("message",
+                    "Failed to validate cancel reason — see server log."));
+        }
+        if (isOther && reasonText.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "reasonText is required when reasonCode marks an 'Other' entry"));
+        }
+
         // Phase B2 (2026-06-10) — failure-audit wrap on the cascading
         // soft-delete. study_event flips to DELETED then the
         // event_crf + item_data children cascade to AUTO_DELETED;
@@ -1062,6 +1160,8 @@ public class EventsApiController {
         final UserAccountBean ubRef = ub;
         final int roleIdRef = roleId;
         final String reqId = MDC.get("reqId");
+        final String reasonCodeRef = reasonCode;
+        final String reasonTextRef = reasonText.isEmpty() ? null : reasonText;
         try {
             return FailureAuditTemplate.runOrAudit(
                     new AuditEventDAO(dataSource),
@@ -1071,6 +1171,20 @@ public class EventsApiController {
                     "DELETE_EVENT",
                     reqId,
                     () -> {
+                        // Wave 1A — persist the institutional reason BEFORE
+                        // the soft-delete. The StudyEventBean has no fields
+                        // for these columns (legacy DAO predates them), so
+                        // a small targeted JDBC update is the cheapest path
+                        // and stays inside the failure-audit envelope.
+                        try {
+                            persistCancelReason(evRef.getId(), reasonCodeRef, reasonTextRef);
+                        } catch (SQLException sqle) {
+                            // Wrap in RuntimeException so the FailureAuditTemplate
+                            // envelope still records the operation as failed and
+                            // the outer catch translates to a 500.
+                            throw new RuntimeException("Failed to persist cancel reason", sqle);
+                        }
+
                         // Parent: study_event → DELETED. Children: event_crf +
                         // item_data → AUTO_DELETED. Mirrors RemoveStudyEventServlet.
                         evRef.setStatus(Status.DELETED);
@@ -1098,8 +1212,9 @@ public class EventsApiController {
                             }
                         }
 
-                        LOG.info("Study event cancel: id={} subject={} by user={} role={}",
-                                evRef.getId(), ssRef.getLabel(), ubRef.getName(), roleIdRef);
+                        LOG.info("Study event cancel: id={} subject={} by user={} role={} reason={}",
+                                evRef.getId(), ssRef.getLabel(), ubRef.getName(),
+                                roleIdRef, reasonCodeRef);
                         return ResponseEntity.noContent().build();
                     });
         } catch (Exception e) {
@@ -1109,6 +1224,64 @@ public class EventsApiController {
                     "message", "Failed to cancel study event — see server log."));
         }
     }
+
+    /**
+     * Wave 1A — wire shape for the {@link #cancel} JSON body.
+     *
+     * <p>{@code reasonCode} is the {@code study_event_cancel_reason.code}
+     * value the operator picked; {@code reasonText} is the free-text
+     * field that the SPA only shows when {@code is_other} is true. Both
+     * fields are validated server-side.
+     */
+    public static class CancelEventRequest {
+        public String reasonCode;
+        public String reasonText;
+    }
+
+    /**
+     * Wave 1A — load the {@code is_other} flag for a reason code, or
+     * {@code null} if the code is not in {@code study_event_cancel_reason}.
+     * The table holds 6 rows so a per-request query is cheap.
+     */
+    private Boolean loadCancelReasonIsOther(String code) throws SQLException {
+        final String sql = "SELECT is_other FROM study_event_cancel_reason WHERE code = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, code);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return rs.getBoolean(1);
+            }
+        }
+    }
+
+    /**
+     * Wave 1A — persist the cancel-reason columns on study_event. The
+     * {@link StudyEventBean} predates these columns; rather than thread
+     * the fields through the legacy DAO update SQL we issue a small
+     * targeted UPDATE here. Runs INSIDE the FailureAuditTemplate
+     * envelope; a failure throws SQLException → wrapped as
+     * RuntimeException → caught by the outer 500 handler with an
+     * OPERATION_FAILED audit row.
+     */
+    private void persistCancelReason(int eventId, String reasonCode, String reasonText)
+            throws SQLException {
+        final String sql = "UPDATE study_event "
+                + "SET cancel_reason_code = ?, cancel_reason_text = ? "
+                + "WHERE study_event_id = ?";
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, reasonCode);
+            if (reasonText == null) {
+                ps.setNull(2, java.sql.Types.VARCHAR);
+            } else {
+                ps.setString(2, reasonText);
+            }
+            ps.setInt(3, eventId);
+            ps.executeUpdate();
+        }
+    }
+
 
     /**
      * Phase E.6 restore-quickwins — inverse of {@link #cancel}. Restores
@@ -1142,6 +1315,199 @@ public class EventsApiController {
      * <p>Returns the restored {@link StudyEventDto} so the SPA can
      * splice it back into the events store without a list refetch.
      */
+    /* ------------------------------------------------------------------ */
+    /* POST /api/v1/events/{id}/sign                                       */
+    /*                                                                    */
+    /* Per-visit electronic signature. The whole-subject sign in           */
+    /* SubjectsApiController flips every visit at once; this endpoint     */
+    /* lets the investigator attest one visit at a time without           */
+    /* committing the rest of the casebook. Same password + attestation  */
+    /* contract as the subject sign; same SubjectEventStatus.SIGNED       */
+    /* terminal status; cascades to flip every non-removed event_crf     */
+    /* row of the visit to Status.SIGNED for consistency with the         */
+    /* whole-subject path.                                                */
+    /*                                                                    */
+    /* Guards: 401 anonymous, 400 missing body, 400 missing attestation,  */
+    /* 400 missing password, 404 unknown event, 403 cross-study event,    */
+    /* 409 already signed / locked, 401 password mismatch, 412 not yet    */
+    /* in a signable state (must be COMPLETED first — investigators       */
+    /* sign Abgeschlossen visits, not in-progress ones).                  */
+    /* 2026-06-21 user-feedback round 7.                                  */
+    /* ------------------------------------------------------------------ */
+    @PostMapping("/{id:[0-9]+}/sign")
+    @Operation(operationId = "signEvent")
+    @ApiResponse(responseCode = "200",
+                 content = @Content(schema = @Schema(implementation = StudyEventDto.class)))
+    public ResponseEntity<?> sign(@PathVariable("id") int eventId,
+                                  @RequestBody(required = false) SignEventRequest body,
+                                  HttpSession session) {
+        UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
+        if (currentUser == null || currentUser.getId() == 0) {
+            return ResponseEntity.status(401).body(Map.of("message", "Not authenticated"));
+        }
+        StudyBean currentStudy = (StudyBean) session.getAttribute("study");
+        if (currentStudy == null || currentStudy.getId() == 0) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "No active study bound to the session — visit /MainMenu after login."));
+        }
+        StudyUserRoleBean currentRole = (StudyUserRoleBean) session.getAttribute("userRole");
+        int roleId = (currentRole != null && currentRole.getRole() != null)
+                ? currentRole.getRole().getId() : 0;
+        // Signing is an attest action — reuse the edit role gate
+        // (Investigator / CRC / DM / Admin). Monitor / RA can read /
+        // verify; they cannot attest.
+        if (!EventEditAuthorization.roleMayEdit(roleId)) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "Your role does not permit signing study events"));
+        }
+        if (body == null) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Request body is required (fields: password, attestation)."));
+        }
+        if (body.attestation() == null || !body.attestation()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Attestation must be explicitly acknowledged before signing."));
+        }
+        if (body.password() == null || body.password().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Password is required for e-signature re-authentication."));
+        }
+
+        StudyEventDAO seDao = new StudyEventDAO(dataSource);
+        StudyEventBean ev = (StudyEventBean) seDao.findByPK(eventId);
+        if (ev == null || ev.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No study_event with id " + eventId));
+        }
+        StudySubjectDAO ssDao = new StudySubjectDAO(dataSource);
+        StudySubjectBean ss = (StudySubjectBean) ssDao.findByPK(ev.getStudySubjectId());
+        Set<Integer> visible = siteVisibilityFilter.visibleStudyIds(
+                currentUser, currentStudy, currentRole);
+        if (ss == null || !visible.contains(ss.getStudyId())) {
+            return ResponseEntity.status(403).body(Map.of("message",
+                    "study_event " + eventId + " belongs to a different study"));
+        }
+        ResponseEntity<?> lockRefusal = SubjectLockGuard.refuseIfLocked(ss, "signing event " + eventId);
+        if (lockRefusal != null) {
+            return lockRefusal;
+        }
+
+        SubjectEventStatus current = ev.getSubjectEventStatus();
+        if (current != null && current.equals(SubjectEventStatus.SIGNED)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "study_event " + eventId + " is already signed."));
+        }
+        if (current != null && current.equals(SubjectEventStatus.LOCKED)) {
+            return ResponseEntity.status(409).body(Map.of("message",
+                    "study_event " + eventId + " is locked — unlock before signing."));
+        }
+        // Investigators attest the data they've reviewed, so the visit
+        // must at least be data-entry-started; signing a scheduled-but-
+        // empty visit makes no semantic sense.
+        if (current == null
+                || current.equals(SubjectEventStatus.SCHEDULED)
+                || current.equals(SubjectEventStatus.NOT_SCHEDULED)) {
+            return ResponseEntity.status(412).body(Map.of("message",
+                    "Visit must be at least in data-entry-started status before it can be signed."));
+        }
+
+        // Password re-auth via SecurityManager — same shape as the
+        // subject sign, no password ever logged.
+        UserDetails userDetails = currentUserDetails();
+        if (userDetails == null || !userDetails.getUsername().equals(currentUser.getName())) {
+            return ResponseEntity.status(401).body(Map.of("message",
+                    "Could not re-authenticate the current user for signing."));
+        }
+        if (!securityManager.verifyPassword(body.password(), userDetails)) {
+            LOG.info("Sign event: password re-auth failed for user={} event={} (study {})",
+                    currentUser.getName(), eventId, currentStudy.getOid());
+            return ResponseEntity.status(401).body(Map.of("message",
+                    "Password does not match — signature not recorded."));
+        }
+
+        // Persistence — flip this study_event to SIGNED + cascade to
+        // its event_crf rows. Single transaction for atomicity.
+        try (Connection conn = dataSource.getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE study_event "
+                                + "   SET subject_event_status_id = ?, "
+                                + "       date_updated = NOW(), "
+                                + "       update_id = ? "
+                                + " WHERE study_event_id = ?")) {
+                    ps.setInt(1, SubjectEventStatus.SIGNED.getId());
+                    ps.setInt(2, currentUser.getId());
+                    ps.setInt(3, eventId);
+                    ps.executeUpdate();
+                }
+                try (PreparedStatement ps = conn.prepareStatement(
+                        "UPDATE event_crf "
+                                + "   SET status_id = ?, "
+                                + "       electronic_signature_status = TRUE, "
+                                + "       date_validate_completed = NOW(), "
+                                + "       validator_id = ?, "
+                                + "       date_updated = NOW(), "
+                                + "       update_id = ? "
+                                + " WHERE study_event_id = ? "
+                                + "   AND status_id NOT IN (5, 6, 7)")) { // skip deleted / auto-deleted / locked
+                    ps.setInt(1, Status.SIGNED.getId());
+                    ps.setInt(2, currentUser.getId());
+                    ps.setInt(3, currentUser.getId());
+                    ps.setInt(4, eventId);
+                    ps.executeUpdate();
+                }
+                conn.commit();
+            } catch (SQLException e) {
+                conn.rollback();
+                throw e;
+            } finally {
+                conn.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            LOG.error("Sign event: persistence failed for event={} (study {}, user {})",
+                    eventId, currentStudy.getOid(), currentUser.getName(), e);
+            return ResponseEntity.status(500).body(Map.of("message",
+                    "Failed to persist event signature — see server log."));
+        }
+
+        LOG.info("Sign event: signed event={} for subject={} by user={} (study {})",
+                eventId, ss.getOid(), currentUser.getName(), currentStudy.getOid());
+
+        // Refetch + return a minimal status payload so the SPA can
+        // update its local state without a list refetch. The detail
+        // view triggers its own getEventDetail on success to pull the
+        // refreshed cascade (event_crf rows etc.).
+        StudyEventBean refreshed = (StudyEventBean) seDao.findByPK(eventId);
+        String statusToken = refreshed != null && refreshed.getSubjectEventStatus() != null
+                ? refreshed.getSubjectEventStatus().getName().toLowerCase(Locale.ROOT)
+                : "signed";
+        Map<String, Object> out = new HashMap<>();
+        out.put("id", String.valueOf(eventId));
+        out.put("status", statusToken);
+        out.put("subjectOid", ss.getOid());
+        return ResponseEntity.ok(out);
+    }
+
+    /**
+     * Pull the {@link UserDetails} principal off the
+     * {@link SecurityContextHolder} for password re-auth. Mirrors
+     * the helper in {@link SubjectsApiController}.
+     */
+    private static UserDetails currentUserDetails() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) return null;
+        Object principal = auth.getPrincipal();
+        return (principal instanceof UserDetails) ? (UserDetails) principal : null;
+    }
+
+    /**
+     * Request body for the per-visit sign endpoint. Mirrors
+     * {@code SubjectsApiController.SignSubjectRequest}. The controller
+     * NEVER logs {@code password()}.
+     */
+    public record SignEventRequest(String password, Boolean attestation) {}
+
     @PostMapping("/{id:[0-9]+}/restore")
     public ResponseEntity<?> restore(@PathVariable("id") int eventId,
                                      HttpSession session) {
@@ -1237,7 +1603,9 @@ public class EventsApiController {
                 refreshed.getDateEnded() == null ? null : ISO_DATE.format(refreshed.getDateEnded()),
                 blankToNull(refreshed.getLocation()),
                 statusForSubjectEventStatus(refreshed.getSubjectEventStatus()),
-                def != null && def.isRepeating());
+                def != null && def.isRepeating(),
+                /* scheduledFor */ null,
+                /* scheduledIntervalDays */ null);
         return ResponseEntity.ok(dto);
     }
 
@@ -1357,12 +1725,21 @@ public class EventsApiController {
         return (s == null || s.isBlank()) ? null : s;
     }
 
-    /** Body of POST /pages/api/v1/events — schedule a new study event. */
+    /**
+     * Body of POST /pages/api/v1/events — schedule a new study event.
+     *
+     * <p>2026-06-19 — {@code scheduledIntervalDays} added for the nAMD
+     * treat-and-extend workflow. Optional + nullable; non-null values
+     * trigger a follow-up UPDATE that sets
+     * {@code study_event.scheduled_for} =
+     * {@code dateStarted + scheduledIntervalDays}.
+     */
     public record ScheduleEventRequest(
             String subjectId,
             String eventDefinitionOid,
             String dateStarted,
-            String location
+            String location,
+            Integer scheduledIntervalDays
     ) {}
 
     /**

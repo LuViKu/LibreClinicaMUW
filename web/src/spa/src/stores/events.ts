@@ -195,12 +195,24 @@ export const useEventsStore = defineStore('events', () => {
    * item_data as AUTO_DELETED. Role-gated to DM / Admin only;
    * Investigators must escalate.
    *
+   * <p>Wave 1A (app-feedback, 2026-06-19) — the call now carries the
+   * institutional cancel-reason metadata on the wire so the row's
+   * `cancel_reason_code` / `cancel_reason_text` columns capture why
+   * the visit was cancelled. The backend 400s when reasonCode is
+   * missing or when an is_other reason is paired with blank text.
+   *
    * <p>Returns 204 from the backend on success; the in-memory event
    * row is removed locally.
    */
-  async function cancelEvent(eventId: string): Promise<boolean> {
+  async function cancelEvent(
+    eventId: string,
+    reason: { reasonCode: string; reasonText?: string },
+  ): Promise<boolean> {
     try {
-      await apiDelete<void>(`/pages/api/v1/events/${encodeURIComponent(eventId)}`)
+      await apiDelete<void>(
+        `/pages/api/v1/events/${encodeURIComponent(eventId)}`,
+        reason,
+      )
       events.value = events.value.filter((e) => e.id !== eventId)
       return true
     } catch (e) {
@@ -231,6 +243,52 @@ export const useEventsStore = defineStore('events', () => {
    *
    * <p>Role-gated to DM / Admin only. Investigators must escalate.
    */
+  /**
+   * 2026-06-21 user-feedback round 7 — per-visit electronic signature.
+   * The whole-subject sign in {@link useSubjectsStore} flips every
+   * visit at once; this action attests one visit at a time without
+   * committing the rest of the casebook.
+   *
+   * <p>POST /pages/api/v1/events/{id}/sign with `{ password, attestation }`.
+   * Returns true on success; on failure the store's {@link error}
+   * carries the surfaced message and the caller's modal stays open
+   * for retry.
+   */
+  async function signEvent(
+    eventId: string,
+    password: string,
+    attestation: boolean,
+  ): Promise<{ ok: true } | { ok: false; message: string }> {
+    try {
+      await apiPost<unknown>(
+        `/pages/api/v1/events/${encodeURIComponent(eventId)}/sign`,
+        { password, attestation },
+      )
+      // Splice the local row so the status pill flips without a full
+      // reload. If the row isn't in memory (event-detail-only path),
+      // no-op — the EventDetailView will refresh from its own store.
+      const idx = events.value.findIndex((e) => e.id === eventId)
+      if (idx >= 0) {
+        const cur = events.value[idx]!
+        events.value = [
+          ...events.value.slice(0, idx),
+          { ...cur, status: 'signed' as typeof cur.status },
+          ...events.value.slice(idx + 1),
+        ]
+      }
+      return { ok: true }
+    } catch (e) {
+      if (e instanceof ApiError) {
+        const body = e.body as { message?: string } | null
+        return { ok: false, message: body?.message ?? `Signieren fehlgeschlagen (HTTP ${e.status}).` }
+      }
+      if (e instanceof ApiNetworkError) {
+        return { ok: false, message: 'Backend nicht erreichbar — Signieren fehlgeschlagen.' }
+      }
+      return { ok: false, message: e instanceof Error ? e.message : 'Unbekannter Fehler beim Signieren.' }
+    }
+  }
+
   async function restoreEvent(eventId: string): Promise<boolean> {
     try {
       const restored = await apiPost<StudyEvent>(
@@ -297,6 +355,7 @@ export const useEventsStore = defineStore('events', () => {
     updateEvent,
     cancelEvent,
     restoreEvent,
+    signEvent,
     reset,
   }
 })

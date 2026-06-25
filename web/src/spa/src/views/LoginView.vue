@@ -11,6 +11,12 @@ import { useAuthStore } from '@/stores/auth'
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
+// Same Vite-injected build constants the SideRail footer uses.
+// vite.config.ts derives these env-first (APP_VERSION / BUILD_HASH /
+// BUILD_DATE) so the release-image workflow can stamp the real
+// release tag, with package.json + `git rev-parse` fallbacks for
+// local dev.
+const appVersion = __APP_VERSION__
 const auth = useAuthStore()
 
 const username = ref('')
@@ -153,7 +159,7 @@ function onSsoBounce() {
       </details>
 
       <div class="mt-8 flex items-center justify-center gap-2 text-[11px] text-slate-400">
-        <span>v1.4.0rc1-muw</span>
+        <span>v{{ appVersion }}</span>
         <span>·</span>
         <a href="#" class="hover:text-slate-600">{{ t('login.terms') }}</a>
         <span>·</span>

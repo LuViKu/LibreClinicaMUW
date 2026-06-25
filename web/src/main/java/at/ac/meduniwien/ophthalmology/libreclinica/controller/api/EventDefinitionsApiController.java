@@ -124,6 +124,180 @@ public class EventDefinitionsApiController {
         return ResponseEntity.ok(out);
     }
 
+    /* ================================================================= */
+    /* Per-event-definition retinal-inference task config (2026-06-22)   */
+    /* ================================================================= */
+
+    /** Tasks the runner registry recognises. Mirrors ALLOWED_RERUN_TASKS
+     *  in RetinalResultsApiController + the CHECK constraint on
+     *  event_definition_retinal_task. */
+    private static final Set<String> ALLOWED_RETINAL_TASKS =
+            Set.of("fluid", "ga", "onl", "pr");
+
+    /**
+     * GET — list the default retinal-inference tasks the upload portal
+     * will fan an OCT scan out to when committed against this event
+     * definition.
+     *
+     * <p>Returns a stable-ordered array so the SPA can render chips in
+     * the order the operator expects (matching the runner-card order).
+     */
+    @GetMapping("/{sedId:[0-9]+}/retinal-tasks")
+    public ResponseEntity<?> listRetinalTasks(@PathVariable("studyOid") String studyOid,
+                                              @PathVariable("sedId") int sedId,
+                                              HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ false);
+        if (guard != null) return guard;
+
+        // Confirm the event_definition belongs to this study before
+        // exposing its config — preflight checks the study scope but
+        // not the sedId↔study link.
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean sed = (StudyEventDefinitionBean) sedDao.findByPK(sedId);
+        if (sed == null || sed.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_definition with id " + sedId));
+        }
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        if (sed.getStudyId() != study.getId()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "Event definition " + sedId + " is not part of study " + studyOid));
+        }
+
+        List<String> tasks = new ArrayList<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(
+                     "SELECT task FROM event_definition_retinal_task "
+                             + "WHERE study_event_definition_id = ? "
+                             + "ORDER BY task")) {
+            ps.setInt(1, sedId);
+            try (var rs = ps.executeQuery()) {
+                while (rs.next()) tasks.add(rs.getString(1));
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to list retinal tasks for event_def {}: {}",
+                    sedId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to list retinal tasks: " + sqlEx.getMessage()));
+        }
+        return ResponseEntity.ok(Map.of("tasks", tasks));
+    }
+
+    /**
+     * PUT — replace the set of default retinal-inference tasks for this
+     * event definition atomically. Body: {@code {"tasks": ["fluid","ga"]}}.
+     * Validates every entry against the allow-list before writing — a
+     * single unknown value rejects the whole request (no partial writes).
+     *
+     * <p>Implementation: DELETE all + INSERT new in a single connection.
+     * Idempotent — re-sending the same set is a no-op for any external
+     * observer. Requires the same admin role as event-definition mutation.
+     */
+    @PutMapping("/{sedId:[0-9]+}/retinal-tasks")
+    public ResponseEntity<?> setRetinalTasks(@PathVariable("studyOid") String studyOid,
+                                             @PathVariable("sedId") int sedId,
+                                             @RequestBody Map<String, Object> body,
+                                             HttpSession session) {
+        ResponseEntity<?> guard = preflight(session, studyOid, /* mutating */ true);
+        if (guard != null) return guard;
+
+        StudyEventDefinitionDAO sedDao = new StudyEventDefinitionDAO(dataSource);
+        StudyEventDefinitionBean sed = (StudyEventDefinitionBean) sedDao.findByPK(sedId);
+        if (sed == null || sed.getId() == 0) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "No event_definition with id " + sedId));
+        }
+        StudyDAO studyDao = new StudyDAO(dataSource);
+        StudyBean study = studyDao.findByOid(studyOid);
+        if (sed.getStudyId() != study.getId()) {
+            return ResponseEntity.status(404).body(Map.of("message",
+                    "Event definition " + sedId + " is not part of study " + studyOid));
+        }
+
+        Object rawTasks = body == null ? null : body.get("tasks");
+        if (!(rawTasks instanceof List<?> list)) {
+            return ResponseEntity.badRequest().body(Map.of("message",
+                    "Body must be {\"tasks\": [...]}"));
+        }
+        // Normalise, dedup, validate.
+        java.util.LinkedHashSet<String> normalised = new java.util.LinkedHashSet<>();
+        for (Object entry : list) {
+            if (!(entry instanceof String s) || s.isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Every tasks entry must be a non-blank string"));
+            }
+            String n = s.trim().toLowerCase(java.util.Locale.ROOT);
+            if (!ALLOWED_RETINAL_TASKS.contains(n)) {
+                return ResponseEntity.badRequest().body(Map.of("message",
+                        "Unknown task '" + s + "' — expected one of " + ALLOWED_RETINAL_TASKS));
+            }
+            normalised.add(n);
+        }
+
+        // Read existing set for the audit row's old_value.
+        List<String> previous = new ArrayList<>();
+        UserAccountBean me = (UserAccountBean) session.getAttribute("userBean");
+        try (Connection c = dataSource.getConnection()) {
+            c.setAutoCommit(false);
+            try {
+                try (PreparedStatement ps = c.prepareStatement(
+                        "SELECT task FROM event_definition_retinal_task "
+                                + "WHERE study_event_definition_id = ? ORDER BY task")) {
+                    ps.setInt(1, sedId);
+                    try (var rs = ps.executeQuery()) {
+                        while (rs.next()) previous.add(rs.getString(1));
+                    }
+                }
+                try (PreparedStatement ps = c.prepareStatement(
+                        "DELETE FROM event_definition_retinal_task "
+                                + "WHERE study_event_definition_id = ?")) {
+                    ps.setInt(1, sedId);
+                    ps.executeUpdate();
+                }
+                if (!normalised.isEmpty()) {
+                    try (PreparedStatement ps = c.prepareStatement(
+                            "INSERT INTO event_definition_retinal_task "
+                                    + "(study_event_definition_id, task, created_by_user_id) "
+                                    + "VALUES (?, ?, ?)")) {
+                        for (String t : normalised) {
+                            ps.setInt(1, sedId);
+                            ps.setString(2, t);
+                            ps.setInt(3, me.getId());
+                            ps.addBatch();
+                        }
+                        ps.executeBatch();
+                    }
+                }
+                c.commit();
+            } catch (SQLException inner) {
+                c.rollback();
+                throw inner;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to replace retinal tasks for event_def {}: {}",
+                    sedId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to replace retinal tasks: " + sqlEx.getMessage()));
+        }
+
+        // Emit one audit row for the SET change so the timeline carries
+        // a single entry per PUT rather than N delete + M insert rows.
+        if (!previous.equals(new ArrayList<>(normalised))) {
+            writeEventDefFieldAudit(
+                    AuditTypeIds.EVENT_DEFINITION_FIELD_UPDATED, me, sed,
+                    "retinal_tasks",
+                    String.join(",", previous),
+                    String.join(",", normalised));
+        }
+
+        LOG.info("Retinal tasks updated for event_def {} (study {}): {} → {}",
+                sedId, studyOid, previous, normalised);
+        return ResponseEntity.ok(Map.of("tasks", new ArrayList<>(normalised)));
+    }
+
     /* ----------------------------------------------------------------- */
     /* POST — create a new event definition                               */
     /* ----------------------------------------------------------------- */
@@ -1226,6 +1400,7 @@ public class EventDefinitionsApiController {
 
     private static EventDefinitionDto toDto(StudyEventDefinitionBean sed) {
         return new EventDefinitionDto(
+                sed.getId(),
                 sed.getOid(),
                 nullToEmpty(sed.getName()),
                 nullToEmpty(sed.getDescription()),

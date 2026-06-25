@@ -178,6 +178,40 @@ public class MeApiController {
 
         MeDto.ActiveStudyDto activeStudy = null;
         if (currentStudy != null && currentStudy.getId() > 0) {
+            // study.protocol_type — StudyBean.getProtocolType() returns
+            // the i18n-resolved label rather than the raw column value,
+            // which is fine for display but the SPA's pluggable
+            // study-module SPI matches on the raw key. Use
+            // getProtocolTypeKey() so the dispatch is locale-independent
+            // (a localized "Beobachtungsstudie" would not match the
+            // registry's 'observational' protocolType in the de-AT
+            // session). Empty key → null on the wire so the SPA's
+            // findModule() short-circuits cleanly.
+            String protocolTypeKey = currentStudy.getProtocolTypeKey();
+            if (protocolTypeKey != null && protocolTypeKey.isBlank()) {
+                protocolTypeKey = null;
+            }
+            // 2026-06-21 user-feedback batch — admin-managed module
+            // enrollment list. Failing to load defaults to an empty
+            // list (the SPA treats empty as "no modules enabled") —
+            // never let a /me lookup 500 over an enrollment-table read
+            // error.
+            //
+            // 2026-06-22 — broadened catch from SQLException to Exception:
+            // MockMvc tests inject a Mockito DataSource whose
+            // getConnection() returns null, and the resulting NPE was
+            // leaking out and producing 500s on the /me happy-path
+            // tests. The fallback to empty-list is the right behaviour
+            // regardless of which exception family the DAO raises.
+            java.util.List<String> enabledModules;
+            try {
+                enabledModules = StudyModuleEnrollmentApiController
+                        .loadEnrolledModuleIds(dataSource, currentStudy.getId());
+            } catch (Exception e) {
+                LOG.warn("Failed to load module enrollments for study={}: {}",
+                        currentStudy.getOid(), e.getMessage());
+                enabledModules = java.util.List.of();
+            }
             activeStudy = new MeDto.ActiveStudyDto(
                     currentStudy.getId(),
                     currentStudy.getOid(),
@@ -193,7 +227,9 @@ public class MeApiController {
                     // set onto the active-study payload so the SPA's
                     // HomeView reads the full set instead of falling back
                     // to the top-level single highest-priority projection.
-                    spaRoles
+                    spaRoles,
+                    protocolTypeKey,
+                    enabledModules
             );
         }
 

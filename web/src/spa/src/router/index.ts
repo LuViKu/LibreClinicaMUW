@@ -51,6 +51,15 @@ const router = createRouter({
       component: () => import('@/views/CrfEntryView.vue'),
       meta: { title: 'CRF Entry', role: ['Investigator', 'Administrator'] as const },
     },
+    /* Phase E.8 Slice L4 (2026-06-20) — print-friendly CRF view,
+       SPA replacement for the legacy Print*CRF servlets. */
+    {
+      path: '/event-crfs/:eventCrfOid/print',
+      name: 'printable-crf',
+      component: () => import('@/views/PrintableCrfView.vue'),
+      meta: { title: 'Print CRF',
+              role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
+    },
     {
       // Phase E.6 dde — reconcile view; DM / Admin / Investigator only.
       // Backend guards (403 when role.id is not in {1, 3, 4}) are the
@@ -88,6 +97,32 @@ const router = createRouter({
       name: 'system-audit-log',
       component: () => import('@/views/SystemAuditLogView.vue'),
       meta: { title: 'System Audit Log', role: 'Administrator' as const },
+    },
+    /* Phase E.8 Slice L3 (2026-06-20) — sysadmin admin tooling. */
+    {
+      path: '/admin/system-status',
+      name: 'admin-system-status',
+      component: () => import('@/views/AdminSystemStatusView.vue'),
+      meta: { title: 'System Status', role: 'Administrator' as const },
+    },
+    {
+      path: '/admin/password-policy',
+      name: 'admin-password-policy',
+      component: () => import('@/views/AdminPasswordPolicyView.vue'),
+      meta: { title: 'Password Policy', role: 'Administrator' as const },
+    },
+    {
+      path: '/admin/config',
+      name: 'admin-config',
+      component: () => import('@/views/AdminConfigView.vue'),
+      meta: { title: 'App Configuration', role: 'Administrator' as const },
+    },
+    /* Phase E.8 Slice L5 (2026-06-20) — sysadmin Quartz job admin. */
+    {
+      path: '/admin/jobs',
+      name: 'admin-jobs',
+      component: () => import('@/views/AdminJobsView.vue'),
+      meta: { title: 'Scheduled jobs', role: 'Administrator' as const },
     },
     /* Phase E.6 carry-over — Read-only CRF (Monitor's "View Within Record" path). */
     {
@@ -136,6 +171,16 @@ const router = createRouter({
       name: 'crf-library',
       component: () => import('@/views/CrfLibraryView.vue'),
       meta: { title: 'CRF Library', role: ['Data Manager', 'Administrator'] as const },
+    },
+    /* App-feedback Wave 2 (2026-06-19) — full drag-and-drop CRF builder canvas.
+       Now the sole CRF authoring surface; the legacy side-rail wizard
+       was removed in the D3 follow-up (2026-06-20) per its
+       "one-release-on-flag" promise. */
+    {
+      path: '/crf-authoring-canvas/:crfOid',
+      name: 'crfAuthoringCanvas',
+      component: () => import('@/views/CrfAuthoringCanvasView.vue'),
+      meta: { title: 'CRF Builder', role: ['Data Manager', 'Administrator'] as const, canvasBuilder: true },
     },
     /* Phase E A8.4 — sites / multi-center setup. */
     {
@@ -233,6 +278,13 @@ const router = createRouter({
       component: () => import('@/views/FirstLoginView.vue'),
       meta: { title: 'First-login profile', public: true },
     },
+    /* Phase E.8 Slice L2 (2026-06-20) — SPA replacement for /pages/Contact. */
+    {
+      path: '/contact',
+      name: 'contact',
+      component: () => import('@/views/ContactView.vue'),
+      meta: { title: 'Contact', public: true },
+    },
     /* Phase E.4 M1 — Study picker (post-login, when no study bound). */
     {
       path: '/pick-study',
@@ -247,7 +299,8 @@ const router = createRouter({
       component: () => import('@/views/ChangePasswordView.vue'),
       meta: { title: 'Change password' },
     },
-    /* Phase E.6 — Data Export Phase 2 — create-dataset wizard. */
+    /* Phase E.6 — dataset list (companions: /datasets/new + /datasets/:id/edit
+       defined earlier in the routes table). */
     {
       path: '/datasets',
       name: 'datasets',
@@ -258,28 +311,33 @@ const router = createRouter({
       },
     },
     {
-      path: '/datasets/new',
-      name: 'dataset-new',
-      component: () => import('@/views/CreateDatasetView.vue'),
-      meta: {
-        title: 'Create dataset',
-        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
-      },
-    },
-    {
-      path: '/datasets/:datasetId/edit',
-      name: 'dataset-edit',
-      component: () => import('@/views/CreateDatasetView.vue'),
-      meta: {
-        title: 'Edit dataset',
-        role: ['Monitor', 'Data Manager', 'Administrator'] as const,
-      },
-    },
-    {
       path: '/modalities',
       name: 'modalities',
       component: () => import('@/views/ModalitiesView.vue'),
       meta: { title: 'Modalitäten', role: 'Administrator' as const },
+    },
+    /* Phase E.7 Wave 4 — Retinal scan metrics viewer. */
+    {
+      path: '/retinal-jobs/:jobId(\\d+)',
+      name: 'retinal-job',
+      component: () => import('@/views/RetinalMetricsView.vue'),
+      meta: {
+        title: 'Retinal scan metrics',
+        role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const,
+      },
+    },
+    /* 2026-06-19 — Administrator-only cross-study parked-scans admin.
+       Parked rows have no study-subject linkage so the per-subject
+       ParkedScansList can never surface them; this view is the only
+       reachable bind UX. Doc: retinal-jobs-admin-followup.md. */
+    {
+      path: '/retinal/parked',
+      name: 'retinal-parked-admin',
+      component: () => import('@/views/RetinalParkedAdminView.vue'),
+      meta: {
+        title: 'Geparkte Scans',
+        role: 'Administrator' as const,
+      },
     },
     /* Phase E.6 — Patient Overview (cross-study, keyed on the underlying
        patient rather than the active-study study-subject label). */
@@ -288,6 +346,32 @@ const router = createRouter({
       name: 'patients-overview',
       component: () => import('@/views/PatientsOverviewView.vue'),
       meta: { title: 'Patientenübersicht', role: ['Investigator', 'Monitor', 'Data Manager', 'Administrator'] as const },
+    },
+    /* Phase E retinal-inference (Wave C) — public OCT-upload portal.
+       Unauthenticated drag-and-drop ingest at /app/oct-upload; the
+       backend whitelists /pages/api/v1/public/oct-upload/** under
+       permitAll() (DR-022 sibling) and the institutional reverse
+       proxy is the only access gate. */
+    {
+      path: '/oct-upload',
+      name: 'oct-upload-portal',
+      component: () => import('@/views/OctUploadPortalView.vue'),
+      meta: { public: true, title: 'OCT-Upload-Portal' },
+    },
+    /**
+     * 2026-06-24 user-feedback round — public BCVA-entry portal.
+     * Same posture as the OCT-upload portal (DR-022 sibling): the
+     * institutional reverse proxy is the only access gate; the
+     * backend whitelists /pages/api/v1/public/bcva-entry/** under
+     * permitAll(). Study nurses bookmark
+     * /app/bcva-entry/<studyOid> and enter today's BCVA readings
+     * for the visits scheduled on that date.
+     */
+    {
+      path: '/bcva-entry/:studyOid',
+      name: 'bcva-portal',
+      component: () => import('@/views/BcvaPortalView.vue'),
+      meta: { public: true, title: 'BCVA-Eingabeportal' },
     },
     /**
      * Phase E hardening — A5 (2026-06-10): catch-all "Seite nicht
@@ -433,6 +517,51 @@ export function guard(
       actualRoles.some((actual) => roleSatisfies(actual, r)),
     )
     if (!ok) return { name: 'home' }
+  }
+
+  // Pluggable study-module SPI — meta.studyModule guard.
+  //
+  // Routes added by a registered StudyModuleManifest are stamped with
+  // meta.studyModule = manifest.protocolType (the module id). The
+  // guard rejects navigations whose active study has not enrolled
+  // that module — match is case-insensitive against
+  // {@code activeStudy.enabledModules}. The protocol_type column on
+  // study is no longer consulted (2026-06-23: see studyModules store
+  // for the decoupling rationale). On mismatch we redirect home with
+  // an error-toast so the operator sees *why* they bounced instead
+  // of staring at a silent reroute.
+  const studyModuleMeta = to.meta.studyModule as string | undefined
+  if (studyModuleMeta) {
+    const enrolled =
+      (auth.user?.activeStudy as unknown as { enabledModules?: string[] } | undefined)
+        ?.enabledModules ?? []
+    const needle = studyModuleMeta.trim().toUpperCase()
+    const isEnrolled = enrolled.some((m) => m.trim().toUpperCase() === needle)
+    if (!isEnrolled) {
+      useErrorsStore().push(
+        new Error(`Module ${studyModuleMeta} is not enrolled on the active study.`),
+        'studyModule.guard',
+      )
+      return { name: 'home' }
+    }
+
+    // PR #245 hardening — verify the URL's :studyOid matches the active
+    // study's OID. The enrollment check above only proves "the active
+    // study has this module enabled"; it doesn't prove "the URL
+    // targets the active study." Without this, a user with study A
+    // active can bookmark study B's module URL and land inside module
+    // A's workspace showing study B context (silent data-routing bug).
+    const urlOid = (to.params.studyOid as string | undefined) ?? null
+    const activeOid = auth.user?.activeStudy?.oid ?? null
+    if (urlOid && activeOid && urlOid !== activeOid) {
+      useErrorsStore().push(
+        new Error(
+          `Module URL references study ${urlOid}, but the active study is ${activeOid}.`,
+        ),
+        'studyModule.guard',
+      )
+      return { name: 'home' }
+    }
   }
 
   return true

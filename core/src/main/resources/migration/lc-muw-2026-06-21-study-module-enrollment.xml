@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                            http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        User-feedback batch (2026-06-21) — admin-driven study-module
+        enrollment.
+
+        Before this change, the SPA's study-module SPI dispatched
+        purely on study.protocol_type (free-form text) and the TopBar
+        rendered the module nav entry the moment the active study
+        carried a matching protocol_type. The operator had no way to
+        DISABLE a module per-study; ANY study with protocol_type='nAMD'
+        got the module unconditionally.
+
+        This table makes module activation explicit, admin-controlled,
+        and decoupled from the protocol_type discriminator. The SPA's
+        useStudyModuleStore.activeModule computed adds an
+        AND-conjunction: the module fires only when the protocol_type
+        matches AND the study is enrolled here.
+
+        Schema:
+
+          - study_id    : FK to study.study_id (RESTRICT on delete —
+                          enrollment rows must be cleaned up before a
+                          study can be hard-deleted, which is itself
+                          rare).
+          - module_id   : VARCHAR(64) — matches the SPA manifest's
+                          protocolType (case-insensitive, normalised
+                          via UPPER in queries). No FK to a backend
+                          enum because the module catalog lives in the
+                          SPA only.
+          - enrolled_at : default NOW().
+          - enrolled_by : INT — user_account.user_id of the operator
+                          who toggled the enrollment on. 0 for seed
+                          rows.
+
+        Composite PK on (study_id, module_id) guarantees idempotent
+        enrollment writes.
+
+        Demo data: seed an nAMD enrollment for the existing
+        S_DEFAULTS1 study so the workspace + nav entry the user has
+        been testing against keep working through this change.
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-21-study-module-enrollment">
+        <createTable tableName="study_module_enrollment"
+                     remarks="Admin-managed per-study module enrollment. SPA dispatch ANDs with study.protocol_type.">
+            <column name="study_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="module_id" type="VARCHAR(64)"
+                    remarks="Matches the SPA manifest's protocolType, case-insensitive.">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enrolled_at" type="TIMESTAMP WITH TIME ZONE"
+                    defaultValueComputed="NOW()">
+                <constraints nullable="false"/>
+            </column>
+            <column name="enrolled_by" type="INT" defaultValueNumeric="0"
+                    remarks="user_account.user_id of the operator who flipped the toggle on. 0 for seed rows.">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey tableName="study_module_enrollment"
+                       columnNames="study_id, module_id"
+                       constraintName="pk_study_module_enrollment"/>
+
+        <addForeignKeyConstraint baseTableName="study_module_enrollment"
+                                 baseColumnNames="study_id"
+                                 constraintName="fk_study_module_enrollment_study"
+                                 referencedTableName="study"
+                                 referencedColumnNames="study_id"
+                                 onDelete="RESTRICT"
+                                 onUpdate="RESTRICT"/>
+
+        <createIndex tableName="study_module_enrollment"
+                     indexName="idx_study_module_enrollment_study">
+            <column name="study_id"/>
+        </createIndex>
+
+        <!-- Seed: keep the user's nAMD smoke flow working through this
+             schema change. S_DEFAULTS1 (study_id=1) is the demo study
+             the user already set protocol_type='nAMD' on. -->
+        <sql>
+            INSERT INTO study_module_enrollment (study_id, module_id, enrolled_by)
+            SELECT s.study_id, 'NAMD', 0
+              FROM study s
+             WHERE s.oc_oid = 'S_DEFAULTS1'
+               AND NOT EXISTS (
+                   SELECT 1 FROM study_module_enrollment e
+                    WHERE e.study_id = s.study_id AND UPPER(e.module_id) = 'NAMD'
+               );
+        </sql>
+
+        <rollback>
+            <dropForeignKeyConstraint baseTableName="study_module_enrollment"
+                                      constraintName="fk_study_module_enrollment_study"/>
+            <dropIndex tableName="study_module_enrollment"
+                       indexName="idx_study_module_enrollment_study"/>
+            <dropTable tableName="study_module_enrollment"/>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>

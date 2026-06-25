@@ -115,5 +115,30 @@ public record MeDto(
              */
             String uniqueIdentifier,
             boolean isSite,
-            List<String> roles) {}
+            List<String> roles,
+            /**
+             * {@code study.protocol_type} — drives the SPA's pluggable
+             * study-module SPI. The SPA's {@code useStudyModuleStore}
+             * looks the value up in {@code STUDY_MODULES} (case-
+             * insensitive) and activates the matching manifest on every
+             * study switch. Free-form text in the DB (no enum
+             * constraint); matched cosmetic-case insensitively by the
+             * registry. Nullable for studies authored before the field
+             * was used.
+             */
+            String protocolType,
+            /**
+             * 2026-06-21 user-feedback batch — admin-managed list of
+             * SPA-module ids enrolled on this study (normalised to
+             * upper-case at write time). The SPA's
+             * {@code useStudyModuleStore.activeModule} computed ANDs
+             * this list with the {@link #protocolType} match — modules
+             * activate only when both conditions hold. An empty list
+             * means "no SPA modules enabled for this study" regardless
+             * of protocolType. Backwards-compatible: the seed
+             * migration populates one row for the existing
+             * {@code S_DEFAULTS1} study so the user's nAMD smoke flow
+             * keeps working through this schema change.
+             */
+            List<String> enabledModules) {}
 }

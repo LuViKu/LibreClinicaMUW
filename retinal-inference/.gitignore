@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+# Vendor wheels + model weights are never committed (large, licensed).
+*.whl
+*.pt
+*.pth
+*.pkl
+*.ckpt
+*.sif
+runners/*/code/*
+!runners/*/code/.gitkeep

@@ -278,6 +278,22 @@ public class SubjectsApiController {
 
         StudySubjectDAO studySubjectDAO = new StudySubjectDAO(dataSource);
         StudySubjectBean ss = studySubjectDAO.findByOid(studySubjectOid);
+        // 2026-06-22 user-feedback round 8 — the SPA constructs the
+        // path arg as `SS_<label>` from the subject's label by
+        // convention, which works for subjects whose seed/auto-OID
+        // followed that pattern but misses on demo seeds that use a
+        // non-standard OID (e.g. `SS_EIAMD139_RIS` for label
+        // EIAMD139). Fall back to a label lookup in the active study
+        // when the bare OID misses, recovering the row without
+        // forcing a database rename.
+        if ((ss == null || ss.getId() == 0) && studySubjectOid != null) {
+            String label = studySubjectOid.startsWith("SS_")
+                    ? studySubjectOid.substring(3) : studySubjectOid;
+            StudySubjectBean fallback = studySubjectDAO.findByLabelAndStudy(label, currentStudy);
+            if (fallback != null && fallback.getId() != 0) {
+                ss = fallback;
+            }
+        }
         if (ss == null || ss.getId() == 0) {
             return ResponseEntity.status(404).body(Map.of(
                     "message", "Subject with OID '" + studySubjectOid + "' not found."
@@ -868,7 +884,8 @@ public class SubjectsApiController {
                 formatIsoDate(ssb.getScreeningDate()),
                 mapStudySubjectStatus(ssb.getStatus()),
                 initialAssignments,
-                /* eyeTransitions — fresh subject, none yet */ null
+                /* eyeTransitions — fresh subject, none yet */ null,
+                /* studySubjectId — Wave 2A */ ssb.getId()
         );
 
         LOG.info("Add Subject: created study_subject id={} oid={} label={} (study {}, user {})",
@@ -948,11 +965,19 @@ public class SubjectsApiController {
      * accompany the lookup. The backend is liberal about partial
      * fields (matches need all three) and renders a permissive 400
      * with explicit reasons rather than leaking match counts.
+     *
+     * <p>App-feedback Wave 1B (2026-06-19) — added the optional
+     * {@code label} field so the dialog can ALSO surface cross-study
+     * label collisions ("M-001 is already in study GA-Studie"). When
+     * blank or omitted the endpoint falls back to PHI-only matching
+     * (the legacy Phase E.6 contract).
      */
     public record SubjectMatchPreflightRequest(
             String firstName,
             String lastName,
-            String dateOfBirth
+            String dateOfBirth,
+            /** App-feedback Wave 1B — optional cross-study label match. */
+            String label
     ) {}
 
     /**
@@ -1156,6 +1181,92 @@ public class SubjectsApiController {
             return ResponseEntity.status(500).body(Map.of("message",
                     "Match preflight failed — see server log."));
         }
+
+        // App-feedback Wave 1B (2026-06-19) — optional cross-study label
+        // union. When the operator typed a study-subject id ("M-001") on
+        // the AddSubject form, ALSO surface candidates whose
+        // study_subject.label matches across visible studies — same
+        // human may be enrolled in a sibling study under a familiar
+        // institutional id, and the operator should see that collision
+        // before committing the new enrolment. Additive to the PHI
+        // branch: rows are merged into the same bySubject map keyed on
+        // subject_id, so a candidate matched by BOTH paths appears once.
+        String label = body.label() == null ? "" : body.label().trim();
+        if (!label.isEmpty()) {
+            String labelSql =
+                    "WITH matched AS (" +
+                    "  SELECT DISTINCT ss.subject_id " +
+                    "    FROM study_subject ss " +
+                    "   WHERE ss.label = ? " +
+                    "     AND ss.status_id IS DISTINCT FROM 5 " +
+                    ") " +
+                    "SELECT s.subject_id, s.unique_identifier, s.gender, s.date_of_birth, " +
+                    "       s.first_name, s.last_name, " +
+                    "       st.unique_identifier AS study_unique_identifier, " +
+                    "       st.oc_oid            AS study_oc_oid, " +
+                    "       st.name              AS study_name, " +
+                    "       ss2.label            AS subject_label " +
+                    "  FROM matched m " +
+                    "  JOIN subject s            ON s.subject_id  = m.subject_id " +
+                    "                            AND s.status_id  IS DISTINCT FROM 5 " +
+                    "  LEFT JOIN study_subject ss2 ON ss2.subject_id = m.subject_id " +
+                    "                             AND ss2.status_id  IS DISTINCT FROM 5 " +
+                    "  LEFT JOIN study st          ON st.study_id    = ss2.study_id " +
+                    " ORDER BY s.subject_id, st.unique_identifier";
+            try (Connection c = dataSource.getConnection();
+                 PreparedStatement ps = c.prepareStatement(labelSql)) {
+                ps.setString(1, label);
+                try (ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        int subjectId = rs.getInt("subject_id");
+                        Acc acc = bySubject.get(subjectId);
+                        if (acc == null) {
+                            java.sql.Date d = rs.getDate("date_of_birth");
+                            acc = new Acc(
+                                    rs.getString("unique_identifier"),
+                                    rs.getString("gender"),
+                                    d == null ? null : d.toLocalDate().toString(),
+                                    rs.getString("first_name"),
+                                    rs.getString("last_name"),
+                                    new ArrayList<>(),
+                                    new int[1]);
+                            bySubject.put(subjectId, acc);
+                        }
+                        String studyUid  = rs.getString("study_unique_identifier");
+                        String studyOcOid = rs.getString("study_oc_oid");
+                        String studyName = rs.getString("study_name");
+                        String enrolLabel = rs.getString("subject_label");
+                        if (studyUid != null || studyOcOid != null) {
+                            // De-dup the per-study enrolment list when
+                            // the same subject was already added via
+                            // the PHI branch — both branches walk the
+                            // same study_subject rows.
+                            boolean alreadyVisible = false;
+                            for (SubjectMatchCandidate.StudyEnrollment se : acc.visibleStudies()) {
+                                if (se.studyOid() != null && se.studyOid().equals(studyOcOid)) {
+                                    alreadyVisible = true;
+                                    break;
+                                }
+                            }
+                            if (studyOcOid != null && visibleStudyOids.contains(studyOcOid)) {
+                                if (!alreadyVisible) {
+                                    acc.visibleStudies().add(new SubjectMatchCandidate.StudyEnrollment(
+                                            studyUid, studyOcOid, studyName, enrolLabel));
+                                }
+                            } else if (!alreadyVisible) {
+                                acc.otherCount()[0]++;
+                            }
+                        }
+                    }
+                }
+            } catch (SQLException e) {
+                LOG.error("Match-preflight label-union lookup failed for user={}",
+                        currentUser.getName(), e);
+                return ResponseEntity.status(500).body(Map.of("message",
+                        "Match preflight failed — see server log."));
+            }
+        }
+
         for (Map.Entry<Integer, Acc> e : bySubject.entrySet()) {
             Acc a = e.getValue();
             out.add(new SubjectMatchCandidate(
@@ -1169,7 +1280,8 @@ public class SubjectsApiController {
                     a.otherCount()[0]));
         }
 
-        LOG.info("Match-preflight: {} candidate(s) for user={}", out.size(), currentUser.getName());
+        LOG.info("Match-preflight: {} candidate(s) for user={} (label-union={})",
+                out.size(), currentUser.getName(), !label.isEmpty());
         return ResponseEntity.ok(out);
     }
 
@@ -2516,7 +2628,8 @@ public class SubjectsApiController {
                 formatIsoDate(ss.getScreeningDate()),
                 mapStudySubjectStatus(ss.getStatus()),
                 groupAssignments,
-                eyeTransitions
+                eyeTransitions,
+                /* studySubjectId — Wave 2A */ ss.getId()
         );
     }
 

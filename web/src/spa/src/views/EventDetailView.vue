@@ -6,9 +6,14 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import SideRail from '@/components/SideRail.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import DenseTable from '@/components/DenseTable.vue'
+import RetinalResultsTab from '@/components/RetinalResultsTab.vue'
 
 import { useEventDetailStore } from '@/stores/eventDetail'
-import type { EventCrfRowStatus, StudyEventStatus } from '@/types/event'
+import { useEventsStore } from '@/stores/events'
+import { useStudyModuleStore } from '@/stores/studyModules'
+import type { EventCrfRowDto, EventCrfRowStatus, StudyEventStatus } from '@/types/event'
+import { formatDate } from '@/lib/dateFormat'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 
 /**
  * Phase E.6 — standalone Event Detail view (replaces the legacy
@@ -25,6 +30,47 @@ const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
 const store = useEventDetailStore()
+// Pluggable study-module SPI — event-detail panels slot.
+// Each entry's optional predicate(ctx) is evaluated with the current
+// event ref so a module can gate per-event without hard-coded
+// per-event-name conditionals in shared code.
+const studyModules = useStudyModuleStore()
+const panelInjections = computed(() => studyModules.injectionsFor('event-detail.panels'))
+
+/**
+ * 2026-06-21 user-feedback round 5 — manual "Visite abschließen"
+ * action. The cascade in EventCrfsApiController that flipped the
+ * visit to COMPLETED on the last CRF mark-complete was removed; the
+ * operator now drives the transition explicitly from this view.
+ */
+const events = useEventsStore()
+const isMarkingEventComplete = ref(false)
+const markEventCompleteError = ref<string | null>(null)
+const canMarkEventComplete = computed(() => {
+  const s = event.value?.status
+  if (!s) return false
+  // Terminal-ish states block: completed (already), signed, locked,
+  // stopped, skipped. Anything else may be marked complete by the
+  // operator (matches the role gate on the PUT endpoint).
+  return s !== 'completed' && s !== 'signed' && s !== 'locked'
+      && s !== 'stopped' && s !== 'skipped'
+})
+async function onMarkEventComplete(): Promise<void> {
+  if (!event.value || !canMarkEventComplete.value) return
+  markEventCompleteError.value = null
+  isMarkingEventComplete.value = true
+  try {
+    const result = await events.updateEvent(String(event.value.eventId), { status: 'completed' })
+    if (!result.ok) {
+      markEventCompleteError.value = result.message
+      return
+    }
+    // Refresh the local detail so the status pill + button gating react.
+    await store.load(eventId.value)
+  } finally {
+    isMarkingEventComplete.value = false
+  }
+}
 
 const eventId = computed<string>(() => String(route.params.eventId))
 
@@ -43,6 +89,18 @@ watch(eventId, (id) => {
 })
 
 const event = computed(() => store.event)
+
+// 2026-06-23 user-feedback round — nested breadcrumb trail:
+// "<study> > Studienteilnehmer > <subject> > <event>".
+useViewBreadcrumb(computed(() => {
+  const ev = event.value
+  if (!ev) return null
+  return [
+    { label: t('nav.subjectMatrix'), to: '/subjects' },
+    { label: ev.subjectLabel, to: `/subjects/${encodeURIComponent(ev.subjectLabel)}` },
+    { label: ev.eventDefinitionName, to: null },
+  ]
+}))
 
 function statusVariant(s: StudyEventStatus): 'success' | 'info' | 'warning' | 'danger' | 'neutral' {
   switch (s) {
@@ -96,12 +154,26 @@ async function restoreCrfRow(eventCrfId: number | null): Promise<void> {
   }
 }
 
-const MONTH_ABBR = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez']
-function formatDate(iso: string | null | undefined): string {
-  if (!iso) return '—'
-  const [y, m, d] = iso.split('-').map((s) => Number.parseInt(s, 10))
-  return `${String(d ?? 1).padStart(2, '0')}-${MONTH_ABBR[(m ?? 1) - 1] ?? '???'}-${y}`
-}
+/**
+ * Phase E.7 Wave 4 — flatten the event's CRF list down to the numeric
+ * event_crf_id values that have a row in {@code retinal_inference_job}.
+ *
+ * <p>The viewer renders one {@code RetinalResultsTab} per CRF row that
+ * actually exists ({@code eventCrfId != null}); pre-creation slots can't
+ * have jobs yet so we skip them. We surface a panel for every existing
+ * row rather than gating on task type — the read-API quietly returns an
+ * empty list for non-retinal CRFs, and the panel renders its own "no
+ * jobs yet" empty state.
+ */
+const retinalCrfIds = computed<number[]>(() => {
+  const crfs: EventCrfRowDto[] = event.value?.crfs ?? []
+  return crfs
+    .map((c) => c.eventCrfId)
+    .filter((id): id is number => id != null)
+})
+
+// 2026-06-21 user-feedback round 4 — formatDate now lives in
+// @/lib/dateFormat so every view renders DD.MM.YYYY (German short).
 
 /**
  * Phase E.6 — start data entry for a CRF slot that has no
@@ -175,7 +247,36 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
             {{ event.eventDefinitionName }}
             <StatusPill :variant="statusVariant(event.status)">{{ t(`subjectMatrix.status.${event.status}`) }}</StatusPill>
           </h1>
-          <p class="text-xs text-slate-500 mt-1 font-mono">{{ formatDate(event.dateStart) }}</p>
+          <div class="mt-1 flex items-center justify-between gap-3 flex-wrap">
+            <p class="text-xs text-slate-500 font-mono">{{ formatDate(event.dateStart) }}</p>
+            <!-- 2026-06-21 user-feedback round 5 — manual visit-completion
+                 button. The cascade in EventCrfsApiController used to
+                 flip the visit to COMPLETED automatically on the last
+                 CRF mark-complete, which surprised operators. The
+                 transition is now driven from here so the operator owns
+                 the call. The button is disabled when the visit is
+                 already in a terminal-ish state (completed / stopped /
+                 skipped / signed / locked) — no double-complete. -->
+            <button
+              v-if="canMarkEventComplete"
+              type="button"
+              class="text-xs px-3 py-1.5 rounded bg-muw-blue text-white hover:bg-muw-blue/90 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              :disabled="isMarkingEventComplete"
+              data-test="event-detail-mark-complete"
+              @click="onMarkEventComplete"
+            >
+              {{ isMarkingEventComplete
+                  ? t('eventDetail.action.completing')
+                  : t('eventDetail.action.markComplete') }}
+            </button>
+          </div>
+          <div
+            v-if="markEventCompleteError"
+            class="mt-2 rounded-muw border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-800"
+            role="alert"
+          >
+            {{ markEventCompleteError }}
+          </div>
         </div>
 
         <!-- Phase E.6 — inline error toast for the "start data entry" action.
@@ -281,6 +382,32 @@ async function startCrf(eventDefinitionCrfId: number): Promise<void> {
             </tr>
           </DenseTable>
         </section>
+
+        <!-- Phase E.7 Wave 4 — retinal inference jobs per event-CRF.
+             One panel per existing CRF row; the read-API quietly returns
+             an empty list for non-retinal CRFs, and the panel renders its
+             own "no jobs yet" empty state. -->
+        <RetinalResultsTab
+          v-for="crfId in retinalCrfIds"
+          :key="`retinal-${crfId}`"
+          :event-crf-id="crfId"
+        />
+
+        <!-- Pluggable study-module SPI — event-detail panels slot.
+             Modules opt-in by registering an entry with an optional
+             predicate(ctx); the host passes the current event ref so
+             modules can gate by status / definition / etc. without
+             hard-coded conditionals in shared code. -->
+        <template
+          v-for="entry in panelInjections"
+          :key="entry.key"
+        >
+          <component
+            v-if="!entry.predicate || entry.predicate(event)"
+            :is="entry.component"
+            :context="event"
+          />
+        </template>
 
         <RouterLink :to="`/subjects/${event.subjectLabel}`" class="text-xs text-muw-blue underline" data-test="event-detail-back">
           {{ t('eventDetail.back') }}

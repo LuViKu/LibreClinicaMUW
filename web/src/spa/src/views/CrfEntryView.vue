@@ -26,12 +26,16 @@ import CrfItemWidget from '@/components/CrfItemWidget.vue'
 import BilateralItemGroup from '@/components/BilateralItemGroup.vue'
 import NewNoteDialog from '@/components/NewNoteDialog.vue'
 import NoteThreadDialog from '@/components/NoteThreadDialog.vue'
+import CrfPrefillModal from '@/components/CrfPrefillModal.vue'
 import { groupBilateralItems, type BilateralRow } from '@/components/bilateral'
+import { parseShowWhen } from '@/components/showWhen'
 
 import { useCrfEntryStore } from '@/stores/crfEntry'
 import { useCrfEntryAdvancedStore } from '@/stores/crfEntryAdvanced'
 import { useAuthStore } from '@/stores/auth'
+import { useStudyModuleStore } from '@/stores/studyModules'
 import { useOphthFieldCatalogStore } from '@/stores/ophthFieldCatalog'
+import { useViewBreadcrumb } from '@/composables/useViewBreadcrumb'
 import type { CrfEntryStatus, CrfItem } from '@/types/crf'
 import { canReopenCrf } from '@/types/crf'
 import type { NoteType, DiscrepancyNote } from '@/types/note'
@@ -41,7 +45,28 @@ const route = useRoute()
 const router = useRouter()
 const store = useCrfEntryStore()
 const advanced = useCrfEntryAdvancedStore()
+
+// 2026-06-23 user-feedback round — nested breadcrumb trail:
+// "<study> > Studienteilnehmer > <subject> > <event> > <crf>".
+useViewBreadcrumb(computed(() => {
+  const entry = store.entry
+  if (!entry) return null
+  const crfLabel = store.schema?.name ?? entry.eventLabel
+  const eventLink = entry.studyEventId != null
+    ? `/events/${entry.studyEventId}`
+    : null
+  return [
+    { label: t('nav.subjectMatrix'), to: '/subjects' },
+    { label: entry.subjectId, to: `/subjects/${encodeURIComponent(entry.subjectId)}` },
+    { label: entry.eventLabel, to: eventLink },
+    { label: crfLabel, to: null },
+  ]
+}))
 const auth = useAuthStore()
+// Pluggable study-module SPI — top-of-form banner slot. Modules use
+// this for AI-auto-populate hints, regimen-specific reminders, etc.
+const studyModules = useStudyModuleStore()
+const bannerInjections = computed(() => studyModules.injectionsFor('crf-entry.banner'))
 // Phase E.6 ophth-field-catalog (2026-06-11): the per-item widget
 // renderer reads the catalog entry to decide between number-stepper /
 // snellen / segmented Ja-Nein / conditional reason chrome. Pre-load
@@ -62,27 +87,53 @@ const ophthCatalog = useOphthFieldCatalogStore()
  * conditionalOnCode {@code SPECTRALIS_OCT_DONE} → parent OID
  * {@code I_OPHTH_OD_SPECTRALIS_OCT_DONE}.
  *
- * <p>Returns undefined when the item isn't conditional OR no parent
- * code is bound — CrfItemWidget then renders the input in the
+ * <p>App-feedback Wave 1D (2026-06-19) — bug fix: when no catalog
+ * entry is bound, fall back to the item's {@code showWhen} rule so
+ * the conditional-reason widget can still resolve its parent value.
+ * This unblocks the {@code *_DONE_REASON} OID-suffix heuristic path
+ * which previously left the textarea permanently disabled.
+ *
+ * <p>Returns undefined when the item isn't conditional AND has no
+ * show-when rule — CrfItemWidget then renders the input in the
  * inactive state.
  */
 function parentValueFor(item: CrfItem): unknown {
   const entry = ophthCatalog.entryForOid(item.oid)
-  if (entry == null) return undefined
-  const parentCode = entry.conditionalOnCode
-  const currentCode = entry.code
-  if (parentCode == null || parentCode === '' || currentCode == null || currentCode === '') return undefined
-  const oidTokens = item.oid.split('_')
-  const currentTokens = currentCode.split('_')
-  if (oidTokens.length < currentTokens.length) return undefined
-  for (let i = 0; i < currentTokens.length; i++) {
-    if (oidTokens[oidTokens.length - currentTokens.length + i] !== currentTokens[i]) {
-      return undefined
+  if (entry != null) {
+    const parentCode = entry.conditionalOnCode
+    const currentCode = entry.code
+    if (parentCode != null && parentCode !== '' && currentCode != null && currentCode !== '') {
+      const oidTokens = item.oid.split('_')
+      const currentTokens = currentCode.split('_')
+      if (oidTokens.length >= currentTokens.length) {
+        let suffixMatch = true
+        for (let i = 0; i < currentTokens.length; i++) {
+          if (oidTokens[oidTokens.length - currentTokens.length + i] !== currentTokens[i]) {
+            suffixMatch = false
+            break
+          }
+        }
+        if (suffixMatch) {
+          const prefix = oidTokens.slice(0, oidTokens.length - currentTokens.length)
+          const parentOid = [...prefix, ...parentCode.split('_')].join('_')
+          return store.values[parentOid]
+        }
+      }
     }
   }
-  const prefix = oidTokens.slice(0, oidTokens.length - currentTokens.length)
-  const parentOid = [...prefix, ...parentCode.split('_')].join('_')
-  return store.values[parentOid]
+  // Fallback path: the item carries a show-when rule (JSON or legacy
+  // OpenClinica string). Parse it once and read the source item's
+  // current value from the store. This catches both the
+  // {@code *_DONE_REASON} heuristic items (where the catalog returns
+  // null but a show-when rule was authored) and any SPA-built CRF that
+  // wires items together via the show-when machinery.
+  if (item.showWhen) {
+    const parsed = parseShowWhen(item.showWhen)
+    if (parsed != null) {
+      return store.values[parsed.sourceItemOid]
+    }
+  }
+  return undefined
 }
 
 const eventCrfOid = computed(() => String(route.params.eventCrfOid))
@@ -196,7 +247,20 @@ function statusLabel(s: CrfEntryStatus): string {
   return t(`crfEntry.status.${s}`)
 }
 
+/**
+ * 2026-06-21 user-feedback round 5 — required-field highlights only
+ * surface once the operator has actually attempted a save or mark-
+ * complete. The previous behaviour painted every required field
+ * red on initial load, which read as "you've done something wrong"
+ * before the operator had a chance to type anything. The flag flips
+ * once on the first onSave / onMarkComplete attempt and stays on
+ * afterwards (the inline messages then track itemErrors live so
+ * fields turn green as the operator fills them in).
+ */
+const submitAttempted = ref(false)
+
 function showError(item: CrfItem): string | null {
+  if (!submitAttempted.value) return null
   return store.itemErrors[item.oid] ?? null
 }
 
@@ -285,6 +349,7 @@ const saveBlockedByRfc = computed(
 )
 
 function onSave() {
+  submitAttempted.value = true
   // If the operator clicks Save on a post-complete entry without
   // every reason staged, route through the modal rather than firing
   // a save that the backend will 400. The store's guard does the
@@ -296,14 +361,23 @@ function onSave() {
   void store.save()
 }
 async function onMarkComplete() {
+  submitAttempted.value = true
   await store.markComplete()
   if (store.status === 'complete') {
-    // Phase E.6 polish — after marking complete, return the operator
-    // to the casebook view for the subject they were entering, with
-    // the events panel scrolled into view. Falls back to the subject
-    // matrix when the entry happens to have no subjectId (shouldn't
-    // happen in practice, but the guard keeps the post-complete UX
-    // from dead-ending).
+    // 2026-06-21 user-feedback round 5 — return to the parent visit
+    // view rather than the subject casebook. The operator was just
+    // working through a CRF for a specific visit; landing them back
+    // on the event-detail page keeps the workflow tight and surfaces
+    // the new "Visite abschließen" button (the visit no longer
+    // auto-completes — see EventCrfsApiController cascade removal).
+    const eventId = store.entry?.studyEventId
+    if (eventId != null) {
+      router.push({
+        name: 'event-detail',
+        params: { eventId: String(eventId) },
+      })
+      return
+    }
     const subjectId = store.entry?.subjectId
     if (subjectId) {
       router.push({
@@ -457,6 +531,31 @@ function onThreadUpdated(_parentId: string) {
   // chip stays as-is until the next loadAll().
   threadDialogState.value = null
 }
+
+/* -------------------------------------------------------------------- */
+/* App-feedback Wave 1D (2026-06-19) — "Vom letzten Besuch übernehmen"  */
+/* prefill modal. Open via the header button on the entry view; on      */
+/* confirm the modal emits a {itemOid -> value} map which we apply to   */
+/* the local store via setValue. Save is still operator-confirmed —     */
+/* the values are dirty + need a deliberate Save click before they      */
+/* persist to item_data.                                                */
+/* -------------------------------------------------------------------- */
+
+const prefillOpen = ref(false)
+
+function openPrefill() {
+  if (isReadOnly.value || !store.entry) return
+  prefillOpen.value = true
+}
+
+function onPrefillApply(values: Record<string, string>) {
+  // Apply each accepted row through setValue so dirty tracking +
+  // status transitions stay coherent. Values are typed straight into
+  // store.values; the operator still has to click Save to persist.
+  for (const [itemOid, value] of Object.entries(values)) {
+    store.setValue(itemOid, value)
+  }
+}
 </script>
 
 <template>
@@ -509,6 +608,45 @@ function onThreadUpdated(_parentId: string) {
             {{ t('crfEntry.unsaved') }}
           </span>
           <span v-if="!isReadOnly && store.isSaving" class="text-[11px] text-muw-blue">{{ t('crfEntry.saving') }}</span>
+          <!-- App-feedback Wave 1D (2026-06-19) — "Vom letzten Besuch
+               übernehmen" trigger. Only rendered for editable entries
+               so a Monitor-view session can't accidentally apply
+               values it can't save. Pushed to the right of the header
+               via ml-auto so the status pills stay grouped on the
+               left. -->
+          <button
+            v-if="!isReadOnly && store.entry"
+            type="button"
+            class="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-muw-blue-50 hover:border-muw-blue text-slate-700 hover:text-muw-blue-700 transition-colors"
+            data-testid="prefill-button"
+            @click="openPrefill"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+              <path d="M12 8v8M8 12h8" />
+              <circle cx="12" cy="12" r="10" />
+            </svg>
+            {{ t('crfEntry.prefill.button') }}
+          </button>
+          <!-- Phase E.8 Slice L4 (2026-06-20) — SPA replacement for the
+               legacy print servlets. Opens in a new tab so the operator
+               can keep editing; the new tab auto-triggers the browser
+               Print to PDF dialog via the printable route's onMounted. -->
+          <RouterLink
+            v-if="store.entry"
+            :to="{ name: 'printable-crf', params: { eventCrfOid: String($route.params.eventCrfOid) } }"
+            target="_blank"
+            rel="noopener"
+            :class="!isReadOnly && store.entry ? '' : 'ml-auto'"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-muw-blue-50 hover:border-muw-blue text-slate-700 hover:text-muw-blue-700 transition-colors"
+            data-testid="print-button"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+              <polyline points="6 9 6 2 18 2 18 9" />
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+              <rect x="6" y="14" width="12" height="8" />
+            </svg>
+            {{ t('crfEntry.printButton') }}
+          </RouterLink>
         </div>
       </div>
 
@@ -566,6 +704,20 @@ function onThreadUpdated(_parentId: string) {
       <!-- Phase E.6 crf-entry-advanced: soft-lock concurrent-editor
            warning. Renders when another session's heartbeat is active. -->
       <ConcurrentEditBanner v-if="!isReadOnly" :probe="advanced.lockProbe" />
+
+      <!-- Pluggable study-module SPI — crf-entry banner slot.
+           Mounted only when a registered module advertises at least one
+           entry for this slot. Modules typically use this to surface an
+           AI-prefill hint, T&E reminder, or regimen-specific guidance
+           that's not worth carving a per-CRF widget for. -->
+      <div v-if="bannerInjections.length" class="mb-4 space-y-2">
+        <template
+          v-for="entry in bannerInjections"
+          :key="entry.key"
+        >
+          <component :is="entry.component" />
+        </template>
+      </div>
 
       <form
         v-if="store.entry && !store.isLoading"
@@ -904,6 +1056,14 @@ function onThreadUpdated(_parentId: string) {
       :item-label="threadDialogState.itemLabel"
       @close="threadDialogState = null"
       @updated="onThreadUpdated"
+    />
+    <!-- App-feedback Wave 1D (2026-06-19) — prefill modal mount. -->
+    <CrfPrefillModal
+      v-if="store.entry"
+      :open="prefillOpen"
+      :current-event-crf-id="store.entry.eventCrfOid"
+      @close="prefillOpen = false"
+      @apply="onPrefillApply"
     />
   </div>
 </template>

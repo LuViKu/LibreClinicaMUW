@@ -1,0 +1,200 @@
+import { beforeEach, describe, expect, it } from 'vitest'
+import { createPinia, setActivePinia } from 'pinia'
+import type { RouteLocationNormalized } from 'vue-router'
+
+import { guard } from '../index'
+import { useAuthStore } from '@/stores/auth'
+import type { AuthenticatedUser } from '@/types/auth'
+
+/**
+ * Pluggable study-module SPI — router-guard contract.
+ *
+ * The framework stamps every module-supplied route with
+ * {@code meta.studyModule = manifest.protocolType}. The shared
+ * {@link guard} helper must reject navigations whose active study's
+ * protocol_type doesn't match (redirect to /), pass when it matches,
+ * and pass cleanly when the meta key is absent (so the rest of the
+ * SPA's route table — none of which carries this meta — keeps working).
+ *
+ * We exercise {@code guard()} directly rather than driving the live
+ * router so we can stub the auth store without booting the full
+ * navigation pipeline.
+ */
+
+function makeTo(opts: {
+  name?: string
+  meta?: Record<string, unknown>
+  fullPath?: string
+  path?: string
+  params?: Record<string, string>
+}): RouteLocationNormalized {
+  return {
+    name: opts.name ?? 'mock-route',
+    fullPath: opts.fullPath ?? opts.path ?? '/mock',
+    path: opts.path ?? '/mock',
+    query: {},
+    params: opts.params ?? {},
+    hash: '',
+    matched: [],
+    redirectedFrom: undefined,
+    meta: opts.meta ?? {},
+  } as unknown as RouteLocationNormalized
+}
+
+/**
+ * 2026-06-23 — the activation gate now keys on
+ * activeStudy.enabledModules (admin enrollment) instead of
+ * protocol_type. The helper name + signature are retained so the
+ * existing test assertions ("matches" / "doesn't match") still read
+ * naturally — internally the value is propagated into enabledModules.
+ */
+function userBoundTo(protocolType: string | null | undefined): AuthenticatedUser {
+  return {
+    username: 'root',
+    displayName: 'Root',
+    email: null,
+    role: 'Investigator',
+    roles: ['Investigator'],
+    siteLabel: null,
+    source: 'local',
+    mfaSatisfied: true,
+    profileComplete: true,
+    locale: 'de-AT',
+    timezone: 'Europe/Vienna',
+    mustChangePassword: false,
+    passwordChangeReason: null,
+    activeStudy: protocolType === undefined
+      ? null
+      : ({
+          id: 1,
+          oid: 'S_DEFAULTS1',
+          name: 'Default Study',
+          uniqueIdentifier: 'D',
+          isSite: false,
+          roles: ['Investigator'],
+          protocolType: protocolType ?? 'observational',
+          enabledModules: protocolType ? [protocolType] : [],
+        } as AuthenticatedUser['activeStudy'] & { enabledModules: string[] }),
+  }
+}
+
+describe('router guard — meta.studyModule', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+  })
+
+  it('passes through when meta.studyModule is absent', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo(null)
+    auth.state = 'authenticated'
+
+    const to = makeTo({ name: 'home', path: '/' })
+    expect(guard(auth, to)).toBe(true)
+  })
+
+  it('redirects to home when active study protocolType does not match', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo('GA')
+    auth.state = 'authenticated'
+
+    const to = makeTo({
+      name: 'namd-workspace',
+      path: '/studies/S_DEFAULTS1/modules/namd',
+      meta: { studyModule: 'NAMD' },
+    })
+    expect(guard(auth, to)).toEqual({ name: 'home' })
+  })
+
+  it('redirects when there is no active study at all', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo(undefined) // null activeStudy
+    auth.state = 'authenticated'
+
+    const to = makeTo({
+      name: 'namd-workspace',
+      path: '/studies/S_DEFAULTS1/modules/namd',
+      meta: { studyModule: 'NAMD' },
+    })
+    // The needsStudyPick branch fires before our module check because
+    // a user with no active study can't navigate anywhere protected.
+    // Either redirection is acceptable — we just confirm the
+    // navigation does NOT pass.
+    expect(guard(auth, to)).not.toBe(true)
+  })
+
+  it('passes when active study protocolType matches (case-insensitive)', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo('nAMD')
+    auth.state = 'authenticated'
+
+    const to = makeTo({
+      name: 'namd-workspace',
+      path: '/studies/S_DEFAULTS1/modules/namd',
+      meta: { studyModule: 'NAMD' },
+    })
+    expect(guard(auth, to)).toBe(true)
+  })
+
+  it('passes when both meta and study agree on lowercase', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo('namd')
+    auth.state = 'authenticated'
+
+    const to = makeTo({
+      name: 'namd-workspace',
+      path: '/studies/S_DEFAULTS1/modules/namd',
+      meta: { studyModule: 'namd' },
+    })
+    expect(guard(auth, to)).toBe(true)
+  })
+
+  /* --------------------------------------------------------------------- */
+  /* PR #245 hardening — studyOid path-param verification                  */
+  /* --------------------------------------------------------------------- */
+
+  it('redirects when URL :studyOid does not match the active study OID', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo('NAMD')
+    auth.state = 'authenticated'
+
+    // userBoundTo seeds activeStudy.oid = 'S_DEFAULTS1' — picking a
+    // different OID in the URL models a bookmarked URL or a typo.
+    const to = makeTo({
+      name: 'namd-workspace',
+      path: '/studies/S_GA_TRIAL/modules/namd',
+      params: { studyOid: 'S_GA_TRIAL' },
+      meta: { studyModule: 'NAMD' },
+    })
+    expect(guard(auth, to)).toEqual({ name: 'home' })
+  })
+
+  it('passes when URL :studyOid matches the active study OID', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo('NAMD')
+    auth.state = 'authenticated'
+
+    const to = makeTo({
+      name: 'namd-workspace',
+      path: '/studies/S_DEFAULTS1/modules/namd',
+      params: { studyOid: 'S_DEFAULTS1' },
+      meta: { studyModule: 'NAMD' },
+    })
+    expect(guard(auth, to)).toBe(true)
+  })
+
+  it('passes when the URL carries no :studyOid (defensive — non-module routes)', () => {
+    const auth = useAuthStore()
+    auth.user = userBoundTo('NAMD')
+    auth.state = 'authenticated'
+
+    // If a future module declares a route without :studyOid (or the
+    // user navigates to a non-module route stamped with studyModule
+    // meta by mistake), the OID check should not block.
+    const to = makeTo({
+      name: 'namd-summary',
+      path: '/modules/namd/summary',
+      meta: { studyModule: 'NAMD' },
+    })
+    expect(guard(auth, to)).toBe(true)
+  })
+})

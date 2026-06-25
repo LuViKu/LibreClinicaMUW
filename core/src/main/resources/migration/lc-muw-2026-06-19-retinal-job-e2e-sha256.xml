@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                                       http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.5.xsd">
+
+    <!--
+      2026-06-19 — Upload-dedup gate for retinal_inference_job.
+
+      Backs the SHA-256-based soft-409 dedup the public OCT-upload
+      portal enforces at commit time. Without this, an operator who
+      clicks "Hochladen" twice (lost network / stale tab) creates two
+      independent jobs that each run inference and persist separate
+      artifact directories — wasteful + confusing in the per-subject
+      "Retinal-Verlauf" history. Discovered 2026-06-18 during smoke of
+      the cross-study parked-admin view: jobs 35-38 on M-002 are the
+      same scan re-uploaded four times.
+
+      The column carries the hex-encoded SHA-256 of the .e2e bytes.
+      The unique index allows multiple NULLs (Postgres default) so
+      pre-existing rows (uploaded before this migration) don't violate
+      the constraint retroactively; controllers populate the hash for
+      every new upload going forward.
+
+      Re-running the same scan against a NEWER inference model is
+      handled separately — that flow will operate on an EXISTING job
+      row (re-segment / re-bind) instead of inserting a new one, so
+      the unique constraint won't block legitimate re-runs.
+    -->
+    <changeSet id="2026-06-19-retinal-job-e2e-sha256" author="muw">
+        <addColumn tableName="retinal_inference_job">
+            <column name="e2e_sha256" type="VARCHAR(64)"
+                    remarks="Hex-encoded SHA-256 of the uploaded .e2e bytes — dedup gate against duplicate uploads."/>
+        </addColumn>
+        <createIndex tableName="retinal_inference_job"
+                     indexName="ux_retinal_inference_job_e2e_sha256"
+                     unique="true">
+            <column name="e2e_sha256"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

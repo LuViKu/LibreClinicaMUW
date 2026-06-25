@@ -73,7 +73,7 @@ That keeps each agent's context separate, which is what we want.
 ## Switching the modernization worktree to a new feature branch
 
 When Phase B.0 wraps and Phase B.1 starts (per [Phase B execution
-playbook](development/modernization/phase-b-execution-playbook.md)):
+playbook](development/modernization/archive/phase-b-execution-playbook.md)):
 
 ```sh
 cd /Users/lukas/LibreClinicaMUW/modernization

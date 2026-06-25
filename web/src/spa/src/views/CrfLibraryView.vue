@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 
 import SideRail from '@/components/SideRail.vue'
@@ -7,7 +8,6 @@ import StatusPill from '@/components/StatusPill.vue'
 import TextInput from '@/components/TextInput.vue'
 import FieldLabel from '@/components/FieldLabel.vue'
 import ErrorText from '@/components/ErrorText.vue'
-import CrfAuthoringWizard from '@/components/CrfAuthoringWizard.vue'
 
 import { useCrfLibraryStore } from '@/stores/crfLibrary'
 import { useAuthStore } from '@/stores/auth'
@@ -29,6 +29,7 @@ import type { Crf } from '@/types/crfLibrary'
  * backend re-checks (sysadmin / director / coordinator triad).
  */
 const { t } = useI18n()
+const router = useRouter()
 const lib = useCrfLibraryStore()
 const auth = useAuthStore()
 
@@ -92,6 +93,13 @@ const uploadParseErrors = ref<string[]>([])
 const uploadFormError = ref<string | null>(null)
 const isUploading = ref(false)
 
+// 2026-06-21 user-feedback batch — the XLSX-upload UI was removed
+// per user direction; the backend endpoint + the dialog state below
+// stay in the source for a quick restore path if a sponsor workbook
+// needs the legacy round-trip. @ts-ignore so tsc stops warning about
+// the unreferenced helper.
+// @ts-expect-error openUpload retained for legacy upload restore path
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function openUpload(crf: Crf) {
   uploading.value = {
     crfOid: crf.oid,
@@ -137,18 +145,54 @@ async function submitUpload() {
   }
 }
 
-/* --------------------------- Author wizard ------------------------ */
-// Phase E.6 Milestone A — JSON-body wizard launched per-CRF from the
-// list. On close, reload the library so the freshly-authored version
-// appears under its parent CRF.
-interface AuthoringState { crfOid: string; crfName: string }
-const authoring = ref<AuthoringState | null>(null)
-function openAuthoring(crf: Crf) {
-  authoring.value = { crfOid: crf.oid, crfName: crf.name }
+/* --------------------------- Author canvas ------------------------ */
+// Routes the operator to the canvas builder (Wave 2 / PR #224). The
+// inline wizard overlay was retired in this release — the canvas view
+// is now the only authoring surface reachable from the library.
+function openAuthoring(crf: Crf): void {
+  forkMenuCrfOid.value = null
+  router.push({ name: 'crfAuthoringCanvas', params: { crfOid: crf.oid } })
 }
-function closeAuthoring() {
-  authoring.value = null
-  refresh()
+
+/**
+ * 2026-06-21 user-feedback round 6 — fork picker state. Single ref
+ * means clicking another CRF's chevron implicitly closes the previous
+ * menu, and the click-outside directive resets it when the operator
+ * clicks anywhere else.
+ */
+const forkMenuCrfOid = ref<string | null>(null)
+function toggleForkMenu(oid: string): void {
+  forkMenuCrfOid.value = forkMenuCrfOid.value === oid ? null : oid
+}
+function forkFromVersion(crf: Crf, v: { oid: string; name: string }): void {
+  forkMenuCrfOid.value = null
+  router.push({
+    name: 'crfAuthoringCanvas',
+    params: { crfOid: crf.oid },
+    query: { fromVersion: v.oid, fromVersionName: v.name },
+  })
+}
+
+/**
+ * Local click-outside directive — see SubjectDetailView for the
+ * shape rationale. Inlined here so library + subject detail don't
+ * yet need to share a util.
+ */
+const vClickOutside = {
+  mounted(el: HTMLElement & { __clickOutside?: (ev: Event) => void }, binding: { value: () => void }) {
+    el.__clickOutside = (ev: Event) => {
+      if (!el.contains(ev.target as Node)) {
+        binding.value?.()
+      }
+    }
+    document.addEventListener('pointerdown', el.__clickOutside, true)
+  },
+  unmounted(el: HTMLElement & { __clickOutside?: (ev: Event) => void }) {
+    if (el.__clickOutside) {
+      document.removeEventListener('pointerdown', el.__clickOutside, true)
+      delete el.__clickOutside
+    }
+  },
 }
 
 /* ----------------------------- Disable ---------------------------- */
@@ -256,15 +300,51 @@ const visibleRows = computed(() =>
         </div>
       </div>
 
-      <div class="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-900 mb-4">
-        {{ t('crfLibrary.parserActiveNote') }}
-      </div>
+      <!-- 2026-06-21 user-feedback batch — the XLSX-parser hint banner
+           was removed: the canvas builder is the primary authoring
+           surface. The legacy parser stays available via the per-CRF
+           card actions for back-compat (parser-bound studies, legacy
+           workbook reuse) but it no longer needs front-page real estate. -->
 
       <p v-if="lib.isLoading" class="text-slate-500 italic">{{ t('common.loading') }}</p>
       <p v-else-if="lib.error" class="text-rose-700">{{ lib.error }}</p>
       <p v-else-if="visibleRows.length === 0" class="text-slate-500 italic">{{ t('crfLibrary.empty') }}</p>
 
-      <ul v-else class="space-y-3">
+      <!-- Create form — 2026-06-23 user-feedback round: moved from
+           below the CRF list to ABOVE so the operator can fill it
+           out without scrolling past every existing CRF to reach
+           the inputs. -->
+      <div v-if="createOpen" class="mb-4 rounded-md border border-slate-200 bg-white p-4">
+        <h2 class="text-sm font-semibold mb-3">{{ t('crfLibrary.createHeading') }}</h2>
+        <div class="grid grid-cols-2 gap-3">
+          <div class="col-span-2">
+            <FieldLabel for="crf-create-name" required>{{ t('crfLibrary.crfName') }}</FieldLabel>
+            <TextInput id="crf-create-name" v-model="createForm.name" />
+            <ErrorText v-if="createErrors.name">{{ createErrors.name }}</ErrorText>
+          </div>
+          <div class="col-span-2">
+            <FieldLabel for="crf-create-desc">{{ t('crfLibrary.crfDescription') }}</FieldLabel>
+            <TextInput id="crf-create-desc" v-model="createForm.description" />
+          </div>
+        </div>
+        <ErrorText v-if="createFormError">{{ createFormError }}</ErrorText>
+        <div class="mt-3 flex items-center gap-2">
+          <button
+            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
+            @click="createOpen = false"
+          >{{ t('common.cancel') }}</button>
+          <button
+            class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
+            :disabled="createForm.name.trim() === '' || isCreating"
+            @click="submitCreate"
+          >{{ isCreating ? t('common.saving') : t('crfLibrary.submitCreate') }}</button>
+        </div>
+      </div>
+
+      <ul
+        v-if="!lib.isLoading && !lib.error && visibleRows.length > 0"
+        class="space-y-3"
+      >
         <li
           v-for="crf in visibleRows"
           :key="crf.oid"
@@ -283,15 +363,57 @@ const visibleRows = computed(() =>
               <p v-if="crf.description" class="text-xs text-slate-500 mt-1">{{ crf.description }}</p>
             </div>
             <div v-if="canManage && crf.status !== 'removed'" class="flex items-center gap-2 text-xs">
-              <button
-                class="text-muw-blue hover:underline"
-                @click="openUpload(crf)"
-              >{{ t('crfLibrary.uploadVersion') }}</button>
-              <span class="text-slate-300">·</span>
-              <button
-                class="text-muw-blue hover:underline"
-                @click="openAuthoring(crf)"
-              >{{ t('crfLibrary.authorManually') }}</button>
+              <!-- 2026-06-21 user-feedback round 6 — split-button: the
+                   primary action stays "Neue Version anlegen" (blank
+                   canvas) and the adjacent chevron opens a picker that
+                   lets the operator fork from a prior version. The
+                   canvas reads ?fromVersion=<oid> + ?fromVersionName=<name>
+                   and seeds the draft via store.loadFromVersion().
+                   The upload endpoint + dialog stay in place even
+                   though the surface is hidden — the legacy entry
+                   point can be restored if a sponsor workbook needs
+                   to round-trip. -->
+              <div
+                class="inline-flex items-center"
+                v-click-outside="() => (forkMenuCrfOid === crf.oid ? (forkMenuCrfOid = null) : null)"
+              >
+                <button
+                  class="text-muw-blue hover:underline"
+                  @click="openAuthoring(crf)"
+                >{{ t('crfLibrary.authorManually') }}</button>
+                <button
+                  v-if="crf.versions.length > 0"
+                  type="button"
+                  class="ml-1 px-1.5 py-0.5 rounded border border-slate-200 text-slate-500 hover:bg-slate-100 inline-flex items-center"
+                  :aria-label="t('crfLibrary.forkMenu.label')"
+                  :aria-expanded="forkMenuCrfOid === crf.oid"
+                  data-testid="crf-library-fork-toggle"
+                  @click="toggleForkMenu(crf.oid)"
+                >
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <div
+                  v-if="forkMenuCrfOid === crf.oid"
+                  class="absolute mt-7 z-20 min-w-[14rem] rounded-md border border-slate-200 bg-white shadow-md py-1"
+                  data-testid="crf-library-fork-menu"
+                >
+                  <div class="px-3 py-1.5 text-[10px] uppercase tracking-wider text-slate-400">
+                    {{ t('crfLibrary.forkMenu.heading') }}
+                  </div>
+                  <button
+                    v-for="v in crf.versions.filter((x) => x.status !== 'removed')"
+                    :key="`fork-${v.oid}`"
+                    type="button"
+                    class="block w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100"
+                    :data-testid="`crf-library-fork-from-${v.oid}`"
+                    @click="forkFromVersion(crf, v)"
+                  >
+                    {{ t('crfLibrary.forkMenu.fromVersion', { name: v.name }) }}
+                  </button>
+                </div>
+              </div>
               <span class="text-slate-300">·</span>
               <button class="text-rose-600 hover:underline" @click="onDisableCrf(crf)">
                 {{ t('crfLibrary.disable') }}
@@ -350,34 +472,6 @@ const visibleRows = computed(() =>
         </li>
       </ul>
 
-      <!-- Create form -->
-      <div v-if="createOpen" class="mt-6 rounded-md border border-slate-200 bg-white p-4">
-        <h2 class="text-sm font-semibold mb-3">{{ t('crfLibrary.createHeading') }}</h2>
-        <div class="grid grid-cols-2 gap-3">
-          <div class="col-span-2">
-            <FieldLabel for="crf-create-name" required>{{ t('crfLibrary.crfName') }}</FieldLabel>
-            <TextInput id="crf-create-name" v-model="createForm.name" />
-            <ErrorText v-if="createErrors.name">{{ createErrors.name }}</ErrorText>
-          </div>
-          <div class="col-span-2">
-            <FieldLabel for="crf-create-desc">{{ t('crfLibrary.crfDescription') }}</FieldLabel>
-            <TextInput id="crf-create-desc" v-model="createForm.description" />
-          </div>
-        </div>
-        <ErrorText v-if="createFormError">{{ createFormError }}</ErrorText>
-        <div class="mt-3 flex items-center gap-2">
-          <button
-            class="px-3 py-1.5 text-xs border border-slate-200 rounded-md bg-white hover:bg-slate-100 text-slate-700"
-            @click="createOpen = false"
-          >{{ t('common.cancel') }}</button>
-          <button
-            class="px-4 py-1.5 text-xs bg-muw-blue text-white rounded-md hover:bg-muw-blue-700 font-medium disabled:opacity-50"
-            :disabled="createForm.name.trim() === '' || isCreating"
-            @click="submitCreate"
-          >{{ isCreating ? t('common.saving') : t('crfLibrary.submitCreate') }}</button>
-        </div>
-      </div>
-
       <!-- Upload form -->
       <div v-if="uploading" class="mt-6 rounded-md border border-amber-200 bg-amber-50 p-4">
         <h2 class="text-sm font-semibold mb-1">
@@ -430,14 +524,6 @@ const visibleRows = computed(() =>
         </div>
       </div>
     </main>
-
-    <CrfAuthoringWizard
-      v-if="authoring"
-      :open="true"
-      :crf-oid="authoring.crfOid"
-      :crf-name="authoring.crfName"
-      @close="closeAuthoring"
-    />
 
     <!-- Hard-remove blocker modal — renders the 409 VersionUsageReport
          when a hard-remove can't proceed. Migrate-dialog wiring lives

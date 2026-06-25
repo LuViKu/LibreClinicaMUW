@@ -10,8 +10,11 @@ import StatusPill from '@/components/StatusPill.vue'
 import DiffCard from '@/components/DiffCard.vue'
 import DenseTable from '@/components/DenseTable.vue'
 
+import { useAuthStore } from '@/stores/auth'
 import { useImportCrfStore } from '@/stores/importCrf'
 import type { ImportCrfPreviewRow, ImportOverwriteMode } from '@/types/importCrf'
+
+const auth = useAuthStore()
 
 const { t } = useI18n()
 
@@ -103,7 +106,13 @@ function variantFor(s: ImportCrfPreviewRow['status']): 'success' | 'warning' | '
         </svg>
         {{ t('nav.buildStudy') }}
       </RouterLink>
-      <RouterLink to="/manage-users" class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white">
+      <!-- 2026-06-23 user-feedback round — gate on Administrator;
+           /manage-users is Administrator-only per router meta. -->
+      <RouterLink
+        v-if="auth.user?.role === 'Administrator'"
+        to="/manage-users"
+        class="flex items-center gap-2.5 px-2.5 py-1.5 rounded-md text-slate-700 hover:bg-white"
+      >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
           <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z" />
         </svg>

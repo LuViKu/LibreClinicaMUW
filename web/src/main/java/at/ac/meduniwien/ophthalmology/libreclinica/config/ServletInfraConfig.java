@@ -21,7 +21,10 @@ import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.ApiSecurityFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.LocaleFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.OpenClinicaUsernamePasswordAuthenticationFilter;
 import at.ac.meduniwien.ophthalmology.libreclinica.web.filter.RequestIdFilter;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation.LegacyServletDeprecationCatalog;
+import at.ac.meduniwien.ophthalmology.libreclinica.web.deprecation.LegacyServletTelemetryFilter;
 import jakarta.servlet.Filter;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * Phase C.14 cliff (2026-05-30): replaces the {@code <listener>}s and
@@ -82,12 +85,72 @@ public class ServletInfraConfig {
      * any downstream filter logs. See {@link RequestIdFilter} JavaDoc for
      * the rationale on filter ordering + MDC hygiene.
      */
+    /*
+     * 2026-06-19 — every FilterRegistrationBean below explicitly sets
+     * {@code setAsyncSupported(true)}. Without this, Tomcat marks the
+     * resolved filter chain as not-async-supported as soon as any one
+     * filter's registration leaves the value at its default; the
+     * SseEmitter-backed {@code GET /pages/api/v1/retinal-jobs/{id}/status/stream}
+     * endpoint then throws {@code IllegalStateException: Async support
+     * must be enabled on a servlet and for all filters involved in
+     * async request processing.}, the SPA's EventSource auto-retries
+     * at ~1 Hz, and the libreclinica log fills with stack traces (the
+     * SSE flood observed during the 2026-06-18 OCT-portal smoke).
+     * Boot 3 used to default this to {@code true} on
+     * {@link FilterRegistrationBean} — being explicit makes the
+     * behaviour future-proof against further Boot defaults churn.
+     */
+
     @Bean
     public FilterRegistrationBean<RequestIdFilter> requestIdFilter() {
         FilterRegistrationBean<RequestIdFilter> reg =
                 new FilterRegistrationBean<>(new RequestIdFilter());
         reg.addUrlPatterns("/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        reg.setAsyncSupported(true);
+        return reg;
+    }
+
+    /**
+     * Phase E.8 legacy-retirement (2026-06-20) — explicit bean for the
+     * deprecation catalog. The catalog itself is annotated
+     * {@code @Component}, but its package
+     * ({@code …libreclinica.web.deprecation}) is not under either of
+     * the application's two narrow {@code scanBasePackages} settings
+     * ({@code .config} on the root context, {@code .controller} on the
+     * pages child context). Without this explicit bean Boot startup
+     * fails with "required a bean of type
+     * LegacyServletDeprecationCatalog that could not be found" — see
+     * the compose smoke-test failure on lc-develop tip 5bdefd25a.
+     */
+    @Bean
+    public LegacyServletDeprecationCatalog legacyServletDeprecationCatalog() {
+        return new LegacyServletDeprecationCatalog();
+    }
+
+    /**
+     * Phase E.8 legacy-retirement (2026-06-20) — emits a structured
+     * INFO line on the {@code legacy-access} logger for every request
+     * that hits a {@link LegacyServletDeprecationCatalog} entry, and
+     * (when {@code LIBRECLINICA_LEGACY_SERVLETS_ENABLED=false}) returns
+     * 410 Gone with a JSON body pointing at the SPA replacement.
+     *
+     * <p>Ordered just after {@link #requestIdFilter()} so the
+     * {@code reqId} MDC value is already populated when this filter
+     * logs the hit.
+     */
+    @Bean
+    public FilterRegistrationBean<LegacyServletTelemetryFilter> legacyServletTelemetryFilter(
+            LegacyServletDeprecationCatalog catalog,
+            @Value("${libreclinica.legacy.servletsEnabled:true}") boolean servletsEnabled,
+            @Value("${libreclinica.legacy.banner:true}") boolean bannerEnabled,
+            @Value("${libreclinica.legacy.sunsetDate:2026-08-15}") String sunsetDate) {
+        FilterRegistrationBean<LegacyServletTelemetryFilter> reg =
+                new FilterRegistrationBean<>(new LegacyServletTelemetryFilter(
+                        catalog, servletsEnabled, bannerEnabled, sunsetDate));
+        reg.addUrlPatterns("/pages/*");
+        reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 1);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -101,6 +164,7 @@ public class ServletInfraConfig {
         // A4 (2026-06-10): bumped from HIGHEST_PRECEDENCE to +5 so
         // requestIdFilter sits strictly ahead of every other filter.
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 5);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -109,6 +173,7 @@ public class ServletInfraConfig {
         FilterRegistrationBean<LocaleFilter> reg = new FilterRegistrationBean<>(new LocaleFilter());
         reg.addUrlPatterns("/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -118,6 +183,7 @@ public class ServletInfraConfig {
                 new FilterRegistrationBean<>(new OpenEntityManagerInViewFilter());
         reg.addUrlPatterns("/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 20);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -127,6 +193,7 @@ public class ServletInfraConfig {
                 new FilterRegistrationBean<>(new OCServletFilter());
         reg.addUrlPatterns("/*");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 30);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -137,6 +204,7 @@ public class ServletInfraConfig {
         reg.addUrlPatterns("/pages/auth/api/*");
         reg.setName("apiSecurityFilterProxy");
         reg.setOrder(Ordered.HIGHEST_PRECEDENCE + 40);
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -150,6 +218,12 @@ public class ServletInfraConfig {
         FilterRegistrationBean<OpenClinicaUsernamePasswordAuthenticationFilter> reg =
                 new FilterRegistrationBean<>(myFilter);
         reg.setEnabled(false);
+        // 2026-06-19 — even disabled, the registration metadata is
+        // surfaced to Tomcat's filter-chain bookkeeping. Marking it
+        // async-supported avoids poisoning request.isAsyncSupported()
+        // on any chain that happens to include the bean. See class
+        // Javadoc's SSE fix note for full context.
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -159,6 +233,12 @@ public class ServletInfraConfig {
         FilterRegistrationBean<ConcurrentSessionFilter> reg =
                 new FilterRegistrationBean<>(concurrencyFilter);
         reg.setEnabled(false);
+        // 2026-06-19 — even disabled, the registration metadata is
+        // surfaced to Tomcat's filter-chain bookkeeping. Marking it
+        // async-supported avoids poisoning request.isAsyncSupported()
+        // on any chain that happens to include the bean. See class
+        // Javadoc's SSE fix note for full context.
+        reg.setAsyncSupported(true);
         return reg;
     }
 
@@ -168,6 +248,58 @@ public class ServletInfraConfig {
         FilterRegistrationBean<ApiSecurityFilter> reg =
                 new FilterRegistrationBean<>(apiSecurityFilter);
         reg.setEnabled(false);
+        // 2026-06-19 — even disabled, the registration metadata is
+        // surfaced to Tomcat's filter-chain bookkeeping. Marking it
+        // async-supported avoids poisoning request.isAsyncSupported()
+        // on any chain that happens to include the bean. See class
+        // Javadoc's SSE fix note for full context.
+        reg.setAsyncSupported(true);
+        return reg;
+    }
+
+    /**
+     * Explicit bean factory for the public OCT-upload rate-limit
+     * filter.
+     *
+     * <p>{@link at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter}
+     * carries {@code @Component} but lives in the {@code .web}
+     * package, which is NOT covered by the root
+     * {@link LibreClinicaApplication @SpringBootApplication}'s
+     * {@code scanBasePackages = ".config"} scope. Without this
+     * factory, Spring fails to start with an
+     * {@code UnsatisfiedDependencyException} when
+     * {@link #publicOctUploadRateLimitFilterAutoRegOptOut(at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter)}
+     * and {@link SecurityConfig#securityFilterChain(...)} try to
+     * autowire it. Hotfix for the PR #211 merge regression
+     * (2026-06-18 boot failure observed against the merged tip).
+     */
+    @Bean
+    public at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter
+            publicOctUploadRateLimitFilter() {
+        return new at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter();
+    }
+
+    /**
+     * Wave 1B (2026-06-18): the public OCT-upload rate-limit filter is
+     * mounted inside the {@code SecurityFilterChain} via
+     * {@link SecurityConfig#securityFilterChain(...)}'s
+     * {@code .addFilterBefore(...)}. Boot would otherwise auto-register
+     * it as a standalone servlet filter at {@code /*} and the token
+     * decrement would happen twice per request.
+     */
+    @Bean
+    public FilterRegistrationBean<at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter>
+            publicOctUploadRateLimitFilterAutoRegOptOut(
+                    at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter filter) {
+        FilterRegistrationBean<at.ac.meduniwien.ophthalmology.libreclinica.web.PublicOctUploadRateLimitFilter>
+                reg = new FilterRegistrationBean<>(filter);
+        reg.setEnabled(false);
+        // 2026-06-19 — even disabled, the registration metadata is
+        // surfaced to Tomcat's filter-chain bookkeeping. Marking it
+        // async-supported avoids poisoning request.isAsyncSupported()
+        // on any chain that happens to include the bean. See class
+        // Javadoc's SSE fix note for full context.
+        reg.setAsyncSupported(true);
         return reg;
     }
 }
