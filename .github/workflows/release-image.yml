@@ -121,7 +121,12 @@ jobs:
             description: Electronic Data Capture for the Department of Ophthalmology and Optometry, Medical University of Vienna — institutional build of LibreClinica.
           - name: retinal-inference
             image: luviku/libreclinicamuw/retinal-inference
-            context: retinal-inference
+            # DR-024 — context is the repo root so the Dockerfile can
+            # COPY both retinal-inference/ AND the sibling
+            # muw-e2e-converter/ package into the image. Matches the
+            # build context compose.yaml's retinal-inference service
+            # uses for `docker compose build`.
+            context: .
             dockerfile: retinal-inference/Dockerfile
             build_args: ''
             cache_scope: release-image-retinal-inference
