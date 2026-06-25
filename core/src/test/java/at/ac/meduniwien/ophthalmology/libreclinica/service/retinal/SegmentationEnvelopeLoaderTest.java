@@ -191,6 +191,36 @@ public class SegmentationEnvelopeLoaderTest {
     }
 
     @Test
+    public void testLoadLayersStack_truncatesIowaPaddingToHeaderCols() throws Exception {
+        // The IOWA converter writes a (cols, n_bscans, n_rows) header
+        // row then PADS each data row to a width WIDER than `cols`,
+        // filling the trailing slots with a sentinel value (100 in the
+        // real world). The loader must respect the header's cols and
+        // drop the padding — otherwise the SPA's BscanViewer renders
+        // polylines normally for the real columns and then jumps to a
+        // flat horizontal line at y=100 for the rest of the canvas.
+        Path dir = tmp.getRoot().toPath();
+        writeCsv(dir, "001-ILM (ILM).csv", new double[][]{
+                {3, 2, 496},                  // header: cols=3, n_bscans=2, n_rows=496
+                {10, 20, 30, 100, 100, 100},  // real + padding
+                {40, 50, 60, 100, 100, 100},
+        });
+
+        SegmentationEnvelope env = SegmentationEnvelopeLoader.load("layers", dir);
+
+        assertNotNull(env);
+        assertArrayEquals(new int[]{1, 2, 3}, env.shape());
+        ByteBuffer bb = ByteBuffer.wrap(env.data()).order(ByteOrder.LITTLE_ENDIAN);
+        assertEquals(10f, bb.getFloat(), 1e-6f);
+        assertEquals(20f, bb.getFloat(), 1e-6f);
+        assertEquals(30f, bb.getFloat(), 1e-6f);
+        assertEquals(40f, bb.getFloat(), 1e-6f);
+        assertEquals(50f, bb.getFloat(), 1e-6f);
+        assertEquals(60f, bb.getFloat(), 1e-6f);
+        assertEquals(6 * 4, env.data().length);
+    }
+
+    @Test
     public void testLoadLayersStack_acceptsPunctuationInShortLabel() throws Exception {
         // The IS#OS junction surface lands as "IS#OSJ" with a # in the
         // short label. The OPL-HFL surface's filename has an apostrophe

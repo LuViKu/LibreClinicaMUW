@@ -429,11 +429,29 @@ public final class SegmentationEnvelopeLoader {
         int cols = -1;
         for (SurfaceCsv e : entries) {
             double[][] rows = readCsvNumeric(e.path());
-            // Defensive: drop a 3-element dimensions header row if it's
-            // narrower than the data rows (mirrors loadSurfacePair).
-            if (rows.length >= 2 && rows[0].length < rows[1].length) {
+            // The IOWA converter emits a 3-element dimensions header row
+            // (cols, n_bscans, n_rows) followed by per-B-scan rows that
+            // are PADDED to a width wider than `cols` — the trailing
+            // padding holds a fixed sentinel (100). Honour the header's
+            // cols so we only surface real data columns to the SPA;
+            // without this, the BscanViewer renders polylines normally
+            // for the real region and then sees them jump to a flat
+            // horizontal line at the padding value (looks like a flat
+            // line in the second half of the canvas).
+            int headerCols = -1;
+            if (rows.length >= 2 && rows[0].length == 3 && rows[0].length < rows[1].length) {
+                headerCols = (int) rows[0][0];
                 double[][] trimmed = new double[rows.length - 1][];
-                System.arraycopy(rows, 1, trimmed, 0, rows.length - 1);
+                for (int i = 0; i < rows.length - 1; i++) {
+                    double[] src = rows[i + 1];
+                    if (headerCols > 0 && headerCols < src.length) {
+                        double[] cut = new double[headerCols];
+                        System.arraycopy(src, 0, cut, 0, headerCols);
+                        trimmed[i] = cut;
+                    } else {
+                        trimmed[i] = src;
+                    }
+                }
                 rows = trimmed;
             }
             if (rows.length == 0) {
