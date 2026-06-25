@@ -10,10 +10,8 @@ package at.ac.meduniwien.ophthalmology.libreclinica.service.retinal;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -49,10 +47,23 @@ public class SegmentationEnvelopeLoaderTest {
         return csv;
     }
 
-    /** IOWA's 11 canonical layer labels, in numeric / anatomical order. */
-    private static final String[] IOWA_LABELS = {
-            "ILM", "NFL", "GCL-IPL", "INL", "OPL",
-            "ONL", "ELM", "IS-OS", "OPR", "RPE", "BM",
+    /**
+     * IOWA's 11 canonical surfaces with their full converter filename
+     * shape: {@code NNN-Long description (SHORT_LABEL).csv}. The short
+     * label is what we surface to the SPA.
+     */
+    private static final String[][] IOWA_FILES = {
+            {"001-ILM (ILM).csv", "ILM"},
+            {"002-RNFL-GCL (RNFL-GCL).csv", "RNFL-GCL"},
+            {"003-GCL-IPL (GCL-IPL).csv", "GCL-IPL"},
+            {"004-IPL-INL (IPL-INL).csv", "IPL-INL"},
+            {"005-INL-OPL (INL-OPL).csv", "INL-OPL"},
+            {"006-OPL-Henle's fiber layer (OPL-HFL).csv", "OPL-HFL"},
+            {"007-Boundary of myoid and ellipsoid of inner segments (BMEIS).csv", "BMEIS"},
+            {"008-IS#OS junction (IS#OSJ).csv", "IS#OSJ"},
+            {"009-Inner boundary of OPR (IB_OPR).csv", "IB_OPR"},
+            {"010-Inner boundary of RPE (IB_RPE).csv", "IB_RPE"},
+            {"011-Outer boundary of RPE (OB_RPE).csv", "OB_RPE"},
     };
 
     @Test
@@ -62,7 +73,7 @@ public class SegmentationEnvelopeLoaderTest {
         // base value so we can verify ordering + float-pack correctness.
         int z = 3;
         int cols = 4;
-        for (int i = 0; i < IOWA_LABELS.length; i++) {
+        for (int i = 0; i < IOWA_FILES.length; i++) {
             double base = (i + 1) * 100.0;
             double[][] rows = new double[z][cols];
             for (int r = 0; r < z; r++) {
@@ -70,8 +81,7 @@ public class SegmentationEnvelopeLoaderTest {
                     rows[r][c] = base + r * 10 + c;
                 }
             }
-            String name = String.format("%03d-%s.csv", i + 1, IOWA_LABELS[i]);
-            writeCsv(dir, name, rows);
+            writeCsv(dir, IOWA_FILES[i][0], rows);
         }
 
         SegmentationEnvelope env = SegmentationEnvelopeLoader.load("layers", dir);
@@ -81,7 +91,9 @@ public class SegmentationEnvelopeLoaderTest {
         assertEquals("float32", env.dtype());
         assertEquals("layers", env.task());
         assertArrayEquals(new int[]{11, z, cols}, env.shape());
-        assertEquals(List.of(IOWA_LABELS), env.labels());
+        String[] expectedShortLabels = new String[IOWA_FILES.length];
+        for (int i = 0; i < IOWA_FILES.length; i++) expectedShortLabels[i] = IOWA_FILES[i][1];
+        assertEquals(List.of(expectedShortLabels), env.labels());
 
         // Float-pack: surface-major, little-endian, 4 bytes per value.
         assertEquals(11 * z * cols * 4, env.data().length);
@@ -100,49 +112,44 @@ public class SegmentationEnvelopeLoaderTest {
     }
 
     @Test
-    public void testLoadLayersStack_excludesBmModelOutput() throws Exception {
-        // The standalone bm task's CSV ("001-Bruch's membrane (BM).csv")
-        // sits in the same artifact dir but MUST be excluded — IOWA's
-        // slot 11 already provides BM, and the IOWA-pattern filter
-        // (NNN-LABEL.csv with no whitespace/parens) leaves it out.
+    public void testLoadLayersStack_includesBmModelAs12thSurface() throws Exception {
+        // IOWA's slot 011 is "Outer boundary of RPE" (OB_RPE), NOT
+        // Bruch's membrane. The standalone bm task's CSV genuinely adds
+        // a 12th surface — the BM that sits below RPE. Sorting puts
+        // IOWA's 001..011 first, then BM at index 11.
         Path dir = tmp.getRoot().toPath();
         int z = 2;
         int cols = 3;
-        for (int i = 0; i < IOWA_LABELS.length; i++) {
-            double[][] rows = new double[z][cols];
-            String name = String.format("%03d-%s.csv", i + 1, IOWA_LABELS[i]);
-            writeCsv(dir, name, rows);
+        for (String[] iowa : IOWA_FILES) {
+            writeCsv(dir, iowa[0], new double[z][cols]);
         }
-        // The intruder.
-        writeCsv(dir, "001-Bruch's membrane (BM).csv",
-                new double[][]{{1, 2, 3}, {4, 5, 6}});
+        writeCsv(dir, "001-Bruch's membrane (BM).csv", new double[][]{{1, 2, 3}, {4, 5, 6}});
 
         SegmentationEnvelope env = SegmentationEnvelopeLoader.load("layers", dir);
 
         assertNotNull(env);
-        assertEquals("exactly 11 IOWA surfaces", 11, env.shape()[0]);
-        assertEquals(11, env.labels().size());
-        for (String label : env.labels()) {
-            assertFalse(
-                    "label " + label + " must not contain spaces/parens",
-                    label.contains(" ") || label.contains("(") || label.contains(")"));
-        }
+        assertEquals("11 IOWA surfaces + 1 BM = 12", 12, env.shape()[0]);
+        assertEquals(12, env.labels().size());
+        // BM lands at the end of the stack, after the 11 IOWA slots.
+        assertEquals("ILM", env.labels().get(0));
+        assertEquals("OB_RPE", env.labels().get(10));
+        assertEquals("BM", env.labels().get(11));
     }
 
     @Test
-    public void testLoadLayersStack_returnsNullWhenNoIowaCsvs() throws Exception {
+    public void testLoadLayersStack_returnsNullWhenNoMatchingCsvs() throws Exception {
         Path dir = tmp.getRoot().toPath();
-        // Only the BM model's output present — not an IOWA layer stack.
-        writeCsv(dir, "001-Bruch's membrane (BM).csv", new double[][]{{1, 2}});
+        // A CSV that doesn't match the NNN-...(LABEL).csv shape — e.g.
+        // the ga task's 001-RPEL.csv (no parenthesised short label).
+        writeCsv(dir, "001-RPEL.csv", new double[][]{{1, 2}});
         SegmentationEnvelope env = SegmentationEnvelopeLoader.load("layers", dir);
-        assertNull("expected null when no IOWA-pattern CSVs are present", env);
+        assertNull(env);
     }
 
     @Test
     public void testLoadLayersStack_packsLittleEndian() throws Exception {
         Path dir = tmp.getRoot().toPath();
-        // Single-surface fixture (well-formed prefix, 1 row x 1 col, value = 42.5).
-        writeCsv(dir, "001-ILM.csv", new double[][]{{42.5}});
+        writeCsv(dir, "001-ILM (ILM).csv", new double[][]{{42.5}});
         SegmentationEnvelope env = SegmentationEnvelopeLoader.load("layers", dir);
 
         assertNotNull(env);
@@ -158,11 +165,9 @@ public class SegmentationEnvelopeLoaderTest {
 
     @Test
     public void testLoadLayersStack_dispatchedFromLoad() throws Exception {
-        // Verify the public `load(task, dir)` switch routes "layers"
-        // to loadLayersStack and not anywhere else.
         Path dir = tmp.getRoot().toPath();
-        writeCsv(dir, "001-ILM.csv", new double[][]{{1, 2, 3}, {4, 5, 6}});
-        writeCsv(dir, "002-RPE.csv", new double[][]{{7, 8, 9}, {10, 11, 12}});
+        writeCsv(dir, "001-ILM (ILM).csv", new double[][]{{1, 2, 3}, {4, 5, 6}});
+        writeCsv(dir, "002-RNFL-GCL (RNFL-GCL).csv", new double[][]{{7, 8, 9}, {10, 11, 12}});
 
         SegmentationEnvelope env = SegmentationEnvelopeLoader.load("layers", dir);
 
@@ -170,7 +175,7 @@ public class SegmentationEnvelopeLoaderTest {
         assertEquals("layers", env.task());
         assertEquals("surface_y", env.kind());
         assertArrayEquals(new int[]{2, 2, 3}, env.shape());
-        assertEquals(List.of("ILM", "RPE"), env.labels());
+        assertEquals(List.of("ILM", "RNFL-GCL"), env.labels());
     }
 
     @Test
@@ -186,17 +191,16 @@ public class SegmentationEnvelopeLoaderTest {
     }
 
     @Test
-    public void testLoadLayersStack_acceptsKebabAndSlashLabels() throws Exception {
-        // IOWA's actual layer names include hyphenated tokens like
-        // "GCL-IPL" and the boundary "IS-OS" (sometimes written
-        // "IS/OS" in clinical contexts). The filename regex must
-        // accept both punctuation forms.
+    public void testLoadLayersStack_acceptsPunctuationInShortLabel() throws Exception {
+        // The IS#OS junction surface lands as "IS#OSJ" with a # in the
+        // short label. The OPL-HFL surface's filename has an apostrophe
+        // in the long description ("OPL-Henle's fiber layer"). Both
+        // must round-trip cleanly.
         Path dir = tmp.getRoot().toPath();
-        writeCsv(dir, "001-GCL-IPL.csv", new double[][]{{1.0}});
-        writeCsv(dir, "002-IS-OS.csv", new double[][]{{2.0}});
+        writeCsv(dir, "008-IS#OS junction (IS#OSJ).csv", new double[][]{{1.0}});
+        writeCsv(dir, "006-OPL-Henle's fiber layer (OPL-HFL).csv", new double[][]{{2.0}});
         SegmentationEnvelope env = SegmentationEnvelopeLoader.load("layers", dir);
         assertNotNull(env);
-        assertTrue(env.labels().contains("GCL-IPL"));
-        assertTrue(env.labels().contains("IS-OS"));
+        assertEquals(List.of("OPL-HFL", "IS#OSJ"), env.labels());
     }
 }
