@@ -93,15 +93,17 @@ describe('CrfAuthoringCanvasView', () => {
     w.unmount()
   })
 
-  it('dropping the IOP preset on the empty section materialises 3 items + auto-selects parent', async () => {
+  it('dropping the IOP preset on the empty section materialises 6 bilateral items + auto-selects first parent', async () => {
+    // 2026-06-25 — IOP preset is now bilateral (OD + OS interleaved).
     const w = await mountView()
     await flushPromises()
     const section = w.find('[data-testid="crf-canvas-section-0"]')
     section.element.dispatchEvent(makeDropEvent({ kind: 'preset', value: 'iop' }))
     await flushPromises()
     const store = useCrfAuthoringStore()
-    expect(store.draft.sections[0]!.items).toHaveLength(3)
-    expect(store.draft.sections[0]!.items[0]!.oid).toBe('IOP_GEMESSEN')
+    expect(store.draft.sections[0]!.items).toHaveLength(6)
+    expect(store.draft.sections[0]!.items[0]!.oid).toBe('OD_IOP_GEMESSEN')
+    expect(store.draft.sections[0]!.items[1]!.oid).toBe('OS_IOP_GEMESSEN')
     expect(store.selectedItemUid).toBe(store.draft.sections[0]!.items[0]!.uid)
     // Properties rail should be in form mode now.
     expect(w.find('[data-testid="crf-canvas-properties-form"]').exists()).toBe(true)

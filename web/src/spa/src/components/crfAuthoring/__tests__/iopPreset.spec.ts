@@ -22,55 +22,69 @@ import { useCrfAuthoringStore } from '@/stores/crfAuthoring'
 const identityT = (key: string): string => key
 
 describe('iopPreset.generateIopPresetItems', () => {
-  it('emits exactly 3 items (parent, value, reason)', () => {
+  // 2026-06-25 — the IOP preset is now bilateral (OD + OS interleaved
+  // so SectionCanvas's bilateral grid pairs them by eye). Items land
+  // in the order:
+  //   [OD-gemessen, OS-gemessen, OD-value, OS-value, OD-reason, OS-reason]
+
+  it('emits exactly 6 items — OD + OS interleaved (parent, value, reason per eye)', () => {
     const items = generateIopPresetItems(identityT)
-    expect(items).toHaveLength(3)
+    expect(items).toHaveLength(6)
   })
 
-  it('parent is TRISTATE_REASON with Ja/Nein/Unbekannt options', () => {
+  it('OD + OS parents are TRISTATE_REASON with Ja/Nein/Unbekannt options', () => {
     const items = generateIopPresetItems(identityT)
-    const parent = items[0]!
-    expect(parent.dataType).toBe('TRISTATE_REASON')
-    expect(parent.oid).toBe('IOP_GEMESSEN')
-    const rs = parent.responseSet
-    if (!rs || 'ref' in rs) throw new Error('expected inline response set')
-    expect(rs.options.map((o) => o.value)).toEqual([
-      IOP_PARENT_OPTIONS.JA,
-      IOP_PARENT_OPTIONS.NEIN,
-      IOP_PARENT_OPTIONS.UNBEKANNT,
-    ])
+    for (const idx of [0, 1] as const) {
+      const parent = items[idx]!
+      expect(parent.dataType).toBe('TRISTATE_REASON')
+      const rs = parent.responseSet
+      if (!rs || 'ref' in rs) throw new Error('expected inline response set')
+      expect(rs.options.map((o) => o.value)).toEqual([
+        IOP_PARENT_OPTIONS.JA,
+        IOP_PARENT_OPTIONS.NEIN,
+        IOP_PARENT_OPTIONS.UNBEKANNT,
+      ])
+    }
+    expect(items[0]!.oid).toBe('OD_IOP_GEMESSEN')
+    expect(items[1]!.oid).toBe('OS_IOP_GEMESSEN')
   })
 
-  it('value child is REAL + mmHg + show-when JA', () => {
+  it('OD + OS value children are REAL + mmHg + show-when JA against their own parent', () => {
     const items = generateIopPresetItems(identityT)
-    const value = items[1]!
-    expect(value.dataType).toBe('REAL')
-    expect(value.units).toBe('mmHg')
-    expect(value.showWhen).toEqual({
-      sourceItemOid: 'IOP_GEMESSEN',
+    const odValue = items[2]!
+    const osValue = items[3]!
+    expect(odValue.dataType).toBe('REAL')
+    expect(odValue.units).toBe('mmHg')
+    expect(odValue.showWhen).toEqual({
+      sourceItemOid: 'OD_IOP_GEMESSEN',
       comparator: '==',
       literal: IOP_PARENT_OPTIONS.JA,
     })
+    expect(osValue.dataType).toBe('REAL')
+    expect(osValue.showWhen?.sourceItemOid).toBe('OS_IOP_GEMESSEN')
   })
 
-  it('reason child is ST textarea + show-when NEIN', () => {
+  it('OD + OS reason children are ST textarea + show-when NEIN against their own parent', () => {
     const items = generateIopPresetItems(identityT)
-    const reason = items[2]!
-    expect(reason.dataType).toBe('ST')
-    expect(reason.responseType).toBe('textarea')
-    expect(reason.showWhen).toEqual({
-      sourceItemOid: 'IOP_GEMESSEN',
+    const odReason = items[4]!
+    const osReason = items[5]!
+    expect(odReason.dataType).toBe('ST')
+    expect(odReason.responseType).toBe('textarea')
+    expect(odReason.showWhen).toEqual({
+      sourceItemOid: 'OD_IOP_GEMESSEN',
       comparator: '==',
       literal: IOP_PARENT_OPTIONS.NEIN,
     })
+    expect(osReason.showWhen?.sourceItemOid).toBe('OS_IOP_GEMESSEN')
   })
 
-  it('respects oidPrefix overrides', () => {
+  it('respects oidPrefix overrides on both eyes', () => {
     const items = generateIopPresetItems(identityT, { oidPrefix: 'TONO' })
-    expect(items[0]!.oid).toBe('TONO_GEMESSEN')
-    expect(items[1]!.oid).toBe('TONO_VALUE')
-    expect(items[2]!.oid).toBe('TONO_REASON')
-    expect(items[1]!.showWhen?.sourceItemOid).toBe('TONO_GEMESSEN')
+    expect(items[0]!.oid).toBe('OD_TONO_GEMESSEN')
+    expect(items[1]!.oid).toBe('OS_TONO_GEMESSEN')
+    expect(items[2]!.oid).toBe('OD_TONO_VALUE')
+    expect(items[3]!.oid).toBe('OS_TONO_VALUE')
+    expect(items[2]!.showWhen?.sourceItemOid).toBe('OD_TONO_GEMESSEN')
   })
 })
 
@@ -79,21 +93,29 @@ describe('applyPreset materialises the IOP preset into a section', () => {
     setActivePinia(createPinia())
   })
 
-  it('appends 3 items to the target section uid', () => {
+  it('appends 6 items (bilateral OD + OS) to the target section uid', () => {
     const store = useCrfAuthoringStore()
     const targetUid = store.draft.sections[0]!.uid
     const added = store.applyPreset(IOP_PRESET_ID, targetUid, {
       registry: PRESET_CATALOG,
       translate: identityT,
     })
-    expect(added).toBe(3)
+    // 2026-06-25 — the IOP preset is now bilateral (OD + OS interleaved
+    // so the bilateral-grid pairing in SectionCanvas can render them
+    // side-by-side). Items land in the order:
+    //   [OD-gemessen, OS-gemessen, OD-value, OS-value, OD-reason, OS-reason]
+    expect(added).toBe(6)
     const section = store.draft.sections.find((s) => s.uid === targetUid)
     expect(section).toBeDefined()
-    expect(section!.items).toHaveLength(3)
-    expect(section!.items[0]!.oid).toBe('IOP_GEMESSEN')
+    expect(section!.items).toHaveLength(6)
+    expect(section!.items[0]!.oid).toBe('OD_IOP_GEMESSEN')
     expect(section!.items[0]!.dataType).toBe('TRISTATE_REASON')
-    expect(section!.items[1]!.dataType).toBe('REAL')
-    expect(section!.items[2]!.dataType).toBe('ST')
+    expect(section!.items[1]!.oid).toBe('OS_IOP_GEMESSEN')
+    expect(section!.items[1]!.dataType).toBe('TRISTATE_REASON')
+    expect(section!.items[2]!.dataType).toBe('REAL')
+    expect(section!.items[3]!.dataType).toBe('REAL')
+    expect(section!.items[4]!.dataType).toBe('ST')
+    expect(section!.items[5]!.dataType).toBe('ST')
   })
 
   it('returns 0 on unknown preset id without mutating sections', () => {

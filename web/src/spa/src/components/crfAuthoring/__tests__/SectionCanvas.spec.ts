@@ -73,14 +73,16 @@ describe('SectionCanvas', () => {
     expect(store.draft.sections[0]!.items[0]!.dataType).toBe('INT')
   })
 
-  it('appends the IOP preset (3 items) when an iop preset payload is dropped', async () => {
+  it('appends the IOP preset (6 bilateral items) when an iop preset payload is dropped', async () => {
+    // 2026-06-25 — IOP preset is now bilateral: 3 OD + 3 OS interleaved.
     const w = mountCanvas()
     const store = useCrfAuthoringStore()
     const section = w.find('[data-testid="crf-canvas-section-0"]')
     section.element.dispatchEvent(makeDropEvent({ kind: 'preset', value: 'iop' }))
     await flushPromises()
-    expect(store.draft.sections[0]!.items).toHaveLength(3)
-    expect(store.draft.sections[0]!.items[0]!.oid).toBe('IOP_GEMESSEN')
+    expect(store.draft.sections[0]!.items).toHaveLength(6)
+    expect(store.draft.sections[0]!.items[0]!.oid).toBe('OD_IOP_GEMESSEN')
+    expect(store.draft.sections[0]!.items[1]!.oid).toBe('OS_IOP_GEMESSEN')
   })
 
   it('clicking an item selects it on the store', async () => {

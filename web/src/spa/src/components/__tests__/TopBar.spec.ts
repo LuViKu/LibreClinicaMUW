@@ -56,37 +56,31 @@ describe('TopBar — nav.modules slot', () => {
     injectionsForMock.mockReset()
   })
 
-  it('mounts one entry per nav.modules injection returned by the store', async () => {
+  // 2026-06-21 user-feedback batch — the nav.modules consumer was
+  // removed from TopBar (see TopBar.vue:50). Module entry points are
+  // now driven by the StudyModuleConsumer wrapper inside the workspace
+  // route, not by the top-bar. These specs were leftover assertions
+  // against the old direct-consumer wiring; skip them so the contract
+  // change is documented rather than re-enabled by accident.
+  it.skip('mounts one entry per nav.modules injection returned by the store', async () => {
     injectionsForMock.mockReturnValue([
       { key: 'topbar-workspace', labelKey: 'studyModules.namd.label', component: NavStub },
     ])
-
     const wrapper = mount(TopBar, {
       props: { userName: 'Root', userRoles: ['Investigator'] as const },
-      global: {
-        plugins: [makeRouter(), makeI18n()],
-      },
+      global: { plugins: [makeRouter(), makeI18n()] },
     })
-
     await wrapper.vm.$nextTick()
-
     expect(injectionsForMock).toHaveBeenCalledWith('nav.modules')
-    expect(wrapper.findAll('[data-testid="nav-stub-link"]')).toHaveLength(1)
   })
 
-  it('renders no slot chrome when injectionsFor returns an empty array', async () => {
+  it.skip('renders no slot chrome when injectionsFor returns an empty array', async () => {
     injectionsForMock.mockReturnValue([])
-
     const wrapper = mount(TopBar, {
       props: { userName: 'Root', userRoles: ['Investigator'] as const },
-      global: {
-        plugins: [makeRouter(), makeI18n()],
-      },
+      global: { plugins: [makeRouter(), makeI18n()] },
     })
-
     await wrapper.vm.$nextTick()
-
     expect(injectionsForMock).toHaveBeenCalledWith('nav.modules')
-    expect(wrapper.find('[data-testid="nav-stub-link"]').exists()).toBe(false)
   })
 })

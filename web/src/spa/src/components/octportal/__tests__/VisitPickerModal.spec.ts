@@ -132,7 +132,9 @@ describe('VisitPickerModal', () => {
     const text = document.body.textContent ?? ''
     expect(text).toContain('V1 · Follow-up')
     expect(text).toContain('V2 · Check')
-    expect(text).toContain('2026-06-17')
+    // 2026-06-25 — the row renders the date in the SPA's German locale
+    // format (dd.MM.yyyy) rather than ISO.
+    expect(text).toContain('17.06.2026')
     expect(text).toContain('data-entry-started')
   })
 

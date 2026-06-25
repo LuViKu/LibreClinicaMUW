@@ -106,7 +106,13 @@ describe('FundusOverlay — registration', () => {
     })
     const ringsGroup = wrapper.find('[data-testid="etdrs-rings"]')
     expect(ringsGroup.exists()).toBe(true)
-    const circles = ringsGroup.findAll('circle')
+    // 2026-06-25 — the etdrs-rings group also contains a center hit-test
+    // circle (etdrs-region-center) for clickable region toggling, so a
+    // bare findAll('circle') now returns 4. Filter to the dashed
+    // reference circles only (they're the ones with stroke-dasharray).
+    const circles = ringsGroup
+      .findAll('circle')
+      .filter((c) => c.attributes('stroke-dasharray') === '4 4')
     expect(circles.length).toBe(3)
     // 1mm diameter → 0.5 mm radius / 0.01 mm-per-px = 50 px
     // 3mm diameter → 1.5 mm radius                = 150 px
@@ -121,7 +127,14 @@ describe('FundusOverlay — registration', () => {
     }
   })
 
-  it('renders one polyline per B-scan, dominant biomarker → stroke colour (fluid task)', () => {
+  // 2026-06-25 — the per-B-scan biomarker polylines were replaced by a
+  // single current-B-scan position line that hooks up via the BscanViewer
+  // hover instead of mouseenter on the fundus side (see FundusOverlay.vue
+  // line 886: "current-B-scan position line. Drawn from the RAW geometry
+  // positions, not the biomarker-filtered list"). Skip the legacy
+  // assertions — the contract is now exercised via the integration test
+  // in NamdViewerTab.test.ts.
+  it.skip('renders one polyline per B-scan, dominant biomarker → stroke colour (fluid task)', () => {
     const wrapper = mount(FundusOverlay, {
       global: { plugins: [i18n] },
       props: {
@@ -142,7 +155,7 @@ describe('FundusOverlay — registration', () => {
     expect(lines[2].attributes('stroke')).toBe(BIOMARKER_COLORS.ped)
   })
 
-  it('renders neutral lines for onl / pr tasks (no per-B-scan biomarker)', () => {
+  it.skip('renders neutral lines for onl / pr tasks (no per-B-scan biomarker)', () => {
     const wrapper = mount(FundusOverlay, {
       global: { plugins: [i18n] },
       props: {
@@ -161,7 +174,7 @@ describe('FundusOverlay — registration', () => {
     }
   })
 
-  it('emits hoverBscan with the z index on line mouseenter', async () => {
+  it.skip('emits hoverBscan with the z index on line mouseenter', async () => {
     const wrapper = mount(FundusOverlay, {
       global: { plugins: [i18n] },
       props: {
@@ -182,7 +195,7 @@ describe('FundusOverlay — registration', () => {
     expect(emitted![0]).toEqual([0])
   })
 
-  it('emits null on mouseleave', async () => {
+  it.skip('emits null on mouseleave', async () => {
     const wrapper = mount(FundusOverlay, {
       global: { plugins: [i18n] },
       props: {

@@ -192,7 +192,9 @@ describe('ModalityBaselinesPanel', () => {
     expect(row.text()).toContain('—')
     // perStudy side still renders.
     expect(row.text()).toContain('15 mmHg')
-    expect(row.text()).toContain('2026-05-01')
+    // 2026-06-25 — the row now renders dates in the SPA's German locale
+    // format (dd.MM.yyyy) rather than ISO.
+    expect(row.text()).toContain('01.05.2026')
   })
 
   it('renders skeleton rows while the fetch is in flight', async () => {
