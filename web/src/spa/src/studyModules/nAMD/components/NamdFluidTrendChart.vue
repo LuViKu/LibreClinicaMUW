@@ -110,13 +110,17 @@ function yFluid(value: number): number {
 const CRT_MIN = 250
 const CRT_MAX = 500
 function yCrt(value: number): number {
-  return PT + (1 - (value - CRT_MIN) / (CRT_MAX - CRT_MIN)) * (H - PT - PB)
+  // Clamp into the visible axis range so a present-but-out-of-range
+  // datum lands at the chart edge instead of plotting below the frame.
+  const v = Math.max(CRT_MIN, Math.min(CRT_MAX, value))
+  return PT + (1 - (v - CRT_MIN) / (CRT_MAX - CRT_MIN)) * (H - PT - PB)
 }
 
 const BCVA_MIN = 58
 const BCVA_MAX = 84
 function yBcva(value: number): number {
-  return H + BPT + (1 - (value - BCVA_MIN) / (BCVA_MAX - BCVA_MIN)) * (BH - BPT - 14)
+  const v = Math.max(BCVA_MIN, Math.min(BCVA_MAX, value))
+  return H + BPT + (1 - (v - BCVA_MIN) / (BCVA_MAX - BCVA_MIN)) * (BH - BPT - 14)
 }
 
 interface Layer {
@@ -161,18 +165,54 @@ const layers = computed<Layer[]>(() => {
   })
 })
 
+/**
+ * 2026-06-25 — break the polyline at visits with no data. The
+ * NamdVisit type uses {@code 0} as a sentinel for "no CRT row" /
+ * "no BCVA row"; a literal 0 µm or 0 letters is clinically
+ * meaningless and would otherwise drag the line far below the
+ * chart frame (the visible axis range starts at 250 µm / 58
+ * letters). Treat 0 as "missing" and start a new sub-path at the
+ * next valid datum so gaps render as breaks instead of off-frame
+ * dives.
+ */
+function buildBrokenPath(
+  values: ReadonlyArray<{ x: number; y: number; present: boolean }>,
+): string {
+  const segments: string[] = []
+  let needsMove = true
+  for (const p of values) {
+    if (!p.present) {
+      needsMove = true
+      continue
+    }
+    segments.push(
+      `${needsMove ? 'M' : 'L'} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`,
+    )
+    needsMove = false
+  }
+  return segments.join(' ')
+}
+
 const crtPath = computed(() => {
   if (props.visits.length === 0) return ''
-  return props.visits
-    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${xAt(v.week).toFixed(1)} ${yCrt(v.crt).toFixed(1)}`)
-    .join(' ')
+  return buildBrokenPath(
+    props.visits.map((v) => ({
+      x: xAt(v.week),
+      y: yCrt(v.crt),
+      present: v.crt > 0,
+    })),
+  )
 })
 
 const bcvaPath = computed(() => {
   if (props.visits.length === 0) return ''
-  return props.visits
-    .map((v, i) => `${i === 0 ? 'M' : 'L'} ${xAt(v.week).toFixed(1)} ${yBcva(v.bcva).toFixed(1)}`)
-    .join(' ')
+  return buildBrokenPath(
+    props.visits.map((v) => ({
+      x: xAt(v.week),
+      y: yBcva(v.bcva),
+      present: v.bcva > 0,
+    })),
+  )
 })
 
 const lastBcva = computed(() => {
@@ -353,6 +393,7 @@ function fmtDate(iso: string): string {
         />
         <circle
           v-for="(v, i) in visits"
+          v-show="v.crt > 0"
           :key="`crt-dot-${i}`"
           :cx="xAt(v.week)"
           :cy="yCrt(v.crt)"
@@ -461,6 +502,7 @@ function fmtDate(iso: string): string {
         />
         <circle
           v-for="(v, i) in visits"
+          v-show="v.bcva > 0"
           :key="`bcva-dot-${i}`"
           :cx="xAt(v.week)"
           :cy="yBcva(v.bcva)"
@@ -469,7 +511,7 @@ function fmtDate(iso: string): string {
           clip-path="url(#namd-trend-reveal)"
         />
         <text
-          v-if="lastBcva != null"
+          v-if="lastBcva != null && lastBcva > 0"
           :x="W - PR"
           :y="yBcva(lastBcva) - 7"
           text-anchor="end"
