@@ -104,6 +104,19 @@ public final class SegmentationEnvelopeLoader {
                         new String[]{"BMEIS", "OB-OPR"},
                         new String[]{"*BMEIS*.csv", "*OB?OPR*.csv"});
             }
+            case "layers" -> {
+                // 2026-06-25 — IOWA OCTLayerSeg stack: 11 layer
+                // interfaces written by the cluster `_iowa_layers`
+                // pipeline + flattened by the artifact collector into
+                // {@code bscanMasksDir} as {@code NNN-LABEL.csv}
+                // (e.g. {@code 001-ILM.csv} ... {@code 011-BM.csv}).
+                // The dedicated {@code bm} task also emits
+                // {@code 001-Bruch's membrane (BM).csv} into the same
+                // dir, which we deliberately exclude — IOWA's slot 11
+                // already provides BM, and we want exactly 11 polylines
+                // matching the IOWA convention.
+                return loadLayersStack(bscanMasksDir);
+            }
             default -> {
                 return null;
             }
@@ -342,6 +355,115 @@ public final class SegmentationEnvelopeLoader {
                 new int[]{surfaces.size(), z, cols},
                 List.of(labels),
                 task,
+                bb.array()
+        );
+    }
+
+    /**
+     * 2026-06-25 — IOWA OCTLayerSeg layer stack loader.
+     *
+     * <p>Discovers all CSV files in {@code bscanMasksDir} whose name
+     * matches the IOWA convention {@code NNN-LABEL.csv} where {@code NNN}
+     * is a 3-digit numeric prefix and {@code LABEL} is a short
+     * whitespace-free identifier (e.g. {@code 001-ILM.csv},
+     * {@code 011-BM.csv}). Files with spaces or parentheses in the name
+     * — like the {@code bm} task's {@code 001-Bruch's membrane (BM).csv}
+     * — are deliberately excluded so we end up with exactly the IOWA
+     * 11-surface stack and not a 12th redundant BM polyline.
+     *
+     * <p>Each CSV has the same shape as the ONL/PR surface pairs: rows
+     * = B-scan index, columns = A-scan index, values = surface depth
+     * in pixel rows. The dimensions-header convention from the
+     * sese_pr/sese_onl runners doesn't apply to IOWA's
+     * {@code local_IOWA_LayerSegV3_to_CSV} output, but we still tolerate
+     * a narrow first row defensively (mirrors {@link #loadSurfacePair}).
+     *
+     * <p>Surfaces are sorted by numeric prefix so the SPA receives
+     * them in IOWA's canonical anatomical order (ILM at index 0,
+     * BM at index 10). The {@code labels} list carries the parsed
+     * label tokens for the {@code X-MUW-Seg-Labels} header.
+     */
+    private static SegmentationEnvelope loadLayersStack(Path bscanMasksDir) throws IOException {
+        // Pattern: 3 digits + '-' + non-whitespace, non-paren label + .csv
+        // Deliberately excludes "001-Bruch's membrane (BM).csv" emitted by
+        // the standalone bm task — IOWA's slot 11 already provides BM.
+        java.util.regex.Pattern iowaName = java.util.regex.Pattern.compile(
+                "^(\\d{3})-([\\w.\\-+/]+)\\.csv$"
+        );
+        record IowaCsv(int order, String label, Path path) {}
+        List<IowaCsv> entries = new ArrayList<>();
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(bscanMasksDir, "*.csv")) {
+            for (Path p : ds) {
+                java.util.regex.Matcher m = iowaName.matcher(p.getFileName().toString());
+                if (m.matches()) {
+                    entries.add(new IowaCsv(
+                            Integer.parseInt(m.group(1)),
+                            m.group(2),
+                            p));
+                }
+            }
+        }
+        if (entries.isEmpty()) {
+            LOG.warn("layers envelope: no IOWA-pattern CSVs (NNN-LABEL.csv) under {}", bscanMasksDir);
+            return null;
+        }
+        entries.sort(Comparator.comparingInt(IowaCsv::order));
+
+        List<double[][]> surfaces = new ArrayList<>(entries.size());
+        List<String> labels = new ArrayList<>(entries.size());
+        int z = -1;
+        int cols = -1;
+        for (IowaCsv e : entries) {
+            double[][] rows = readCsvNumeric(e.path());
+            // Defensive: drop a 3-element dimensions header row if it's
+            // narrower than the data rows (mirrors loadSurfacePair).
+            if (rows.length >= 2 && rows[0].length < rows[1].length) {
+                double[][] trimmed = new double[rows.length - 1][];
+                System.arraycopy(rows, 1, trimmed, 0, rows.length - 1);
+                rows = trimmed;
+            }
+            if (rows.length == 0) {
+                LOG.warn("layers envelope: {} produced 0 data rows; skipping", e.path().getFileName());
+                continue;
+            }
+            int zRows = rows.length;
+            int cs = rows[0].length;
+            if (z < 0) z = zRows;
+            if (cols < 0) cols = cs;
+            if (zRows != z) {
+                LOG.warn("layers envelope: surface {} row count {} differs from baseline {} — clamping",
+                        e.label(), zRows, z);
+                if (zRows < z) z = zRows;
+            }
+            if (cs != cols) {
+                LOG.warn("layers envelope: surface {} col count {} differs from baseline {} — clamping",
+                        e.label(), cs, cols);
+                if (cs < cols) cols = cs;
+            }
+            surfaces.add(rows);
+            labels.add(e.label());
+        }
+        if (surfaces.isEmpty() || z <= 0 || cols <= 0) return null;
+
+        // Pack as float32 little-endian, surface-major.
+        int sliceLen = z * cols;
+        ByteBuffer bb = ByteBuffer.allocate(surfaces.size() * sliceLen * 4)
+                .order(ByteOrder.LITTLE_ENDIAN);
+        for (double[][] surface : surfaces) {
+            for (int rIdx = 0; rIdx < z; rIdx++) {
+                double[] row = surface[rIdx];
+                for (int x = 0; x < cols; x++) {
+                    float v = x < row.length ? (float) row[x] : 0f;
+                    bb.putFloat(v);
+                }
+            }
+        }
+        return new SegmentationEnvelope(
+                "surface_y",
+                "float32",
+                new int[]{surfaces.size(), z, cols},
+                List.copyOf(labels),
+                "layers",
                 bb.array()
         );
     }

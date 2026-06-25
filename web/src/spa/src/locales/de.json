@@ -3082,6 +3082,11 @@
       "previous": "Vorheriger Schnitt",
       "next": "Nächster Schnitt"
     },
+    "layers": {
+      "legendTitle": "Netzhautschichten",
+      "allOn": "Alle ein",
+      "allOff": "Alle aus"
+    },
     "trends": {
       "title": "Biomarker-Verlauf",
       "chartHeader": "Verlauf",

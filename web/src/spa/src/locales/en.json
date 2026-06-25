@@ -3070,6 +3070,11 @@
       "previous": "[NEEDS_REVIEW] Previous slice",
       "next": "[NEEDS_REVIEW] Next slice"
     },
+    "layers": {
+      "legendTitle": "[NEEDS_REVIEW] Retinal layers",
+      "allOn": "[NEEDS_REVIEW] All on",
+      "allOff": "[NEEDS_REVIEW] All off"
+    },
     "trends": {
       "title": "[NEEDS_REVIEW] Biomarker trends",
       "chartHeader": "[NEEDS_REVIEW] Trend",
