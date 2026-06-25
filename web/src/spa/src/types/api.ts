@@ -164,6 +164,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/studies/{studyOid}/event-definitions/{sedId}/retinal-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listRetinalTasks"];
+        put: operations["setRetinalTasks"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/studies/{parentOid}/sites/{siteOid}": {
         parameters: {
             query?: never;
@@ -1124,6 +1140,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retinal-jobs/{jobId}/rerun-as": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rerunAs"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retinal-jobs/bulk-bind": {
         parameters: {
             query?: never;
@@ -1182,6 +1214,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["commit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/bcva-entry/commit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["commit_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1278,6 +1326,22 @@ export interface paths {
         get: operations["list_9"];
         put?: never;
         post: operations["schedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/events/{id}/sign": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["signEvent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1924,6 +1988,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/study-subjects/{studySubjectId}/crt-timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listCrtTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/study-subjects/{studySubjectId}/bcva-timeline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listBcvaTimeline"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/study-subjects/search": {
         parameters: {
             query?: never;
@@ -2148,6 +2244,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/retinal-jobs/{jobId}/segmentation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["streamSegmentation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/retinal-jobs/{jobId}/compare-previous": {
         parameters: {
             query?: never;
@@ -2204,6 +2316,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["listPatientEventsPublic"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/bcva-entry/{studyOid}/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listVisits"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2946,6 +3074,8 @@ export interface components {
             repeating?: boolean;
         };
         EventDefinitionDto: {
+            /** Format: int32 */
+            sedId?: number;
             oid?: string;
             name?: string;
             description?: string;
@@ -3686,6 +3816,10 @@ export interface components {
             location?: string;
             /** Format: int32 */
             scheduledIntervalDays?: number;
+        };
+        SignEventRequest: {
+            password?: string;
+            attestation?: boolean;
         };
         StartEventCrfRequest: {
             /** Format: int32 */
@@ -4822,6 +4956,58 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["EventCrfAssignmentDto"];
+                };
+            };
+        };
+    };
+    listRetinalTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    setRetinalTasks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studyOid: string;
+                sedId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
                 };
             };
         };
@@ -6647,6 +6833,34 @@ export interface operations {
             };
         };
     };
+    rerunAs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     bulkBindParkedJobs: {
         parameters: {
             query?: never;
@@ -6751,6 +6965,7 @@ export interface operations {
                 laterality: string;
                 scanIndex?: number;
                 eventCrfId?: number;
+                studyEventId?: number;
                 park?: boolean;
                 disambiguated?: boolean;
                 candidateCount?: number;
@@ -6765,6 +6980,30 @@ export interface operations {
                     /** Format: binary */
                     file: string;
                 };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    commit_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CommitRequest"];
             };
         };
         responses: {
@@ -6964,6 +7203,32 @@ export interface operations {
         responses: {
             /** @description Created */
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudyEventDto"];
+                };
+            };
+        };
+    };
+    signEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SignEventRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8125,6 +8390,50 @@ export interface operations {
             };
         };
     };
+    listCrtTimeline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studySubjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listBcvaTimeline: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                studySubjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
     searchSubjects: {
         parameters: {
             query: {
@@ -8456,6 +8765,28 @@ export interface operations {
             };
         };
     };
+    streamSegmentation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
     compareToPrevious: {
         parameters: {
             query?: never;
@@ -8530,6 +8861,30 @@ export interface operations {
             header?: never;
             path: {
                 studySubjectId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    listVisits: {
+        parameters: {
+            query?: {
+                date?: string;
+            };
+            header?: never;
+            path: {
+                studyOid: string;
             };
             cookie?: never;
         };
