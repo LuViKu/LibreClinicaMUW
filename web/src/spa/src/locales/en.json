@@ -2386,6 +2386,7 @@
       "moreActions": "[NEEDS_REVIEW] More actions",
       "save": "Save",
       "location": "Location",
+      "saveSuccess": "Visit saved.",
       "dateInvalid": "Date must be in YYYY-MM-DD format.",
       "cancelConfirm": "Cancel event \"{label}\"? Associated CRFs and items will be marked deleted. The action is recorded in the audit trail.",
       "lockedBanner": "This visit is completed. Click «Edit» to make changes.",
@@ -3021,7 +3022,8 @@
     "retry": {
       "cta": "Retry",
       "inflight": "Restarting…",
-      "error": "Retry failed — please try again later."
+      "error": "Retry failed — please try again later.",
+      "successBanner": "Re-dispatch started — the status will update automatically."
     },
     "rerunAs": {
       "cta": "[NEEDS_REVIEW] Run as different task",

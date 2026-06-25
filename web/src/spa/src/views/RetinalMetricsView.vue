@@ -753,12 +753,23 @@ const inflightMessage = computed(() => emptyStateMessage(job.value?.status))
 /* communicates the new status.                                  */
 /* ------------------------------------------------------------- */
 const retrying = computed<boolean>(() => !!store.retryInflight[jobId.value])
+// 2026-06-25 — explicit retry feedback. Success drives a dismissable banner;
+// failures go through the GlobalErrorToast. The inline loadError banner only
+// renders when the job failed to load (v-else-if="loadError && !job"), so a
+// retry failure on an already-open job would otherwise vanish silently.
+const retryNotice = ref<boolean>(false)
 async function onRetry(): Promise<void> {
   try {
     await store.retryJob(jobId.value)
+    retryNotice.value = true
   } catch (e) {
-    const message = e instanceof Error ? e.message : t('retinal.retry.error')
-    store.errors[jobId.value] = message
+    const status = (e as { status?: number }).status
+    const baseMsg = t('retinal.retry.error')
+    const fullMsg = status ? `${baseMsg} — HTTP ${status}` : baseMsg
+    errors.push(
+      e instanceof Error ? Object.assign(new Error(fullMsg), { cause: e }) : new Error(fullMsg),
+      'retinal.retry',
+    )
   }
 }
 
@@ -797,7 +808,7 @@ type RerunNotice =
   | { kind: 'duplicate'; task: RerunTask; jobId: number }
 const rerunNotice = ref<RerunNotice | null>(null)
 
-watch(jobId, () => { rerunNotice.value = null })
+watch(jobId, () => { rerunNotice.value = null; retryNotice.value = false })
 
 async function onRerunAs(task: RerunTask): Promise<void> {
   rerunMenuOpen.value = false
@@ -1083,6 +1094,23 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
               class="text-[11px] underline hover:no-underline"
               data-testid="retinal-view-rerun-notice-dismiss"
               @click="rerunNotice = null"
+            >{{ t('common.dismiss') }}</button>
+          </div>
+
+          <!-- Retry success banner. Re-dispatch confirmation so the operator
+               gets explicit feedback; failures surface via GlobalErrorToast
+               (see onRetry catch). Dismissable + auto-clears on jobId change. -->
+          <div
+            v-if="retryNotice"
+            class="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50 text-emerald-900 px-4 py-3 text-xs flex items-center gap-3"
+            data-testid="retinal-view-retry-notice"
+          >
+            <span class="flex-1">{{ t('retinal.retry.successBanner') }}</span>
+            <button
+              type="button"
+              class="text-[11px] underline hover:no-underline"
+              data-testid="retinal-view-retry-notice-dismiss"
+              @click="retryNotice = false"
             >{{ t('common.dismiss') }}</button>
           </div>
 

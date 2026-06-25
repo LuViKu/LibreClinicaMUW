@@ -2388,6 +2388,7 @@
       "moreActions": "Weitere Aktionen",
       "save": "Speichern",
       "location": "Ort",
+      "saveSuccess": "Visite gespeichert.",
       "dateInvalid": "Datum muss im Format YYYY-MM-DD sein.",
       "cancelConfirm": "Visite »{label}« stornieren? Verbundene CRFs und Items werden als gelöscht markiert. Die Aktion wird im Audit Trail dokumentiert.",
       "lockedBanner": "Diese Visite ist abgeschlossen. Klicken Sie «Bearbeiten», um Änderungen zu erfassen.",
@@ -3026,7 +3027,8 @@
     "retry": {
       "cta": "Erneut versuchen",
       "inflight": "Wird neu gestartet…",
-      "error": "Neustart fehlgeschlagen — bitte später erneut versuchen."
+      "error": "Neustart fehlgeschlagen — bitte später erneut versuchen.",
+      "successBanner": "Auswertung wird erneut ausgeführt — der Status aktualisiert sich automatisch."
     },
     "rerunAs": {
       "cta": "Anderen Task ausführen",

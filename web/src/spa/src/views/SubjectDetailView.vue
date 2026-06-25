@@ -224,6 +224,18 @@ interface EditEventState {
 const editEvent = ref<EditEventState | null>(null)
 const isSavingEvent = ref(false)
 
+// 2026-06-25 — transient confirmation after a visit edit saves. The inline
+// editor collapses on success, which on its own reads as "did anything
+// happen?"; this surfaces an explicit success banner (failures stay inline
+// via editEvent.fieldError). Auto-clears after a few seconds.
+const eventSaveOk = ref(false)
+let saveFlashTimer: ReturnType<typeof setTimeout> | undefined
+function flashEventSaveSuccess() {
+  eventSaveOk.value = true
+  if (saveFlashTimer) clearTimeout(saveFlashTimer)
+  saveFlashTimer = setTimeout(() => { eventSaveOk.value = false }, 4000)
+}
+
 /**
  * Phase E completed-crf-and-event-lock — true while the composer is
  * showing a previously-completed visit and the operator hasn't yet
@@ -340,6 +352,7 @@ async function submitEditEvent() {
     })
     if (result.ok) {
       editEvent.value = null
+      flashEventSaveSuccess()
       // Refresh subject detail so the events table flips to the
       // new state — the events store is separate from
       // subjects.selected.events, so we re-fetch.
@@ -1114,6 +1127,20 @@ const baselinePanelEyes = computed<EyePanelDescriptor[]>(() => {
                 {{ subject.events.length }} {{ t('subjectDetail.eventsCount') }}
               </span>
             </div>
+          </div>
+          <!-- 2026-06-25 — transient confirmation after a visit edit saves.
+               The inline editor collapses on success; this makes the outcome
+               explicit. Failures surface inline via editEvent.fieldError. -->
+          <div
+            v-if="eventSaveOk"
+            class="mx-5 mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 flex items-center gap-2"
+            role="status"
+            data-testid="event-save-success"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shrink-0" aria-hidden="true">
+              <path d="M20 6 9 17l-5-5" />
+            </svg>
+            {{ t('subjectDetail.event.saveSuccess') }}
           </div>
           <!-- 2026-06-22 round 9 — horizontal-scroll wrapper so the
                sticky-right actions column has a scrolling context. With
