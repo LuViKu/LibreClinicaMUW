@@ -106,8 +106,16 @@ jobs:
             dockerfile: Dockerfile
             # Override the Dockerfile's smoke-test-friendly default
             # (SKIP_SPA=true) so the SPA bundle lands in the WAR.
+            # Stamp the SPA's footer + LoginView version line with the
+            # actual release tag, commit SHA, and publish date. The
+            # vite.config.ts reads these from process.env and falls
+            # back to package.json + `git rev-parse` when absent
+            # (local dev / smoke build).
             build_args: |
               SKIP_SPA=false
+              APP_VERSION=${{ github.event_name == 'release' && github.ref_name || inputs.version }}
+              BUILD_HASH=${{ github.sha }}
+              BUILD_DATE=${{ github.event_name == 'release' && github.event.release.published_at || github.event.repository.updated_at }}
             cache_scope: release-image-app
             title: LibreClinica MUW Ophthalmology
             description: Electronic Data Capture for the Department of Ophthalmology and Optometry, Medical University of Vienna — institutional build of LibreClinica.

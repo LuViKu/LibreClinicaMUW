@@ -8,10 +8,21 @@ import { readFileSync } from 'node:fs'
 
 /**
  * Phase E.6 — version + build constants surfaced in the SideRail
- * footer. Read at config-load time:
- *   - APP_VERSION ← SPA package.json's `version`
- *   - BUILD_HASH  ← short git SHA (best-effort; falls back to "dev")
- *   - BUILD_DATE  ← ISO yyyy-MM-dd (today)
+ * footer and the LoginView. Read at config-load time, env-first so
+ * the release-image workflow can stamp the real GitHub release tag
+ * + commit SHA + publish date by passing build-args to the Docker
+ * build:
+ *
+ *   APP_VERSION ← $APP_VERSION env (from --build-arg) ▸ package.json
+ *                 ▸ 'unknown'
+ *   BUILD_HASH  ← $BUILD_HASH env ▸ `git rev-parse --short HEAD`
+ *                 ▸ 'dev'
+ *   BUILD_DATE  ← $BUILD_DATE env (ISO yyyy-MM-dd) ▸ today
+ *
+ * The env override is what makes the release tag dynamic — the
+ * Dockerfile accepts the build-arg, sets the matching ENV, and the
+ * Vite config picks it up here. Local `pnpm dev` and the smoke-build
+ * `mvn package` without build-args fall through to package.json + git.
  */
 function readPackageVersion(): string {
   try {
@@ -43,9 +54,22 @@ function todayIso(): string {
   const day = String(d.getDate()).padStart(2, '0')
   return `${y}-${m}-${day}`
 }
-const APP_VERSION = readPackageVersion()
-const BUILD_HASH = gitShortSha()
-const BUILD_DATE = todayIso()
+function normaliseDate(raw: string): string {
+  // GitHub's release.published_at + repository.updated_at come back as
+  // full ISO timestamps (`yyyy-MM-ddTHH:mm:ssZ`). The SPA footer wants
+  // just the calendar date — slice the first 10 chars when the input
+  // matches the ISO timestamp shape; otherwise pass through.
+  const m = raw.match(/^(\d{4}-\d{2}-\d{2})/)
+  return m ? m[1]! : raw
+}
+function normaliseHash(raw: string): string {
+  // GitHub passes the full 40-char `github.sha`; the footer uses the
+  // short 7-char form everywhere else. Truncate to match.
+  return /^[0-9a-f]{40}$/.test(raw) ? raw.slice(0, 7) : raw
+}
+const APP_VERSION = (process.env.APP_VERSION ?? '').trim() || readPackageVersion()
+const BUILD_HASH = normaliseHash((process.env.BUILD_HASH ?? '').trim()) || gitShortSha()
+const BUILD_DATE = normaliseDate((process.env.BUILD_DATE ?? '').trim()) || todayIso()
 
 /**
  * Phase E.1 (2026-05-30): Vue 3 + Vite + Tailwind v4.

@@ -8,6 +8,19 @@ FROM docker.io/library/maven:3-eclipse-temurin-21 AS builder
 # so production WARs contain the SPA bundle.
 ARG SKIP_SPA=true
 
+# Version / build identity surfaced in the SPA's footer + LoginView.
+# The release-image workflow passes the GitHub release tag, the
+# committed SHA, and the publish date as build-args so the version
+# stamp is the actual release tag rather than the pom.xml fallback.
+# Empty defaults let local + smoke builds fall through to the Vite
+# config's package.json + `git rev-parse` derivation.
+ARG APP_VERSION=
+ARG BUILD_HASH=
+ARG BUILD_DATE=
+ENV APP_VERSION=${APP_VERSION}
+ENV BUILD_HASH=${BUILD_HASH}
+ENV BUILD_DATE=${BUILD_DATE}
+
 WORKDIR /app
 
 # ----- Dependency layer -----
@@ -45,7 +58,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     set -eux; \
     mvn package -DskipSpa=${SKIP_SPA} -DskipTests=true -Dmdep.analyze.skip=true; \
     # Maven's default WAR name is ${artifactId}-${version}.war, so this is
-    # LibreClinica-web-1.4.0rc1-muw.war today and will keep changing as the
+    # LibreClinica-web-1.5.0-beta.2-muw.war today and will keep changing as the
     # project version moves. Glob it and rename to a stable name for the
     # COPY --from=builder line below.
     mv web/target/LibreClinica-web-*.war /LibreClinica-web.war;

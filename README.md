@@ -16,7 +16,7 @@ This fork is undergoing a planned multi-phase backend modernization. See [MIGRAT
 | Target stack | Spring Boot 3 · Hibernate 6 · Java 21 · embedded Tomcat · PostgreSQL 14+ · `jakarta.*` |
 | Posture | Hard fork from `reliatec-gmbh/LibreClinica:lc-develop` (manual cherry-picks) |
 | License | LGPL (see [COPYING.LESSER](COPYING.LESSER) and [LICENSE](LICENSE)) |
-| Build version | `1.4.0rc1-muw` |
+| Build version | `1.5.0-beta.2-muw` |
 
 ### Quick start (local development)
 
