@@ -218,12 +218,25 @@ def test_ga_iowa_chain_libs_and_rmdir(monkeypatch, tmp_path) -> None:
             out = tmp_path / "work" / "out"
             out.mkdir(parents=True, exist_ok=True)
             (out / "001-RPEL.csv").write_text("size\n1\n2\n")
+        elif any("local_IOWA_LayerSegV3_to_CSV" in c for c in cmd):
+            # 2026-06-25 — IOWA converter --out is now a /tmp-staged path
+            # (commit 34afc2fa8 stages all IOWA I/O to /tmp). Materialise
+            # the output where the actual cmd asked for it so the staging
+            # copy-back can find something.
+            out = Path(cmd[cmd.index("--out") + 1])
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "001-RPEL.csv").write_text("size\n1\n2\n")
         return ""
 
     monkeypatch.setattr(ap, "_exec", fake_exec)
 
     dcm_dir = tmp_path / "in"
     dcm_dir.mkdir()
+    # 2026-06-25 — _iowa_layers stages the DCM to /tmp via dcm.read_bytes()
+    # (root-cause fix for the cn5 /scratch SIGSEGV, commit 34afc2fa8). The
+    # test fixture has to materialise a non-empty bscan.dcm so read_bytes
+    # finds something to copy.
+    (dcm_dir / "bscan.dcm").write_bytes(b"FAKE-DCM-BYTES")
     res = ap.ApptainerAdapter().full_volume(
         "ga", dcm_dir, "OD", out_dir_override=tmp_path / "work"
     )
@@ -315,6 +328,9 @@ def test_layers_returns_iowa_stack_plus_bm(monkeypatch, tmp_path) -> None:
 
     dcm_dir = tmp_path / "in"
     dcm_dir.mkdir()
+    # 2026-06-25 — see test_ga_iowa_chain_libs_and_rmdir; _iowa_layers
+    # now stages bscan.dcm to /tmp first via dcm.read_bytes().
+    (dcm_dir / "bscan.dcm").write_bytes(b"FAKE-DCM-BYTES")
     res = adapter.full_volume("layers", dcm_dir, "OD", out_dir_override=tmp_path / "work")
 
     assert res.task == "layers"

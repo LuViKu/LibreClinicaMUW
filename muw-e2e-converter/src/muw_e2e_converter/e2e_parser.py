@@ -571,7 +571,7 @@ def write_bscan_dcm(bv: BscanVolume, out_dir: Path) -> Path:
     # PHI redaction (DR-022) — strip patient identifiers from the synthesised
     # bscan before write. E2E headers may carry PatientID/Name/DOB; we don't
     # propagate them into anything the sidecar ever returns.
-    from retinal_inference.inference.phi import redact_dicom
+    from .phi import redact_dicom
 
     redact_dicom(ds)
 
