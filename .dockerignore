@@ -14,6 +14,13 @@
 !/web
 !/ws
 
+# DR-024 — the retinal-inference Docker build now uses the repo root as
+# its context so it can COPY both retinal-inference/ and the sibling
+# muw-e2e-converter/ converter package into the image. Allow both
+# directories through.
+!/retinal-inference
+!/muw-e2e-converter
+
 # ignore build files
 /*/target
 

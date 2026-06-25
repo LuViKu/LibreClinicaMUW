@@ -28,12 +28,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# E2E -> bscan.dcm ingestion (app-VM /preprocess + single-host dev OptimaAdapter).
-# The DICOM-only cluster run-only deploy does NOT need these — oct-converter is
-# imported lazily, so the package imports fine without them installed.
-ingest = [
-    "oct-converter==0.7.0",
-    "pillow==11.0.0",
+# DR-024 — the .e2e -> bscan.dcm ingestion seam moved out into the
+# `muw-e2e-converter` package (sibling directory in this repo). The
+# LOCAL `retinal-preprocess` docker service installs it via the
+# Dockerfile (which pip-installs ../muw-e2e-converter explicitly); the
+# cluster's bare-metal cn5 deployment deliberately does NOT install it
+# (the cluster's ApptainerAdapter rejects .e2e). The cluster's
+# /preprocess endpoint, if mistakenly enabled, returns HTTP 503 with
+# a clear pointer to DR-024.
+#
+# This `[converter]` extra is documentation: it lists the sibling
+# package as a dependency for editor / IDE / local-pip workflows. The
+# Docker build install path uses pip install -e ../muw-e2e-converter
+# directly rather than this extra (path-style URLs in PEP 508 extras
+# have spotty resolver support across pip versions).
+converter = [
+    "muw-e2e-converter",
 ]
 dev = [
     "pytest>=8.3",

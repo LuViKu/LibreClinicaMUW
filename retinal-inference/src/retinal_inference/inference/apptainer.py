@@ -107,6 +107,10 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         if task == "bm":
             s = _config.settings
             return bool(s.bm_code or s.bm_python)
+        # layers = IOWA 11-layer stack + BM: needs the IOWA binary+converter and BM.
+        if task == "layers":
+            s = _config.settings
+            return bool(s.ga_iowa_binary and s.ga_iowa_converter and (s.bm_code or s.bm_python))
         return bool(self._sif.get(task))
 
     def fast_screen(
@@ -173,7 +177,7 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         axial = _spacing_mm(dcm_dir / "bscan.dcm")[0]
         return {"primary_metric_value": None, "primary_metric_unit": None,
                 "output_payload": {"segmentation_file": seg_file},
-                "pixel_scale_mm": axial}
+                "pixel_scale_mm": axial, "artifact_names": [seg_file]}
 
     def _onl(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
         import glob
@@ -200,9 +204,10 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         if not upper or not lower:
             raise RuntimeError(f"sese_onl produced no boundary CSVs in {out}")
         axial = _spacing_mm(dcm_dir / "bscan.dcm")[0]
+        names = [Path(upper[0]).name, Path(lower[0]).name]
         return {"primary_metric_value": None, "primary_metric_unit": None,
-                "output_payload": {"surface_csvs": [Path(upper[0]).name, Path(lower[0]).name]},
-                "pixel_scale_mm": axial}
+                "output_payload": {"surface_csvs": names},
+                "pixel_scale_mm": axial, "artifact_names": names}
 
     def _pr(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
         import glob
@@ -257,49 +262,119 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         if not bmeis or not ob_opr:
             raise RuntimeError(f"sese_pr produced no BMEIS / OB-OPR CSVs in {out}")
         axial = _spacing_mm(dcm_dir / "bscan.dcm")[0]
+        names = [Path(bmeis[0]).name, Path(ob_opr[0]).name]
         return {"primary_metric_value": None, "primary_metric_unit": None,
-                "output_payload": {"surface_csvs": [Path(bmeis[0]).name, Path(ob_opr[0]).name]},
-                "pixel_scale_mm": axial}
+                "output_payload": {"surface_csvs": names},
+                "pixel_scale_mm": axial, "artifact_names": names}
+
+    # --- shared host-native steps (IOWA layer stack + BM), reused by ga/bm/layers
+
+    def _iowa_layers(self, dcm: Path, work: Path) -> Path:
+        """Run the host-native IOWA chain -> a folder of 11 layer CSVs.
+
+        Shared by ``ga`` (consumes them as ``--LayerSegPath`` input) and
+        ``layers`` (returns them). The IOWA binary + converter are CentOS-6-era
+        host builds needing extra libs (modern libstdc++ for the binary, the
+        framework lib dir for the converter) — both supplied via
+        ``GA_IOWA_LD_LIBRARY_PATH``.
+        """
+        s = _config.settings
+        env: dict[str, str] = {}
+        if s.ga_iowa_ld_library_path:
+            existing = os.environ.get("LD_LIBRARY_PATH", "")
+            env["LD_LIBRARY_PATH"] = (
+                f"{s.ga_iowa_ld_library_path}:{existing}"
+                if existing else s.ga_iowa_ld_library_path
+            )
+        # 2026-06-24 — IOWA OCTLayerSeg 3.6 SIGSEGVs unconditionally on
+        # files staged on cn5's /scratch volume (dev 0x44 — XFS, likely
+        # BeeGFS or Lustre underneath given the suspiciously-low device
+        # number). Every copy method we tried that lands the file back
+        # on /scratch crashes IOWA (cp, dd, cat, Python write_bytes,
+        # shutil.copy — all -11). The same content on /tmp (ext4 /
+        # tmpfs, dev 0xfd00) IOWA accepts without issue. We could not
+        # identify the exact filesystem property that triggers the
+        # crash; the empirical fix is to stage IOWA's input + output
+        # to /tmp, then copy the result CSVs back to ``work`` (which
+        # lives on /scratch and is the persistent artifact path).
+        #
+        # See PR #255 for the full diagnostic trail.
+        import shutil as _shutil
+        import tempfile as _tempfile
+        with _tempfile.TemporaryDirectory(prefix="iowa_", dir="/tmp") as _tmp:
+            iowa_root = Path(_tmp)
+            iowa_dcm = iowa_root / "bscan.dcm"
+            iowa_layerseg = iowa_root / "layerseg"
+            iowa_layerseg.mkdir()
+            # Stage the DICOM onto /tmp so IOWA accepts it.
+            iowa_dcm.write_bytes(dcm.read_bytes())
+            # OCTLayerSeg3.6 (licensed host binary) -> lres.xml on /tmp.
+            _exec([s.ga_iowa_binary or "OCTLayerSeg3.6", "-oM", str(iowa_dcm),
+                   str(iowa_layerseg / "lres.xml"), str(iowa_layerseg / "t1.xml"),
+                   str(iowa_layerseg / "t2.tif"), str(iowa_layerseg / "t3.xml")],
+                  env or None)
+            # Convert lres.xml -> 11 layer CSVs on /tmp too. The converter
+            # REFUSES a pre-existing --out dir so don't create it; pass
+            # --rmdir_out 1 to allow it to manage its own directory.
+            iowa_layers_csv = iowa_root / "layers_csv"
+            _exec([s.ga_iowa_converter or "local_IOWA_LayerSegV3_to_CSV",
+                   "--in", str(iowa_layerseg / "lres.xml"), "--intype", "iowaxml_ls",
+                   "--out", str(iowa_layers_csv), "--outtype", "csv",
+                   "--rmdir_out", "1"], env or None)
+            # Copy results back to the persistent ``work`` dir on /scratch.
+            layers_csv = work / "layers_csv"
+            if layers_csv.exists():
+                _shutil.rmtree(str(layers_csv))
+            _shutil.copytree(str(iowa_layers_csv), str(layers_csv))
+            # Also persist the IOWA intermediates so downstream model
+            # runs (ga consumes lres.xml as --LayerSegPath) can reach
+            # them via the existing ``work / 'layerseg'`` path.
+            layerseg = work / "layerseg"
+            if layerseg.exists():
+                _shutil.rmtree(str(layerseg))
+            _shutil.copytree(str(iowa_layerseg), str(layerseg))
+        return layers_csv
+
+    def _run_bm(self, dcm: Path, out: Path) -> Path:
+        """Run the host-native BM venv on application.py -> the BM surface CSV.
+
+        Shared by ``bm`` and ``layers``. BM has no .sif: exec the cluster venv
+        python with the Python-3.8 + CUDA-11.1 + cuDNN module libs on
+        LD_LIBRARY_PATH (without it the venv python can't find libpython3.8) and a
+        GPU (application.py forces torch.cuda + pins device 0). Weights are
+        hardcoded in application.py to the cluster path (referenced in place).
+        """
+        import glob
+
+        s = _config.settings
+        out.mkdir(parents=True, exist_ok=True)
+        code = Path(s.bm_code or "/opt/sese_bm/code")
+        python = s.bm_python or "python3"
+        env: dict[str, str] = {}
+        if s.bm_ld_library_path:
+            existing = os.environ.get("LD_LIBRARY_PATH", "")
+            env["LD_LIBRARY_PATH"] = (
+                f"{s.bm_ld_library_path}:{existing}" if existing else s.bm_ld_library_path
+            )
+        dev = s.bm_gpu_device if s.bm_gpu_device is not None else s.apptainer_gpu_device
+        if dev is not None:
+            env["CUDA_VISIBLE_DEVICES"] = dev
+        _exec([python, str(code / "application.py"), str(dcm), str(out)], env or None)
+        bm = sorted(glob.glob(str(out / "*BM*.csv"))) or sorted(glob.glob(str(out / "*Bruch*.csv")))
+        if not bm:
+            raise RuntimeError(f"sese_bm produced no BM CSV in {out}")
+        return Path(bm[0])
 
     def _ga(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
         import glob
 
         s = _config.settings
         out = work / "out"
-        layerseg = work / "layerseg"
         out.mkdir(parents=True, exist_ok=True)
-        layerseg.mkdir(parents=True, exist_ok=True)
         dcm = dcm_dir / "bscan.dcm"
-        # The IOWA binary + converter are host-native (CentOS-6-era) builds needing
-        # extra shared libs: the binary wants a modern libstdc++ (GLIBCXX_3.4.20,
-        # e.g. the conda env lib) and the converter wants the framework lib dir
-        # (xerces etc.). GA_IOWA_LD_LIBRARY_PATH supplies both (colon-joined); we
-        # prepend it to LD_LIBRARY_PATH for these two host execs.
-        iowa_env: dict[str, str] = {}
-        if s.ga_iowa_ld_library_path:
-            existing = os.environ.get("LD_LIBRARY_PATH", "")
-            iowa_env["LD_LIBRARY_PATH"] = (
-                f"{s.ga_iowa_ld_library_path}:{existing}"
-                if existing else s.ga_iowa_ld_library_path
-            )
-        # Step 1: IOWA layer segmentation — native host binary OCTLayerSeg3.6
-        # (licensed, not a .sif), emits lres.xml. Matches sese_iowa_layer_vrcbin.py.
-        _exec([s.ga_iowa_binary or "OCTLayerSeg3.6", "-oM", str(dcm),
-               str(layerseg / "lres.xml"), str(layerseg / "t1.xml"),
-               str(layerseg / "t2.tif"), str(layerseg / "t3.xml")], iowa_env or None)
-        # Step 1b: convert the IOWA XML -> a folder of 11 layer CSVs, which is what
-        # infer_sample_filly.py's --LayerSegPath consumes (it reads them via
-        # prepare_filly.resample_oct, and rpe = layers[:, 10]). The raw lres.xml is
-        # NOT directly consumable. Converter = local_IOWA_LayerSegV3_to_CSV.
-        # Flags confirmed on cn5: iowaxml_ls -> csv folder; --aScanMode unsupported
-        # for iowaxml_ls; the converter REFUSES a pre-existing --out dir, so don't
-        # create it and pass --rmdir_out 1.
-        layers_csv = work / "layers_csv"
-        _exec([s.ga_iowa_converter or "local_IOWA_LayerSegV3_to_CSV",
-               "--in", str(layerseg / "lres.xml"), "--intype", "iowaxml_ls",
-               "--out", str(layers_csv), "--outtype", "csv", "--rmdir_out", "1"],
-              iowa_env or None)
-        # Step 2: GA model in the .sif.
+        # IOWA 11-layer stack is the GA model's --LayerSegPath input (consumed,
+        # NOT returned). GA returns ONLY the RPEL surface.
+        layers_csv = self._iowa_layers(dcm, work)
         code = Path(s.ga_code or "/opt/sese_ga/code")
         weights = Path(s.ga_weights or "/weights/filly_checkpoints")
         wlist = [str(weights / str(i) / "w.ckpt") for i in range(5)]
@@ -311,49 +386,41 @@ class ApptainerAdapter(RetinalInferenceAdapter):
              "--OutputGA", str(out), "--threshold", s.ga_threshold],
         )
         _exec(cmd, self._gpu_env("ga"))
-        # Server returns the raw RPEL surface CSV only; Java computes the GA
-        # area (mm²) from it.
+        # infer_sample_filly.py writes RPEL + EZL + ELM; return ONLY RPEL (the
+        # IOWA layers + EZL/ELM stay in the tempdir, uncollected via artifact_names).
         rpel = sorted(glob.glob(str(out / "*RPEL*.csv")))
         if not rpel:
             raise RuntimeError(f"sese_ga produced no RPEL CSV in {out}")
         lateral = _spacing_mm(dcm)[1]
         return {"primary_metric_value": None, "primary_metric_unit": None,
                 "output_payload": {"rpel_csv": Path(rpel[0]).name},
-                "pixel_scale_mm": lateral}
+                "pixel_scale_mm": lateral,
+                "artifact_names": [Path(rpel[0]).name]}
 
     def _bm(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
-        import glob
-
-        s = _config.settings
-        out = work / "out"
-        out.mkdir(parents=True, exist_ok=True)
         dcm = dcm_dir / "bscan.dcm"
-        code = Path(s.bm_code or "/opt/sese_bm/code")
-        python = s.bm_python or "python3"
-        # BM is host-native (cluster venv + LMOD modules), NOT a .sif: exec the
-        # venv python on application.py with the module lib dirs on
-        # LD_LIBRARY_PATH (Python 3.8 + CUDA 11.1 + cuDNN — without it the venv
-        # python can't even find libpython3.8). GPU-required: application.py
-        # forces torch.cuda + pins device 0, so make the chosen GPU visible as 0.
-        # Weights are hardcoded in application.py to the cluster path (in place).
-        env: dict[str, str] = {}
-        if s.bm_ld_library_path:
-            existing = os.environ.get("LD_LIBRARY_PATH", "")
-            env["LD_LIBRARY_PATH"] = (
-                f"{s.bm_ld_library_path}:{existing}" if existing else s.bm_ld_library_path
-            )
-        dev = s.bm_gpu_device if s.bm_gpu_device is not None else s.apptainer_gpu_device
-        if dev is not None:
-            env["CUDA_VISIBLE_DEVICES"] = dev
-        _exec([python, str(code / "application.py"), str(dcm), str(out)], env or None)
-        # application.py writes "001-Bruch's membrane (BM).csv" into the out dir.
-        bm = sorted(glob.glob(str(out / "*BM*.csv"))) or sorted(glob.glob(str(out / "*Bruch*.csv")))
-        if not bm:
-            raise RuntimeError(f"sese_bm produced no BM CSV in {out}")
+        bm = self._run_bm(dcm, work / "out")
         axial = _spacing_mm(dcm)[0]
         return {"primary_metric_value": None, "primary_metric_unit": None,
-                "output_payload": {"surface_csvs": [Path(bm[0]).name]},
-                "pixel_scale_mm": axial}
+                "output_payload": {"surface_csvs": [bm.name]},
+                "pixel_scale_mm": axial, "artifact_names": [bm.name]}
+
+    def _layers(self, dcm_dir: Path, work: Path) -> dict[str, Any]:
+        import glob
+
+        dcm = dcm_dir / "bscan.dcm"
+        # The full layer stack: 11 IOWA reference layers + the BM layer. Both are
+        # returned (unlike ga, which consumes the IOWA layers internally).
+        layers_csv = self._iowa_layers(dcm, work)
+        iowa = sorted(glob.glob(str(layers_csv / "*.csv")))
+        if not iowa:
+            raise RuntimeError(f"IOWA converter produced no layer CSVs in {layers_csv}")
+        bm = self._run_bm(dcm, work / "bm_out")
+        names = [Path(p).name for p in iowa] + [bm.name]
+        axial = _spacing_mm(dcm)[0]
+        return {"primary_metric_value": None, "primary_metric_unit": None,
+                "output_payload": {"surface_csvs": names},
+                "pixel_scale_mm": axial, "artifact_names": names}
 
     def full_volume(
         self,
@@ -381,7 +448,8 @@ class ApptainerAdapter(RetinalInferenceAdapter):
         dcm_dir, _dcm = _resolve_dcm(src)
 
         handler = {"fluid": self._fluid, "onl": self._onl,
-                   "pr": self._pr, "ga": self._ga, "bm": self._bm}[task]
+                   "pr": self._pr, "ga": self._ga, "bm": self._bm,
+                   "layers": self._layers}[task]
 
         if out_dir_override is not None:
             work = Path(out_dir_override)
@@ -405,4 +473,5 @@ class ApptainerAdapter(RetinalInferenceAdapter):
             pixel_scale_mm=res["pixel_scale_mm"],
             confidence=0.85,
             model_version=self._model_version,
+            artifact_names=res.get("artifact_names"),
         )

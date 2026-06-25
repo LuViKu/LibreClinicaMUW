@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pydicom
 
-from retinal_inference.inference.phi import DEIDENTIFICATION_METHOD, redact_dicom
+from muw_e2e_converter import DEIDENTIFICATION_METHOD, redact_dicom
 
 
 def _make_ds_with_phi() -> pydicom.Dataset:

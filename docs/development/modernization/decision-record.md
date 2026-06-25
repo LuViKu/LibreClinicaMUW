@@ -525,6 +525,61 @@ Option 3. The catalog is read-only at the database level; "create" is a UX affor
 
 ---
 
+## DR-024 — Single bscan.dcm ingestion seam
+
+**Status:** Accepted (2026-06-25)
+
+**Context.** DR-022 introduced the remote GPU sidecar pattern with two deployment postures sharing a single `retinal-inference` Python codebase:
+
+1. **App-VM `retinal-preprocess` container** (local docker compose) — receives uploaded `.e2e` files, converts to `bscan.dcm`, strips PHI, persists SPA-viewer companions (`fundus.png`, `geometry.json`). Serves `/preprocess`.
+2. **Cluster inference sidecar on cn5** (bare-metal uvicorn under `~/start_sidecar.sh`) — receives a pre-converted `bscan.dcm` over HTTPS from the institutional Tomcat, dispatches inference via the host-native `OCTLayerSeg` binary + Apptainer/.sif containers. Serves `/run` only.
+
+The cluster's `ApptainerAdapter.full_volume` explicitly rejects `.e2e` inputs (raises `ValueError`) — production conversion ALWAYS happens app-side in posture (1) before the bytes leave the institutional VM. The cluster never sees raw `.e2e` content. PHI redaction therefore happens on the app VM, not on the GPU host.
+
+**Problem.** Because both deployments share the same git tree, the `e2e_parser.py` module physically existed on cn5's disk even though it's never executed there. On 2026-06-24 a 6-hour debug session of an IOWA SIGSEGV cost ~4 hours fixing `e2e_parser.py` on the cluster, with the changes never taking effect — `git pull` + uvicorn restart applied the new code to the file, but `ApptainerAdapter` never imports it. The duplication was invisible to anyone tailing logs or reading the diff.
+
+**Decision.** Move the `.e2e` → `bscan.dcm` + SLO companion code into a **separate Python package** at `muw-e2e-converter/` (sibling of `retinal-inference/`). The cluster's bare-metal deployment runbook installs `retinal-inference` WITHOUT this package; the LOCAL `retinal-preprocess` Docker image installs both via the Dockerfile's `pip install -e /app/muw-e2e-converter` step.
+
+The new package contains:
+
+| Module | Purpose |
+|---|---|
+| `e2e_parser.py` | Heidelberg .e2e → multi-frame `bscan.dcm` (oct-converter + pydicom). Produces `BscanVolume` with real-mm geometry from the .e2e header. |
+| `fundus_extract.py` | SLO en-face PNG + `geometry.json` build (per-B-scan-to-fundus registration metadata). |
+| `phi.py` | DICOM Supplement 142 blanking helper. Only ever runs against synthesised bscan.dcm bytes, so it belongs with the synthesiser. |
+
+`retinal-inference` imports the converter via a guarded `try/except ModuleNotFoundError` block:
+
+- `api/preprocess.py` — when the converter is absent, `/preprocess` returns HTTP 503 with `detail` pointing at DR-024.
+- `inference/optima.py` — when the converter is absent, `OptimaAdapter.__init__` raises `ModuleNotFoundError` immediately. (Cluster operators who mistakenly set `RETINAL_INFERENCE_ADAPTER=optima` see the failure at adapter-selection time, not mid-request.)
+
+The cluster posture is verified by the runbook's smoke step: after starting uvicorn, `curl /preprocess` must return 503 (anything else means the converter was mistakenly installed; remove it).
+
+**Alternatives considered.**
+
+| Option | Why not |
+|---|---|
+| Documentation-only (docstring + DR) | Doesn't prevent the next operator from hot-fixing the cluster's `e2e_parser.py`. Visibility doesn't equal enforcement. |
+| Runtime startup banner | Same as above — operators tailing the launch logs would see "code path inactive" but the file is still right there to edit. |
+| Single git repo for the converter | Overkill for a one-institution fork; an extra repo to manage with no clear ownership boundary. |
+
+**Consequences.**
+
+- **Iteration loop tightens.** When a future bug touches `prepare_bscan_dcm`, the only deployment that can show it is the local `retinal-preprocess` container — one `docker compose build retinal-preprocess` away. No cluster redeploy, no uvicorn env-var dance.
+- **Cluster image surface shrinks.** `oct-converter`, `pillow`, and the SLO geometry build no longer ship to cn5. Smaller install footprint + fewer dependencies that could conflict with cluster-side Python pins.
+- **Test split.** `test_fundus_extract.py` and `test_phi_strip.py` move to `muw-e2e-converter/tests/`. `test_preprocess.py` and `test_optima_dispatch.py` stay in `retinal-inference/tests/` (they exercise the consumer behavior). A new `test_preprocess_without_converter.py` simulates the cluster posture by monkeypatching `_CONVERTER_AVAILABLE = False`.
+- **Compose build context broadens.** The retinal-inference Docker build context becomes the repo root (was `./retinal-inference`) so the Dockerfile can COPY both packages. The `retinal-preprocess` service reuses the same image and gets the converter for free.
+
+**Reversible** — undoing the split is a `git mv` of the three modules + a Dockerfile diff. The two-package state isn't load-bearing for any downstream Java/SPA consumer (they only ever see the HTTP surface).
+
+**Out of scope (for this DR).**
+
+- Removing `OptimaAdapter` (kept as the dev-compose multi-runner path).
+- A startup banner reflecting the active adapter + endpoint set (could be a future DR-024.5 if cluster operators want it).
+- CI workflow that runs both pytest suites — current CI runs `retinal-inference/tests/` only; the new `muw-e2e-converter/tests/` add to that loop in a follow-up.
+
+---
+
 ## Future decisions (open)
 
 - DR-007 — iText 2.1.2 replacement: OpenPDF vs. Apache PDFBox (decide before Phase D library long-tail)

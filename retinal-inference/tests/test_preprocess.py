@@ -63,6 +63,10 @@ class _FakeBscanVolume:
     n_bscans = 3
     rows = 4
     cols = 5
+    # 2026-06-25 — preprocess.py grew an optional ``acquisition_date``
+    # surface (header + companion field); the fixture has to set None
+    # explicitly so attribute access doesn't AttributeError.
+    acquisition_date = None
     bscan_data = [
         {"posX1": 100.0, "posY1": 200.0, "posX2": 500.0, "posY2": 200.0,
          "imgSizeX": 5, "scaley": 0.00387, "centrePosY": 195.0},

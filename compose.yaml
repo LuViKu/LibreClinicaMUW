@@ -102,7 +102,12 @@ services:
   # real MIRAGE-based model lands. Task-agnostic by design; v1 enables
   # task='ga' only (geographic atrophy / cRORA segmentation).
   retinal-inference:
-    build: ./retinal-inference
+    # DR-024 — build context is the repo root so the Dockerfile can COPY
+    # both retinal-inference/ and the sibling muw-e2e-converter/ package
+    # into the image.
+    build:
+      context: .
+      dockerfile: retinal-inference/Dockerfile
     # Explicit `image:` tag — without it `docker compose up --no-build`
     # looks up the auto-generated `<project_name>-<service_name>:latest`
     # (`libreclinica-muw-retinal-inference:latest`) but `docker buildx

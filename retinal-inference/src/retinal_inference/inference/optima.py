@@ -27,7 +27,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 from retinal_inference import config as _config
-from retinal_inference.inference.e2e_parser import prepare_bscan_dcm
 from retinal_inference.models.responses import FastScreenResult, FullVolumeResult
 from retinal_inference.tasks import SUPPORTED_TASKS, TaskName
 
@@ -36,6 +35,19 @@ from .adapter import (
     RetinalInferenceAdapter,
     UnsupportedTaskError,
 )
+
+# DR-024 — see preprocess.py for the rationale. OptimaAdapter requires the
+# converter at runtime to turn the uploaded .e2e into a bscan.dcm before
+# dispatching to a per-task runner. The cluster's posture deliberately
+# leaves the converter package uninstalled; selecting OptimaAdapter on
+# the cluster is a deployment bug and should fail loudly at adapter
+# instantiation rather than mid-request.
+try:
+    from muw_e2e_converter import prepare_bscan_dcm
+    _CONVERTER_AVAILABLE = True
+except ModuleNotFoundError:  # cluster posture — converter not installed
+    _CONVERTER_AVAILABLE = False
+    prepare_bscan_dcm = None  # type: ignore[assignment]
 
 
 def _post_json(url: str, payload: dict[str, Any], timeout: float) -> dict[str, Any]:
@@ -75,6 +87,15 @@ class OptimaAdapter(RetinalInferenceAdapter):
     _model_version: str = "optima-dispatcher-v1"
 
     def __init__(self) -> None:
+        if not _CONVERTER_AVAILABLE:
+            # DR-024 — fail at adapter selection time, not mid-request.
+            raise ModuleNotFoundError(
+                "OptimaAdapter requires the 'muw-e2e-converter' package "
+                "(provides prepare_bscan_dcm). The cluster deployment posture "
+                "deliberately omits this package — if you're hitting this on "
+                "the cluster, set RETINAL_INFERENCE_INFERENCE_ADAPTER=apptainer. "
+                "See DR-024 for the single-ingestion-seam rationale."
+            )
         s = _config.settings
         # task → runner base URL (None = task not deployed here)
         self._runner_urls: dict[TaskName, str | None] = {

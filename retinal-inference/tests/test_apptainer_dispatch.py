@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -216,12 +218,25 @@ def test_ga_iowa_chain_libs_and_rmdir(monkeypatch, tmp_path) -> None:
             out = tmp_path / "work" / "out"
             out.mkdir(parents=True, exist_ok=True)
             (out / "001-RPEL.csv").write_text("size\n1\n2\n")
+        elif any("local_IOWA_LayerSegV3_to_CSV" in c for c in cmd):
+            # 2026-06-25 — IOWA converter --out is now a /tmp-staged path
+            # (commit 34afc2fa8 stages all IOWA I/O to /tmp). Materialise
+            # the output where the actual cmd asked for it so the staging
+            # copy-back can find something.
+            out = Path(cmd[cmd.index("--out") + 1])
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "001-RPEL.csv").write_text("size\n1\n2\n")
         return ""
 
     monkeypatch.setattr(ap, "_exec", fake_exec)
 
     dcm_dir = tmp_path / "in"
     dcm_dir.mkdir()
+    # 2026-06-25 — _iowa_layers stages the DCM to /tmp via dcm.read_bytes()
+    # (root-cause fix for the cn5 /scratch SIGSEGV, commit 34afc2fa8). The
+    # test fixture has to materialise a non-empty bscan.dcm so read_bytes
+    # finds something to copy.
+    (dcm_dir / "bscan.dcm").write_bytes(b"FAKE-DCM-BYTES")
     res = ap.ApptainerAdapter().full_volume(
         "ga", dcm_dir, "OD", out_dir_override=tmp_path / "work"
     )
@@ -229,6 +244,8 @@ def test_ga_iowa_chain_libs_and_rmdir(monkeypatch, tmp_path) -> None:
     assert res.task == "ga"
     assert res.primary_metric_value is None
     assert res.output_payload["rpel_csv"] == "001-RPEL.csv"
+    # GA returns ONLY RPEL — not EZL/ELM, not the IOWA layers it consumed.
+    assert res.artifact_names == ["001-RPEL.csv"]
     # IOWA binary call carries LD_LIBRARY_PATH with the configured dirs.
     iowa = next((c, e) for c, e in calls if c[0].endswith("OCTLayerSeg3.6_owned"))
     assert iowa[1] and "/conda/lib:/fw/lib" in iowa[1]["LD_LIBRARY_PATH"]
@@ -276,6 +293,52 @@ def test_bm_host_native_dispatch(monkeypatch, tmp_path) -> None:
     assert "singularity" not in cmd and "apptainer" not in cmd and cmd[0] != "srun"
     assert captured["env"]["LD_LIBRARY_PATH"].startswith("/mods/cuda/lib")
     assert captured["env"]["CUDA_VISIBLE_DEVICES"] == "0"
+
+
+def test_layers_returns_iowa_stack_plus_bm(monkeypatch, tmp_path) -> None:
+    # layers = 11 IOWA reference layers (binary+converter) + BM (venv). All 12
+    # returned; supported when IOWA binary+converter and BM are configured.
+    monkeypatch.setattr(_config.settings, "ga_iowa_binary", "/ri/OCTLayerSeg3.6_owned", raising=False)
+    monkeypatch.setattr(_config.settings, "ga_iowa_converter", "/fw/local_IOWA_LayerSegV3_to_CSV", raising=False)
+    monkeypatch.setattr(_config.settings, "ga_iowa_ld_library_path", "/conda/lib:/fw/lib", raising=False)
+    monkeypatch.setattr(_config.settings, "bm_python", "/bm/venv/bin/python3", raising=False)
+    monkeypatch.setattr(_config.settings, "bm_code", "/bm/code", raising=False)
+    monkeypatch.setattr(_config.settings, "bm_ld_library_path", "/mods/lib", raising=False)
+    monkeypatch.setattr(ap, "_spacing_mm", lambda p: (0.004, 0.02, 0.2))
+
+    iowa_names = [f"{i:03d}-layer.csv" for i in range(1, 12)]  # 11 IOWA layers
+
+    def fake_exec(cmd, env=None):
+        if any("local_IOWA_LayerSegV3_to_CSV" in c for c in cmd):
+            # converter --out <dir> is the element after --out
+            out = Path(cmd[cmd.index("--out") + 1])
+            out.mkdir(parents=True, exist_ok=True)
+            for n in iowa_names:
+                (out / n).write_text("size\n1\n2\n")
+        elif any("application.py" in c for c in cmd):
+            out = tmp_path / "work" / "bm_out"
+            out.mkdir(parents=True, exist_ok=True)
+            (out / "001-Bruch's membrane (BM).csv").write_text("size\n3\n4\n")
+        return ""
+
+    monkeypatch.setattr(ap, "_exec", fake_exec)
+
+    adapter = ap.ApptainerAdapter()
+    assert adapter.supports("layers") is True
+
+    dcm_dir = tmp_path / "in"
+    dcm_dir.mkdir()
+    # 2026-06-25 — see test_ga_iowa_chain_libs_and_rmdir; _iowa_layers
+    # now stages bscan.dcm to /tmp first via dcm.read_bytes().
+    (dcm_dir / "bscan.dcm").write_bytes(b"FAKE-DCM-BYTES")
+    res = adapter.full_volume("layers", dcm_dir, "OD", out_dir_override=tmp_path / "work")
+
+    assert res.task == "layers"
+    assert res.primary_metric_value is None
+    assert res.artifact_names is not None
+    assert len(res.artifact_names) == 12  # 11 IOWA + 1 BM
+    assert "001-Bruch's membrane (BM).csv" in res.artifact_names
+    assert set(iowa_names) <= set(res.artifact_names)
 
 
 def test_slurm_wraps_in_srun(monkeypatch, tmp_path) -> None:

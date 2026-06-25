@@ -13,7 +13,7 @@ import os
 import pydicom
 import pytest
 
-from retinal_inference.inference.fundus_extract import build_geometry
+from muw_e2e_converter import build_geometry
 
 
 class _FakeBscanVolume:
@@ -38,8 +38,12 @@ def test_build_geometry_uses_bscan_fallback_by_default(monkeypatch) -> None:
     monkeypatch.delenv("RETINAL_INFERENCE_SLO_SPECTRALIS_MM_PER_PX", raising=False)
     geom = build_geometry(_FakeBscanVolume(), _fake_ds(), (768, 768))
     assert geom["fundus"]["scale_source"] == "bscan_fallback"
+    # 2026-06-19 design choice (see fundus_extract.py lines 173-184): the
+    # bscan_fallback path uses lateral_mm for BOTH axes because the bscan
+    # `slice_mm` is the OCT z-axis spacing, NOT the SLO fundus pitch.
+    # The fundus is square-sampled at the OCT lateral spacing here.
     assert geom["fundus"]["lateral_mm_per_px"] == pytest.approx(0.01148)
-    assert geom["fundus"]["slice_mm_per_px"] == pytest.approx(0.05)
+    assert geom["fundus"]["slice_mm_per_px"] == pytest.approx(0.01148)
 
 
 def test_build_geometry_uses_env_override(monkeypatch) -> None:

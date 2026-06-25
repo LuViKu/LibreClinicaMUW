@@ -86,16 +86,24 @@ bash Miniconda3-py311_23.11.0-2-Linux-x86_64.sh -b -p "$H/miniconda3"
 source "$H/miniconda3/bin/activate" "$H/ri-env"
 ```
 Clone the repo under home too (`git clone … $H/libreclinicamuw`). Install the
-**run-only** server (no `ingest` extra — the cluster never converts E2E; that's
-app-side). Pin `numpy<2.1` so pip uses a glibc-2.17 wheel instead of building
-numpy ≥2.1 from source (cn7's GCC 4.8.5 is too old):
+**run-only** server. DR-024: do NOT install the sibling `muw-e2e-converter`
+package — the cluster's `ApptainerAdapter` rejects .e2e inputs, conversion
+happens app-side. Installing it on cn5 would be a deployment bug. Pin
+`numpy<2.1` so pip uses a glibc-2.17 wheel instead of building numpy ≥2.1
+from source (cn7's GCC 4.8.5 is too old):
 ```sh
 cd "$H/libreclinicamuw/retinal-inference"
 pip install -e . "numpy<2.1"
+# Confirm the converter package is NOT installed (this is the load-bearing
+# invariant — see DR-024 in decision-record.md):
+python -c "import muw_e2e_converter" 2>&1 | grep -q "ModuleNotFoundError" \
+  && echo "OK: muw-e2e-converter absent (DR-024 invariant holds)" \
+  || echo "WARN: muw-e2e-converter is installed — this is the cluster posture, it should NOT be"
 mkdir -p /scratch/$USER/retinal-inference/tmp   # SHARED_TMPDIR — transient, stays on scratch
 ```
-(The app-VM preprocess sidecar — §5b — installs `pip install -e ".[ingest]"` to
-pull `oct-converter`; on a modern-glibc app VM no numpy pin is needed.)
+(The app-VM preprocess sidecar — §5b — pip-installs `muw-e2e-converter`
+explicitly to pull `oct-converter` + the converter modules; on a modern-glibc
+app VM no numpy pin is needed.)
 
 ## 3. Run — direct mode (works now, no SLURM account needed)
 ```sh
@@ -153,6 +161,13 @@ RETINAL_INFERENCE_PR_WEIGHTS=/home/optima/octreader/Processor_Implementations/se
   RETINAL_INFERENCE_BM_GPU_DEVICE=0
   RETINAL_INFERENCE_BM_LD_LIBRARY_PATH=<the captured module LD_LIBRARY_PATH>
   ```
+- `layers` (full layer stack) returns the **11 IOWA reference layers + the BM
+  layer**. It reuses the GA IOWA env (`GA_IOWA_BINARY` / `GA_IOWA_CONVERTER` /
+  `GA_IOWA_LD_LIBRARY_PATH`) **and** the BM env (`BM_*`) — no new vars. It's
+  auto-supported once both of those groups are set, so it comes for free with GA +
+  BM enabled. (Note: `ga` itself now returns **only the RPEL** surface — the IOWA
+  layers it consumes and the EZL/ELM it also produces are no longer shipped; use
+  `layers` if you want the full IOWA stack.)
 - PR extra dep: sese_pr imports `scikit-learn`, baked into `pr.sif` via the
   `.def`. To avoid rebaking the `.sif` you can instead bind a `pip --target` dir:
   ```sh
@@ -189,9 +204,15 @@ curl -sS -m5 -o /dev/null -w "%{http_code}\n" http://149.148.108.173:8000/health
 The cluster `ApptainerAdapter` rejects `.e2e` — the `.e2e → bscan.dcm` conversion
 (PHI redaction included) happens **app-side** so the PHI-bearing E2E never leaves
 the app VM. Run a tiny preprocess-only sidecar next to Tomcat (no GPU, no models).
-Install **with** the `ingest` extra (this side does need `oct-converter`):
+Install both packages: `retinal-inference` for the FastAPI app + endpoint, and
+the sibling `muw-e2e-converter` package (DR-024) for the actual conversion
+modules:
 ```sh
-pip install -e ".[ingest]"
+pip install -e .                          # retinal-inference
+pip install -e ../muw-e2e-converter       # the converter (oct-converter, pillow, etc.)
+# Sanity check — the converter MUST be importable here (opposite of the cn5
+# posture, where it must NOT be):
+python -c "import muw_e2e_converter; print('OK:', muw_e2e_converter.__file__)"
 ```
 ```sh
 RETINAL_INFERENCE_PREPROCESS_ENDPOINT_ENABLED=true \

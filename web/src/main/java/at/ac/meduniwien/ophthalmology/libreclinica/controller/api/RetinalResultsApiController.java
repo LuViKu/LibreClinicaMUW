@@ -1568,9 +1568,12 @@ public class RetinalResultsApiController {
     /* ====================================================================== */
 
     /** Tasks the operator can pick from the rerun-as dropdown. Mirrors the
-     *  runner profiles + the FUNDUS overlay's recognised task discriminator. */
+     *  runner profiles + the FUNDUS overlay's recognised task discriminator.
+     *  2026-06-25: `layers` added — returns the IOWA 11-surface stack +
+     *  BM in one job. `bm` deliberately omitted (layers already covers it).
+     *  Mirrors {@code RERUN_TASKS} in RetinalMetricsView.vue. */
     private static final java.util.Set<String> ALLOWED_RERUN_TASKS =
-            java.util.Set.of("fluid", "ga", "onl", "pr");
+            java.util.Set.of("fluid", "ga", "onl", "pr", "layers");
 
     /**
      * Re-dispatch the same uploaded .e2e (referenced by {@code sourceJobId})

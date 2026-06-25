@@ -48,6 +48,12 @@ class FullVolumeResult(BaseModel):
     confidence: float = 0.85
     model_version: str
 
+    # Exact basenames the handler wants returned as /run artifacts. When set, the
+    # endpoint collects ONLY these (so a task can keep intermediates in its
+    # tempdir without shipping them — e.g. GA returns just RPEL, not the IOWA
+    # layers it consumed). None = collect every allowlisted file (dev OptimaAdapter).
+    artifact_names: list[str] | None = None
+
     # --- back-compat: the GA area task + the deterministic placeholder still
     # populate these; the worker log and older callers read them when present.
     total_area_mm2: float | None = None

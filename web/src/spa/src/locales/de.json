@@ -2953,7 +2953,8 @@
       "onl": "ONL-Dicke",
       "pr": "PR-Dicke",
       "ga": "GA-Fläche",
-      "bmeis": "BMEIS"
+      "bmeis": "BMEIS",
+      "layers": "Schichten (IOWA + BM)"
     },
     "empty": {
       "awaitingSidecar": "Warte auf Sidecar …",
@@ -3081,6 +3082,11 @@
       "scrollHint": "Scrollen = Slice wechseln",
       "previous": "Vorheriger Schnitt",
       "next": "Nächster Schnitt"
+    },
+    "layers": {
+      "legendTitle": "Netzhautschichten",
+      "allOn": "Alle ein",
+      "allOff": "Alle aus"
     },
     "trends": {
       "title": "Biomarker-Verlauf",

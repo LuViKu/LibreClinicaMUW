@@ -22,6 +22,11 @@
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSegmentationEnvelope } from '@/composables/useSegmentationEnvelope'
+import {
+  IOWA_DEFAULT_VISIBLE,
+  IOWA_LAYER_COLORS,
+  IOWA_LAYER_LABELS,
+} from '@/components/retinalPalette'
 
 const { t } = useI18n()
 
@@ -112,6 +117,71 @@ const sliderMax = computed(() => Math.max(0, props.nBscans - 1))
 const jobIdRef = computed<number | null>(() => props.jobId ?? null)
 const { envelope: segEnvelope } = useSegmentationEnvelope(jobIdRef)
 const overlayCanvasEl = ref<HTMLCanvasElement | null>(null)
+
+/**
+ * 2026-06-25 — IOWA layers overlay state.
+ *
+ * Per-surface visibility toggle backed by localStorage (one entry per
+ * job-id so revisiting a scan restores the operator's last choice).
+ * Default visible: ILM (0), RPE (9), BM (10) — the CRT trio.
+ *
+ * {@link focusedLayer} drives the hover affordance: when set, the
+ * matching surface paints at full opacity and the others fade to 30 %
+ * alpha so the operator can read a single boundary at a glance.
+ */
+const visibleLayers = ref<Set<number>>(new Set(IOWA_DEFAULT_VISIBLE))
+const focusedLayer = ref<number | null>(null)
+const LS_VISIBLE_PREFIX = 'bscan-layers-visible-'
+
+function loadLayersVisibility(jobId: number | null | undefined): void {
+  if (jobId == null) return
+  try {
+    const raw = window.localStorage.getItem(LS_VISIBLE_PREFIX + String(jobId))
+    if (!raw) return
+    const parsed = JSON.parse(raw) as number[]
+    if (Array.isArray(parsed)) {
+      visibleLayers.value = new Set(parsed.filter((n): n is number =>
+        typeof n === 'number' && Number.isFinite(n) && n >= 0 && n < 32,
+      ))
+    }
+  } catch {
+    // Corrupt entry — fall back to defaults silently.
+  }
+}
+
+function persistLayersVisibility(jobId: number | null | undefined): void {
+  if (jobId == null) return
+  try {
+    const arr = Array.from(visibleLayers.value).sort((a, b) => a - b)
+    window.localStorage.setItem(LS_VISIBLE_PREFIX + String(jobId), JSON.stringify(arr))
+  } catch {
+    // Quota full / private-mode — non-fatal.
+  }
+}
+
+function toggleLayer(index: number): void {
+  const next = new Set(visibleLayers.value)
+  if (next.has(index)) next.delete(index)
+  else next.add(index)
+  visibleLayers.value = next
+  persistLayersVisibility(props.jobId)
+}
+
+function setAllLayers(visible: boolean): void {
+  const totalSurfaces = segEnvelope.value?.labels?.length
+    ?? segEnvelope.value?.shape?.[0]
+    ?? IOWA_LAYER_LABELS.length
+  visibleLayers.value = visible
+    ? new Set(Array.from({ length: totalSurfaces }, (_, i) => i))
+    : new Set<number>()
+  persistLayersVisibility(props.jobId)
+}
+
+watch(jobIdRef, (id) => {
+  // Reset to defaults then overlay any persisted choice for this job.
+  visibleLayers.value = new Set(IOWA_DEFAULT_VISIBLE)
+  loadLayersVisibility(id)
+}, { immediate: true })
 
 /**
  * 2026-06-22 round 4 — position the overlay canvas at the bscan's
@@ -292,10 +362,19 @@ function paintOverlay(): void {
       'firstUpper5=', Array.from({ length: 5 }, (_, i) => data[(0 * surfaceStride) + z * zStride + i]),
       'lastUpper5=', Array.from({ length: 5 }, (_, i) => data[(0 * surfaceStride) + z * zStride + (cols - 5 + i)]),
     )
-    const palette = SURFACE_PALETTE
+    // 2026-06-25 — palette is task-specific. The `layers` task ships
+    // an 11-surface IOWA stack; other surface_y tasks (onl, pr) stay
+    // on the legacy 4-entry SURFACE_PALETTE which wraps modulo. Per-
+    // surface visibility + focused-layer alpha kick in for layers
+    // only; ONL/PR always render both polylines at full opacity.
+    const isLayers = env.task === 'layers'
+    const palette = isLayers ? IOWA_LAYER_COLORS : SURFACE_PALETTE
+    const focused = focusedLayer.value
     for (let s = 0; s < nSurfaces; s++) {
+      if (isLayers && !visibleLayers.value.has(s)) continue
       ctx.strokeStyle = palette[s % palette.length] ?? palette[0]!
       ctx.lineWidth = 2
+      ctx.globalAlpha = (isLayers && focused != null && focused !== s) ? 0.3 : 1.0
       ctx.beginPath()
       const surfaceOffset = s * surfaceStride
       const sliceOffset = surfaceOffset + z * zStride
@@ -315,6 +394,7 @@ function paintOverlay(): void {
       }
       ctx.stroke()
     }
+    ctx.globalAlpha = 1.0
     return
   }
 }
@@ -331,7 +411,13 @@ const SURFACE_PALETTE = [
   'rgba(34, 197, 94, 0.85)',   // emerald-500
 ] as const
 
-watch([segEnvelope, () => props.modelValue, () => props.showSegmentation], () => {
+watch([
+  segEnvelope,
+  () => props.modelValue,
+  () => props.showSegmentation,
+  visibleLayers,
+  focusedLayer,
+], () => {
   paintOverlay()
 }, { flush: 'post' })
 
@@ -728,6 +814,59 @@ onBeforeUnmount(() => {
           <span class="inline-flex items-center gap-1.5 text-white/70">
             <span class="w-2.5 h-2.5 rounded-[3px] bg-fuchsia-500" />PED
           </span>
+        </div>
+        <!-- 2026-06-25 — IOWA layers legend (Part B of DR-024). Shown
+             only when the envelope is the layers task; renders one
+             chip per surface with click-toggle visibility + hover-
+             focus. ILM + RPE + BM ship visible by default; the rest
+             persist per-job via localStorage. -->
+        <div
+          v-if="segEnvelope?.kind === 'surface_y' && segEnvelope?.task === 'layers'"
+          class="hidden sm:flex items-center gap-2 text-[11px]"
+          data-testid="bscan-viewer-layers-legend"
+        >
+          <span class="text-white/50 uppercase tracking-wider text-[10px]">
+            {{ t('retinal.layers.legendTitle') }}
+          </span>
+          <span class="flex flex-wrap items-center gap-1.5">
+            <button
+              v-for="(label, idx) in (segEnvelope.labels?.length
+                ? segEnvelope.labels
+                : IOWA_LAYER_LABELS)"
+              :key="label + idx"
+              type="button"
+              :data-testid="`bscan-layers-chip-${idx}`"
+              class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border transition-opacity"
+              :class="visibleLayers.has(idx)
+                ? 'border-white/30 text-white/90 bg-white/5'
+                : 'border-white/10 text-white/40'"
+              :style="{ borderColor: visibleLayers.has(idx)
+                ? IOWA_LAYER_COLORS[idx % IOWA_LAYER_COLORS.length]
+                : undefined }"
+              :title="label"
+              @click="toggleLayer(idx)"
+              @mouseenter="focusedLayer = idx"
+              @mouseleave="focusedLayer = null"
+            >
+              <span
+                class="w-2 h-2 rounded-[2px]"
+                :style="{ backgroundColor: IOWA_LAYER_COLORS[idx % IOWA_LAYER_COLORS.length] }"
+              />
+              <span class="text-[10px] font-mono">{{ label }}</span>
+            </button>
+          </span>
+          <button
+            type="button"
+            class="text-white/50 hover:text-white/80 underline underline-offset-2"
+            data-testid="bscan-layers-all-on"
+            @click="setAllLayers(true)"
+          >{{ t('retinal.layers.allOn') }}</button>
+          <button
+            type="button"
+            class="text-white/50 hover:text-white/80 underline underline-offset-2"
+            data-testid="bscan-layers-all-off"
+            @click="setAllLayers(false)"
+          >{{ t('retinal.layers.allOff') }}</button>
         </div>
         <span class="text-[11px] text-white/60 tabular-nums font-mono">
           {{ t('retinal.bscanViewer.position', { current: modelValue + 1, total: nBscans }) }}

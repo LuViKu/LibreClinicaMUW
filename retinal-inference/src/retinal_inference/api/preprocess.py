@@ -46,8 +46,25 @@ from fastapi import (
 )
 
 from retinal_inference import config as _config
-from retinal_inference.inference.e2e_parser import prepare_bscan_dcm, read_e2e_volume
-from retinal_inference.inference.fundus_extract import build_geometry, extract_fundus_png
+
+# DR-024 — the .e2e -> bscan.dcm conversion lives in a separate package
+# (``muw-e2e-converter``) installed only in the LOCAL app-VM
+# ``retinal-preprocess`` posture. The cluster's inference sidecar does
+# NOT install it (cluster uses ApptainerAdapter which rejects .e2e). When
+# the package is absent, ``/preprocess`` returns 503 so an operator who
+# mistakenly enables this endpoint on the cluster sees a loud, clear
+# error instead of a silent failure. See DR-024 for the split rationale.
+try:
+    from muw_e2e_converter import (
+        build_geometry,
+        extract_fundus_png,
+        prepare_bscan_dcm,
+        read_e2e_volume,
+    )
+    _CONVERTER_AVAILABLE = True
+except ModuleNotFoundError:  # cluster posture — converter not installed
+    _CONVERTER_AVAILABLE = False
+    prepare_bscan_dcm = read_e2e_volume = build_geometry = extract_fundus_png = None  # type: ignore[assignment]
 
 LOG = logging.getLogger(__name__)
 
@@ -65,6 +82,20 @@ def _check_endpoint_enabled() -> None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Sidecar /preprocess is disabled in this deployment",
+        )
+    if not _CONVERTER_AVAILABLE:
+        # DR-024 — the converter is the muw-e2e-converter package, deliberately
+        # not installed in the cluster posture. If somebody enables /preprocess
+        # on the cluster, this guard converts the resulting AttributeError into
+        # a clear 503 so the deployment misconfiguration is obvious.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "muw-e2e-converter is not installed in this deployment posture; "
+                "this endpoint is inactive (see DR-024). The cluster runs "
+                "ApptainerAdapter which expects a pre-converted bscan.dcm; "
+                "E2E conversion belongs in the app-VM retinal-preprocess container."
+            ),
         )
 
 

@@ -3,11 +3,13 @@ uvicorn[standard]==0.32.1
 pydantic==2.10.4
 pydantic-settings==2.7.0
 psycopg2-binary==2.9.10
-pillow==11.0.0
-# E2E -> bscan.dcm ingestion (OptimaAdapter); the model inference itself lives
-# in the per-task runner images, not here.
-oct-converter==0.7.0
 pydicom==3.0.2
 numpy==2.4.6
 # FastAPI multipart parsing for POST /run (DR-022).
 python-multipart==0.0.20
+# DR-024 — oct-converter + pillow live in the sibling muw-e2e-converter
+# package now and are pip-installed separately in the Dockerfile when
+# building the LOCAL retinal-preprocess image. The cluster posture
+# (bare-metal cn5 uvicorn) installs only this requirements file +
+# retinal-inference itself, NOT muw-e2e-converter, so .e2e ingestion
+# code is physically absent from the cluster.
