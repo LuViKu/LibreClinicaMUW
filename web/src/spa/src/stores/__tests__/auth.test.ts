@@ -404,4 +404,28 @@ describe('useAuthStore', () => {
       expect(store.needsStudyPick).toBe(false)
     })
   })
+
+  describe('clearForUnauthorized()', () => {
+    it('resets local state when authenticated', async () => {
+      vi.mocked(apiGet).mockResolvedValueOnce(FIXTURE_USER)
+      const store = useAuthStore()
+      await store.bootstrap()
+      expect(store.state).toBe('authenticated')
+      expect(store.user).not.toBeNull()
+
+      store.clearForUnauthorized()
+
+      expect(store.state).toBe('anonymous')
+      expect(store.user).toBeNull()
+      expect(store.availableStudies).toEqual([])
+    })
+
+    it('is a no-op when already anonymous (idempotent under 401 burst)', () => {
+      const store = useAuthStore()
+      // state is anonymous by default; clearing twice must stay clean
+      store.clearForUnauthorized()
+      store.clearForUnauthorized()
+      expect(store.state).toBe('anonymous')
+    })
+  })
 })

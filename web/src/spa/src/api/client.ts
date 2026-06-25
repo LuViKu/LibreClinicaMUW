@@ -218,6 +218,9 @@ async function request<T>(
   const parsed = isJson ? await response.json().catch(() => null) : await response.text().catch(() => null)
 
   if (!response.ok) {
+    if (response.status === 401) {
+      void notifyAuthStoreOfUnauthorized()
+    }
     const message =
       (isJson && parsed && typeof parsed === 'object' && 'message' in parsed
         ? String((parsed as { message: unknown }).message)
@@ -231,6 +234,7 @@ async function request<T>(
   // content-type mismatch ourselves and translate it into a 401 so the
   // store-level fallback / router guard can react.
   if (!isJson) {
+    void notifyAuthStoreOfUnauthorized()
     throw new ApiError(
       401,
       `${method} ${url}: expected application/json but got ${contentType || '<unset>'} — likely auth redirect`,
@@ -240,6 +244,28 @@ async function request<T>(
   }
 
   return parsed as T
+}
+
+/**
+ * 2026-06-25 — global 401 handler. The legacy session can expire mid-
+ * navigation (Tomcat default 30-min idle timeout); without this hook
+ * the router still believed the user was authenticated, every data
+ * call silently returned 401, and the operator was stranded on a
+ * route with no data and no redirect cue. Lazy-imports the auth store
+ * (avoids the stores -> api -> stores circular import) and lets it
+ * reset to anonymous + push /login carrying the current path as
+ * {@code returnTo}. Idempotent — repeated 401s during a single render
+ * burst no-op once the store is already anonymous.
+ */
+async function notifyAuthStoreOfUnauthorized(): Promise<void> {
+  try {
+    const mod = await import('@/stores/auth')
+    mod.useAuthStore().clearForUnauthorized()
+  } catch {
+    // Pinia or the store hasn't mounted yet (e.g. a unit test exercising
+    // request() in isolation). The ApiError still propagates so callers
+    // can react locally — the router redirect is the soft layer.
+  }
 }
 
 export function apiGet<T>(path: string, opts?: RequestOptions): Promise<T> {
