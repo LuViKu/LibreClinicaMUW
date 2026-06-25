@@ -107,13 +107,57 @@ function yFluid(value: number): number {
   return PT + (1 - value / fluidMax.value) * (H - PT - PB)
 }
 
-const CRT_MIN = 250
-const CRT_MAX = 500
+/**
+ * 2026-06-25 — dynamic CRT axis. The previous hardcoded [250..500]
+ * band fit only the design-mock exsudative-AMD timeline. Real cohorts
+ * span a much wider clinical envelope:
+ *   * severe atrophy        ~150 µm
+ *   * normal foveal CRT     ~250 µm
+ *   * moderate IRF edema    ~400 µm
+ *   * dense subretinal fluid ~600+ µm
+ * Hardcoding to [250..500] meant atrophy datasets dove off the bottom
+ * and severe-edema datasets ran out the top. Compute the visible band
+ * from the actual data + a clinical-baseline anchor (always include
+ * 250 µm so the normal-CRT line stays a familiar reference).
+ *
+ * Mirrors {@link fluidMax}'s "nice number" rounding so the axis ticks
+ * land on values an operator can read.
+ */
+const crtRange = computed<{ min: number; max: number }>(() => {
+  const values = props.visits.map((v) => v.crt).filter((c) => c > 0)
+  if (values.length === 0) {
+    // No CRT data yet — keep the design-mock band so the empty chart
+    // still has a familiar axis.
+    return { min: 250, max: 500 }
+  }
+  let min = Math.min(...values)
+  let max = Math.max(...values)
+  // Always include the 250 µm clinical-baseline anchor in the visible
+  // band so cross-cohort visual comparison stays grounded.
+  min = Math.min(min, 250)
+  // 8 % padding above and below so the polyline doesn't graze the
+  // axis edge.
+  const span = Math.max(50, max - min)
+  min = min - span * 0.08
+  max = max + span * 0.08
+  // Round to multiples of 25 µm so ticks read cleanly. Min rounds
+  // DOWN (never above the lowest datum), max rounds UP.
+  const STEP = 25
+  min = Math.floor(min / STEP) * STEP
+  max = Math.ceil(max / STEP) * STEP
+  // Guarantee a minimum band of 100 µm so a flat trace doesn't
+  // collapse onto a single hairline.
+  if (max - min < 100) max = min + 100
+  // Never let min go negative.
+  if (min < 0) min = 0
+  return { min, max }
+})
 function yCrt(value: number): number {
+  const { min, max } = crtRange.value
   // Clamp into the visible axis range so a present-but-out-of-range
   // datum lands at the chart edge instead of plotting below the frame.
-  const v = Math.max(CRT_MIN, Math.min(CRT_MAX, value))
-  return PT + (1 - (v - CRT_MIN) / (CRT_MAX - CRT_MIN)) * (H - PT - PB)
+  const v = Math.max(min, Math.min(max, value))
+  return PT + (1 - (v - min) / (max - min)) * (H - PT - PB)
 }
 
 const BCVA_MIN = 58
@@ -139,7 +183,13 @@ const gridVals = computed<number[]>(() => {
   const m = fluidMax.value
   return [0, m * 0.25, m * 0.5, m * 0.75, m]
 })
-const crtTicks = [250, 375, 500]
+const crtTicks = computed<number[]>(() => {
+  const { min, max } = crtRange.value
+  // Three ticks: bottom, midpoint, top. Round the midpoint to the
+  // same 25-µm step the range uses.
+  const mid = Math.round((min + max) / 2 / 25) * 25
+  return [min, mid, max]
+})
 
 const layers = computed<Layer[]>(() => {
   // Build stacked polygons: PED bottom → SRF → IRF top so an
