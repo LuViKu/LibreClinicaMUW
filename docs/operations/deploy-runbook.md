@@ -190,7 +190,7 @@ cycle on a typo.
 
 | Environment | Tag pattern | Source of truth |
 |---|---|---|
-| **Production** | `ghcr.io/luviku/libreclinicamuw:<semver>` (e.g. `:1.5.0-beta.2-muw`) | `project.version` in `pom.xml:8` — published by `.github/workflows/release-image.yml` on every release. |
+| **Production** | `ghcr.io/luviku/libreclinicamuw:<semver>` (e.g. `:1.5.0-beta.3-muw`) | `project.version` in `pom.xml:8` — published by `.github/workflows/release-image.yml` on every release. |
 | **Staging** | `ghcr.io/luviku/libreclinicamuw:latest` | release workflow re-tags the latest semver push as `:latest`. |
 | **Local dev** | `libreclinica-muw:dev` (built by `docker compose build`) | the `:dev` tag in `compose.yaml` is for local Docker daemons only — never pushed. |
 

@@ -58,7 +58,7 @@ RUN --mount=type=cache,target=/root/.m2 \
     set -eux; \
     mvn package -DskipSpa=${SKIP_SPA} -DskipTests=true -Dmdep.analyze.skip=true; \
     # Maven's default WAR name is ${artifactId}-${version}.war, so this is
-    # LibreClinica-web-1.5.0-beta.2-muw.war today and will keep changing as the
+    # LibreClinica-web-1.5.0-beta.3-muw.war today and will keep changing as the
     # project version moves. Glob it and rename to a stable name for the
     # COPY --from=builder line below.
     mv web/target/LibreClinica-web-*.war /LibreClinica-web.war;
