@@ -289,4 +289,18 @@ public final class AuditTypeIds {
      * them).
      */
     public static final int BCVA_ENTRY_PUBLIC               = 121;
+
+    /**
+     * 2026-06-24 — CRT (Central Retinal Thickness, central 1 mm)
+     * auto-populated into an item_data row by
+     * {@code RetinalResultItemDataPopulator} after pairing a
+     * {@code done} GA job (ILM surface) with a {@code done} BM job
+     * (BM surface) on the same study_event + eye. The
+     * {@code source_retinal_job_id} column on the item_data row
+     * holds the GA job id (the "more upstream" of the two); the
+     * audit row's {@code new_value} packs both ids as
+     * {@code ga:<id>,bm:<id>,value:<µm>} so the timeline can
+     * deep-link either artifact.
+     */
+    public static final int RETINAL_CRT_AUTOPOPULATE        = 122;
 }

@@ -1521,6 +1521,14 @@
           "axisValidation": "Ganzzahl 0–180 erwartet."
         }
       },
+      "crt": {
+        "label": "CRT (zentrale 1 mm, µm)",
+        "description": "Zentrale Netzhautdicke — gemittelter ILM↔BM-Abstand über die zentrale 1-mm-Scheibe. Wird automatisch aus dem GA-Job (ILM) und dem BM-Job derselben Visite pro Auge berechnet; manuelle Korrekturen überschreiben den AI-Wert.",
+        "items": {
+          "crtMicrons": "CRT (zentrale 1 mm)",
+          "crtValidation": "Ganzzahl oder Dezimal 0–1500 µm erwartet."
+        }
+      },
       "rnfl": {
         "label": "RNFL (peripapillär, Heidelberg HRA / Spectralis ONH)",
         "description": "Peripapilläre Nervenfaserschicht — globaler Mittelwert + Quadranten (S/T/I/N) + Signalqualität pro Auge.",
@@ -2954,7 +2962,8 @@
       "pr": "PR-Dicke",
       "ga": "GA-Fläche",
       "bmeis": "BMEIS",
-      "layers": "Schichten (IOWA + BM)"
+      "layers": "Schichtsegmentierung (IOWA + BM)",
+      "bm": "Bruch-Membran"
     },
     "empty": {
       "awaitingSidecar": "Warte auf Sidecar …",

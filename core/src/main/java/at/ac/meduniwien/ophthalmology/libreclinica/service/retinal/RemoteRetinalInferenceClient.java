@@ -214,6 +214,24 @@ public class RemoteRetinalInferenceClient {
                 );
             }
             return parsed;
+        } catch (org.springframework.web.client.HttpStatusCodeException httpErr) {
+            // 2026-06-24 — capture the cluster's response body alongside
+            // the status. Spring's HttpStatusCodeException stops at
+            // `e.getMessage()` returning the bare "500 Internal Server
+            // Error" line; the real diagnostic text (e.g. a Python
+            // stack trace from the sidecar's uvicorn) lives in
+            // `getResponseBodyAsString()` and was being silently
+            // dropped. Trim to 4 KiB so a runaway HTML 500 page can't
+            // fill the log; truncated body is still vastly more useful
+            // than the status line alone.
+            String bodyText = httpErr.getResponseBodyAsString();
+            if (bodyText != null && bodyText.length() > 4096) {
+                bodyText = bodyText.substring(0, 4096) + "…[truncated]";
+            }
+            LOG.warn("Remote /run failed for job {} (task={}) at {}: {} body=<<{}>>",
+                    jobId, task, endpoint, httpErr.getMessage(),
+                    bodyText == null ? "" : bodyText);
+            return null;
         } catch (Exception e) {
             LOG.warn("Remote /run failed for job {} (task={}) at {}: {}",
                     jobId, task, endpoint, e.getMessage());

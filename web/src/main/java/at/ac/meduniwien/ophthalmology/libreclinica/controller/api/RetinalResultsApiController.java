@@ -146,6 +146,14 @@ public class RetinalResultsApiController {
      */
     private final RetinalInferenceApiController inferenceController;
 
+    /**
+     * 2026-06-24 — CRT (Central Retinal Thickness, central 1 mm)
+     * compute service. Nullable so the IT-friendly back-compat
+     * constructor stays valid; the new endpoint guards on null.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService crtComputeService;
+
     @Autowired
     public RetinalResultsApiController(@Qualifier("dataSource") DataSource dataSource,
                                        SiteVisibilityFilter siteVisibilityFilter,
@@ -662,6 +670,121 @@ public class RetinalResultsApiController {
             Double d = parseDoubleOrNull(s);
             return d == null ? null : (int) Math.round(d);
         }
+    }
+
+    /* ====================================================================== */
+    /* GET /study-subjects/{studySubjectId}/crt-timeline                       */
+    /* 2026-06-24 user-feedback round — central 1 mm retinal thickness        */
+    /* ====================================================================== */
+
+    /**
+     * Per-subject CRT timeline. Returns one row per study_event for
+     * which the GA + BM jobs are both {@code done} for at least one
+     * eye. Each row carries per-eye {@code crt_um} plus the source
+     * job ids so the SPA can deep-link the operator to either of the
+     * two artifacts.
+     *
+     * <p>Same auth posture as {@link #listBcvaTimeline}: session +
+     * site-visibility filter on the subject's study. Soft-fails — a
+     * missing GA or BM on one eye returns null for that eye rather
+     * than erroring out the whole timeline.
+     */
+    @GetMapping(path = "/study-subjects/{studySubjectId:[0-9]+}/crt-timeline",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> listCrtTimeline(@PathVariable("studySubjectId") int studySubjectId,
+                                             HttpSession session) {
+        ResponseEntity<?> denied = guardSession(session);
+        if (denied != null) return denied;
+        if (crtComputeService == null) {
+            // Test-only ctor path with a null CRT service. Be explicit
+            // rather than 500ing on NPE.
+            return ResponseEntity.status(501).body(Map.of(
+                    "message", "CRT compute service is not wired in this context"));
+        }
+        Integer subjectStudyId;
+        try (Connection c = dataSource.getConnection()) {
+            subjectStudyId = fetchStudyIdForStudySubject(c, studySubjectId);
+        } catch (SQLException sqlEx) {
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to resolve study for subject: " + sqlEx.getMessage()));
+        }
+        if (subjectStudyId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "study_subject " + studySubjectId + " not found"));
+        }
+        ResponseEntity<?> visGuard = guardStudyVisibility(subjectStudyId, session,
+                "study_subject " + studySubjectId + " is outside your site visibility");
+        if (visGuard != null) return visGuard;
+
+        // Pull every study_event the subject has where at least one GA
+        // OR BM done job exists. We compute per-eye in the service —
+        // pairing happens there.
+        String sql = "SELECT DISTINCT se.study_event_id, "
+                + "       date(se.date_start) AS event_date "
+                + "  FROM retinal_inference_job j "
+                + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
+                + " WHERE se.study_subject_id = ? "
+                + "   AND j.task IN ('ga','bm') "
+                + "   AND j.status IN ('done','succeeded') "
+                + " ORDER BY event_date ASC, study_event_id ASC";
+
+        List<Map<String, Object>> out = new ArrayList<>();
+        List<int[]> events = new ArrayList<>(); // [eventId, dateMillis-ish ordinal]
+        Map<Integer, String> eventDateByEventId = new LinkedHashMap<>();
+        try (Connection c = dataSource.getConnection();
+             PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setInt(1, studySubjectId);
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    int sev = rs.getInt("study_event_id");
+                    java.sql.Date ed = rs.getDate("event_date");
+                    eventDateByEventId.put(sev, ed == null ? null : ed.toString());
+                    events.add(new int[]{sev});
+                }
+            }
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to list CRT-eligible events for study_subject {}: {}",
+                    studySubjectId, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to list CRT timeline: " + sqlEx.getMessage()));
+        }
+        // Per-event per-eye computation. Each event is independent; one
+        // failing event doesn't abort the rest.
+        for (Map.Entry<Integer, String> e : eventDateByEventId.entrySet()) {
+            int eventId = e.getKey();
+            Map<at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Eye,
+                    at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Result>
+                    perEye = crtComputeService.computeForStudyEvent(eventId);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("studyEventId", eventId);
+            row.put("eventDate", e.getValue());
+            row.put("od", crtRowOrNull(perEye, at.ac.meduniwien.ophthalmology.libreclinica
+                    .service.retinal.metrics.CrtComputeService.Eye.OD));
+            row.put("os", crtRowOrNull(perEye, at.ac.meduniwien.ophthalmology.libreclinica
+                    .service.retinal.metrics.CrtComputeService.Eye.OS));
+            // Only surface events that produced AT LEAST one eye —
+            // events where both GA + BM exist but neither paired (e.g.
+            // GA done for OD, BM done for OS only) would otherwise
+            // surface as a useless empty row.
+            if (row.get("od") != null || row.get("os") != null) {
+                out.add(row);
+            }
+        }
+        return ResponseEntity.ok(out);
+    }
+
+    private static Map<String, Object> crtRowOrNull(
+            Map<at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Eye,
+                    at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Result> perEye,
+            at.ac.meduniwien.ophthalmology.libreclinica.service.retinal.metrics.CrtComputeService.Eye eye) {
+        var r = perEye.get(eye);
+        if (r == null) return null;
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("crtMicrons", Math.round(r.crtMicrons() * 100.0) / 100.0); // 2 decimals
+        out.put("pixelsInDisk", r.pixelsInDisk());
+        out.put("layersJobId", r.layersJobId());
+        return out;
     }
 
     /* ====================================================================== */
@@ -1569,8 +1692,9 @@ public class RetinalResultsApiController {
 
     /** Tasks the operator can pick from the rerun-as dropdown. Mirrors the
      *  runner profiles + the FUNDUS overlay's recognised task discriminator.
-     *  2026-06-25: `layers` added — returns the IOWA 11-surface stack +
-     *  BM in one job. `bm` deliberately omitted (layers already covers it).
+     *  2026-06-25: `layers` added — returns the full IOWA 11-surface stack
+     *  + BM in one job (feeds the BscanViewer overlay + CRT compute).
+     *  `bm` is intentionally absent — `layers` already covers it.
      *  Mirrors {@code RERUN_TASKS} in RetinalMetricsView.vue. */
     private static final java.util.Set<String> ALLOWED_RERUN_TASKS =
             java.util.Set.of("fluid", "ga", "onl", "pr", "layers");
@@ -1611,10 +1735,11 @@ public class RetinalResultsApiController {
 
         // ---- load the source job's immutable metadata ----------------
         FailedJob source;
+        Integer sourceStudyEventId;
         String sourceSha256;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
-                     "SELECT status, status_message, event_crf_id, task, "
+                     "SELECT status, status_message, event_crf_id, study_event_id, task, "
                              + "       e2e_path, eye_laterality, scan_index, e2e_sha256 "
                              + "  FROM retinal_inference_job WHERE job_id = ?")) {
             ps.setLong(1, sourceJobId);
@@ -1628,6 +1753,8 @@ public class RetinalResultsApiController {
                 source.statusMessage = rs.getString("status_message");
                 int ecId = rs.getInt("event_crf_id");
                 source.eventCrfId = rs.wasNull() ? null : ecId;
+                int sevId = rs.getInt("study_event_id");
+                sourceStudyEventId = rs.wasNull() ? null : sevId;
                 source.task = rs.getString("task");
                 source.e2ePath = rs.getString("e2e_path");
                 source.eyeLaterality = rs.getString("eye_laterality");
@@ -1641,9 +1768,16 @@ public class RetinalResultsApiController {
                     "message", "Failed to fetch source job: " + sqlEx.getMessage()));
         }
 
-        if (source.eventCrfId == null) {
+        // 2026-06-24 — accept planned-visit-bound source jobs (study_event_id
+        // set but event_crf_id still null). The OCT-upload portal binds to
+        // planned visits this way; demanding /bind first would force the
+        // operator into the legacy CRF-open dance for a job that can run
+        // perfectly well against the bare study_event. Only refuse when
+        // the source is truly orphaned (BOTH bindings null — "parked
+        // without a patient" / pre-bind state).
+        if (source.eventCrfId == null && sourceStudyEventId == null) {
             return ResponseEntity.status(404).body(Map.of(
-                    "message", "Source job " + sourceJobId + " has no event_crf — "
+                    "message", "Source job " + sourceJobId + " has no visit binding — "
                             + "park it to a visit first via /bind"));
         }
         if (newTask.equals(source.task)) {
@@ -1657,18 +1791,46 @@ public class RetinalResultsApiController {
                             + "dedup gate; cannot rerun-as safely"));
         }
 
-        // ---- visibility check via the source job's event_crf --------
-        EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
-        EventCRFBean ecb = eventCrfDAO.findByPK(source.eventCrfId);
-        if (ecb == null || ecb.getId() == 0) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "No event_crf with id " + source.eventCrfId));
-        }
+        // ---- visibility check via the source job's binding -----------
+        // Prefer event_crf when available (already-opened-CRF flow). Fall
+        // back to the study_event binding when the source job is still
+        // planned-visit-bound — same shape as the OCT-upload portal.
         StudySubjectDAO ssDAO = new StudySubjectDAO(dataSource);
-        StudySubjectBean ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
-        if (ss == null || ss.getStudyId() == 0) {
-            return ResponseEntity.status(404).body(Map.of(
-                    "message", "event_crf " + source.eventCrfId + " has no resolvable study"));
+        StudySubjectBean ss;
+        if (source.eventCrfId != null) {
+            EventCRFDAO eventCrfDAO = new EventCRFDAO(dataSource);
+            EventCRFBean ecb = eventCrfDAO.findByPK(source.eventCrfId);
+            if (ecb == null || ecb.getId() == 0) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "No event_crf with id " + source.eventCrfId));
+            }
+            ss = (StudySubjectBean) ssDAO.findByPK(ecb.getStudySubjectId());
+            if (ss == null || ss.getStudyId() == 0) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "event_crf " + source.eventCrfId + " has no resolvable study"));
+            }
+        } else {
+            // sourceStudyEventId is non-null here: the guard above
+            // returned 404 when both bindings are null, and the
+            // event_crf branch handled the eventCrfId-set case.
+            // Redundant null check keeps the IDE's flow analyser
+            // from flagging the auto-unbox.
+            Integer planEventBoxed = sourceStudyEventId;
+            if (planEventBoxed == null) {
+                return ResponseEntity.status(500).body(Map.of(
+                        "message", "rerun-as binding resolution invariant violated"));
+            }
+            int planEventId = planEventBoxed;
+            Integer studySubjectId = fetchStudySubjectIdForStudyEvent(planEventId);
+            if (studySubjectId == null) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "study_event " + planEventId + " has no resolvable subject"));
+            }
+            ss = (StudySubjectBean) ssDAO.findByPK(studySubjectId);
+            if (ss == null || ss.getStudyId() == 0) {
+                return ResponseEntity.status(404).body(Map.of(
+                        "message", "study_event " + planEventId + " has no resolvable study"));
+            }
         }
         UserAccountBean currentUser = (UserAccountBean) session.getAttribute("userBean");
         StudyBean currentStudy = (StudyBean) session.getAttribute("study");
@@ -1713,21 +1875,29 @@ public class RetinalResultsApiController {
         }
 
         // ---- insert the new job row ---------------------------------
+        // 2026-06-24 — also threads study_event_id so a
+        // planned-visit-bound source job (no event_crf yet) produces
+        // a child job with the same planned-visit binding. Without
+        // this the new job would land orphaned (both bindings null)
+        // and silently drop off the timeline endpoints.
         long newJobId;
         try (Connection c = dataSource.getConnection();
              PreparedStatement ps = c.prepareStatement(
                      "INSERT INTO retinal_inference_job ("
-                             + "event_crf_id, task, e2e_path, eye_laterality, status, "
-                             + "scan_index, enqueued_at, e2e_sha256"
-                             + ") VALUES (?, ?, ?, ?, 'remote_pending', ?, ?, ?)",
+                             + "event_crf_id, study_event_id, task, e2e_path, "
+                             + "eye_laterality, status, scan_index, enqueued_at, e2e_sha256"
+                             + ") VALUES (?, ?, ?, ?, ?, 'remote_pending', ?, ?, ?)",
                      Statement.RETURN_GENERATED_KEYS)) {
-            ps.setInt(1, source.eventCrfId);
-            ps.setString(2, newTask);
-            ps.setString(3, source.e2ePath);
-            ps.setString(4, source.eyeLaterality);
-            ps.setInt(5, source.scanIndex);
-            ps.setTimestamp(6, Timestamp.from(Instant.now()));
-            ps.setString(7, sourceSha256);
+            if (source.eventCrfId == null) ps.setNull(1, java.sql.Types.INTEGER);
+            else ps.setInt(1, source.eventCrfId);
+            if (sourceStudyEventId == null) ps.setNull(2, java.sql.Types.INTEGER);
+            else ps.setInt(2, sourceStudyEventId);
+            ps.setString(3, newTask);
+            ps.setString(4, source.e2ePath);
+            ps.setString(5, source.eyeLaterality);
+            ps.setInt(6, source.scanIndex);
+            ps.setTimestamp(7, Timestamp.from(Instant.now()));
+            ps.setString(8, sourceSha256);
             ps.executeUpdate();
             try (ResultSet keys = ps.getGeneratedKeys()) {
                 if (!keys.next()) {

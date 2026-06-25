@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.6.xsd">
+
+    <!--
+        2026-06-24 — broaden the event_definition_retinal_task CHECK
+        constraint with the new `layers` discriminator added by the
+        retinal-inference runner refactor (PR #255). `layers` returns
+        the full IOWA reference stack + BM in one job, replacing the
+        operator-facing need for a separate `bm` task — so `bm` is NOT
+        added to the operator allow-list (it stays as a runner-side
+        capability only).
+
+        Plus seed `layers` for SE_RIS_VISIT (the cross-cutting Retinal
+        Imaging Study visit) so every OCT upload in that study
+        dispatches BOTH fluid + layers — the latter feeds the CRT
+        (central 1 mm) compute service (PR #254).
+    -->
+
+    <changeSet author="muw-ophthalmology" id="2026-06-24-relax-retinal-task-check" dbms="postgresql">
+        <comment>Relax CHECK to include layers.</comment>
+        <sql>
+            ALTER TABLE event_definition_retinal_task
+            DROP CONSTRAINT IF EXISTS ck_event_def_retinal_task_allowed;
+            ALTER TABLE event_definition_retinal_task
+            ADD CONSTRAINT ck_event_def_retinal_task_allowed
+            CHECK (task IN ('fluid','ga','onl','pr','layers'));
+        </sql>
+        <rollback>
+            <sql>
+                ALTER TABLE event_definition_retinal_task
+                DROP CONSTRAINT IF EXISTS ck_event_def_retinal_task_allowed;
+                ALTER TABLE event_definition_retinal_task
+                ADD CONSTRAINT ck_event_def_retinal_task_allowed
+                CHECK (task IN ('fluid','ga','onl','pr'));
+            </sql>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="muw-ophthalmology" id="2026-06-24-seed-layers-for-ris-visit" dbms="postgresql">
+        <comment>
+            Seed `layers` on SE_RIS_VISIT so RIS-study uploads spawn
+            both fluid + layers. Idempotent — skips if either the
+            event_definition is missing or the row already exists.
+        </comment>
+        <sql>
+            INSERT INTO event_definition_retinal_task (study_event_definition_id, task, created_by_user_id)
+            SELECT sed.study_event_definition_id, 'layers', NULL
+              FROM study_event_definition sed
+             WHERE sed.oc_oid = 'SE_RIS_VISIT'
+               AND NOT EXISTS (
+                  SELECT 1 FROM event_definition_retinal_task t
+                   WHERE t.study_event_definition_id = sed.study_event_definition_id
+                     AND t.task = 'layers'
+               );
+        </sql>
+        <rollback>
+            <sql>
+                DELETE FROM event_definition_retinal_task
+                 WHERE task = 'layers'
+                   AND study_event_definition_id IN (
+                        SELECT study_event_definition_id FROM study_event_definition
+                         WHERE oc_oid = 'SE_RIS_VISIT'
+                   );
+            </sql>
+        </rollback>
+    </changeSet>
+
+</databaseChangeLog>
