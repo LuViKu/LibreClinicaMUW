@@ -2968,6 +2968,7 @@
       "noMetric": "[NEEDS_REVIEW] Metrics couldn't be computed — segmentation artifacts are still available below.",
       "noKpi": "[NEEDS_REVIEW] No KPI yet.",
       "fundusNotAvailable": "[NEEDS_REVIEW] Fundus image not yet available.",
+      "bscanNotAvailable": "[NEEDS_REVIEW] OCT B-scan not yet available.",
       "noPerBscan": "[NEEDS_REVIEW] No per-B-scan trace for this task."
     },
     "kpi": {
@@ -3113,6 +3114,7 @@
       "history": {
         "colJob": "[NEEDS_REVIEW] Job",
         "colCompleted": "[NEEDS_REVIEW] Completed",
+        "colAcquired": "[NEEDS_REVIEW] Acquired",
         "colTask": "[NEEDS_REVIEW] Task",
         "colEye": "[NEEDS_REVIEW] Eye",
         "colStatus": "[NEEDS_REVIEW] Status",

@@ -18,7 +18,11 @@
  */
 const appVersion = __APP_VERSION__
 const buildHash = __BUILD_HASH__
-const buildDate = __BUILD_DATE__
+// The define ships ISO yyyy-MM-dd; render it as DD-MM-YYYY (e.g. 25-06-2026).
+const rawBuildDate = __BUILD_DATE__
+const buildDate = /^\d{4}-\d{2}-\d{2}$/.test(rawBuildDate)
+  ? rawBuildDate.split('-').reverse().join('-')
+  : rawBuildDate
 </script>
 
 <template>

@@ -1260,7 +1260,7 @@ const { connected: liveConnected } = useJobStatusStream(streamJobId, {
                 v-else
                 class="flex-1 rounded-2xl border border-slate-200 bg-slate-50 flex items-center justify-center text-xs text-slate-500 italic min-h-[300px]"
               >
-                {{ t('retinal.empty.fundusNotAvailable') }}
+                {{ t('retinal.empty.bscanNotAvailable') }}
               </div>
             </div>
           </div>

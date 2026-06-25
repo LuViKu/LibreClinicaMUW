@@ -2973,6 +2973,7 @@
       "noMetric": "Metriken konnten nicht berechnet werden — Segmentierungs-Artefakte sind unten weiterhin verfügbar.",
       "noKpi": "Noch keine Kennzahlen.",
       "fundusNotAvailable": "Fundus-Bild ist noch nicht verfügbar.",
+      "bscanNotAvailable": "OCT-B-Scan ist noch nicht verfügbar.",
       "noPerBscan": "Für diesen Task gibt es keine Per-B-Scan-Auswertung."
     },
     "kpi": {
@@ -3118,6 +3119,7 @@
       "history": {
         "colJob": "Job",
         "colCompleted": "Abgeschlossen",
+        "colAcquired": "Aufnahmedatum",
         "colTask": "Aufgabe",
         "colEye": "Auge",
         "colStatus": "Status",

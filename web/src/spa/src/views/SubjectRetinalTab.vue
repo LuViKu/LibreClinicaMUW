@@ -68,9 +68,11 @@ const hasJobs = computed(() => jobs.value.length > 0)
 
 /* ----- Display helpers (mirrored from RetinalMetricsView) ----- */
 
-function formatIsoDate(iso: string | null): string {
+/** Scan acquisition date (ISO yyyy-MM-dd from the .e2e header) → DD-MM-YYYY. */
+function formatAcqDate(iso: string | null | undefined): string {
   if (!iso) return '—'
-  return iso.slice(0, 16).replace('T', ' ')
+  const d = iso.slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d.split('-').reverse().join('-') : d
 }
 
 function statusVariant(status: string): 'success' | 'info' | 'warning' | 'danger' | 'neutral' {
@@ -153,7 +155,7 @@ function formatPrimary(job: RetinalJobSummary): string {
         <template #header>
           <tr class="border-b border-slate-200">
             <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colJob') }}</th>
-            <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colCompleted') }}</th>
+            <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colAcquired') }}</th>
             <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colTask') }}</th>
             <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colEye') }}</th>
             <th scope="col" class="px-5 py-2 font-medium">{{ t('retinal.trends.history.colStatus') }}</th>
@@ -163,7 +165,7 @@ function formatPrimary(job: RetinalJobSummary): string {
         </template>
         <tr v-for="row in jobs" :key="row.jobId" data-testid="subject-retinal-tab-history-row">
           <td class="px-5 py-2.5 font-mono text-xs">#{{ row.jobId }}</td>
-          <td class="px-5 py-2.5 font-mono text-xs text-slate-600">{{ formatIsoDate(row.completedAt) }}</td>
+          <td class="px-5 py-2.5 font-mono text-xs text-slate-600">{{ formatAcqDate(row.acquisitionDate) }}</td>
           <td class="px-5 py-2.5 text-xs uppercase">{{ row.task }}</td>
           <td class="px-5 py-2.5 text-xs">{{ row.laterality }}</td>
           <td class="px-5 py-2.5 text-xs">
