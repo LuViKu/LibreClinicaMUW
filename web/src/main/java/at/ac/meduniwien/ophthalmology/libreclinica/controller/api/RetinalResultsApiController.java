@@ -716,16 +716,20 @@ public class RetinalResultsApiController {
                 "study_subject " + studySubjectId + " is outside your site visibility");
         if (visGuard != null) return visGuard;
 
-        // Pull every study_event the subject has where at least one GA
-        // OR BM done job exists. We compute per-eye in the service —
-        // pairing happens there.
+        // Pull every study_event the subject has where at least one
+        // CRT-source done job exists. 2026-06-25 — the supported source
+        // tasks are now {layers, ga, bm}: the consolidated `layers` task
+        // returns both ILM + BM in one job (the post-refactor default
+        // for RIS uploads), and the legacy `ga` + `bm` pair stays
+        // recognised so historical jobs still surface a timeline entry.
+        // Per-eye pairing happens in CrtComputeService.
         String sql = "SELECT DISTINCT se.study_event_id, "
                 + "       date(se.date_start) AS event_date "
                 + "  FROM retinal_inference_job j "
                 + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
                 + "  JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + " WHERE se.study_subject_id = ? "
-                + "   AND j.task IN ('ga','bm') "
+                + "   AND j.task IN ('layers','ga','bm') "
                 + "   AND j.status IN ('done','succeeded') "
                 + " ORDER BY event_date ASC, study_event_id ASC";
 
