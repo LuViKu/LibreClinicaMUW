@@ -130,9 +130,15 @@ public class EventDefinitionsApiController {
 
     /** Tasks the runner registry recognises. Mirrors ALLOWED_RERUN_TASKS
      *  in RetinalResultsApiController + the CHECK constraint on
-     *  event_definition_retinal_task. */
+     *  event_definition_retinal_task.
+     *  2026-06-25 hotfix: `layers` added. The matching Liquibase
+     *  `lc-muw-2026-06-24-event-def-retinal-tasks-layers` already
+     *  broadened the CHECK constraint; the matching SPA view's
+     *  RETINAL_TASK_OPTIONS already lists `layers`. This validator
+     *  was the last stop where the request 400'd before reaching
+     *  the DB. Mirrors RetinalResultsApiController.ALLOWED_RERUN_TASKS. */
     private static final Set<String> ALLOWED_RETINAL_TASKS =
-            Set.of("fluid", "ga", "onl", "pr");
+            Set.of("fluid", "ga", "onl", "pr", "layers");
 
     /**
      * GET — list the default retinal-inference tasks the upload portal
