@@ -768,8 +768,12 @@ async function onRetry(): Promise<void> {
 /* to the retry button; on success we navigate to the new job's  */
 /* metrics view so the next page-load tracks the new SSE stream. */
 /* ------------------------------------------------------------- */
-type RerunTask = 'fluid' | 'ga' | 'onl' | 'pr'
-const RERUN_TASKS: readonly RerunTask[] = ['fluid', 'ga', 'onl', 'pr'] as const
+// 2026-06-25 — `layers` returns the IOWA 11-surface stack + BM in
+// one job (feeds the BscanViewer layers overlay + the CRT compute).
+// `bm` is intentionally NOT here; `layers` already covers it.
+// Mirrors ALLOWED_RERUN_TASKS in RetinalResultsApiController.java.
+type RerunTask = 'fluid' | 'ga' | 'onl' | 'pr' | 'layers'
+const RERUN_TASKS: readonly RerunTask[] = ['fluid', 'ga', 'onl', 'pr', 'layers'] as const
 const rerunMenuOpen = ref(false)
 const rerunning = computed<boolean>(() => !!store.rerunAsInflight[jobId.value])
 

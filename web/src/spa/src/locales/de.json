@@ -2953,7 +2953,8 @@
       "onl": "ONL-Dicke",
       "pr": "PR-Dicke",
       "ga": "GA-Fläche",
-      "bmeis": "BMEIS"
+      "bmeis": "BMEIS",
+      "layers": "Schichten (IOWA + BM)"
     },
     "empty": {
       "awaitingSidecar": "Warte auf Sidecar …",

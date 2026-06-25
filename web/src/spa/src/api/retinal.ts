@@ -560,7 +560,7 @@ export interface RetinalJobRerunAsConflict {
 
 export function rerunRetinalJobAs(
   jobId: number,
-  task: 'fluid' | 'ga' | 'onl' | 'pr',
+  task: 'fluid' | 'ga' | 'onl' | 'pr' | 'layers',
 ): Promise<RetinalJobRerunAsResponse> {
   return apiPost<RetinalJobRerunAsResponse>(`${BASE}/${jobId}/rerun-as`, { task })
 }

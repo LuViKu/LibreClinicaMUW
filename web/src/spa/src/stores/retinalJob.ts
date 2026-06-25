@@ -160,7 +160,7 @@ export const useRetinalJobStore = defineStore('retinalJob', () => {
   const rerunAsInflight = ref<Record<number, boolean>>({})
   async function rerunJobAs(
     sourceJobId: number,
-    task: 'fluid' | 'ga' | 'onl' | 'pr',
+    task: 'fluid' | 'ga' | 'onl' | 'pr' | 'layers',
   ): Promise<number> {
     rerunAsInflight.value = { ...rerunAsInflight.value, [sourceJobId]: true }
     try {
