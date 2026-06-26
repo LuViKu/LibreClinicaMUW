@@ -3100,6 +3100,34 @@
       "allOn": "[NEEDS_REVIEW] All on",
       "allOff": "[NEEDS_REVIEW] All off"
     },
+    "correction": {
+      "tools": {
+        "off": "[NEEDS_REVIEW] View",
+        "shift": "[NEEDS_REVIEW] Shift whole layer",
+        "free": "[NEEDS_REVIEW] Freehand draw",
+        "points": "[NEEDS_REVIEW] Edit control points"
+      },
+      "hint": {
+        "off": "[NEEDS_REVIEW] Pick a tool to correct the AI segmentation",
+        "shift": "[NEEDS_REVIEW] Drag to shift the whole layer up or down",
+        "free": "[NEEDS_REVIEW] Draw over the scan to correct the curve",
+        "points": "[NEEDS_REVIEW] Drag a point · Double-click to add · Rectangle to select · Del to remove"
+      },
+      "selectedPoints": "[NEEDS_REVIEW] {n} point(s) selected",
+      "resetLayer": "[NEEDS_REVIEW] Reset to AI output",
+      "prevSlice": "[NEEDS_REVIEW] Previous slice",
+      "nextSlice": "[NEEDS_REVIEW] Next slice",
+      "save": "[NEEDS_REVIEW] Save correction",
+      "saveBadge": "[NEEDS_REVIEW] {n} edit(s)",
+      "savedToast": "[NEEDS_REVIEW] Correction saved · {layers} layer(s) · {slices} slice(s)",
+      "discardConfirm": "[NEEDS_REVIEW] Discard unsaved corrections?",
+      "discardYes": "[NEEDS_REVIEW] Discard",
+      "discardCancel": "[NEEDS_REVIEW] Cancel",
+      "correctedBadge": "[NEEDS_REVIEW] corrected",
+      "saveFailed": "[NEEDS_REVIEW] Failed to save correction: {message}",
+      "noChanges": "[NEEDS_REVIEW] No changes to save",
+      "roleRequired": "[NEEDS_REVIEW] Corrections require Investigator or Data-Manager role"
+    },
     "trends": {
       "title": "[NEEDS_REVIEW] Biomarker trends",
       "chartHeader": "[NEEDS_REVIEW] Trend",

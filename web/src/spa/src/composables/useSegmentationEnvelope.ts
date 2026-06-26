@@ -27,6 +27,16 @@ export interface SegmentationEnvelope {
   labels: string[]
   /** Owned by the composable — the BscanViewer reads slices via subarray views. */
   data: Uint8Array | Float32Array
+  /**
+   * 2026-06-26 — surface indices (0-based, matching the envelope's
+   * surface-major order) the BACKEND served from
+   * {@code bscan_masks_dir/corrections/} instead of the original AI
+   * output. Sourced from the {@code X-MUW-Seg-Corrected} response
+   * header (CSV of indices). Empty when no operator corrections
+   * apply. The SPA uses this to render the "korrigiert" badge per
+   * layer chip.
+   */
+  correctedSurfaceIndices: number[]
 }
 
 const cache = new Map<number, Promise<SegmentationEnvelope | null>>()
@@ -94,6 +104,16 @@ async function fetchEnvelope(jobId: number): Promise<SegmentationEnvelope | null
     .split(',')
     .map((s) => s.trim())
     .filter((s) => s.length > 0)
+  // 2026-06-26 — X-MUW-Seg-Corrected (CSV of indices). Older backends
+  // omit the header → treat as no corrections; the controller emits
+  // an empty string when the file is present but the list is empty,
+  // which also lands as []. The header is read for layers-task
+  // envelopes; volume / binary_2d responses don't carry corrections
+  // yet but the field is null-safe across kinds.
+  const correctedSurfaceIndices = (resp.headers.get('X-MUW-Seg-Corrected') ?? '')
+    .split(',')
+    .map((s) => Number.parseInt(s.trim(), 10))
+    .filter((n) => Number.isFinite(n) && n >= 0)
   const bytes = new Uint8Array(await resp.arrayBuffer())
   let data: Uint8Array | Float32Array
   if (dtype === 'float32') {
@@ -103,7 +123,7 @@ async function fetchEnvelope(jobId: number): Promise<SegmentationEnvelope | null
   } else {
     data = bytes
   }
-  return { task, kind, dtype, shape, labels, data }
+  return { task, kind, dtype, shape, labels, data, correctedSurfaceIndices }
 }
 
 /**

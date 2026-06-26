@@ -3105,6 +3105,34 @@
       "allOn": "Alle ein",
       "allOff": "Alle aus"
     },
+    "correction": {
+      "tools": {
+        "off": "Ansicht",
+        "shift": "Ganze Schicht verschieben",
+        "free": "Freihand zeichnen",
+        "points": "Stützpunkte bearbeiten"
+      },
+      "hint": {
+        "off": "Werkzeug wählen, um die KI-Segmentierung zu korrigieren",
+        "shift": "Ziehen, um die gesamte Schicht nach oben/unten zu verschieben",
+        "free": "Über den Scan zeichnen, um den Verlauf zu korrigieren",
+        "points": "Punkt ziehen · Doppelklick fügt hinzu · Rechteck wählt aus · Entf löscht"
+      },
+      "selectedPoints": "{n} Punkt(e) ausgewählt",
+      "resetLayer": "Auf KI-Ergebnis zurücksetzen",
+      "prevSlice": "Vorheriger Schnitt",
+      "nextSlice": "Nächster Schnitt",
+      "save": "Korrektur speichern",
+      "saveBadge": "{n} Änderung(en)",
+      "savedToast": "Korrektur gespeichert · {layers} Schicht(en) · {slices} Schnitt(e)",
+      "discardConfirm": "Ungespeicherte Korrekturen verwerfen?",
+      "discardYes": "Verwerfen",
+      "discardCancel": "Abbrechen",
+      "correctedBadge": "korrigiert",
+      "saveFailed": "Korrektur konnte nicht gespeichert werden: {message}",
+      "noChanges": "Keine Änderungen zum Speichern",
+      "roleRequired": "Korrekturen sind Prüfärzten und Studienleitung vorbehalten"
+    },
     "trends": {
       "title": "Biomarker-Verlauf",
       "chartHeader": "Verlauf",

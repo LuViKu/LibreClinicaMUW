@@ -947,6 +947,19 @@ onBeforeUnmount(() => {
         data-testid="bscan-viewer-seg-overlay"
         :aria-label="t('retinal.bscanViewer.segOverlayAlt', { current: modelValue + 1, total: nBscans })"
       />
+      <!-- 2026-06-26 — scoped slot for an editing overlay (e.g.
+           BscanLayerEditOverlay). Exposes the same overlay bbox style
+           the seg canvas uses + the DICOM's image dims so the consumer
+           can size its SVG viewBox identically. Default is empty so
+           non-editing consumers (FundusOverlay, RetinalMetricsView
+           inline, NamdScanFrame inline) pay nothing. -->
+      <slot
+        v-if="status === 'ready'"
+        name="overlay"
+        :bbox-style="overlayBboxStyle"
+        :image-dims="bscanImageDims"
+        :envelope="segEnvelope"
+      />
       <!-- Discoverability hint — auto-fades after the operator has
            used the scroll/scrub once (the hint is only useful for the
            first interaction; after that it's noise). -->

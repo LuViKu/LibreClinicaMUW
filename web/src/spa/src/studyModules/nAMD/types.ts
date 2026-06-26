@@ -17,6 +17,12 @@ export type Laterality = 'OD' | 'OS'
 export interface NamdPatient {
   /** Site-scoped subject label, e.g. "S-0042". */
   id: string
+  /**
+   * Numeric `study_subject_id` (DB primary key). Required for the
+   * layer-correction sibling-job lookup (which calls
+   * `/study-subjects/{id}/retinal-jobs`). Null in the mock fixture.
+   */
+  studySubjectId: number | null
   /** Eye under workspace — OD or OS (ophthalmology convention). */
   eye: Laterality
   /** Diagnosis line, e.g. "exsudative AMD". */
