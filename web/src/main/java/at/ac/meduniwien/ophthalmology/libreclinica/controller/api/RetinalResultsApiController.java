@@ -2769,13 +2769,22 @@ public class RetinalResultsApiController {
                 }
             }
         }
+        // 2026-06-26 user-feedback round — daysBetween reads from the
+        // clinical date (COALESCE(acquisition_date, study_event.date_start,
+        // completed_at::date)) instead of completed_at. Operators were
+        // seeing "Vor 0 Tagen" when uploading historical data because
+        // both jobs' completed_at landed on the same day; the clinical
+        // date pulled from the .e2e header or the planned visit is the
+        // load-bearing reference. The new fetchPreviousJob SQL surfaces
+        // both clinical dates from the same query so we don't pay a
+        // second round-trip.
         Integer daysBetween = (previous == null
-                || current.completedAt == null
-                || previous.completedAt == null)
+                || previous.clinicalDate == null
+                || previous.currentClinicalDate == null)
                 ? null
                 : (int) java.time.temporal.ChronoUnit.DAYS.between(
-                        previous.completedAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
-                        current.completedAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate());
+                        previous.clinicalDate.toLocalDate(),
+                        previous.currentClinicalDate.toLocalDate());
 
         return ResponseEntity.ok(new RetinalJobCompareDto(
                 current.jobId,
@@ -2792,14 +2801,33 @@ public class RetinalResultsApiController {
         // 2026-06-23 — subject resolution via COALESCE on the two
         // binding paths so previous-job lookup still works for
         // planned-visit-bound jobs (no event_crf yet).
+        //
+        // 2026-06-26 user-feedback round — ordering + filtering on the
+        // CLINICAL date instead of completed_at. Historical uploads done
+        // in a single sitting all share the same completed_at day; the
+        // clinical date is the .e2e acquisition_date when available,
+        // falling back to the planned visit's date_start, and only
+        // finally to completed_at::date. The query surfaces both the
+        // previous job's clinical date AND the current job's clinical
+        // date so the caller's daysBetween computation reads off the
+        // same source (one round-trip).
         String sql = "WITH cur AS ("
                 + "  SELECT j.job_id, j.task, j.eye_laterality, j.completed_at, "
-                + "         ev.study_subject_id "
+                + "         j.acquisition_date, "
+                + "         ev.study_subject_id, "
+                + "         COALESCE(j.acquisition_date, "
+                + "                  date(ev.date_start), "
+                + "                  date(j.completed_at)) AS clinical_date "
                 + "    FROM retinal_inference_job j "
                 + "    LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
                 + "    JOIN study_event ev ON ev.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "   WHERE j.job_id = ?) "
-                + "SELECT prev.job_id, prev.completed_at, prev_r.output_payload::text "
+                + "SELECT prev.job_id, prev.completed_at, "
+                + "       COALESCE(prev.acquisition_date, "
+                + "                date(ev2.date_start), "
+                + "                date(prev.completed_at)) AS prev_clinical_date, "
+                + "       cur.clinical_date AS cur_clinical_date, "
+                + "       prev_r.output_payload::text "
                 + "  FROM retinal_inference_job prev "
                 + "  JOIN retinal_inference_result prev_r ON prev_r.job_id = prev.job_id "
                 + "  LEFT JOIN event_crf ec2 ON ec2.event_crf_id = prev.event_crf_id "
@@ -2808,8 +2836,12 @@ public class RetinalResultsApiController {
                 + "   AND cur.task = prev.task "
                 + "   AND cur.eye_laterality = prev.eye_laterality "
                 + " WHERE prev.status = 'done' "
-                + "   AND prev.completed_at < cur.completed_at "
-                + " ORDER BY prev.completed_at DESC "
+                + "   AND COALESCE(prev.acquisition_date, "
+                + "                date(ev2.date_start), "
+                + "                date(prev.completed_at)) < cur.clinical_date "
+                + " ORDER BY COALESCE(prev.acquisition_date, "
+                + "                   date(ev2.date_start), "
+                + "                   date(prev.completed_at)) DESC "
                 + " LIMIT 1";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setLong(1, currentJobId);
@@ -2818,6 +2850,8 @@ public class RetinalResultsApiController {
                 PreviousJobView v = new PreviousJobView();
                 v.jobId = rs.getLong("job_id");
                 v.completedAt = rs.getTimestamp("completed_at");
+                v.clinicalDate = rs.getDate("prev_clinical_date");
+                v.currentClinicalDate = rs.getDate("cur_clinical_date");
                 v.outputPayloadJson = rs.getString("output_payload");
                 return v;
             }
@@ -2851,6 +2885,23 @@ public class RetinalResultsApiController {
     private static final class PreviousJobView {
         long jobId;
         java.sql.Timestamp completedAt;
+        /**
+         * 2026-06-26 — clinical date for THIS (previous) job:
+         * COALESCE(acquisition_date, study_event.date_start::date,
+         * completed_at::date). Used by {@code compareToPrevious}'s
+         * daysBetween calculation so the displayed "Vor N Tagen"
+         * reads from the scan date rather than the upload-pipeline
+         * timestamp.
+         */
+        java.sql.Date clinicalDate;
+        /**
+         * 2026-06-26 — clinical date for the CURRENT job, surfaced
+         * by the same SQL (the WITH cur CTE already had the row).
+         * Stored here so the caller doesn't have to round-trip a
+         * second query just to compute daysBetween. Awkwardly
+         * named but the alternative is a separate return tuple.
+         */
+        java.sql.Date currentClinicalDate;
         String outputPayloadJson;
     }
 

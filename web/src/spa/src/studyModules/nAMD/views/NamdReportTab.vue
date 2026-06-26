@@ -68,6 +68,8 @@ interface DynamicBscan {
   visit: NamdVisit
   slice: number
   deltaMm2: number
+  /** Distinguishes the prev (reference) panel from the current panel for captioning. */
+  role: 'prev' | 'current'
 }
 
 /**
@@ -84,11 +86,19 @@ onMounted(() => { void ensureLoaded() })
 watch(() => [props.data.current?.retinalJobId, props.data.prev?.retinalJobId] as const, () => { void ensureLoaded() })
 
 /**
- * The two B-scans with the BIGGEST absolute fluid Δ vs the prior
- * visit. Iterate the per_bscan_mm2 traces of (current, prev),
- * compute the per-slice (current_total − prev_total) in mm², and
- * pick the top two by absolute value. Returns null when there's
- * no prior visit OR either job lacks the per-B-scan trace.
+ * The B-scan index whose per-slice fluid total changed the MOST
+ * between the previous and the current visit. We then surface
+ * that SAME slice from BOTH visits side-by-side so the operator
+ * sees the actual before/after picture instead of two
+ * disconnected scans from the same visit. Returns null when
+ * there's no prior visit OR either job lacks the per-B-scan
+ * trace.
+ *
+ * <p>2026-06-26 user-feedback revision — the prior implementation
+ * showed top-2 slice indices from the current visit only; the
+ * operator wants the comparison pair (prev's slice N + cur's slice
+ * N where N is the most-changed index), so the report reads
+ * "V02 B-scan 25 → V03 B-scan 25, fluid dropped by …".
  */
 const dynamicBscans = computed<DynamicBscan[] | null>(() => {
   const cur = props.data.current
@@ -104,32 +114,52 @@ const dynamicBscans = computed<DynamicBscan[] | null>(() => {
   const prvTotals = totalPerSlice(prvTrace)
   const n = Math.min(curTotals.length, prvTotals.length)
   if (n < 2) return null
-  // Pair each slice index with its Δ so we can sort by |Δ| then
-  // emit the two winners in slice-index order so the printed page
-  // reads superior → inferior.
-  const deltas = new Array<{ z: number; d: number }>(n)
-  for (let z = 0; z < n; z++) deltas[z] = { z, d: curTotals[z]! - prvTotals[z]! }
-  deltas.sort((a, b) => Math.abs(b.d) - Math.abs(a.d))
-  const top = deltas.slice(0, 2).sort((a, b) => a.z - b.z)
-  // Filter out the all-zero-Δ corner case (both visits dry at every
-  // B-scan) — surfacing two arbitrary "Δ = 0" scans would be
-  // misleading on a clinical report.
-  if (top.every((entry) => Math.abs(entry.d) < 1e-6)) return null
-  return top.map(({ z, d }) => ({ visit: cur, slice: z, deltaMm2: d }))
+  // Find the SINGLE slice with the biggest |Δ|.
+  let topZ = -1
+  let topAbs = 0
+  let topDelta = 0
+  for (let z = 0; z < n; z++) {
+    const d = curTotals[z]! - prvTotals[z]!
+    const a = Math.abs(d)
+    if (a > topAbs) {
+      topAbs = a
+      topZ = z
+      topDelta = d
+    }
+  }
+  // All-zero-Δ corner case (both visits dry at every B-scan).
+  if (topZ < 0 || topAbs < 1e-6) return null
+  // Two panels — same slice index, one for prev, one for cur.
+  // Reading direction: prev (V02) on the LEFT, current (V03) on
+  // the RIGHT, so the operator scans the change naturally L→R.
+  return [
+    { visit: prv, slice: topZ, deltaMm2: topDelta, role: 'prev' },
+    { visit: cur, slice: topZ, deltaMm2: topDelta, role: 'current' },
+  ]
 })
 
-/** Caption for a dynamic-B-scan tile: "Anstieg +12.4 nL · B-Scan 23/49". */
+/**
+ * Caption for a dynamic-B-scan tile. The previous (reference)
+ * panel reads "V02 · B-Scan 25/49"; the current panel reads
+ * "V03 · B-Scan 25/49 · Anstieg +12.4 nL" with the magnitude +
+ * direction. mm² → nL conversion is a rough proxy (×1000) —
+ * detailed numbers are on the trend chart.
+ */
 function dynamicCaption(entry: DynamicBscan): string {
-  // mm² → nL (1 µm slice depth assumed) is a rough proxy; the
-  // detailed numbers are on the trend chart. The report caption
-  // just needs the direction + a rough magnitude. Use the raw mm²
-  // value × 1000 to land in the µL range and round to one decimal.
+  if (entry.role === 'prev') {
+    return t('studyModules.namd.report2.dynamicCaptionPrev', {
+      label: entry.visit.label,
+      z: entry.slice + 1,
+      n: nSlices.value,
+    })
+  }
   const dLitres = entry.deltaMm2 * 1000
   const sign = dLitres >= 0 ? '+' : ''
   const dir = entry.deltaMm2 >= 0
     ? t('studyModules.namd.report2.dynamicRise')
     : t('studyModules.namd.report2.dynamicFall')
-  return t('studyModules.namd.report2.dynamicCaption', {
+  return t('studyModules.namd.report2.dynamicCaptionCurrent', {
+    label: entry.visit.label,
     dir,
     sign,
     value: dLitres.toFixed(1),

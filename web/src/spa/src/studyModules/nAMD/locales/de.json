@@ -78,7 +78,9 @@
         "syncedScroll": "Synchroner Scroll",
         "syncedScrollTip": "Mit synchronem Scroll bewegen sich beide Volumina gleichzeitig durch dieselbe B-Scan-Ebene.",
         "tagReference": "Referenz",
-        "tagCurrent": "Aktuell"
+        "tagCurrent": "Aktuell",
+        "fsEyebrow": "Vergleich",
+        "fsMaximize": "Vollbild · gestapelt vergleichen"
       },
       "decision": {
         "header": "Entscheidung",
@@ -124,7 +126,8 @@
       },
       "report2": {
         "dynamicHeader": "Dynamische B-Scans · grösste Veränderung vs. Vorvisite",
-        "dynamicCaption": "{dir} {sign}{value} nL · B-Scan {z}/{n}",
+        "dynamicCaptionPrev": "{label} · B-Scan {z}/{n}",
+        "dynamicCaptionCurrent": "{label} · B-Scan {z}/{n} · {dir} {sign}{value} nL",
         "dynamicRise": "Anstieg",
         "dynamicFall": "Rückgang"
       }

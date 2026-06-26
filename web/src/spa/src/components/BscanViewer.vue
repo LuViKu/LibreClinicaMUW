@@ -64,11 +64,25 @@ interface Props {
    * single-slice B-scan that survives {@code Cmd-P}.
    */
   staticFrame?: boolean
+  /**
+   * 2026-06-26 user-feedback round — release the canvas wrapper
+   * from its hardcoded {@code aspect-[4/3]} constraint. The
+   * default behaviour (false) keeps the viewer at a stable
+   * 4:3 footprint regardless of available height — the same
+   * shape every consumer used historically. The nAMD scan-frame
+   * fullscreen mode passes {@code true} so the wrapper grows
+   * to {@code h-full w-full}, letting cornerstone fit-inside
+   * use the entire viewport. The overlay bbox recompute is
+   * ResizeObserver-driven so the seg overlay tracks the new
+   * canvas size automatically.
+   */
+  fillContainer?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   showSegmentation: true,
   staticFrame: false,
+  fillContainer: false,
 })
 const emit = defineEmits<{
   'update:modelValue': [z: number]
@@ -880,8 +894,17 @@ onBeforeUnmount(() => {
          The overlay canvas is absolutely positioned via :style at the
          bscan's actual rendered bbox (queried from worldToCanvas),
          so it ALWAYS aligns regardless of how cornerstone chooses to
-         scale internally. -->
-    <div class="relative aspect-[4/3] w-full bg-black flex items-center justify-center overflow-hidden">
+         scale internally.
+         2026-06-26 — fillContainer releases the aspect constraint so
+         the nAMD fullscreen mode can have cornerstone span the entire
+         viewport. ResizeObserver-driven overlay-bbox recompute tracks
+         the new canvas size automatically. -->
+    <div
+      :class="[
+        'relative w-full bg-black flex items-center justify-center overflow-hidden',
+        fillContainer ? 'h-full' : 'aspect-[4/3]',
+      ]"
+    >
       <div
         ref="containerEl"
         data-testid="bscan-viewer-canvas"

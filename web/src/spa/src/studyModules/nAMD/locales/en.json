@@ -78,7 +78,9 @@
         "syncedScroll": "[NEEDS_REVIEW] Synchronised scroll",
         "syncedScrollTip": "[NEEDS_REVIEW] With synchronised scroll, both volumes move through the same B-scan plane simultaneously.",
         "tagReference": "[NEEDS_REVIEW] Reference",
-        "tagCurrent": "[NEEDS_REVIEW] Current"
+        "tagCurrent": "[NEEDS_REVIEW] Current",
+        "fsEyebrow": "[NEEDS_REVIEW] Compare",
+        "fsMaximize": "[NEEDS_REVIEW] Fullscreen · stacked compare"
       },
       "decision": {
         "header": "[NEEDS_REVIEW] Decision",
@@ -124,7 +126,8 @@
       },
       "report2": {
         "dynamicHeader": "[NEEDS_REVIEW] Dynamic B-scans · largest change vs previous visit",
-        "dynamicCaption": "[NEEDS_REVIEW] {dir} {sign}{value} nL · B-scan {z}/{n}",
+        "dynamicCaptionPrev": "[NEEDS_REVIEW] {label} · B-scan {z}/{n}",
+        "dynamicCaptionCurrent": "[NEEDS_REVIEW] {label} · B-scan {z}/{n} · {dir} {sign}{value} nL",
         "dynamicRise": "[NEEDS_REVIEW] Rise",
         "dynamicFall": "[NEEDS_REVIEW] Drop"
       }

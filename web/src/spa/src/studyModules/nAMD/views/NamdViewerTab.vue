@@ -169,11 +169,16 @@ function formatNumber(v: number): string {
 
 <template>
   <div data-testid="namd-viewer-tab" class="space-y-5">
-    <!-- ── Row 1: fundus + B-scan side-by-side (5/7 split) ── -->
+    <!-- ── Row 1: fundus + B-scan side-by-side (4/8 split).
+         2026-06-26 user-feedback round — narrower fundus column
+         (was 5/12) so the B-scan gets meaningfully more horizontal
+         space, matching the inference job viewer's proportions
+         where the fundus is a thumbnail/locator and the B-scan is
+         the primary working surface. ── -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch">
-      <!-- Fundus column — bigger image + click-quantify ETDRS regions -->
+      <!-- Fundus column — locator + click-quantify ETDRS regions -->
       <section
-        class="lg:col-span-5 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] flex flex-col"
+        class="lg:col-span-4 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] flex flex-col"
         data-testid="namd-viewer-fundus"
       >
         <div class="flex items-center justify-between px-5 pt-4 pb-3 border-b border-slate-100">
@@ -258,7 +263,7 @@ function formatNumber(v: number): string {
            slider + en-face thumb hidden (the FundusOverlay
            replaces it). Fullscreen button still works. -->
       <section
-        class="lg:col-span-7 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] p-4 flex flex-col"
+        class="lg:col-span-8 rounded-2xl border border-slate-200 bg-white shadow-[0_1px_2px_rgba(17,29,78,.04)] p-4 flex flex-col"
         data-testid="namd-viewer-bscan"
       >
         <NamdScanFrame

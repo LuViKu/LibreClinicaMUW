@@ -347,6 +347,7 @@ const fsTitle = computed(() => `${eyeLabel.value} · ${props.visit.label} · ${f
             :job-id="jobIdRef"
             :show-segmentation="mask"
             :static-frame="true"
+            :fill-container="fsOpen"
           />
         </div>
         <div
