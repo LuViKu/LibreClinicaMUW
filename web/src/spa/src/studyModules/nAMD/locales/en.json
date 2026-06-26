@@ -46,6 +46,15 @@
         "segCardsHeader": "[NEEDS_REVIEW] Segmentation · this scan",
         "empty": "[NEEDS_REVIEW] No OCT acquisition is linked to this visit."
       },
+      "viewer2": {
+        "fundusHeader": "[NEEDS_REVIEW] Fundus · ETDRS selection",
+        "fundusSub": "[NEEDS_REVIEW] B-scan position · click a region to quantify",
+        "fundusEmpty": "[NEEDS_REVIEW] Fundus image not available for this visit.",
+        "selectionHeader": "[NEEDS_REVIEW] Selected regions",
+        "selectionClear": "[NEEDS_REVIEW] Clear selection",
+        "selectionHint": "[NEEDS_REVIEW] Click an ETDRS region (center / ring 1–3 mm / ring 3–6 mm / corners) to select it; multi-select sums the volumes without double-counting.",
+        "deltaHeader": "[NEEDS_REVIEW] Comparison to previous visit"
+      },
       "scanFrame": {
         "bscanCounter": "[NEEDS_REVIEW] B-scan {z}/{n}",
         "fovea": "[NEEDS_REVIEW] Fovea",
@@ -55,7 +64,11 @@
         "pause": "[NEEDS_REVIEW] Pause volume scroll",
         "superior": "[NEEDS_REVIEW] superior",
         "inferior": "[NEEDS_REVIEW] inferior",
-        "volumeScroll": "[NEEDS_REVIEW] Volume scroll · {n} B-scans"
+        "volumeScroll": "[NEEDS_REVIEW] Volume scroll · {n} B-scans",
+        "fsMaximize": "[NEEDS_REVIEW] Fullscreen · review B-scans",
+        "fsMinimize": "[NEEDS_REVIEW] Close fullscreen",
+        "fsClose": "[NEEDS_REVIEW] Close (Esc)",
+        "fsEyebrow": "[NEEDS_REVIEW] OCT viewer"
       },
       "compare": {
         "delta": "[NEEDS_REVIEW] Delta between visits",
@@ -65,7 +78,9 @@
         "syncedScroll": "[NEEDS_REVIEW] Synchronised scroll",
         "syncedScrollTip": "[NEEDS_REVIEW] With synchronised scroll, both volumes move through the same B-scan plane simultaneously.",
         "tagReference": "[NEEDS_REVIEW] Reference",
-        "tagCurrent": "[NEEDS_REVIEW] Current"
+        "tagCurrent": "[NEEDS_REVIEW] Current",
+        "fsEyebrow": "[NEEDS_REVIEW] Compare",
+        "fsMaximize": "[NEEDS_REVIEW] Fullscreen · stacked compare"
       },
       "decision": {
         "header": "[NEEDS_REVIEW] Decision",
@@ -79,7 +94,17 @@
       },
       "trend": {
         "aria": "[NEEDS_REVIEW] Trend of fluid volumes IRF, SRF and PED across the last visits.",
-        "bcvaSuffix": "[NEEDS_REVIEW] letters"
+        "bcvaSuffix": "[NEEDS_REVIEW] letters",
+        "injectionLegend": "[NEEDS_REVIEW] Injection",
+        "region": {
+          "label": "[NEEDS_REVIEW] Region",
+          "c1": "[NEEDS_REVIEW] Central 1 mm",
+          "c3": "[NEEDS_REVIEW] Central 3 mm",
+          "c6": "[NEEDS_REVIEW] Central 6 mm"
+        }
+      },
+      "overview2": {
+        "crtDeltaAria": "[NEEDS_REVIEW] Change in central retinal thickness vs previous visit"
       },
       "report": {
         "letterhead": "[NEEDS_REVIEW] nAMD Fluid Monitoring · Report",
@@ -98,6 +123,13 @@
         "dateMismatchTitle": "[NEEDS_REVIEW] Planned visit date ({visit}) does not match OCT acquisition date ({acquired}).",
         "signaturePhysician": "[NEEDS_REVIEW] Physician signature",
         "signatureDate": "[NEEDS_REVIEW] Date"
+      },
+      "report2": {
+        "dynamicHeader": "[NEEDS_REVIEW] Dynamic B-scans · largest change vs previous visit",
+        "dynamicCaptionPrev": "[NEEDS_REVIEW] {label} · B-scan {z}/{n}",
+        "dynamicCaptionCurrent": "[NEEDS_REVIEW] {label} · B-scan {z}/{n} · {dir} {sign}{value} nL",
+        "dynamicRise": "[NEEDS_REVIEW] Rise",
+        "dynamicFall": "[NEEDS_REVIEW] Drop"
       }
     }
   }

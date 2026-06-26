@@ -15,33 +15,166 @@
  * The print stylesheet hides the tab strip + header via {@code no-print}
  * already applied upstream; this view adds no extra print-only CSS.
  */
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import NamdSegCards from '../components/NamdSegCards.vue'
 import NamdFluidTrendChart from '../components/NamdFluidTrendChart.vue'
 import NamdReportScan from '../components/NamdReportScan.vue'
 import { totalFluid } from '../fluid'
 import { I } from '../icons'
-import type { NamdWorkspaceData } from '../types'
+import { useRetinalJobStore } from '@/stores/retinalJob'
+import type { NamdWorkspaceData, NamdVisit } from '../types'
 
 interface Props {
   data: NamdWorkspaceData
 }
 const props = defineProps<Props>()
 const { t } = useI18n()
+const store = useRetinalJobStore()
 
 const today = computed(() => {
   const d = new Date()
   return d.toLocaleDateString('de-AT', { year: 'numeric', month: '2-digit', day: '2-digit' })
 })
 
+const nSlices = computed(() => props.data.nSlices ?? 49)
+
+/* ── 2026-06-26 user-feedback round — top-2 dynamic B-scans block ── */
+
 /**
- * 2026-06-23 — baseline visit for the "OCT · Baseline vs. aktueller"
- * block. Per the design's report layout, the first visit in the
- * workspace data (lowest week) is the baseline reference.
+ * Pull the per-B-scan fluid trace ({@code per_bscan_mm2}) out of a
+ * fluid payload. Returns null when the payload isn't fluid-shaped
+ * or the trace arrays are missing. Used to compute the
+ * within-visit per-slice fluid totals.
+ */
+function perBscanMm2(payload: unknown): { irf: number[]; srf: number[]; ped: number[] } | null {
+  if (!payload || typeof payload !== 'object') return null
+  const per = (payload as { per_bscan_mm2?: unknown }).per_bscan_mm2
+  if (!per || typeof per !== 'object') return null
+  const { irf, srf, ped } = per as { irf?: unknown; srf?: unknown; ped?: unknown }
+  if (!Array.isArray(irf) || !Array.isArray(srf) || !Array.isArray(ped)) return null
+  return { irf: irf as number[], srf: srf as number[], ped: ped as number[] }
+}
+
+/** Per-slice sum of (irf + srf + ped) in mm². */
+function totalPerSlice(t: { irf: number[]; srf: number[]; ped: number[] }): number[] {
+  const n = Math.min(t.irf.length, t.srf.length, t.ped.length)
+  const out = new Array<number>(n)
+  for (let i = 0; i < n; i++) out[i] = (t.irf[i] ?? 0) + (t.srf[i] ?? 0) + (t.ped[i] ?? 0)
+  return out
+}
+
+interface DynamicBscan {
+  visit: NamdVisit
+  slice: number
+  deltaMm2: number
+  /** Distinguishes the prev (reference) panel from the current panel for captioning. */
+  role: 'prev' | 'current'
+}
+
+/**
+ * Ensure both the current + prior visit jobs are loaded so we can
+ * read their per_bscan_mm2 arrays. The store caches detail by
+ * job id so a return-trip from another tab is free.
+ */
+async function ensureLoaded(): Promise<void> {
+  const ids = [props.data.current?.retinalJobId, props.data.prev?.retinalJobId].filter((x): x is number => x != null)
+  await Promise.all(ids.map((id) => (store.jobs[id] == null ? store.loadJob(id) : Promise.resolve(null))))
+}
+
+onMounted(() => { void ensureLoaded() })
+watch(() => [props.data.current?.retinalJobId, props.data.prev?.retinalJobId] as const, () => { void ensureLoaded() })
+
+/**
+ * The B-scan index whose per-slice fluid total changed the MOST
+ * between the previous and the current visit. We then surface
+ * that SAME slice from BOTH visits side-by-side so the operator
+ * sees the actual before/after picture instead of two
+ * disconnected scans from the same visit. Returns null when
+ * there's no prior visit OR either job lacks the per-B-scan
+ * trace.
+ *
+ * <p>2026-06-26 user-feedback revision — the prior implementation
+ * showed top-2 slice indices from the current visit only; the
+ * operator wants the comparison pair (prev's slice N + cur's slice
+ * N where N is the most-changed index), so the report reads
+ * "V02 B-scan 25 → V03 B-scan 25, fluid dropped by …".
+ */
+const dynamicBscans = computed<DynamicBscan[] | null>(() => {
+  const cur = props.data.current
+  const prv = props.data.prev
+  if (!cur || !prv || cur.id === prv.id) return null
+  const curJob = cur.retinalJobId != null ? store.jobs[cur.retinalJobId] : null
+  const prvJob = prv.retinalJobId != null ? store.jobs[prv.retinalJobId] : null
+  if (!curJob || !prvJob) return null
+  const curTrace = perBscanMm2(curJob.outputPayload)
+  const prvTrace = perBscanMm2(prvJob.outputPayload)
+  if (!curTrace || !prvTrace) return null
+  const curTotals = totalPerSlice(curTrace)
+  const prvTotals = totalPerSlice(prvTrace)
+  const n = Math.min(curTotals.length, prvTotals.length)
+  if (n < 2) return null
+  // Find the SINGLE slice with the biggest |Δ|.
+  let topZ = -1
+  let topAbs = 0
+  let topDelta = 0
+  for (let z = 0; z < n; z++) {
+    const d = curTotals[z]! - prvTotals[z]!
+    const a = Math.abs(d)
+    if (a > topAbs) {
+      topAbs = a
+      topZ = z
+      topDelta = d
+    }
+  }
+  // All-zero-Δ corner case (both visits dry at every B-scan).
+  if (topZ < 0 || topAbs < 1e-6) return null
+  // Two panels — same slice index, one for prev, one for cur.
+  // Reading direction: prev (V02) on the LEFT, current (V03) on
+  // the RIGHT, so the operator scans the change naturally L→R.
+  return [
+    { visit: prv, slice: topZ, deltaMm2: topDelta, role: 'prev' },
+    { visit: cur, slice: topZ, deltaMm2: topDelta, role: 'current' },
+  ]
+})
+
+/**
+ * Caption for a dynamic-B-scan tile. The previous (reference)
+ * panel reads "V02 · B-Scan 25/49"; the current panel reads
+ * "V03 · B-Scan 25/49 · Anstieg +12.4 nL" with the magnitude +
+ * direction. mm² → nL conversion is a rough proxy (×1000) —
+ * detailed numbers are on the trend chart.
+ */
+function dynamicCaption(entry: DynamicBscan): string {
+  if (entry.role === 'prev') {
+    return t('studyModules.namd.report2.dynamicCaptionPrev', {
+      label: entry.visit.label,
+      z: entry.slice + 1,
+      n: nSlices.value,
+    })
+  }
+  const dLitres = entry.deltaMm2 * 1000
+  const sign = dLitres >= 0 ? '+' : ''
+  const dir = entry.deltaMm2 >= 0
+    ? t('studyModules.namd.report2.dynamicRise')
+    : t('studyModules.namd.report2.dynamicFall')
+  return t('studyModules.namd.report2.dynamicCaptionCurrent', {
+    label: entry.visit.label,
+    dir,
+    sign,
+    value: dLitres.toFixed(1),
+    z: entry.slice + 1,
+    n: nSlices.value,
+  })
+}
+
+/**
+ * 2026-06-23 — baseline visit fallback. Retained for the legacy
+ * "OCT · Baseline vs. aktueller" block which paints when there's
+ * no prior visit (so per-B-scan deltas can't be computed) and
+ * gives the report a second OCT page regardless.
  */
 const baselineVisit = computed(() => props.data.visits[0] ?? null)
-const nSlices = computed(() => props.data.nSlices ?? 49)
 
 function printReport() {
   window.print()
@@ -135,11 +268,39 @@ function printReport() {
       <NamdFluidTrendChart :visits="props.data.visits" />
     </section>
 
-    <!-- 2026-06-23 — baseline vs current OCT block. Page-break-before
-         keeps the two scans (+ caption + activity pills) together on a
-         second sheet when printed, mirroring the design's report layout. -->
+    <!-- 2026-06-26 user-feedback round — top-2 dynamic B-scans.
+         Replaces the previous "Baseline vs. aktueller Besuch" block
+         for visits with a prior reference: the two B-scans whose
+         per-slice fluid total (irf+srf+ped) changed the most vs the
+         previous visit's same-index B-scan. Sorted by absolute |Δ|;
+         emitted in superior→inferior slice order so the printed
+         page reads top-to-bottom. The caption surfaces direction +
+         magnitude + slice index. Falls back to the legacy
+         baseline-vs-current block when (a) there's no prior visit
+         or (b) the payloads lack per_bscan_mm2 traces. Page-break-
+         before keeps the two scans + captions together on a second
+         sheet. -->
     <section
-      v-if="baselineVisit && props.data.current && baselineVisit.id !== props.data.current.id"
+      v-if="dynamicBscans && dynamicBscans.length > 0"
+      class="mb-6 print:break-before-page"
+      data-testid="namd-report-dynamic-block"
+    >
+      <h2 class="text-[12px] font-semibold uppercase tracking-wider text-slate-500 mb-3">
+        {{ t('studyModules.namd.report2.dynamicHeader') }}
+      </h2>
+      <div class="grid grid-cols-2 gap-4">
+        <NamdReportScan
+          v-for="entry in dynamicBscans"
+          :key="`${entry.visit.id}-${entry.slice}`"
+          :visit="entry.visit"
+          :n-slices="nSlices"
+          :slice="entry.slice"
+          :caption="dynamicCaption(entry)"
+        />
+      </div>
+    </section>
+    <section
+      v-else-if="baselineVisit && props.data.current && baselineVisit.id !== props.data.current.id"
       class="mb-6 print:break-before-page"
       data-testid="namd-report-oct-block"
     >

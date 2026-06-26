@@ -75,6 +75,20 @@ set -euo pipefail
 : "${LIBRECLINICA_MAIL_CONNECTION_TIMEOUT:=10000}"   # ms — the repo's 100ms default is too short for a real relay
 : "${LIBRECLINICA_ADMIN_EMAIL:=}"                    # From/reply-to on system mail; empty keeps the seeded value
 
+# Retinal remote-inference pipeline (DR-022 + DR-024). Stamped into
+# datainfo.properties so a fresh deploy dispatches OCT scans to the GPU cluster
+# out of the box — the repo's dev defaults point remotePushUrl at
+# host.docker.internal (the Mac/SSH-tunnel pattern) and preprocessUrl at a
+# separate dev-only 'retinal-preprocess' sidecar, neither of which exists in
+# prod. The cluster URL/token default to the MUW reading-centre host; the
+# preprocess endpoint is served by the retinal-inference container itself.
+# RETINAL_PREPROCESS_TOKEN must match RETINAL_INFERENCE_PREPROCESS_TOKEN passed
+# to compose (deploy/compose.production.yaml) — same value, two consumers.
+: "${LIBRECLINICA_RETINAL_REMOTE_PUSH_URL:=http://cn5.cir.meduniwien.ac.at:8000}"
+: "${LIBRECLINICA_RETINAL_REMOTE_PUSH_TOKEN:=choose-a-long-shared-secret}"
+: "${LIBRECLINICA_RETINAL_PREPROCESS_URL:=http://retinal-inference:8000}"
+: "${LIBRECLINICA_RETINAL_PREPROCESS_TOKEN:=cb2e7d0edd4d54cd8af46bbef78755a7}"
+
 INSTALL_PREFIX=/opt/libreclinica
 CONFIG_DIR=/etc/libreclinica
 ENV_FILE=${CONFIG_DIR}/env
@@ -528,6 +542,26 @@ if [[ -f "$DATAINFO_FILE" ]]; then
     fi
   else
     log "datainfo.properties mail already configured (mailHost off the 'smtp' default) — leaving as-is"
+  fi
+
+  # Retinal remote-inference pipeline (DR-022 + DR-024). The seeded config
+  # ships dev defaults — remotePushUrl=host.docker.internal (the Mac/SSH-tunnel
+  # pattern) + preprocessUrl=retinal-preprocess (a dev-only sidecar). Production
+  # reaches the GPU cluster directly and serves /preprocess from the
+  # retinal-inference container itself, so stamp the production values. Guarded
+  # on remotePushUrl still being the dev default so operator/site edits survive
+  # a re-run (mirrors the mailHost approach). URLs/tokens are simple tokens with
+  # no '|', safe in the sed replacement unescaped.
+  if grep -q '^core.retinalInference.remotePushUrl=http://host.docker.internal:8000$' "$DATAINFO_FILE"; then
+    sed -i \
+      -e "s|^core.retinalInference.remotePushUrl=.*|core.retinalInference.remotePushUrl=${LIBRECLINICA_RETINAL_REMOTE_PUSH_URL}|" \
+      -e "s|^core.retinalInference.remotePushToken=.*|core.retinalInference.remotePushToken=${LIBRECLINICA_RETINAL_REMOTE_PUSH_TOKEN}|" \
+      -e "s|^core.retinalInference.preprocessUrl=.*|core.retinalInference.preprocessUrl=${LIBRECLINICA_RETINAL_PREPROCESS_URL}|" \
+      -e "s|^core.retinalInference.preprocessToken=.*|core.retinalInference.preprocessToken=${LIBRECLINICA_RETINAL_PREPROCESS_TOKEN}|" \
+      "$DATAINFO_FILE"
+    log "Configured datainfo.properties retinal pipeline (remote=${LIBRECLINICA_RETINAL_REMOTE_PUSH_URL}, preprocess=${LIBRECLINICA_RETINAL_PREPROCESS_URL})"
+  else
+    log "datainfo.properties retinal pipeline already configured (remotePushUrl off the dev default) — leaving as-is"
   fi
 else
   warn "  $DATAINFO_FILE not found — could not sync dbPass / mail config"

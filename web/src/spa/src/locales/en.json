@@ -2386,6 +2386,7 @@
       "moreActions": "[NEEDS_REVIEW] More actions",
       "save": "Save",
       "location": "Location",
+      "saveSuccess": "Visit saved.",
       "dateInvalid": "Date must be in YYYY-MM-DD format.",
       "cancelConfirm": "Cancel event \"{label}\"? Associated CRFs and items will be marked deleted. The action is recorded in the audit trail.",
       "lockedBanner": "This visit is completed. Click «Edit» to make changes.",
@@ -2926,6 +2927,9 @@
   "retinal": {
     "loading": "[NEEDS_REVIEW] Loading retinal scan metrics…",
     "failedToLoad": "[NEEDS_REVIEW] Failed to load retinal job: {error}",
+    "breadcrumb": {
+      "job": "[NEEDS_REVIEW] Job #{seq}"
+    },
     "header": {
       "eventCrfLabel": "[NEEDS_REVIEW] Event-CRF #{id} · Retinal inference job #{jobId}",
       "title": "[NEEDS_REVIEW] Retinal scan metrics",
@@ -2968,6 +2972,7 @@
       "noMetric": "[NEEDS_REVIEW] Metrics couldn't be computed — segmentation artifacts are still available below.",
       "noKpi": "[NEEDS_REVIEW] No KPI yet.",
       "fundusNotAvailable": "[NEEDS_REVIEW] Fundus image not yet available.",
+      "bscanNotAvailable": "[NEEDS_REVIEW] OCT B-scan not yet available.",
       "noPerBscan": "[NEEDS_REVIEW] No per-B-scan trace for this task."
     },
     "kpi": {
@@ -3020,7 +3025,8 @@
     "retry": {
       "cta": "Retry",
       "inflight": "Restarting…",
-      "error": "Retry failed — please try again later."
+      "error": "Retry failed — please try again later.",
+      "successBanner": "Re-dispatch started — the status will update automatically."
     },
     "rerunAs": {
       "cta": "[NEEDS_REVIEW] Run as different task",
@@ -3070,6 +3076,7 @@
     "compare": {
       "header": "Vs previous visit",
       "daysAgo": "{days} days ago",
+      "weeksAgo": "{weeks} weeks ago",
       "loading": "Loading comparison…",
       "errorPrefix": "Could not load comparison:"
     },
@@ -3113,6 +3120,7 @@
       "history": {
         "colJob": "[NEEDS_REVIEW] Job",
         "colCompleted": "[NEEDS_REVIEW] Completed",
+        "colAcquired": "[NEEDS_REVIEW] Acquired",
         "colTask": "[NEEDS_REVIEW] Task",
         "colEye": "[NEEDS_REVIEW] Eye",
         "colStatus": "[NEEDS_REVIEW] Status",

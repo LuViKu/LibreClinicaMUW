@@ -261,7 +261,16 @@ public class RetinalResultsApiController {
              * to "no BCVA known" for those.
              */
             Integer studyEventId,
-            PrimaryMetric primaryMetric) { }
+            PrimaryMetric primaryMetric,
+            /**
+             * 2026-06-26 — stable per-subject sequence number (1-based,
+             * ordered by enqueued_at then job_id so it is append-only and
+             * never renumbers existing jobs). Lets the SPA show "Job #n"
+             * per subject and deep-link via /subjects/{label}/jobs/{n}.
+             * Only the per-subject list query computes it; null elsewhere
+             * (e.g. the event-CRF-scoped list).
+             */
+            Integer subjectSeq) { }
 
     /**
      * Wave 2A — longitudinal trends row. One point per completed job
@@ -298,7 +307,18 @@ public class RetinalResultsApiController {
                                     HttpSession session) {
         ResponseEntity<?> guard = guardSession(session);
         if (guard != null) return guard;
+        return buildJobDetailResponse(jobId, session);
+    }
 
+    /**
+     * 2026-06-26 — shared job-detail builder. Both {@code GET
+     * /retinal-jobs/{id}} and the subject-scoped {@code GET
+     * /subjects/{label}/retinal-jobs/{seq}} deep-link resolver return the
+     * identical {@link RetinalJobDetailDto}; this holds the fetch +
+     * visibility guard + DTO assembly so the two entry points can't drift.
+     * The caller must have already passed {@link #guardSession}.
+     */
+    private ResponseEntity<?> buildJobDetailResponse(long jobId, HttpSession session) {
         JobRow row;
         try (Connection c = dataSource.getConnection()) {
             row = fetchJobDetail(c, jobId);
@@ -360,6 +380,71 @@ public class RetinalResultsApiController {
                 bscanDcmUrl,
                 subjectArm);
         return ResponseEntity.ok(dto);
+    }
+
+    /* ====================================================================== */
+    /* GET /subjects/{label}/retinal-jobs/{seq}  (per-subject deep link)       */
+    /* ====================================================================== */
+
+    /**
+     * 2026-06-26 — resolve a stable per-subject sequence number to a job
+     * and return its detail, so the SPA can address jobs via the
+     * human-friendly {@code /app/subjects/{label}/jobs/{n}} URL instead of
+     * the opaque global job_id. {@code seq} matches the {@code subjectSeq}
+     * exported by the per-subject list (same ROW_NUMBER ordering:
+     * enqueued_at then job_id, scoped to the subject). 404 when the
+     * (subject, seq) pair resolves to no job; visibility is enforced by the
+     * shared {@link #buildJobDetailResponse} (job → study → session scope).
+     */
+    @GetMapping(path = "/subjects/{subjectLabel}/retinal-jobs/{seq:[0-9]+}",
+                produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> getJobBySubjectSeq(
+            @PathVariable("subjectLabel") String subjectLabel,
+            @PathVariable("seq") int seq,
+            HttpSession session) {
+        ResponseEntity<?> guard = guardSession(session);
+        if (guard != null) return guard;
+
+        Long jobId;
+        try (Connection c = dataSource.getConnection()) {
+            jobId = resolveJobIdBySubjectSeq(c, subjectLabel, seq);
+        } catch (SQLException sqlEx) {
+            LOG.error("Failed to resolve retinal job for subject {} seq {}: {}",
+                    subjectLabel, seq, sqlEx.getMessage());
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "message", "Failed to resolve retinal job: " + sqlEx.getMessage()));
+        }
+        if (jobId == null) {
+            return ResponseEntity.status(404).body(Map.of(
+                    "message", "No retinal job #" + seq + " for subject " + subjectLabel));
+        }
+        return buildJobDetailResponse(jobId, session);
+    }
+
+    /**
+     * Resolve (subject label, 1-based sequence) → job_id. Mirrors the
+     * per-subject list's ROW_NUMBER ordering + COALESCE binding join so the
+     * seq is identical to the {@code subjectSeq} the list exports.
+     */
+    private Long resolveJobIdBySubjectSeq(Connection c, String subjectLabel, int seq)
+            throws SQLException {
+        String sql = "SELECT t.job_id FROM ("
+                + "  SELECT j.job_id, "
+                + "         ROW_NUMBER() OVER (ORDER BY j.enqueued_at ASC, j.job_id ASC) AS seq "
+                + "    FROM retinal_inference_job j "
+                + "    LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
+                + "    JOIN study_event se ON se.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
+                + "    JOIN study_subject ss ON ss.study_subject_id = se.study_subject_id "
+                + "   WHERE ss.label = ?) t "
+                + " WHERE t.seq = ?";
+        try (PreparedStatement ps = c.prepareStatement(sql)) {
+            ps.setString(1, subjectLabel);
+            ps.setInt(2, seq);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null;
+                return rs.getLong("job_id");
+            }
+        }
     }
 
     /**
@@ -503,6 +588,13 @@ public class RetinalResultsApiController {
                 // BCVA values live on a sibling event_crf on the same
                 // event).
                 + "       se.study_event_id, "
+                // 2026-06-26 — stable 1-based per-subject sequence number.
+                // Ordered by enqueued_at then job_id (append-only: a new job
+                // gets the next number, existing numbers never shift), so it
+                // is safe to use in the /subjects/{label}/jobs/{n} deep link.
+                // Independent of the outer ORDER BY (which sorts the displayed
+                // rows by scan date).
+                + "       ROW_NUMBER() OVER (ORDER BY j.enqueued_at ASC, j.job_id ASC) AS subject_seq, "
                 + "       r.primary_metric_value, r.primary_metric_unit "
                 + "  FROM retinal_inference_job j "
                 + "  LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
@@ -2422,9 +2514,19 @@ public class RetinalResultsApiController {
         } catch (SQLException ignoredColumnAbsent) {
             // study_event_id column not in this query — leave null.
         }
+        // 2026-06-26 — per-subject sequence number, only present in the
+        // per-subject list query; same defensive lookup as the columns above.
+        Integer subjectSeq = null;
+        try {
+            int seq = rs.getInt("subject_seq");
+            if (!rs.wasNull()) subjectSeq = seq;
+        } catch (SQLException ignoredColumnAbsent) {
+            // subject_seq column not in this query — leave null.
+        }
         return new RetinalJobSummaryDto(
                 jobId, task, laterality, status, modelVersion,
-                toIso(completedAt), visitDate, acquisitionDate, studyEventId, primaryMetric(pv, pu));
+                toIso(completedAt), visitDate, acquisitionDate, studyEventId,
+                primaryMetric(pv, pu), subjectSeq);
     }
 
     /** 401 if no authenticated user, 400 if no active study. */
@@ -2644,22 +2746,45 @@ public class RetinalResultsApiController {
         Map<String, Object> previousMetrics = previous == null
                 ? Map.of()
                 : parsePayload(previous.outputPayloadJson);
+        // 2026-06-26 — the fluid task's output_payload nests the four
+        // biomarker totals inside a `biomarkers` object:
+        //   { "biomarkers": { "irf_mm3": …, "srf_mm3": …, "ped_mm3": …,
+        //                     "total_mm3": … }, … }
+        // The previous loop read those keys at the TOP level, so the
+        // deltas map was always empty and the SPA's RetinalVisitComparison
+        // strip rendered "—" everywhere even when a previous job existed.
+        // Plus the fourth key was misnamed (`total_fluid_volume_mm3` vs
+        // the payload's `total_mm3`). Both fixed in one pass: descend
+        // into `biomarkers` (gracefully fall back to top-level for any
+        // future task whose payload doesn't nest) and use the correct
+        // total key.
         if (previous != null) {
-            for (String key : List.of("irf_mm3", "srf_mm3", "ped_mm3", "total_fluid_volume_mm3")) {
-                Double curV = asDouble(currentMetrics.get(key));
-                Double prevV = asDouble(previousMetrics.get(key));
+            Map<String, Object> curBio = nestedMap(currentMetrics, "biomarkers");
+            Map<String, Object> prevBio = nestedMap(previousMetrics, "biomarkers");
+            for (String key : List.of("irf_mm3", "srf_mm3", "ped_mm3", "total_mm3")) {
+                Double curV = asDouble(curBio.getOrDefault(key, currentMetrics.get(key)));
+                Double prevV = asDouble(prevBio.getOrDefault(key, previousMetrics.get(key)));
                 if (curV != null && prevV != null) {
                     deltas.put(key, curV - prevV);
                 }
             }
         }
+        // 2026-06-26 user-feedback round — daysBetween reads from the
+        // clinical date (COALESCE(acquisition_date, study_event.date_start,
+        // completed_at::date)) instead of completed_at. Operators were
+        // seeing "Vor 0 Tagen" when uploading historical data because
+        // both jobs' completed_at landed on the same day; the clinical
+        // date pulled from the .e2e header or the planned visit is the
+        // load-bearing reference. The new fetchPreviousJob SQL surfaces
+        // both clinical dates from the same query so we don't pay a
+        // second round-trip.
         Integer daysBetween = (previous == null
-                || current.completedAt == null
-                || previous.completedAt == null)
+                || previous.clinicalDate == null
+                || previous.currentClinicalDate == null)
                 ? null
                 : (int) java.time.temporal.ChronoUnit.DAYS.between(
-                        previous.completedAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate(),
-                        current.completedAt.toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate());
+                        previous.clinicalDate.toLocalDate(),
+                        previous.currentClinicalDate.toLocalDate());
 
         return ResponseEntity.ok(new RetinalJobCompareDto(
                 current.jobId,
@@ -2676,14 +2801,33 @@ public class RetinalResultsApiController {
         // 2026-06-23 — subject resolution via COALESCE on the two
         // binding paths so previous-job lookup still works for
         // planned-visit-bound jobs (no event_crf yet).
+        //
+        // 2026-06-26 user-feedback round — ordering + filtering on the
+        // CLINICAL date instead of completed_at. Historical uploads done
+        // in a single sitting all share the same completed_at day; the
+        // clinical date is the .e2e acquisition_date when available,
+        // falling back to the planned visit's date_start, and only
+        // finally to completed_at::date. The query surfaces both the
+        // previous job's clinical date AND the current job's clinical
+        // date so the caller's daysBetween computation reads off the
+        // same source (one round-trip).
         String sql = "WITH cur AS ("
                 + "  SELECT j.job_id, j.task, j.eye_laterality, j.completed_at, "
-                + "         ev.study_subject_id "
+                + "         j.acquisition_date, "
+                + "         ev.study_subject_id, "
+                + "         COALESCE(j.acquisition_date, "
+                + "                  date(ev.date_start), "
+                + "                  date(j.completed_at)) AS clinical_date "
                 + "    FROM retinal_inference_job j "
                 + "    LEFT JOIN event_crf ec ON ec.event_crf_id = j.event_crf_id "
                 + "    JOIN study_event ev ON ev.study_event_id = COALESCE(ec.study_event_id, j.study_event_id) "
                 + "   WHERE j.job_id = ?) "
-                + "SELECT prev.job_id, prev.completed_at, prev_r.output_payload::text "
+                + "SELECT prev.job_id, prev.completed_at, "
+                + "       COALESCE(prev.acquisition_date, "
+                + "                date(ev2.date_start), "
+                + "                date(prev.completed_at)) AS prev_clinical_date, "
+                + "       cur.clinical_date AS cur_clinical_date, "
+                + "       prev_r.output_payload::text "
                 + "  FROM retinal_inference_job prev "
                 + "  JOIN retinal_inference_result prev_r ON prev_r.job_id = prev.job_id "
                 + "  LEFT JOIN event_crf ec2 ON ec2.event_crf_id = prev.event_crf_id "
@@ -2692,8 +2836,12 @@ public class RetinalResultsApiController {
                 + "   AND cur.task = prev.task "
                 + "   AND cur.eye_laterality = prev.eye_laterality "
                 + " WHERE prev.status = 'done' "
-                + "   AND prev.completed_at < cur.completed_at "
-                + " ORDER BY prev.completed_at DESC "
+                + "   AND COALESCE(prev.acquisition_date, "
+                + "                date(ev2.date_start), "
+                + "                date(prev.completed_at)) < cur.clinical_date "
+                + " ORDER BY COALESCE(prev.acquisition_date, "
+                + "                   date(ev2.date_start), "
+                + "                   date(prev.completed_at)) DESC "
                 + " LIMIT 1";
         try (PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setLong(1, currentJobId);
@@ -2702,6 +2850,8 @@ public class RetinalResultsApiController {
                 PreviousJobView v = new PreviousJobView();
                 v.jobId = rs.getLong("job_id");
                 v.completedAt = rs.getTimestamp("completed_at");
+                v.clinicalDate = rs.getDate("prev_clinical_date");
+                v.currentClinicalDate = rs.getDate("cur_clinical_date");
                 v.outputPayloadJson = rs.getString("output_payload");
                 return v;
             }
@@ -2718,9 +2868,40 @@ public class RetinalResultsApiController {
         return null;
     }
 
+    /**
+     * Read a nested object out of a parsed output_payload map. Returns an
+     * empty map (not null) if the key is absent or holds a non-object
+     * value so callers can call {@code .getOrDefault(...)} on the result
+     * without an NPE check. Used by {@code compareToPrevious} to descend
+     * into the fluid task's {@code "biomarkers"} block.
+     */
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> nestedMap(Map<String, Object> source, String key) {
+        if (source == null) return Map.of();
+        Object child = source.get(key);
+        return (child instanceof Map<?, ?> m) ? (Map<String, Object>) m : Map.of();
+    }
+
     private static final class PreviousJobView {
         long jobId;
         java.sql.Timestamp completedAt;
+        /**
+         * 2026-06-26 — clinical date for THIS (previous) job:
+         * COALESCE(acquisition_date, study_event.date_start::date,
+         * completed_at::date). Used by {@code compareToPrevious}'s
+         * daysBetween calculation so the displayed "Vor N Tagen"
+         * reads from the scan date rather than the upload-pipeline
+         * timestamp.
+         */
+        java.sql.Date clinicalDate;
+        /**
+         * 2026-06-26 — clinical date for the CURRENT job, surfaced
+         * by the same SQL (the WITH cur CTE already had the row).
+         * Stored here so the caller doesn't have to round-trip a
+         * second query just to compute daysBetween. Awkwardly
+         * named but the alternative is a separate return tuple.
+         */
+        java.sql.Date currentClinicalDate;
         String outputPayloadJson;
     }
 

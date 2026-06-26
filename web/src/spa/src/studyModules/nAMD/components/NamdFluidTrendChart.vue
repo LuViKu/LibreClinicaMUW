@@ -29,6 +29,41 @@ interface Props {
 const props = defineProps<Props>()
 const { t } = useI18n()
 
+/**
+ * 2026-06-26 user-feedback round — ETDRS-ring region filter.
+ *
+ * <p>The chart's polygons read fluid biomarker values for one of the
+ * three central rings the inference pipeline emits:
+ *   - {@code c1} — central 1 mm (foveal core, ~0.79 mm² area)
+ *   - {@code c3} — central 3 mm (foveal + parafoveal, ~7.07 mm² area)
+ *   - {@code c6} — central 6 mm (full ETDRS grid, ~28.27 mm² area)
+ *
+ * <p>Default is {@code c6} (the widest ring + the legacy behaviour —
+ * before this iteration the chart always plotted c6 values via
+ * {@link NamdVisit.irf}/{@code srf}/{@code ped}). The dropdown lives
+ * in the chart header next to the inline legend.
+ */
+type Region = 'c1' | 'c3' | 'c6'
+const region = ref<Region>('c6')
+
+/**
+ * Visits with {@link NamdVisit.irf}/{@code srf}/{@code ped} swapped
+ * to the selected region's values (when {@link NamdVisit.fluidByRegion}
+ * is present). All downstream computeds (layers, fluidMax, tooltip)
+ * read off this shape so the swap is transparent. For legacy
+ * payloads with no {@link NamdVisit.fluidByRegion} we keep the flat
+ * c6 values regardless of the selector — the data simply doesn't
+ * carry the smaller-ring breakdown.
+ */
+const regionVisits = computed<NamdVisit[]>(() =>
+  props.visits.map((v) => {
+    const r = v.fluidByRegion
+    if (!r) return v
+    const slice = r[region.value]
+    return { ...v, irf: Math.round(slice.irf), srf: Math.round(slice.srf), ped: Math.round(slice.ped) }
+  }),
+)
+
 const W = 760
 const H = 250
 const PL = 46
@@ -56,8 +91,8 @@ onMounted(() => {
 })
 
 const maxWeek = computed(() => {
-  if (props.visits.length === 0) return 1
-  return Math.max(1, props.visits[props.visits.length - 1]!.week)
+  if (regionVisits.value.length === 0) return 1
+  return Math.max(1, regionVisits.value[regionVisits.value.length - 1]!.week)
 })
 
 function xAt(week: number): number {
@@ -88,7 +123,7 @@ function xAt(week: number): number {
  */
 const fluidMax = computed(() => {
   let peak = 0
-  for (const v of props.visits) {
+  for (const v of regionVisits.value) {
     const stack = (v.irf ?? 0) + (v.srf ?? 0) + (v.ped ?? 0)
     if (stack > peak) peak = stack
   }
@@ -124,7 +159,7 @@ function yFluid(value: number): number {
  * land on values an operator can read.
  */
 const crtRange = computed<{ min: number; max: number }>(() => {
-  const values = props.visits.map((v) => v.crt).filter((c) => c > 0)
+  const values = regionVisits.value.map((v) => v.crt).filter((c) => c > 0)
   if (values.length === 0) {
     // No CRT data yet — keep the design-mock band so the empty chart
     // still has a familiar axis.
@@ -195,7 +230,7 @@ const layers = computed<Layer[]>(() => {
   // Build stacked polygons: PED bottom → SRF → IRF top so an
   // increase in subretinal fluid pushes the IRF cap upward
   // visibly.
-  let baseline = props.visits.map(() => 0)
+  let baseline = regionVisits.value.map(() => 0)
   const order: Array<{ key: Layer['key']; field: 'irf' | 'srf' | 'ped' }> = [
     { key: 'PED', field: 'ped' },
     { key: 'SRF', field: 'srf' },
@@ -203,12 +238,12 @@ const layers = computed<Layer[]>(() => {
   ]
   return order.map(({ key, field }) => {
     const lower = baseline.slice()
-    const upper = props.visits.map((v, i) => lower[i]! + v[field])
+    const upper = regionVisits.value.map((v, i) => lower[i]! + v[field])
     baseline = upper
-    const top = props.visits.map(
+    const top = regionVisits.value.map(
       (v, i) => `${xAt(v.week).toFixed(1)},${yFluid(upper[i]!).toFixed(1)}`,
     )
-    const bot = props.visits
+    const bot = regionVisits.value
       .map((v, i) => `${xAt(v.week).toFixed(1)},${yFluid(lower[i]!).toFixed(1)}`)
       .reverse()
     return { key, color: FLUID[key].color, points: [...top, ...bot].join(' ') }
@@ -244,9 +279,9 @@ function buildBrokenPath(
 }
 
 const crtPath = computed(() => {
-  if (props.visits.length === 0) return ''
+  if (regionVisits.value.length === 0) return ''
   return buildBrokenPath(
-    props.visits.map((v) => ({
+    regionVisits.value.map((v) => ({
       x: xAt(v.week),
       y: yCrt(v.crt),
       present: v.crt > 0,
@@ -255,9 +290,9 @@ const crtPath = computed(() => {
 })
 
 const bcvaPath = computed(() => {
-  if (props.visits.length === 0) return ''
+  if (regionVisits.value.length === 0) return ''
   return buildBrokenPath(
-    props.visits.map((v) => ({
+    regionVisits.value.map((v) => ({
       x: xAt(v.week),
       y: yBcva(v.bcva),
       present: v.bcva > 0,
@@ -266,14 +301,14 @@ const bcvaPath = computed(() => {
 })
 
 const lastBcva = computed(() => {
-  if (props.visits.length === 0) return null
-  return props.visits[props.visits.length - 1]!.bcva
+  if (regionVisits.value.length === 0) return null
+  return regionVisits.value[regionVisits.value.length - 1]!.bcva
 })
 
-const currentIdx = computed(() => props.visits.length - 1)
+const currentIdx = computed(() => regionVisits.value.length - 1)
 
 const injectionVisits = computed(() =>
-  props.visits
+  regionVisits.value
     .map((v, i) => ({ v, i }))
     .filter(({ v }) => v.inj && v.inj.length > 0),
 )
@@ -283,7 +318,7 @@ const revealWidth = computed(() =>
 )
 
 const hovered = computed(() =>
-  hoverIdx.value == null ? null : (props.visits[hoverIdx.value] ?? null),
+  hoverIdx.value == null ? null : (regionVisits.value[hoverIdx.value] ?? null),
 )
 
 const hoveredXPct = computed(() => {
@@ -326,6 +361,55 @@ function fmtDate(iso: string): string {
     role="img"
     :aria-label="t('studyModules.namd.trend.aria')"
   >
+    <!-- 2026-06-26 user-feedback round — inline header.
+         Replaces the standalone right-column Legend Card with a chip
+         strip in the chart's own title bar:
+           IRF · SRF · PED · CRT line · Injektion marker
+         plus a region dropdown (Zentral 1 mm / 3 mm / 6 mm). The
+         Overview tab reclaims the freed right-column height for the
+         Decision panel. The strip stays compact on narrow widths by
+         flex-wrapping; the dropdown anchors right. -->
+    <header
+      data-testid="namd-fluid-trend-header"
+      class="flex items-center flex-wrap gap-x-3 gap-y-1 mb-2 text-[11px] text-slate-600"
+    >
+      <span
+        v-for="k in (['IRF', 'SRF', 'PED'] as const)"
+        :key="`legend-${k}`"
+        class="inline-flex items-center gap-1.5"
+        :data-testid="`namd-fluid-legend-chip-${k}`"
+      >
+        <span class="w-2.5 h-2.5 rounded-full" :style="`background:${FLUID[k].color}`" />
+        <span class="font-semibold tracking-tight">{{ k }}</span>
+      </span>
+      <span class="inline-flex items-center gap-1.5" data-testid="namd-fluid-legend-chip-CRT">
+        <svg viewBox="0 0 14 6" class="w-4 h-2"><line x1="0" x2="14" y1="3" y2="3" stroke="#111d4e" stroke-width="2" /></svg>
+        <span class="font-semibold tracking-tight">CRT</span>
+      </span>
+      <span class="inline-flex items-center gap-1.5" data-testid="namd-fluid-legend-chip-INJ">
+        <svg viewBox="0 0 14 14" class="w-3.5 h-3.5">
+          <circle cx="7" cy="7" r="5.5" fill="#e4f2ef" stroke="#2f8e91" stroke-width="1" />
+          <path d="M7 3.8 C 9.4 6.4 9.6 8 7 9.6 C 4.4 8 4.6 6.4 7 3.8 Z" fill="#2f8e91" />
+        </svg>
+        <span class="font-semibold tracking-tight">{{ t('studyModules.namd.trend.injectionLegend') }}</span>
+      </span>
+      <span class="ml-auto inline-flex items-center gap-1.5">
+        <label
+          for="namd-fluid-region"
+          class="text-[10.5px] uppercase tracking-wider text-slate-500"
+        >{{ t('studyModules.namd.trend.region.label') }}</label>
+        <select
+          id="namd-fluid-region"
+          v-model="region"
+          data-testid="namd-fluid-region-select"
+          class="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-muw-teal-300"
+        >
+          <option value="c1">{{ t('studyModules.namd.trend.region.c1') }}</option>
+          <option value="c3">{{ t('studyModules.namd.trend.region.c3') }}</option>
+          <option value="c6">{{ t('studyModules.namd.trend.region.c6') }}</option>
+        </select>
+      </span>
+    </header>
     <svg
       :viewBox="`0 0 ${W} ${H + BH + 6}`"
       width="100%"

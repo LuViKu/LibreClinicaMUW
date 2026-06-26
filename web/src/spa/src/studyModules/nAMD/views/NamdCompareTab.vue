@@ -20,13 +20,14 @@
  * visit is the operator's most common reference for "what
  * changed today?".
  */
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Card from '../components/primitives/Card.vue'
 import NamdVisitPicker from '../components/NamdVisitPicker.vue'
 import NamdCompareDeltaBar from '../components/NamdCompareDeltaBar.vue'
 import NamdScanFrame from '../components/NamdScanFrame.vue'
 import { FLUID } from '../fluid'
+import { I } from '../icons'
 import type { NamdVisit } from '../types'
 
 interface Props {
@@ -54,6 +55,30 @@ watch(
 
 const aVisit = computed(() => props.data.visits.find((v) => v.id === aId.value) ?? null)
 const bVisit = computed(() => props.data.visits.find((v) => v.id === bId.value) ?? null)
+
+/**
+ * 2026-06-26 user-feedback round — colormap reference visit.
+ *
+ * <p>The activity-heatmap colormap means 'change since the
+ * chronologically previous visit'. For each compare pane, that's
+ * the visit immediately BEFORE the one being displayed in the
+ * full timeline, NOT the other pane's selected visit. So when the
+ * operator picks A=V01 and B=V03 the V01 pane shows uniform grey
+ * (no predecessor exists), while the V03 pane shows change vs V02.
+ *
+ * <p>Returns null when the visit is the first in the timeline or
+ * isn't in the visits array at all. NamdScanFrame's barColor
+ * falls back to grey on null prev.
+ */
+function chronologicalPrev(visit: NamdVisit | null): NamdVisit | null {
+  if (!visit) return null
+  const idx = props.data.visits.findIndex((v) => v.id === visit.id)
+  if (idx <= 0) return null
+  return props.data.visits[idx - 1] ?? null
+}
+
+const aPrev = computed<NamdVisit | null>(() => chronologicalPrev(aVisit.value))
+const bPrev = computed<NamdVisit | null>(() => chronologicalPrev(bVisit.value))
 
 // Shared scroll state. When synced, both frames write through
 // `slice`. When unsynced, each pane uses its own solo ref so the
@@ -88,37 +113,219 @@ function rightSetSlice(z: number): void {
 
 const leftSlice = computed(() => (synced.value ? slice.value : leftSolo.value))
 const rightSlice = computed(() => (synced.value ? slice.value : rightSolo.value))
+
+/* ── 2026-06-26 user-feedback round — stacked compare fullscreen ── */
+
+/**
+ * Tab-level fullscreen — both panes render stacked vertically over
+ * a dark backdrop (top = reference / V_A, bottom = current / V_B)
+ * so the operator sees BOTH visits at the same time + can sync-
+ * scroll through them. The per-frame fullscreen button is disabled
+ * here because the stacked layout is what the operator wants —
+ * triggering a single-frame fullscreen would defeat the whole
+ * point. Esc + the close button + the maximize/minimize toggle on
+ * the masthead all dismiss.
+ */
+const fsOpen = ref(false)
+
+function openFullscreen(): void {
+  fsOpen.value = true
+}
+
+function closeFullscreen(): void {
+  fsOpen.value = false
+}
+
+function onKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape' && fsOpen.value) closeFullscreen()
+}
+
+let fsPrevOverflow = ''
+watch(fsOpen, (open) => {
+  if (typeof document === 'undefined') return
+  if (open) {
+    document.addEventListener('keydown', onKey)
+    fsPrevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  } else {
+    document.removeEventListener('keydown', onKey)
+    document.body.style.overflow = fsPrevOverflow
+    fsPrevOverflow = ''
+  }
+})
+
+onBeforeUnmount(() => {
+  if (fsOpen.value && typeof document !== 'undefined') {
+    document.removeEventListener('keydown', onKey)
+    document.body.style.overflow = fsPrevOverflow
+  }
+})
+
+function toggleSynced(): void {
+  synced.value = !synced.value
+}
 </script>
 
 <template>
-  <div data-testid="namd-compare-tab" class="space-y-5">
-    <Card :title="t('studyModules.namd.compare.delta')">
-      <template #right>
+  <div
+    data-testid="namd-compare-tab"
+    :class="
+      fsOpen
+        ? 'fixed inset-0 z-50 bg-black/95 backdrop-blur-sm px-5 py-4 flex flex-col gap-3 overflow-hidden select-none'
+        : 'space-y-5'
+    "
+  >
+    <!-- Fullscreen masthead — eyebrow ("VERGLEICH · OD · Woche 16 → Heute"),
+         synced-scroll toggle in dark style, KI-Maske toggle mirror, close.
+         Mirrors the design's namd-fs-compare screenshot. -->
+    <header
+      v-if="fsOpen"
+      data-testid="namd-compare-fs-header"
+      class="flex items-center justify-between gap-4 shrink-0 text-white"
+    >
+      <div class="flex items-center gap-3 min-w-0">
+        <span class="text-[12px] font-semibold uppercase tracking-[0.12em] whitespace-nowrap">
+          {{ t('studyModules.namd.compare.fsEyebrow') }}
+        </span>
+        <span class="text-white/45 text-[12px] truncate">
+          {{ props.data.patient.eye }} ·
+          {{ aVisit?.label ?? '—' }} → {{ bVisit?.label ?? '—' }}
+        </span>
+      </div>
+      <div class="flex items-center gap-2.5 shrink-0">
         <label
-          class="inline-flex items-center gap-2 text-[12px] text-slate-600 cursor-pointer select-none"
-          data-testid="namd-compare-synced-toggle"
+          class="inline-flex items-center gap-2 text-[12px] cursor-pointer select-none"
+          data-testid="namd-compare-fs-synced"
         >
           <span
             class="relative w-9 h-5 rounded-full transition inline-block"
-            :class="synced ? 'bg-muw-blue' : 'bg-slate-300'"
-            @click="synced = !synced"
+            :class="synced ? 'bg-muw-sky' : 'bg-white/20'"
+            @click="toggleSynced"
           >
             <span
               class="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
               :class="synced ? 'left-4' : 'left-0.5'"
             />
           </span>
-          {{ t('studyModules.namd.compare.syncedScroll') }}
+          <span>{{ t('studyModules.namd.compare.syncedScroll') }}</span>
         </label>
+        <button
+          type="button"
+          data-testid="namd-compare-fs-mask"
+          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition"
+          :class="mask ? 'bg-white text-muw-blue' : 'bg-white/10 text-white/85 hover:bg-white/20'"
+          @click="mask = !mask"
+        >
+          <span class="w-2 h-2 rounded-full" :class="mask ? 'bg-muw-teal' : 'bg-white/50'" />
+          {{ mask ? t('studyModules.namd.scanFrame.maskOn') : t('studyModules.namd.scanFrame.maskOff') }}
+        </button>
+        <button
+          type="button"
+          data-testid="namd-compare-fs-close"
+          class="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold bg-white/10 text-white hover:bg-white/20 transition"
+          @click="closeFullscreen"
+        >
+          <span class="inline-block w-3.5 h-3.5" v-html="I.close" />
+          {{ t('studyModules.namd.scanFrame.fsClose') }}
+        </button>
+      </div>
+    </header>
+
+    <!-- ── Fullscreen stacked layout: A on top + B below.
+         2026-06-26 user-feedback round — maximise B-scan real estate:
+         drop the per-pane card chrome (background/padding/rounded),
+         drop the inter-pane <hr>, and inline the header row directly
+         above the scan box (no gap). The two scans get the full
+         vertical budget minus the masthead + two thin info rows +
+         two compact slider strips. ── -->
+    <div
+      v-if="fsOpen"
+      class="flex-1 min-h-0 flex flex-col gap-2"
+      data-testid="namd-compare-fs-stack"
+    >
+      <section
+        v-for="side in [
+          { key: 'A', tag: t('studyModules.namd.compare.tagReference'), visit: aVisit, prev: aPrev, slice: leftSlice, setSlice: leftSetSlice, idBase: 'cmp-fs-a' },
+          { key: 'B', tag: t('studyModules.namd.compare.tagCurrent'),   visit: bVisit, prev: bPrev, slice: rightSlice, setSlice: rightSetSlice, idBase: 'cmp-fs-b' },
+        ]"
+        :key="side.key"
+        :data-testid="`namd-compare-fs-pane-${side.key}`"
+        class="flex-1 min-h-0 flex flex-col"
+      >
+        <div class="flex items-center gap-3 text-white/75 text-[11px] shrink-0 pb-1">
+          <span class="font-semibold uppercase tracking-[0.1em] text-white/55">{{ side.tag }}</span>
+          <span v-if="side.visit" class="font-semibold text-white">{{ side.visit.label }}</span>
+          <span v-if="side.visit" class="text-white/50">{{ side.visit.date || '—' }}</span>
+          <span v-if="side.visit" class="ml-auto tabular-nums text-white/50">
+            IRF {{ side.visit.irf }} · SRF {{ side.visit.srf }} · PED {{ side.visit.ped }} nL
+          </span>
+        </div>
+        <NamdScanFrame
+          v-if="side.visit"
+          :visit="side.visit"
+          :prev-visit="side.prev"
+          :eye="props.data.patient.eye"
+          :n-slices="nSlices"
+          :slice="side.slice"
+          :mask="mask"
+          :show-thumbs="false"
+          :enable-fullscreen="false"
+          :fill-container="true"
+          slider-tone="sky"
+          :id-base="side.idBase"
+          class="flex-1 min-h-0"
+          @update:slice="(z: number) => side.setSlice(z)"
+          @update:mask="(m: boolean) => (mask = m)"
+        />
+        <div
+          v-else
+          class="flex-1 rounded-md bg-white/5 flex items-center justify-center text-sm text-white/45"
+        >
+          {{ t('studyModules.namd.viewer.empty') }}
+        </div>
+      </section>
+    </div>
+
+    <!-- ── Inline (non-fullscreen) layout below ── -->
+    <Card v-if="!fsOpen" :title="t('studyModules.namd.compare.delta')">
+      <template #right>
+        <div class="inline-flex items-center gap-3">
+          <label
+            class="inline-flex items-center gap-2 text-[12px] text-slate-600 cursor-pointer select-none"
+            data-testid="namd-compare-synced-toggle"
+          >
+            <span
+              class="relative w-9 h-5 rounded-full transition inline-block"
+              :class="synced ? 'bg-muw-blue' : 'bg-slate-300'"
+              @click="toggleSynced"
+            >
+              <span
+                class="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all"
+                :class="synced ? 'left-4' : 'left-0.5'"
+              />
+            </span>
+            {{ t('studyModules.namd.compare.syncedScroll') }}
+          </label>
+          <button
+            type="button"
+            data-testid="namd-compare-fs-toggle"
+            :aria-label="t('studyModules.namd.compare.fsMaximize')"
+            :title="t('studyModules.namd.compare.fsMaximize')"
+            class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+            @click="openFullscreen"
+          >
+            <span class="inline-block w-3.5 h-3.5" v-html="I.maximize" />
+          </button>
+        </div>
       </template>
       <NamdCompareDeltaBar :a="aVisit" :b="bVisit" />
     </Card>
 
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+    <div v-if="!fsOpen" class="grid grid-cols-1 lg:grid-cols-2 gap-5">
       <Card
         v-for="(side, i) in [
-          { tag: t('studyModules.namd.compare.tagReference'), id: aId, setId: (v: string) => (aId = v), visit: aVisit, slice: leftSlice, setSlice: leftSetSlice, excludeOther: bId, variant: 'A' as const, idBase: 'cmp-a' },
-          { tag: t('studyModules.namd.compare.tagCurrent'),   id: bId, setId: (v: string) => (bId = v), visit: bVisit, slice: rightSlice, setSlice: rightSetSlice, excludeOther: aId, variant: 'B' as const, idBase: 'cmp-b' },
+          { tag: t('studyModules.namd.compare.tagReference'), id: aId, setId: (v: string) => (aId = v), visit: aVisit, prev: aPrev, slice: leftSlice, setSlice: leftSetSlice, excludeOther: bId, variant: 'A' as const, idBase: 'cmp-a' },
+          { tag: t('studyModules.namd.compare.tagCurrent'),   id: bId, setId: (v: string) => (bId = v), visit: bVisit, prev: bPrev, slice: rightSlice, setSlice: rightSetSlice, excludeOther: aId, variant: 'B' as const, idBase: 'cmp-b' },
         ]"
         :key="i"
       >
@@ -139,11 +346,13 @@ const rightSlice = computed(() => (synced.value ? slice.value : rightSolo.value)
         <NamdScanFrame
           v-if="side.visit"
           :visit="side.visit"
+          :prev-visit="side.prev"
           :eye="props.data.patient.eye"
           :n-slices="nSlices"
           :slice="side.slice"
           :mask="mask"
           :show-thumbs="false"
+          :enable-fullscreen="false"
           :id-base="side.idBase"
           @update:slice="(z) => side.setSlice(z)"
           @update:mask="(m) => (mask = m)"
@@ -175,7 +384,7 @@ const rightSlice = computed(() => (synced.value ? slice.value : rightSolo.value)
       </Card>
     </div>
 
-    <div class="flex items-center justify-center gap-2 text-[12px] text-slate-500">
+    <div v-if="!fsOpen" class="flex items-center justify-center gap-2 text-[12px] text-slate-500">
       <span class="inline-block w-4 h-4 align-middle">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 4 L22 20 H2 Z M12 10 V14 M12 17 V17.5" />

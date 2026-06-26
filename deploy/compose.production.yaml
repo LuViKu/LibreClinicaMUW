@@ -88,12 +88,30 @@ services:
       RETINAL_INFERENCE_RUNNER_ONL_URL: ${RETINAL_INFERENCE_RUNNER_ONL_URL:-}
       RETINAL_INFERENCE_RUNNER_PR_URL: ${RETINAL_INFERENCE_RUNNER_PR_URL:-}
       RETINAL_INFERENCE_RUNNER_GA_URL: ${RETINAL_INFERENCE_RUNNER_GA_URL:-}
+      # DR-022 / DR-024 — the app-VM dispatch path needs the e2e→bscan.dcm
+      # /preprocess endpoint served locally (the published image bundles the
+      # muw-e2e-converter, so the same retinal-inference container can do it —
+      # no separate retinal-preprocess service required in prod). The token
+      # must match core.retinalInference.preprocessToken in datainfo.properties
+      # (the setup script stamps both from LIBRECLINICA_RETINAL_PREPROCESS_TOKEN).
+      RETINAL_INFERENCE_PREPROCESS_ENDPOINT_ENABLED: "true"
+      RETINAL_INFERENCE_AUTH_TOKEN: ${RETINAL_INFERENCE_PREPROCESS_TOKEN:-cb2e7d0edd4d54cd8af46bbef78755a7}
+      # Persist the per-source-scan companion files (bscan.dcm + fundus.png +
+      # geometry.json) under the shared retinal-artifacts bind so the app's
+      # viewer (core.retinalInference.artifactStorePath) can stream them back.
+      RETINAL_INFERENCE_BSCAN_STORE: /var/lib/libreclinica/retinal-artifacts/bscans
     volumes:
       # Move the two retinal-inference bind mounts off the dev-tree
       # ./docker/ paths and onto /var/lib/libreclinica/ paths the setup
       # script creates and chowns to libreclinica:libreclinica.
       - /var/lib/libreclinica/retinal-inference:/var/lib/libreclinica/segmentation-output
       - /var/lib/libreclinica/e2e-uploads:/var/lib/libreclinica/e2e-uploads:ro
+      # Shared artifact store — the SAME host dir the libreclinica service
+      # binds at this target (base compose.yaml maps ./docker/retinal-artifacts
+      # here), so the sidecar writes companions where the app reads them. Kept
+      # on ./docker (not /var/lib) to match the app's existing bind; the dir is
+      # git-ignored runtime data and survives `git reset` on setup re-runs.
+      - ./docker/retinal-artifacts:/var/lib/libreclinica/retinal-artifacts
     # The base compose.yaml pins cpus: "4.0" for local dev boxes. The
     # production VM is a 2-CPU host, and Docker rejects a cpus limit above
     # the physical core count outright ("range of CPUs is from 0.01 to

@@ -53,6 +53,12 @@ export const I: Record<string, NamdIcon> = {
   arrowRight: sw('<path d="M5 12 H19 M13 6 L19 12 L13 18" />'),
   /** Printer — Report tab download / print action. */
   printer: sw('<path d="M7 3 H17 V8 H7 Z M5 8 H19 V18 H17 V21 H7 V18 H5 Z M7 14 H17" />'),
+  /** Maximize — open the OCT scan in fullscreen. */
+  maximize: sw('<path d="M4 10 V4 H10 M14 4 H20 V10 M20 14 V20 H14 M10 20 H4 V14" />'),
+  /** Minimize — close the OCT scan fullscreen back to inline. */
+  minimize: sw('<path d="M10 4 V10 H4 M14 10 H20 V4 M4 14 H10 V20 M14 20 V14 H20" />'),
+  /** Close (×) — fullscreen header dismiss button. */
+  close: sw('<path d="M6 6 L18 18 M18 6 L6 18" />'),
 }
 
 /** Inline SVG used as the fluid-trend "no-data" decoration. */
